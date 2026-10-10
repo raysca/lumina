@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod catalog;
 pub mod decoder;
+pub mod geocoder;
 pub mod scanner;
 pub mod watcher;
 
@@ -15,6 +16,7 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::Catalog;
 pub use decoder::DecoderPipeline;
+pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::Scanner;
 pub use watcher::LibraryWatcher;
 
@@ -25,19 +27,62 @@ pub struct MediaId(pub u64);
 pub enum MediaType {
     Image,
     Video,
+    Raw,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaItem {
     pub id: MediaId,
     pub path: PathBuf,
+    pub parent_dir: String,
+    pub file_name: String,
+    pub file_size: u64,
+    pub mtime_epoch_ms: i64,
+
+    // Dimensions & Media Classification
     pub media_type: MediaType,
     pub width: u32,
     pub height: u32,
+    pub duration_ms: Option<u64>,
     pub duration_secs: f64,
-    pub file_size: u64,
-    pub mtime_epoch_ms: i64,
+
+    // EXIF Temporal & Spatial Attributes
     pub timestamp_epoch_ms: i64,
+    pub year: i32,
+    pub month: u32,
+    pub day: u32,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub altitude: Option<f64>,
+
+    // Reverse Geocoded Metadata
+    pub country_code: Option<String>,
+    pub admin1_region: Option<String>,
+    pub city: Option<String>,
+
+    // Camera Hardware Metadata
+    pub make: Option<String>,
+    pub model: Option<String>,
+    pub lens: Option<String>,
+    pub focal_length: Option<f64>,
+    pub f_number: Option<f64>,
+    pub iso: Option<u32>,
+    pub exposure_time: Option<String>,
+
+    // State Flags
+    pub is_favorite: bool,
+    pub is_hidden: bool,
+    pub is_trashed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineBucket {
+    pub bucket_type: String, // 'year', 'month', 'day'
+    pub bucket_key: String,  // '2026', '2026-10', '2026-10-10'
+    pub start_timestamp: i64,
+    pub end_timestamp: i64,
+    pub item_count: usize,
+    pub cover_media_id: Option<MediaId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +173,18 @@ impl LuminaEngine {
 
     pub fn get_item_by_id(&self, id: MediaId) -> Option<MediaItem> {
         self.catalog.get_item_by_id(id).unwrap_or(None)
+    }
+
+    pub fn get_timeline_buckets(&self, bucket_type: &str) -> Vec<TimelineBucket> {
+        self.catalog.get_timeline_buckets(bucket_type).unwrap_or_default()
+    }
+
+    pub fn search_fts(&self, query: &str, limit: usize) -> Vec<MediaItem> {
+        self.catalog.search_fts(query, limit).unwrap_or_default()
+    }
+
+    pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {
+        self.catalog.toggle_favorite(id, is_favorite)
     }
 
     pub fn request_thumbnail<F>(&self, id: MediaId, target_size: u32, callback: F)
@@ -223,6 +280,8 @@ impl LuminaEngine {
                         });
                     }
                     EngineEvent::ScanComplete { total_items } => {
+                        // Automatically recompute timeline buckets upon scan completion
+                        let _ = catalog.compute_timeline_buckets();
                         let _ = event_tx.send(EngineEvent::ScanComplete { total_items });
                     }
                     _ => {}

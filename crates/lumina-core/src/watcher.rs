@@ -25,6 +25,7 @@ impl LibraryWatcher {
             .name("lumina-watcher".to_string())
             .spawn(move || {
                 let tx = event_tx.clone();
+                let scanner = Scanner::new(path.clone(), tx.clone());
                 let mut debouncer = match new_debouncer(
                     Duration::from_millis(500),
                     move |res: DebounceEventResult| {
@@ -32,7 +33,7 @@ impl LibraryWatcher {
                             for event in events {
                                 let p = &event.path;
                                 if p.is_file() {
-                                    if let Some(item) = Scanner::inspect_media_file(p) {
+                                    if let Some(item) = scanner.inspect_media_file(p) {
                                         let _ = tx.send(EngineEvent::ItemAdded(item));
                                     }
                                 }

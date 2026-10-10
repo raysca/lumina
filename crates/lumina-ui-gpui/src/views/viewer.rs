@@ -20,6 +20,7 @@ impl MediaViewer {
         let size_str = format_bytes(item.file_size);
         let type_label = match item.media_type {
             MediaType::Image => "Photo".to_string(),
+            MediaType::Raw => "RAW Photo".to_string(),
             MediaType::Video => {
                 if item.duration_secs > 0.0 {
                     format!("Video ({:.1}s)", item.duration_secs)
@@ -120,7 +121,8 @@ impl MediaViewer {
                     .child(
                         div()
                             .flex()
-                            .gap_4()
+                            .gap_3()
+                            .items_center()
                             .text_sm()
                             .child(
                                 div()
@@ -130,7 +132,31 @@ impl MediaViewer {
                                     .rounded_sm()
                                     .child(type_label),
                             )
-                            .child(div().child(size_str)),
+                            .child(div().child(size_str))
+                            .child(if let Some(ref m) = item.model {
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .bg(rgb(0x1e1e24))
+                                    .rounded_sm()
+                                    .text_color(rgb(0xd4d4d8))
+                                    .child(format!("📷 {}", m))
+                                    .into_any_element()
+                            } else {
+                                Empty.into_any_element()
+                            })
+                            .child(if let Some(ref c) = item.city {
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .bg(rgb(0x1e293b))
+                                    .rounded_sm()
+                                    .text_color(rgb(0x38bdf8))
+                                    .child(format!("📍 {}", c))
+                                    .into_any_element()
+                            } else {
+                                Empty.into_any_element()
+                            }),
                     )
                     .child(
                         div()

@@ -130,6 +130,11 @@ impl DecoderPipeline {
         match media_type {
             MediaType::Image => Self::decode_image(id, path, target_size),
             MediaType::Video => Self::decode_video(id, path, target_size),
+            MediaType::Raw => {
+                // Try native QuickLook thumbnail for RAW camera formats
+                Self::decode_video(id, path, target_size)
+                    .or_else(|_| Self::decode_image(id, path, target_size))
+            }
         }
     }
 
