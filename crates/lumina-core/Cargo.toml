@@ -1,0 +1,26 @@
+[package]
+name = "lumina-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crossbeam-channel = "0.5"
+rayon = "1.10"
+parking_lot = "0.12"
+
+jwalk = "0.8"
+notify = "6.1"
+notify-debouncer-mini = "0.4"
+
+kamadak-exif = "0.5"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+dirs = "5.0"
+
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+zune-jpeg = "0.4"
+
+rusqlite = { version = "0.31", features = ["bundled"] }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
