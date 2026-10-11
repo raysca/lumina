@@ -144,7 +144,7 @@ impl Catalog {
 
             -- Performance Indexes for 120 FPS Scrolling & Hierarchy
             CREATE INDEX IF NOT EXISTS idx_timeline_active 
-                ON media_items(timestamp_epoch_ms DESC) 
+                ON media_items(timestamp_epoch_ms DESC, id DESC) 
                 WHERE is_trashed = 0 AND is_hidden = 0;
 
             CREATE INDEX IF NOT EXISTS idx_folder_listing 
