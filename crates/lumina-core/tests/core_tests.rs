@@ -1,5 +1,7 @@
 use lumina_core::{
-    Catalog, DiskCache, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, DecodedFrame, Scanner,
+    Catalog, DecodedFrame, DiskCache, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder,
+    PixelFormat, RuleField, RuleOperator, RuleValue, Scanner, SmartAlbumRule, StructuredQuery,
+    SystemAlbum,
 };
 use std::collections::HashSet;
 use std::fs::File;
@@ -34,11 +36,11 @@ fn sample_media_item(
         year: 2026,
         month: 10,
         day: 10,
-        latitude: Some(35.0116),
-        longitude: Some(135.7681),
-        altitude: Some(50.0),
-        country_code: if city == Some("Paris") { Some("FR".to_string()) } else { Some("JP".to_string()) },
-        admin1_region: if city == Some("Paris") { Some("Île-de-France".to_string()) } else { Some("Kansai".to_string()) },
+        latitude: if city.is_some() { Some(35.0116) } else { None },
+        longitude: if city.is_some() { Some(135.7681) } else { None },
+        altitude: if city.is_some() { Some(50.0) } else { None },
+        country_code: if city == Some("Paris") { Some("FR".to_string()) } else if city.is_some() { Some("JP".to_string()) } else { None },
+        admin1_region: if city == Some("Paris") { Some("Île-de-France".to_string()) } else if city.is_some() { Some("Kansai".to_string()) } else { None },
         city: city.map(|s| s.to_string()),
         make: Some("Sony".to_string()),
         model: model.map(|s| s.to_string()),
@@ -292,4 +294,290 @@ fn test_desktop_pics_integration() {
     assert!(frame_opt.is_some(), "Thumbnail decode succeeded");
     let frame = frame_opt.unwrap();
     assert!(frame.width > 0 && frame.height > 0);
+}
+
+#[test]
+fn test_structured_search_engine() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let mut item1 = sample_media_item("/photos/sunset_kyoto.jpg", MediaType::Image, 1789430400000, Some("Kyoto"), Some("ILCE-7M4"));
+    item1.make = Some("Sony".to_string());
+    item1.model = Some("Sony A7IV".to_string());
+    item1.lens = Some("FE 35mm F1.4 GM".to_string());
+    item1.iso = Some(800);
+    item1.f_number = Some(2.8);
+    item1.is_favorite = true;
+    item1.year = 2026;
+    item1.month = 9;
+    item1.day = 15;
+
+    let mut item2 = sample_media_item("/photos/shibuya_night.jpg", MediaType::Image, 1786320000000, Some("Tokyo"), Some("EOS R5"));
+    item2.make = Some("Canon".to_string());
+    item2.model = Some("Canon EOS R5".to_string());
+    item2.lens = Some("RF 50mm F1.2L".to_string());
+    item2.iso = Some(1600);
+    item2.f_number = Some(1.2);
+    item2.is_favorite = false;
+    item2.year = 2026;
+    item2.month = 8;
+    item2.day = 10;
+
+    let mut item3 = sample_media_item("/photos/eiffel_tower.jpg", MediaType::Image, 1746057600000, Some("Paris"), Some("Z8"));
+    item3.make = Some("Nikon".to_string());
+    item3.model = Some("Nikon Z8".to_string());
+    item3.iso = Some(200);
+    item3.f_number = Some(1.8);
+    item3.is_favorite = true;
+    item3.year = 2025;
+    item3.month = 5;
+    item3.day = 1;
+
+    let mut item4 = sample_media_item("/videos/kyoto_temple.mp4", MediaType::Video, 1789862400000, Some("Kyoto"), Some("FX3"));
+    item4.make = Some("Sony".to_string());
+    item4.model = Some("Sony FX3".to_string());
+    item4.iso = Some(3200);
+    item4.is_favorite = false;
+    item4.year = 2026;
+    item4.month = 9;
+    item4.day = 20;
+
+    let mut item5 = sample_media_item("/raw/arashiyama.arw", MediaType::Raw, 1790035200000, Some("Kyoto"), Some("Sony A7IV"));
+    item5.make = Some("Sony".to_string());
+    item5.model = Some("Sony A7IV".to_string());
+    item5.iso = Some(100);
+    item5.is_favorite = false;
+    item5.year = 2026;
+    item5.month = 9;
+    item5.day = 22;
+
+    catalog.insert_or_update_batch(&[item1, item2, item3, item4, item5]).expect("insert items");
+
+    // 1. Search camera:Sony
+    let q_sony = StructuredQuery::parse("camera:Sony");
+    let sony_res = catalog.search_structured(&q_sony, 10, 0).expect("search sony");
+    assert_eq!(sony_res.len(), 3);
+
+    // 2. Search camera:Sony is:favorite
+    let q_sony_fav = StructuredQuery::parse("camera:Sony is:favorite");
+    let sony_fav_res = catalog.search_structured(&q_sony_fav, 10, 0).expect("search sony fav");
+    assert_eq!(sony_fav_res.len(), 1);
+    assert_eq!(sony_fav_res[0].file_name, "sunset_kyoto.jpg");
+
+    // 3. Search city:Kyoto is:video
+    let q_kyoto_vid = StructuredQuery::parse("city:Kyoto is:video");
+    let kyoto_vid_res = catalog.search_structured(&q_kyoto_vid, 10, 0).expect("search kyoto video");
+    assert_eq!(kyoto_vid_res.len(), 1);
+    assert_eq!(kyoto_vid_res[0].file_name, "kyoto_temple.mp4");
+
+    // 4. Search iso:>1000
+    let q_iso = StructuredQuery::parse("iso:>1000");
+    let iso_res = catalog.search_structured(&q_iso, 10, 0).expect("search iso");
+    assert_eq!(iso_res.len(), 2);
+
+    // 5. Search year:2026 month:9
+    let q_sep = StructuredQuery::parse("year:2026 month:september");
+    let sep_res = catalog.search_structured(&q_sep, 10, 0).expect("search sep");
+    assert_eq!(sep_res.len(), 3);
+
+    // 6. Search is:raw
+    let q_raw = StructuredQuery::parse("is:raw");
+    let raw_res = catalog.search_structured(&q_raw, 10, 0).expect("search raw");
+    assert_eq!(raw_res.len(), 1);
+    assert_eq!(raw_res[0].file_name, "arashiyama.arw");
+
+    // 7. Search date range
+    let q_date = StructuredQuery::parse("date:2026-09-01..2026-09-30");
+    let date_res = catalog.search_structured(&q_date, 10, 0).expect("search date range");
+    assert_eq!(date_res.len(), 3);
+
+    // 8. FTS Keyword + Structured
+    let q_comb = StructuredQuery::parse("sunset camera:Sony");
+    let comb_res = catalog.search_structured(&q_comb, 10, 0).expect("search comb");
+    assert_eq!(comb_res.len(), 1);
+    assert_eq!(comb_res[0].file_name, "sunset_kyoto.jpg");
+
+    // Benchmark search latency: must be < 5ms
+    let start = Instant::now();
+    for _ in 0..100 {
+        let _ = catalog.search_structured(&q_comb, 10, 0);
+    }
+    let elapsed = start.elapsed();
+    let per_query_ms = elapsed.as_secs_f64() * 1000.0 / 100.0;
+    println!("Structured search latency: {:.3} ms/query", per_query_ms);
+    assert!(per_query_ms < 5.0, "Structured search must execute in < 5ms");
+}
+
+#[test]
+fn test_system_smart_albums() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let mut item_fav = sample_media_item("/photos/fav.jpg", MediaType::Image, 1000, None, Some("A7IV"));
+    item_fav.is_favorite = true;
+
+    let item_vid = sample_media_item("/photos/clip.mp4", MediaType::Video, 2000, None, Some("FX3"));
+
+    let item_raw = sample_media_item("/photos/raw.cr3", MediaType::Raw, 3000, None, Some("R5"));
+
+    let mut item_shot = sample_media_item("/photos/Screenshot_2026.png", MediaType::Image, 4000, None, None);
+    item_shot.width = 2560;
+    item_shot.height = 1440;
+    item_shot.lens = None;
+    item_shot.focal_length = None;
+    item_shot.iso = None;
+    item_shot.make = None;
+
+    let mut item_long = sample_media_item("/photos/waterfall.jpg", MediaType::Image, 5000, None, Some("A7IV"));
+    item_long.exposure_time = Some("2.5s".to_string());
+
+    let mut item_pano = sample_media_item("/photos/horizon.jpg", MediaType::Image, 6000, None, Some("A7IV"));
+    item_pano.width = 3000;
+    item_pano.height = 1000;
+
+    // Bursts: 2 photos within 200ms from same camera model
+    let item_burst1 = sample_media_item("/photos/burst1.jpg", MediaType::Image, 7000, None, Some("ILCE-1"));
+    let item_burst2 = sample_media_item("/photos/burst2.jpg", MediaType::Image, 7200, None, Some("ILCE-1"));
+
+    let mut item_trash = sample_media_item("/photos/deleted.jpg", MediaType::Image, 8000, None, None);
+    item_trash.is_trashed = true;
+
+    let mut item_places = sample_media_item("/photos/gps.jpg", MediaType::Image, 9000, None, None);
+    item_places.latitude = Some(35.6895);
+    item_places.longitude = Some(139.6917);
+
+    catalog.insert_or_update_batch(&[
+        item_fav, item_vid, item_raw, item_shot, item_long, item_pano,
+        item_burst1, item_burst2, item_trash, item_places,
+    ]).expect("insert batch");
+
+    // Verify all 9 system albums
+    assert_eq!(catalog.query_system_album(SystemAlbum::Favorites, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Videos, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Raw, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Screenshots, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::LongExposures, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Panoramas, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Bursts, 10, 0).unwrap().len(), 2);
+    assert_eq!(catalog.query_system_album(SystemAlbum::RecentlyDeleted, 10, 0).unwrap().len(), 1);
+    assert_eq!(catalog.query_system_album(SystemAlbum::Places, 10, 0).unwrap().len(), 1);
+
+    // Verify count queries
+    for album in SystemAlbum::all() {
+        let count = catalog.query_system_album_count(*album).unwrap();
+        let items = catalog.query_system_album(*album, 10, 0).unwrap();
+        assert_eq!(count, items.len(), "Count mismatch for {:?}", album);
+    }
+
+    // Benchmark evaluation latency (< 8ms)
+    let start = Instant::now();
+    for album in SystemAlbum::all() {
+        let _ = catalog.query_system_album(*album, 10, 0);
+    }
+    let elapsed = start.elapsed();
+    let per_album_ms = elapsed.as_secs_f64() * 1000.0 / 9.0;
+    println!("System smart album evaluation latency: {:.3} ms/album", per_album_ms);
+    assert!(per_album_ms < 8.0, "System smart album evaluation must be < 8ms");
+}
+
+#[test]
+fn test_user_defined_smart_albums_json_engine() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let mut item1 = sample_media_item("/photos/sony_fav.jpg", MediaType::Image, 1000, Some("Kyoto"), Some("ILCE-7M4"));
+    item1.make = Some("Sony".to_string());
+    item1.is_favorite = true;
+    item1.iso = Some(1600);
+
+    let mut item2 = sample_media_item("/photos/sony_regular.jpg", MediaType::Image, 2000, Some("Tokyo"), Some("ILCE-7M4"));
+    item2.make = Some("Sony".to_string());
+    item2.is_favorite = false;
+    item2.iso = Some(400);
+
+    let mut item3 = sample_media_item("/photos/canon_fav.jpg", MediaType::Image, 3000, Some("Paris"), Some("EOS R5"));
+    item3.make = Some("Canon".to_string());
+    item3.is_favorite = true;
+    item3.iso = Some(1600);
+
+    catalog.insert_or_update_batch(&[item1, item2, item3]).unwrap();
+
+    let rules = vec![
+        SmartAlbumRule {
+            field: RuleField::CameraMake,
+            operator: RuleOperator::Contains,
+            value: RuleValue::Text("Sony".to_string()),
+        },
+        SmartAlbumRule {
+            field: RuleField::IsFavorite,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Bool(true),
+        },
+        SmartAlbumRule {
+            field: RuleField::Iso,
+            operator: RuleOperator::GreaterThan,
+            value: RuleValue::Integer(800),
+        },
+    ];
+
+    let created = catalog.create_smart_album(
+        "High ISO Sony Favorites",
+        "heart",
+        MatchMode::All,
+        &rules,
+    ).expect("create smart album");
+
+    assert!(created.id > 0);
+    assert_eq!(created.title, "High ISO Sony Favorites");
+    assert_eq!(created.rules.len(), 3);
+
+    // List smart albums
+    let albums = catalog.list_smart_albums().expect("list smart albums");
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].title, "High ISO Sony Favorites");
+
+    // Execute smart album query
+    let results = catalog.query_smart_album(&albums[0], 10, 0).expect("query smart album");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].file_name, "sony_fav.jpg");
+
+    let count = catalog.query_smart_album_count(&albums[0]).expect("count smart album");
+    assert_eq!(count, 1);
+
+    // Test MatchMode::Any
+    let any_rules = vec![
+        SmartAlbumRule {
+            field: RuleField::CameraMake,
+            operator: RuleOperator::Contains,
+            value: RuleValue::Text("Canon".to_string()),
+        },
+        SmartAlbumRule {
+            field: RuleField::City,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Text("Kyoto".to_string()),
+        },
+    ];
+
+    let any_album = catalog.create_smart_album(
+        "Canon or Kyoto",
+        "folder",
+        MatchMode::Any,
+        &any_rules,
+    ).unwrap();
+
+    let any_results = catalog.query_smart_album(&any_album, 10, 0).unwrap();
+    assert_eq!(any_results.len(), 2);
+
+    // Benchmark multi-condition rule evaluation latency (< 8ms)
+    let start = Instant::now();
+    for _ in 0..100 {
+        let _ = catalog.query_smart_album(&albums[0], 10, 0);
+    }
+    let elapsed = start.elapsed();
+    let per_eval_ms = elapsed.as_secs_f64() * 1000.0 / 100.0;
+    println!("Multi-condition smart album evaluation latency: {:.3} ms/eval", per_eval_ms);
+    assert!(per_eval_ms < 8.0, "Rule evaluation must execute in < 8ms");
+
+    // Delete smart album
+    let deleted = catalog.delete_smart_album(created.id).unwrap();
+    assert!(deleted);
+    let remaining = catalog.list_smart_albums().unwrap();
+    assert_eq!(remaining.len(), 1);
 }

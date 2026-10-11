@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{MediaId, MediaItem, MediaType, TimelineBucket};
+use crate::search::StructuredQuery;
+use crate::smart_albums::{MatchMode, SmartAlbum, SmartAlbumRule, SystemAlbum};
 
 #[derive(Clone)]
 pub struct Catalog {
@@ -503,6 +505,174 @@ impl Catalog {
         )?;
 
         Self::map_query_rows(&mut stmt, params![query, limit as i64])
+    }
+
+    pub fn search_structured(&self, query: &StructuredQuery, limit: usize, offset: usize) -> Result<Vec<MediaItem>> {
+        let (sql, params) = query.synthesize_query(limit, offset);
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(&params))
+    }
+
+    pub fn search_structured_count(&self, query: &StructuredQuery) -> Result<usize> {
+        let (sql, params) = query.synthesize_count_query();
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        let count: i64 = stmt.query_row(rusqlite::params_from_iter(&params), |row| row.get(0))?;
+        Ok(count as usize)
+    }
+
+    pub fn query_system_album(&self, album: SystemAlbum, limit: usize, offset: usize) -> Result<Vec<MediaItem>> {
+        let (sql, params) = album.synthesize_query(limit, offset);
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(&params))
+    }
+
+    pub fn query_system_album_count(&self, album: SystemAlbum) -> Result<usize> {
+        let (sql, params) = album.synthesize_count_query();
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        let count: i64 = stmt.query_row(rusqlite::params_from_iter(&params), |row| row.get(0))?;
+        Ok(count as usize)
+    }
+
+    pub fn create_smart_album(
+        &self,
+        title: &str,
+        icon_name: &str,
+        match_mode: MatchMode,
+        rules: &[SmartAlbumRule],
+    ) -> Result<SmartAlbum> {
+        let conn = self.conn.lock();
+        let match_mode_str = match match_mode {
+            MatchMode::All => "all",
+            MatchMode::Any => "any",
+        };
+        let rules_json = serde_json::to_string(rules)?;
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        conn.execute(
+            r#"
+            INSERT INTO smart_albums (title, icon_name, match_mode, rule_definition_json, created_at_epoch_ms)
+            VALUES (?1, ?2, ?3, ?4, ?5);
+            "#,
+            params![title, icon_name, match_mode_str, rules_json, now_ms],
+        )?;
+
+        let id = conn.last_insert_rowid();
+        Ok(SmartAlbum {
+            id,
+            title: title.to_string(),
+            icon_name: icon_name.to_string(),
+            match_mode,
+            rules: rules.to_vec(),
+            created_at_epoch_ms: now_ms,
+        })
+    }
+
+    pub fn get_smart_album(&self, id: i64) -> Result<Option<SmartAlbum>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, title, icon_name, match_mode, rule_definition_json, created_at_epoch_ms
+            FROM smart_albums
+            WHERE id = ?1;
+            "#,
+        )?;
+
+        let album = stmt.query_row(params![id], |row| {
+            let id: i64 = row.get(0)?;
+            let title: String = row.get(1)?;
+            let icon_name: String = row.get(2)?;
+            let match_mode_str: String = row.get(3)?;
+            let rule_json: String = row.get(4)?;
+            let created_at: i64 = row.get(5)?;
+            Ok((id, title, icon_name, match_mode_str, rule_json, created_at))
+        });
+
+        match album {
+            Ok((id, title, icon_name, match_mode_str, rule_json, created_at)) => {
+                let match_mode = if match_mode_str == "any" {
+                    MatchMode::Any
+                } else {
+                    MatchMode::All
+                };
+                let rules: Vec<SmartAlbumRule> = serde_json::from_str(&rule_json).unwrap_or_default();
+                Ok(Some(SmartAlbum {
+                    id,
+                    title,
+                    icon_name,
+                    match_mode,
+                    rules,
+                    created_at_epoch_ms: created_at,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn list_smart_albums(&self) -> Result<Vec<SmartAlbum>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, title, icon_name, match_mode, rule_definition_json, created_at_epoch_ms
+            FROM smart_albums
+            ORDER BY id ASC;
+            "#,
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let title: String = row.get(1)?;
+            let icon_name: String = row.get(2)?;
+            let match_mode_str: String = row.get(3)?;
+            let rule_json: String = row.get(4)?;
+            let created_at: i64 = row.get(5)?;
+            Ok((id, title, icon_name, match_mode_str, rule_json, created_at))
+        })?;
+
+        let mut albums = Vec::new();
+        for r in rows {
+            let (id, title, icon_name, match_mode_str, rule_json, created_at) = r?;
+            let match_mode = if match_mode_str == "any" {
+                MatchMode::Any
+            } else {
+                MatchMode::All
+            };
+            let rules: Vec<SmartAlbumRule> = serde_json::from_str(&rule_json).unwrap_or_default();
+            albums.push(SmartAlbum {
+                id,
+                title,
+                icon_name,
+                match_mode,
+                rules,
+                created_at_epoch_ms: created_at,
+            });
+        }
+        Ok(albums)
+    }
+
+    pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
+        let conn = self.conn.lock();
+        let affected = conn.execute("DELETE FROM smart_albums WHERE id = ?1;", params![id])?;
+        Ok(affected > 0)
+    }
+
+    pub fn query_smart_album(&self, album: &SmartAlbum, limit: usize, offset: usize) -> Result<Vec<MediaItem>> {
+        let (sql, params) = album.synthesize_query(limit, offset)?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(&params))
+    }
+
+    pub fn query_smart_album_count(&self, album: &SmartAlbum) -> Result<usize> {
+        let (sql, params) = album.synthesize_count_query()?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&sql)?;
+        let count: i64 = stmt.query_row(rusqlite::params_from_iter(&params), |row| row.get(0))?;
+        Ok(count as usize)
     }
 
     pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {

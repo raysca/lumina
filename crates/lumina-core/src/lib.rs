@@ -3,6 +3,8 @@ pub mod catalog;
 pub mod decoder;
 pub mod geocoder;
 pub mod scanner;
+pub mod search;
+pub mod smart_albums;
 pub mod watcher;
 
 use anyhow::Result;
@@ -18,6 +20,10 @@ pub use catalog::Catalog;
 pub use decoder::DecoderPipeline;
 pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::Scanner;
+pub use search::StructuredQuery;
+pub use smart_albums::{
+    MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, SystemAlbum,
+};
 pub use watcher::LibraryWatcher;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -181,6 +187,58 @@ impl LuminaEngine {
 
     pub fn search_fts(&self, query: &str, limit: usize) -> Vec<MediaItem> {
         self.catalog.search_fts(query, limit).unwrap_or_default()
+    }
+
+    pub fn search_structured(&self, query: &StructuredQuery, limit: usize, offset: usize) -> Vec<MediaItem> {
+        self.catalog.search_structured(query, limit, offset).unwrap_or_default()
+    }
+
+    pub fn search_structured_count(&self, query: &StructuredQuery) -> usize {
+        self.catalog.search_structured_count(query).unwrap_or(0)
+    }
+
+    pub fn search_query(&self, input: &str, limit: usize, offset: usize) -> Vec<MediaItem> {
+        let q = StructuredQuery::parse(input);
+        self.search_structured(&q, limit, offset)
+    }
+
+    pub fn search_query_count(&self, input: &str) -> usize {
+        let q = StructuredQuery::parse(input);
+        self.search_structured_count(&q)
+    }
+
+    pub fn query_system_album(&self, album: SystemAlbum, limit: usize, offset: usize) -> Vec<MediaItem> {
+        self.catalog.query_system_album(album, limit, offset).unwrap_or_default()
+    }
+
+    pub fn query_system_album_count(&self, album: SystemAlbum) -> usize {
+        self.catalog.query_system_album_count(album).unwrap_or(0)
+    }
+
+    pub fn list_smart_albums(&self) -> Vec<SmartAlbum> {
+        self.catalog.list_smart_albums().unwrap_or_default()
+    }
+
+    pub fn create_smart_album(
+        &self,
+        title: &str,
+        icon_name: &str,
+        match_mode: MatchMode,
+        rules: &[SmartAlbumRule],
+    ) -> Result<SmartAlbum> {
+        self.catalog.create_smart_album(title, icon_name, match_mode, rules)
+    }
+
+    pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
+        self.catalog.delete_smart_album(id)
+    }
+
+    pub fn query_smart_album(&self, album: &SmartAlbum, limit: usize, offset: usize) -> Vec<MediaItem> {
+        self.catalog.query_smart_album(album, limit, offset).unwrap_or_default()
+    }
+
+    pub fn query_smart_album_count(&self, album: &SmartAlbum) -> usize {
+        self.catalog.query_smart_album_count(album).unwrap_or(0)
     }
 
     pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {
