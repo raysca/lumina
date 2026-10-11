@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use lru::LruCache;
 
-pub const COLS_COUNT: usize = 6;
+pub const COLS_COUNT: usize = 4;
 pub const ROW_HEIGHT_PX: f32 = 180.0;
 
 #[derive(Clone)]

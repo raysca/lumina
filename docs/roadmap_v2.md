@@ -74,17 +74,19 @@ flowchart TD
 ---
 
 ## Phase 5: GPUI Presentation Shell Integration (`lumina-ui-gpui`)
-- [ ] **Left Navigation Sidebar**:
+- [x] **Left Navigation Sidebar**:
   - Apple Photos-style collapsible sidebar with Library, System Smart Albums, User Smart Albums, and Trash.
-  - Badge counts per smart album.
-- [ ] **Unified Top Search Bar**:
-  - Search input in header with live syntax highlight & suggestion pills (`is:favorite`, `camera:`, `year:`).
+  - Live badge counts per smart album.
+  - Collapsible mode for maximized viewing canvas.
+- [x] **Unified Top Search Bar**:
+  - Search input in header with live result counts & suggestion pills (`is:favorite`, `is:video`, `is:raw`, `camera:Sony`, `has:location`).
   - Non-blocking search execution with instant 120 FPS timeline updates.
-- [ ] **Metadata & Location Inspector**:
-  - Slide-out / toggleable inspector card displaying camera settings, lens info, dimensions, file size, and geocoded location.
-  - "Favorite" toggle button syncing with catalog.
-- [ ] **Timeline Scrubber**:
-  - Quick jump scrubber by Year/Month using `timeline_buckets`.
+- [x] **Metadata & Location Inspector**:
+  - Slide-out / toggleable inspector card displaying camera settings (make, model, lens, exposure, aperture, ISO, focal length), dimensions, file size, and geocoded location.
+  - "Favorite" toggle button syncing immediately with catalog.
+  - "Reveal in Finder" shortcut.
+- [x] **Timeline Scrubber**:
+  - Quick jump scrubber by Year/Month using pre-aggregated `timeline_buckets`.
 
 ---
 
