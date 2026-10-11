@@ -38,6 +38,6 @@ impl GridState {
     }
 
     pub fn total_rows(&self) -> usize {
-        (self.total_count + COLS_COUNT - 1) / COLS_COUNT
+        self.total_count.div_ceil(COLS_COUNT)
     }
 }

@@ -348,7 +348,7 @@ fn chrono_parse_timestamp(s: &str) -> Option<i64> {
         return None;
     }
     let date_parts: Vec<i64> = parts[0]
-        .split(|c| c == '-' || c == ':')
+        .split(['-', ':'])
         .filter_map(|p| p.parse().ok())
         .collect();
     let time_parts: Vec<i64> = parts[1]

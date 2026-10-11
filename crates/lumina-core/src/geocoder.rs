@@ -134,7 +134,7 @@ impl OfflineGeocoder {
                 point: to_sphere_point(lat, lon),
                 city: name,
                 admin1: admin,
-                country: country,
+                country,
             })
             .collect();
 

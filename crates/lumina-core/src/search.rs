@@ -445,7 +445,7 @@ fn build_fts5_expression(terms: &[String]) -> String {
     let escaped_terms: Vec<String> = terms
         .iter()
         .map(|t| {
-            let clean = t.replace('"', "").replace('*', "");
+            let clean = t.replace(['"', '*'], "");
             format!("\"{}\"*", clean)
         })
         .collect();

@@ -434,7 +434,7 @@ impl Render for LuminaApp {
 
         let state = self.grid_state.as_ref().unwrap();
         let total_count = self.get_active_count();
-        let total_rows = (total_count + COLS_COUNT - 1) / COLS_COUNT;
+        let total_rows = total_count.div_ceil(COLS_COUNT);
         let is_scanning = state.is_scanning;
         let library_name = state
             .library_path
@@ -839,7 +839,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(|cx| LuminaApp::new(cx)),
+            |_, cx| cx.new(LuminaApp::new),
         )
         .unwrap();
         cx.activate(true);
