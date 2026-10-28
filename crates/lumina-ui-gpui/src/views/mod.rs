@@ -1,6 +1,13 @@
+pub mod album_builder;
+pub mod context_menu;
+pub mod delete_modal;
+pub mod floating_inspector;
+pub mod floating_pip;
 pub mod grid;
 pub mod inspector;
 pub mod onboarding;
 pub mod search_bar;
 pub mod sidebar;
+pub mod tag_manager;
 pub mod viewer;
+pub mod viewer_state;

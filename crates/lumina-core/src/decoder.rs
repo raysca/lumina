@@ -9,6 +9,23 @@ use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
 
+/// RAII guard that removes a file on drop.
+struct TempFile(std::path::PathBuf);
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// RAII guard that removes a directory tree on drop.
+struct TempDir(std::path::PathBuf);
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[derive(Clone)]
 pub struct DecoderPipeline {
     pool: Arc<ThreadPool>,
 }
@@ -16,7 +33,10 @@ pub struct DecoderPipeline {
 impl DecoderPipeline {
     pub fn new(num_threads: usize) -> Result<Self> {
         let threads = if num_threads == 0 {
-            num_cpus::get().max(2)
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+                .max(2)
         } else {
             num_threads
         };
@@ -48,17 +68,54 @@ impl DecoderPipeline {
 
         // High-speed SIMD path for JPEGs
         if ext == "jpg" || ext == "jpeg" {
-            if let Ok(frame) = Self::decode_jpeg_simd(id, &bytes, target_size) {
+            if let Ok(frame) = Self::decode_jpeg_simd(id, path, &bytes, target_size) {
+                return Ok(frame);
+            }
+        }
+
+        // For large non-JPEG files (> 8 MB), decode hardware-scaled via sips first to avoid full decode OOM
+        if bytes.len() > 8 * 1024 * 1024 {
+            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
                 return Ok(frame);
             }
         }
 
         // Fallback to image crate
-        let img = image::load_from_memory(&bytes)?;
+        let img = Self::apply_exif_orientation(image::load_from_memory(&bytes)?, &bytes);
         Self::resize_to_frame(id, img, target_size)
     }
 
-    fn decode_jpeg_simd(id: MediaId, bytes: &[u8], target_size: u32) -> Result<DecodedFrame> {
+    fn read_exif_orientation(bytes: &[u8]) -> u32 {
+        let mut cursor = std::io::Cursor::new(bytes);
+        if let Ok(exif) = exif::Reader::new().read_from_container(&mut cursor) {
+            if let Some(field) = exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY) {
+                if let Some(v) = field.value.get_uint(0) {
+                    return v;
+                }
+            }
+        }
+        1
+    }
+
+    fn apply_exif_orientation(img: DynamicImage, bytes: &[u8]) -> DynamicImage {
+        match Self::read_exif_orientation(bytes) {
+            2 => img.fliph(),
+            3 => img.rotate180(),
+            4 => img.flipv(),
+            5 => img.rotate90().fliph(),
+            6 => img.rotate90(),
+            7 => img.fliph().rotate90(),
+            8 => img.rotate270(),
+            _ => img,
+        }
+    }
+
+    fn decode_jpeg_simd(
+        id: MediaId,
+        path: &Path,
+        bytes: &[u8],
+        target_size: u32,
+    ) -> Result<DecodedFrame> {
         let mut decoder = JpegDecoder::new(bytes);
         decoder.decode_headers()?;
         let info = decoder
@@ -68,19 +125,64 @@ impl DecoderPipeline {
         let orig_width = info.width as u32;
         let orig_height = info.height as u32;
 
+        // Cap longest edge: if larger than 2560px, decode scaled image via sips to prevent OOM
+        if (orig_width > 2560 || orig_height > 2560)
+            && (orig_width > target_size || orig_height > target_size)
+        {
+            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+                return Ok(frame);
+            }
+        }
+
         let pixels = decoder.decode()?;
         // zune-jpeg returns RGB
         let img = image::RgbImage::from_raw(orig_width, orig_height, pixels)
             .ok_or_else(|| anyhow!("Failed to create RgbImage from decoded JPEG bytes"))?;
 
-        let dynamic = DynamicImage::ImageRgb8(img);
+        let dynamic = Self::apply_exif_orientation(DynamicImage::ImageRgb8(img), bytes);
         Self::resize_to_frame(id, dynamic, target_size)
+    }
+
+    pub fn decode_via_sips(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let temp_out = std::env::temp_dir().join(format!("lumina_sips_{}_{}.png", id.0, nanos));
+        let _guard = TempFile(temp_out.clone());
+
+        let status = Command::new("sips")
+            .arg("-s")
+            .arg("format")
+            .arg("png")
+            .arg("-Z")
+            .arg(target_size.to_string())
+            .arg(path)
+            .arg("--out")
+            .arg(&temp_out)
+            .output();
+
+        if let Ok(output) = status {
+            if output.status.success() && temp_out.exists() {
+                if let Ok(bytes) = fs::read(&temp_out) {
+                    if let Ok(img) = image::load_from_memory(&bytes) {
+                        return Self::resize_to_frame(id, img, target_size);
+                    }
+                }
+            }
+        }
+        Err(anyhow!("sips decode failed"))
     }
 
     pub fn decode_video(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         // Use macOS quicklook thumbnail generator (instant native GPU/AVFoundation thumbnail)
-        let temp_dir = std::env::temp_dir().join(format!("lumina_thumb_{}", id.0));
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let temp_dir = std::env::temp_dir().join(format!("lumina_thumb_{}_{}", id.0, nanos));
         let _ = fs::create_dir_all(&temp_dir);
+        let _guard = TempDir(temp_dir.clone());
 
         let size_arg = target_size.max(256).to_string();
         let status = Command::new("qlmanage")
@@ -92,8 +194,6 @@ impl DecoderPipeline {
             .arg(path)
             .output();
 
-        let mut frame_res = Err(anyhow!("QuickLook thumbnail failed"));
-
         if let Ok(output) = status {
             if output.status.success() {
                 // Find generated thumbnail image
@@ -104,8 +204,7 @@ impl DecoderPipeline {
                             if ext == "png" || ext == "jpg" {
                                 if let Ok(bytes) = fs::read(&p) {
                                     if let Ok(img) = image::load_from_memory(&bytes) {
-                                        frame_res = Self::resize_to_frame(id, img, target_size);
-                                        break;
+                                        return Self::resize_to_frame(id, img, target_size);
                                     }
                                 }
                             }
@@ -115,10 +214,7 @@ impl DecoderPipeline {
             }
         }
 
-        // Clean up temporary directory
-        let _ = fs::remove_dir_all(&temp_dir);
-
-        frame_res
+        Err(anyhow!("QuickLook thumbnail failed"))
     }
 
     pub fn decode_media(
@@ -127,13 +223,27 @@ impl DecoderPipeline {
         path: &Path,
         target_size: u32,
     ) -> Result<DecodedFrame> {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
         match media_type {
-            MediaType::Image => Self::decode_image(id, path, target_size),
+            MediaType::Image => {
+                // HEIC/HEIF formats lack pure-Rust decoding in image crate; use native sips ImageIO hardware decode first
+                if ext == "heic" || ext == "heif" {
+                    return Self::decode_via_sips(id, path, target_size)
+                        .or_else(|_| Self::decode_video(id, path, target_size));
+                }
+                Self::decode_image(id, path, target_size)
+                    .or_else(|_| Self::decode_video(id, path, target_size))
+            }
             MediaType::Video => Self::decode_video(id, path, target_size),
             MediaType::Raw => {
-                // Try native QuickLook thumbnail for RAW camera formats
-                Self::decode_video(id, path, target_size)
-                    .or_else(|_| Self::decode_image(id, path, target_size))
+                // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode
+                Self::decode_via_sips(id, path, target_size)
+                    .or_else(|_| Self::decode_video(id, path, target_size))
             }
         }
     }
@@ -148,22 +258,20 @@ impl DecoderPipeline {
 
         let rgba = resized.to_rgba8();
         let (width, height) = rgba.dimensions();
-        let data = rgba.into_raw();
+        let mut data = rgba.into_raw();
+
+        // Pre-swizzle RGBA8 -> BGRA8 on the background Rayon thread so DiskCache stores
+        // native Metal BGRA8Unorm bytes and UI-thread texture upload is zero-copy.
+        for chunk in data.chunks_exact_mut(4) {
+            chunk.swap(0, 2);
+        }
 
         Ok(DecodedFrame {
             id,
             width,
             height,
-            format: PixelFormat::Rgba8,
+            format: PixelFormat::Bgra8,
             data,
         })
-    }
-}
-
-mod num_cpus {
-    pub fn get() -> usize {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(4)
     }
 }

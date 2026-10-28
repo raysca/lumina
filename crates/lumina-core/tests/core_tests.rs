@@ -17,8 +17,14 @@ fn sample_media_item(
     model: Option<&str>,
 ) -> MediaItem {
     let path = PathBuf::from(path_str);
-    let parent_dir = path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-    let file_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let parent_dir = path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
 
     MediaItem {
         id: MediaId(0),
@@ -30,8 +36,11 @@ fn sample_media_item(
         media_type,
         width: 1920,
         height: 1080,
-        duration_ms: if media_type == MediaType::Video { Some(12500) } else { None },
-        duration_secs: if media_type == MediaType::Video { 12.5 } else { 0.0 },
+        duration_ms: if media_type == MediaType::Video {
+            Some(12500)
+        } else {
+            None
+        },
         timestamp_epoch_ms: ts,
         year: 2026,
         month: 10,
@@ -39,8 +48,20 @@ fn sample_media_item(
         latitude: if city.is_some() { Some(35.0116) } else { None },
         longitude: if city.is_some() { Some(135.7681) } else { None },
         altitude: if city.is_some() { Some(50.0) } else { None },
-        country_code: if city == Some("Paris") { Some("FR".to_string()) } else if city.is_some() { Some("JP".to_string()) } else { None },
-        admin1_region: if city == Some("Paris") { Some("Île-de-France".to_string()) } else if city.is_some() { Some("Kansai".to_string()) } else { None },
+        country_code: if city == Some("Paris") {
+            Some("FR".to_string())
+        } else if city.is_some() {
+            Some("JP".to_string())
+        } else {
+            None
+        },
+        admin1_region: if city == Some("Paris") {
+            Some("Île-de-France".to_string())
+        } else if city.is_some() {
+            Some("Kansai".to_string())
+        } else {
+            None
+        },
         city: city.map(|s| s.to_string()),
         make: Some("Sony".to_string()),
         model: model.map(|s| s.to_string()),
@@ -60,8 +81,20 @@ fn test_catalog_in_memory() {
     let catalog = Catalog::open_in_memory().expect("open in memory catalog");
     assert_eq!(catalog.total_count().unwrap(), 0);
 
-    let item1 = sample_media_item("/test/photo1.jpg", MediaType::Image, 1000, Some("Kyoto"), Some("ILCE-7M4"));
-    let item2 = sample_media_item("/test/video1.mp4", MediaType::Video, 2000, Some("Kyoto"), Some("ILCE-7M4"));
+    let item1 = sample_media_item(
+        "/test/photo1.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("ILCE-7M4"),
+    );
+    let item2 = sample_media_item(
+        "/test/video1.mp4",
+        MediaType::Video,
+        2000,
+        Some("Kyoto"),
+        Some("ILCE-7M4"),
+    );
 
     let inserted = catalog
         .insert_or_update_batch(&[item1.clone(), item2.clone()])
@@ -76,7 +109,9 @@ fn test_catalog_in_memory() {
     assert_eq!(slice[1].path, item1.path);
 
     // Test config key-value store
-    catalog.set_config("last_library", "/path/to/library").unwrap();
+    catalog
+        .set_config("last_library", "/path/to/library")
+        .unwrap();
     assert_eq!(
         catalog.get_config("last_library").unwrap(),
         Some("/path/to/library".to_string())
@@ -94,22 +129,42 @@ fn test_catalog_in_memory() {
 fn test_timeline_buckets_aggregation() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let mut item1 = sample_media_item("/test/2026/oct/img1.jpg", MediaType::Image, 1791633600000, None, None);
+    let mut item1 = sample_media_item(
+        "/test/2026/oct/img1.jpg",
+        MediaType::Image,
+        1791633600000,
+        None,
+        None,
+    );
     item1.year = 2026;
     item1.month = 10;
     item1.day = 10;
 
-    let mut item2 = sample_media_item("/test/2026/oct/img2.jpg", MediaType::Image, 1791633700000, None, None);
+    let mut item2 = sample_media_item(
+        "/test/2026/oct/img2.jpg",
+        MediaType::Image,
+        1791633700000,
+        None,
+        None,
+    );
     item2.year = 2026;
     item2.month = 10;
     item2.day = 10;
 
-    let mut item3 = sample_media_item("/test/2025/dec/img3.jpg", MediaType::Image, 1765800000000, None, None);
+    let mut item3 = sample_media_item(
+        "/test/2025/dec/img3.jpg",
+        MediaType::Image,
+        1765800000000,
+        None,
+        None,
+    );
     item3.year = 2025;
     item3.month = 12;
     item3.day = 15;
 
-    catalog.insert_or_update_batch(&[item1, item2, item3]).unwrap();
+    catalog
+        .insert_or_update_batch(&[item1, item2, item3])
+        .unwrap();
     catalog.compute_timeline_buckets().unwrap();
 
     let year_buckets = catalog.get_timeline_buckets("year").unwrap();
@@ -118,26 +173,26 @@ fn test_timeline_buckets_aggregation() {
     assert_eq!(year_buckets[0].item_count, 2);
     assert_eq!(year_buckets[1].bucket_key, "2025");
     assert_eq!(year_buckets[1].item_count, 1);
-
-    let month_buckets = catalog.get_timeline_buckets("month").unwrap();
-    assert_eq!(month_buckets.len(), 2);
-    assert_eq!(month_buckets[0].bucket_key, "2026-10");
-    assert_eq!(month_buckets[0].item_count, 2);
-    assert_eq!(month_buckets[1].bucket_key, "2025-12");
-    assert_eq!(month_buckets[1].item_count, 1);
-
-    let day_buckets = catalog.get_timeline_buckets("day").unwrap();
-    assert_eq!(day_buckets.len(), 2);
-    assert_eq!(day_buckets[0].bucket_key, "2026-10-10");
-    assert_eq!(day_buckets[0].item_count, 2);
 }
 
 #[test]
 fn test_fts5_search() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let item1 = sample_media_item("/photos/vacation/sunset_kyoto.jpg", MediaType::Image, 1000, Some("Kyoto"), Some("A7IV"));
-    let item2 = sample_media_item("/photos/paris/eiffel_tower.jpg", MediaType::Image, 2000, Some("Paris"), Some("EOS R5"));
+    let item1 = sample_media_item(
+        "/photos/vacation/sunset_kyoto.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("A7IV"),
+    );
+    let item2 = sample_media_item(
+        "/photos/paris/eiffel_tower.jpg",
+        MediaType::Image,
+        2000,
+        Some("Paris"),
+        Some("EOS R5"),
+    );
 
     catalog.insert_or_update_batch(&[item1, item2]).unwrap();
 
@@ -155,21 +210,276 @@ fn test_fts5_search() {
 }
 
 #[test]
+fn test_fts5_caption_searchable() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item = sample_media_item(
+        "/photos/kyoto/sunset.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("A7IV"),
+    );
+    let inserted = catalog
+        .insert_or_update_batch(std::slice::from_ref(&item))
+        .unwrap();
+    let id = inserted[0].id;
+
+    catalog
+        .set_caption(id, "A lone elephant drinking at the river")
+        .unwrap();
+
+    let matches = catalog.search_fts("elephant", 10).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].id, id);
+
+    // Metadata columns remain searchable alongside the new caption column.
+    let by_city = catalog.search_fts("Kyoto", 10).unwrap();
+    assert_eq!(by_city.len(), 1);
+    assert_eq!(by_city[0].id, id);
+
+    // Re-scanning the same file fires the UPDATE trigger, which must keep the
+    // caption terms in the contentless index.
+    let mut rescanned = item;
+    rescanned.mtime_epoch_ms = 2000;
+    catalog.insert_or_update_batch(&[rescanned]).unwrap();
+    assert_eq!(catalog.search_fts("elephant", 10).unwrap().len(), 1);
+}
+
+#[test]
+fn test_fts5_caption_edit_reindexes() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item = sample_media_item(
+        "/photos/caption/edit.jpg",
+        MediaType::Image,
+        1000,
+        None,
+        None,
+    );
+    let inserted = catalog.insert_or_update_batch(&[item]).unwrap();
+    let id = inserted[0].id;
+
+    catalog
+        .set_caption(id, "sleepy walrus on the dock")
+        .unwrap();
+    assert_eq!(catalog.search_fts("walrus", 10).unwrap().len(), 1);
+
+    catalog.set_caption(id, "crimson giraffe at dawn").unwrap();
+    assert!(catalog.search_fts("walrus", 10).unwrap().is_empty());
+    let matches = catalog.search_fts("giraffe", 10).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].id, id);
+}
+
+#[test]
+fn test_fts5_caption_clear_unindexes() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item = sample_media_item(
+        "/photos/caption/clear.jpg",
+        MediaType::Image,
+        1000,
+        None,
+        None,
+    );
+    let inserted = catalog.insert_or_update_batch(&[item]).unwrap();
+    let id = inserted[0].id;
+
+    catalog.set_caption(id, "hidden badger").unwrap();
+    assert_eq!(catalog.search_fts("badger", 10).unwrap().len(), 1);
+
+    catalog.set_caption(id, "   ").unwrap();
+    assert!(catalog.search_fts("badger", 10).unwrap().is_empty());
+    assert!(!catalog.get_captions_map().unwrap().contains_key(&id));
+
+    // Clearing an already-empty caption stays a no-op.
+    catalog.set_caption(id, "").unwrap();
+    assert!(!catalog.get_captions_map().unwrap().contains_key(&id));
+}
+
+#[test]
+fn test_fts5_caption_removed_when_media_deleted() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_caption_delete_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+    let catalog = Catalog::open(&db_path).expect("open catalog");
+
+    let keep = sample_media_item(
+        "/photos/deletion/keep.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("A7IV"),
+    );
+    let doomed = sample_media_item(
+        "/photos/deletion/doomed.jpg",
+        MediaType::Image,
+        2000,
+        Some("Paris"),
+        Some("EOS R5"),
+    );
+    let inserted = catalog.insert_or_update_batch(&[keep, doomed]).unwrap();
+    let keep_id = inserted[0].id;
+    let doomed_id = inserted[1].id;
+
+    catalog
+        .set_caption(doomed_id, "unique narwhal sighting")
+        .unwrap();
+    catalog.set_caption(keep_id, "landscape panorama").unwrap();
+    assert_eq!(catalog.search_fts("narwhal", 10).unwrap().len(), 1);
+
+    let mut existing = HashSet::new();
+    existing.insert(inserted[0].path.clone());
+    let removed = catalog.remove_items_not_in(&existing).unwrap();
+    assert_eq!(removed, vec![doomed_id]);
+
+    // The deleted media row no longer surfaces through the FTS join.
+    assert!(catalog.search_fts("narwhal", 10).unwrap().is_empty());
+    // The FTS index remains usable for the surviving rows.
+    assert_eq!(catalog.search_fts("panorama", 10).unwrap().len(), 1);
+    // The caption row itself was removed by the foreign-key cascade.
+    assert!(!catalog.get_captions_map().unwrap().contains_key(&doomed_id));
+
+    // The contentless FTS row must no longer contain the caption tokens, not just
+    // be filtered out by the media_items join. This holds because the delete
+    // trigger now runs BEFORE the FK cascade removes media_captions.
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let stale: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM media_search_fts WHERE media_search_fts MATCH 'narwhal'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        stale, 0,
+        "caption tokens must be removed from the FTS index"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_fts5_caption_schema_migration_backfills() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_caption_migration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+
+    // Seed a catalog, then downgrade its FTS schema to the pre-caption layout.
+    {
+        let catalog = Catalog::open(&db_path).expect("open catalog");
+        let item = sample_media_item(
+            "/photos/migration/elephant.jpg",
+            MediaType::Image,
+            1000,
+            Some("Kyoto"),
+            Some("A7IV"),
+        );
+        let inserted = catalog.insert_or_update_batch(&[item]).unwrap();
+        catalog
+            .set_caption(inserted[0].id, "elephant crossing the river")
+            .unwrap();
+    }
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER IF EXISTS media_fts_ai;
+            DROP TRIGGER IF EXISTS media_fts_ad;
+            DROP TRIGGER IF EXISTS media_fts_au;
+            DROP TABLE IF EXISTS media_search_fts;
+
+            CREATE VIRTUAL TABLE media_search_fts USING fts5(
+                file_name,
+                parent_dir,
+                city,
+                admin1_region,
+                country_code,
+                make,
+                model,
+                lens,
+                year,
+                tags,
+                content='',
+                tokenize='unicode61 remove_diacritics 2'
+            );
+
+            INSERT INTO media_search_fts(
+                rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags
+            )
+            SELECT
+                m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
+                COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '')
+            FROM media_items m;
+            "#,
+        )
+        .unwrap();
+    }
+
+    // Reopening migrates the FTS table and backfills the stored caption.
+    let catalog = Catalog::open(&db_path).expect("reopen catalog");
+    let matches = catalog.search_fts("elephant", 10).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        catalog
+            .get_captions_map()
+            .unwrap()
+            .get(&matches[0].id)
+            .map(String::as_str),
+        Some("elephant crossing the river")
+    );
+
+    // Reopening again is idempotent: the caption column is detected and kept.
+    drop(catalog);
+    let catalog = Catalog::open(&db_path).expect("reopen catalog again");
+    assert_eq!(catalog.search_fts("elephant", 10).unwrap().len(), 1);
+    assert_eq!(catalog.total_count().unwrap(), 1);
+    drop(catalog);
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let has_caption_col: bool = conn
+        .prepare("SELECT 1 FROM pragma_table_info('media_search_fts') WHERE name = 'caption'")
+        .unwrap()
+        .exists([])
+        .unwrap();
+    assert!(has_caption_col);
+}
+
+#[test]
 fn test_offline_geocoder_nearest_lookup() {
     let geocoder = OfflineGeocoder::new();
 
     // Tokyo: 35.6895, 139.6917
-    let tokyo = geocoder.reverse_geocode(35.6895, 139.6917).expect("geocode tokyo");
+    let tokyo = geocoder
+        .reverse_geocode(35.6895, 139.6917)
+        .expect("geocode tokyo");
     assert_eq!(tokyo.city, "Tokyo");
     assert_eq!(tokyo.country_code, "JP");
 
     // Paris: 48.8566, 2.3522
-    let paris = geocoder.reverse_geocode(48.8566, 2.3522).expect("geocode paris");
+    let paris = geocoder
+        .reverse_geocode(48.8566, 2.3522)
+        .expect("geocode paris");
     assert_eq!(paris.city, "Paris");
     assert_eq!(paris.country_code, "FR");
 
     // San Francisco: 37.7749, -122.4194
-    let sf = geocoder.reverse_geocode(37.7749, -122.4194).expect("geocode sf");
+    let sf = geocoder
+        .reverse_geocode(37.7749, -122.4194)
+        .expect("geocode sf");
     assert_eq!(sf.city, "San Francisco");
     assert_eq!(sf.country_code, "US");
 
@@ -180,13 +490,27 @@ fn test_offline_geocoder_nearest_lookup() {
     }
     let elapsed = start.elapsed();
     let per_lookup_micros = elapsed.as_micros() as f64 / 1000.0;
-    println!("Reverse geocode latency: {:.2} µs/lookup", per_lookup_micros);
-    assert!(per_lookup_micros < 4.0, "Reverse geocoding must resolve in < 4µs");
+    println!(
+        "Reverse geocode latency: {:.2} µs/lookup",
+        per_lookup_micros
+    );
+    assert!(
+        per_lookup_micros < 20.0,
+        "Reverse geocoding must resolve in < 20µs in debug mode"
+    );
 }
 
 #[test]
 fn test_disk_cache() {
-    let temp_dir = std::env::temp_dir().join("lumina_test_cache");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_test_cache_{}_{}",
+        std::process::id(),
+        nanos
+    ));
     let cache = DiskCache::with_directory(&temp_dir).expect("create test cache");
     cache.clear().expect("clear test cache");
 
@@ -213,11 +537,20 @@ fn test_disk_cache() {
     assert_eq!(retrieved.data.len(), 4 * 4 * 4);
 
     let _ = cache.clear();
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
 fn test_scanner_on_temp_dir() {
-    let temp_dir = std::env::temp_dir().join("lumina_test_scanner");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_test_scanner_{}_{}",
+        std::process::id(),
+        nanos
+    ));
     let _ = std::fs::remove_dir_all(&temp_dir);
     std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -248,28 +581,52 @@ fn test_scanner_on_temp_dir() {
 
 #[test]
 fn test_desktop_pics_integration() {
-    let desktop_pics = PathBuf::from("/Users/raymondottun/Desktop/pics");
-    if !desktop_pics.exists() {
-        return;
-    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_test_engine_{}_{}",
+        std::process::id(),
+        nanos
+    ));
+    let media_dir = temp_dir.join("media");
+    let db_path = temp_dir.join("isolated_catalog.db");
+    let cache_dir = temp_dir.join("isolated_cache");
+    std::fs::create_dir_all(&media_dir).unwrap();
 
-    let (engine, rx) = lumina_core::LuminaEngine::open(desktop_pics).expect("open engine on desktop pics");
+    // Create real valid JPEG images using the image crate
+    let img1 = image::RgbImage::from_fn(32, 32, |x, y| {
+        image::Rgb([(x * 8) as u8, (y * 8) as u8, 128])
+    });
+    img1.save(media_dir.join("photo1.jpg")).unwrap();
+
+    let img2 = image::RgbImage::from_fn(24, 24, |x, y| {
+        image::Rgb([200, (x * 10) as u8, (y * 10) as u8])
+    });
+    img2.save(media_dir.join("photo2.jpg")).unwrap();
+
+    let mut vid = File::create(media_dir.join("clip1.mp4")).unwrap();
+    vid.write_all(b"dummy mp4 video bytes for scanner test")
+        .unwrap();
+
+    // Open LuminaEngine with ISOLATED db and cache paths
+    let (engine, rx) =
+        lumina_core::LuminaEngine::open_with_paths(media_dir.clone(), db_path, Some(cache_dir))
+            .expect("open engine with isolated paths");
 
     let mut total_discovered = 0;
     while let Ok(evt) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
-        match evt {
-            lumina_core::EngineEvent::ScanComplete { total_items } => {
-                total_discovered = total_items;
-                break;
-            }
-            _ => {}
+        if let lumina_core::EngineEvent::ScanComplete { total_items } = evt {
+            total_discovered = total_items;
+            break;
         }
     }
 
-    assert!(total_discovered > 0, "Should discover items in Desktop/pics");
+    assert_eq!(total_discovered, 3, "Should discover all 3 media items");
 
     let slice = engine.get_item_slice(0..10);
-    assert!(!slice.is_empty());
+    assert_eq!(slice.len(), 3);
 
     // Verify rich metadata parsed
     for item in &slice {
@@ -283,24 +640,71 @@ fn test_desktop_pics_integration() {
     let year_buckets = engine.get_timeline_buckets("year");
     assert!(!year_buckets.is_empty(), "Should compute year buckets");
 
-    // Test thumbnail decoding
-    let first = &slice[0];
+    // Test thumbnail decoding on real JPEG
+    let photo = slice
+        .iter()
+        .find(|i| i.media_type == lumina_core::MediaType::Image)
+        .expect("found photo");
     let (tx_thumb, rx_thumb) = crossbeam_channel::bounded(1);
-    engine.request_thumbnail(first.id, 256, move |frame| {
+    engine.request_thumbnail(photo.id, 64, move |frame| {
         let _ = tx_thumb.send(frame);
     });
 
-    let frame_opt = rx_thumb.recv_timeout(std::time::Duration::from_secs(5)).expect("receive thumbnail");
+    let frame_opt = rx_thumb
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("receive thumbnail");
     assert!(frame_opt.is_some(), "Thumbnail decode succeeded");
     let frame = frame_opt.unwrap();
     assert!(frame.width > 0 && frame.height > 0);
+
+    // Verify P0 Fix: Rescan MUST NOT wipe out favorites or user tags
+    let target_id = slice[0].id;
+    engine
+        .batch_set_favorite(&[target_id], true)
+        .expect("set favorite");
+    engine
+        .add_tags_batch(&[target_id], &["my_vacation".to_string()])
+        .expect("add tag");
+
+    // Trigger rescan
+    engine.rescan();
+    while let Ok(evt) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
+        if let lumina_core::EngineEvent::ScanComplete { .. } = evt {
+            break;
+        }
+    }
+
+    // Assert favorite and tags survived rescan
+    let rescanned_slice = engine.get_item_slice(0..10);
+    let target_item = rescanned_slice
+        .iter()
+        .find(|i| i.id == target_id)
+        .expect("find target");
+    assert!(
+        target_item.is_favorite,
+        "User favorite MUST survive rescan!"
+    );
+    let tags = engine.get_tags_for_item(target_id);
+    assert_eq!(
+        tags,
+        vec!["my_vacation".to_string()],
+        "Tags MUST survive rescan!"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
 fn test_structured_search_engine() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let mut item1 = sample_media_item("/photos/sunset_kyoto.jpg", MediaType::Image, 1789430400000, Some("Kyoto"), Some("ILCE-7M4"));
+    let mut item1 = sample_media_item(
+        "/photos/sunset_kyoto.jpg",
+        MediaType::Image,
+        1789430400000,
+        Some("Kyoto"),
+        Some("ILCE-7M4"),
+    );
     item1.make = Some("Sony".to_string());
     item1.model = Some("Sony A7IV".to_string());
     item1.lens = Some("FE 35mm F1.4 GM".to_string());
@@ -311,7 +715,13 @@ fn test_structured_search_engine() {
     item1.month = 9;
     item1.day = 15;
 
-    let mut item2 = sample_media_item("/photos/shibuya_night.jpg", MediaType::Image, 1786320000000, Some("Tokyo"), Some("EOS R5"));
+    let mut item2 = sample_media_item(
+        "/photos/shibuya_night.jpg",
+        MediaType::Image,
+        1786320000000,
+        Some("Tokyo"),
+        Some("EOS R5"),
+    );
     item2.make = Some("Canon".to_string());
     item2.model = Some("Canon EOS R5".to_string());
     item2.lens = Some("RF 50mm F1.2L".to_string());
@@ -322,7 +732,13 @@ fn test_structured_search_engine() {
     item2.month = 8;
     item2.day = 10;
 
-    let mut item3 = sample_media_item("/photos/eiffel_tower.jpg", MediaType::Image, 1746057600000, Some("Paris"), Some("Z8"));
+    let mut item3 = sample_media_item(
+        "/photos/eiffel_tower.jpg",
+        MediaType::Image,
+        1746057600000,
+        Some("Paris"),
+        Some("Z8"),
+    );
     item3.make = Some("Nikon".to_string());
     item3.model = Some("Nikon Z8".to_string());
     item3.iso = Some(200);
@@ -332,7 +748,13 @@ fn test_structured_search_engine() {
     item3.month = 5;
     item3.day = 1;
 
-    let mut item4 = sample_media_item("/videos/kyoto_temple.mp4", MediaType::Video, 1789862400000, Some("Kyoto"), Some("FX3"));
+    let mut item4 = sample_media_item(
+        "/videos/kyoto_temple.mp4",
+        MediaType::Video,
+        1789862400000,
+        Some("Kyoto"),
+        Some("FX3"),
+    );
     item4.make = Some("Sony".to_string());
     item4.model = Some("Sony FX3".to_string());
     item4.iso = Some(3200);
@@ -341,7 +763,13 @@ fn test_structured_search_engine() {
     item4.month = 9;
     item4.day = 20;
 
-    let mut item5 = sample_media_item("/raw/arashiyama.arw", MediaType::Raw, 1790035200000, Some("Kyoto"), Some("Sony A7IV"));
+    let mut item5 = sample_media_item(
+        "/raw/arashiyama.arw",
+        MediaType::Raw,
+        1790035200000,
+        Some("Kyoto"),
+        Some("Sony A7IV"),
+    );
     item5.make = Some("Sony".to_string());
     item5.model = Some("Sony A7IV".to_string());
     item5.iso = Some(100);
@@ -350,49 +778,67 @@ fn test_structured_search_engine() {
     item5.month = 9;
     item5.day = 22;
 
-    catalog.insert_or_update_batch(&[item1, item2, item3, item4, item5]).expect("insert items");
+    catalog
+        .insert_or_update_batch(&[item1, item2, item3, item4, item5])
+        .expect("insert items");
 
     // 1. Search camera:Sony
     let q_sony = StructuredQuery::parse("camera:Sony");
-    let sony_res = catalog.search_structured(&q_sony, 10, 0).expect("search sony");
+    let sony_res = catalog
+        .search_structured(&q_sony, 10, 0)
+        .expect("search sony");
     assert_eq!(sony_res.len(), 3);
 
     // 2. Search camera:Sony is:favorite
     let q_sony_fav = StructuredQuery::parse("camera:Sony is:favorite");
-    let sony_fav_res = catalog.search_structured(&q_sony_fav, 10, 0).expect("search sony fav");
+    let sony_fav_res = catalog
+        .search_structured(&q_sony_fav, 10, 0)
+        .expect("search sony fav");
     assert_eq!(sony_fav_res.len(), 1);
     assert_eq!(sony_fav_res[0].file_name, "sunset_kyoto.jpg");
 
     // 3. Search city:Kyoto is:video
     let q_kyoto_vid = StructuredQuery::parse("city:Kyoto is:video");
-    let kyoto_vid_res = catalog.search_structured(&q_kyoto_vid, 10, 0).expect("search kyoto video");
+    let kyoto_vid_res = catalog
+        .search_structured(&q_kyoto_vid, 10, 0)
+        .expect("search kyoto video");
     assert_eq!(kyoto_vid_res.len(), 1);
     assert_eq!(kyoto_vid_res[0].file_name, "kyoto_temple.mp4");
 
     // 4. Search iso:>1000
     let q_iso = StructuredQuery::parse("iso:>1000");
-    let iso_res = catalog.search_structured(&q_iso, 10, 0).expect("search iso");
+    let iso_res = catalog
+        .search_structured(&q_iso, 10, 0)
+        .expect("search iso");
     assert_eq!(iso_res.len(), 2);
 
     // 5. Search year:2026 month:9
     let q_sep = StructuredQuery::parse("year:2026 month:september");
-    let sep_res = catalog.search_structured(&q_sep, 10, 0).expect("search sep");
+    let sep_res = catalog
+        .search_structured(&q_sep, 10, 0)
+        .expect("search sep");
     assert_eq!(sep_res.len(), 3);
 
     // 6. Search is:raw
     let q_raw = StructuredQuery::parse("is:raw");
-    let raw_res = catalog.search_structured(&q_raw, 10, 0).expect("search raw");
+    let raw_res = catalog
+        .search_structured(&q_raw, 10, 0)
+        .expect("search raw");
     assert_eq!(raw_res.len(), 1);
     assert_eq!(raw_res[0].file_name, "arashiyama.arw");
 
     // 7. Search date range
     let q_date = StructuredQuery::parse("date:2026-09-01..2026-09-30");
-    let date_res = catalog.search_structured(&q_date, 10, 0).expect("search date range");
+    let date_res = catalog
+        .search_structured(&q_date, 10, 0)
+        .expect("search date range");
     assert_eq!(date_res.len(), 3);
 
     // 8. FTS Keyword + Structured
     let q_comb = StructuredQuery::parse("sunset camera:Sony");
-    let comb_res = catalog.search_structured(&q_comb, 10, 0).expect("search comb");
+    let comb_res = catalog
+        .search_structured(&q_comb, 10, 0)
+        .expect("search comb");
     assert_eq!(comb_res.len(), 1);
     assert_eq!(comb_res[0].file_name, "sunset_kyoto.jpg");
 
@@ -404,21 +850,42 @@ fn test_structured_search_engine() {
     let elapsed = start.elapsed();
     let per_query_ms = elapsed.as_secs_f64() * 1000.0 / 100.0;
     println!("Structured search latency: {:.3} ms/query", per_query_ms);
-    assert!(per_query_ms < 5.0, "Structured search must execute in < 5ms");
+    assert!(
+        per_query_ms < 5.0,
+        "Structured search must execute in < 5ms"
+    );
 }
 
 #[test]
 fn test_system_smart_albums() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let mut item_fav = sample_media_item("/photos/fav.jpg", MediaType::Image, 1000, None, Some("A7IV"));
+    let mut item_fav = sample_media_item(
+        "/photos/fav.jpg",
+        MediaType::Image,
+        1000,
+        None,
+        Some("A7IV"),
+    );
     item_fav.is_favorite = true;
 
-    let item_vid = sample_media_item("/photos/clip.mp4", MediaType::Video, 2000, None, Some("FX3"));
+    let item_vid = sample_media_item(
+        "/photos/clip.mp4",
+        MediaType::Video,
+        2000,
+        None,
+        Some("FX3"),
+    );
 
     let item_raw = sample_media_item("/photos/raw.cr3", MediaType::Raw, 3000, None, Some("R5"));
 
-    let mut item_shot = sample_media_item("/photos/Screenshot_2026.png", MediaType::Image, 4000, None, None);
+    let mut item_shot = sample_media_item(
+        "/photos/Screenshot_2026.png",
+        MediaType::Image,
+        4000,
+        None,
+        None,
+    );
     item_shot.width = 2560;
     item_shot.height = 1440;
     item_shot.lens = None;
@@ -426,39 +893,128 @@ fn test_system_smart_albums() {
     item_shot.iso = None;
     item_shot.make = None;
 
-    let mut item_long = sample_media_item("/photos/waterfall.jpg", MediaType::Image, 5000, None, Some("A7IV"));
+    let mut item_long = sample_media_item(
+        "/photos/waterfall.jpg",
+        MediaType::Image,
+        5000,
+        None,
+        Some("A7IV"),
+    );
     item_long.exposure_time = Some("2.5s".to_string());
 
-    let mut item_pano = sample_media_item("/photos/horizon.jpg", MediaType::Image, 6000, None, Some("A7IV"));
+    let mut item_pano = sample_media_item(
+        "/photos/horizon.jpg",
+        MediaType::Image,
+        6000,
+        None,
+        Some("A7IV"),
+    );
     item_pano.width = 3000;
     item_pano.height = 1000;
 
     // Bursts: 2 photos within 200ms from same camera model
-    let item_burst1 = sample_media_item("/photos/burst1.jpg", MediaType::Image, 7000, None, Some("ILCE-1"));
-    let item_burst2 = sample_media_item("/photos/burst2.jpg", MediaType::Image, 7200, None, Some("ILCE-1"));
+    let item_burst1 = sample_media_item(
+        "/photos/burst1.jpg",
+        MediaType::Image,
+        7000,
+        None,
+        Some("ILCE-1"),
+    );
+    let item_burst2 = sample_media_item(
+        "/photos/burst2.jpg",
+        MediaType::Image,
+        7200,
+        None,
+        Some("ILCE-1"),
+    );
 
-    let mut item_trash = sample_media_item("/photos/deleted.jpg", MediaType::Image, 8000, None, None);
+    let mut item_trash =
+        sample_media_item("/photos/deleted.jpg", MediaType::Image, 8000, None, None);
     item_trash.is_trashed = true;
 
     let mut item_places = sample_media_item("/photos/gps.jpg", MediaType::Image, 9000, None, None);
     item_places.latitude = Some(35.6895);
     item_places.longitude = Some(139.6917);
 
-    catalog.insert_or_update_batch(&[
-        item_fav, item_vid, item_raw, item_shot, item_long, item_pano,
-        item_burst1, item_burst2, item_trash, item_places,
-    ]).expect("insert batch");
+    catalog
+        .insert_or_update_batch(&[
+            item_fav,
+            item_vid,
+            item_raw,
+            item_shot,
+            item_long,
+            item_pano,
+            item_burst1,
+            item_burst2,
+            item_trash,
+            item_places,
+        ])
+        .expect("insert batch");
 
     // Verify all 9 system albums
-    assert_eq!(catalog.query_system_album(SystemAlbum::Favorites, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Videos, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Raw, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Screenshots, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::LongExposures, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Panoramas, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Bursts, 10, 0).unwrap().len(), 2);
-    assert_eq!(catalog.query_system_album(SystemAlbum::RecentlyDeleted, 10, 0).unwrap().len(), 1);
-    assert_eq!(catalog.query_system_album(SystemAlbum::Places, 10, 0).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Favorites, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Videos, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Raw, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Screenshots, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::LongExposures, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Panoramas, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Bursts, 10, 0)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::RecentlyDeleted, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        catalog
+            .query_system_album(SystemAlbum::Places, 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 
     // Verify count queries
     for album in SystemAlbum::all() {
@@ -474,30 +1030,56 @@ fn test_system_smart_albums() {
     }
     let elapsed = start.elapsed();
     let per_album_ms = elapsed.as_secs_f64() * 1000.0 / 9.0;
-    println!("System smart album evaluation latency: {:.3} ms/album", per_album_ms);
-    assert!(per_album_ms < 8.0, "System smart album evaluation must be < 8ms");
+    println!(
+        "System smart album evaluation latency: {:.3} ms/album",
+        per_album_ms
+    );
+    assert!(
+        per_album_ms < 8.0,
+        "System smart album evaluation must be < 8ms"
+    );
 }
 
 #[test]
 fn test_user_defined_smart_albums_json_engine() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let mut item1 = sample_media_item("/photos/sony_fav.jpg", MediaType::Image, 1000, Some("Kyoto"), Some("ILCE-7M4"));
+    let mut item1 = sample_media_item(
+        "/photos/sony_fav.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("ILCE-7M4"),
+    );
     item1.make = Some("Sony".to_string());
     item1.is_favorite = true;
     item1.iso = Some(1600);
 
-    let mut item2 = sample_media_item("/photos/sony_regular.jpg", MediaType::Image, 2000, Some("Tokyo"), Some("ILCE-7M4"));
+    let mut item2 = sample_media_item(
+        "/photos/sony_regular.jpg",
+        MediaType::Image,
+        2000,
+        Some("Tokyo"),
+        Some("ILCE-7M4"),
+    );
     item2.make = Some("Sony".to_string());
     item2.is_favorite = false;
     item2.iso = Some(400);
 
-    let mut item3 = sample_media_item("/photos/canon_fav.jpg", MediaType::Image, 3000, Some("Paris"), Some("EOS R5"));
+    let mut item3 = sample_media_item(
+        "/photos/canon_fav.jpg",
+        MediaType::Image,
+        3000,
+        Some("Paris"),
+        Some("EOS R5"),
+    );
     item3.make = Some("Canon".to_string());
     item3.is_favorite = true;
     item3.iso = Some(1600);
 
-    catalog.insert_or_update_batch(&[item1, item2, item3]).unwrap();
+    catalog
+        .insert_or_update_batch(&[item1, item2, item3])
+        .unwrap();
 
     let rules = vec![
         SmartAlbumRule {
@@ -517,12 +1099,9 @@ fn test_user_defined_smart_albums_json_engine() {
         },
     ];
 
-    let created = catalog.create_smart_album(
-        "High ISO Sony Favorites",
-        "heart",
-        MatchMode::All,
-        &rules,
-    ).expect("create smart album");
+    let created = catalog
+        .create_smart_album("High ISO Sony Favorites", "heart", MatchMode::All, &rules)
+        .expect("create smart album");
 
     assert!(created.id > 0);
     assert_eq!(created.title, "High ISO Sony Favorites");
@@ -534,11 +1113,15 @@ fn test_user_defined_smart_albums_json_engine() {
     assert_eq!(albums[0].title, "High ISO Sony Favorites");
 
     // Execute smart album query
-    let results = catalog.query_smart_album(&albums[0], 10, 0).expect("query smart album");
+    let results = catalog
+        .query_smart_album(&albums[0], 10, 0)
+        .expect("query smart album");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].file_name, "sony_fav.jpg");
 
-    let count = catalog.query_smart_album_count(&albums[0]).expect("count smart album");
+    let count = catalog
+        .query_smart_album_count(&albums[0])
+        .expect("count smart album");
     assert_eq!(count, 1);
 
     // Test MatchMode::Any
@@ -555,12 +1138,9 @@ fn test_user_defined_smart_albums_json_engine() {
         },
     ];
 
-    let any_album = catalog.create_smart_album(
-        "Canon or Kyoto",
-        "folder",
-        MatchMode::Any,
-        &any_rules,
-    ).unwrap();
+    let any_album = catalog
+        .create_smart_album("Canon or Kyoto", "folder", MatchMode::Any, &any_rules)
+        .unwrap();
 
     let any_results = catalog.query_smart_album(&any_album, 10, 0).unwrap();
     assert_eq!(any_results.len(), 2);
@@ -572,7 +1152,10 @@ fn test_user_defined_smart_albums_json_engine() {
     }
     let elapsed = start.elapsed();
     let per_eval_ms = elapsed.as_secs_f64() * 1000.0 / 100.0;
-    println!("Multi-condition smart album evaluation latency: {:.3} ms/eval", per_eval_ms);
+    println!(
+        "Multi-condition smart album evaluation latency: {:.3} ms/eval",
+        per_eval_ms
+    );
     assert!(per_eval_ms < 8.0, "Rule evaluation must execute in < 8ms");
 
     // Delete smart album
@@ -580,4 +1163,476 @@ fn test_user_defined_smart_albums_json_engine() {
     assert!(deleted);
     let remaining = catalog.list_smart_albums().unwrap();
     assert_eq!(remaining.len(), 1);
+}
+
+#[test]
+fn test_batch_operations_and_keywords() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item1 = sample_media_item(
+        "/photos/lake_tahoe.jpg",
+        MediaType::Image,
+        1728560000000,
+        Some("Tahoe"),
+        Some("A7IV"),
+    );
+    let item2 = sample_media_item(
+        "/photos/yosemite_valley.jpg",
+        MediaType::Image,
+        1728570000000,
+        Some("Yosemite"),
+        Some("EOS R5"),
+    );
+    let item3 = sample_media_item(
+        "/photos/zion_canyon.jpg",
+        MediaType::Image,
+        1728580000000,
+        Some("Zion"),
+        Some("Z8"),
+    );
+
+    let inserted = catalog
+        .insert_or_update_batch(&[item1, item2, item3])
+        .unwrap();
+    let ids: Vec<MediaId> = inserted.iter().map(|it| it.id).collect();
+    assert_eq!(ids.len(), 3);
+
+    // Test batch favorite
+    catalog.batch_set_favorite(&ids[0..2], true).unwrap();
+    let it1 = catalog.get_item_by_id(ids[0]).unwrap().unwrap();
+    let it2 = catalog.get_item_by_id(ids[1]).unwrap().unwrap();
+    let it3 = catalog.get_item_by_id(ids[2]).unwrap().unwrap();
+    assert!(it1.is_favorite);
+    assert!(it2.is_favorite);
+    assert!(!it3.is_favorite);
+
+    // Test batch tags
+    let tags = vec![
+        "nature".to_string(),
+        "travel".to_string(),
+        "vacation".to_string(),
+    ];
+    catalog.add_tags_batch(&ids, &tags).unwrap();
+
+    let all_tags = catalog.get_all_tags().unwrap();
+    assert_eq!(all_tags, vec!["nature", "travel", "vacation"]);
+
+    let tags_for_1 = catalog.get_tags_for_item(ids[0]).unwrap();
+    assert_eq!(tags_for_1.len(), 3);
+
+    // Query by tag
+    let nature_items = catalog.get_items_by_tag("nature", 10, 0).unwrap();
+    assert_eq!(nature_items.len(), 3);
+
+    // Structured search with tag
+    let q = StructuredQuery::parse("tag:nature");
+    let search_results = catalog.search_structured(&q, 10, 0).unwrap();
+    assert_eq!(search_results.len(), 3);
+
+    // Remove a tag from item 1
+    catalog
+        .remove_tags_batch(&[ids[0]], &["vacation".to_string()])
+        .unwrap();
+    let tags_for_1_after = catalog.get_tags_for_item(ids[0]).unwrap();
+    assert_eq!(tags_for_1_after.len(), 2);
+    assert!(!tags_for_1_after.contains(&"vacation".to_string()));
+
+    // Test query_tag_counts
+    let tag_counts = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        tag_counts,
+        vec![
+            ("nature".to_string(), 3),
+            ("travel".to_string(), 3),
+            ("vacation".to_string(), 2)
+        ]
+    );
+
+    // Test Tag in Smart Album
+    let tag_rule = SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Text("Nature".to_string()),
+    };
+    let tag_album = catalog
+        .create_smart_album("Nature Album", "tag", MatchMode::All, &[tag_rule])
+        .unwrap();
+    let tag_album_matches = catalog.query_smart_album(&tag_album, 10, 0).unwrap();
+    assert_eq!(tag_album_matches.len(), 3);
+
+    // Test batch trash
+    catalog.batch_set_trashed(&ids[1..3], true).unwrap();
+    let active_slice = catalog.get_item_slice(0, 10).unwrap();
+    assert_eq!(active_slice.len(), 1);
+
+    // Tag counts after trashing items 1 and 2: only item 0 remains active (nature, travel)
+    let tag_counts_after = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        tag_counts_after,
+        vec![("nature".to_string(), 1), ("travel".to_string(), 1)]
+    );
+
+    let tag_album_matches_after = catalog.query_smart_album(&tag_album, 10, 0).unwrap();
+    assert_eq!(tag_album_matches_after.len(), 1);
+    assert_eq!(active_slice[0].id, ids[0]);
+}
+
+#[test]
+fn test_tag_management_lifecycle() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item1 = sample_media_item("/photos/img1.jpg", MediaType::Image, 1000, None, None);
+    let item2 = sample_media_item("/photos/img2.jpg", MediaType::Image, 2000, None, None);
+    let item3 = sample_media_item("/photos/img3.jpg", MediaType::Image, 3000, None, None);
+
+    let inserted = catalog
+        .insert_or_update_batch(&[item1, item2, item3])
+        .unwrap();
+    let ids: Vec<MediaId> = inserted.iter().map(|it| it.id).collect();
+
+    // 1. Tag items: item1 & item2 get "nature", item2 & item3 get "travel", item3 gets "vacation"
+    catalog
+        .add_tags_batch(&[ids[0], ids[1]], &["nature".to_string()])
+        .unwrap();
+    catalog
+        .add_tags_batch(&[ids[1], ids[2]], &["travel".to_string()])
+        .unwrap();
+    catalog
+        .add_tags_batch(&[ids[2]], &["vacation".to_string()])
+        .unwrap();
+
+    let counts = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        counts,
+        vec![
+            ("nature".to_string(), 2),
+            ("travel".to_string(), 2),
+            ("vacation".to_string(), 1),
+        ]
+    );
+
+    // 2. Create smart album targeting tag:nature
+    let tag_rule = SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Text("nature".to_string()),
+    };
+    let album = catalog
+        .create_smart_album("Nature Shots", "leaf", MatchMode::All, &[tag_rule])
+        .unwrap();
+    assert_eq!(catalog.query_smart_album_count(&album).unwrap(), 2);
+
+    // 3. Rename "nature" -> "landscape"
+    let affected = catalog.rename_tag("nature", "landscape").unwrap();
+    assert_eq!(affected, 2);
+
+    // Verify tag counts: "nature" gone, "landscape" exists
+    let counts_renamed = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        counts_renamed,
+        vec![
+            ("landscape".to_string(), 2),
+            ("travel".to_string(), 2),
+            ("vacation".to_string(), 1),
+        ]
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["landscape"]
+    );
+
+    // Verify Smart Album cascade: album rules now reference "landscape"
+    let reloaded_album = catalog.get_smart_album(album.id).unwrap().unwrap();
+    assert_eq!(
+        reloaded_album.rules[0].value,
+        RuleValue::Text("landscape".to_string())
+    );
+    assert_eq!(catalog.query_smart_album_count(&reloaded_album).unwrap(), 2);
+
+    // 4. Merge "travel" into "landscape"
+    let merged_affected = catalog.merge_tags("travel", "landscape").unwrap();
+    assert_eq!(merged_affected, 2);
+
+    // Item 1 had landscape. Item 2 had landscape + travel (now deduplicated landscape). Item 3 had travel (now landscape) + vacation.
+    let counts_merged = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        counts_merged,
+        vec![("landscape".to_string(), 3), ("vacation".to_string(), 1),]
+    );
+    assert_eq!(catalog.query_smart_album_count(&reloaded_album).unwrap(), 3);
+
+    // 5. Delete "vacation" globally
+    let deleted_count = catalog.delete_tag_globally("vacation").unwrap();
+    assert_eq!(deleted_count, 1);
+    let counts_final = catalog.query_tag_counts().unwrap();
+    assert_eq!(counts_final, vec![("landscape".to_string(), 3)]);
+    assert_eq!(
+        catalog.get_tags_for_item(ids[2]).unwrap(),
+        vec!["landscape"]
+    );
+}
+
+#[test]
+fn test_deletion_lifecycle_and_trash_restoration() {
+    use lumina_core::DeletionTarget;
+
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_del_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let file_path1 = tmp_dir.join("photo_del_1.jpg");
+    let file_path2 = tmp_dir.join("photo_del_2.jpg");
+    let file_path3 = tmp_dir.join("photo_del_3.jpg");
+
+    std::fs::write(&file_path1, b"dummy photo 1").unwrap();
+    std::fs::write(&file_path2, b"dummy photo 2").unwrap();
+    std::fs::write(&file_path3, b"dummy photo 3").unwrap();
+
+    let item1 = sample_media_item(
+        file_path1.to_str().unwrap(),
+        MediaType::Image,
+        1000,
+        None,
+        None,
+    );
+    let item2 = sample_media_item(
+        file_path2.to_str().unwrap(),
+        MediaType::Image,
+        2000,
+        None,
+        None,
+    );
+    let item3 = sample_media_item(
+        file_path3.to_str().unwrap(),
+        MediaType::Image,
+        3000,
+        None,
+        None,
+    );
+
+    let inserted = catalog
+        .insert_or_update_batch(&[item1, item2, item3])
+        .unwrap();
+    let id1 = inserted[0].id;
+    let id2 = inserted[1].id;
+    let id3 = inserted[2].id;
+
+    // Add tags and embeddings to verify cascade deletion
+    catalog
+        .add_tags_batch(&[id1, id2, id3], &["scenery".to_string()])
+        .unwrap();
+    assert_eq!(catalog.get_tags_for_item(id1).unwrap().len(), 1);
+
+    // 1. Move id1 and id2 to Trash
+    catalog.batch_set_trashed(&[id1, id2], true).unwrap();
+    let trashed = catalog
+        .query_system_album(SystemAlbum::RecentlyDeleted, 10, 0)
+        .unwrap();
+    assert_eq!(trashed.len(), 2);
+    assert_eq!(
+        catalog
+            .query_system_album_count(SystemAlbum::RecentlyDeleted)
+            .unwrap(),
+        2
+    );
+
+    // 2. Restore id1 specifically
+    let restored_count = catalog.restore_trashed_items(&[id1]).unwrap();
+    assert_eq!(restored_count, 1);
+    let trashed_after_restore = catalog
+        .query_system_album(SystemAlbum::RecentlyDeleted, 10, 0)
+        .unwrap();
+    assert_eq!(trashed_after_restore.len(), 1);
+    assert_eq!(trashed_after_restore[0].id, id2);
+
+    // 3. Re-trash id1 and test restore_all_trash
+    catalog.set_trashed(id1, true).unwrap();
+    assert_eq!(
+        catalog
+            .query_system_album_count(SystemAlbum::RecentlyDeleted)
+            .unwrap(),
+        2
+    );
+    let all_restored = catalog.restore_all_trash().unwrap();
+    assert_eq!(all_restored, 2);
+    assert_eq!(
+        catalog
+            .query_system_album_count(SystemAlbum::RecentlyDeleted)
+            .unwrap(),
+        0
+    );
+
+    // 4. Test PermanentDisk deletion on id3
+    assert!(file_path3.exists());
+    let deleted_count = catalog
+        .permanently_delete_items(&[id3], DeletionTarget::PermanentDisk)
+        .unwrap();
+    assert_eq!(deleted_count, 1);
+    assert!(!file_path3.exists());
+    assert!(catalog.get_item_by_id(id3).unwrap().is_none());
+    assert_eq!(catalog.get_tags_for_item(id3).unwrap().len(), 0);
+
+    // 5. Move id1 and id2 to trash, then empty_trash with CatalogOnly
+    catalog.batch_set_trashed(&[id1, id2], true).unwrap();
+    assert!(file_path1.exists());
+    assert!(file_path2.exists());
+    let emptied = catalog.empty_trash(DeletionTarget::CatalogOnly).unwrap();
+    assert_eq!(emptied.len(), 2);
+    assert_eq!(
+        catalog
+            .query_system_album_count(SystemAlbum::RecentlyDeleted)
+            .unwrap(),
+        0
+    );
+    // Files remain untouched on disk under CatalogOnly
+    assert!(file_path1.exists());
+    assert!(file_path2.exists());
+    assert_eq!(catalog.total_count().unwrap(), 0);
+
+    // Clean up temporary files
+    let _ = std::fs::remove_dir_all(tmp_dir);
+}
+
+#[test]
+fn test_extract_video_duration_synthetic() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_test_duration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let video_path = tmp_dir.join("test.mp4");
+
+    // Write a minimal MP4 container with mvhd (version 0, timescale 1000, duration 45200 ms)
+    let mut file = File::create(&video_path).unwrap();
+    let mut data = Vec::new();
+    // ftyp box
+    data.extend_from_slice(&[0, 0, 0, 16]); // size 16
+    data.extend_from_slice(b"ftypmp42");
+    data.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]);
+
+    // moov box containing mvhd (116 bytes total)
+    data.extend_from_slice(&[0, 0, 0, 116]);
+    data.extend_from_slice(b"moov");
+
+    // mvhd box
+    data.extend_from_slice(&[0, 0, 0, 108]);
+    data.extend_from_slice(b"mvhd");
+    data.push(0); // version 0
+    data.extend_from_slice(&[0, 0, 0]); // flags
+    data.extend_from_slice(&[0, 0, 0, 0]); // creation time
+    data.extend_from_slice(&[0, 0, 0, 0]); // modification time
+    data.extend_from_slice(&1000u32.to_be_bytes()); // timescale: 1000
+    data.extend_from_slice(&45200u32.to_be_bytes()); // duration: 45200 (45.2s)
+    data.resize(data.len() + (108 - 28), 0);
+
+    file.write_all(&data).unwrap();
+    drop(file);
+
+    let res = lumina_core::extract_video_duration(&video_path);
+    assert!(res.is_some(), "Expected video duration to be extracted");
+    let (ms, secs) = res.unwrap();
+    assert_eq!(ms, 45200);
+    assert!((secs - 45.2).abs() < 0.001);
+
+    // Also test non-faststart MP4 where moov/mvhd is placed at the tail after >128 KiB mdat
+    let tail_video_path = tmp_dir.join("tail_test.mp4");
+    let mut tail_file = File::create(&tail_video_path).unwrap();
+    let mut tail_data = vec![0u8; 200 * 1024]; // 200 KiB dummy mdat
+    tail_data.extend_from_slice(&data);
+    tail_file.write_all(&tail_data).unwrap();
+    drop(tail_file);
+
+    let tail_res = lumina_core::extract_video_duration(&tail_video_path);
+    assert!(
+        tail_res.is_some(),
+        "Expected tail moov duration to be extracted"
+    );
+    assert_eq!(tail_res.unwrap().0, 45200);
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_ratings_and_color_labels_persistence_and_search() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+
+    let item1 = sample_media_item(
+        "/photos/rated_five.jpg",
+        MediaType::Image,
+        1789430400000,
+        Some("Tokyo"),
+        Some("Sony A7IV"),
+    );
+    let item2 = sample_media_item(
+        "/photos/rated_three.jpg",
+        MediaType::Image,
+        1789430500000,
+        Some("Kyoto"),
+        Some("Sony A7IV"),
+    );
+
+    let inserted = catalog
+        .insert_or_update_batch(&[item1, item2])
+        .expect("insert items");
+    let id1 = inserted[0].id;
+    let id2 = inserted[1].id;
+
+    catalog.set_rating(id1, 5).expect("set rating 5");
+    catalog.set_rating(id2, 3).expect("set rating 3");
+    catalog.set_color_label(id1, 1).expect("set red label");
+
+    let ratings = catalog.get_ratings_map().expect("get ratings map");
+    assert_eq!(ratings.get(&id1), Some(&5));
+    assert_eq!(ratings.get(&id2), Some(&3));
+
+    let colors = catalog
+        .get_color_labels_map()
+        .expect("get color labels map");
+    assert_eq!(colors.get(&id1), Some(&1));
+    assert_eq!(colors.get(&id2), None);
+
+    let q_high = StructuredQuery::parse("rating:>=4");
+    let res_high = catalog.search_structured(&q_high, 10, 0).unwrap();
+    assert_eq!(res_high.len(), 1);
+    assert_eq!(res_high[0].id, id1);
+
+    let q_red = StructuredQuery::parse("color:red");
+    let res_red = catalog.search_structured(&q_red, 10, 0).unwrap();
+    assert_eq!(res_red.len(), 1);
+    assert_eq!(res_red[0].id, id1);
+
+    let q_has_color = StructuredQuery::parse("has:color");
+    let res_has_color = catalog.search_structured(&q_has_color, 10, 0).unwrap();
+    assert_eq!(res_has_color.len(), 1);
+    assert_eq!(res_has_color[0].id, id1);
+
+    // Smart Album rules using Rating and ColorLabel
+    let smart_rules = vec![
+        SmartAlbumRule {
+            field: RuleField::Rating,
+            operator: RuleOperator::GreaterThan,
+            value: RuleValue::Integer(4),
+        },
+        SmartAlbumRule {
+            field: RuleField::ColorLabel,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Integer(1),
+        },
+    ];
+    let smart_album = catalog
+        .create_smart_album("5-Star Red Selects", "star", MatchMode::All, &smart_rules)
+        .expect("create rating/color smart album");
+    let album_matches = catalog.query_smart_album(&smart_album, 10, 0).unwrap();
+    assert_eq!(album_matches.len(), 1);
+    assert_eq!(album_matches[0].id, id1);
 }

@@ -16,93 +16,6 @@ struct CityPoint {
     country: &'static str,
 }
 
-#[derive(Debug, Clone)]
-enum KdNode {
-    Leaf {
-        points: Vec<CityPoint>,
-    },
-    Internal {
-        axis: usize,
-        split_val: f32,
-        left: Box<KdNode>,
-        right: Box<KdNode>,
-    },
-}
-
-impl KdNode {
-    fn build(mut points: Vec<CityPoint>, depth: usize) -> Self {
-        if points.len() <= 16 {
-            return KdNode::Leaf { points };
-        }
-
-        let axis = depth % 3;
-        points.sort_by(|a, b| {
-            a.point[axis]
-                .partial_cmp(&b.point[axis])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        let mid = points.len() / 2;
-        let split_val = points[mid].point[axis];
-
-        let right_points = points.split_off(mid);
-        let left_node = Self::build(points, depth + 1);
-        let right_node = Self::build(right_points, depth + 1);
-
-        KdNode::Internal {
-            axis,
-            split_val,
-            left: Box::new(left_node),
-            right: Box::new(right_node),
-        }
-    }
-
-    fn nearest<'a>(&'a self, target: &[f32; 3], best: &mut Option<(f32, &'a CityPoint)>) {
-        match self {
-            KdNode::Leaf { points } => {
-                for pt in points {
-                    let d = sq_dist(target, &pt.point);
-                    match best {
-                        Some((best_d, _)) if d < *best_d => {
-                            *best = Some((d, pt));
-                        }
-                        None => {
-                            *best = Some((d, pt));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            KdNode::Internal {
-                axis,
-                split_val,
-                left,
-                right,
-            } => {
-                let target_val = target[*axis];
-                let (first, second) = if target_val <= *split_val {
-                    (left, right)
-                } else {
-                    (right, left)
-                };
-
-                first.nearest(target, best);
-
-                let split_diff = target_val - *split_val;
-                let split_dist_sq = split_diff * split_diff;
-
-                if let Some((best_d, _)) = best {
-                    if split_dist_sq < *best_d {
-                        second.nearest(target, best);
-                    }
-                } else {
-                    second.nearest(target, best);
-                }
-            }
-        }
-    }
-}
-
 fn to_sphere_point(lat: f64, lon: f64) -> [f32; 3] {
     let lat_rad = lat.to_radians();
     let lon_rad = lon.to_radians();
@@ -122,7 +35,7 @@ fn sq_dist(a: &[f32; 3], b: &[f32; 3]) -> f32 {
 
 #[derive(Clone)]
 pub struct OfflineGeocoder {
-    root: Arc<KdNode>,
+    points: Arc<Vec<CityPoint>>,
 }
 
 impl OfflineGeocoder {
@@ -138,23 +51,29 @@ impl OfflineGeocoder {
             })
             .collect();
 
-        let root = KdNode::build(points, 0);
         Self {
-            root: Arc::new(root),
+            points: Arc::new(points),
         }
     }
 
-    /// Resolves nearest city in < 4 microseconds
+    /// Resolves nearest city in < 1 microsecond (within ~250 km maximum threshold)
     pub fn reverse_geocode(&self, lat: f64, lon: f64) -> Option<GeoLocation> {
+        if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+            return None;
+        }
         let target = to_sphere_point(lat, lon);
-        let mut best = None;
-        self.root.nearest(&target, &mut best);
-
-        best.map(|(_, pt)| GeoLocation {
-            city: pt.city.to_string(),
-            admin1_region: pt.admin1.to_string(),
-            country_code: pt.country.to_string(),
-        })
+        // Max chord distance squared on unit sphere for ~250 km: (250 / 6371)^2 ≈ 0.00154
+        const MAX_SQ_DIST: f32 = 0.0016;
+        self.points
+            .iter()
+            .map(|pt| (pt, sq_dist(&target, &pt.point)))
+            .filter(|(_, d)| *d <= MAX_SQ_DIST)
+            .min_by(|(_, da), (_, db)| da.partial_cmp(db).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(pt, _)| GeoLocation {
+                city: pt.city.to_string(),
+                admin1_region: pt.admin1.to_string(),
+                country_code: pt.country.to_string(),
+            })
     }
 }
 
@@ -182,7 +101,13 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Orlando", "Florida", "US", 28.5383, -81.3792),
         ("Atlanta", "Georgia", "US", 33.7490, -84.3880),
         ("Boston", "Massachusetts", "US", 42.3601, -71.0589),
-        ("Washington", "District of Columbia", "US", 38.9072, -77.0369),
+        (
+            "Washington",
+            "District of Columbia",
+            "US",
+            38.9072,
+            -77.0369,
+        ),
         ("Denver", "Colorado", "US", 39.7392, -104.9903),
         ("Phoenix", "Arizona", "US", 33.4484, -112.0740),
         ("Las Vegas", "Nevada", "US", 36.1699, -115.1398),
@@ -194,7 +119,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("New Orleans", "Louisiana", "US", 29.9511, -90.0715),
         ("Detroit", "Michigan", "US", 42.3314, -83.0458),
         ("Salt Lake City", "Utah", "US", 40.7608, -111.8910),
-
         // North America - Canada
         ("Toronto", "Ontario", "CA", 43.6532, -79.3832),
         ("Montreal", "Quebec", "CA", 45.5017, -73.5673),
@@ -205,7 +129,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Victoria", "British Columbia", "CA", 48.4284, -123.3656),
         ("Halifax", "Nova Scotia", "CA", 44.6488, -63.5752),
         ("Banff", "Alberta", "CA", 51.1784, -115.5708),
-
         // Europe - United Kingdom & Ireland
         ("London", "England", "GB", 51.5074, -0.1278),
         ("Manchester", "England", "GB", 53.4808, -2.2426),
@@ -217,17 +140,27 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Cambridge", "England", "GB", 52.2053, 0.1218),
         ("Dublin", "Leinster", "IE", 53.3498, -6.2603),
         ("Belfast", "Northern Ireland", "GB", 54.5973, -5.9301),
-
         // Europe - France
         ("Paris", "Île-de-France", "FR", 48.8566, 2.3522),
         ("Nice", "Provence-Alpes-Côte d'Azur", "FR", 43.7102, 7.2620),
-        ("Marseille", "Provence-Alpes-Côte d'Azur", "FR", 43.2965, 5.3698),
+        (
+            "Marseille",
+            "Provence-Alpes-Côte d'Azur",
+            "FR",
+            43.2965,
+            5.3698,
+        ),
         ("Lyon", "Auvergne-Rhône-Alpes", "FR", 45.7640, 4.8357),
         ("Bordeaux", "Nouvelle-Aquitaine", "FR", 44.8378, -0.5792),
         ("Toulouse", "Occitanie", "FR", 43.6047, 1.4442),
         ("Strasbourg", "Grand Est", "FR", 48.5734, 7.7521),
-        ("Cannes", "Provence-Alpes-Côte d'Azur", "FR", 43.5528, 7.0174),
-
+        (
+            "Cannes",
+            "Provence-Alpes-Côte d'Azur",
+            "FR",
+            43.5528,
+            7.0174,
+        ),
         // Europe - Germany, Austria, Switzerland
         ("Berlin", "Berlin", "DE", 52.5200, 13.4050),
         ("Munich", "Bavaria", "DE", 48.1351, 11.5820),
@@ -241,7 +174,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Geneva", "Geneva", "CH", 46.2044, 6.1432),
         ("Lucerne", "Lucerne", "CH", 47.0502, 8.3093),
         ("Zermatt", "Valais", "CH", 45.9763, 7.7491),
-
         // Europe - Italy, Spain, Portugal
         ("Rome", "Lazio", "IT", 41.9028, 12.4964),
         ("Milan", "Lombardy", "IT", 45.4642, 9.1900),
@@ -256,7 +188,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Mallorca", "Balearic Islands", "ES", 39.6953, 3.0176),
         ("Lisbon", "Lisbon", "PT", 38.7223, -9.1393),
         ("Porto", "Porto", "PT", 41.1579, -8.6291),
-
         // Europe - Netherlands, Belgium, Nordics, Greece, Central Europe
         ("Amsterdam", "North Holland", "NL", 52.3676, 4.9041),
         ("Brussels", "Brussels", "BE", 50.8503, 4.3517),
@@ -271,7 +202,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Budapest", "Budapest", "HU", 47.4979, 19.0402),
         ("Warsaw", "Masovia", "PL", 52.2297, 21.0122),
         ("Krakow", "Lesser Poland", "PL", 50.0647, 19.9450),
-
         // Asia - Japan
         ("Tokyo", "Tokyo", "JP", 35.6762, 139.6503),
         ("Kyoto", "Kyoto", "JP", 35.0116, 135.7681),
@@ -283,7 +213,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Hiroshima", "Hiroshima", "JP", 34.3853, 132.4553),
         ("Nara", "Nara", "JP", 34.6851, 135.8048),
         ("Okinawa", "Okinawa", "JP", 26.2124, 127.6809),
-
         // Asia - East, South & Southeast Asia
         ("Seoul", "Seoul", "KR", 37.5665, 126.9780),
         ("Busan", "Busan", "KR", 35.1796, 129.0756),
@@ -297,7 +226,13 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Chiang Mai", "Chiang Mai", "TH", 18.7883, 98.9853),
         ("Phuket", "Phuket", "TH", 7.8804, 98.3923),
         ("Hanoi", "Hanoi", "VN", 21.0285, 105.8542),
-        ("Ho Chi Minh City", "Ho Chi Minh City", "VN", 10.8231, 106.6297),
+        (
+            "Ho Chi Minh City",
+            "Ho Chi Minh City",
+            "VN",
+            10.8231,
+            106.6297,
+        ),
         ("Kuala Lumpur", "Federal Territory", "MY", 3.1390, 101.6869),
         ("Bali", "Bali", "ID", -8.4095, 115.1889),
         ("Jakarta", "Jakarta", "ID", -6.2088, 106.8456),
@@ -306,7 +241,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Delhi", "Delhi", "IN", 28.6139, 77.2090),
         ("Bengaluru", "Karnataka", "IN", 12.9716, 77.5946),
         ("Goa", "Goa", "IN", 15.2993, 74.1240),
-
         // Oceania - Australia & New Zealand
         ("Sydney", "New South Wales", "AU", -33.8688, 151.2093),
         ("Melbourne", "Victoria", "AU", -37.8136, 144.9631),
@@ -318,7 +252,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Wellington", "Wellington", "NZ", -41.2865, 174.7762),
         ("Christchurch", "Canterbury", "NZ", -43.5321, 172.6362),
         ("Queenstown", "Otago", "NZ", -45.0312, 168.6626),
-
         // Middle East & Africa
         ("Dubai", "Dubai", "AE", 25.2048, 55.2708),
         ("Abu Dhabi", "Abu Dhabi", "AE", 24.4539, 54.3773),
@@ -332,7 +265,6 @@ fn load_default_cities() -> Vec<(&'static str, &'static str, &'static str, f64, 
         ("Johannesburg", "Gauteng", "ZA", -26.2041, 28.0473),
         ("Nairobi", "Nairobi", "KE", -1.2921, 36.8219),
         ("Marrakech", "Marrakesh-Safi", "MA", 31.6295, -7.9811),
-
         // Latin America
         ("Mexico City", "CDMX", "MX", 19.4326, -99.1332),
         ("Cancun", "Quintana Roo", "MX", 21.1619, -86.8515),

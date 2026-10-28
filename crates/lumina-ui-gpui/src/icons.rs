@@ -1,0 +1,115 @@
+use gpui::{svg, Pixels, Rgba, Styled, Svg};
+
+/// Bundled Lucide icon set rendered as monochrome SVGs (tinted via `render_icon`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Icon {
+    Heart,
+    HeartFilled,
+    Star,
+    StarFilled,
+    Trash,
+    X,
+    Play,
+    Pause,
+    StepForward,
+    StepBack,
+    Pip,
+    Maximize,
+    Minimize,
+    Volume,
+    VolumeX,
+    Image,
+    ExternalLink,
+    Undo2,
+    Tag,
+    Search,
+    Info,
+    PanelLeft,
+}
+
+impl Icon {
+    /// Every icon the UI can render. Kept in sync with the embedded assets so a
+    /// missing SVG fails the asset-resolution test instead of silently rendering blank.
+    #[allow(dead_code)] // exercised by `every_icon_resolves_in_asset_source`
+    pub const ALL: &[Icon] = &[
+        Icon::Heart,
+        Icon::HeartFilled,
+        Icon::Star,
+        Icon::StarFilled,
+        Icon::Trash,
+        Icon::X,
+        Icon::Play,
+        Icon::Pause,
+        Icon::StepForward,
+        Icon::StepBack,
+        Icon::Pip,
+        Icon::Maximize,
+        Icon::Minimize,
+        Icon::Volume,
+        Icon::VolumeX,
+        Icon::Image,
+        Icon::ExternalLink,
+        Icon::Undo2,
+        Icon::Tag,
+        Icon::Search,
+        Icon::Info,
+        Icon::PanelLeft,
+    ];
+
+    pub fn path(self) -> &'static str {
+        match self {
+            Self::Heart => "icons/heart.svg",
+            Self::HeartFilled => "icons/heart-filled.svg",
+            Self::Star => "icons/star.svg",
+            Self::StarFilled => "icons/star-filled.svg",
+            Self::Trash => "icons/trash.svg",
+            Self::X => "icons/x.svg",
+            Self::Play => "icons/play.svg",
+            Self::Pause => "icons/pause.svg",
+            Self::StepForward => "icons/step-forward.svg",
+            Self::StepBack => "icons/step-back.svg",
+            Self::Pip => "icons/pip.svg",
+            Self::Maximize => "icons/maximize.svg",
+            Self::Minimize => "icons/minimize.svg",
+            Self::Volume => "icons/volume.svg",
+            Self::VolumeX => "icons/volume-x.svg",
+            Self::Image => "icons/image.svg",
+            Self::ExternalLink => "icons/external-link.svg",
+            Self::Undo2 => "icons/undo-2.svg",
+            Self::Tag => "icons/tag.svg",
+            Self::Search => "icons/search.svg",
+            Self::Info => "icons/info.svg",
+            Self::PanelLeft => "icons/panel-left.svg",
+        }
+    }
+}
+
+/// Create an icon element with custom pixel size and color.
+pub fn render_icon(i: Icon, size: Pixels, color: Rgba) -> Svg {
+    svg().path(i.path()).size(size).text_color(color)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::AssetSource as _;
+
+    #[test]
+    fn every_icon_resolves_in_asset_source() {
+        let assets = crate::assets::LuminaAssets;
+        for icon in Icon::ALL {
+            let loaded = assets.load(icon.path()).unwrap_or_else(|err| {
+                panic!("asset load failed for {:?} ({}): {err}", icon, icon.path())
+            });
+            let Some(bytes) = loaded else {
+                panic!("no asset registered for {:?} at {}", icon, icon.path());
+            };
+            assert!(
+                !bytes.is_empty(),
+                "empty asset for {:?} at {}",
+                icon,
+                icon.path()
+            );
+        }
+    }
+}

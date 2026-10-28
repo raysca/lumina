@@ -6,7 +6,15 @@ use std::time::Instant;
 
 #[test]
 fn benchmark_cold_scan_synthetic() {
-    let temp_dir = std::env::temp_dir().join("lumina_bench_synthetic");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_bench_synthetic_{}_{}",
+        std::process::id(),
+        nanos
+    ));
     let _ = std::fs::remove_dir_all(&temp_dir);
     std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -39,20 +47,50 @@ fn benchmark_cold_scan_synthetic() {
 
     assert_eq!(scanned, count);
     assert_eq!(drained, count);
-    assert!(items_per_sec > 1000.0, "Scan throughput should exceed 1,000 items/sec");
+    assert!(
+        items_per_sec > 1000.0,
+        "Scan throughput should exceed 1,000 items/sec"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
 fn benchmark_desktop_pics_cold_scan_and_decodes() {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_bench_pics_{}_{}",
+        std::process::id(),
+        nanos
+    ));
+    let db_path = temp_dir.join("bench_catalog.db");
+    let cache_dir = temp_dir.join("bench_cache");
+    std::fs::create_dir_all(&temp_dir).unwrap();
+
     let desktop_pics = PathBuf::from("/Users/raymondottun/Desktop/pics");
-    if !desktop_pics.exists() {
-        return;
-    }
+    let (target_folder, _cleanup_media) = if desktop_pics.exists() && desktop_pics.is_dir() {
+        (desktop_pics, false)
+    } else {
+        // Fallback: create synthetic real JPEG files so the benchmark runs everywhere
+        let media_dir = temp_dir.join("media");
+        std::fs::create_dir_all(&media_dir).unwrap();
+        for i in 0..10 {
+            let img = image::RgbImage::from_fn(64, 64, |x, y| {
+                image::Rgb([(x * 4) as u8, (y * 4) as u8, (i * 25) as u8])
+            });
+            img.save(media_dir.join(format!("img_{:02}.jpg", i)))
+                .unwrap();
+        }
+        (media_dir, true)
+    };
 
     let start = Instant::now();
-    let (engine, rx) = LuminaEngine::open(desktop_pics).expect("open engine");
+    // Open with ISOLATED db and cache to prevent touching production database!
+    let (engine, rx) = LuminaEngine::open_with_paths(target_folder, db_path, Some(cache_dir))
+        .expect("open engine with isolated paths");
 
     let mut total_discovered = 0;
     while let Ok(evt) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
@@ -101,13 +139,22 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
     );
 
     assert_eq!(decoded_count, slice.len());
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
 fn benchmark_scale_and_gates() {
     use lumina_core::{Catalog, MediaId, MediaItem, MediaType, StructuredQuery, SystemAlbum};
 
-    let temp_db = std::env::temp_dir().join("lumina_gate_scale.db");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_db = std::env::temp_dir().join(format!(
+        "lumina_gate_scale_{}_{}.db",
+        std::process::id(),
+        nanos
+    ));
     let _ = std::fs::remove_file(&temp_db);
 
     let catalog = Catalog::open(&temp_db).expect("open catalog on disk");
@@ -140,7 +187,6 @@ fn benchmark_scale_and_gates() {
             width: 3840,
             height: 2160,
             duration_ms: if is_video { Some(15_000) } else { None },
-            duration_secs: if is_video { 15.0 } else { 0.0 },
             timestamp_epoch_ms: 1789430400000 + (i as i64 * 60_000),
             year: 2026,
             month: ((i % 12) + 1) as u32,
@@ -148,11 +194,31 @@ fn benchmark_scale_and_gates() {
             latitude: if i % 3 == 0 { Some(35.0116) } else { None },
             longitude: if i % 3 == 0 { Some(135.7681) } else { None },
             altitude: Some(50.0),
-            country_code: if i % 3 == 0 { Some("JP".to_string()) } else { None },
-            admin1_region: if i % 3 == 0 { Some("Kansai".to_string()) } else { None },
-            city: if i % 3 == 0 { Some("Kyoto".to_string()) } else { None },
-            make: if i % 2 == 0 { Some("Sony".to_string()) } else { Some("Canon".to_string()) },
-            model: if i % 2 == 0 { Some("A7IV".to_string()) } else { Some("R5".to_string()) },
+            country_code: if i % 3 == 0 {
+                Some("JP".to_string())
+            } else {
+                None
+            },
+            admin1_region: if i % 3 == 0 {
+                Some("Kansai".to_string())
+            } else {
+                None
+            },
+            city: if i % 3 == 0 {
+                Some("Kyoto".to_string())
+            } else {
+                None
+            },
+            make: if i % 2 == 0 {
+                Some("Sony".to_string())
+            } else {
+                Some("Canon".to_string())
+            },
+            model: if i % 2 == 0 {
+                Some("A7IV".to_string())
+            } else {
+                Some("R5".to_string())
+            },
             lens: Some("35mm F1.4".to_string()),
             focal_length: Some(35.0),
             f_number: Some(1.4),
@@ -164,7 +230,9 @@ fn benchmark_scale_and_gates() {
         });
 
         if items.len() >= batch_size {
-            catalog.insert_or_update_batch(&items).expect("insert batch");
+            catalog
+                .insert_or_update_batch(&items)
+                .expect("insert batch");
             items.clear();
         }
     }
@@ -177,7 +245,9 @@ fn benchmark_scale_and_gates() {
     );
 
     // Recompute timeline buckets
-    catalog.compute_timeline_buckets().expect("compute timeline buckets");
+    catalog
+        .compute_timeline_buckets()
+        .expect("compute timeline buckets");
 
     // Gate 1: Check Database Size on Disk
     let db_metadata = std::fs::metadata(&temp_db).expect("metadata db");
@@ -205,8 +275,14 @@ fn benchmark_scale_and_gates() {
     }
     let seek_elapsed = seek_start.elapsed();
     let seek_per_query_ms = (seek_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
-    println!("Gate 2 - Timeline Seek Latency: {:.3} ms/slice (< 1.0 ms target)", seek_per_query_ms);
-    assert!(seek_per_query_ms < 1.0, "Timeline seek must resolve in < 1ms");
+    println!(
+        "Gate 2 - Timeline Seek Latency: {:.3} ms/slice (< 1.0 ms target)",
+        seek_per_query_ms
+    );
+    assert!(
+        seek_per_query_ms < 1.0,
+        "Timeline seek must resolve in < 1ms"
+    );
 
     // Gate 2: Structured Query Latency (< 5ms)
     let q = StructuredQuery::parse("camera:Sony is:favorite iso:>800");
@@ -216,8 +292,14 @@ fn benchmark_scale_and_gates() {
     }
     let search_elapsed = search_start.elapsed();
     let search_per_query_ms = (search_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
-    println!("Gate 2 - Structured Query Latency: {:.3} ms/query (< 5.0 ms target)", search_per_query_ms);
-    assert!(search_per_query_ms < 5.0, "Structured query must resolve in < 5ms");
+    println!(
+        "Gate 2 - Structured Query Latency: {:.3} ms/query (< 5.0 ms target)",
+        search_per_query_ms
+    );
+    assert!(
+        search_per_query_ms < 5.0,
+        "Structured query must resolve in < 5ms"
+    );
 
     // Gate 3: Smart Album Evaluation Latency (< 8ms)
     let album_start = Instant::now();
@@ -226,8 +308,14 @@ fn benchmark_scale_and_gates() {
     }
     let album_elapsed = album_start.elapsed();
     let album_per_query_ms = (album_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
-    println!("Gate 3 - Smart Album Latency: {:.3} ms/album (< 8.0 ms target)", album_per_query_ms);
-    assert!(album_per_query_ms < 8.0, "Smart album query must resolve in < 8ms");
+    println!(
+        "Gate 3 - Smart Album Latency: {:.3} ms/album (< 8.0 ms target)",
+        album_per_query_ms
+    );
+    assert!(
+        album_per_query_ms < 8.0,
+        "Smart album query must resolve in < 8ms"
+    );
 
     let _ = std::fs::remove_file(&temp_db);
 }

@@ -26,9 +26,17 @@ impl DiskCache {
         Ok(Self { cache_dir })
     }
 
-    pub fn compute_key(path: &Path, file_size: u64, mtime_epoch_ms: i64, target_size: u32) -> String {
+    pub fn compute_key(
+        path: &Path,
+        file_size: u64,
+        mtime_epoch_ms: i64,
+        target_size: u32,
+    ) -> String {
         let path_str = path.to_string_lossy();
-        let payload = format!("{}:{}:{}:{}", path_str, file_size, mtime_epoch_ms, target_size);
+        let payload = format!(
+            "{}:{}:{}:{}",
+            path_str, file_size, mtime_epoch_ms, target_size
+        );
         let hash = xxh3_64(payload.as_bytes());
         format!("{:016x}", hash)
     }
@@ -103,10 +111,45 @@ impl DiskCache {
         out.extend_from_slice(&frame.data);
 
         // Atomic write via temp file
-        let temp_path = self.cache_dir.join(format!("{}.tmp.{}", key, std::process::id()));
-        fs::write(&temp_path, out)?;
-        let _ = fs::rename(temp_path, file_path);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let temp_path =
+            self.cache_dir
+                .join(format!("{}.tmp.{}.{}", key, std::process::id(), nanos));
+        fs::write(&temp_path, &out)?;
+        if fs::rename(&temp_path, &file_path).is_err() {
+            // rename can fail across filesystem boundaries; fall back to copy + remove
+            if let Err(e) = fs::copy(&temp_path, &file_path) {
+                let _ = fs::remove_file(&temp_path);
+                return Err(e.into());
+            }
+            let _ = fs::remove_file(&temp_path);
+        }
         Ok(())
+    }
+
+    pub fn remove_cached(
+        &self,
+        path: &Path,
+        file_size: u64,
+        mtime_epoch_ms: i64,
+        target_size: u32,
+    ) -> bool {
+        let key = Self::compute_key(path, file_size, mtime_epoch_ms, target_size);
+        let file_path = self.cache_file_path(&key);
+        if file_path.exists() {
+            fs::remove_file(file_path).is_ok()
+        } else {
+            false
+        }
+    }
+
+    pub fn remove_cached_item(&self, path: &Path, file_size: u64, mtime_epoch_ms: i64) {
+        for size in [256, 320, 512, 1024, 2048] {
+            self.remove_cached(path, file_size, mtime_epoch_ms, size);
+        }
     }
 
     pub fn clear(&self) -> Result<()> {

@@ -1,3 +1,4 @@
+use crate::theme;
 use gpui::*;
 
 pub struct OnboardingView;
@@ -14,8 +15,8 @@ impl OnboardingView {
             .size_full()
             .justify_center()
             .items_center()
-            .bg(rgb(0x09090b))
-            .text_color(rgb(0xffffff))
+            .bg(theme::bg_viewer())
+            .text_color(theme::text())
             .p_8()
             .child(
                 div()
@@ -36,16 +37,14 @@ impl OnboardingView {
                                     .w(px(72.0))
                                     .h(px(72.0))
                                     .rounded_2xl()
-                                    .bg(rgb(0x3b82f6))
+                                    .bg(theme::accent())
+                                    .text_color(theme::accent_fg())
                                     .flex()
                                     .justify_center()
                                     .items_center()
                                     .shadow_xl()
                                     .child(
-                                        div()
-                                            .text_3xl()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child("✦"),
+                                        div().text_3xl().font_weight(FontWeight::BOLD).child("✦"),
                                     ),
                             )
                             .child(
@@ -57,9 +56,11 @@ impl OnboardingView {
                             .child(
                                 div()
                                     .text_center()
-                                    .text_color(rgb(0xa1a1aa))
+                                    .text_color(theme::text_muted())
                                     .text_base()
-                                    .child("Ultra-fast, 120 FPS GPU-accelerated photo & video manager"),
+                                    .child(
+                                        "Ultra-fast, 120 FPS GPU-accelerated photo & video manager",
+                                    ),
                             ),
                     )
                     // Feature badges
@@ -73,36 +74,36 @@ impl OnboardingView {
                                 div()
                                     .px_3()
                                     .py_1p5()
-                                    .bg(rgb(0x18181b))
+                                    .bg(theme::bg_pane())
                                     .border_1()
-                                    .border_color(rgb(0x27272a))
+                                    .border_color(theme::border())
                                     .rounded_lg()
                                     .text_xs()
-                                    .text_color(rgb(0xd4d4d8))
+                                    .text_color(theme::text())
                                     .child("⚡ 120 FPS ProMotion"),
                             )
                             .child(
                                 div()
                                     .px_3()
                                     .py_1p5()
-                                    .bg(rgb(0x18181b))
+                                    .bg(theme::bg_pane())
                                     .border_1()
-                                    .border_color(rgb(0x27272a))
+                                    .border_color(theme::border())
                                     .rounded_lg()
                                     .text_xs()
-                                    .text_color(rgb(0xd4d4d8))
+                                    .text_color(theme::text())
                                     .child("🎞 Photos & Videos"),
                             )
                             .child(
                                 div()
                                     .px_3()
                                     .py_1p5()
-                                    .bg(rgb(0x18181b))
+                                    .bg(theme::bg_pane())
                                     .border_1()
-                                    .border_color(rgb(0x27272a))
+                                    .border_color(theme::border())
                                     .rounded_lg()
                                     .text_xs()
-                                    .text_color(rgb(0xd4d4d8))
+                                    .text_color(theme::text())
                                     .child("🏎 0ms UI Blocking"),
                             ),
                     )
@@ -119,9 +120,12 @@ impl OnboardingView {
                                     .id("pick-folder-btn")
                                     .w_full()
                                     .py_3()
-                                    .bg(rgb(0x3b82f6))
-                                    .hover(|s| s.bg(rgb(0x2563eb)))
-                                    .active(|s| s.bg(rgb(0x1d4ed8)))
+                                    .bg(theme::accent())
+                                    .text_color(theme::accent_fg())
+                                    .hover(|s| s.bg(theme::accent()).text_color(theme::accent_fg()))
+                                    .active(|s| {
+                                        s.bg(theme::accent_hover()).text_color(theme::accent_fg())
+                                    })
                                     .rounded_xl()
                                     .cursor_pointer()
                                     .flex()
@@ -137,16 +141,16 @@ impl OnboardingView {
                                     .id("pick-desktop-pics-btn")
                                     .w_full()
                                     .py_2p5()
-                                    .bg(rgb(0x27272a))
-                                    .hover(|s| s.bg(rgb(0x3f3f46)))
+                                    .bg(theme::bg_control())
+                                    .hover(|s| s.bg(theme::bg_control_hover()))
                                     .rounded_xl()
                                     .cursor_pointer()
                                     .flex()
                                     .justify_center()
                                     .items_center()
                                     .text_sm()
-                                    .text_color(rgb(0xe4e4e7))
-                                    .child("📂 Quick Open: Desktop/pics")
+                                    .text_color(theme::text())
+                                    .child("📂 Quick Open: Pictures")
                                     .on_click(on_pick_desktop_pics)
                                     .into_any_element()
                             } else {

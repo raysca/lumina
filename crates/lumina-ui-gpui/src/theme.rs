@@ -1,0 +1,363 @@
+//! Lumina v3 "graphite" theme tokens (see the v3 token sheet in the design canvas).
+//!
+//! Rules: solid fills + 1px borders, depth from brightness steps (no blur/translucency),
+//! shadows only on floating panels, amber is the single accent and always means selection.
+#![allow(dead_code)]
+use gpui::{
+    div, prelude::*, px, rgb, rgba, transparent_black, Div, ElementId, Rgba, SharedString, Stateful,
+};
+
+macro_rules! tokens {
+    ($($(#[$m:meta])* $name:ident = $hex:literal;)*) => {
+        $($(#[$m])* #[inline] pub fn $name() -> Rgba { rgb($hex) })*
+    };
+}
+
+tokens! {
+    // Surfaces, darkest to lightest.
+    bg_media = 0x000000;
+    bg_viewer = 0x141517;
+    bg_app = 0x1C1D20;
+    bg_pane = 0x202125;
+    bg_raised = 0x26272B;
+    bg_hud = 0x2A2C30;
+    bg_control = 0x2C2E32;
+    bg_control_hover = 0x34363B;
+
+    // Lines.
+    border_subtle = 0x2E3034;
+    border = 0x36383D;
+    border_strong = 0x44464C;
+
+    // Text.
+    text = 0xE7E6E3;
+    text_muted = 0xA0A2A7;
+    text_subtle = 0x74767C;
+    text_disabled = 0x5A5D63;
+
+    // Accent: primary actions, links, focus.
+    accent = 0xF0B54B;
+    accent_hover = 0xF4C46A;
+    /// Text/icons drawn on an `accent` fill.
+    accent_fg = 0x1A1206;
+
+    // Selection (rows, chips, toggles that are "on").
+    selection_bg = 0x3A3426;
+    selection_bg_hover = 0x453D2B;
+    selection_border = 0x6B5A33;
+    selection_fg = 0xF5DDA8;
+
+    // Metadata marks — identical everywhere they appear.
+    rating = 0xF0B54B;
+    flag = 0xF28C38;
+    label_red = 0xE5484D;
+    label_orange = 0xF28C38;
+    label_yellow = 0xF5D90A;
+    label_green = 0x46A758;
+    label_blue = 0x3E8BF5;
+    label_purple = 0x8E4EC6;
+
+    // Status.
+    danger = 0xC4343A;
+    danger_text = 0xF08A7A;
+    danger_bg = 0x3A2224;
+    danger_bg_hover = 0x4A2A2C;
+    danger_border = 0x7A3A3C;
+    success = 0x2E7D46;
+    success_text = 0x7FCDA8;
+    success_bg = 0x1F3328;
+}
+
+// Shared control shapes from the token sheet. Callers add content and handlers.
+
+fn control_base(id: impl Into<ElementId>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(28.0))
+        .px(px(10.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_1p5()
+        .rounded(px(6.0))
+        .border_1()
+        .cursor_pointer()
+        .text_xs()
+}
+
+/// Toolbar button: 28px tall, 6px radius, 1px border.
+pub fn control(id: impl Into<ElementId>) -> Stateful<Div> {
+    control_base(id)
+        .border_color(border())
+        .bg(bg_control())
+        .hover(|s| s.bg(bg_control_hover()))
+        .text_color(text())
+}
+
+/// `control` in the "on" state (a toggle that is active).
+pub fn control_on(id: impl Into<ElementId>) -> Stateful<Div> {
+    control_base(id)
+        .bg(selection_bg())
+        .border_color(selection_border())
+        .text_color(selection_fg())
+        .hover(|s| s.bg(selection_bg_hover()))
+}
+
+/// The one primary (amber) action in a bar.
+pub fn control_primary(id: impl Into<ElementId>) -> Stateful<Div> {
+    control_base(id)
+        .bg(accent())
+        .border_color(accent())
+        .text_color(accent_fg())
+        .hover(|s| s.bg(accent_hover()))
+}
+
+/// 24px pill used for filters and timeline buckets.
+pub fn chip(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
+    let base = div()
+        .id(id)
+        .h(px(24.0))
+        .px(px(10.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_1()
+        .rounded_full()
+        .border_1()
+        .cursor_pointer()
+        .text_xs();
+    if on {
+        base.bg(selection_bg())
+            .border_color(selection_border())
+            .text_color(selection_fg())
+            .hover(|s| s.bg(selection_bg_hover()))
+    } else {
+        base.bg(transparent_black())
+            .border_color(border())
+            .text_color(text_muted())
+            .hover(|s| s.border_color(border_strong()).text_color(text()))
+    }
+}
+
+/// Semi-transparent dark overlay for modals and viewports.
+#[inline]
+pub fn scrim() -> Rgba {
+    rgba(0x000000cc)
+}
+
+pub const FONT_SANS: &str = "IBM Plex Sans";
+pub const FONT_MONO: &str = "IBM Plex Mono";
+
+/// Text input field: 28px tall, 6px radius, 1px border.
+pub fn field(id: impl Into<ElementId>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(28.0))
+        .px(px(8.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(border())
+        .bg(bg_control())
+        .text_xs()
+        .text_color(text())
+        .cursor_text()
+}
+
+/// Floating menu container (context menus, dropdowns).
+pub fn menu(id: impl Into<ElementId>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .bg(bg_hud())
+        .border_1()
+        .border_color(border())
+        .rounded(px(8.0))
+        .shadow_lg()
+        .p(px(4.0))
+        .flex()
+        .flex_col()
+        .gap(px(1.0))
+}
+
+/// Menu item row inside a menu.
+pub fn menu_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
+    let base = div()
+        .id(id)
+        .h(px(26.0))
+        .px(px(8.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .rounded(px(4.0))
+        .text_xs()
+        .cursor_pointer();
+
+    if active {
+        base.bg(selection_bg())
+            .text_color(selection_fg())
+            .hover(|s| s.bg(selection_bg_hover()))
+    } else {
+        base.text_color(text()).hover(|s| s.bg(bg_control_hover()))
+    }
+}
+
+/// Standard 26px list/sidebar row.
+pub fn row(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
+    let base = div()
+        .id(id)
+        .h(px(26.0))
+        .px(px(8.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .rounded(px(4.0))
+        .text_xs()
+        .cursor_pointer();
+
+    if active {
+        base.bg(selection_bg())
+            .text_color(selection_fg())
+            .hover(|s| s.bg(selection_bg_hover()))
+    } else {
+        base.text_color(text()).hover(|s| s.bg(bg_control_hover()))
+    }
+}
+
+/// Small metadata badge (e.g. `R+J`, `0:42` with a play icon, stack count).
+pub fn badge(label: impl Into<SharedString>) -> Div {
+    div()
+        .px(px(5.0))
+        .py(px(1.5))
+        .rounded(px(4.0))
+        .bg(scrim())
+        .border_1()
+        .border_color(border_subtle())
+        .text_xs()
+        .font_family(FONT_MONO)
+        .text_color(text())
+        .child(label.into())
+}
+
+/// Rating stars (1 to 5) rendered with filled/empty states.
+pub fn stars(rating_val: u8) -> Div {
+    let r = rating_val.min(5);
+    let mut row = div().flex().flex_row().items_center().gap(px(1.0));
+    for i in 1..=5 {
+        let (icon, color) = if i <= r {
+            (crate::icons::Icon::StarFilled, rating())
+        } else {
+            (crate::icons::Icon::Star, text_disabled())
+        };
+        row = row.child(crate::icons::render_icon(icon, px(12.0), color));
+    }
+    row
+}
+
+/// 8px circular color label dot.
+pub fn label_dot(color: Rgba) -> Div {
+    div().size(px(8.0)).rounded_full().bg(color)
+}
+
+/// Floating HUD / panel container with subtle border and elevation.
+pub fn hud_panel(id: impl Into<ElementId>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .bg(bg_hud())
+        .border_1()
+        .border_color(border())
+        .rounded(px(8.0))
+        .shadow_md()
+}
+
+/// Small keyboard shortcut tag (e.g. `⌘I`, `Space`).
+pub fn kbd(label: impl Into<SharedString>) -> Div {
+    div()
+        .px(px(4.0))
+        .py(px(1.0))
+        .rounded(px(3.0))
+        .bg(bg_control())
+        .border_1()
+        .border_color(border())
+        .text_xs()
+        .font_family(FONT_MONO)
+        .text_color(text_muted())
+        .child(label.into())
+}
+
+/// Segmented control container.
+pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(28.0))
+        .p(px(2.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(2.0))
+        .rounded(px(6.0))
+        .bg(bg_control())
+        .border_1()
+        .border_color(border())
+}
+
+/// Segmented control item.
+pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
+    let base = div()
+        .id(id)
+        .h(px(24.0))
+        .px(px(8.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap_1()
+        .rounded(px(4.0))
+        .text_xs()
+        .cursor_pointer();
+
+    if active {
+        base.bg(selection_bg())
+            .text_color(selection_fg())
+            .border_1()
+            .border_color(selection_border())
+    } else {
+        base.text_color(text_muted())
+            .hover(|s| s.text_color(text()).bg(bg_control_hover()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // WCAG relative luminance contrast, so palette tweaks can't silently break legibility.
+    fn contrast(a: Rgba, b: Rgba) -> f32 {
+        let l = |c: Rgba| {
+            let f = |v: f32| {
+                if v <= 0.03928 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+        };
+        let (x, y) = (l(a), l(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    #[test]
+    fn text_pairs_meet_aa() {
+        for bg in [bg_viewer(), bg_app(), bg_pane(), bg_control()] {
+            assert!(contrast(text(), bg) >= 4.5);
+            assert!(contrast(text_muted(), bg) >= 4.5);
+        }
+        assert!(contrast(accent_fg(), accent()) >= 4.5);
+        assert!(contrast(selection_fg(), selection_bg()) >= 4.5);
+        assert!(contrast(danger_text(), bg_app()) >= 4.5);
+    }
+}

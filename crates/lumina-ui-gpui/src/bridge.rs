@@ -6,21 +6,30 @@ use smallvec::smallvec;
 use std::sync::Arc;
 
 pub fn frame_to_gpui_image(frame: DecodedFrame) -> Result<Arc<RenderImage>> {
-    let rgba_buffer = match frame.format {
+    let bgra_data = match frame.format {
         PixelFormat::Rgba8 => {
-            RgbaImage::from_raw(frame.width, frame.height, frame.data)
-                .ok_or_else(|| anyhow!("Failed to construct RgbaImage from frame data"))?
-        }
-        PixelFormat::Bgra8 => {
             let mut data = frame.data;
+            // GPUI Metal texture atlas uses BGRA8Unorm pixel format.
+            // Convert RGBA8 to BGRA8 by swapping Red (0) and Blue (2) channels.
             for chunk in data.chunks_exact_mut(4) {
                 chunk.swap(0, 2);
             }
-            RgbaImage::from_raw(frame.width, frame.height, data)
-                .ok_or_else(|| anyhow!("Failed to construct RgbaImage from frame data"))?
+            data
         }
+        PixelFormat::Bgra8 => frame.data,
     };
 
-    let frame_element = Frame::new(rgba_buffer);
+    let buffer = RgbaImage::from_raw(frame.width, frame.height, bgra_data)
+        .ok_or_else(|| anyhow!("Failed to construct image buffer from frame data"))?;
+
+    let frame_element = Frame::new(buffer);
+    Ok(Arc::new(RenderImage::new(smallvec![frame_element])))
+}
+
+pub fn video_frame_to_gpui_image(frame: crate::player::VideoFrame) -> Result<Arc<RenderImage>> {
+    let buffer = RgbaImage::from_raw(frame.width, frame.height, frame.data)
+        .ok_or_else(|| anyhow!("Failed to construct image buffer from video frame"))?;
+
+    let frame_element = Frame::new(buffer);
     Ok(Arc::new(RenderImage::new(smallvec![frame_element])))
 }

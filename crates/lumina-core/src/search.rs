@@ -18,6 +18,12 @@ pub struct StructuredQuery {
     pub is_favorite: Option<bool>,
     pub is_trashed: Option<bool>,
     pub has_location: Option<bool>,
+    pub has_tag: Option<bool>,
+    pub tag: Option<String>,
+    pub min_rating: Option<u32>,
+    pub max_rating: Option<u32>,
+    pub color_label: Option<u8>,
+    pub has_color_label: Option<bool>,
 }
 
 impl StructuredQuery {
@@ -72,22 +78,48 @@ impl StructuredQuery {
                         parse_num_filter(val_clean, &mut query.min_iso, &mut query.max_iso);
                     }
                     "f" | "fnumber" => {
-                        parse_float_filter(val_clean, &mut query.min_f_number, &mut query.max_f_number);
+                        parse_float_filter(
+                            val_clean,
+                            &mut query.min_f_number,
+                            &mut query.max_f_number,
+                        );
                     }
-                    "is" => {
-                        match val_clean.to_lowercase().as_str() {
-                            "favorite" | "fav" => query.is_favorite = Some(true),
-                            "video" => query.media_type = Some("video".to_string()),
-                            "image" | "photo" => query.media_type = Some("image".to_string()),
-                            "raw" => query.media_type = Some("raw".to_string()),
-                            "trashed" | "trash" => query.is_trashed = Some(true),
-                            _ => {}
+                    "is" => match val_clean.to_lowercase().as_str() {
+                        "favorite" | "fav" => query.is_favorite = Some(true),
+                        "video" => query.media_type = Some("video".to_string()),
+                        "image" | "photo" => query.media_type = Some("image".to_string()),
+                        "raw" => query.media_type = Some("raw".to_string()),
+                        "trashed" | "trash" => query.is_trashed = Some(true),
+                        _ => {}
+                    },
+                    "has" => match val_clean.to_lowercase().as_str() {
+                        "location" | "geo" | "gps" => query.has_location = Some(true),
+                        "tag" | "tags" | "label" => query.has_tag = Some(true),
+                        "color" | "color_label" => query.has_color_label = Some(true),
+                        "rating" | "stars" => query.min_rating = Some(1),
+                        _ => {}
+                    },
+                    "rating" | "stars" => {
+                        parse_num_filter(val_clean, &mut query.min_rating, &mut query.max_rating);
+                    }
+                    "color" => {
+                        let code = match val_clean.to_lowercase().as_str() {
+                            "red" | "1" => Some(1),
+                            "orange" | "2" => Some(2),
+                            "yellow" | "3" => Some(3),
+                            "green" | "4" => Some(4),
+                            "blue" | "5" => Some(5),
+                            "purple" | "6" => Some(6),
+                            "none" | "0" => Some(0),
+                            _ => None,
+                        };
+                        if let Some(c) = code {
+                            query.color_label = Some(c);
                         }
                     }
-                    "has" => {
-                        match val_clean.to_lowercase().as_str() {
-                            "location" | "geo" | "gps" => query.has_location = Some(true),
-                            _ => {}
+                    "tag" | "keyword" => {
+                        if !val_clean.is_empty() {
+                            query.tag = Some(val_clean.to_lowercase());
                         }
                     }
                     _ => {
@@ -147,20 +179,32 @@ impl StructuredQuery {
         }
 
         if let Some(ref cam) = self.camera {
-            clauses.push("(m.make LIKE ? OR m.model LIKE ?)".to_string());
-            let pattern = format!("%{}%", cam);
+            let escaped = cam
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            clauses.push("(m.make LIKE ? ESCAPE '\\' OR m.model LIKE ? ESCAPE '\\')".to_string());
+            let pattern = format!("%{}%", escaped);
             params.push(pattern.clone().into());
             params.push(pattern.into());
         }
 
         if let Some(ref lens) = self.lens {
-            clauses.push("m.lens LIKE ?".to_string());
-            params.push(format!("%{}%", lens).into());
+            let escaped = lens
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            clauses.push("m.lens LIKE ? ESCAPE '\\'".to_string());
+            params.push(format!("%{}%", escaped).into());
         }
 
         if let Some(ref city) = self.city {
-            clauses.push("m.city LIKE ?".to_string());
-            params.push(format!("%{}%", city).into());
+            let escaped = city
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            clauses.push("m.city LIKE ? ESCAPE '\\'".to_string());
+            params.push(format!("%{}%", escaped).into());
         }
 
         if let Some(ref country) = self.country {
@@ -196,9 +240,45 @@ impl StructuredQuery {
             }
         }
 
+        if let Some(has_tag) = self.has_tag {
+            if has_tag {
+                clauses.push("m.id IN (SELECT DISTINCT media_id FROM media_tags)".to_string());
+            } else {
+                clauses.push("m.id NOT IN (SELECT DISTINCT media_id FROM media_tags)".to_string());
+            }
+        }
+
+        if let Some(ref tag) = self.tag {
+            clauses.push("m.id IN (SELECT media_id FROM media_tags WHERE tag = ?)".to_string());
+            params.push(tag.clone().into());
+        }
+
+        if let Some(min_r) = self.min_rating {
+            clauses.push("m.rating >= ?".to_string());
+            params.push((min_r as i64).into());
+        }
+
+        if let Some(max_r) = self.max_rating {
+            clauses.push("m.rating <= ?".to_string());
+            params.push((max_r as i64).into());
+        }
+
+        if let Some(c) = self.color_label {
+            clauses.push("m.color_label = ?".to_string());
+            params.push((c as i64).into());
+        }
+
+        if let Some(has_c) = self.has_color_label {
+            if has_c {
+                clauses.push("m.color_label > 0".to_string());
+            } else {
+                clauses.push("m.color_label = 0".to_string());
+            }
+        }
+
         // FTS match clause if free-text terms exist
-        if !self.fts_terms.is_empty() {
-            let fts_query = build_fts5_expression(&self.fts_terms);
+        let fts_query = build_fts5_expression(&self.fts_terms);
+        if !fts_query.is_empty() {
             clauses.push("media_search_fts MATCH ?".to_string());
             params.push(fts_query.into());
         }
@@ -213,10 +293,15 @@ impl StructuredQuery {
     }
 
     /// Synthesizes the full query with SELECT columns and optional FTS5 JOIN.
-    pub fn synthesize_query(&self, limit: usize, offset: usize) -> (String, Vec<rusqlite::types::Value>) {
+    pub fn synthesize_query(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> (String, Vec<rusqlite::types::Value>) {
         let (where_clause, mut params) = self.build_sql();
+        let fts_query = build_fts5_expression(&self.fts_terms);
 
-        let sql = if !self.fts_terms.is_empty() {
+        let sql = if !fts_query.is_empty() {
             format!(
                 r#"
                 SELECT 
@@ -263,8 +348,9 @@ impl StructuredQuery {
 
     pub fn synthesize_count_query(&self) -> (String, Vec<rusqlite::types::Value>) {
         let (where_clause, params) = self.build_sql();
+        let fts_query = build_fts5_expression(&self.fts_terms);
 
-        let sql = if !self.fts_terms.is_empty() {
+        let sql = if !fts_query.is_empty() {
             format!(
                 r#"
                 SELECT COUNT(*)
@@ -355,17 +441,18 @@ fn parse_month(s: &str) -> Option<u32> {
 
 fn parse_date_filter(val: &str) -> Option<(i64, i64)> {
     if let Some((start_s, end_s)) = val.split_once("..") {
-        let start = chrono::NaiveDate::parse_from_str(start_s.trim(), "%Y-%m-%d")
+        let start_opt = chrono::NaiveDate::parse_from_str(start_s.trim(), "%Y-%m-%d")
             .ok()
             .and_then(|d| d.and_hms_opt(0, 0, 0))
-            .map(|dt| dt.and_utc().timestamp_millis())
-            .unwrap_or(0);
-        let end = chrono::NaiveDate::parse_from_str(end_s.trim(), "%Y-%m-%d")
+            .map(|dt| dt.and_utc().timestamp_millis());
+        let end_opt = chrono::NaiveDate::parse_from_str(end_s.trim(), "%Y-%m-%d")
             .ok()
             .and_then(|d| d.and_hms_opt(23, 59, 59))
-            .map(|dt| dt.and_utc().timestamp_millis() + 999)
-            .unwrap_or(i64::MAX);
-        return Some((start, end));
+            .map(|dt| dt.and_utc().timestamp_millis() + 999);
+        if start_opt.is_none() && end_opt.is_none() {
+            return None;
+        }
+        return Some((start_opt.unwrap_or(0), end_opt.unwrap_or(i64::MAX)));
     }
     if let Some(stripped) = val.strip_prefix(">=") {
         if let Ok(d) = chrono::NaiveDate::parse_from_str(stripped.trim(), "%Y-%m-%d") {
@@ -402,7 +489,7 @@ fn parse_num_filter(s: &str, min: &mut Option<u32>, max: &mut Option<u32>) {
         }
     } else if let Some(stripped) = s.strip_prefix('>') {
         if let Ok(n) = stripped.parse::<u32>() {
-            *min = Some(n + 1);
+            *min = Some(n.saturating_add(1));
         }
     } else if let Some(stripped) = s.strip_prefix("<=") {
         if let Ok(n) = stripped.parse::<u32>() {
@@ -444,10 +531,9 @@ fn parse_float_filter(s: &str, min: &mut Option<f64>, max: &mut Option<f64>) {
 fn build_fts5_expression(terms: &[String]) -> String {
     let escaped_terms: Vec<String> = terms
         .iter()
-        .map(|t| {
-            let clean = t.replace(['"', '*'], "");
-            format!("\"{}\"*", clean)
-        })
+        .map(|t| t.replace(['"', '*'], "").trim().to_string())
+        .filter(|clean| !clean.is_empty())
+        .map(|clean| format!("\"{}\"*", clean))
         .collect();
 
     escaped_terms.join(" ")
@@ -460,7 +546,7 @@ mod tests {
     #[test]
     fn test_parse_structured_query() {
         let q = StructuredQuery::parse(
-            r#"sunset in Kyoto camera:"Sony A7IV" is:favorite year:2026 iso:>400 f:<2.8 date:2026-09-01..2026-10-10"#
+            r#"sunset in Kyoto camera:"Sony A7IV" is:favorite year:2026 iso:>400 f:<2.8 date:2026-09-01..2026-10-10"#,
         );
 
         assert_eq!(q.fts_terms, vec!["sunset", "in", "Kyoto"]);
@@ -479,5 +565,21 @@ mod tests {
 
         let r_exact = parse_date_filter("2026-05-10").unwrap();
         assert!(r_exact.0 < r_exact.1);
+    }
+
+    #[test]
+    fn test_empty_and_special_fts_terms() {
+        let terms = vec![
+            "".to_string(),
+            "\"\"".to_string(),
+            "*".to_string(),
+            "valid".to_string(),
+        ];
+        let expr = build_fts5_expression(&terms);
+        assert_eq!(expr, "\"valid\"*");
+
+        let empty_terms: Vec<String> = vec!["*".to_string(), "\"\"".to_string()];
+        let expr_empty = build_fts5_expression(&empty_terms);
+        assert_eq!(expr_empty, "");
     }
 }

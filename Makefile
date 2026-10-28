@@ -1,4 +1,7 @@
-.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install
+.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg
+
+# Keep in sync with crates/*/Cargo.toml and resources/Info.plist
+VERSION := 0.2.0
 
 # Terminal colors
 CYAN    := \033[36m
@@ -81,6 +84,34 @@ fmt:
 ## Format code
 fmt-fix:
 	cargo fmt --all
+
+## Generate macOS Retina App Icon (.icns)
+icon:
+	cargo run -p lumina-ui-gpui --bin generate-icon --features generate-icon
+
+## Package macOS Application Bundle (Lumina.app)
+bundle: icon
+	@echo "$(BOLD)$(CYAN)Building Lumina.app release bundle...$(RESET)"
+	cargo build --release -p lumina-ui-gpui --bin lumina-ui-gpui
+	@mkdir -p target/release/bundle/osx/Lumina.app/Contents/MacOS
+	@mkdir -p target/release/bundle/osx/Lumina.app/Contents/Resources
+	@cp target/release/lumina-ui-gpui target/release/bundle/osx/Lumina.app/Contents/MacOS/lumina-ui-gpui
+	@chmod +x target/release/bundle/osx/Lumina.app/Contents/MacOS/lumina-ui-gpui
+	@cp resources/Info.plist target/release/bundle/osx/Lumina.app/Contents/Info.plist
+	@cp resources/Lumina.icns target/release/bundle/osx/Lumina.app/Contents/Resources/Lumina.icns
+	@codesign --force --deep --sign - target/release/bundle/osx/Lumina.app
+	@echo "$(GREEN)$(BOLD)✓ Lumina.app bundle created at target/release/bundle/osx/Lumina.app$(RESET)"
+
+## Build distributable macOS Disk Image Installer (.dmg)
+dmg: bundle
+	@echo "$(BOLD)$(CYAN)Creating distributable DMG installer...$(RESET)"
+	@rm -rf target/release/bundle/osx/dmg_stage target/release/bundle/osx/Lumina-v$(VERSION).dmg
+	@mkdir -p target/release/bundle/osx/dmg_stage
+	@cp -R target/release/bundle/osx/Lumina.app target/release/bundle/osx/dmg_stage/
+	@ln -s /Applications target/release/bundle/osx/dmg_stage/Applications
+	@hdiutil create -volname "Lumina Photos" -srcfolder target/release/bundle/osx/dmg_stage -ov -format UDZO target/release/bundle/osx/Lumina-v$(VERSION).dmg
+	@rm -rf target/release/bundle/osx/dmg_stage
+	@echo "$(GREEN)$(BOLD)✓ Lumina DMG created at target/release/bundle/osx/Lumina-v$(VERSION).dmg$(RESET)"
 
 ## Clean cargo build artifacts
 clean:
