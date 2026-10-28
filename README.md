@@ -73,7 +73,9 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 | `make fmt` / `make fmt-fix` | Check / apply rustfmt |
 | `make bench` | Run performance benchmarks |
 | `make ui-smoke` | Launch the real app window and verify it appears |
-| `make bundle` / `make dmg` | Build Lumina.app / installer DMG |
+| `make bundle` | Build Lumina.app (universal when both rustup targets are installed) |
+| `make release` | Build, sign, and package .zip/.dmg with SHA256SUMS |
+| `make notarize` | Developer ID notarization + stapling, then package |
 | `make icon` | Regenerate resources/Lumina.icns |
 
 > Performance gates live in `crates/lumina-core/tests/benchmark_test.rs` and are
@@ -148,6 +150,7 @@ docs/                Roadmap, system design, technical notes
 - [System design](docs/system_design_v2.md)
 - [Technical notes](docs/tech.md)
 - [Implementation plan](docs/implementation_plan.md)
+- [Releasing & notarization](RELEASING.md)
 
 ## Third-party assets
 

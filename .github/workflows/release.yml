@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build, sign, notarize, package
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (universal targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - name: Import Developer ID certificate
+        if: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo -n "$APPLE_CERTIFICATE_P12" | base64 --decode -o "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | tr -d '"')"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build, sign and package
+        env:
+          LUMINA_UNIVERSAL: "1"
+          LUMINA_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          LUMINA_NOTARIZE: ${{ (secrets.LUMINA_NOTARY_PROFILE != '' || secrets.APPLE_ID != '') && '1' || '0' }}
+          LUMINA_NOTARY_PROFILE: ${{ secrets.LUMINA_NOTARY_PROFILE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -z "${LUMINA_SIGN_IDENTITY:-}" ]; then
+            echo "No signing identity configured; producing ad-hoc build"
+            export LUMINA_SIGN_IDENTITY="-"
+          fi
+          ./scripts/package_release.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-release
+          path: |
+            target/release/bundle/osx/*.zip
+            target/release/bundle/osx/*.dmg
+            target/release/bundle/osx/SHA256SUMS.txt
+
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            target/release/bundle/osx/*.zip
+            target/release/bundle/osx/*.dmg
+            target/release/bundle/osx/SHA256SUMS.txt
