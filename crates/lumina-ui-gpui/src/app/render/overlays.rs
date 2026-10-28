@@ -232,7 +232,8 @@ impl LuminaApp {
     pub(crate) fn render_album_builder_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.album_draft.modal_open {
             div()
-                .size_full()
+                .absolute()
+                .inset_0()
                 .child(AlbumBuilderModal::render(self, cx))
                 .into_any_element()
         } else {
@@ -244,7 +245,8 @@ impl LuminaApp {
     pub(crate) fn render_delete_confirm_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.delete_confirm_state.is_some() {
             div()
-                .size_full()
+                .absolute()
+                .inset_0()
                 .child(DeleteConfirmModal::render(self, cx))
                 .into_any_element()
         } else {
@@ -269,7 +271,8 @@ impl LuminaApp {
     pub(crate) fn render_tag_manager_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.tag_manager.open {
             div()
-                .size_full()
+                .absolute()
+                .inset_0()
                 .child(TagManagerModal::render(self, cx))
                 .into_any_element()
         } else {

@@ -51,6 +51,7 @@ impl MediaContextMenu {
             .child(
                 div()
                     .id("context-menu-dismiss-backdrop")
+                    .debug_selector(|| "context-menu-backdrop".to_string())
                     .absolute()
                     .inset_0()
                     .on_mouse_down(
@@ -70,6 +71,7 @@ impl MediaContextMenu {
             .child(
                 div()
                     .id("media-context-menu-popover")
+                    .debug_selector(|| "context-menu".to_string())
                     .absolute()
                     .left(px(x))
                     .top(px(y))

@@ -212,6 +212,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-play-btn")
+                                    .debug_selector(|| "video-play".to_string())
                                     .w(px(38.0))
                                     .h(px(26.0))
                                     .bg(theme::text())
@@ -290,6 +291,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-mute-btn")
+                                    .debug_selector(|| "video-mute".to_string())
                                     .tooltip(theme::tooltip_label("Mute (M)"))
                                     .cursor_pointer()
                                     .text_sm()
@@ -398,6 +400,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-loop-btn")
+                                    .debug_selector(|| "video-loop".to_string())
                                     .tooltip(theme::tooltip_label("Loop playback"))
                                     .px_2()
                                     .py_1()
@@ -444,6 +447,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-pip-btn")
+                                    .debug_selector(|| "video-pip".to_string())
                                     .tooltip(theme::tooltip_label("Open Picture-in-Picture (⌥P)"))
                                     .px_2()
                                     .py_1()
@@ -470,6 +474,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-fullscreen-btn")
+                                    .debug_selector(|| "video-fullscreen".to_string())
                                     .tooltip(theme::tooltip_label("Toggle fullscreen"))
                                     .w(px(28.0))
                                     .h(px(26.0))

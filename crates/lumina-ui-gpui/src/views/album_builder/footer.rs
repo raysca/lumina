@@ -143,6 +143,7 @@ pub(super) fn render_footer_actions(
                 .child(
                     div()
                         .id("cancel-album-btn")
+                        .debug_selector(|| "album-cancel".to_string())
                         .px_3p5()
                         .py_1p5()
                         .bg(theme::bg_raised())
@@ -169,6 +170,7 @@ pub(super) fn render_footer_actions(
                 .child(
                     div()
                         .id("save-album-btn")
+                        .debug_selector(|| "album-save".to_string())
                         .px_4()
                         .py_2()
                         .bg(theme::accent())

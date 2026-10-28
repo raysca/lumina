@@ -37,3 +37,6 @@ jobs:
 
       - name: Build
         run: cargo build --workspace
+
+      - name: Live UI smoke (skips on headless runners)
+        run: ./scripts/live_ui_smoke.sh

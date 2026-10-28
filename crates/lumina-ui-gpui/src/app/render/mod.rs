@@ -41,6 +41,7 @@ impl LuminaApp {
             .child(
                 div()
                     .id("app-error-banner-dismiss")
+                    .debug_selector(|| "error-banner-dismiss".to_string())
                     .cursor_pointer()
                     .child(render_icon(Icon::X, px(12.0), theme::text()))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -77,6 +78,7 @@ impl LuminaApp {
         ];
         div()
             .id("shortcuts-overlay")
+            .debug_selector(|| "shortcuts-overlay".to_string())
             .absolute()
             .inset_0()
             .bg(theme::scrim())
@@ -92,6 +94,7 @@ impl LuminaApp {
             .child(
                 div()
                     .id("shortcuts-card")
+                    .debug_selector(|| "shortcuts-card".to_string())
                     .w(px(520.0))
                     .max_h(px(560.0))
                     .overflow_y_scroll()
@@ -123,6 +126,7 @@ impl LuminaApp {
                             .child(
                                 div()
                                     .id("shortcuts-close")
+                                    .debug_selector(|| "shortcuts-close".to_string())
                                     .cursor_pointer()
                                     .child(render_icon(Icon::X, px(12.0), theme::text()))
                                     .tooltip(theme::tooltip_label("Close"))
@@ -220,6 +224,7 @@ impl Render for LuminaApp {
 
         div()
             .id("lumina-app-root")
+            .debug_selector(|| "app-root".to_string())
             .font_family(theme::FONT_SANS)
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

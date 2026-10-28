@@ -32,9 +32,12 @@ impl LuminaApp {
             .child(
                 if self.sidebar_collapsed {
                     theme::control("sidebar-toggle-btn")
+                        .debug_selector(|| "sidebar-toggle".to_string())
                         .tooltip(theme::tooltip_label("Toggle sidebar"))
                 } else {
                     theme::control_on("sidebar-toggle-btn")
+                        .debug_selector(|| "sidebar-toggle".to_string())
+                        .tooltip(theme::tooltip_label("Toggle sidebar"))
                 }
                 .w(px(28.0))
                 .px_0()
@@ -56,6 +59,7 @@ impl LuminaApp {
                             "mode-browser",
                             self.layout_mode == LayoutMode::Browser,
                         )
+                        .debug_selector(|| "mode-browser".to_string())
                         .child("Browser")
                         .on_click(cx.listener(
                             |this, _e: &ClickEvent, _w, cx| {
@@ -68,6 +72,7 @@ impl LuminaApp {
                     )
                     .child(
                         theme::segmented_item("mode-split", self.layout_mode == LayoutMode::Split)
+                            .debug_selector(|| "mode-split".to_string())
                             .child("Split")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.layout_mode = LayoutMode::Split;
@@ -80,6 +85,7 @@ impl LuminaApp {
                             "mode-viewer",
                             self.layout_mode == LayoutMode::Viewer,
                         )
+                        .debug_selector(|| "mode-viewer".to_string())
                         .child("Viewer")
                         .on_click(cx.listener(
                             |this, _e: &ClickEvent, _w, cx| {
@@ -103,6 +109,7 @@ impl LuminaApp {
                     .child(
                         div()
                             .id("breadcrumb-library-btn")
+                            .debug_selector(|| "breadcrumb-library".to_string())
                             .cursor_pointer()
                             .hover(|s| s.text_color(theme::text()))
                             .text_color(theme::text_muted())
@@ -173,6 +180,7 @@ impl LuminaApp {
                     theme::control_on("inspector-toggle-btn")
                 } else {
                     theme::control("inspector-toggle-btn")
+                        .debug_selector(|| "inspector-toggle".to_string())
                 }
                 .child(crate::icons::render_icon(
                     crate::icons::Icon::Info,
@@ -190,6 +198,7 @@ impl LuminaApp {
             )
             .child(
                 theme::control_primary("change-folder-btn")
+                    .debug_selector(|| "switch-library".to_string())
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Folder,

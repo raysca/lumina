@@ -59,6 +59,7 @@ impl SidebarView {
                 .child(
                     div()
                         .id("expand-sidebar-btn")
+                        .debug_selector(|| "expand-sidebar".to_string())
                         .w(px(32.0))
                         .h(px(32.0))
                         .rounded_md()

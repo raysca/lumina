@@ -75,6 +75,7 @@ impl TagManagerHeader {
             .child(
                 div()
                     .id("close-tag-manager-btn")
+                    .debug_selector(|| "tag-manager-close".to_string())
                     .tooltip(theme::tooltip_label("Close tag manager"))
                     .size(px(28.0))
                     .rounded_md()

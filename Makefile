@@ -1,4 +1,4 @@
-.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg
+.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg ui-smoke
 
 # Keep in sync with crates/*/Cargo.toml and resources/Info.plist
 VERSION := 0.2.0
@@ -72,6 +72,10 @@ test-verbose:
 ## Run performance benchmarks and scale gates
 bench:
 	cargo test --test benchmark_test -- --nocapture
+
+## Launch the real app window and verify it appears (permission-light smoke test)
+ui-smoke:
+	./scripts/live_ui_smoke.sh
 
 ## Lint workspace with Clippy
 lint:

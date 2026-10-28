@@ -23,6 +23,7 @@ impl DeleteConfirmModal {
 
         div()
             .id("delete-modal-backdrop")
+            .debug_selector(|| "delete-modal-backdrop".to_string())
             .absolute()
             .inset_0()
             .bg(theme::scrim())
@@ -98,6 +99,7 @@ impl DeleteConfirmModal {
                             .child(
                                 div()
                                     .id("close-delete-modal-btn")
+                                    .debug_selector(|| "delete-modal-close".to_string())
                                     .tooltip(theme::tooltip_label("Cancel"))
                                     .px_2p5()
                                     .py_1()

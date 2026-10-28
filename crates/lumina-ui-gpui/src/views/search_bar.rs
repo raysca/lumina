@@ -19,6 +19,7 @@ impl SearchBarView {
 
         div()
             .id("search-input-box")
+            .debug_selector(|| "search-input".to_string())
             .w(px(280.0))
             .h(px(28.0))
             .px_2()
@@ -71,6 +72,7 @@ impl SearchBarView {
                     .child(
                         div()
                             .id("clear-search-btn")
+                            .debug_selector(|| "clear-search".to_string())
                             .tooltip(theme::tooltip_label("Clear search"))
                             .w(px(16.0))
                             .h(px(16.0))
@@ -88,6 +90,7 @@ impl SearchBarView {
                                 theme::text_muted(),
                             ))
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                cx.stop_propagation();
                                 this.clear_search(cx);
                             })),
                     )
@@ -214,6 +217,7 @@ impl SearchBarView {
                 theme::segmented("fit-square-toggle")
                     .child(
                         theme::segmented_item("fit-mode-fit", this.card_fit_mode)
+                            .debug_selector(|| "fit-mode-fit".to_string())
                             .child("Fit")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.card_fit_mode = true;
@@ -223,6 +227,7 @@ impl SearchBarView {
                     )
                     .child(
                         theme::segmented_item("fit-mode-square", !this.card_fit_mode)
+                            .debug_selector(|| "fit-mode-square".to_string())
                             .child("Square")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.card_fit_mode = false;
@@ -240,6 +245,7 @@ impl SearchBarView {
                     .gap_1p5()
                     .child(
                         theme::control("grid-zoom-out-btn")
+                            .debug_selector(|| "grid-zoom-out".to_string())
                             .tooltip(theme::tooltip_label("Larger thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))
@@ -297,6 +303,7 @@ impl SearchBarView {
                     )
                     .child(
                         theme::control("grid-zoom-in-btn")
+                            .debug_selector(|| "grid-zoom-in".to_string())
                             .tooltip(theme::tooltip_label("Smaller thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))

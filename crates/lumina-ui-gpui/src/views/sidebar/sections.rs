@@ -244,6 +244,7 @@ pub(super) fn render_smart_albums_section(
                 .child(
                     div()
                         .id("new-smart-album-btn")
+                        .debug_selector(|| "new-smart-album".to_string())
                         .w(px(20.0))
                         .h(px(20.0))
                         .rounded_sm()
@@ -343,6 +344,7 @@ pub(super) fn render_tags_section(
                 .child(
                     div()
                         .id("open-tag-manager-sidebar-btn")
+                        .debug_selector(|| "open-tag-manager".to_string())
                         .cursor_pointer()
                         .text_xs()
                         .text_color(theme::accent())

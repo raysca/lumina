@@ -41,6 +41,7 @@ impl AlbumBuilderModal {
 
         div()
             .id("album-builder-backdrop")
+            .debug_selector(|| "album-builder-backdrop".to_string())
             .absolute()
             .inset_0()
             .bg(rgba(0x09090b99))
@@ -56,6 +57,7 @@ impl AlbumBuilderModal {
             .child(
                 div()
                     .id("album-builder-modal-card")
+                    .debug_selector(|| "album-builder-card".to_string())
                     .w(px(640.0))
                     .max_h(px(620.0))
                     .bg(theme::bg_app())

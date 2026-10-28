@@ -138,6 +138,9 @@ impl LuminaApp {
                                 row_cards.push(
                                     div()
                                         .id(item_id_num)
+                                        .debug_selector(move || {
+                                            format!("media-card-{}", item_id_num)
+                                        })
                                         .flex_1()
                                         .h(px(row_h - 10.0))
                                         .p(px(8.0))

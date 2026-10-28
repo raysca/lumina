@@ -67,6 +67,7 @@ impl ViewerViewport {
             .child(if !is_immersive || hud_visible {
                 div()
                     .id("viewer-prev-btn")
+                    .debug_selector(|| "viewer-prev".to_string())
                     .tooltip(theme::tooltip_label("Previous item"))
                     .absolute()
                     .left_6()
@@ -98,6 +99,7 @@ impl ViewerViewport {
             .child(if !is_immersive || hud_visible {
                 div()
                     .id("viewer-next-btn")
+                    .debug_selector(|| "viewer-next".to_string())
                     .tooltip(theme::tooltip_label("Next item"))
                     .absolute()
                     .right_6()

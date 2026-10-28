@@ -54,6 +54,7 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 | `make lint` | Clippy (--all-targets --all-features) |
 | `make fmt` / `make fmt-fix` | Check / apply rustfmt |
 | `make bench` | Run performance benchmarks |
+| `make ui-smoke` | Launch the real app window and verify it appears |
 | `make bundle` / `make dmg` | Build Lumina.app / installer DMG |
 | `make icon` | Regenerate resources/Lumina.icns |
 
@@ -62,6 +63,23 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 > Thumbnail decoding is best-effort because QuickLook/AVFoundation poster
 > extraction can be unavailable headlessly; set `LUMINA_STRICT_BENCH=1` to
 > require every thumbnail to decode.
+
+## UI testing
+
+Two layers of UI coverage live alongside the unit tests:
+
+1. **In-process UI automation** (`cargo test -p lumina-ui-gpui ui_automation`):
+   drives the real GPUI view tree with synthetic platform input — mouse clicks
+   at rendered element bounds, key events, double/right clicks and window
+   resizes — then asserts application state. Covers toolbar/sidebar controls,
+   search click+typing+clear, grid selection, double-click viewer, context menu,
+   Home/End/Page navigation, modal backdrop dismissal, the shortcut sheet, and
+   window-bounds observation. Runs headlessly and in CI.
+2. **Live window smoke test** (`make ui-smoke`): launches the release/debug
+   binary with an isolated `HOME`, waits for a native window via CoreGraphics,
+   saves a screenshot to `target/ui-smoke/window.png` when Screen Recording is
+   permitted, and shuts the app down. It skips cleanly on headless CI and needs
+   no Accessibility permissions.
 
 ## Layout
 

@@ -41,6 +41,7 @@ impl TagManagerModal {
 
         div()
             .id("tag-manager-backdrop")
+            .debug_selector(|| "tag-manager-backdrop".to_string())
             .absolute()
             .inset_0()
             .bg(theme::scrim())
@@ -58,6 +59,7 @@ impl TagManagerModal {
             .child(
                 div()
                     .id("tag-manager-dialog")
+                    .debug_selector(|| "tag-manager-dialog".to_string())
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                         cx.stop_propagation();
                     })
