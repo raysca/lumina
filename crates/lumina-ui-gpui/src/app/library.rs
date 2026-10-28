@@ -150,7 +150,7 @@ impl LuminaApp {
         let (engine, rx) = match LuminaEngine::open(path.clone()) {
             Ok(res) => res,
             Err(e) => {
-                eprintln!("Failed to open library at {:?}: {:?}", path, e);
+                log::error!("failed to open library at {:?}: {e:?}", path);
                 self.set_error(format!("Could not open library: {e}"), cx);
                 return;
             }

@@ -37,7 +37,7 @@ pub fn open_floating_inspector_window(
             }
         }
         Err(e) => {
-            eprintln!("Failed to open floating inspector window: {:?}", e);
+            log::error!("failed to open floating inspector window: {e:?}");
             if let Some(app) = weak_app.upgrade() {
                 app.update(cx, |this, cx| {
                     this.inspector_open = true;
@@ -93,7 +93,7 @@ pub fn open_floating_pip_window(
             }
         }
         Err(e) => {
-            eprintln!("Failed to open floating PiP window: {:?}", e);
+            log::error!("failed to open floating PiP window: {e:?}");
         }
     }
 }

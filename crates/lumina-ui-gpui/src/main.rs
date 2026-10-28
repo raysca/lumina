@@ -5,6 +5,8 @@ mod assets;
 mod bridge;
 mod config;
 mod icons;
+mod instance_lock;
+mod logging;
 mod player;
 mod theme;
 mod views;
@@ -17,6 +19,22 @@ use gpui::*;
 mod tests;
 
 fn main() {
+    logging::init();
+
+    // Only one Lumina process may touch a catalog at a time.
+    let _instance_lock = match instance_lock::acquire() {
+        Ok(lock) => {
+            log::info!("instance lock acquired at {}", lock.path().display());
+            lock
+        }
+        Err(err) => {
+            // A blocking modal here would hang automated launches; log and exit.
+            log::error!("{err}");
+            eprintln!("Lumina: {err}");
+            return;
+        }
+    };
+
     Application::new()
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
@@ -27,7 +45,7 @@ fn main() {
                 std::borrow::Cow::Borrowed(assets::PLEX_SANS_SEMIBOLD),
                 std::borrow::Cow::Borrowed(assets::PLEX_MONO_REGULAR),
             ]) {
-                eprintln!("Warning: Failed to load bundled IBM Plex fonts: {:?}", e);
+                log::warn!("failed to load bundled IBM Plex fonts: {e:?}");
             }
 
             let restored = crate::config::AppConfig::load().restored_window_bounds();
@@ -51,7 +69,7 @@ fn main() {
                 },
                 |_, cx| cx.new(LuminaApp::new),
             ) {
-                eprintln!("Failed to open window: {:?}", e);
+                log::error!("failed to open main window: {e:?}");
             }
             cx.activate(true);
         });

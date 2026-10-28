@@ -58,11 +58,12 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 | `make bundle` / `make dmg` | Build Lumina.app / installer DMG |
 | `make icon` | Regenerate resources/Lumina.icns |
 
-> `benchmark_desktop_pics_cold_scan_and_decodes` benchmarks a real
-> `~/Desktop/pics` folder (falling back to synthetic images if it is absent).
-> Thumbnail decoding is best-effort because QuickLook/AVFoundation poster
-> extraction can be unavailable headlessly; set `LUMINA_STRICT_BENCH=1` to
-> require every thumbnail to decode.
+> Performance gates live in `crates/lumina-core/tests/benchmark_test.rs` and are
+> **opt-in** so the normal test suite is not timing-sensitive: run them with
+> `make bench` (which passes `--include-ignored`). The desktop-pics benchmark
+> falls back to synthetic images when `~/Desktop/pics` is absent; thumbnail
+> decoding is best-effort headlessly, and `LUMINA_STRICT_BENCH=1` requires every
+> thumbnail to decode.
 
 ## UI testing
 
@@ -94,6 +95,22 @@ Three layers of UI coverage live alongside the unit tests:
    the harness app (System Settings → Privacy & Security → Accessibility → DeepSeek
    Harness / your terminal). Without it the script reports SKIP and exits 0; set
    `LUMINA_REQUIRE_UI_PERMISSIONS=1` to make a missing grant fatal.
+
+## Diagnostics & safety
+
+- **Logs**: structured log file at `<data dir>/lumina/logs/lumina.log` (rotated at
+  5 MB) plus stderr; set `LUMINA_LOG=debug` (or another log level) for more detail.
+  A panic hook records crashes to the same file.
+- **Single instance**: only one Lumina process may run at a time, enforced with an
+  OS file lock; a second launch exits with an explanatory error.
+- **Catalog protection**: schema version is stamped in `PRAGMA user_version`,
+  `busy_timeout` is enabled, a quick integrity check runs on open, and a
+  single-generation `.db.bak` snapshot is written with `VACUUM INTO` when the
+  catalog changed (at most once per app launch).
+- **Thumbnail cache budget**: startup cleanup removes entries older than 30 days
+  and evicts oldest files down to a 1.5 GB budget (cache keys are format-versioned).
+- **Decode safety**: native `sips`/QuickLook helpers run with a 10 s timeout and
+  are killed if they hang, so a bad file cannot pin a decode worker forever.
 
 ## Layout
 

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 #[test]
+#[ignore = "performance gate: run via make bench"]
 fn benchmark_cold_scan_synthetic() {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -56,6 +57,7 @@ fn benchmark_cold_scan_synthetic() {
 }
 
 #[test]
+#[ignore = "performance gate: run via make bench"]
 fn benchmark_desktop_pics_cold_scan_and_decodes() {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -159,6 +161,7 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
 }
 
 #[test]
+#[ignore = "performance gate: run via make bench"]
 fn benchmark_scale_and_gates() {
     use lumina_core::{Catalog, MediaId, MediaItem, MediaType, StructuredQuery, SystemAlbum};
 

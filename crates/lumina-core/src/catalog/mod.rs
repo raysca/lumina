@@ -4,13 +4,19 @@ mod schema;
 mod tags;
 mod trash;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{MediaId, MediaItem, MediaType};
+
+/// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
+/// idempotent, and this version is stamped into `PRAGMA user_version` so future
+/// migrations can dispatch on it.
+pub const SCHEMA_VERSION: i64 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {
@@ -22,6 +28,7 @@ pub enum DeletionTarget {
 #[derive(Clone)]
 pub struct Catalog {
     pub(crate) conn: Arc<Mutex<Connection>>,
+    db_path: Option<PathBuf>,
 }
 
 impl Catalog {
@@ -33,6 +40,7 @@ impl Catalog {
         let conn = Connection::open(db_path)?;
         let catalog = Self {
             conn: Arc::new(Mutex::new(conn)),
+            db_path: Some(db_path.to_path_buf()),
         };
         catalog.init_schema()?;
         Ok(catalog)
@@ -42,6 +50,7 @@ impl Catalog {
         let conn = Connection::open_in_memory()?;
         let catalog = Self {
             conn: Arc::new(Mutex::new(conn)),
+            db_path: None,
         };
         catalog.init_schema()?;
         Ok(catalog)
@@ -68,6 +77,55 @@ impl Catalog {
             params![key, value],
         )?;
         Ok(())
+    }
+
+    /// Returns the schema version stamped in `PRAGMA user_version`.
+    pub fn schema_version(&self) -> Result<i64> {
+        let conn = self.conn.lock();
+        Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// Runs SQLite's fast integrity check (bounded to one error).
+    pub fn quick_check(&self) -> Result<()> {
+        let conn = self.conn.lock();
+        let result: String = conn.query_row("PRAGMA quick_check(1);", [], |row| row.get(0))?;
+        if result == "ok" {
+            Ok(())
+        } else {
+            bail!("catalog integrity check failed: {result}");
+        }
+    }
+
+    /// Creates a consistent single-generation backup next to the catalog file,
+    /// at most once per database modification (newer DB than backup).
+    pub fn daily_backup(&self) -> Result<Option<PathBuf>> {
+        let Some(db_path) = self.db_path.as_ref() else {
+            return Ok(None);
+        };
+        if !db_path.exists() {
+            return Ok(None);
+        }
+        let backup_path = PathBuf::from(format!("{}.bak", db_path.display()));
+
+        if let Ok(backup_meta) = fs::metadata(&backup_path) {
+            if backup_meta.len() > 0 {
+                if let (Ok(db_modified), Ok(backup_modified)) =
+                    (fs::metadata(db_path)?.modified(), backup_meta.modified())
+                {
+                    if backup_modified >= db_modified {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+
+        let _ = fs::remove_file(&backup_path);
+        let conn = self.conn.lock();
+        conn.execute(
+            "VACUUM INTO ?1;",
+            params![backup_path.to_string_lossy().to_string()],
+        )?;
+        Ok(Some(backup_path))
     }
 
     pub(crate) fn map_query_rows<P>(

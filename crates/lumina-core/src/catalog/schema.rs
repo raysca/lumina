@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::params;
 
-use super::Catalog;
+use super::{Catalog, SCHEMA_VERSION};
 use crate::{MediaId, TimelineBucket};
 
 impl Catalog {
@@ -11,6 +11,7 @@ impl Catalog {
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
+            PRAGMA busy_timeout = 5000;
             PRAGMA synchronous = NORMAL;
             PRAGMA temp_store = MEMORY;
             PRAGMA cache_size = -64000;
@@ -338,6 +339,12 @@ impl Catalog {
                 LEFT JOIN media_captions c ON c.media_id = m.id;
                 "#,
             )?;
+        }
+
+        // Stamp the schema version so future migrations can dispatch on it.
+        let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if current < SCHEMA_VERSION {
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
 
         Ok(())

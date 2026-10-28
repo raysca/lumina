@@ -3,8 +3,9 @@ use image::{imageops::FilterType, DynamicImage, GenericImageView};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use zune_jpeg::JpegDecoder;
 
 use crate::{DecodedFrame, MediaId, MediaType, PixelFormat};
@@ -22,6 +23,26 @@ struct TempDir(std::path::PathBuf);
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Native helpers (sips/QuickLook) must never hang a decode worker.
+const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
+    command.stdout(Stdio::null()).stderr(Stdio::null());
+    let mut child = command.spawn()?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(status) => return Ok(status),
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(anyhow!("native image tool timed out after {:?}", timeout));
+            }
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
     }
 }
 
@@ -151,19 +172,21 @@ impl DecoderPipeline {
         let temp_out = std::env::temp_dir().join(format!("lumina_sips_{}_{}.png", id.0, nanos));
         let _guard = TempFile(temp_out.clone());
 
-        let status = Command::new("sips")
-            .arg("-s")
-            .arg("format")
-            .arg("png")
-            .arg("-Z")
-            .arg(target_size.to_string())
-            .arg(path)
-            .arg("--out")
-            .arg(&temp_out)
-            .output();
+        let status = run_with_timeout(
+            Command::new("sips")
+                .arg("-s")
+                .arg("format")
+                .arg("png")
+                .arg("-Z")
+                .arg(target_size.to_string())
+                .arg(path)
+                .arg("--out")
+                .arg(&temp_out),
+            NATIVE_TOOL_TIMEOUT,
+        );
 
-        if let Ok(output) = status {
-            if output.status.success() && temp_out.exists() {
+        if let Ok(status) = status {
+            if status.success() && temp_out.exists() {
                 if let Ok(bytes) = fs::read(&temp_out) {
                     if let Ok(img) = image::load_from_memory(&bytes) {
                         return Self::resize_to_frame(id, img, target_size);
@@ -185,17 +208,19 @@ impl DecoderPipeline {
         let _guard = TempDir(temp_dir.clone());
 
         let size_arg = target_size.max(256).to_string();
-        let status = Command::new("qlmanage")
-            .arg("-t")
-            .arg("-s")
-            .arg(&size_arg)
-            .arg("-o")
-            .arg(&temp_dir)
-            .arg(path)
-            .output();
+        let status = run_with_timeout(
+            Command::new("qlmanage")
+                .arg("-t")
+                .arg("-s")
+                .arg(&size_arg)
+                .arg("-o")
+                .arg(&temp_dir)
+                .arg(path),
+            NATIVE_TOOL_TIMEOUT,
+        );
 
-        if let Ok(output) = status {
-            if output.status.success() {
+        if let Ok(status) = status {
+            if status.success() {
                 // Find generated thumbnail image
                 if let Ok(entries) = fs::read_dir(&temp_dir) {
                     for entry in entries.flatten() {
@@ -273,5 +298,34 @@ impl DecoderPipeline {
             format: PixelFormat::Bgra8,
             data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn native_tool_timeout_kills_slow_child() {
+        let started = Instant::now();
+        let err = run_with_timeout(
+            Command::new("sh").args(["-c", "sleep 5"]),
+            Duration::from_millis(100),
+        )
+        .expect_err("slow command must time out");
+        assert!(err.to_string().contains("timed out"));
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_tool_returns_fast_status() {
+        let status = run_with_timeout(
+            Command::new("sh").args(["-c", "exit 0"]),
+            Duration::from_secs(2),
+        )
+        .expect("fast command should run");
+        assert!(status.success());
     }
 }

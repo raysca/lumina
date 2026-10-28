@@ -10,6 +10,23 @@ pub struct DiskCache {
     cache_dir: PathBuf,
 }
 
+/// Bump when the on-disk thumbnail encoding changes.
+const CACHE_FORMAT_VERSION: u32 = 2;
+
+/// Default disk budget for thumbnails (1.5 GB).
+pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
+/// Thumbnails older than this are removed on startup (30 days).
+pub const DEFAULT_MAX_CACHE_AGE: std::time::Duration =
+    std::time::Duration::from_secs(30 * 24 * 60 * 60);
+
+/// Result of a cache cleanup pass.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CacheCleanupStats {
+    pub removed_files: usize,
+    pub removed_bytes: u64,
+    pub remaining_bytes: u64,
+}
+
 impl DiskCache {
     pub fn new() -> Result<Self> {
         let base = dirs::cache_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
@@ -34,8 +51,8 @@ impl DiskCache {
     ) -> String {
         let path_str = path.to_string_lossy();
         let payload = format!(
-            "{}:{}:{}:{}",
-            path_str, file_size, mtime_epoch_ms, target_size
+            "v{}:{}:{}:{}:{}",
+            CACHE_FORMAT_VERSION, path_str, file_size, mtime_epoch_ms, target_size
         );
         let hash = xxh3_64(payload.as_bytes());
         format!("{:016x}", hash)
@@ -152,6 +169,76 @@ impl DiskCache {
         }
     }
 
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// Removes stale/oversized thumbnails. Entries older than `max_age` are
+    /// deleted, then the oldest remaining entries are evicted until the cache is
+    /// under `max_bytes`.
+    pub fn cleanup(
+        &self,
+        max_bytes: u64,
+        max_age: std::time::Duration,
+    ) -> Result<CacheCleanupStats> {
+        if !self.cache_dir.exists() {
+            return Ok(CacheCleanupStats::default());
+        }
+
+        let now = std::time::SystemTime::now();
+        let mut files = Vec::new();
+        let mut stats = CacheCleanupStats::default();
+
+        for entry in fs::read_dir(&self.cache_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if !metadata.is_file() {
+                continue;
+            }
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let is_thumbnail = name.ends_with(".bin");
+            let is_temp = name.contains(".tmp.");
+            if !is_thumbnail && !is_temp {
+                continue;
+            }
+
+            let age = metadata
+                .modified()
+                .ok()
+                .and_then(|modified| now.duration_since(modified).ok())
+                .unwrap_or_default();
+
+            // Temp files older than an hour are leftovers from a crash.
+            let stale = age > max_age || (is_temp && age > std::time::Duration::from_secs(3600));
+            if stale {
+                if fs::remove_file(&path).is_ok() {
+                    stats.removed_files += 1;
+                    stats.removed_bytes += metadata.len();
+                }
+            } else if is_thumbnail {
+                files.push((metadata.modified().ok(), metadata.len(), path));
+            }
+        }
+
+        files.sort_by_key(|(modified, _, _)| *modified);
+        let mut total: u64 = files.iter().map(|(_, len, _)| *len).sum();
+        for (_, len, path) in files {
+            if total <= max_bytes {
+                break;
+            }
+            if fs::remove_file(&path).is_ok() {
+                stats.removed_files += 1;
+                stats.removed_bytes += len;
+                total = total.saturating_sub(len);
+            }
+        }
+        stats.remaining_bytes = total;
+        Ok(stats)
+    }
+
     pub fn clear(&self) -> Result<()> {
         if self.cache_dir.exists() {
             for entry in fs::read_dir(&self.cache_dir)? {
@@ -160,5 +247,83 @@ impl DiskCache {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_cache(name: &str) -> DiskCache {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_cache_test_{}_{}",
+            name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        DiskCache::with_directory(dir).unwrap()
+    }
+
+    fn frame() -> DecodedFrame {
+        DecodedFrame {
+            id: MediaId(1),
+            width: 2,
+            height: 2,
+            format: PixelFormat::Rgba8,
+            data: vec![0u8; 16],
+        }
+    }
+
+    #[test]
+    fn cleanup_evicts_to_size_limit() {
+        let cache = temp_cache("size");
+        for i in 0..3 {
+            cache
+                .put_cached(
+                    std::path::Path::new(&format!("/photos/{i}.jpg")),
+                    10,
+                    1000,
+                    256,
+                    &frame(),
+                )
+                .unwrap();
+        }
+        let stats = cache
+            .cleanup(0, std::time::Duration::from_secs(3600))
+            .unwrap();
+        assert_eq!(stats.removed_files, 3);
+        assert_eq!(stats.remaining_bytes, 0);
+        assert!(std::fs::read_dir(cache.cache_dir())
+            .unwrap()
+            .next()
+            .is_none());
+    }
+
+    #[test]
+    fn cleanup_removes_stale_entries_but_keeps_fresh_ones() {
+        let cache = temp_cache("age");
+        let cold = cache.cache_dir().join("cold.bin");
+        let warm = cache.cache_dir().join("warm.bin");
+        std::fs::write(&cold, vec![0u8; 8]).unwrap();
+        std::fs::write(&warm, vec![0u8; 8]).unwrap();
+
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        std::fs::File::options()
+            .write(true)
+            .open(&cold)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+
+        let stats = cache
+            .cleanup(1024 * 1024, std::time::Duration::from_secs(60))
+            .unwrap();
+        assert_eq!(stats.removed_files, 1);
+        assert!(!cold.exists());
+        assert!(warm.exists());
+        assert_eq!(stats.remaining_bytes, 8);
     }
 }

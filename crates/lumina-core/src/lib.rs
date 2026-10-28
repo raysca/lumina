@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub use cache::DiskCache;
-pub use catalog::{Catalog, DeletionTarget};
+pub use catalog::{Catalog, DeletionTarget, SCHEMA_VERSION};
 pub use decoder::DecoderPipeline;
 pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, Scanner};
@@ -177,11 +177,46 @@ impl LuminaEngine {
     ) -> Result<(Arc<Self>, Receiver<EngineEvent>)> {
         let (event_tx, event_rx) = unbounded();
 
+        let db_existed = db_path.exists();
         let catalog = Catalog::open(db_path)?;
+        if db_existed {
+            match catalog.quick_check() {
+                Ok(()) => log::info!("catalog integrity check passed"),
+                Err(err) => log::error!("catalog integrity check failed: {err:?}"),
+            }
+            match catalog.daily_backup() {
+                Ok(Some(path)) => log::info!("catalog backup created at {}", path.display()),
+                Ok(None) => {}
+                Err(err) => log::warn!("catalog backup failed: {err:?}"),
+            }
+        }
+
         let cache = match cache_dir {
             Some(dir) => DiskCache::with_directory(dir)?,
             None => DiskCache::new()?,
         };
+        {
+            let cache = cache.clone();
+            let _ = std::thread::Builder::new()
+                .name("lumina-cache-cleanup".to_string())
+                .spawn(move || {
+                    match cache.cleanup(
+                        crate::cache::DEFAULT_MAX_CACHE_BYTES,
+                        crate::cache::DEFAULT_MAX_CACHE_AGE,
+                    ) {
+                        Ok(stats) if stats.removed_files > 0 => {
+                            log::info!(
+                                "thumbnail cache cleanup removed {} files ({} bytes), {} remaining",
+                                stats.removed_files,
+                                stats.removed_bytes,
+                                stats.remaining_bytes
+                            );
+                        }
+                        Ok(_) => {}
+                        Err(err) => log::warn!("thumbnail cache cleanup failed: {err:?}"),
+                    }
+                });
+        }
         let decoder = DecoderPipeline::new(0)?;
 
         let cancel_flag = Arc::new(AtomicBool::new(false));
@@ -194,7 +229,7 @@ impl LuminaEngine {
             match LibraryWatcher::new(library_root.clone(), catalog.clone(), event_tx.clone()) {
                 Ok(watcher) => Some(watcher),
                 Err(err) => {
-                    eprintln!("lumina: real-time filesystem watcher unavailable: {err:?}");
+                    log::warn!("real-time filesystem watcher unavailable: {err:?}");
                     None
                 }
             };
@@ -494,7 +529,7 @@ impl LuminaEngine {
                     callback(Some(frame));
                 }
                 Err(err) => {
-                    eprintln!("Failed to decode thumbnail for {:?}: {:?}", item.path, err);
+                    log::warn!("failed to decode thumbnail for {:?}: {err:?}", item.path);
                     callback(None);
                 }
             }

@@ -186,7 +186,7 @@ fn build_debouncer(
                     handle_event(&path, &scanner, &catalog, &event_tx);
                 }
             }
-            Err(err) => eprintln!("lumina watcher: notify error: {err:?}"),
+            Err(err) => log::warn!("watcher notify error: {err:?}"),
         }
     })?;
 
@@ -234,7 +234,7 @@ fn handle_event(path: &Path, scanner: &Scanner, catalog: &Catalog, event_tx: &Se
                 let _ = event_tx.send(EngineEvent::BatchDiscovered { items: inserted });
             }
             Ok(_) => {}
-            Err(err) => eprintln!("lumina watcher: failed to upsert {:?}: {err:?}", path),
+            Err(err) => log::warn!("watcher failed to upsert {path:?}: {err:?}"),
         }
         return;
     }
@@ -245,7 +245,7 @@ fn handle_event(path: &Path, scanner: &Scanner, catalog: &Catalog, event_tx: &Se
             let _ = event_tx.send(EngineEvent::ItemRemoved(id));
         }
         Ok(None) => {}
-        Err(err) => eprintln!("lumina watcher: failed to remove {:?}: {err:?}", path),
+        Err(err) => log::warn!("watcher failed to remove {path:?}: {err:?}"),
     }
 }
 

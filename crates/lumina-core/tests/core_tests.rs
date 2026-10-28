@@ -1,7 +1,7 @@
 use lumina_core::{
     Catalog, DecodedFrame, DiskCache, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder,
     PixelFormat, RuleField, RuleOperator, RuleValue, Scanner, SmartAlbumRule, StructuredQuery,
-    SystemAlbum,
+    SystemAlbum, SCHEMA_VERSION,
 };
 use std::collections::HashSet;
 use std::fs::File;
@@ -1674,4 +1674,50 @@ fn test_clear_all_resets_catalog_and_fts() {
         .unwrap();
     assert!(catalog.search_fts("hedgehog", 10).unwrap().is_empty());
     assert_eq!(catalog.search_fts("second", 10).unwrap().len(), 1);
+}
+
+#[test]
+fn test_catalog_schema_version_integrity_and_backup() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_catalog_hardening_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+
+    let catalog = Catalog::open(&db_path).expect("open catalog");
+    assert_eq!(
+        catalog.schema_version().unwrap(),
+        SCHEMA_VERSION,
+        "schema version must be stamped on open"
+    );
+    catalog
+        .quick_check()
+        .expect("fresh catalog should be healthy");
+
+    let item = sample_media_item(
+        "/photos/hardening/one.jpg",
+        MediaType::Image,
+        1000,
+        None,
+        None,
+    );
+    catalog.insert_or_update_batch(&[item]).unwrap();
+
+    let backup = catalog
+        .daily_backup()
+        .expect("backup should succeed")
+        .expect("first backup should be created");
+    assert!(backup.exists());
+    assert!(backup.metadata().unwrap().len() > 0);
+    assert!(
+        catalog.daily_backup().unwrap().is_none(),
+        "an up-to-date backup must not be rewritten"
+    );
+
+    drop(catalog);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }
