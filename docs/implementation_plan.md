@@ -1,6 +1,6 @@
 # Lumina: Implementation Plan & Phase Roadmap
 
-This document outlines the phased roadmap and actionable task backlog for implementing Lumina as specified in [`docs/tech.md`](file:///Users/raymondottun/Projects/lumina/docs/tech.md).
+This document outlines the phased roadmap and actionable task backlog for implementing Lumina as specified in [`tech.md`](tech.md).
 
 ---
 
@@ -45,7 +45,7 @@ This document outlines the phased roadmap and actionable task backlog for implem
 **Status**: Complete
 
 ### 1.1 Workspace Scaffolding
-- [x] Create root [`Cargo.toml`](file:///Users/raymondottun/Projects/lumina/Cargo.toml) with workspace members `crates/lumina-core` and `crates/lumina-ui-gpui`.
+- [x] Create root [`Cargo.toml`](../Cargo.toml) with workspace members `crates/lumina-core` and `crates/lumina-ui-gpui`.
 - [x] Scaffold `crates/lumina-core` package with core dependencies:
   - `crossbeam-channel`, `rayon`, `parking_lot`
   - `jwalk`, `notify`, `notify-debouncer-mini`

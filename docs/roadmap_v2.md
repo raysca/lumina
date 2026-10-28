@@ -1,6 +1,6 @@
 # Lumina v2: Implementation Roadmap & Execution Plan
 
-This roadmap translates [`docs/system_design_v2.md`](file:///Users/raymondottun/Projects/lumina/docs/system_design_v2.md) into concrete, testable phases.
+This roadmap translates [`system_design_v2.md`](system_design_v2.md) into concrete, testable phases.
 
 ---
 
@@ -16,7 +16,7 @@ flowchart TD
     P6 --> P7["Phase 7: Pro Navigation & Shortcuts\n• Arrow Key Grid Navigation\n• Spacebar Quick Look & Esc Dismiss\n• Cmd+F / Cmd+I / F / Backspace"]
     P7 --> P8["Phase 8: Smart Album Builder Modal\n• Dynamic Condition Rule Composer\n• Live Match Counter Preview\n• SQLite Persistence & Auto-Select"]
     P8 --> P9["Phase 9: In-App Video Playback\n• Play/Pause & Scrubbing Controls\n• Elapsed/Total Timestamps\n• Seamless Detail Viewer Integration"]
-    P9 --> P10["Phase 10: Local Semantic AI Search\n• MobileCLIP/SigLIP Vector Embeddings\n• Cosine Similarity Hybrid Querying\n• Zero UI Thread Starvation"]
+    P9 -.-> P10["Phase 10: Local Semantic AI Search (planned)\n• MobileCLIP/SigLIP Vector Embeddings\n• Cosine Similarity Hybrid Querying\n• Zero UI Thread Starvation"]
     P10 --> P11["Phase 11: Multi-Select & Batch Operations\n• Shift+Click Range, Cmd+Click, Cmd+A\n• media_tags Schema & Batch API\n• Floating Multi-Select Action Dock\n• Batch Favorite, Trash & Tagging"]
     P11 --> P12["Phase 12: macOS Native App Bundling\n• High-Res Retina .icns Icon\n• ProMotion 120Hz Info.plist & UTIs\n• make bundle (Lumina.app)\n• make dmg (Disk Image Installer)"]
 ```
@@ -25,7 +25,7 @@ flowchart TD
 
 ## Phase 1: Catalog v2 & Temporal Pre-aggregation (`lumina-core`)
 **Status**: Complete
-- [x] **Schema Migration**: Update [`catalog.rs`](file:///Users/raymondottun/Projects/lumina/crates/lumina-core/src/catalog.rs) with the expanded `media_items` table:
+- [x] **Schema Migration**: Update [`catalog/schema.rs`](../crates/lumina-core/src/catalog/schema.rs) with the expanded `media_items` table:
   - Temporal: `year`, `month`, `day`, `timestamp_epoch_ms`
   - Spatial: `latitude`, `longitude`, `altitude`, `country_code`, `admin1_region`, `city`
   - Camera & Optics: `make`, `model`, `lens`, `focal_length`, `f_number`, `iso`, `exposure_time`
@@ -164,19 +164,16 @@ flowchart TD
 ---
 
 ## Phase 10: Tier 3 Local Semantic AI Search (`lumina-core` & `lumina-ui-gpui`)
-**Status**: Complete
-- [x] **On-Device Embedding Pipeline**:
-  - Implemented 512-dimensional L2-normalized embedding representation in [`crates/lumina-core/src/semantic.rs`](file:///Users/raymondottun/Projects/lumina/crates/lumina-core/src/semantic.rs).
-  - Compact 2,048-byte IEEE 754 float binary SQLite BLOB serialization and deserialization.
-- [x] **Vector Storage & Cosine Similarity**:
-  - Dedicated `media_embeddings` SQLite table (`media_id INTEGER PRIMARY KEY`, `embedding BLOB NOT NULL`).
-  - Rayon parallel dot-product cosine similarity ranking across entire catalog ($< 1.5\text{ ms}$; measured in benchmarks at **< 1.0 ms**).
-- [x] **Zero UI Starvation Semantic Worker**:
-  - Automatic background embedding worker during media ingestion loop without GPUI render thread starvation.
-  - Startup / scan-complete backfill worker via `catalog.index_missing_embeddings()`.
-- [x] **Hybrid Search Synthesis & Suggestion UI**:
-  - Structured search bar prefix parsing for `semantic:"..."` and `ai:"..."` natural language queries.
-  - Interactive AI suggestion pills (`✨ AI: Sunset`, `✨ AI: Portrait`, `✨ AI: Landscape`) in the top search bar.
+**Status**: Planned — not implemented
+- [ ] **On-Device Embedding Pipeline**:
+  - Planned 512-dimensional L2-normalized embedding representation (`lumina-core/src/semantic.rs`).
+  - Compact float BLOB serialization/deserialization in SQLite.
+- [ ] **Vector Storage & Cosine Similarity**:
+  - Planned `media_embeddings` table and cosine-similarity ranking.
+- [ ] **Zero UI Starvation Semantic Worker**:
+  - Planned background embedding worker during ingestion and a scan-complete backfill worker.
+- [ ] **Hybrid Search Synthesis & Suggestion UI**:
+  - Planned `semantic:"..."` / `ai:"..."` query parsing and AI suggestion pills in the search bar.
 
 ---
 
@@ -205,7 +202,7 @@ flowchart TD
 **Status**: Complete
 - [x] **Retina Multi-Resolution App Icon**:
   - Generated 1024x1024 master squircle aperture/sparkle icon with Lanczos3 downscaling across all 10 macOS iconset sizes.
-  - Automated `iconutil -c icns` compilation producing high-res [`resources/Lumina.icns`](file:///Users/raymondottun/Projects/lumina/resources/Lumina.icns).
+  - Automated `iconutil -c icns` compilation producing high-res [`resources/Lumina.icns`](../resources/Lumina.icns).
 - [x] **Production macOS `Info.plist`**:
   - Configured bundle ID `com.lumina.photos`, version `0.2.0`, Retina High-Resolution mode, dark mode support.
   - Enabled Apple ProMotion 120Hz display refresh key (`CADisableMinimumFrameDurationOnPhone: true`).
@@ -242,10 +239,10 @@ flowchart TD
   - Quick jump preset pills (`0%`, `25%`, `50%`, `75%`).
   - Dual timecodes: elapsed time and negative countdown remaining time (`-mm:ss`).
 - [x] **Transport & Variable Playback Speed**:
-  - Precise single-frame stepping buttons (`⏮ -1 frame`, `⏭ +1 frame` at ~40ms/frame).
-  - Relative jump transport buttons (`⏪ 5s (J)`, `5s ⏩ (L)`).
+  - Precise single-frame stepping buttons (StepBack `-1 frame`, StepForward `+1 frame` at ~40ms/frame).
+  - Relative jump transport buttons (Rewind `5s (J)`, Fast-forward `5s (L)`).
   - Play/Pause toggle with center badge overlay and bottom bar button (play `Play (Space)` / pause `Pause (K)`).
-  - Variable playback speed cycling: `⚡ 0.5x` $\rightarrow$ `1.0x` $\rightarrow$ `1.5x` $\rightarrow$ `2.0x` scaling background video clock ticks.
+  - Variable playback speed cycling: 0.5x $\rightarrow$ 1.0x $\rightarrow$ 1.5x $\rightarrow$ 2.0x scaling background video clock ticks.
   - Audio mute toggle button (volume `Sound` / volume-x `Muted` / `M`).
 - [x] **Pro Transport Keyboard Shortcuts**:
   - `J`: Rewind 5s.
@@ -260,8 +257,8 @@ flowchart TD
 **Status**: Complete
 - [x] **1:1 Pixel Sharpness Inspection**:
   - Full-resolution 1:1 pixel inspection container with Cover fit, min-dimensions `(width, height)`, and interactive toggle on photo click or `Z` keystroke.
-  - Visual sharpness indicator badge: `🔍 1:1 Pixel Inspection (100%) • Click to Fit`.
-  - Fullscreen top bar quick toggle button: `🔍 100% Zoom (Z)` / `🔍 Fit View (Z)`.
+  - Visual sharpness indicator badge: "1:1 Pixel Inspection (100%) • Click to Fit".
+  - Fullscreen top bar quick toggle button: "100% Zoom (Z)" / "Fit View (Z)".
   - Automatic zoom reset when navigating between items or exiting viewer.
 - [x] **Dynamic Grid Density Controls & Scaling**:
   - Top header density controls pill: `[-] {cols} cols [+]` supporting 2 to 8 columns.

@@ -56,8 +56,10 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 | `make icon` | Regenerate resources/Lumina.icns |
 
 > `benchmark_desktop_pics_cold_scan_and_decodes` benchmarks a real
-> `~/Desktop/pics` folder and is skipped in CI. Run it locally with
-> `cargo test -p lumina-core --test benchmark_test`.
+> `~/Desktop/pics` folder (falling back to synthetic images if it is absent).
+> Thumbnail decoding is best-effort because QuickLook/AVFoundation poster
+> extraction can be unavailable headlessly; set `LUMINA_STRICT_BENCH=1` to
+> require every thumbnail to decode.
 
 ## Layout
 

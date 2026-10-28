@@ -33,9 +33,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Tests
-        run: >
-          cargo test --workspace --
-          --skip benchmark_desktop_pics_cold_scan_and_decodes
+        run: cargo test --workspace
 
       - name: Build
         run: cargo build --workspace

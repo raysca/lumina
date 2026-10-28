@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS timeline_buckets (
 
 ## 3. Search Engine Architecture
 
-The search engine supports a three-tiered pipeline combining keyword matching, structured query operators, and local semantic embeddings:
+The design targets a three-tiered pipeline combining keyword matching, structured query operators, and local semantic embeddings (Tier 3 semantic search is planned, not implemented):
 
 ```text
 User Input: "sunset in Kyoto camera:Sony is:favorite"
@@ -149,14 +149,10 @@ User Input: "sunset in Kyoto camera:Sony is:favorite"
 ### 3.1 Tier 1: Full-Text Search (SQLite FTS5)
 ```sql
 CREATE VIRTUAL TABLE IF NOT EXISTS media_search_fts USING fts5(
-    file_name,
-    parent_dir,
-    city,
-    admin1_region,
-    country_code,
-    model,
-    content='media_items',
-    content_rowid='id'
+    file_name, parent_dir, city, admin1_region, country_code,
+    make, model, lens, year, tags, caption,
+    content='',
+    tokenize='unicode61 remove_diacritics 2'
 );
 ```
 
@@ -166,7 +162,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS media_search_fts USING fts5(
 * **Location**: `city:Kyoto`, `country:JP`
 * **Flags**: `is:favorite`, `is:video`, `is:raw`, `has:location`
 
-### 3.3 Tier 3: Local Semantic & Vector Search (Offline AI)
+### 3.3 Tier 3: Local Semantic & Vector Search (Offline AI) — planned
 * **Model**: Quantized MobileCLIP / SigLIP running on local GPU / Apple Neural Engine.
 * **Storage**: 512-dimensional float embeddings using `sqlite-vec` or embedded HNSW:
 ```sql
