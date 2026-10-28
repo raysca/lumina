@@ -57,6 +57,8 @@ impl SortSpec {
             SortDirection::Ascending => "ASC",
             SortDirection::Descending => "DESC",
         };
-        format!("{column} {direction}, {prefix}id ASC")
+        // Match the tie-breaker to the primary direction so the composite
+        // indexes (timestamp/id, rating/id) can satisfy the ORDER BY directly.
+        format!("{column} {direction}, {prefix}id {direction}")
     }
 }

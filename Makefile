@@ -71,7 +71,7 @@ test-verbose:
 
 ## Run performance benchmarks and scale gates
 bench:
-	cargo test -p lumina-core --test benchmark_test -- --include-ignored --nocapture
+	cargo test -p lumina-core --test benchmark_test -- --include-ignored --nocapture --test-threads=1
 
 ## Launch the real app window and verify it appears (permission-light smoke test)
 ui-smoke:

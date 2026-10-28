@@ -43,3 +43,58 @@ jobs:
 
       - name: Live UI automation (interaction tests need Accessibility; skips otherwise)
         run: ./scripts/live_ui_automation.sh
+
+  perf:
+    name: performance gates (bench suite)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: perf
+
+      - name: Run benchmarks and scale gates
+        run: make bench
+
+  quality:
+    name: coverage & dependency audit
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (llvm tools)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate coverage summary
+        run: cargo llvm-cov --workspace --summary-only
+
+      - name: Generate LCOV report
+        run: cargo llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-coverage
+          path: lcov.info
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Dependency advisory report (non-blocking)
+        continue-on-error: true
+        run: cargo audit

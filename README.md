@@ -133,6 +133,19 @@ Three layers of UI coverage live alongside the unit tests:
 - **Decode safety**: native `sips`/QuickLook helpers run with a 10 s timeout and
   are killed if they hang, so a bad file cannot pin a decode worker forever.
 
+## Continuous integration
+
+- **test**: rustfmt, clippy `-D warnings`, workspace tests, debug build, live
+  UI smoke and the OS-level UI harness (both skip cleanly on headless runners).
+- **perf**: runs the opt-in benchmark suite (`make bench`, serialized for stable
+  measurements); debug-mode budgets are intentionally looser than the strict
+  release gates (seek <1 ms, structured query <5 ms, smart album <8 ms).
+- **quality**: `cargo llvm-cov` summary + LCOV artifact, and a non-blocking
+  `cargo audit` advisory report.
+- **release** (`.github/workflows/release.yml`): tag-driven universal build,
+  optional Developer ID signing/notarization, zip/DMG/checksums and a draft
+  GitHub release.
+
 ## Layout
 
 ```
