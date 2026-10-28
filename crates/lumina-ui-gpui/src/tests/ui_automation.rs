@@ -589,6 +589,60 @@ fn ui_automation_date_and_location_edit_undo() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_command_palette() {
+    let (temp_dir, engine) = seed_library("command_palette", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-k");
+    view.update(vcx, |app, _| assert!(app.command_palette_open));
+
+    for key in ["p", "r", "e", "f"] {
+        keystrokes(vcx, key);
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.command_query, "pref");
+        let titles: Vec<String> = app
+            .filtered_commands()
+            .into_iter()
+            .map(|command| command.title())
+            .collect();
+        assert_eq!(titles.first().map(String::as_str), Some("Preferences…"));
+    });
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open);
+        assert!(app.preferences_open);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.preferences_open));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-k");
+    for key in ["a", "b", "o", "u", "t"] {
+        keystrokes(vcx, key);
+    }
+    click(vcx, "command-item-command.about");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open);
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::About
+        );
+    });
+    keystrokes(vcx, "escape");
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.command_palette_open));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_preferences_modal() {
     let (temp_dir, engine) = seed_library("preferences", 3);
     let mut cx = gpui::TestAppContext::single();

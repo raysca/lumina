@@ -6,6 +6,7 @@ actions!(
     lumina,
     [
         OpenPreferences,
+        ShowCommandPalette,
         OpenLibrary,
         RescanLibrary,
         ShowShortcuts,

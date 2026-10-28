@@ -28,6 +28,8 @@ pub fn build_menus() -> Vec<Menu> {
         Menu {
             name: "View".into(),
             items: vec![
+                MenuItem::action("Command Palette…", ShowCommandPalette),
+                MenuItem::separator(),
                 MenuItem::action("Toggle Sidebar", ToggleSidebar),
                 MenuItem::action("Toggle Inspector", ToggleInspector),
                 MenuItem::separator(),

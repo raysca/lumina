@@ -13,6 +13,29 @@ impl LuminaApp {
         cmd_or_ctrl: bool,
         cx: &mut Context<Self>,
     ) -> bool {
+        // 0. Command palette
+        if self.command_palette_open {
+            match key {
+                "escape" => self.close_command_palette(cx),
+                "enter" | "return" => self.execute_selected_command(cx),
+                "up" => self.move_command_selection(-1, cx),
+                "down" => self.move_command_selection(1, cx),
+                "backspace" => {
+                    self.command_query.pop();
+                    self.command_selected = 0;
+                    cx.notify();
+                }
+                _ => {
+                    if !cmd_or_ctrl && key.chars().count() == 1 {
+                        self.command_query.push_str(key);
+                        self.command_selected = 0;
+                        cx.notify();
+                    }
+                }
+            }
+            return true;
+        }
+
         // 0. Keyboard shortcut cheat sheet
         if self.shortcuts_overlay_open {
             if key == "escape" || key == "/" {

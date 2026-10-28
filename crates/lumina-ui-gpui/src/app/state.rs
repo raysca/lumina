@@ -173,6 +173,9 @@ pub struct LuminaApp {
     pub preferences_open: bool,
     pub preferences_tab: crate::app::preferences::PreferencesTab,
     pub preferences_cache_bytes: Option<u64>,
+    pub command_palette_open: bool,
+    pub command_query: String,
+    pub command_selected: usize,
 
     // Phase 16 Hardware-Accelerated Video Player
     pub video: VideoPlaybackState,
@@ -294,6 +297,9 @@ impl LuminaApp {
             preferences_open: false,
             preferences_tab: crate::app::preferences::PreferencesTab::General,
             preferences_cache_bytes: None,
+            command_palette_open: false,
+            command_query: String::new(),
+            command_selected: 0,
             video: VideoPlaybackState {
                 playback_speed: 1.0,
                 is_looping: true,

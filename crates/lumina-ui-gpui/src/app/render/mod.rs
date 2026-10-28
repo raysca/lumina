@@ -60,7 +60,8 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 18] = [
+        let rows: [(&str, &str); 19] = [
+            ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
             ("⌘,", "Preferences"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
@@ -236,6 +237,9 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
                 this.open_preferences(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowCommandPalette, _w, cx| {
+                this.open_command_palette(cx);
             }))
             .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
                 this.pick_folder_dialog(cx);
@@ -425,6 +429,10 @@ impl Render for LuminaApp {
             .child(self.render_shortcuts_overlay(cx))
             // 12. Preferences / About
             .child(crate::views::preferences::render_preferences_modal(
+                self, cx,
+            ))
+            // 13. Command palette (topmost)
+            .child(crate::views::command_palette::render_command_palette(
                 self, cx,
             ))
             .into_any_element()

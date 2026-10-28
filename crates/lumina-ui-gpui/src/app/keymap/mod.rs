@@ -34,6 +34,16 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+K: command palette
+        if cmd_or_ctrl && key.eq_ignore_ascii_case("k") {
+            if self.command_palette_open {
+                self.close_command_palette(cx);
+            } else {
+                self.open_command_palette(cx);
+            }
+            return;
+        }
+
         // Cmd+,: preferences
         if cmd_or_ctrl && key == "," {
             self.open_preferences(cx);

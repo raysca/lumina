@@ -5,6 +5,7 @@ mod app;
 mod assets;
 mod bridge;
 mod config;
+mod i18n;
 mod icons;
 mod instance_lock;
 mod logging;
