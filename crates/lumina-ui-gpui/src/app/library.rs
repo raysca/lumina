@@ -102,6 +102,9 @@ impl LuminaApp {
             UiMessage::FolderPicked(folder) => {
                 self.open_library(folder, cx);
             }
+            UiMessage::ExportFolderPicked(folder) => {
+                self.export_to_folder(folder, cx);
+            }
             UiMessage::VideoFrameTick => {
                 self.video.frame_pending.store(false, Ordering::Release);
                 if let Some(ref mut player) = self.video.player {
@@ -208,6 +211,68 @@ impl LuminaApp {
             }
         })
         .detach();
+    }
+
+    /// Opens a folder picker for exporting the current selection.
+    pub fn export_pick_folder(&mut self, cx: &mut Context<Self>) {
+        let selected = self.get_selected_ids();
+        if selected.is_empty() {
+            self.set_error("Select at least one item to export", cx);
+            return;
+        }
+        let tx = self.ui_tx.clone();
+        cx.spawn(async move |_this, _cx| {
+            if let Some(handle) = rfd::AsyncFileDialog::new()
+                .set_title(format!("Export {} item(s)", selected.len()))
+                .pick_folder()
+                .await
+            {
+                let _ =
+                    tx.send_blocking(UiMessage::ExportFolderPicked(handle.path().to_path_buf()));
+            }
+        })
+        .detach();
+    }
+
+    /// Copies the selection into `folder`, writing XMP sidecars for annotated items.
+    pub fn export_to_folder(&mut self, folder: std::path::PathBuf, cx: &mut Context<Self>) {
+        let ids = self.get_selected_ids();
+        if ids.is_empty() {
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            self.set_error("Open a library before exporting", cx);
+            return;
+        };
+        match engine.export_items(&ids, &folder) {
+            Ok(report) => {
+                let mut summary = format!(
+                    "Exported {} item(s) to {}",
+                    report.exported,
+                    folder.display()
+                );
+                if report.sidecars > 0 {
+                    summary.push_str(&format!(" ({} XMP sidecar(s))", report.sidecars));
+                }
+                self.set_last_action(summary);
+                if report.failed.is_empty() {
+                    cx.notify();
+                } else {
+                    let details = report
+                        .failed
+                        .iter()
+                        .take(3)
+                        .map(|(path, error)| format!("{}: {error}", path.display()))
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    self.set_error(
+                        format!("{} export(s) failed: {details}", report.failed.len()),
+                        cx,
+                    );
+                }
+            }
+            Err(err) => self.set_error(format!("Export failed: {err}"), cx),
+        }
     }
 
     pub fn get_active_count(&self) -> usize {

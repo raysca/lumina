@@ -32,6 +32,7 @@ pub enum UiMessage {
     ThumbnailLoaded { id: MediaId, frame: DecodedFrame },
     ViewerLoaded { id: MediaId, frame: DecodedFrame },
     FolderPicked(PathBuf),
+    ExportFolderPicked(PathBuf),
     VideoFrameTick,
     OpenFloatingInspector,
     OpenFloatingPip,

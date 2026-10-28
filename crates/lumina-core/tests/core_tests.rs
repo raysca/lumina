@@ -1,7 +1,7 @@
 use lumina_core::{
-    Catalog, DecodedFrame, DiskCache, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder,
-    PixelFormat, RuleField, RuleOperator, RuleValue, Scanner, SmartAlbumRule, StructuredQuery,
-    SystemAlbum, SCHEMA_VERSION,
+    read_sidecar, Catalog, DecodedFrame, DiskCache, EngineEvent, LuminaEngine, MatchMode, MediaId,
+    MediaItem, MediaType, OfflineGeocoder, PixelFormat, RuleField, RuleOperator, RuleValue,
+    Scanner, SmartAlbumRule, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
 };
 use std::collections::HashSet;
 use std::fs::File;
@@ -1719,5 +1719,81 @@ fn test_catalog_schema_version_integrity_and_backup() {
     );
 
     drop(catalog);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_export_items_copies_files_and_writes_xmp_sidecars() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_export_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let media_dir = tmp_dir.join("library");
+    std::fs::create_dir_all(&media_dir).unwrap();
+    for name in ["trip_01.jpg", "trip_02.jpg"] {
+        std::fs::write(media_dir.join(name), b"test-jpeg-content").unwrap();
+    }
+
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        media_dir.clone(),
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+
+    let items = engine.get_item_slice(0..10);
+    assert_eq!(items.len(), 2, "both seeded files should be indexed");
+    let rated = &items[0];
+    engine.catalog().set_rating(rated.id, 4).unwrap();
+    engine
+        .catalog()
+        .set_caption(rated.id, "Golden hour in Kyoto")
+        .unwrap();
+    engine
+        .catalog()
+        .add_tags_batch(&[rated.id], &["travel".to_string()])
+        .unwrap();
+
+    let ids: Vec<MediaId> = items.iter().map(|item| item.id).collect();
+    let destination = tmp_dir.join("exported");
+    let report = engine.export_items(&ids, &destination).unwrap();
+    assert_eq!(report.exported, 2);
+    assert_eq!(report.sidecars, 1, "only the annotated item gets a sidecar");
+    assert!(
+        report.failed.is_empty(),
+        "unexpected failures: {:?}",
+        report.failed
+    );
+
+    let copied = destination.join(&rated.file_name);
+    assert!(copied.exists(), "original must be copied");
+    let metadata = read_sidecar(&copied)
+        .expect("sidecar read")
+        .expect("sidecar should exist");
+    assert_eq!(metadata.rating, 4);
+    assert_eq!(metadata.caption.as_deref(), Some("Golden hour in Kyoto"));
+    assert_eq!(metadata.tags, vec!["travel".to_string()]);
+
+    // Re-exporting must not overwrite the first copy.
+    let second = engine.export_items(&[rated.id], &destination).unwrap();
+    assert_eq!(second.exported, 1);
+    let renamed = destination.join(format!(
+        "{} (1).jpg",
+        rated
+            .file_name
+            .strip_suffix(".jpg")
+            .unwrap_or(&rated.file_name)
+    ));
+    assert!(renamed.exists(), "collision should produce a numbered copy");
+
+    drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

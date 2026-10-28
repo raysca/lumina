@@ -186,6 +186,28 @@ impl LuminaApp {
                                 cx.notify();
                             })),
                     )
+                    // Action: Export Selection
+                    .child(
+                        div()
+                            .id("batch-export-dock-btn")
+                            .px_2()
+                            .py_1()
+                            .bg(theme::bg_control())
+                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1p5()
+                            .text_xs()
+                            .text_color(theme::text_muted())
+                            .child(render_icon(Icon::Folder, px(12.0), theme::text_muted()))
+                            .child("Export…")
+                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.export_pick_folder(cx);
+                            })),
+                    )
                     // Action: Clear Selection
                     .child(
                         div()

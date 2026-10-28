@@ -19,6 +19,10 @@ core handles cataloguing, decoding, and search.
   stepping, speed, mute, looping, and a floating Picture-in-Picture window.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
+- **Metadata portability** — exporting a selection copies the originals and
+  writes Adobe-compatible XMP sidecars (`xmp:Rating`, `dc:subject`,
+  `dc:description`) so ratings, tags, and captions survive outside the catalog;
+  the same sidecars can be generated in place via `write_metadata_sidecars`.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and
   a built-in shortcut cheat sheet (⌘/) plus manual rescan (⌘R).

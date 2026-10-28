@@ -320,9 +320,20 @@ impl MediaContextMenu {
                             this.open_album_builder(cx);
                         }),
                     ))
+                    // 11. Export...
+                    .child(Self::render_menu_item(
+                        "export-menu-btn",
+                        "Export…",
+                        None,
+                        false,
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.close_context_menu(cx);
+                            this.export_pick_folder(cx);
+                        }),
+                    ))
                     // Divider
                     .child(Self::render_divider())
-                    // 11. Copy File Path
+                    // 12. Copy File Path
                     .child({
                         let path_for_copy = item.path.to_string_lossy().to_string();
                         Self::render_menu_item(

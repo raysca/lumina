@@ -6,11 +6,14 @@ pub mod scanner;
 pub mod search;
 pub mod smart_albums;
 pub mod watcher;
+pub mod xmp;
 
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,9 +29,35 @@ pub use smart_albums::{
     MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, SystemAlbum,
 };
 pub use watcher::LibraryWatcher;
+pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, SidecarMetadata};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
+
+/// Never overwrite an existing export: photo.jpg -> photo (1).jpg, photo (2).jpg...
+fn unique_destination(directory: &Path, file_name: &str) -> PathBuf {
+    let candidate = directory.join(file_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let source = Path::new(file_name);
+    let stem = source
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "export".to_string());
+    let extension = source.extension().map(|e| e.to_string_lossy().to_string());
+    for index in 1..10_000 {
+        let name = match extension.as_deref() {
+            Some(ext) => format!("{stem} ({index}).{ext}"),
+            None => format!("{stem} ({index})"),
+        };
+        let candidate = directory.join(name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    directory.join(format!("{stem}-{}.export", std::process::id()))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaType {
@@ -145,6 +174,15 @@ pub enum EngineEvent {
     ScanComplete {
         total_items: usize,
     },
+}
+
+/// Result of exporting media + metadata.
+#[derive(Debug, Default, Clone)]
+pub struct ExportReport {
+    pub exported: usize,
+    pub sidecars: usize,
+    pub skipped: usize,
+    pub failed: Vec<(PathBuf, String)>,
 }
 
 #[derive(Clone)]
@@ -390,6 +428,83 @@ impl LuminaEngine {
 
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {
         self.catalog.set_caption(id, caption)
+    }
+
+    /// Copies the given items into destination, writing an XMP sidecar for each
+    /// item that has rating/tags/caption metadata. Existing files are never
+    /// overwritten; collisions get a numbered suffix.
+    pub fn export_items(&self, ids: &[MediaId], destination: &Path) -> Result<ExportReport> {
+        fs::create_dir_all(destination)?;
+        let captions = self.catalog.get_captions_map().unwrap_or_default();
+        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let mut report = ExportReport::default();
+
+        for id in ids {
+            let Some(item) = self.catalog.get_item_by_id(*id)? else {
+                report.skipped += 1;
+                continue;
+            };
+            if !item.path.exists() {
+                report
+                    .failed
+                    .push((item.path.clone(), "source file is missing".to_string()));
+                continue;
+            }
+            let destination_path = unique_destination(destination, &item.file_name);
+            if let Err(err) = fs::copy(&item.path, &destination_path) {
+                report
+                    .failed
+                    .push((item.path.clone(), format!("could not copy file: {err}")));
+                continue;
+            }
+            report.exported += 1;
+
+            match self.sidecar_metadata_for(*id, &captions, &ratings) {
+                Ok(metadata) => match xmp::write_sidecar(&destination_path, &metadata) {
+                    Ok(Some(_)) => report.sidecars += 1,
+                    Ok(None) => {}
+                    Err(err) => report.failed.push((
+                        item.path.clone(),
+                        format!("could not write XMP sidecar: {err}"),
+                    )),
+                },
+                Err(err) => report
+                    .failed
+                    .push((item.path.clone(), format!("could not read metadata: {err}"))),
+            }
+        }
+        Ok(report)
+    }
+
+    /// Writes/updates XMP sidecars next to the original files (metadata-only export).
+    pub fn write_metadata_sidecars(&self, ids: &[MediaId]) -> Result<usize> {
+        let captions = self.catalog.get_captions_map().unwrap_or_default();
+        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let mut written = 0;
+        for id in ids {
+            let Some(item) = self.catalog.get_item_by_id(*id)? else {
+                continue;
+            };
+            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings)?;
+            if xmp::write_sidecar(&item.path, &metadata)?.is_some() {
+                written += 1;
+            }
+        }
+        Ok(written)
+    }
+
+    fn sidecar_metadata_for(
+        &self,
+        id: MediaId,
+        captions: &HashMap<MediaId, String>,
+        ratings: &HashMap<MediaId, u8>,
+    ) -> Result<SidecarMetadata> {
+        let tags = self.catalog.get_tags_for_item(id)?;
+        Ok(SidecarMetadata {
+            caption: captions.get(&id).cloned(),
+            rating: ratings.get(&id).copied().unwrap_or(0),
+            tags,
+        })
     }
 
     pub fn get_captions_map(&self) -> std::collections::HashMap<MediaId, String> {

@@ -313,6 +313,50 @@ fn ui_automation_shortcut_cheat_sheet() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_export_writes_originals_and_sidecars() {
+    let (temp_dir, engine) = seed_library("export", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine.catalog().set_rating(item.id, 5).unwrap();
+    engine
+        .catalog()
+        .set_caption(item.id, "Export caption")
+        .unwrap();
+    engine
+        .catalog()
+        .add_tags_batch(&[item.id], &["exported".to_string()])
+        .unwrap();
+
+    let destination = temp_dir.join("exported");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.export_to_folder(destination.clone(), cx);
+    });
+
+    let copied = destination.join(&item.file_name);
+    assert!(copied.exists(), "export must copy the original file");
+    let sidecar = lumina_core::read_sidecar(&copied)
+        .unwrap()
+        .expect("export should write a sidecar for annotated items");
+    assert_eq!(sidecar.rating, 5);
+    assert_eq!(sidecar.caption.as_deref(), Some("Export caption"));
+    assert!(sidecar.tags.contains(&"exported".to_string()));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.last_action
+                .as_deref()
+                .unwrap_or("")
+                .contains("Exported"),
+            "got {:?}",
+            app.last_action
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
     let mut cx = gpui::TestAppContext::single();
