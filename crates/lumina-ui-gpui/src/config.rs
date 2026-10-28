@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::app::types::LayoutMode;
+use lumina_core::{SortDirection, SortField, SortSpec};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -32,6 +33,10 @@ pub struct AppConfig {
     pub window_width: Option<f32>,
     #[serde(default)]
     pub window_height: Option<f32>,
+    #[serde(default)]
+    pub sort_field: Option<String>,
+    #[serde(default)]
+    pub sort_direction: Option<String>,
 }
 
 fn default_sidebar_width() -> f32 {
@@ -78,6 +83,8 @@ impl Default for AppConfig {
             window_y: None,
             window_width: None,
             window_height: None,
+            sort_field: None,
+            sort_direction: None,
         }
     }
 }
@@ -138,6 +145,21 @@ impl AppConfig {
     }
 
     /// Maps the persisted layout string back to a [`LayoutMode`], defaulting to Browser.
+    /// Restores the persisted grid sort, defaulting to date taken descending.
+    pub fn restored_sort(&self) -> SortSpec {
+        let field = match self.sort_field.as_deref() {
+            Some("name") => SortField::FileName,
+            Some("size") => SortField::FileSize,
+            Some("rating") => SortField::Rating,
+            _ => SortField::DateTaken,
+        };
+        let direction = match self.sort_direction.as_deref() {
+            Some("asc") => SortDirection::Ascending,
+            _ => SortDirection::Descending,
+        };
+        SortSpec { field, direction }
+    }
+
     pub fn restored_layout_mode(&self) -> LayoutMode {
         match self.layout_mode.as_str() {
             "split" => LayoutMode::Split,
@@ -238,5 +260,30 @@ mod tests {
         assert_eq!(cfg.layout_mode, "browser");
         assert_eq!(cfg.grid_columns, 4);
         assert!(cfg.card_fit_mode);
+    }
+
+    #[test]
+    fn test_sort_preferences_roundtrip() {
+        let path = temp_config_path("sort");
+        let cfg = AppConfig {
+            sort_field: Some("name".to_string()),
+            sort_direction: Some("asc".to_string()),
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.restored_sort(),
+            SortSpec {
+                field: SortField::FileName,
+                direction: SortDirection::Ascending,
+            }
+        );
+        assert_eq!(
+            AppConfig::default().restored_sort(),
+            SortSpec::default(),
+            "missing keys fall back to date taken descending"
+        );
+        let _ = std::fs::remove_file(&path);
     }
 }

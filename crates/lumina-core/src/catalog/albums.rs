@@ -5,7 +5,7 @@ use rusqlite::{params, OptionalExtension};
 use super::Catalog;
 use crate::search::StructuredQuery;
 use crate::smart_albums::{MatchMode, SmartAlbum, SmartAlbumRule, SystemAlbum};
-use crate::MediaItem;
+use crate::{MediaItem, SortSpec};
 
 impl Catalog {
     /// High-speed full-text search over filename, city, region, country, camera model, year, and tags.
@@ -21,7 +21,17 @@ impl Catalog {
         limit: usize,
         offset: usize,
     ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = query.synthesize_query(limit, offset);
+        self.search_structured_sorted(query, limit, offset, SortSpec::default())
+    }
+
+    pub fn search_structured_sorted(
+        &self,
+        query: &StructuredQuery,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
+        let (sql, params) = query.synthesize_query_sorted(limit, offset, sort);
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
@@ -44,7 +54,17 @@ impl Catalog {
         limit: usize,
         offset: usize,
     ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = album.synthesize_query(limit, offset);
+        self.query_system_album_sorted(album, limit, offset, SortSpec::default())
+    }
+
+    pub fn query_system_album_sorted(
+        &self,
+        album: SystemAlbum,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
+        let (sql, params) = album.synthesize_query_sorted(limit, offset, sort);
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
@@ -214,7 +234,17 @@ impl Catalog {
         limit: usize,
         offset: usize,
     ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = album.synthesize_query(limit, offset)?;
+        self.query_smart_album_sorted(album, limit, offset, SortSpec::default())
+    }
+
+    pub fn query_smart_album_sorted(
+        &self,
+        album: &SmartAlbum,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
+        let (sql, params) = album.synthesize_query_sorted(limit, offset, sort)?;
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))

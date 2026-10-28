@@ -387,6 +387,8 @@ impl Render for LuminaApp {
             .child(self.render_delete_confirm_modal(cx))
             // 9. Media Card Context Menu Overlay
             .child(self.render_context_menu_overlay(window, cx))
+            // 9b. Sort popover
+            .child(self.render_sort_menu_overlay(cx))
             // 10. Tag Manager Modal Overlay
             .child(self.render_tag_manager_modal(cx))
             // 11. Keyboard Shortcuts Cheat Sheet

@@ -164,6 +164,19 @@ impl LuminaApp {
                     )
             }))
             .child(
+                theme::control("sort-toolbar-btn")
+                    .debug_selector(|| "sort-menu-button".to_string())
+                    .child(crate::icons::render_icon(
+                        crate::icons::Icon::Sliders,
+                        px(13.0),
+                        theme::text_muted(),
+                    ))
+                    .child(self.sort_label())
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.toggle_sort_menu(cx);
+                    })),
+            )
+            .child(
                 theme::control("tags-toolbar-btn")
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Tag,

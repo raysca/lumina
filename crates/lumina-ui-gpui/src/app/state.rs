@@ -1,5 +1,7 @@
 use gpui::*;
-use lumina_core::{MatchMode, MediaId, MediaItem, SmartAlbum, SmartAlbumRule, SystemAlbum};
+use lumina_core::{
+    MatchMode, MediaId, MediaItem, SmartAlbum, SmartAlbumRule, SortSpec, SystemAlbum,
+};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -165,6 +167,9 @@ pub struct LuminaApp {
     pub viewer_state: ViewerState,
     pub viewer_shortcuts_open: bool,
     pub grid_columns: usize,
+    /// Current grid ordering (persisted in config).
+    pub sort: SortSpec,
+    pub sort_menu_open: bool,
 
     // Phase 16 Hardware-Accelerated Video Player
     pub video: VideoPlaybackState,
@@ -281,6 +286,8 @@ impl LuminaApp {
             viewer_state: ViewerState::default(),
             viewer_shortcuts_open: false,
             grid_columns: config.grid_columns.clamp(2, 8),
+            sort: config.restored_sort(),
+            sort_menu_open: false,
             video: VideoPlaybackState {
                 playback_speed: 1.0,
                 is_looping: true,
@@ -338,6 +345,8 @@ impl LuminaApp {
             cfg.grid_columns = self.grid_columns.clamp(2, 8);
             cfg.card_fit_mode = self.card_fit_mode;
             cfg.inspector_tab = Some(self.inspector_tab.config_key().to_string());
+            cfg.sort_field = Some(self.sort.field_key().to_string());
+            cfg.sort_direction = Some(self.sort.direction_key().to_string());
             if let Some((x, y, width, height)) = self.window_bounds {
                 cfg.window_x = Some(x);
                 cfg.window_y = Some(y);

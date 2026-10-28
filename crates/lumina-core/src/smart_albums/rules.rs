@@ -127,6 +127,15 @@ impl SmartAlbum {
         limit: usize,
         offset: usize,
     ) -> Result<(String, Vec<rusqlite::types::Value>)> {
+        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
+    }
+
+    pub fn synthesize_query_sorted(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: crate::SortSpec,
+    ) -> Result<(String, Vec<rusqlite::types::Value>)> {
         let (where_clause, mut params) = self.build_sql()?;
 
         let sql = format!(
@@ -141,10 +150,11 @@ impl SmartAlbum {
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             WHERE {}
-            ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
+            ORDER BY {}
             LIMIT ? OFFSET ?;
             "#,
-            where_clause
+            where_clause,
+            sort.order_by("m.")
         );
 
         params.push((limit as i64).into());

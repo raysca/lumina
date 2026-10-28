@@ -94,6 +94,15 @@ impl SystemAlbum {
         limit: usize,
         offset: usize,
     ) -> (String, Vec<rusqlite::types::Value>) {
+        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
+    }
+
+    pub fn synthesize_query_sorted(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: crate::SortSpec,
+    ) -> (String, Vec<rusqlite::types::Value>) {
         let where_clause = self.build_where_clause();
         let sql = format!(
             r#"
@@ -107,10 +116,11 @@ impl SystemAlbum {
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             WHERE {}
-            ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
+            ORDER BY {}
             LIMIT ?1 OFFSET ?2;
             "#,
-            where_clause
+            where_clause,
+            sort.order_by("m.")
         );
 
         let params = vec![(limit as i64).into(), (offset as i64).into()];

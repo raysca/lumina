@@ -1,8 +1,8 @@
 use lumina_core::{
     read_sidecar, write_sidecar, Catalog, DecodedFrame, DiskCache, EngineEvent, LuminaEngine,
     MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, RuleField,
-    RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, StructuredQuery,
-    SystemAlbum, SCHEMA_VERSION,
+    RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, SortDirection, SortField,
+    SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
 };
 use std::collections::HashSet;
 use std::fs::File;
@@ -1727,6 +1727,102 @@ fn test_catalog_schema_version_integrity_and_backup() {
 
     drop(catalog);
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_sort_orders_library_search_and_albums() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let specs = [
+        ("/photos/sort/c.jpg", 1_600_000_000_300, 300),
+        ("/photos/sort/a.jpg", 1_600_000_000_100, 100),
+        ("/photos/sort/b.jpg", 1_600_000_000_200, 200),
+    ];
+    let items: Vec<MediaItem> = specs
+        .iter()
+        .map(|(path, timestamp, size)| {
+            let mut item = sample_media_item(path, MediaType::Image, *timestamp, None, None);
+            item.file_size = *size;
+            item
+        })
+        .collect();
+    let inserted = catalog.insert_or_update_batch(&items).unwrap();
+    let ids: Vec<MediaId> = inserted.iter().map(|item| item.id).collect();
+    catalog.batch_set_favorite(&ids, true).unwrap();
+    catalog.set_rating(ids[0], 1).unwrap();
+    catalog.set_rating(ids[1], 3).unwrap();
+    catalog.set_rating(ids[2], 5).unwrap();
+
+    let names = |items: Vec<MediaItem>| -> Vec<String> {
+        items.into_iter().map(|item| item.file_name).collect()
+    };
+
+    let by_name_asc = SortSpec {
+        field: SortField::FileName,
+        direction: SortDirection::Ascending,
+    };
+    assert_eq!(
+        names(catalog.get_item_slice_sorted(0, 10, by_name_asc).unwrap()),
+        vec!["a.jpg", "b.jpg", "c.jpg"]
+    );
+    let by_size_asc = SortSpec {
+        field: SortField::FileSize,
+        direction: SortDirection::Ascending,
+    };
+    assert_eq!(
+        names(catalog.get_item_slice_sorted(0, 10, by_size_asc).unwrap()),
+        vec!["a.jpg", "b.jpg", "c.jpg"]
+    );
+    let by_rating_desc = SortSpec {
+        field: SortField::Rating,
+        direction: SortDirection::Descending,
+    };
+    assert_eq!(
+        names(
+            catalog
+                .get_item_slice_sorted(0, 10, by_rating_desc)
+                .unwrap()
+        ),
+        vec!["b.jpg", "a.jpg", "c.jpg"]
+    );
+
+    let favorites = StructuredQuery::parse("is:favorite");
+    assert_eq!(
+        names(
+            catalog
+                .search_structured_sorted(&favorites, 10, 0, by_name_asc)
+                .unwrap()
+        ),
+        vec!["a.jpg", "b.jpg", "c.jpg"]
+    );
+    assert_eq!(
+        names(
+            catalog
+                .query_system_album_sorted(SystemAlbum::Favorites, 10, 0, by_name_asc)
+                .unwrap()
+        ),
+        vec!["a.jpg", "b.jpg", "c.jpg"]
+    );
+
+    let album = catalog
+        .create_smart_album(
+            "Rated",
+            "folder",
+            MatchMode::All,
+            &[SmartAlbumRule {
+                field: RuleField::Rating,
+                operator: RuleOperator::GreaterThan,
+                value: RuleValue::Integer(0),
+            }],
+        )
+        .unwrap();
+    assert_eq!(
+        names(
+            catalog
+                .query_smart_album_sorted(&album, 10, 0, by_name_asc)
+                .unwrap()
+        ),
+        vec!["a.jpg", "b.jpg", "c.jpg"]
+    );
 }
 
 #[test]

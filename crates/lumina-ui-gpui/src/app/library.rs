@@ -394,37 +394,51 @@ impl LuminaApp {
         }
 
         if !self.search_query.is_empty() {
-            return state.engine.search_query(&self.search_query, limit, offset);
+            return state
+                .engine
+                .search_query_sorted(&self.search_query, limit, offset, self.sort);
         }
 
         if let Some(year) = self.active_year {
-            return state
-                .engine
-                .search_query(&format!("year:{}", year), limit, offset);
+            return state.engine.search_query_sorted(
+                &format!("year:{}", year),
+                limit,
+                offset,
+                self.sort,
+            );
         }
 
         match self.selection {
-            AlbumSelection::AllLibrary => state.engine.get_item_slice(range),
-            AlbumSelection::System(album) => state.engine.query_system_album(album, limit, offset),
+            AlbumSelection::AllLibrary => {
+                state.engine.get_item_slice_sorted(offset, limit, self.sort)
+            }
+            AlbumSelection::System(album) => state
+                .engine
+                .query_system_album_sorted(album, limit, offset, self.sort),
             AlbumSelection::User(id) => {
                 if let Some(album) = self.user_smart_albums.iter().find(|a| a.id == id) {
-                    state.engine.query_smart_album(album, limit, offset)
+                    state
+                        .engine
+                        .query_smart_album_sorted(album, limit, offset, self.sort)
                 } else {
                     Vec::new()
                 }
             }
-            AlbumSelection::Trash => {
-                state
-                    .engine
-                    .query_system_album(SystemAlbum::RecentlyDeleted, limit, offset)
-            }
+            AlbumSelection::Trash => state.engine.query_system_album_sorted(
+                SystemAlbum::RecentlyDeleted,
+                limit,
+                offset,
+                self.sort,
+            ),
             AlbumSelection::Tag(ref tag) => {
                 let query = if tag.contains(' ') {
                     format!("tag:\"{}\"", tag)
                 } else {
                     format!("tag:{}", tag)
                 };
-                state.engine.search_query(&query, limit, offset)
+                state
+                    .engine
+                    .search_query_sorted(&query, limit, offset, self.sort)
             }
         }
     }

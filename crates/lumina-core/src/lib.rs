@@ -5,6 +5,7 @@ pub mod geocoder;
 pub mod scanner;
 pub mod search;
 pub mod smart_albums;
+pub mod sort;
 pub mod watcher;
 pub mod xmp;
 
@@ -28,6 +29,7 @@ pub use search::StructuredQuery;
 pub use smart_albums::{
     MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, SystemAlbum,
 };
+pub use sort::{SortDirection, SortField, SortSpec};
 pub use watcher::LibraryWatcher;
 pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, SidecarMetadata};
 
@@ -327,6 +329,17 @@ impl LuminaEngine {
             .unwrap_or_default()
     }
 
+    pub fn get_item_slice_sorted(
+        &self,
+        offset: usize,
+        limit: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
+        self.catalog
+            .get_item_slice_sorted(offset, limit, sort)
+            .unwrap_or_default()
+    }
+
     pub fn get_item_by_id(&self, id: MediaId) -> Option<MediaItem> {
         self.catalog.get_item_by_id(id).unwrap_or(None)
     }
@@ -353,9 +366,21 @@ impl LuminaEngine {
     }
 
     pub fn search_query(&self, input: &str, limit: usize, offset: usize) -> Vec<MediaItem> {
+        self.search_query_sorted(input, limit, offset, SortSpec::default())
+    }
+
+    pub fn search_query_sorted(
+        &self,
+        input: &str,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
         let trimmed = input.trim();
         let q = StructuredQuery::parse(trimmed);
-        self.search_structured(&q, limit, offset)
+        self.catalog
+            .search_structured_sorted(&q, limit, offset, sort)
+            .unwrap_or_default()
     }
 
     pub fn search_query_count(&self, input: &str) -> usize {
@@ -372,6 +397,18 @@ impl LuminaEngine {
     ) -> Vec<MediaItem> {
         self.catalog
             .query_system_album(album, limit, offset)
+            .unwrap_or_default()
+    }
+
+    pub fn query_system_album_sorted(
+        &self,
+        album: SystemAlbum,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
+        self.catalog
+            .query_system_album_sorted(album, limit, offset, sort)
             .unwrap_or_default()
     }
 
@@ -418,6 +455,18 @@ impl LuminaEngine {
     ) -> Vec<MediaItem> {
         self.catalog
             .query_smart_album(album, limit, offset)
+            .unwrap_or_default()
+    }
+
+    pub fn query_smart_album_sorted(
+        &self,
+        album: &SmartAlbum,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
+        self.catalog
+            .query_smart_album_sorted(album, limit, offset, sort)
             .unwrap_or_default()
     }
 

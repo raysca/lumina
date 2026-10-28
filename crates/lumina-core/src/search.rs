@@ -298,6 +298,15 @@ impl StructuredQuery {
         limit: usize,
         offset: usize,
     ) -> (String, Vec<rusqlite::types::Value>) {
+        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
+    }
+
+    pub fn synthesize_query_sorted(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: crate::SortSpec,
+    ) -> (String, Vec<rusqlite::types::Value>) {
         let (where_clause, mut params) = self.build_sql();
         let fts_query = build_fts5_expression(&self.fts_terms);
 
@@ -315,10 +324,11 @@ impl StructuredQuery {
                 FROM media_search_fts
                 JOIN media_items m ON media_search_fts.rowid = m.id
                 WHERE {}
-                ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
+                ORDER BY {}
                 LIMIT ? OFFSET ?;
                 "#,
-                where_clause
+                where_clause,
+                sort.order_by("m.")
             )
         } else {
             format!(
@@ -333,10 +343,11 @@ impl StructuredQuery {
                     m.is_favorite, m.is_hidden, m.is_trashed, m.title
                 FROM media_items m
                 WHERE {}
-                ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
+                ORDER BY {}
                 LIMIT ? OFFSET ?;
                 "#,
-                where_clause
+                where_clause,
+                sort.order_by("m.")
             )
         };
 

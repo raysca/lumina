@@ -5,6 +5,7 @@ pub mod library;
 pub mod navigation;
 pub mod panels;
 pub mod render;
+pub mod sort;
 pub mod state;
 pub mod tags;
 pub mod types;

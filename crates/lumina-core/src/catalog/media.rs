@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::Catalog;
-use crate::{MediaId, MediaItem, MediaType};
+use crate::{MediaId, MediaItem, MediaType, SortSpec};
 
 impl Catalog {
     pub fn insert_or_update_batch(&self, items: &[MediaItem]) -> Result<Vec<MediaItem>> {
@@ -165,8 +165,17 @@ impl Catalog {
     }
 
     pub fn get_item_slice(&self, offset: usize, limit: usize) -> Result<Vec<MediaItem>> {
+        self.get_item_slice_sorted(offset, limit, SortSpec::default())
+    }
+
+    pub fn get_item_slice_sorted(
+        &self,
+        offset: usize,
+        limit: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
+        let sql = format!(
             r#"
             SELECT 
                 id, file_path, parent_dir, file_name, file_size, mtime_epoch_ms,
@@ -178,10 +187,12 @@ impl Catalog {
                 is_favorite, is_hidden, is_trashed, title
             FROM media_items
             WHERE is_trashed = 0 AND is_hidden = 0
-            ORDER BY timestamp_epoch_ms DESC, id DESC
+            ORDER BY {}
             LIMIT ?1 OFFSET ?2;
             "#,
-        )?;
+            sort.order_by("")
+        );
+        let mut stmt = conn.prepare_cached(&sql)?;
 
         Self::map_query_rows(&mut stmt, params![limit as i64, offset as i64])
     }
