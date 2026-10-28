@@ -64,10 +64,19 @@ fn test_e2e_tag_workflow() {
     // 2. Filter by tag via search
     view.update(cx, |app, cx| {
         app.set_search_query("tag:mountains", cx);
+        assert!(
+            app.selected_item.is_none(),
+            "changing filters must clear the previous selection"
+        );
         assert_eq!(app.get_active_count(), 1);
         let slice = app.get_active_slice(0..1);
         assert_eq!(slice.len(), 1);
         assert_eq!(slice[0].file_name, "photo1.jpg");
+        // Re-select the filtered item so the rename step has a selection to update.
+        app.selected_item = Some(slice[0].clone());
+        app.selected_index = Some(0);
+        app.selected_indices.insert(0);
+        app.refresh_selected_tags();
     });
     cx.run_until_parked();
 

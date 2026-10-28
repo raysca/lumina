@@ -101,6 +101,14 @@ impl Render for LuminaApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    // Any click outside the search field should return keyboard
+                    // shortcuts to the app. The field's own click re-focuses it.
+                    this.blur_search(cx);
+                }),
+            )
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, window, cx| {
                 if this.is_dragging_sidebar_resizer {
                     let x: f32 = e.position.x.into();

@@ -16,10 +16,25 @@ impl LuminaApp {
         match msg {
             UiMessage::Engine(evt) => {
                 let mut should_refresh_counts = false;
+                let mut should_clear_selection = false;
+                let had_multi_selection = !self.selected_indices.is_empty();
+                let selected_item_id = self.selected_item.as_ref().map(|item| item.id);
+
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
                         EngineEvent::BatchDiscovered { .. } => {
-                            state.total_count = state.engine.total_count();
+                            let new_total = state.engine.total_count();
+                            let structural_change = new_total != state.total_count;
+                            state.total_count = new_total;
+                            // Initial scan batches are followed by ScanComplete; only
+                            // refresh sidebar counts for post-scan (watcher) changes.
+                            if !state.is_scanning {
+                                should_refresh_counts = true;
+                                // Added/removed items shift position-based selection.
+                                if structural_change {
+                                    should_clear_selection = true;
+                                }
+                            }
                             cx.notify();
                         }
                         EngineEvent::ScanProgress {
@@ -36,6 +51,10 @@ impl LuminaApp {
                             state.total_count = total_items;
                             state.is_scanning = false;
                             should_refresh_counts = true;
+                            // Indices may have shifted while scanning.
+                            if had_multi_selection {
+                                should_clear_selection = true;
+                            }
                             cx.notify();
                         }
                         EngineEvent::ItemRemoved(id) => {
@@ -43,9 +62,18 @@ impl LuminaApp {
                             state.texture_cache.lock().pop(&id);
                             state.in_flight.lock().remove(&id);
                             should_refresh_counts = true;
+                            // Removals shift every following index; clear rather than
+                            // risk batch actions targeting different files.
+                            if had_multi_selection || selected_item_id == Some(id) {
+                                should_clear_selection = true;
+                            }
                             cx.notify();
                         }
                     }
+                }
+
+                if should_clear_selection {
+                    self.clear_selection(cx);
                 }
                 if should_refresh_counts {
                     self.refresh_album_counts();
@@ -171,11 +199,9 @@ impl LuminaApp {
 
         let tx = self.ui_tx.clone();
         cx.spawn(async move |_this, _cx| {
-            let mut dialog = rfd::AsyncFileDialog::new().set_title("Select Photos & Videos Folder");
+            let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose Photos Library Folder");
             if let Some(ref dir) = current_dir {
-                if let Some(parent) = dir.parent() {
-                    dialog = dialog.set_directory(parent);
-                }
+                dialog = dialog.set_directory(dir);
             }
             if let Some(handle) = dialog.pick_folder().await {
                 let _ = tx.send_blocking(UiMessage::FolderPicked(handle.path().to_path_buf()));
@@ -302,6 +328,14 @@ impl LuminaApp {
         self.clear_selection(cx);
     }
 
+    /// Drops keyboard focus from the toolbar search field.
+    pub fn blur_search(&mut self, cx: &mut Context<Self>) {
+        if self.search_focused {
+            self.search_focused = false;
+            cx.notify();
+        }
+    }
+
     pub fn append_search_pill(&mut self, pill: &str, cx: &mut Context<Self>) {
         if self.search_query.is_empty() {
             self.search_query = pill.to_string();
@@ -309,26 +343,20 @@ impl LuminaApp {
             self.search_query = format!("{} {}", self.search_query, pill);
         }
         self.active_year = None;
-        self.selected_index = None;
-        self.selected_item = None;
-        cx.notify();
+        self.clear_selection(cx);
     }
 
     pub fn clear_search(&mut self, cx: &mut Context<Self>) {
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
-        self.selected_index = None;
-        self.selected_item = None;
-        cx.notify();
+        self.clear_selection(cx);
     }
 
     pub fn set_search_query(&mut self, query: &str, cx: &mut Context<Self>) {
         self.search_query = query.to_string();
         self.active_year = None;
-        self.selected_index = None;
-        self.selected_item = None;
-        cx.notify();
+        self.clear_selection(cx);
     }
 
     pub fn set_active_year(&mut self, year: Option<i32>, cx: &mut Context<Self>) {
