@@ -37,6 +37,8 @@ impl InspectorView {
             .and_then(|it| this.item_captions.get(&it.id).cloned());
         let caption_input_active = this.caption.input_active;
         let caption_input_buffer = this.caption.input_buffer.clone();
+        let title_input_active = this.caption.title_input_active;
+        let title_input_buffer = this.caption.title_input_buffer.clone();
 
         div()
             .w(px(this.inspector_width))
@@ -154,6 +156,8 @@ impl InspectorView {
                         caption.as_deref(),
                         caption_input_active,
                         &caption_input_buffer,
+                        title_input_active,
+                        &title_input_buffer,
                     )),
             )
             .into_any_element()

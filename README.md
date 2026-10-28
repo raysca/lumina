@@ -24,8 +24,12 @@ core handles cataloguing, decoding, and search.
   `dc:description`) so ratings, tags, and captions survive outside the catalog;
   the same sidecars can be generated in place via `write_metadata_sidecars`.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
-  tag add/remove, and trash/restore. Metadata edits also refresh the item's XMP
-  sidecar automatically; permanent deletion is deliberately not undoable.
+  titles, tag add/remove, and trash/restore. Metadata edits also refresh the
+  item's XMP sidecar automatically; permanent deletion is deliberately not
+  undoable.
+- **Editable title & XMP import** — click the title in the inspector to edit it
+  (persisted in SQLite and written to `dc:title`); "Import XMP Metadata" in the
+  card context menu applies sidecar titles, ratings, captions and tags.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and
   a built-in shortcut cheat sheet (⌘/) plus manual rescan (⌘R).

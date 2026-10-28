@@ -447,6 +447,75 @@ fn ui_automation_undo_tag_and_caption() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_title_edit_undo_and_xmp_import() {
+    let (temp_dir, engine) = seed_library("title_import", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.start_title_input(cx);
+        app.caption.title_input_buffer = "Kyoto Trip".to_string();
+        app.commit_title_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            Some("Kyoto Trip")
+        );
+    });
+    let written = lumina_core::read_sidecar(&item.path).unwrap().unwrap();
+    assert_eq!(written.title.as_deref(), Some("Kyoto Trip"));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            None,
+            "undo should clear the title"
+        );
+    });
+    assert!(!sidecar.exists(), "empty title should remove the sidecar");
+
+    lumina_core::write_sidecar(
+        &item.path,
+        &lumina_core::SidecarMetadata {
+            title: Some("Imported title".to_string()),
+            caption: Some("Imported caption".to_string()),
+            rating: 5,
+            tags: vec!["imported".to_string()],
+        },
+    )
+    .unwrap();
+    view.update(vcx, |app, cx| {
+        app.import_sidecars_selected(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            Some("Imported title")
+        );
+        assert_eq!(app.item_ratings.get(&item.id).copied(), Some(5));
+        assert_eq!(
+            app.item_captions.get(&item.id).map(String::as_str),
+            Some("Imported caption")
+        );
+        assert!(app.selected_item_tags.contains(&"imported".to_string()));
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
     let mut cx = gpui::TestAppContext::single();

@@ -341,7 +341,7 @@ impl Catalog {
                 m.latitude, m.longitude, m.altitude,
                 m.country_code, m.admin1_region, m.city,
                 m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed
+                m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             JOIN media_tags mt ON mt.media_id = m.id
             WHERE mt.tag = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0

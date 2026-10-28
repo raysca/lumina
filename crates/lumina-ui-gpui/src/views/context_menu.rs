@@ -331,9 +331,20 @@ impl MediaContextMenu {
                             this.export_pick_folder(cx);
                         }),
                     ))
+                    // 12. Import XMP metadata
+                    .child(Self::render_menu_item(
+                        "import-xmp-menu-btn",
+                        "Import XMP Metadata",
+                        None,
+                        false,
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.close_context_menu(cx);
+                            this.import_sidecars_selected(cx);
+                        }),
+                    ))
                     // Divider
                     .child(Self::render_divider())
-                    // 12. Copy File Path
+                    // 13. Copy File Path
                     .child({
                         let path_for_copy = item.path.to_string_lossy().to_string();
                         Self::render_menu_item(

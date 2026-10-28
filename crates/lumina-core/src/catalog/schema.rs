@@ -56,7 +56,8 @@ impl Catalog {
                 is_hidden INTEGER NOT NULL DEFAULT 0,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 rating INTEGER NOT NULL DEFAULT 0,
-                color_label INTEGER NOT NULL DEFAULT 0
+                color_label INTEGER NOT NULL DEFAULT 0,
+                title TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -181,6 +182,13 @@ impl Catalog {
                 "ALTER TABLE media_items ADD COLUMN color_label INTEGER NOT NULL DEFAULT 0;",
                 [],
             );
+        }
+
+        let has_title: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'title'")?
+            .exists([])?;
+        if !has_title {
+            let _ = conn.execute("ALTER TABLE media_items ADD COLUMN title TEXT;", []);
         }
 
         // Check if existing media_search_fts table has the 'tags' column (for migration from older schemas)

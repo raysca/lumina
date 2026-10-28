@@ -194,6 +194,37 @@ impl LuminaApp {
             return true;
         }
 
+        // 3a. Inline title input in inspector
+        if self.caption.title_input_active {
+            if key == "escape" {
+                self.cancel_title_input(cx);
+                return true;
+            }
+            if key == "enter" || key == "return" {
+                self.commit_title_input(cx);
+                return true;
+            }
+            if key == "backspace" {
+                self.caption.title_input_buffer.pop();
+                cx.notify();
+                return true;
+            }
+            if !cmd_or_ctrl {
+                if key == "space" {
+                    self.caption.title_input_buffer.push(' ');
+                    cx.notify();
+                    return true;
+                } else if key.chars().count() == 1
+                    && !key.chars().next().is_some_and(|c| c.is_control())
+                {
+                    self.caption.title_input_buffer.push_str(key);
+                    cx.notify();
+                    return true;
+                }
+            }
+            return true;
+        }
+
         // 3b. Inline caption input in inspector
         if self.caption.input_active {
             if key == "escape" {

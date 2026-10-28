@@ -1,7 +1,8 @@
 use lumina_core::{
-    read_sidecar, Catalog, DecodedFrame, DiskCache, EngineEvent, LuminaEngine, MatchMode, MediaId,
-    MediaItem, MediaType, OfflineGeocoder, PixelFormat, RuleField, RuleOperator, RuleValue,
-    Scanner, SmartAlbumRule, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
+    read_sidecar, write_sidecar, Catalog, DecodedFrame, DiskCache, EngineEvent, LuminaEngine,
+    MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, RuleField,
+    RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, StructuredQuery,
+    SystemAlbum, SCHEMA_VERSION,
 };
 use std::collections::HashSet;
 use std::fs::File;
@@ -31,6 +32,7 @@ fn sample_media_item(
         path,
         parent_dir,
         file_name,
+        title: None,
         file_size: 2048,
         mtime_epoch_ms: ts,
         media_type,
@@ -1719,6 +1721,69 @@ fn test_catalog_schema_version_integrity_and_backup() {
     );
 
     drop(catalog);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_import_sidecars_applies_title_caption_rating_and_tags() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_import_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let media_path = tmp_dir.join("import_me.jpg");
+    std::fs::write(&media_path, b"test-jpeg-content").unwrap();
+
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        tmp_dir.clone(),
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    let item = engine.get_item_slice(0..1).remove(0);
+
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            title: Some("Imported title".to_string()),
+            caption: Some("Imported caption".to_string()),
+            rating: 5,
+            tags: vec!["imported".to_string()],
+        },
+    )
+    .unwrap();
+
+    let report = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(report.imported, 1);
+    assert_eq!(report.updated, 1);
+
+    let updated = engine.catalog().get_item_by_id(item.id).unwrap().unwrap();
+    assert_eq!(updated.title.as_deref(), Some("Imported title"));
+    assert_eq!(engine.catalog().get_rating(item.id).unwrap(), 5);
+    assert_eq!(
+        engine
+            .catalog()
+            .get_captions_map()
+            .unwrap()
+            .get(&item.id)
+            .map(String::as_str),
+        Some("Imported caption")
+    );
+    assert!(engine
+        .catalog()
+        .get_tags_for_item(item.id)
+        .unwrap()
+        .contains(&"imported".to_string()));
+
+    drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 

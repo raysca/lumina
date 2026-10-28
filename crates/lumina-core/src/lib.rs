@@ -72,6 +72,8 @@ pub struct MediaItem {
     pub path: PathBuf,
     pub parent_dir: String,
     pub file_name: String,
+    /// User-editable title; falls back to a derived display title when absent.
+    pub title: Option<String>,
     pub file_size: u64,
     pub mtime_epoch_ms: i64,
 
@@ -181,6 +183,15 @@ pub enum EngineEvent {
 pub struct ExportReport {
     pub exported: usize,
     pub sidecars: usize,
+    pub skipped: usize,
+    pub failed: Vec<(PathBuf, String)>,
+}
+
+/// Result of importing XMP sidecars.
+#[derive(Debug, Default, Clone)]
+pub struct ImportReport {
+    pub imported: usize,
+    pub updated: usize,
     pub skipped: usize,
     pub failed: Vec<(PathBuf, String)>,
 }
@@ -422,6 +433,10 @@ impl LuminaEngine {
         self.catalog.set_color_label(id, label)
     }
 
+    pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
+        self.catalog.set_title(id, title)
+    }
+
     pub fn get_color_labels_map(&self) -> std::collections::HashMap<MediaId, u8> {
         self.catalog.get_color_labels_map().unwrap_or_default()
     }
@@ -493,6 +508,55 @@ impl LuminaEngine {
         Ok(written)
     }
 
+    /// Imports XMP sidecars for the given items. Only values present in the
+    /// sidecar are applied (ratings always, title/caption when set, tags merged),
+    /// so importing never clears metadata that the sidecar does not mention.
+    pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
+        let captions = self.catalog.get_captions_map().unwrap_or_default();
+        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let mut report = ImportReport::default();
+
+        for id in ids {
+            let Some(item) = self.catalog.get_item_by_id(*id)? else {
+                report.skipped += 1;
+                continue;
+            };
+            match xmp::read_sidecar(&item.path) {
+                Ok(Some(metadata)) => {
+                    report.imported += 1;
+                    let mut changed = false;
+
+                    if metadata.title.is_some() && metadata.title != item.title {
+                        self.catalog.set_title(*id, metadata.title.as_deref())?;
+                        changed = true;
+                    }
+                    let current_rating = ratings.get(id).copied().unwrap_or(0);
+                    if metadata.rating != current_rating {
+                        self.catalog.set_rating(*id, metadata.rating)?;
+                        changed = true;
+                    }
+                    if metadata.caption.is_some() && metadata.caption != captions.get(id).cloned() {
+                        self.catalog
+                            .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
+                        changed = true;
+                    }
+                    if !metadata.tags.is_empty() {
+                        self.catalog.add_tags_batch(&[*id], &metadata.tags)?;
+                        changed = true;
+                    }
+                    if changed {
+                        report.updated += 1;
+                    }
+                }
+                Ok(None) => report.skipped += 1,
+                Err(err) => report
+                    .failed
+                    .push((item.path.clone(), format!("could not read sidecar: {err}"))),
+            }
+        }
+        Ok(report)
+    }
+
     fn sidecar_metadata_for(
         &self,
         id: MediaId,
@@ -500,7 +564,9 @@ impl LuminaEngine {
         ratings: &HashMap<MediaId, u8>,
     ) -> Result<SidecarMetadata> {
         let tags = self.catalog.get_tags_for_item(id)?;
+        let title = self.catalog.get_item_by_id(id)?.and_then(|item| item.title);
         Ok(SidecarMetadata {
+            title,
             caption: captions.get(&id).cloned(),
             rating: ratings.get(&id).copied().unwrap_or(0),
             tags,

@@ -322,6 +322,7 @@ impl Scanner {
             path: path.to_path_buf(),
             parent_dir,
             file_name,
+            title: None,
             file_size,
             mtime_epoch_ms,
             media_type,

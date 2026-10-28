@@ -33,6 +33,11 @@ pub enum UndoAction {
         before: Option<String>,
         after: Option<String>,
     },
+    Title {
+        id: MediaId,
+        before: Option<String>,
+        after: Option<String>,
+    },
     /// Tags were added (\`added = true\`) or removed.
     Tags {
         ids: Vec<MediaId>,
@@ -56,7 +61,7 @@ impl UndoAction {
     pub fn affected_ids(&self) -> Vec<MediaId> {
         match self {
             UndoAction::Rating { id, .. } | UndoAction::ColorLabel { id, .. } => vec![*id],
-            UndoAction::Caption { id, .. } => vec![*id],
+            UndoAction::Caption { id, .. } | UndoAction::Title { id, .. } => vec![*id],
             UndoAction::Favorite { changes } | UndoAction::Trashed { changes } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
@@ -70,6 +75,7 @@ impl UndoAction {
             UndoAction::ColorLabel { .. } => "color label",
             UndoAction::Favorite { .. } => "favorite",
             UndoAction::Caption { .. } => "caption",
+            UndoAction::Title { .. } => "title",
             UndoAction::Tags { .. } => "tag edit",
             UndoAction::Trashed { .. } => "trash",
         }
@@ -105,6 +111,14 @@ impl UndoAction {
             } => {
                 let value = if before { b } else { a };
                 engine.set_caption(*id, value.as_deref().unwrap_or(""))
+            }
+            UndoAction::Title {
+                id,
+                before: b,
+                after: a,
+            } => {
+                let value = if before { b } else { a };
+                engine.set_title(*id, value.as_deref())
             }
             UndoAction::Tags { ids, tag, added } => {
                 let tags = std::slice::from_ref(tag);
@@ -217,7 +231,7 @@ impl LuminaApp {
         }
     }
 
-    fn refresh_after_history(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn refresh_after_history(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.grid_state.as_ref() {
             self.item_ratings = state.engine.get_ratings_map();
             self.item_color_labels = state.engine.get_color_labels_map();

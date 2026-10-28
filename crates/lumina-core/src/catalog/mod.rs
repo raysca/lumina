@@ -16,7 +16,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {
@@ -166,6 +166,7 @@ impl Catalog {
             let is_favorite: i32 = row.get(27)?;
             let is_hidden: i32 = row.get(28)?;
             let is_trashed: i32 = row.get(29)?;
+            let title: Option<String> = row.get(30)?;
 
             let media_type = match media_type_str.as_str() {
                 "video" => MediaType::Video,
@@ -178,6 +179,7 @@ impl Catalog {
                 path: PathBuf::from(file_path),
                 parent_dir,
                 file_name,
+                title,
                 file_size,
                 mtime_epoch_ms,
                 media_type,

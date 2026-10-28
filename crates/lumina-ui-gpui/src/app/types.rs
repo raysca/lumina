@@ -180,6 +180,7 @@ pub fn get_sample_items() -> Vec<MediaItem> {
                 path: PathBuf::from(format!("/sample/{}", name)),
                 parent_dir: "/sample".to_string(),
                 file_name: name.to_string(),
+                title: None,
                 file_size: if is_2044 { 18_400_000 } else { 4_500_000 },
                 mtime_epoch_ms: 1642200000000,
                 media_type: if vid {

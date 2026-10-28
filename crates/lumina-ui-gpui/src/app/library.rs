@@ -275,6 +275,50 @@ impl LuminaApp {
         }
     }
 
+    /// Imports rating/title/caption/tags from adjacent XMP sidecars for the selection.
+    pub fn import_sidecars_selected(&mut self, cx: &mut Context<Self>) {
+        let ids = self.get_selected_ids();
+        if ids.is_empty() {
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            self.set_error("Open a library before importing metadata", cx);
+            return;
+        };
+        match engine.import_sidecars(&ids) {
+            Ok(report) => {
+                self.refresh_after_history(cx);
+                let mut summary = format!(
+                    "Imported XMP metadata: {} sidecar(s), {} updated",
+                    report.imported, report.updated
+                );
+                if report.skipped > 0 {
+                    summary.push_str(&format!(", {} without sidecar", report.skipped));
+                }
+                self.set_last_action(summary);
+                if !report.failed.is_empty() {
+                    let details = report
+                        .failed
+                        .iter()
+                        .take(3)
+                        .map(|(path, error)| format!("{}: {error}", path.display()))
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    self.set_error(
+                        format!(
+                            "{} sidecar import(s) failed: {details}",
+                            report.failed.len()
+                        ),
+                        cx,
+                    );
+                } else {
+                    cx.notify();
+                }
+            }
+            Err(err) => self.set_error(format!("XMP import failed: {err}"), cx),
+        }
+    }
+
     pub fn get_active_count(&self) -> usize {
         let state = match self.grid_state.as_ref() {
             Some(s) => s,

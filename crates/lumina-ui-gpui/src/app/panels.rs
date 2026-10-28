@@ -176,4 +176,65 @@ impl LuminaApp {
         self.caption.input_buffer.clear();
         cx.notify();
     }
+
+    pub fn start_title_input(&mut self, cx: &mut Context<Self>) {
+        let existing = self
+            .selected_item
+            .as_ref()
+            .and_then(|item| item.title.clone())
+            .unwrap_or_default();
+        self.caption.title_input_active = true;
+        self.caption.title_input_buffer = existing;
+        cx.notify();
+    }
+
+    pub fn commit_title_input(&mut self, cx: &mut Context<Self>) {
+        let value = std::mem::take(&mut self.caption.title_input_buffer);
+        self.caption.title_input_active = false;
+        let Some(item) = self.selected_item.clone() else {
+            cx.notify();
+            return;
+        };
+        let trimmed = value.trim();
+        let after = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        };
+        let before = item.title.clone();
+        if before == after {
+            cx.notify();
+            return;
+        }
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_title(item.id, after.as_deref())
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not save title: {err}"), cx);
+            return;
+        }
+        if let Some(ref mut current) = self.selected_item {
+            current.title = after.clone();
+        }
+        self.push_undo(crate::app::undo::UndoAction::Title {
+            id: item.id,
+            before,
+            after,
+        });
+        self.sync_metadata_sidecars(&[item.id]);
+        self.set_last_action(if trimmed.is_empty() {
+            "Title removed"
+        } else {
+            "Title saved"
+        });
+        cx.notify();
+    }
+
+    pub fn cancel_title_input(&mut self, cx: &mut Context<Self>) {
+        self.caption.title_input_active = false;
+        self.caption.title_input_buffer.clear();
+        cx.notify();
+    }
 }

@@ -84,6 +84,8 @@ pub fn render_inspector_body(
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
+    title_input_active: bool,
+    title_input_buffer: &str,
 ) -> AnyElement {
     if selected_count > 1 {
         return render_batch_body(
@@ -128,6 +130,8 @@ pub fn render_inspector_body(
         caption,
         caption_input_active,
         caption_input_buffer,
+        title_input_active,
+        title_input_buffer,
     )
 }
 
@@ -146,6 +150,8 @@ fn render_single_body(
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
+    title_input_active: bool,
+    title_input_buffer: &str,
 ) -> AnyElement {
     let path = item.path.clone();
     let file_name = item.file_name.clone();
@@ -158,8 +164,10 @@ fn render_single_body(
         MediaType::Video => "Video",
     };
 
-    // Derive display title from location or filename stem
-    let display_title = if let Some(ref city) = item.city {
+    // Prefer the user title, then location, then filename stem.
+    let display_title = if let Some(ref title) = item.title {
+        title.clone()
+    } else if let Some(ref city) = item.city {
         if let Some(ref country) = item.country_code {
             format!("{}, {}", city, country)
         } else {
@@ -409,6 +417,8 @@ fn render_single_body(
                         caption,
                         caption_input_active,
                         caption_input_buffer,
+                        title_input_active,
+                        title_input_buffer,
                     ),
                     InspectorTab::Camera => render_camera_tab(&item, type_label),
                     InspectorTab::Location => render_location_tab(weak_app.clone(), &item),

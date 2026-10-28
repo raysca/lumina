@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SidecarMetadata {
+    pub title: Option<String>,
     pub caption: Option<String>,
     pub rating: u8,
     pub tags: Vec<String>,
@@ -18,7 +19,8 @@ pub struct SidecarMetadata {
 
 impl SidecarMetadata {
     pub fn is_empty(&self) -> bool {
-        self.caption.as_deref().unwrap_or("").trim().is_empty()
+        self.title.as_deref().unwrap_or("").trim().is_empty()
+            && self.caption.as_deref().unwrap_or("").trim().is_empty()
             && self.rating == 0
             && self.tags.is_empty()
     }
@@ -58,6 +60,14 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
         subject.push_str("    </rdf:Bag>\n   </dc:subject>\n");
     }
 
+    let title = match metadata.title.as_deref() {
+        Some(title) if !title.trim().is_empty() => format!(
+            "   <dc:title>\n    <rdf:Alt>\n     <rdf:li xml:lang=\"x-default\">{}</rdf:li>\n    </rdf:Alt>\n   </dc:title>\n",
+            escape_xml(title)
+        ),
+        _ => String::new(),
+    };
+
     let description = match metadata.caption.as_deref() {
         Some(caption) if !caption.trim().is_empty() => format!(
             "   <dc:description>\n    <rdf:Alt>\n     <rdf:li xml:lang=\"x-default\">{}</rdf:li>\n    </rdf:Alt>\n   </dc:description>\n",
@@ -67,8 +77,8 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
     };
 
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n  >\n{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
-        metadata.rating, subject, description
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n  >\n{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        metadata.rating, title, subject, description
     )
 }
 
@@ -104,6 +114,10 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .unwrap_or(0)
         .min(5);
 
+    let title = between(xml, "<dc:title>", "</dc:title>")
+        .and_then(|section| extract_li_values(section).into_iter().next())
+        .filter(|value| !value.trim().is_empty());
+
     let caption = between(xml, "<dc:description>", "</dc:description>")
         .and_then(|section| extract_li_values(section).into_iter().next())
         .filter(|value| !value.trim().is_empty());
@@ -113,6 +127,7 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .unwrap_or_default();
 
     SidecarMetadata {
+        title,
         caption,
         rating,
         tags,
@@ -165,6 +180,7 @@ mod tests {
     #[test]
     fn render_and_parse_roundtrip() {
         let metadata = SidecarMetadata {
+            title: Some("A & B <title>".to_string()),
             caption: Some("Golden hour & <Kyoto>".to_string()),
             rating: 4,
             tags: vec!["travel".to_string(), "japan & kyoto".to_string()],
@@ -180,6 +196,7 @@ mod tests {
         let media = temp_media("roundtrip");
         fs::write(&media, b"jpeg").unwrap();
         let metadata = SidecarMetadata {
+            title: Some("A title".to_string()),
             caption: Some("A caption".to_string()),
             rating: 3,
             tags: vec!["one".to_string(), "two".to_string()],

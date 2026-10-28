@@ -101,6 +101,8 @@ impl Default for AlbumDraftState {
 pub struct CaptionState {
     pub input_active: bool,
     pub input_buffer: String,
+    pub title_input_active: bool,
+    pub title_input_buffer: String,
 }
 
 pub struct LuminaApp {

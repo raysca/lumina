@@ -23,7 +23,7 @@ impl Catalog {
                     latitude, longitude, altitude,
                     country_code, admin1_region, city,
                     make, model, lens, focal_length, f_number, iso, exposure_time,
-                    is_favorite, is_hidden, is_trashed
+                    is_favorite, is_hidden, is_trashed, title
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5,
                     ?6, ?7, ?8, ?9,
@@ -31,7 +31,7 @@ impl Catalog {
                     ?14, ?15, ?16,
                     ?17, ?18, ?19,
                     ?20, ?21, ?22, ?23, ?24, ?25, ?26,
-                    ?27, ?28, ?29
+                    ?27, ?28, ?29, ?30
                 )
                 ON CONFLICT(file_path) DO UPDATE SET
                     file_size = excluded.file_size,
@@ -56,7 +56,7 @@ impl Catalog {
                     f_number = excluded.f_number,
                     iso = excluded.iso,
                     exposure_time = excluded.exposure_time
-                RETURNING id, is_favorite, is_hidden, is_trashed;
+                RETURNING id, is_favorite, is_hidden, is_trashed, title;
                 "#,
             )?;
 
@@ -69,7 +69,13 @@ impl Catalog {
 
                 let path_str = item.path.to_string_lossy().to_string();
 
-                let (row_id, db_fav, db_hid, db_trash): (i64, i32, i32, i32) = stmt.query_row(
+                let (row_id, db_fav, db_hid, db_trash, db_title): (
+                    i64,
+                    i32,
+                    i32,
+                    i32,
+                    Option<String>,
+                ) = stmt.query_row(
                     params![
                         path_str,
                         item.parent_dir,
@@ -100,8 +106,17 @@ impl Catalog {
                         item.is_favorite as i32,
                         item.is_hidden as i32,
                         item.is_trashed as i32,
+                        item.title,
                     ],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                        ))
+                    },
                 )?;
 
                 let mut updated = item.clone();
@@ -109,6 +124,7 @@ impl Catalog {
                 updated.is_favorite = db_fav != 0;
                 updated.is_hidden = db_hid != 0;
                 updated.is_trashed = db_trash != 0;
+                updated.title = db_title;
                 inserted.push(updated);
             }
         }
@@ -158,7 +174,7 @@ impl Catalog {
                 latitude, longitude, altitude,
                 country_code, admin1_region, city,
                 make, model, lens, focal_length, f_number, iso, exposure_time,
-                is_favorite, is_hidden, is_trashed
+                is_favorite, is_hidden, is_trashed, title
             FROM media_items
             WHERE is_trashed = 0 AND is_hidden = 0
             ORDER BY timestamp_epoch_ms DESC, id DESC
@@ -180,7 +196,7 @@ impl Catalog {
                 latitude, longitude, altitude,
                 country_code, admin1_region, city,
                 make, model, lens, focal_length, f_number, iso, exposure_time,
-                is_favorite, is_hidden, is_trashed
+                is_favorite, is_hidden, is_trashed, title
             FROM media_items
             WHERE id = ?1;
             "#,
@@ -279,6 +295,26 @@ impl Catalog {
             map.insert(id, c);
         }
         Ok(map)
+    }
+
+    pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
+        let conn = self.conn.lock();
+        let trimmed = title.map(str::trim).filter(|value| !value.is_empty());
+        match trimmed {
+            Some(value) => {
+                conn.execute(
+                    "UPDATE media_items SET title = ?1 WHERE id = ?2;",
+                    params![value, id.0 as i64],
+                )?;
+            }
+            None => {
+                conn.execute(
+                    "UPDATE media_items SET title = NULL WHERE id = ?1;",
+                    params![id.0 as i64],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {

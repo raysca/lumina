@@ -200,6 +200,7 @@ fn benchmark_scale_and_gates() {
             path: PathBuf::from(format!("/library/folder_{}/photo_{:06}.jpg", i / 1000, i)),
             parent_dir: format!("/library/folder_{}", i / 1000),
             file_name: format!("photo_{:06}.jpg", i),
+            title: None,
             file_size: 4_000_000 + (i as u64 % 100_000),
             mtime_epoch_ms: 1789430400000 + (i as i64 * 60_000),
             media_type: m_type,

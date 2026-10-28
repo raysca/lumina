@@ -19,6 +19,8 @@ pub fn render_info_tab(
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
+    title_input_active: bool,
+    title_input_buffer: &str,
 ) -> AnyElement {
     // Kind string derived from file extension / media type
     let kind_str = if file_name.ends_with(".HEIC") || file_name.ends_with(".heic") {
@@ -57,6 +59,7 @@ pub fn render_info_tab(
 
     let path_str = path.display().to_string();
     let app_caption_start = weak_app.clone();
+    let app_title_start = weak_app.clone();
 
     div()
         .w_full()
@@ -70,20 +73,51 @@ pub fn render_info_tab(
                 .flex()
                 .flex_col()
                 .gap_2p5()
-                // Title
+                // Title (click to edit)
                 .child(render_info_field_row(
                     "Title",
                     div()
+                        .id("inspector-title-box")
+                        .debug_selector(|| "inspector-title-box".to_string())
                         .w_full()
                         .px_3()
                         .py_1p5()
                         .bg(theme::bg_app())
                         .border_1()
-                        .border_color(theme::border_subtle())
+                        .border_color(if title_input_active {
+                            theme::accent()
+                        } else {
+                            theme::border_subtle()
+                        })
+                        .hover(|s| {
+                            if title_input_active {
+                                s
+                            } else {
+                                s.border_color(theme::border_strong())
+                            }
+                        })
                         .rounded_md()
+                        .cursor_text()
                         .text_xs()
                         .text_color(theme::text())
-                        .child(display_title.to_string()),
+                        .child(if title_input_active {
+                            if title_input_buffer.is_empty() {
+                                "Type a title... (Enter to save, Esc to cancel)|".to_string()
+                            } else {
+                                format!("{}|", title_input_buffer)
+                            }
+                        } else {
+                            display_title.to_string()
+                        })
+                        .on_click(move |_e, _w, cx| {
+                            if !title_input_active {
+                                if let Some(app) = app_title_start.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.start_title_input(cx);
+                                    });
+                                }
+                            }
+                        }),
                 ))
                 // Caption (Interactive click-to-edit & SQLite persistence)
                 .child(render_info_field_row(
