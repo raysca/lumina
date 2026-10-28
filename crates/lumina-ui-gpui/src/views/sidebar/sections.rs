@@ -404,7 +404,11 @@ pub(super) fn render_tags_section(
                                             .text_xs()
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(theme::accent_fg())
-                                            .child("✓")
+                                            .child(render_icon(
+                                                Icon::Check,
+                                                px(10.0),
+                                                theme::accent_fg(),
+                                            ))
                                             .on_click(cx.listener(
                                                 |this, _e: &ClickEvent, _w, cx| {
                                                     this.commit_tag_rename(cx);

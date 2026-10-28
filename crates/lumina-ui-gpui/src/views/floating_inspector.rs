@@ -203,7 +203,16 @@ impl Render for FloatingInspectorView {
                                     .cursor_pointer()
                                     .text_xs()
                                     .text_color(theme::text_muted())
-                                    .child("⇣ Dock")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(render_icon(
+                                        Icon::ArrowDownToLine,
+                                        px(11.0),
+                                        theme::text_muted(),
+                                    ))
+                                    .child("Dock")
                                     .on_click(cx.listener(
                                         move |_this, _e: &ClickEvent, window, cx| {
                                             if let Some(app_entity) = app_redock.upgrade() {

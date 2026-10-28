@@ -1,5 +1,7 @@
 use gpui::RenderImage;
-use lumina_core::{DecodedFrame, DeletionTarget, EngineEvent, MediaId, MediaItem, MediaType};
+use lumina_core::{DecodedFrame, DeletionTarget, EngineEvent, MediaId};
+#[cfg(test)]
+use lumina_core::{MediaItem, MediaType};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -55,44 +57,15 @@ pub struct BatchSelectionSummary {
     pub fav_count: usize,
 }
 
-pub type RgbColor = (u8, u8, u8);
-pub type GradientSpec = (RgbColor, RgbColor, u32, u32);
-
-pub fn get_sample_gradient(name: &str) -> GradientSpec {
-    if name.contains("2036") {
-        ((48, 22, 50), (175, 48, 102), 120, 80)
-    } else if name.contains("2037") {
-        ((145, 128, 80), (75, 62, 38), 65, 110)
-    } else if name.contains("2038") {
-        ((155, 148, 136), (72, 68, 60), 65, 110)
-    } else if name.contains("2039") {
-        ((55, 32, 46), (198, 105, 112), 120, 75)
-    } else if name.contains("2040") {
-        ((35, 45, 52), (88, 112, 125), 110, 88)
-    } else if name.contains("2041") {
-        ((165, 122, 65), (105, 70, 30), 95, 110)
-    } else if name.contains("2042") {
-        ((138, 162, 180), (192, 180, 158), 120, 80)
-    } else if name.contains("2043") {
-        ((132, 158, 175), (188, 178, 160), 65, 110)
-    } else if name.contains("2044") {
-        ((82, 148, 185), (175, 205, 220), 88, 105)
-    } else if name.contains("2046") {
-        ((165, 115, 82), (85, 45, 28), 65, 110)
-    } else if name.contains("2047") {
-        ((58, 92, 42), (112, 138, 68), 120, 85)
-    } else {
-        ((60, 60, 65), (35, 35, 40), 100, 100)
-    }
-}
-
 pub fn generate_gradient_image(
     top: (u8, u8, u8),
     bottom: (u8, u8, u8),
     width: u32,
     height: u32,
 ) -> Arc<RenderImage> {
-    let mut data = Vec::with_capacity((width * height * 4) as usize);
+    // Compute in usize so large (but still valid) dimensions cannot overflow.
+    let expected_len = (width as usize) * (height as usize) * 4;
+    let mut data = Vec::with_capacity(expected_len);
     for y in 0..height {
         let t = if height > 1 {
             y as f32 / (height - 1) as f32
@@ -109,57 +82,25 @@ pub fn generate_gradient_image(
             data.push(255);
         }
     }
-    let buffer = image::RgbaImage::from_raw(width, height, data).unwrap();
+    // Never panic in the render path: a malformed buffer falls back to a blank
+    // image instead of unwinding through GPUI.
+    let buffer = image::RgbaImage::from_raw(width, height, data)
+        .unwrap_or_else(|| image::RgbaImage::new(width.max(1), height.max(1)));
     Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(
         buffer
     )]))
 }
 
-pub fn get_sample_bg_color(name: &str) -> u32 {
-    if name.contains("2036") {
-        0x3b1c31
-    } else if name.contains("2037") {
-        0x5c4d32
-    } else if name.contains("2038") {
-        0x555047
-    } else if name.contains("2039") {
-        0x5a3948
-    } else if name.contains("2040") {
-        0x2e3840
-    } else if name.contains("2041") {
-        0x6a4e28
-    } else if name.contains("2042") {
-        0x5c6d78
-    } else if name.contains("2043") {
-        0x6b7479
-    } else if name.contains("2044") {
-        0x456f87
-    } else if name.contains("2045") {
-        0x2b3846
-    } else if name.contains("2046") {
-        0x63422e
-    } else if name.contains("2047") {
-        0x384c2a
-    } else {
-        0x2c2e32
-    }
-}
-
 /// Duration text for the video badge; the play icon is rendered separately.
-pub fn format_duration_badge(secs: f64, name: &str) -> String {
-    if secs > 0.0 {
-        let m = (secs as u64) / 60;
-        let s = (secs as u64) % 60;
-        format!("{}:{:02}", m, s)
-    } else if name.contains("2037") {
-        "0:15".to_string()
-    } else if name.contains("2039") {
-        "0:31".to_string()
-    } else if name.contains("2047") {
-        "1:08".to_string()
-    } else {
-        "0:30".to_string()
+/// Returns an empty string when the real duration is unknown rather than
+/// fabricating a value from the file name.
+pub fn format_duration_badge(secs: f64) -> String {
+    if !secs.is_finite() || secs <= 0.0 {
+        return String::new();
     }
+    let m = (secs as u64) / 60;
+    let s = (secs as u64) % 60;
+    format!("{}:{:02}", m, s)
 }
 
 pub fn format_bytes(bytes: u64) -> String {
@@ -209,6 +150,9 @@ pub fn month_name(month: u32) -> &'static str {
     }
 }
 
+/// Deterministic demo items for unit tests only; never part of the production
+/// render path.
+#[cfg(test)]
 pub fn get_sample_items() -> Vec<MediaItem> {
     let names = [
         ("IMG_2036.HEIC", 2022, 1, 15, false, false, None),

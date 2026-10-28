@@ -189,7 +189,7 @@ impl ViewerTransport {
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
                                     .text_sm()
-                                    .child("⟲")
+                                    .child(render_icon(Icon::RotateCcw, px(14.0), theme::text()))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.seek_video_relative(-5.0, cx);
                                     })),
@@ -257,7 +257,7 @@ impl ViewerTransport {
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
                                     .text_sm()
-                                    .child("⟳")
+                                    .child(render_icon(Icon::RotateCw, px(14.0), theme::text()))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.seek_video_relative(5.0, cx);
                                     })),
@@ -417,7 +417,20 @@ impl ViewerTransport {
                                     } else {
                                         theme::text_muted()
                                     })
-                                    .child("🔁 Loop")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(render_icon(
+                                        Icon::Repeat,
+                                        px(11.0),
+                                        if this.video.is_looping {
+                                            theme::accent()
+                                        } else {
+                                            theme::text_muted()
+                                        },
+                                    ))
+                                    .child("Loop")
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.toggle_video_loop(cx);
                                     })),
@@ -540,7 +553,11 @@ impl ViewerTransport {
                                             .items_center()
                                             .gap_1p5()
                                             .child(if is_cur {
-                                                div().text_color(theme::accent()).child("✓")
+                                                div().flex().items_center().child(render_icon(
+                                                    Icon::Check,
+                                                    px(12.0),
+                                                    theme::accent(),
+                                                ))
                                             } else {
                                                 div().w(px(12.0)).child("")
                                             })

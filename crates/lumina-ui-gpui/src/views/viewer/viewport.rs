@@ -81,7 +81,11 @@ impl ViewerViewport {
                     .cursor_pointer()
                     .text_xl()
                     .text_color(theme::text_muted())
-                    .child("‹")
+                    .child(render_icon(
+                        Icon::ChevronLeft,
+                        px(20.0),
+                        theme::text_muted(),
+                    ))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.navigate_selection(-1, cx);
                     }))
@@ -107,7 +111,11 @@ impl ViewerViewport {
                     .cursor_pointer()
                     .text_xl()
                     .text_color(theme::text_muted())
-                    .child("›")
+                    .child(render_icon(
+                        Icon::ChevronRight,
+                        px(20.0),
+                        theme::text_muted(),
+                    ))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.navigate_selection(1, cx);
                     }))
@@ -164,19 +172,7 @@ impl ViewerViewport {
                                 .into_any_element()
                         }
                     } else if is_video {
-                        let video_img = if let Some(ref it) = this.selected_item {
-                            let (top, bot, w, h) =
-                                crate::app::types::get_sample_gradient(&it.file_name);
-                            crate::app::types::generate_gradient_image(top, bot, w, h)
-                        } else {
-                            crate::app::types::generate_gradient_image(
-                                (82, 148, 185),
-                                (175, 205, 220),
-                                1060,
-                                596,
-                            )
-                        };
-
+                        // Neutral canvas while the first video frame decodes.
                         div()
                             .w_full()
                             .h_full()
@@ -184,12 +180,7 @@ impl ViewerViewport {
                             .max_h(px(596.0))
                             .rounded_lg()
                             .overflow_hidden()
-                            .relative()
                             .bg(theme::bg_media())
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(img(video_img).size_full().object_fit(ObjectFit::Cover))
                             .into_any_element()
                     } else {
                         div()

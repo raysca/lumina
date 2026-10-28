@@ -54,7 +54,7 @@ impl LuminaApp {
                             .flex_row()
                             .items_center()
                             .gap_2()
-                            .child(div().text_sm().text_color(theme::accent()).child("✦"))
+                            .child(render_icon(Icon::Sparkles, px(14.0), theme::accent()))
                             .child(
                                 div()
                                     .text_xs()
@@ -175,7 +175,12 @@ impl LuminaApp {
                             .cursor_pointer()
                             .text_xs()
                             .text_color(theme::accent_fg())
-                            .child("🏷 Add Tags")
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1p5()
+                            .child(render_icon(Icon::Tag, px(12.0), theme::accent_fg()))
+                            .child("Add Tags")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.inspector_open = true;
                                 cx.notify();

@@ -3,10 +3,7 @@ use std::cmp;
 use gpui::*;
 use lumina_core::MediaType;
 
-use crate::app::types::{
-    format_duration_badge, generate_gradient_image, get_sample_bg_color, get_sample_gradient,
-    get_sample_items,
-};
+use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -17,13 +14,7 @@ impl LuminaApp {
         total_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let effective_count = if total_count > 0 {
-            total_count
-        } else if self.grid_state.is_none() {
-            12
-        } else {
-            0
-        };
+        let effective_count = total_count;
 
         if effective_count == 0 {
             let empty_msg = if !self.search_query.is_empty() {
@@ -86,17 +77,12 @@ impl LuminaApp {
                         // Fetch all visible items for this frame in a single SQLite query
                         let visible_start = range.start * cols;
                         let visible_end = cmp::min(range.end * cols, effective_count);
-                        let visible_items = if visible_start >= visible_end {
-                            Vec::new()
-                        } else if this.grid_state.is_some() {
-                            this.get_active_slice(visible_start..visible_end)
-                        } else {
-                            get_sample_items()
-                                .into_iter()
-                                .skip(visible_start)
-                                .take(visible_end.saturating_sub(visible_start))
-                                .collect()
-                        };
+                        let visible_items =
+                            if visible_start >= visible_end || this.grid_state.is_none() {
+                                Vec::new()
+                            } else {
+                                this.get_active_slice(visible_start..visible_end)
+                            };
 
                         for row_ix in range {
                             let start = row_ix * cols;
@@ -124,34 +110,23 @@ impl LuminaApp {
                                 let item_rating = this.get_item_rating(item);
                                 let item_color = this.get_item_color_label(item);
                                 let is_video = item.media_type == MediaType::Video;
-                                let is_sample_item = item.path.starts_with("/sample");
 
                                 let texture = if let Some(ref state) = this.grid_state {
                                     let mut cache = state.texture_cache.lock();
                                     if let Some(tex) = cache.get(&item.id).cloned() {
-                                        Some(tex)
-                                    } else if is_sample_item {
-                                        let (top, bot, w, h) = get_sample_gradient(&item.file_name);
-                                        let tex = generate_gradient_image(top, bot, w, h);
-                                        cache.put(item.id, tex.clone());
                                         Some(tex)
                                     } else {
                                         drop(cache);
                                         this.queue_thumbnail_request(item.id);
                                         None
                                     }
-                                } else if is_sample_item {
-                                    let (top, bot, w, h) = get_sample_gradient(&item.file_name);
-                                    Some(generate_gradient_image(top, bot, w, h))
                                 } else {
                                     None
                                 };
 
                                 let item_for_click = item.clone();
                                 let item_for_context = item.clone();
-                                let bg_tone = get_sample_bg_color(&item.file_name);
-                                let dur_text =
-                                    format_duration_badge(item.duration_secs(), &item.file_name);
+                                let dur_text = format_duration_badge(item.duration_secs());
                                 let fit_mode = this.card_fit_mode;
 
                                 row_cards.push(
@@ -234,7 +209,7 @@ impl LuminaApp {
                                                 } else {
                                                     div()
                                                         .size_full()
-                                                        .bg(rgb(bg_tone))
+                                                        .bg(theme::bg_app())
                                                         .into_any_element()
                                                 })
                                                 // Favorite Heart Overlay (bottom-left)

@@ -296,10 +296,9 @@ impl MediaContextMenu {
                         }),
                     ))
                     // 9. Add to Album
-                    .child(Self::render_menu_item(
+                    .child(Self::render_submenu_item(
                         "add-album-menu-btn",
                         "Add to Album",
-                        Some("›"),
                         false,
                         cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.close_context_menu(cx);
@@ -350,10 +349,9 @@ impl MediaContextMenu {
                     // 13. Open With
                     .child({
                         let path_for_open = path.clone();
-                        Self::render_menu_item(
+                        Self::render_submenu_item(
                             "open-with-menu-btn",
                             "Open With",
-                            Some("›"),
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
@@ -418,6 +416,39 @@ impl MediaContextMenu {
         is_destructive: bool,
         on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> impl IntoElement {
+        let trailing = if let Some(sc) = shortcut {
+            div()
+                .text_xs()
+                .font_family(theme::FONT_MONO)
+                .text_color(theme::text_subtle())
+                .child(sc)
+                .into_any_element()
+        } else {
+            Empty.into_any_element()
+        };
+        Self::render_menu_row(id_str, label, trailing, is_destructive, on_click_handler)
+    }
+
+    /// A menu row that opens a submenu, marked with a chevron instead of a
+    /// keyboard shortcut.
+    fn render_submenu_item(
+        id_str: &'static str,
+        label: &'static str,
+        is_destructive: bool,
+        on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> impl IntoElement {
+        let trailing =
+            render_icon(Icon::ChevronRight, px(12.0), theme::text_subtle()).into_any_element();
+        Self::render_menu_row(id_str, label, trailing, is_destructive, on_click_handler)
+    }
+
+    fn render_menu_row(
+        id_str: &'static str,
+        label: &'static str,
+        trailing: AnyElement,
+        is_destructive: bool,
+        on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> impl IntoElement {
         div()
             .id(id_str)
             .px_2p5()
@@ -445,16 +476,7 @@ impl MediaContextMenu {
                     })
                     .child(label),
             )
-            .child(if let Some(sc) = shortcut {
-                div()
-                    .text_xs()
-                    .font_family(theme::FONT_MONO)
-                    .text_color(theme::text_subtle())
-                    .child(sc)
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
+            .child(trailing)
             .on_click(on_click_handler)
     }
 }

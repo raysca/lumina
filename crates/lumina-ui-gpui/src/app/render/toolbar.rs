@@ -87,7 +87,7 @@ impl LuminaApp {
                         )),
                     ),
             )
-            // Breadcrumb: Library › year/view
+            // Breadcrumb: Library / year-view
             .child(
                 div()
                     .ml_1()
@@ -97,7 +97,13 @@ impl LuminaApp {
                     .gap_1p5()
                     .text_xs()
                     .child(div().text_color(theme::text_muted()).child("Library"))
-                    .child(div().text_color(theme::text_disabled()).child("›"))
+                    .child(div().text_color(theme::text_disabled()).child(
+                        crate::icons::render_icon(
+                            crate::icons::Icon::ChevronRight,
+                            px(10.0),
+                            theme::text_disabled(),
+                        ),
+                    ))
                     .child(
                         div()
                             .font_weight(FontWeight::MEDIUM)
@@ -171,7 +177,12 @@ impl LuminaApp {
             .child(
                 theme::control_primary("change-folder-btn")
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("⤓ Import")
+                    .child(crate::icons::render_icon(
+                        crate::icons::Icon::ArrowDownToLine,
+                        px(13.0),
+                        theme::accent_fg(),
+                    ))
+                    .child("Import")
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.pick_folder_dialog(cx);
                     })),

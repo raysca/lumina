@@ -139,7 +139,11 @@ impl ViewerTopBar {
                     .items_center()
                     .gap_1p5()
                     .child(div().text_color(theme::text_muted()).child(date_prefix))
-                    .child(div().text_color(theme::text_disabled()).child("›"))
+                    .child(div().text_color(theme::text_disabled()).child(render_icon(
+                        Icon::ChevronRight,
+                        px(10.0),
+                        theme::text_disabled(),
+                    )))
                     .child(
                         div()
                             .font_weight(FontWeight::BOLD)

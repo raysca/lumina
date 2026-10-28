@@ -136,6 +136,8 @@ pub struct LuminaApp {
     pub immersive_hud_visible: bool,
     pub layout_mode: LayoutMode,
     pub card_fit_mode: bool,
+    /// User-visible, dismissible error banner (library open/save failures).
+    pub error_message: Option<String>,
 
     // Phase 8 Visual Smart Album Builder State
     pub album_draft: AlbumDraftState,
@@ -250,6 +252,7 @@ impl LuminaApp {
             immersive_hud_visible: true,
             layout_mode: restored_layout,
             card_fit_mode: config.card_fit_mode,
+            error_message: None,
             album_draft: AlbumDraftState::default(),
             delete_confirm_state: None,
             viewer_state: ViewerState::default(),
@@ -293,7 +296,7 @@ impl LuminaApp {
         app
     }
 
-    pub fn save_config(&self) {
+    pub fn save_config(&mut self) {
         let mut cfg = self.config.clone();
         cfg.sidebar_width = self.sidebar_width;
         cfg.inspector_width = self.inspector_width;
@@ -306,7 +309,9 @@ impl LuminaApp {
         };
         cfg.grid_columns = self.grid_columns.clamp(2, 8);
         cfg.card_fit_mode = self.card_fit_mode;
-        let _ = cfg.save();
+        if let Err(err) = cfg.save() {
+            self.error_message = Some(format!("Could not save settings: {err}"));
+        }
     }
 
     pub fn copy_to_clipboard(&self, text: &str, cx: &mut Context<Self>) {

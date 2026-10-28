@@ -3,7 +3,6 @@ use lumina_core::MediaItem;
 use std::cmp;
 
 use super::utils::render_shortcut_hint;
-use crate::app::types::get_sample_items;
 use crate::app::LuminaApp;
 use crate::theme;
 
@@ -30,7 +29,7 @@ impl ViewerFilmstrip {
             };
             (this.get_active_slice(actual_start..end), actual_start)
         } else {
-            (get_sample_items().into_iter().take(8).collect(), 0)
+            (Vec::new(), 0)
         };
 
         let cur_id = item.id;
@@ -54,26 +53,15 @@ impl ViewerFilmstrip {
                     let is_sel = it.id == cur_id;
                     let it_clone = it.clone();
 
-                    let is_sample_item = it.path.starts_with("/sample");
                     let texture = if let Some(ref state) = this.grid_state {
                         let mut cache = state.texture_cache.lock();
                         if let Some(tex) = cache.get(&it.id).cloned() {
-                            Some(tex)
-                        } else if is_sample_item {
-                            let (top, bot, w, h) =
-                                crate::app::types::get_sample_gradient(&it.file_name);
-                            let tex = crate::app::types::generate_gradient_image(top, bot, w, h);
-                            cache.put(it.id, tex.clone());
                             Some(tex)
                         } else {
                             drop(cache);
                             this.queue_thumbnail_request(it.id);
                             None
                         }
-                    } else if is_sample_item {
-                        let (top, bot, w, h) =
-                            crate::app::types::get_sample_gradient(&it.file_name);
-                        Some(crate::app::types::generate_gradient_image(top, bot, w, h))
                     } else {
                         None
                     };

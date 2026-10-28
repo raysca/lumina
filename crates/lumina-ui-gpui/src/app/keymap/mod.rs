@@ -35,6 +35,15 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+R: rescan the active library (filesystem watcher is best-effort)
+        if cmd_or_ctrl && key.eq_ignore_ascii_case("r") {
+            if let Some(ref state) = self.grid_state {
+                state.engine.rescan();
+            }
+            cx.notify();
+            return;
+        }
+
         // Inspector Toggle
         if key.eq_ignore_ascii_case("i") {
             self.toggle_inspector(cx);

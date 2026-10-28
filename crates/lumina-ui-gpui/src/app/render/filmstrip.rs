@@ -3,7 +3,6 @@ use std::cmp;
 use gpui::*;
 use lumina_core::MediaType;
 
-use crate::app::types::get_sample_items;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -13,8 +12,6 @@ impl LuminaApp {
         let active_count = self.get_active_count();
         let items = if active_count > 0 {
             self.get_active_slice(0..cmp::min(active_count, 300))
-        } else if self.grid_state.is_none() {
-            get_sample_items()
         } else {
             Vec::new()
         };

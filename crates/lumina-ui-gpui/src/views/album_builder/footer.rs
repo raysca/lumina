@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use gpui::*;
 
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -116,9 +117,10 @@ pub(super) fn render_footer_actions(
                         .font_weight(FontWeight::BOLD)
                         .text_color(theme::accent_fg())
                         .child(if app.album_draft.show_in_sidebar {
-                            "✓"
+                            render_icon(Icon::Check, px(10.0), theme::accent_fg())
+                                .into_any_element()
                         } else {
-                            ""
+                            Empty.into_any_element()
                         }),
                 )
                 .child(

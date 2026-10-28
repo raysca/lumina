@@ -25,6 +25,16 @@ pub enum Icon {
     Search,
     Info,
     PanelLeft,
+    RotateCcw,
+    RotateCw,
+    Repeat,
+    TriangleAlert,
+    Sparkles,
+    ArrowDownToLine,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Zap,
 }
 
 impl Icon {
@@ -54,6 +64,16 @@ impl Icon {
         Icon::Search,
         Icon::Info,
         Icon::PanelLeft,
+        Icon::RotateCcw,
+        Icon::RotateCw,
+        Icon::Repeat,
+        Icon::TriangleAlert,
+        Icon::Sparkles,
+        Icon::ArrowDownToLine,
+        Icon::Check,
+        Icon::ChevronLeft,
+        Icon::ChevronRight,
+        Icon::Zap,
     ];
 
     pub fn path(self) -> &'static str {
@@ -80,6 +100,16 @@ impl Icon {
             Self::Search => "icons/search.svg",
             Self::Info => "icons/info.svg",
             Self::PanelLeft => "icons/panel-left.svg",
+            Self::RotateCcw => "icons/rotate-ccw.svg",
+            Self::RotateCw => "icons/rotate-cw.svg",
+            Self::Repeat => "icons/repeat.svg",
+            Self::TriangleAlert => "icons/triangle-alert.svg",
+            Self::Sparkles => "icons/sparkles.svg",
+            Self::ArrowDownToLine => "icons/arrow-down-to-line.svg",
+            Self::Check => "icons/check.svg",
+            Self::ChevronLeft => "icons/chevron-left.svg",
+            Self::ChevronRight => "icons/chevron-right.svg",
+            Self::Zap => "icons/zap.svg",
         }
     }
 }

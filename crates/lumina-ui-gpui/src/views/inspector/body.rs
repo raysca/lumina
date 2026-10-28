@@ -4,7 +4,6 @@ use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
 pub use crate::app::types::format_bytes;
-use crate::app::types::{generate_gradient_image, get_sample_gradient};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::inspector::batch::render_batch_body;
@@ -162,12 +161,6 @@ fn render_single_body(
     let date_str = item.formatted_timestamp();
     let meta_summary_line = format!("{} · {} · {} · {}", type_label, dim_str, size_str, date_str);
 
-    // Fallback gradient thumbnail if preview_image is loading
-    let gradient_img = {
-        let (top, bot, w, h) = get_sample_gradient(&item.file_name);
-        generate_gradient_image(top, bot, w, h)
-    };
-
     let app_fav = weak_app.clone();
     let app_reveal = weak_app.clone();
     let app_open_with = weak_app.clone();
@@ -209,10 +202,7 @@ fn render_single_body(
                                 .object_fit(ObjectFit::Cover)
                                 .into_any_element()
                         } else {
-                            img(gradient_img)
-                                .size_full()
-                                .object_fit(ObjectFit::Cover)
-                                .into_any_element()
+                            div().size_full().bg(theme::bg_app()).into_any_element()
                         }),
                 )
                 // Right: Titles & Quick Actions

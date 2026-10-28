@@ -1,3 +1,4 @@
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use gpui::*;
 
@@ -43,9 +44,11 @@ impl OnboardingView {
                                     .justify_center()
                                     .items_center()
                                     .shadow_xl()
-                                    .child(
-                                        div().text_3xl().font_weight(FontWeight::BOLD).child("✦"),
-                                    ),
+                                    .child(render_icon(
+                                        Icon::Sparkles,
+                                        px(30.0),
+                                        theme::accent_fg(),
+                                    )),
                             )
                             .child(
                                 div()
@@ -80,7 +83,12 @@ impl OnboardingView {
                                     .rounded_lg()
                                     .text_xs()
                                     .text_color(theme::text())
-                                    .child("⚡ 120 FPS ProMotion"),
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1p5()
+                                    .child(render_icon(Icon::Zap, px(11.0), theme::text()))
+                                    .child("120 FPS ProMotion"),
                             )
                             .child(
                                 div()

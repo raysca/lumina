@@ -7,7 +7,7 @@ use gpui::*;
 use lumina_core::SmartAlbum;
 
 use crate::theme;
-use crate::{generate_gradient_image, get_sample_gradient, LuminaApp};
+use crate::{generate_gradient_image, LuminaApp};
 
 pub struct AlbumBuilderModal;
 
@@ -32,12 +32,12 @@ impl AlbumBuilderModal {
             24
         };
 
-        let (t1, b1, w1, h1) = get_sample_gradient("Lisbon_Tram28_0412.ARW");
-        let thumb1 = generate_gradient_image(t1, b1, w1, h1);
-        let (t2, b2, w2, h2) = get_sample_gradient("Alfama_Rooftops.HEIC");
-        let thumb2 = generate_gradient_image(t2, b2, w2, h2);
-        let (t3, b3, w3, h3) = get_sample_gradient("Belem_Tower_Dusk.ARW");
-        let thumb3 = generate_gradient_image(t3, b3, w3, h3);
+        // Neutral placeholder tiles for the live preview strip; real matches are
+        // shown after the album is created.
+        let placeholder_thumb = generate_gradient_image((60, 60, 65), (35, 35, 40), 100, 100);
+        let thumb1 = placeholder_thumb.clone();
+        let thumb2 = placeholder_thumb.clone();
+        let thumb3 = placeholder_thumb;
 
         div()
             .id("album-builder-backdrop")

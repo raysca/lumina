@@ -107,7 +107,16 @@ impl TagManagerTable {
                                             .text_xs()
                                             .font_weight(FontWeight::BOLD)
                                             .text_color(theme::accent_fg())
-                                            .child(if is_selected { "✓" } else { "" })
+                                            .child(if is_selected {
+                                                render_icon(
+                                                    Icon::Check,
+                                                    px(10.0),
+                                                    theme::accent_fg(),
+                                                )
+                                                .into_any_element()
+                                            } else {
+                                                Empty.into_any_element()
+                                            })
                                             .on_click(cx.listener(
                                                 move |this, _e: &ClickEvent, _w, cx| {
                                                     this.toggle_tag_manager_selection(
@@ -183,7 +192,16 @@ impl TagManagerTable {
                                                     .text_xs()
                                                     .font_weight(FontWeight::BOLD)
                                                     .text_color(theme::accent_fg())
-                                                    .child("✓ Save")
+                                                    .flex()
+                                                    .flex_row()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .child(render_icon(
+                                                        Icon::Check,
+                                                        px(10.0),
+                                                        theme::accent_fg(),
+                                                    ))
+                                                    .child("Save")
                                                     .on_click(cx.listener(
                                                         |this, _e: &ClickEvent, _w, cx| {
                                                             this.commit_modal_tag_rename(cx);

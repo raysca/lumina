@@ -100,6 +100,17 @@ impl LuminaApp {
         }
     }
 
+    /// Shows a dismissible error banner; used for recoverable user-facing failures.
+    pub fn set_error(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.error_message = Some(message.into());
+        cx.notify();
+    }
+
+    pub fn dismiss_error(&mut self, cx: &mut Context<Self>) {
+        self.error_message = None;
+        cx.notify();
+    }
+
     pub fn open_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         if let Some(ref state) = self.grid_state {
             state.engine.cancel_scan();
@@ -112,6 +123,7 @@ impl LuminaApp {
             Ok(res) => res,
             Err(e) => {
                 eprintln!("Failed to open library at {:?}: {:?}", path, e);
+                self.set_error(format!("Could not open library: {e}"), cx);
                 return;
             }
         };

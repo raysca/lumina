@@ -4,6 +4,7 @@ use gpui::*;
 
 use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
@@ -18,12 +19,47 @@ mod rail;
 mod status_bar;
 mod toolbar;
 
+impl LuminaApp {
+    /// Dismissible banner for recoverable, user-facing failures.
+    fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(message) = self.error_message.clone() else {
+            return Empty.into_any_element();
+        };
+        div()
+            .id("app-error-banner")
+            .w_full()
+            .px_3()
+            .py_1p5()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .bg(theme::danger_bg())
+            .text_xs()
+            .text_color(theme::text())
+            .child(message)
+            .child(
+                div()
+                    .id("app-error-banner-dismiss")
+                    .cursor_pointer()
+                    .child(render_icon(Icon::X, px(12.0), theme::text()))
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.dismiss_error(cx);
+                    })),
+            )
+            .into_any_element()
+    }
+}
+
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.grid_state.is_none() {
             return div()
                 .size_full()
                 .font_family(theme::FONT_SANS)
+                .flex()
+                .flex_col()
+                .child(self.render_error_banner(cx))
                 .child(OnboardingView::render(
                     cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.pick_folder_dialog(cx);
@@ -93,6 +129,8 @@ impl Render for LuminaApp {
             .flex()
             .flex_col()
             .relative()
+            // 0. Recoverable error banner (if any)
+            .child(self.render_error_banner(cx))
             // 1. Top 52px Toolbar
             .child(self.render_toolbar(&view_label, cx))
             // 2. Filter bar: quick filters, timeline, grid density

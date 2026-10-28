@@ -37,7 +37,7 @@ impl TagManagerHeader {
                             .items_center()
                             .text_base()
                             .text_color(theme::accent())
-                            .child("🏷"),
+                            .child(render_icon(Icon::Tag, px(16.0), theme::accent())),
                     )
                     .child(
                         div()
@@ -207,7 +207,11 @@ impl TagManagerHeader {
                     .flex_row()
                     .items_center()
                     .gap_2()
-                    .child(div().text_xs().text_color(theme::text_subtle()).child("🔍"))
+                    .child(div().text_color(theme::text_subtle()).child(render_icon(
+                        Icon::Search,
+                        px(12.0),
+                        theme::text_subtle(),
+                    )))
                     .child(
                         div()
                             .text_xs()

@@ -72,7 +72,11 @@ impl DeleteConfirmModal {
                                             .items_center()
                                             .text_base()
                                             .text_color(theme::danger_text())
-                                            .child("⚠️"),
+                                            .child(render_icon(
+                                                Icon::TriangleAlert,
+                                                px(16.0),
+                                                theme::danger_text(),
+                                            )),
                                     )
                                     .child(
                                         div()
@@ -196,7 +200,16 @@ impl DeleteConfirmModal {
                                             .items_center()
                                             .text_xs()
                                             .text_color(theme::accent_fg())
-                                            .child(if state.permanent_acknowledged { "✓" } else { "" }),
+                                            .child(if state.permanent_acknowledged {
+                                                render_icon(
+                                                    Icon::Check,
+                                                    px(10.0),
+                                                    theme::accent_fg(),
+                                                )
+                                                .into_any_element()
+                                            } else {
+                                                Empty.into_any_element()
+                                            }),
                                     )
                                     .child(
                                         div()

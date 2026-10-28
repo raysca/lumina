@@ -299,9 +299,16 @@ pub fn render_tags_section(
                                 theme::text_muted()
                             })
                             .child(if is_present {
-                                format!("✓ {}", suggested)
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(render_icon(Icon::Check, px(9.0), theme::selection_fg()))
+                                    .child(suggested.to_string())
+                                    .into_any_element()
                             } else {
-                                format!("+ {}", suggested)
+                                div().child(format!("+ {}", suggested)).into_any_element()
                             })
                             .on_click(move |_e, _window, cx| {
                                 if let Some(app) = app_suggest.upgrade() {
