@@ -179,6 +179,29 @@ impl Catalog {
         Ok(albums)
     }
 
+    pub fn update_smart_album(
+        &self,
+        id: i64,
+        title: &str,
+        icon_name: &str,
+        match_mode: MatchMode,
+        rules: &[SmartAlbumRule],
+    ) -> Result<bool> {
+        let conn = self.conn.lock();
+        let rules_json = serde_json::to_string(rules)?;
+        let match_str = match match_mode {
+            MatchMode::All => "all",
+            MatchMode::Any => "any",
+        };
+        let affected = conn.execute(
+            "UPDATE smart_albums
+             SET title = ?1, icon_name = ?2, match_mode = ?3, rules_json = ?4
+             WHERE id = ?5;",
+            params![title, icon_name, match_str, rules_json, id],
+        )?;
+        Ok(affected > 0)
+    }
+
     pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
         let conn = self.conn.lock();
         let affected = conn.execute("DELETE FROM smart_albums WHERE id = ?1;", params![id])?;

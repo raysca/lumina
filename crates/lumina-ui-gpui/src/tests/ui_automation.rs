@@ -589,6 +589,70 @@ fn ui_automation_date_and_location_edit_undo() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_smart_album_edit_and_delete() {
+    let (temp_dir, engine) = seed_library("smart_album_mgmt", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.open_album_builder(cx);
+        app.album_draft.album_title = "Round Trip".to_string();
+        app.album_draft.rules = vec![lumina_core::SmartAlbumRule {
+            field: lumina_core::RuleField::IsFavorite,
+            operator: lumina_core::RuleOperator::Equals,
+            value: lumina_core::RuleValue::Bool(true),
+        }];
+        app.save_draft_smart_album(cx);
+    });
+    let album = view.update(vcx, |app, _| {
+        let album = app
+            .user_smart_albums
+            .first()
+            .cloned()
+            .expect("album should be created");
+        assert_eq!(album.title, "Round Trip");
+        album
+    });
+
+    render_ui(vcx);
+    click(vcx, leak(format!("smart-album-edit-{}", album.id)));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.modal_open,
+            "edit button should open builder"
+        );
+        assert_eq!(app.album_draft.editing_album_id, Some(album.id));
+    });
+    view.update(vcx, |app, cx| {
+        app.album_draft.album_title = "Renamed Trip".to_string();
+        app.save_draft_smart_album(cx);
+    });
+    view.update(vcx, |app, _| {
+        let updated = app
+            .user_smart_albums
+            .iter()
+            .find(|candidate| candidate.id == album.id)
+            .expect("album should still exist");
+        assert_eq!(updated.title, "Renamed Trip");
+    });
+
+    render_ui(vcx);
+    click(vcx, leak(format!("smart-album-delete-{}", album.id)));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.user_smart_albums.is_empty(),
+            "delete button should remove the album"
+        );
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::AllLibrary
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
     let mut cx = gpui::TestAppContext::single();

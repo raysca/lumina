@@ -1916,3 +1916,52 @@ fn test_export_items_copies_files_and_writes_xmp_sidecars() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn test_update_smart_album_title_match_mode_and_rules() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let album = catalog
+        .create_smart_album(
+            "Old title",
+            "folder",
+            MatchMode::All,
+            &[SmartAlbumRule {
+                field: RuleField::IsFavorite,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Bool(true),
+            }],
+        )
+        .unwrap();
+
+    let updated = catalog
+        .update_smart_album(
+            album.id,
+            "New title",
+            "star",
+            MatchMode::Any,
+            &[
+                SmartAlbumRule {
+                    field: RuleField::Rating,
+                    operator: RuleOperator::GreaterThan,
+                    value: RuleValue::Integer(3),
+                },
+                SmartAlbumRule {
+                    field: RuleField::Tag,
+                    operator: RuleOperator::Equals,
+                    value: RuleValue::Text("travel".to_string()),
+                },
+            ],
+        )
+        .unwrap();
+    assert!(updated);
+
+    let albums = catalog.list_smart_albums().unwrap();
+    let found = albums.iter().find(|a| a.id == album.id).unwrap();
+    assert_eq!(found.title, "New title");
+    assert_eq!(found.icon_name, "star");
+    assert_eq!(found.match_mode, MatchMode::Any);
+    assert_eq!(found.rules.len(), 2);
+
+    assert!(catalog.delete_smart_album(album.id).unwrap());
+    assert!(catalog.list_smart_albums().unwrap().is_empty());
+}

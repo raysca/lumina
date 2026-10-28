@@ -12,7 +12,8 @@ core handles cataloguing, decoding, and search.
   pre-aggregated for instant scrubbing.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a bundled GeoNames dataset.
-- **Smart albums** — 9 system albums plus a composable JSON rule builder.
+- **Smart albums** — 9 system albums plus a composable rule builder; user
+  albums can be renamed, re-edited and deleted from the sidebar row.
 - **Fast grid & viewer** — virtualized grid, 2–8 column density, zoom/pan and
   1:1 pixel inspection, filmstrip navigation, keyboard-first shortcuts.
 - **Video playback** — native AVFoundation bridge with scrubbing, frame

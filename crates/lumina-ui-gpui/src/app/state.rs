@@ -62,6 +62,7 @@ impl Default for TagManagerState {
 /// Visual smart-album builder draft state.
 pub struct AlbumDraftState {
     pub modal_open: bool,
+    pub editing_album_id: Option<i64>,
     pub album_title: String,
     pub title_focused: bool,
     pub match_mode: MatchMode,
@@ -80,6 +81,7 @@ impl Default for AlbumDraftState {
     fn default() -> Self {
         Self {
             modal_open: false,
+            editing_album_id: None,
             album_title: "My Smart Album".to_string(),
             title_focused: false,
             match_mode: MatchMode::All,

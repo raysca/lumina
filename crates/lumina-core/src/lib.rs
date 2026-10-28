@@ -394,6 +394,18 @@ impl LuminaEngine {
             .create_smart_album(title, icon_name, match_mode, rules)
     }
 
+    pub fn update_smart_album(
+        &self,
+        id: i64,
+        title: &str,
+        icon_name: &str,
+        match_mode: MatchMode,
+        rules: &[SmartAlbumRule],
+    ) -> Result<bool> {
+        self.catalog
+            .update_smart_album(id, title, icon_name, match_mode, rules)
+    }
+
     pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
         self.catalog.delete_smart_album(id)
     }

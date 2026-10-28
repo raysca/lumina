@@ -1,5 +1,5 @@
 use gpui::*;
-use lumina_core::SystemAlbum;
+use lumina_core::{SmartAlbum, SystemAlbum};
 
 use super::{tag_color, AlbumSelection};
 use crate::icons::{render_icon, Icon};
@@ -215,6 +215,86 @@ pub(super) fn render_events_section(
         }))
 }
 
+fn render_user_smart_album_row(
+    _this: &LuminaApp,
+    album: &SmartAlbum,
+    count: usize,
+    is_active: bool,
+    cx: &mut Context<LuminaApp>,
+) -> impl IntoElement {
+    let album_id = album.id;
+    let edit_album = album.clone();
+    div()
+        .id(("smart-album-row", album_id as u64))
+        .debug_selector(move || format!("smart-album-row-{album_id}"))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_1()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .cursor_pointer()
+        .bg(if is_active {
+            theme::selection_bg()
+        } else {
+            theme::bg_app()
+        })
+        .hover(|s| s.bg(theme::selection_bg_hover()))
+        .child(
+            div()
+                .flex_1()
+                .text_sm()
+                .text_color(if is_active {
+                    theme::accent()
+                } else {
+                    theme::text()
+                })
+                .child(album.title.clone()),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .child(count.to_string()),
+        )
+        .child(
+            div()
+                .id(("smart-album-edit", album_id as u64))
+                .debug_selector(move || format!("smart-album-edit-{album_id}"))
+                .px_1()
+                .rounded_sm()
+                .cursor_pointer()
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .hover(|s| s.text_color(theme::accent()))
+                .child("✎")
+                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                    cx.stop_propagation();
+                    this.open_album_builder_for_edit(edit_album.clone(), cx);
+                })),
+        )
+        .child(
+            div()
+                .id(("smart-album-delete", album_id as u64))
+                .debug_selector(move || format!("smart-album-delete-{album_id}"))
+                .px_1()
+                .rounded_sm()
+                .cursor_pointer()
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .hover(|s| s.text_color(theme::danger_text()))
+                .child("×")
+                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                    cx.stop_propagation();
+                    this.delete_smart_album(album_id, cx);
+                })),
+        )
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            this.select_album(AlbumSelection::User(album_id), cx);
+        }))
+}
+
 pub(super) fn render_smart_albums_section(
     this: &LuminaApp,
     cx: &mut Context<LuminaApp>,
@@ -290,18 +370,10 @@ pub(super) fn render_smart_albums_section(
             user_albums
                 .iter()
                 .map(|album| {
-                    let album_id = album.id;
-                    let is_active = this.selection == AlbumSelection::User(album_id);
-                    let count = this.user_album_counts.get(&album_id).copied().unwrap_or(0);
-                    render_nav_item(
-                        &album.title,
-                        count,
-                        is_active,
-                        cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.select_album(AlbumSelection::User(album_id), cx);
-                        }),
-                    )
-                    .into_any_element()
+                    let is_active = this.selection == AlbumSelection::User(album.id);
+                    let count = this.user_album_counts.get(&album.id).copied().unwrap_or(0);
+                    render_user_smart_album_row(this, album, count, is_active, cx)
+                        .into_any_element()
                 })
                 .collect::<Vec<_>>()
         })

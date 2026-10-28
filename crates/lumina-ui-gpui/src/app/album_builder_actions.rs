@@ -1,5 +1,5 @@
 use gpui::*;
-use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
+use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule};
 
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
@@ -7,6 +7,7 @@ use crate::views::sidebar::AlbumSelection;
 impl LuminaApp {
     pub fn open_album_builder(&mut self, cx: &mut Context<Self>) {
         self.album_draft.modal_open = true;
+        self.album_draft.editing_album_id = None;
         self.album_draft.album_title = "My Smart Album".to_string();
         self.album_draft.title_focused = false;
         self.album_draft.match_mode = MatchMode::All;
@@ -27,6 +28,7 @@ impl LuminaApp {
 
     pub fn close_album_builder(&mut self, cx: &mut Context<Self>) {
         self.album_draft.modal_open = false;
+        self.album_draft.editing_album_id = None;
         self.album_draft.title_focused = false;
         self.album_draft.logic_dropdown_open = false;
         self.album_draft.field_dropdown = None;
@@ -35,6 +37,55 @@ impl LuminaApp {
         self.album_draft.rule_value_editing = None;
         self.album_draft.rule_value_buffer.clear();
         cx.notify();
+    }
+
+    /// Opens the smart-album builder prefilled with an existing album.
+    pub fn open_album_builder_for_edit(&mut self, album: SmartAlbum, cx: &mut Context<Self>) {
+        self.album_draft.modal_open = true;
+        self.album_draft.editing_album_id = Some(album.id);
+        self.album_draft.album_title = album.title.clone();
+        self.album_draft.title_focused = false;
+        self.album_draft.match_mode = album.match_mode;
+        self.album_draft.logic_dropdown_open = false;
+        self.album_draft.field_dropdown = None;
+        self.album_draft.operator_dropdown = None;
+        self.album_draft.value_dropdown = None;
+        self.album_draft.rule_value_editing = None;
+        self.album_draft.rule_value_buffer.clear();
+        self.album_draft.rules = if album.rules.is_empty() {
+            vec![SmartAlbumRule {
+                field: RuleField::IsFavorite,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Bool(true),
+            }]
+        } else {
+            album.rules.clone()
+        };
+        self.album_draft.show_in_sidebar = true;
+        self.update_draft_count();
+        cx.notify();
+    }
+
+    /// Deletes a user smart album (metadata only; no media is touched).
+    pub fn delete_smart_album(&mut self, album_id: i64, cx: &mut Context<Self>) {
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.delete_smart_album(album_id)
+        } else {
+            Ok(false)
+        };
+        match result {
+            Ok(true) => {
+                if self.selection == AlbumSelection::User(album_id) {
+                    self.selection = AlbumSelection::AllLibrary;
+                    self.clear_selection(cx);
+                }
+                self.refresh_album_counts();
+                self.set_last_action("Deleted smart album");
+                cx.notify();
+            }
+            Ok(false) => self.set_error("Smart album not found", cx),
+            Err(err) => self.set_error(format!("Could not delete smart album: {err}"), cx),
+        }
     }
 
     pub fn focus_draft_title(&mut self, cx: &mut Context<Self>) {
@@ -359,36 +410,56 @@ impl LuminaApp {
         } else {
             self.album_draft.album_title.trim().to_string()
         };
-        let created_id = if let Some(ref state) = self.grid_state {
-            state
-                .engine
-                .create_smart_album(
-                    &title,
-                    "folder",
-                    self.album_draft.match_mode,
-                    &self.album_draft.rules,
-                )
-                .ok()
-                .map(|a| a.id)
+        let editing_id = self.album_draft.editing_album_id;
+        let result = if let Some(ref state) = self.grid_state {
+            match editing_id {
+                Some(album_id) => state
+                    .engine
+                    .update_smart_album(
+                        album_id,
+                        &title,
+                        "folder",
+                        self.album_draft.match_mode,
+                        &self.album_draft.rules,
+                    )
+                    .map(|_| album_id),
+                None => state
+                    .engine
+                    .create_smart_album(
+                        &title,
+                        "folder",
+                        self.album_draft.match_mode,
+                        &self.album_draft.rules,
+                    )
+                    .map(|album| album.id),
+            }
         } else {
-            None
+            Ok(-1)
         };
 
-        if let Some(album_id) = created_id {
-            self.album_draft.modal_open = false;
-            self.album_draft.title_focused = false;
-            self.album_draft.logic_dropdown_open = false;
-            self.album_draft.field_dropdown = None;
-            self.album_draft.operator_dropdown = None;
-            self.album_draft.value_dropdown = None;
-            self.album_draft.rule_value_editing = None;
-            self.album_draft.rule_value_buffer.clear();
-            self.selection = AlbumSelection::User(album_id);
-            self.selected_index = None;
-            self.selected_item = None;
-            self.set_last_action(format!("Created smart album \"{}\"", title));
-            self.refresh_album_counts();
-            cx.notify();
+        match result {
+            Ok(album_id) => {
+                self.album_draft.modal_open = false;
+                self.album_draft.editing_album_id = None;
+                self.album_draft.title_focused = false;
+                self.album_draft.logic_dropdown_open = false;
+                self.album_draft.field_dropdown = None;
+                self.album_draft.operator_dropdown = None;
+                self.album_draft.value_dropdown = None;
+                self.album_draft.rule_value_editing = None;
+                self.album_draft.rule_value_buffer.clear();
+                self.selection = AlbumSelection::User(album_id);
+                self.selected_index = None;
+                self.selected_item = None;
+                self.set_last_action(if editing_id.is_some() {
+                    format!("Updated smart album \"{}\"", title)
+                } else {
+                    format!("Created smart album \"{}\"", title)
+                });
+                self.refresh_album_counts();
+                cx.notify();
+            }
+            Err(err) => self.set_error(format!("Could not save smart album: {err}"), cx),
         }
     }
 
