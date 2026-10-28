@@ -21,6 +21,14 @@ impl LuminaApp {
             return true;
         }
 
+        // 0b. Preferences modal
+        if self.preferences_open {
+            if key == "escape" {
+                self.close_preferences(cx);
+            }
+            return true;
+        }
+
         // 1. Delete confirmation modal
         if self.delete_confirm_state.is_some() {
             if key == "escape" {

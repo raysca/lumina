@@ -589,6 +589,48 @@ fn ui_automation_date_and_location_edit_undo() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_preferences_modal() {
+    let (temp_dir, engine) = seed_library("preferences", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-,");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "Cmd+, should open preferences");
+        assert!(app.preferences_cache_bytes.is_some());
+    });
+
+    click(vcx, "preferences-tab-storage");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::Storage
+        );
+    });
+    click(vcx, "preferences-tab-about");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::About
+        );
+    });
+    click(vcx, "preferences-close");
+    view.update(vcx, |app, _| assert!(!app.preferences_open));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-,");
+    view.update(vcx, |app, _| assert!(app.preferences_open));
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_open, "Escape should close preferences");
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_sort_menu_orders_grid() {
     let (temp_dir, engine) = seed_library("sorting", 5);
     let mut cx = gpui::TestAppContext::single();

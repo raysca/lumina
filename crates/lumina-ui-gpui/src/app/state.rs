@@ -170,6 +170,9 @@ pub struct LuminaApp {
     /// Current grid ordering (persisted in config).
     pub sort: SortSpec,
     pub sort_menu_open: bool,
+    pub preferences_open: bool,
+    pub preferences_tab: crate::app::preferences::PreferencesTab,
+    pub preferences_cache_bytes: Option<u64>,
 
     // Phase 16 Hardware-Accelerated Video Player
     pub video: VideoPlaybackState,
@@ -288,6 +291,9 @@ impl LuminaApp {
             grid_columns: config.grid_columns.clamp(2, 8),
             sort: config.restored_sort(),
             sort_menu_open: false,
+            preferences_open: false,
+            preferences_tab: crate::app::preferences::PreferencesTab::General,
+            preferences_cache_bytes: None,
             video: VideoPlaybackState {
                 playback_speed: 1.0,
                 is_looping: true,

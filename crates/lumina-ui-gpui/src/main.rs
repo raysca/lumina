@@ -1,5 +1,6 @@
 #![recursion_limit = "4096"]
 
+mod actions;
 mod app;
 mod assets;
 mod bridge;
@@ -7,6 +8,7 @@ mod config;
 mod icons;
 mod instance_lock;
 mod logging;
+mod menus;
 mod player;
 mod theme;
 mod views;
@@ -38,6 +40,8 @@ fn main() {
     Application::new()
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
+            cx.set_menus(crate::menus::build_menus());
+
             // Register bundled IBM Plex fonts
             if let Err(e) = cx.text_system().add_fonts(vec![
                 std::borrow::Cow::Borrowed(assets::PLEX_SANS_REGULAR),

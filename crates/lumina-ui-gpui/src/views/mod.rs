@@ -6,6 +6,7 @@ pub mod floating_pip;
 pub mod grid;
 pub mod inspector;
 pub mod onboarding;
+pub mod preferences;
 pub mod search_bar;
 pub mod sidebar;
 pub mod tag_manager;

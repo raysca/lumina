@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use gpui::*;
 
+use crate::actions::*;
+
 use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
@@ -58,8 +60,9 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 17] = [
+        let rows: [(&str, &str); 18] = [
             ("⌘F", "Focus search"),
+            ("⌘,", "Preferences"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘R", "Rescan library"),
             ("⌘+ / ⌘-", "Grid density"),
@@ -231,6 +234,33 @@ impl Render for LuminaApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
+                this.open_preferences(cx);
+            }))
+            .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
+                this.pick_folder_dialog(cx);
+            }))
+            .on_action(cx.listener(|this, _: &RescanLibrary, _w, cx| {
+                this.rescan_library(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowShortcuts, _w, cx| {
+                this.toggle_shortcuts_overlay(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
+                this.open_about(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
+                this.toggle_sidebar(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
+                this.toggle_inspector(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
+                this.import_sidecars_selected(cx);
+            }))
+            .on_action(cx.listener(|_this, _: &QuitApp, _w, cx| {
+                cx.quit();
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -393,6 +423,10 @@ impl Render for LuminaApp {
             .child(self.render_tag_manager_modal(cx))
             // 11. Keyboard Shortcuts Cheat Sheet
             .child(self.render_shortcuts_overlay(cx))
+            // 12. Preferences / About
+            .child(crate::views::preferences::render_preferences_modal(
+                self, cx,
+            ))
             .into_any_element()
     }
 }

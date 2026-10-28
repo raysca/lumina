@@ -34,8 +34,12 @@ core handles cataloguing, decoding, and search.
   `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
   card context menu applies sidecar titles, ratings, captions and tags.
 - **Floating panels** — detachable inspector and PiP windows.
-- **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and
-  a built-in shortcut cheat sheet (⌘/) plus manual rescan (⌘R).
+- **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, a
+  built-in shortcut cheat sheet (⌘/), manual rescan (⌘R), and a native macOS
+  menu bar (Open Library, Rescan, Sidebar/Inspector, Preferences ⌘, About, Quit).
+- **Preferences** — in-app General/Storage/About panel: library path and item
+  count, rescan, log/database locations, thumbnail-cache size with clear/reveal,
+  and version/settings-file details.
 
 > **Status note:** local semantic/AI search ("Phase 10" in the roadmap) is a
 > planned feature and is **not implemented** in this tree.

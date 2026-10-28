@@ -4,6 +4,7 @@ pub mod keymap;
 pub mod library;
 pub mod navigation;
 pub mod panels;
+pub mod preferences;
 pub mod render;
 pub mod sort;
 pub mod state;

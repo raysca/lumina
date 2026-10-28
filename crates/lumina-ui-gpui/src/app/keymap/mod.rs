@@ -34,6 +34,12 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+,: preferences
+        if cmd_or_ctrl && key == "," {
+            self.open_preferences(cx);
+            return;
+        }
+
         // Cmd+Z / Cmd+Shift+Z: undo / redo reversible catalog edits
         if cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
             if keystroke.modifiers.shift {
