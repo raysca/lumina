@@ -34,6 +34,16 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+Z / Cmd+Shift+Z: undo / redo reversible catalog edits
+        if cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
+            if keystroke.modifiers.shift {
+                self.redo_last(cx);
+            } else {
+                self.undo_last(cx);
+            }
+            return;
+        }
+
         if cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
             self.search_focused = true;
             self.search_query.clear();

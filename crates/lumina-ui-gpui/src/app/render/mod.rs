@@ -58,8 +58,9 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 16] = [
+        let rows: [(&str, &str); 17] = [
             ("⌘F", "Focus search"),
+            ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘R", "Rescan library"),
             ("⌘+ / ⌘-", "Grid density"),
             ("I", "Toggle inspector"),

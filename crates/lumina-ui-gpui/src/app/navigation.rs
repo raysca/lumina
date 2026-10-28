@@ -3,6 +3,7 @@ use lumina_core::{MediaId, MediaItem, MediaType};
 use std::cmp;
 
 use crate::app::types::{BatchSelectionSummary, UiMessage};
+use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 use crate::theme;
 
@@ -26,14 +27,27 @@ impl LuminaApp {
     }
 
     pub fn toggle_favorite_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref mut item) = self.selected_item {
-            let new_fav = !item.is_favorite;
-            item.is_favorite = new_fav;
-            if let Some(ref state) = self.grid_state {
-                let _ = state.engine.toggle_favorite(item.id, new_fav);
+        let Some(item) = self.selected_item.clone() else {
+            return;
+        };
+        let new_fav = !item.is_favorite;
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.toggle_favorite(item.id, new_fav)
+        } else {
+            Ok(())
+        };
+        match result {
+            Ok(()) => {
+                if let Some(ref mut current) = self.selected_item {
+                    current.is_favorite = new_fav;
+                }
+                self.push_undo(UndoAction::Favorite {
+                    changes: vec![(item.id, item.is_favorite, new_fav)],
+                });
+                self.refresh_album_counts();
+                cx.notify();
             }
-            self.refresh_album_counts();
-            cx.notify();
+            Err(err) => self.set_error(format!("Could not update favorite: {err}"), cx),
         }
     }
 
@@ -361,29 +375,63 @@ impl LuminaApp {
         let all_fav = items.iter().all(|i| i.is_favorite);
         let new_fav = !all_fav;
         let ids: Vec<MediaId> = items.iter().map(|i| i.id).collect();
+        let changes: Vec<(MediaId, bool, bool)> = items
+            .iter()
+            .map(|item| (item.id, item.is_favorite, new_fav))
+            .collect();
 
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.batch_set_favorite(&ids, new_fav);
-            if let Some(ref mut it) = self.selected_item {
-                if ids.contains(&it.id) {
-                    it.is_favorite = new_fav;
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.batch_set_favorite(&ids, new_fav)
+        } else {
+            Ok(())
+        };
+        match result {
+            Ok(()) => {
+                if let Some(ref mut it) = self.selected_item {
+                    if ids.contains(&it.id) {
+                        it.is_favorite = new_fav;
+                    }
                 }
+                self.push_undo(UndoAction::Favorite { changes });
+                self.refresh_album_counts();
+                cx.notify();
             }
+            Err(err) => self.set_error(format!("Could not update favorites: {err}"), cx),
         }
-        self.refresh_album_counts();
-        cx.notify();
     }
 
     pub fn set_item_rating(&mut self, id: MediaId, rating: u8, cx: &mut Context<Self>) {
+        let before = self.item_ratings.get(&id).copied().unwrap_or(0);
         let clamped = rating.min(5);
+        if before == clamped {
+            cx.notify();
+            return;
+        }
         if clamped == 0 {
             self.item_ratings.remove(&id);
         } else {
             self.item_ratings.insert(id, clamped);
         }
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.set_rating(id, clamped);
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_rating(id, clamped)
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            if before == 0 {
+                self.item_ratings.remove(&id);
+            } else {
+                self.item_ratings.insert(id, before);
+            }
+            self.set_error(format!("Could not save rating: {err}"), cx);
+            return;
         }
+        self.push_undo(UndoAction::Rating {
+            id,
+            before,
+            after: clamped,
+        });
+        self.sync_metadata_sidecars(&[id]);
         if self.user_smart_albums.iter().any(|a| {
             a.rules
                 .iter()
@@ -395,15 +443,36 @@ impl LuminaApp {
     }
 
     pub fn set_item_color_label(&mut self, id: MediaId, label: u8, cx: &mut Context<Self>) {
+        let before = self.item_color_labels.get(&id).copied().unwrap_or(0);
         let clamped = label.min(6);
+        if before == clamped {
+            cx.notify();
+            return;
+        }
         if clamped == 0 {
             self.item_color_labels.remove(&id);
         } else {
             self.item_color_labels.insert(id, clamped);
         }
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.set_color_label(id, clamped);
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_color_label(id, clamped)
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            if before == 0 {
+                self.item_color_labels.remove(&id);
+            } else {
+                self.item_color_labels.insert(id, before);
+            }
+            self.set_error(format!("Could not save color label: {err}"), cx);
+            return;
         }
+        self.push_undo(UndoAction::ColorLabel {
+            id,
+            before,
+            after: clamped,
+        });
         if self.user_smart_albums.iter().any(|a| {
             a.rules
                 .iter()

@@ -127,16 +127,46 @@ impl LuminaApp {
         self.caption.input_active = false;
         if let Some(item) = self.selected_item.clone() {
             let trimmed = caption.trim().to_string();
-            if trimmed.is_empty() {
-                self.item_captions.remove(&item.id);
-                self.set_last_action("Caption removed");
+            let before = self.item_captions.get(&item.id).cloned();
+            let after = if trimmed.is_empty() {
+                None
             } else {
-                self.item_captions.insert(item.id, trimmed.clone());
-                self.set_last_action("Caption saved");
+                Some(trimmed.clone())
+            };
+            if before == after {
+                cx.notify();
+                return;
             }
-            if let Some(ref state) = self.grid_state {
-                let _ = state.engine.set_caption(item.id, &trimmed);
+            if let Some(ref value) = after {
+                self.item_captions.insert(item.id, value.clone());
+            } else {
+                self.item_captions.remove(&item.id);
             }
+            let result = if let Some(ref state) = self.grid_state {
+                state.engine.set_caption(item.id, &trimmed)
+            } else {
+                Ok(())
+            };
+            if let Err(err) = result {
+                if let Some(previous) = before {
+                    self.item_captions.insert(item.id, previous);
+                } else {
+                    self.item_captions.remove(&item.id);
+                }
+                self.set_error(format!("Could not save caption: {err}"), cx);
+                return;
+            }
+            self.push_undo(crate::app::undo::UndoAction::Caption {
+                id: item.id,
+                before,
+                after,
+            });
+            self.sync_metadata_sidecars(&[item.id]);
+            self.set_last_action(if trimmed.is_empty() {
+                "Caption removed"
+            } else {
+                "Caption saved"
+            });
         }
         cx.notify();
     }

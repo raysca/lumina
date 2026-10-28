@@ -23,6 +23,9 @@ core handles cataloguing, decoding, and search.
   writes Adobe-compatible XMP sidecars (`xmp:Rating`, `dc:subject`,
   `dc:description`) so ratings, tags, and captions survive outside the catalog;
   the same sidecars can be generated in place via `write_metadata_sidecars`.
+- **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
+  tag add/remove, and trash/restore. Metadata edits also refresh the item's XMP
+  sidecar automatically; permanent deletion is deliberately not undoable.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and
   a built-in shortcut cheat sheet (⌘/) plus manual rescan (⌘R).

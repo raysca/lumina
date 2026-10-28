@@ -8,6 +8,7 @@ pub mod render;
 pub mod state;
 pub mod tags;
 pub mod types;
+pub mod undo;
 pub mod video_actions;
 pub mod viewer_actions;
 pub mod windows;

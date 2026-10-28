@@ -2,23 +2,37 @@ use gpui::*;
 use lumina_core::{DeletionTarget, MediaId, SystemAlbum};
 
 use crate::app::types::{DeleteConfirmState, DeleteIntent};
+use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
 impl LuminaApp {
     pub fn trash_or_restore_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref mut item) = self.selected_item {
-            let new_trashed = !item.is_trashed;
-            item.is_trashed = new_trashed;
-            if let Some(ref state) = self.grid_state {
-                let _ = state.engine.set_trashed(item.id, new_trashed);
+        let Some(item) = self.selected_item.clone() else {
+            return;
+        };
+        let new_trashed = !item.is_trashed;
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_trashed(item.id, new_trashed)
+        } else {
+            Ok(())
+        };
+        match result {
+            Ok(()) => {
+                if let Some(ref mut current) = self.selected_item {
+                    current.is_trashed = new_trashed;
+                }
+                self.push_undo(UndoAction::Trashed {
+                    changes: vec![(item.id, item.is_trashed, new_trashed)],
+                });
+                self.refresh_album_counts();
+                if let Some(idx) = self.selected_index {
+                    self.select_index(idx, cx);
+                } else {
+                    cx.notify();
+                }
             }
-            self.refresh_album_counts();
-            if let Some(idx) = self.selected_index {
-                self.select_index(idx, cx);
-            } else {
-                cx.notify();
-            }
+            Err(err) => self.set_error(format!("Could not update Trash: {err}"), cx),
         }
     }
 
@@ -30,10 +44,21 @@ impl LuminaApp {
         let is_trash_view = self.selection == AlbumSelection::Trash;
         let new_trashed = !is_trash_view;
         let ids: Vec<MediaId> = items.iter().map(|i| i.id).collect();
+        let changes: Vec<(MediaId, bool, bool)> = items
+            .iter()
+            .map(|item| (item.id, item.is_trashed, new_trashed))
+            .collect();
 
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.batch_set_trashed(&ids, new_trashed);
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.batch_set_trashed(&ids, new_trashed)
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not update Trash: {err}"), cx);
+            return;
         }
+        self.push_undo(UndoAction::Trashed { changes });
         self.set_last_action(if new_trashed {
             format!("Moved {} item(s) to Trash", ids.len())
         } else {
@@ -144,9 +169,19 @@ impl LuminaApp {
             return;
         }
         let ids: Vec<MediaId> = items.iter().map(|i| i.id).collect();
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.restore_trashed_items(&ids);
+        let changes: Vec<(MediaId, bool, bool)> =
+            items.iter().map(|item| (item.id, true, false)).collect();
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.restore_trashed_items(&ids).map(|_| ())
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not restore items: {err}"), cx);
+            return;
         }
+        self.push_undo(UndoAction::Trashed { changes });
+        self.set_last_action(format!("Restored {} item(s)", ids.len()));
         self.refresh_album_counts();
         self.clear_selection(cx);
     }

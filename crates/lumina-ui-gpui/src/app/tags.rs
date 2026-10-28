@@ -38,9 +38,23 @@ impl LuminaApp {
             return;
         }
 
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.add_tags_batch(&ids, &[clean]);
+        let result = if let Some(ref state) = self.grid_state {
+            state
+                .engine
+                .add_tags_batch(&ids, std::slice::from_ref(&clean))
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not add tag: {err}"), cx);
+            return;
         }
+        self.push_undo(crate::app::undo::UndoAction::Tags {
+            ids: ids.clone(),
+            tag: clean.clone(),
+            added: true,
+        });
+        self.sync_metadata_sidecars(&ids);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         cx.notify();
@@ -56,11 +70,23 @@ impl LuminaApp {
             return;
         }
 
-        if let Some(ref state) = self.grid_state {
-            let _ = state
+        let result = if let Some(ref state) = self.grid_state {
+            state
                 .engine
-                .remove_tags_batch(&ids, std::slice::from_ref(&clean));
+                .remove_tags_batch(&ids, std::slice::from_ref(&clean))
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not remove tag: {err}"), cx);
+            return;
         }
+        self.push_undo(crate::app::undo::UndoAction::Tags {
+            ids: ids.clone(),
+            tag: clean.clone(),
+            added: false,
+        });
+        self.sync_metadata_sidecars(&ids);
         self.set_last_action(format!("Removed tag \"{}\"", clean));
         self.refresh_selected_tags();
         self.refresh_album_counts();

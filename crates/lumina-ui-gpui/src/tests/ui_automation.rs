@@ -357,6 +357,96 @@ fn ui_automation_export_writes_originals_and_sidecars() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_undo_redo_rating_and_sidecar() {
+    let (temp_dir, engine) = seed_library("undo", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.set_item_rating(item.id, 4, cx);
+    });
+    assert!(sidecar.exists(), "rating should write an XMP sidecar");
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied().unwrap_or(0),
+            0,
+            "undo should clear the rating"
+        );
+    });
+    assert!(
+        !sidecar.exists(),
+        "undoing the only metadata should remove the sidecar"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied().unwrap_or(0),
+            4,
+            "redo should restore the rating"
+        );
+    });
+    assert!(sidecar.exists(), "redo should rewrite the sidecar");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_undo_tag_and_caption() {
+    let (temp_dir, engine) = seed_library("undo_meta", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.selected_indices.insert(0);
+        app.batch_add_tag("travel".to_string(), cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(app.selected_item_tags.contains(&"travel".to_string()));
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_item_tags.contains(&"travel".to_string()),
+            "undo should remove the tag"
+        );
+    });
+    keystrokes(vcx, "cmd-shift-z");
+    view.update(vcx, |app, _| {
+        assert!(app.selected_item_tags.contains(&"travel".to_string()));
+    });
+
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        app.caption.input_buffer = "A short caption".to_string();
+        app.commit_caption_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_captions.get(&item.id).map(String::as_str),
+            Some("A short caption")
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert!(!app.item_captions.contains_key(&item.id));
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
     let mut cx = gpui::TestAppContext::single();
