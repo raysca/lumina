@@ -237,4 +237,161 @@ impl LuminaApp {
         self.caption.title_input_buffer.clear();
         cx.notify();
     }
+
+    pub fn start_date_input(&mut self, cx: &mut Context<Self>) {
+        let current = self
+            .selected_item
+            .as_ref()
+            .map(|item| item.timestamp_epoch_ms)
+            .unwrap_or(0);
+        let buffer = chrono::DateTime::from_timestamp_millis(current)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default();
+        self.caption.date_input_active = true;
+        self.caption.date_input_buffer = buffer;
+        cx.notify();
+    }
+
+    pub fn commit_date_input(&mut self, cx: &mut Context<Self>) {
+        let value = std::mem::take(&mut self.caption.date_input_buffer);
+        self.caption.date_input_active = false;
+        let Some(item) = self.selected_item.clone() else {
+            cx.notify();
+            return;
+        };
+        let Some(epoch_ms) = parse_edited_timestamp(&value, item.timestamp_epoch_ms) else {
+            self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+            return;
+        };
+        if epoch_ms == item.timestamp_epoch_ms {
+            cx.notify();
+            return;
+        }
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_timestamp(item.id, epoch_ms)
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not save date: {err}"), cx);
+            return;
+        }
+        self.push_undo(crate::app::undo::UndoAction::Date {
+            id: item.id,
+            before: item.timestamp_epoch_ms,
+            after: epoch_ms,
+        });
+        if let Some(updated) = self
+            .grid_state
+            .as_ref()
+            .and_then(|state| state.engine.get_item_by_id(item.id))
+        {
+            self.selected_item = Some(updated);
+        }
+        self.refresh_album_counts();
+        self.set_last_action("Date updated");
+        cx.notify();
+    }
+
+    pub fn cancel_date_input(&mut self, cx: &mut Context<Self>) {
+        self.caption.date_input_active = false;
+        self.caption.date_input_buffer.clear();
+        cx.notify();
+    }
+
+    pub fn start_location_input(&mut self, cx: &mut Context<Self>) {
+        let buffer = self
+            .selected_item
+            .as_ref()
+            .and_then(|item| match (item.latitude, item.longitude) {
+                (Some(lat), Some(lon)) => Some(format!("{lat:.6}, {lon:.6}")),
+                _ => None,
+            })
+            .unwrap_or_default();
+        self.caption.location_input_active = true;
+        self.caption.location_input_buffer = buffer;
+        cx.notify();
+    }
+
+    pub fn commit_location_input(&mut self, cx: &mut Context<Self>) {
+        let value = std::mem::take(&mut self.caption.location_input_buffer);
+        self.caption.location_input_active = false;
+        let Some(item) = self.selected_item.clone() else {
+            cx.notify();
+            return;
+        };
+        let trimmed = value.trim();
+        let (lat, lon) = if trimmed.is_empty() {
+            (None, None)
+        } else {
+            let parts: Vec<&str> = trimmed
+                .split(|c: char| c == ',' || c.is_whitespace())
+                .filter(|part| !part.is_empty())
+                .collect();
+            if parts.len() != 2 {
+                self.set_error("Enter coordinates as latitude, longitude", cx);
+                return;
+            }
+            let (Ok(lat), Ok(lon)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) else {
+                self.set_error("Coordinates must be decimal numbers", cx);
+                return;
+            };
+            if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+                self.set_error("Latitude must be -90..90 and longitude -180..180", cx);
+                return;
+            }
+            (Some(lat), Some(lon))
+        };
+        if (lat, lon) == (item.latitude, item.longitude) {
+            cx.notify();
+            return;
+        }
+        let result = if let Some(ref state) = self.grid_state {
+            state.engine.set_location(item.id, lat, lon)
+        } else {
+            Ok(())
+        };
+        if let Err(err) = result {
+            self.set_error(format!("Could not save location: {err}"), cx);
+            return;
+        }
+        self.push_undo(crate::app::undo::UndoAction::Location {
+            id: item.id,
+            before: (item.latitude, item.longitude),
+            after: (lat, lon),
+        });
+        if let Some(updated) = self
+            .grid_state
+            .as_ref()
+            .and_then(|state| state.engine.get_item_by_id(item.id))
+        {
+            self.selected_item = Some(updated);
+        }
+        self.set_last_action(if lat.is_some() {
+            "Location updated"
+        } else {
+            "Location removed"
+        });
+        cx.notify();
+    }
+
+    pub fn cancel_location_input(&mut self, cx: &mut Context<Self>) {
+        self.caption.location_input_active = false;
+        self.caption.location_input_buffer.clear();
+        cx.notify();
+    }
+}
+
+fn parse_edited_timestamp(input: &str, current_epoch_ms: i64) -> Option<i64> {
+    let trimmed = input.trim();
+    if let Ok(datetime) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+        return Some(datetime.and_utc().timestamp_millis());
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        let time = chrono::DateTime::from_timestamp_millis(current_epoch_ms)
+            .map(|dt| dt.time())
+            .unwrap_or_default();
+        return Some(date.and_time(time).and_utc().timestamp_millis());
+    }
+    None
 }

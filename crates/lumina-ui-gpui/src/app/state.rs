@@ -103,6 +103,10 @@ pub struct CaptionState {
     pub input_buffer: String,
     pub title_input_active: bool,
     pub title_input_buffer: String,
+    pub date_input_active: bool,
+    pub date_input_buffer: String,
+    pub location_input_active: bool,
+    pub location_input_buffer: String,
 }
 
 pub struct LuminaApp {

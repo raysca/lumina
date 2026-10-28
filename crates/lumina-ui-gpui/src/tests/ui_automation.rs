@@ -516,6 +516,79 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_date_and_location_edit_undo() {
+    let (temp_dir, engine) = seed_library("edit_time_place", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let original_timestamp = item.timestamp_epoch_ms;
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.start_date_input(cx);
+        app.caption.date_input_buffer = "2020-05-06".to_string();
+        app.commit_date_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.year),
+            Some(2020),
+            "date edit should update the selected item"
+        );
+        assert!(app
+            .timeline_year_buckets
+            .iter()
+            .any(|(year, _)| *year == 2020));
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.timestamp_epoch_ms),
+            Some(original_timestamp),
+            "undo should restore the original date"
+        );
+    });
+    keystrokes(vcx, "cmd-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_item.as_ref().map(|it| it.year), Some(2020));
+    });
+
+    view.update(vcx, |app, cx| {
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "48.8566, 2.3522".to_string();
+        app.commit_location_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.latitude)
+                .map(|lat| (lat * 10_000.0).round() / 10_000.0),
+            Some(48.8566)
+        );
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.longitude)
+                .map(|lon| (lon * 10_000.0).round() / 10_000.0),
+            Some(2.3522)
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().and_then(|it| it.latitude),
+            None,
+            "undo should clear the location"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
     let mut cx = gpui::TestAppContext::single();

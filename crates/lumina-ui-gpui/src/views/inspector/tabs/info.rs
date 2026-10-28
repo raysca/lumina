@@ -21,6 +21,8 @@ pub fn render_info_tab(
     caption_input_buffer: &str,
     title_input_active: bool,
     title_input_buffer: &str,
+    date_input_active: bool,
+    date_input_buffer: &str,
 ) -> AnyElement {
     // Kind string derived from file extension / media type
     let kind_str = if file_name.ends_with(".HEIC") || file_name.ends_with(".heic") {
@@ -60,6 +62,7 @@ pub fn render_info_tab(
     let path_str = path.display().to_string();
     let app_caption_start = weak_app.clone();
     let app_title_start = weak_app.clone();
+    let app_date_start = weak_app.clone();
 
     div()
         .w_full()
@@ -171,15 +174,51 @@ pub fn render_info_tab(
                             }
                         }),
                 ))
-                // Date taken
+                // Date taken (click to edit)
                 .child(render_info_field_row(
                     "Date taken",
-                    div().flex().flex_row().items_center().gap_2().child(
-                        div()
-                            .text_xs()
-                            .text_color(theme::text())
-                            .child(date_taken_str),
-                    ),
+                    div()
+                        .id("inspector-date-box")
+                        .debug_selector(|| "inspector-date-box".to_string())
+                        .w_full()
+                        .px_3()
+                        .py_1p5()
+                        .bg(theme::bg_app())
+                        .border_1()
+                        .border_color(if date_input_active {
+                            theme::accent()
+                        } else {
+                            theme::border_subtle()
+                        })
+                        .hover(|s| {
+                            if date_input_active {
+                                s
+                            } else {
+                                s.border_color(theme::border_strong())
+                            }
+                        })
+                        .rounded_md()
+                        .cursor_text()
+                        .text_xs()
+                        .text_color(theme::text())
+                        .child(if date_input_active {
+                            if date_input_buffer.is_empty() {
+                                "YYYY-MM-DD HH:MM:SS|".to_string()
+                            } else {
+                                format!("{}|", date_input_buffer)
+                            }
+                        } else {
+                            date_taken_str
+                        })
+                        .on_click(move |_e, _w, cx| {
+                            if !date_input_active {
+                                if let Some(app) = app_date_start.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.start_date_input(cx);
+                                    });
+                                }
+                            }
+                        }),
                 ))
                 // Rating (interactive gold star icons)
                 .child(render_info_field_row(

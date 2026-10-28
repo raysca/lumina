@@ -86,6 +86,10 @@ pub fn render_inspector_body(
     caption_input_buffer: &str,
     title_input_active: bool,
     title_input_buffer: &str,
+    date_input_active: bool,
+    date_input_buffer: &str,
+    location_input_active: bool,
+    location_input_buffer: &str,
 ) -> AnyElement {
     if selected_count > 1 {
         return render_batch_body(
@@ -132,6 +136,10 @@ pub fn render_inspector_body(
         caption_input_buffer,
         title_input_active,
         title_input_buffer,
+        date_input_active,
+        date_input_buffer,
+        location_input_active,
+        location_input_buffer,
     )
 }
 
@@ -152,6 +160,10 @@ fn render_single_body(
     caption_input_buffer: &str,
     title_input_active: bool,
     title_input_buffer: &str,
+    date_input_active: bool,
+    date_input_buffer: &str,
+    location_input_active: bool,
+    location_input_buffer: &str,
 ) -> AnyElement {
     let path = item.path.clone();
     let file_name = item.file_name.clone();
@@ -419,9 +431,16 @@ fn render_single_body(
                         caption_input_buffer,
                         title_input_active,
                         title_input_buffer,
+                        date_input_active,
+                        date_input_buffer,
                     ),
                     InspectorTab::Camera => render_camera_tab(&item, type_label),
-                    InspectorTab::Location => render_location_tab(weak_app.clone(), &item),
+                    InspectorTab::Location => render_location_tab(
+                        weak_app.clone(),
+                        &item,
+                        location_input_active,
+                        location_input_buffer,
+                    ),
                     InspectorTab::Tags => render_tags_tab(
                         weak_app.clone(),
                         tags,

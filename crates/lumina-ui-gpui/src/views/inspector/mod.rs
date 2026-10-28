@@ -39,6 +39,10 @@ impl InspectorView {
         let caption_input_buffer = this.caption.input_buffer.clone();
         let title_input_active = this.caption.title_input_active;
         let title_input_buffer = this.caption.title_input_buffer.clone();
+        let date_input_active = this.caption.date_input_active;
+        let date_input_buffer = this.caption.date_input_buffer.clone();
+        let location_input_active = this.caption.location_input_active;
+        let location_input_buffer = this.caption.location_input_buffer.clone();
 
         div()
             .w(px(this.inspector_width))
@@ -158,6 +162,10 @@ impl InspectorView {
                         &caption_input_buffer,
                         title_input_active,
                         &title_input_buffer,
+                        date_input_active,
+                        &date_input_buffer,
+                        location_input_active,
+                        &location_input_buffer,
                     )),
             )
             .into_any_element()

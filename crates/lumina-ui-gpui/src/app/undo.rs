@@ -38,6 +38,16 @@ pub enum UndoAction {
         before: Option<String>,
         after: Option<String>,
     },
+    Date {
+        id: MediaId,
+        before: i64,
+        after: i64,
+    },
+    Location {
+        id: MediaId,
+        before: (Option<f64>, Option<f64>),
+        after: (Option<f64>, Option<f64>),
+    },
     /// Tags were added (\`added = true\`) or removed.
     Tags {
         ids: Vec<MediaId>,
@@ -61,7 +71,10 @@ impl UndoAction {
     pub fn affected_ids(&self) -> Vec<MediaId> {
         match self {
             UndoAction::Rating { id, .. } | UndoAction::ColorLabel { id, .. } => vec![*id],
-            UndoAction::Caption { id, .. } | UndoAction::Title { id, .. } => vec![*id],
+            UndoAction::Caption { id, .. }
+            | UndoAction::Title { id, .. }
+            | UndoAction::Date { id, .. }
+            | UndoAction::Location { id, .. } => vec![*id],
             UndoAction::Favorite { changes } | UndoAction::Trashed { changes } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
@@ -76,6 +89,8 @@ impl UndoAction {
             UndoAction::Favorite { .. } => "favorite",
             UndoAction::Caption { .. } => "caption",
             UndoAction::Title { .. } => "title",
+            UndoAction::Date { .. } => "date",
+            UndoAction::Location { .. } => "location",
             UndoAction::Tags { .. } => "tag edit",
             UndoAction::Trashed { .. } => "trash",
         }
@@ -119,6 +134,19 @@ impl UndoAction {
             } => {
                 let value = if before { b } else { a };
                 engine.set_title(*id, value.as_deref())
+            }
+            UndoAction::Date {
+                id,
+                before: b,
+                after: a,
+            } => engine.set_timestamp(*id, if before { *b } else { *a }),
+            UndoAction::Location {
+                id,
+                before: b,
+                after: a,
+            } => {
+                let (lat, lon) = if before { b } else { a };
+                engine.set_location(*id, *lat, *lon)
             }
             UndoAction::Tags { ids, tag, added } => {
                 let tags = std::slice::from_ref(tag);

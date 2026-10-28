@@ -86,6 +86,10 @@ impl Render for FloatingInspectorView {
         let caption_input_buffer = app_read.caption.input_buffer.clone();
         let title_input_active = app_read.caption.title_input_active;
         let title_input_buffer = app_read.caption.title_input_buffer.clone();
+        let date_input_active = app_read.caption.date_input_active;
+        let date_input_buffer = app_read.caption.date_input_buffer.clone();
+        let location_input_active = app_read.caption.location_input_active;
+        let location_input_buffer = app_read.caption.location_input_buffer.clone();
 
         let file_name = selected_item
             .as_ref()
@@ -280,6 +284,10 @@ impl Render for FloatingInspectorView {
                         &caption_input_buffer,
                         title_input_active,
                         &title_input_buffer,
+                        date_input_active,
+                        &date_input_buffer,
+                        location_input_active,
+                        &location_input_buffer,
                     )),
             )
             .into_any_element()

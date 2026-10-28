@@ -27,8 +27,9 @@ core handles cataloguing, decoding, and search.
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
   item's XMP sidecar automatically; permanent deletion is deliberately not
   undoable.
-- **Editable title & XMP import** — click the title in the inspector to edit it
-  (persisted in SQLite and written to `dc:title`); "Import XMP Metadata" in the
+- **Editable metadata & XMP import** — click the title, date-taken or coordinate
+  row in the inspector to edit it (SQLite, undoable; titles also go to
+  `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
   card context menu applies sidecar titles, ratings, captions and tags.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and

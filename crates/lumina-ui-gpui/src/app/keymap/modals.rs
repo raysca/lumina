@@ -225,7 +225,53 @@ impl LuminaApp {
             return true;
         }
 
-        // 3b. Inline caption input in inspector
+        // 3b. Inline date input in inspector
+        if self.caption.date_input_active {
+            if key == "escape" {
+                self.cancel_date_input(cx);
+                return true;
+            }
+            if key == "enter" || key == "return" {
+                self.commit_date_input(cx);
+                return true;
+            }
+            if key == "backspace" {
+                self.caption.date_input_buffer.pop();
+                cx.notify();
+                return true;
+            }
+            if !cmd_or_ctrl && key.chars().count() == 1 {
+                self.caption.date_input_buffer.push_str(key);
+                cx.notify();
+                return true;
+            }
+            return true;
+        }
+
+        // 3c. Inline location input in inspector
+        if self.caption.location_input_active {
+            if key == "escape" {
+                self.cancel_location_input(cx);
+                return true;
+            }
+            if key == "enter" || key == "return" {
+                self.commit_location_input(cx);
+                return true;
+            }
+            if key == "backspace" {
+                self.caption.location_input_buffer.pop();
+                cx.notify();
+                return true;
+            }
+            if !cmd_or_ctrl && key.chars().count() == 1 {
+                self.caption.location_input_buffer.push_str(key);
+                cx.notify();
+                return true;
+            }
+            return true;
+        }
+
+        // 3d. Inline caption input in inspector
         if self.caption.input_active {
             if key == "escape" {
                 self.cancel_caption_input(cx);

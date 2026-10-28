@@ -437,6 +437,19 @@ impl LuminaEngine {
         self.catalog.set_title(id, title)
     }
 
+    pub fn set_timestamp(&self, id: MediaId, epoch_ms: i64) -> Result<()> {
+        self.catalog.set_timestamp(id, epoch_ms)
+    }
+
+    pub fn set_location(
+        &self,
+        id: MediaId,
+        latitude: Option<f64>,
+        longitude: Option<f64>,
+    ) -> Result<()> {
+        self.catalog.set_location(id, latitude, longitude)
+    }
+
     pub fn get_color_labels_map(&self) -> std::collections::HashMap<MediaId, u8> {
         self.catalog.get_color_labels_map().unwrap_or_default()
     }

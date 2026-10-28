@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::Datelike;
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -314,6 +315,44 @@ impl Catalog {
                 )?;
             }
         }
+        Ok(())
+    }
+
+    /// Updates the capture timestamp and derived year/month/day, then rebuilds
+    /// timeline buckets so year/month scrubbing reflects the edit immediately.
+    pub fn set_timestamp(&self, id: MediaId, epoch_ms: i64) -> Result<()> {
+        let Some(datetime) = chrono::DateTime::from_timestamp_millis(epoch_ms) else {
+            anyhow::bail!("invalid timestamp: {epoch_ms}");
+        };
+        {
+            let conn = self.conn.lock();
+            conn.execute(
+                "UPDATE media_items
+                 SET timestamp_epoch_ms = ?1, year = ?2, month = ?3, day = ?4
+                 WHERE id = ?5;",
+                params![
+                    epoch_ms,
+                    datetime.year(),
+                    datetime.month(),
+                    datetime.day(),
+                    id.0 as i64
+                ],
+            )?;
+        }
+        self.compute_timeline_buckets()
+    }
+
+    pub fn set_location(
+        &self,
+        id: MediaId,
+        latitude: Option<f64>,
+        longitude: Option<f64>,
+    ) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE media_items SET latitude = ?1, longitude = ?2 WHERE id = ?3;",
+            params![latitude, longitude, id.0 as i64],
+        )?;
         Ok(())
     }
 
