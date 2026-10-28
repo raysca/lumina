@@ -220,15 +220,23 @@ impl Catalog {
     }
 
     pub fn clear_all(&self) -> Result<()> {
-        let conn = self.conn.lock();
-        conn.execute_batch(
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        // Deleting media_items fires the FTS delete triggers. Contentless FTS5
+        // tables reject a plain DELETE, so any remaining rows are cleared with the
+        // dedicated 'delete-all' command.
+        tx.execute_batch(
             r#"
             DELETE FROM media_tags;
             DELETE FROM media_items;
             DELETE FROM timeline_buckets;
-            DELETE FROM media_search_fts;
             "#,
         )?;
+        tx.execute(
+            "INSERT INTO media_search_fts(media_search_fts) VALUES('delete-all');",
+            [],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 }

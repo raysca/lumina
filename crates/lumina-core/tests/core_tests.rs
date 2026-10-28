@@ -1636,3 +1636,42 @@ fn test_ratings_and_color_labels_persistence_and_search() {
     assert_eq!(album_matches.len(), 1);
     assert_eq!(album_matches[0].id, id1);
 }
+
+#[test]
+fn test_clear_all_resets_catalog_and_fts() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let item = sample_media_item(
+        "/photos/reset/one.jpg",
+        MediaType::Image,
+        1000,
+        Some("Kyoto"),
+        Some("A7IV"),
+    );
+    let inserted = catalog.insert_or_update_batch(&[item]).unwrap();
+    let id = inserted[0].id;
+    catalog
+        .add_tags_batch(&[id], &["scenery".to_string()])
+        .unwrap();
+    catalog.set_caption(id, "unique hedgehog at dusk").unwrap();
+
+    assert_eq!(catalog.total_count().unwrap(), 1);
+    assert_eq!(catalog.search_fts("hedgehog", 10).unwrap().len(), 1);
+
+    catalog
+        .clear_all()
+        .expect("clear_all must handle contentless FTS5");
+
+    assert_eq!(catalog.total_count().unwrap(), 0);
+    assert!(catalog.search_fts("hedgehog", 10).unwrap().is_empty());
+    assert!(catalog.get_captions_map().unwrap().is_empty());
+    assert!(catalog.get_tags_for_item(id).unwrap().is_empty());
+
+    // The FTS index must remain usable after delete-all.
+    let item2 = sample_media_item("/photos/reset/two.jpg", MediaType::Image, 2000, None, None);
+    let inserted2 = catalog.insert_or_update_batch(&[item2]).unwrap();
+    catalog
+        .set_caption(inserted2[0].id, "second entry")
+        .unwrap();
+    assert!(catalog.search_fts("hedgehog", 10).unwrap().is_empty());
+    assert_eq!(catalog.search_fts("second", 10).unwrap().len(), 1);
+}
