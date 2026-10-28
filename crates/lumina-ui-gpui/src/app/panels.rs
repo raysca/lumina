@@ -125,12 +125,14 @@ impl LuminaApp {
     pub fn commit_caption_input(&mut self, cx: &mut Context<Self>) {
         let caption = std::mem::take(&mut self.caption.input_buffer);
         self.caption.input_active = false;
-        if let Some(ref item) = self.selected_item {
+        if let Some(item) = self.selected_item.clone() {
             let trimmed = caption.trim().to_string();
             if trimmed.is_empty() {
                 self.item_captions.remove(&item.id);
+                self.set_last_action("Caption removed");
             } else {
                 self.item_captions.insert(item.id, trimmed.clone());
+                self.set_last_action("Caption saved");
             }
             if let Some(ref state) = self.grid_state {
                 let _ = state.engine.set_caption(item.id, &trimmed);

@@ -98,6 +98,7 @@ impl DeleteConfirmModal {
                             .child(
                                 div()
                                     .id("close-delete-modal-btn")
+                                    .tooltip(theme::tooltip_label("Cancel"))
                                     .px_2p5()
                                     .py_1()
                                     .rounded_md()

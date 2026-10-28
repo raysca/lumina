@@ -178,6 +178,7 @@ impl Render for FloatingPipPlayerView {
                             .child(
                                 div()
                                     .id("pip-return-to-viewer-btn")
+                                    .tooltip(theme::tooltip_label("Expand to main viewer"))
                                     .px_2()
                                     .py_0p5()
                                     .bg(theme::bg_control())
@@ -208,6 +209,7 @@ impl Render for FloatingPipPlayerView {
                             .child(
                                 div()
                                     .id("pip-close-btn")
+                                    .tooltip(theme::tooltip_label("Close PiP"))
                                     .w(px(20.0))
                                     .h(px(20.0))
                                     .rounded_md()

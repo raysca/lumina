@@ -57,8 +57,11 @@ impl LuminaApp {
         }
 
         if let Some(ref state) = self.grid_state {
-            let _ = state.engine.remove_tags_batch(&ids, &[clean]);
+            let _ = state
+                .engine
+                .remove_tags_batch(&ids, std::slice::from_ref(&clean));
         }
+        self.set_last_action(format!("Removed tag \"{}\"", clean));
         self.refresh_selected_tags();
         self.refresh_album_counts();
         cx.notify();
@@ -75,6 +78,7 @@ impl LuminaApp {
         self.tag_input_active = false;
         let clean = tag.trim().to_string();
         if !clean.is_empty() {
+            self.set_last_action(format!("Added tag \"{}\"", clean));
             self.batch_add_tag(clean, cx);
         }
         cx.notify();
@@ -118,6 +122,7 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
+                self.set_last_action(format!("Renamed tag to \"{}\"", clean_new));
             }
         }
         cx.notify();

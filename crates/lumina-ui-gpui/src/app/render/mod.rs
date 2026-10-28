@@ -51,8 +51,132 @@ impl LuminaApp {
     }
 }
 
+impl LuminaApp {
+    /// Keyboard shortcut cheat sheet (Cmd+/), also serving as keyboard discoverability.
+    fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
+        if !self.shortcuts_overlay_open {
+            return Empty.into_any_element();
+        }
+        let rows: [(&str, &str); 16] = [
+            ("⌘F", "Focus search"),
+            ("⌘R", "Rescan library"),
+            ("⌘+ / ⌘-", "Grid density"),
+            ("I", "Toggle inspector"),
+            ("Space", "Quick look / open viewer"),
+            ("Enter", "Open selected item"),
+            ("← ↑ → ↓", "Navigate items"),
+            ("Home / End", "First / last item"),
+            ("PageUp / PageDown", "Jump four rows"),
+            ("F", "Favorite"),
+            ("⌫", "Move to Trash / restore"),
+            ("Z / O", "Toggle 1:1 zoom"),
+            ("J / K / L", "Video rewind / play / forward"),
+            ("M", "Mute audio"),
+            ("Esc", "Close / go back"),
+            ("⌘/", "Toggle this help"),
+        ];
+        div()
+            .id("shortcuts-overlay")
+            .absolute()
+            .inset_0()
+            .bg(theme::scrim())
+            .flex()
+            .justify_center()
+            .items_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    this.close_shortcuts_overlay(cx);
+                }),
+            )
+            .child(
+                div()
+                    .id("shortcuts-card")
+                    .w(px(520.0))
+                    .max_h(px(560.0))
+                    .overflow_y_scroll()
+                    .bg(theme::bg_pane())
+                    .border_1()
+                    .border_color(theme::border())
+                    .rounded_xl()
+                    .shadow_2xl()
+                    .p_5()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
+                        cx.stop_propagation();
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(theme::text())
+                                    .child("Keyboard Shortcuts"),
+                            )
+                            .child(
+                                div()
+                                    .id("shortcuts-close")
+                                    .cursor_pointer()
+                                    .child(render_icon(Icon::X, px(12.0), theme::text()))
+                                    .tooltip(theme::tooltip_label("Close"))
+                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                        this.close_shortcuts_overlay(cx);
+                                    })),
+                            ),
+                    )
+                    .children(rows.into_iter().map(|(keys, description)| {
+                        div()
+                            .flex()
+                            .flex_row()
+                            .justify_between()
+                            .items_center()
+                            .py_1()
+                            .child(div().text_xs().text_color(theme::text()).child(description))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_family(theme::FONT_MONO)
+                                    .text_color(theme::accent())
+                                    .child(keys),
+                            )
+                    })),
+            )
+            .into_any_element()
+    }
+}
+
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.window_bounds_subscription.is_none() {
+            self.window_bounds_subscription =
+                Some(cx.observe_window_bounds(window, |this, window, cx| {
+                    let bounds = window.bounds();
+                    this.window_bounds = Some((
+                        bounds.origin.x.into(),
+                        bounds.origin.y.into(),
+                        bounds.size.width.into(),
+                        bounds.size.height.into(),
+                    ));
+                    // Throttle disk writes while the user is live-resizing.
+                    let now = std::time::Instant::now();
+                    let should_save = this.last_bounds_save.is_none_or(|last| {
+                        now.duration_since(last) >= std::time::Duration::from_millis(750)
+                    });
+                    if should_save {
+                        this.last_bounds_save = Some(now);
+                        this.save_config();
+                    }
+                    cx.notify();
+                }));
+        }
+
         if self.grid_state.is_none() {
             return div()
                 .size_full()
@@ -259,6 +383,8 @@ impl Render for LuminaApp {
             .child(self.render_context_menu_overlay(window, cx))
             // 10. Tag Manager Modal Overlay
             .child(self.render_tag_manager_modal(cx))
+            // 11. Keyboard Shortcuts Cheat Sheet
+            .child(self.render_shortcuts_overlay(cx))
             .into_any_element()
     }
 }

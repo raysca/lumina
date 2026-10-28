@@ -34,6 +34,11 @@ impl LuminaApp {
         if let Some(ref state) = self.grid_state {
             let _ = state.engine.batch_set_trashed(&ids, new_trashed);
         }
+        self.set_last_action(if new_trashed {
+            format!("Moved {} item(s) to Trash", ids.len())
+        } else {
+            format!("Restored {} item(s)", ids.len())
+        });
         self.refresh_album_counts();
         self.clear_selection(cx);
     }
@@ -114,6 +119,12 @@ impl LuminaApp {
                     }
                 }
             }
+            self.set_last_action(match st.intent {
+                DeleteIntent::EmptyTrash => "Trash emptied".to_string(),
+                DeleteIntent::DeleteSelected => {
+                    format!("Permanently deleted {} item(s)", st.item_ids.len())
+                }
+            });
             self.refresh_album_counts();
             self.clear_selection(cx);
         }

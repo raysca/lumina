@@ -3,8 +3,39 @@ use gpui::*;
 use crate::app::LuminaApp;
 use crate::theme;
 
+/// Right-hand status text: scan progress takes priority, then the last action,
+/// then a static hint.
+pub(crate) fn format_status_right(
+    is_scanning: bool,
+    scan_progress: usize,
+    last_action: Option<&str>,
+) -> String {
+    if is_scanning {
+        return format!("Scanning… {} items found", scan_progress);
+    }
+    if let Some(action) = last_action {
+        return action.to_string();
+    }
+    "⌘R rescan · Right-click for actions".to_string()
+}
+
 impl LuminaApp {
+    pub(crate) fn status_right_text(&self) -> String {
+        let (is_scanning, scan_progress) = self
+            .grid_state
+            .as_ref()
+            .map(|state| (state.is_scanning, state.scan_progress))
+            .unwrap_or((false, 0));
+        format_status_right(is_scanning, scan_progress, self.last_action.as_deref())
+    }
+
     pub(crate) fn render_status_bar(&self, total_count: usize) -> impl IntoElement {
+        let (is_scanning, _) = self
+            .grid_state
+            .as_ref()
+            .map(|state| (state.is_scanning, state.scan_progress))
+            .unwrap_or((false, 0));
+
         div()
             .h(px(28.0))
             .w_full()
@@ -34,8 +65,41 @@ impl LuminaApp {
             .child(
                 div()
                     .text_xs()
-                    .text_color(theme::text_subtle())
-                    .child("Right-click any item for actions"),
+                    .text_color(if is_scanning {
+                        theme::accent()
+                    } else {
+                        theme::text_subtle()
+                    })
+                    .child(self.status_right_text()),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[core::prelude::v1::test]
+    fn scan_progress_takes_priority() {
+        assert_eq!(
+            format_status_right(true, 42, Some("Tag renamed")),
+            "Scanning… 42 items found"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn last_action_beats_static_hint() {
+        assert_eq!(
+            format_status_right(false, 0, Some("Moved 3 items to Trash")),
+            "Moved 3 items to Trash"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn falls_back_to_shortcut_hint() {
+        assert_eq!(
+            format_status_right(false, 0, None),
+            "⌘R rescan · Right-click for actions"
+        );
     }
 }

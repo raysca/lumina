@@ -71,6 +71,7 @@ impl SearchBarView {
                     .child(
                         div()
                             .id("clear-search-btn")
+                            .tooltip(theme::tooltip_label("Clear search"))
                             .w(px(16.0))
                             .h(px(16.0))
                             .rounded_full()
@@ -239,6 +240,7 @@ impl SearchBarView {
                     .gap_1p5()
                     .child(
                         theme::control("grid-zoom-out-btn")
+                            .tooltip(theme::tooltip_label("Larger thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()
@@ -295,6 +297,7 @@ impl SearchBarView {
                     )
                     .child(
                         theme::control("grid-zoom-in-btn")
+                            .tooltip(theme::tooltip_label("Smaller thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()

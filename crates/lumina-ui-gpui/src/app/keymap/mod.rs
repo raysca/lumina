@@ -28,6 +28,12 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+/: keyboard shortcut cheat sheet
+        if cmd_or_ctrl && key == "/" {
+            self.toggle_shortcuts_overlay(cx);
+            return;
+        }
+
         if cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
             self.search_focused = true;
             self.search_query.clear();
@@ -37,9 +43,12 @@ impl LuminaApp {
 
         // Cmd+R: rescan the active library (filesystem watcher is best-effort)
         if cmd_or_ctrl && key.eq_ignore_ascii_case("r") {
-            if let Some(ref state) = self.grid_state {
+            if let Some(state) = self.grid_state.as_mut() {
+                state.is_scanning = true;
+                state.scan_progress = 0;
                 state.engine.rescan();
             }
+            self.last_action = None;
             cx.notify();
             return;
         }

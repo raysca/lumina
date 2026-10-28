@@ -67,6 +67,7 @@ impl ViewerViewport {
             .child(if !is_immersive || hud_visible {
                 div()
                     .id("viewer-prev-btn")
+                    .tooltip(theme::tooltip_label("Previous item"))
                     .absolute()
                     .left_6()
                     .size(px(40.0))
@@ -97,6 +98,7 @@ impl ViewerViewport {
             .child(if !is_immersive || hud_visible {
                 div()
                     .id("viewer-next-btn")
+                    .tooltip(theme::tooltip_label("Next item"))
                     .absolute()
                     .right_6()
                     .size(px(40.0))
@@ -133,6 +135,16 @@ impl ViewerViewport {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .on_scroll_wheel(cx.listener(|this, e: &ScrollWheelEvent, _w, cx| {
+                        let dy = match e.delta {
+                            ScrollDelta::Pixels(p) => f32::from(p.y),
+                            ScrollDelta::Lines(p) => p.y * 10.0,
+                        };
+                        if dy.abs() < 0.01 {
+                            return;
+                        }
+                        this.zoom_viewer_by(dy.signum() * 0.25, cx);
+                    }))
                     .child(if let Some(render_img) = preview_image {
                         if is_zoomed {
                             div()

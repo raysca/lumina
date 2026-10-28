@@ -198,6 +198,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-step-back-btn")
+                                    .tooltip(theme::tooltip_label("Previous frame"))
                                     .p_1()
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
@@ -240,6 +241,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-step-fwd-btn")
+                                    .tooltip(theme::tooltip_label("Next frame"))
                                     .p_1()
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
@@ -288,6 +290,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-mute-btn")
+                                    .tooltip(theme::tooltip_label("Mute (M)"))
                                     .cursor_pointer()
                                     .text_sm()
                                     .child(render_icon(
@@ -365,6 +368,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-speed-btn")
+                                    .tooltip(theme::tooltip_label("Playback speed"))
                                     .px_2()
                                     .py_1()
                                     .bg(if this.video.speed_menu_open {
@@ -394,6 +398,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-loop-btn")
+                                    .tooltip(theme::tooltip_label("Loop playback"))
                                     .px_2()
                                     .py_1()
                                     .bg(if this.video.is_looping {
@@ -439,6 +444,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-pip-btn")
+                                    .tooltip(theme::tooltip_label("Open Picture-in-Picture (⌥P)"))
                                     .px_2()
                                     .py_1()
                                     .bg(theme::bg_control())
@@ -464,6 +470,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-fullscreen-btn")
+                                    .tooltip(theme::tooltip_label("Toggle fullscreen"))
                                     .w(px(28.0))
                                     .h(px(26.0))
                                     .bg(theme::bg_control())

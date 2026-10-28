@@ -118,6 +118,44 @@ fn test_watcher_batch_clears_selection_and_refreshes_counts() {
 }
 
 #[core::prelude::v1::test]
+fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let sample = get_sample_items();
+
+    view.update(cx, |app, cx| {
+        app.selected_item = Some(sample[0].clone());
+        app.zoom_viewer_by(0.5, cx);
+        assert!((app.viewer_state.zoom_scale - 1.5).abs() < 0.01);
+        app.zoom_viewer_by(10.0, cx);
+        assert_eq!(app.viewer_state.zoom_scale, 5.0);
+        app.zoom_viewer_by(-10.0, cx);
+        assert_eq!(app.viewer_state.zoom_scale, 1.0);
+
+        app.selected_item = Some(sample[1].clone());
+        app.zoom_viewer_by(1.0, cx);
+        assert_eq!(
+            app.viewer_state.zoom_scale, 1.0,
+            "video playback must not zoom"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn test_shortcuts_overlay_toggles() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    view.update(cx, |app, cx| {
+        assert!(!app.shortcuts_overlay_open);
+        app.toggle_shortcuts_overlay(cx);
+        assert!(app.shortcuts_overlay_open);
+        app.close_shortcuts_overlay(cx);
+        assert!(!app.shortcuts_overlay_open);
+    });
+}
+
+#[core::prelude::v1::test]
 fn test_keyboard_selection_reveals_grid_row() {
     let (temp_dir, engine) = scanned_engine("reveal");
     let mut cx = gpui::TestAppContext::single();

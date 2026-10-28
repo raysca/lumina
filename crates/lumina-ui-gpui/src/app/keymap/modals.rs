@@ -13,6 +13,14 @@ impl LuminaApp {
         cmd_or_ctrl: bool,
         cx: &mut Context<Self>,
     ) -> bool {
+        // 0. Keyboard shortcut cheat sheet
+        if self.shortcuts_overlay_open {
+            if key == "escape" || key == "/" {
+                self.close_shortcuts_overlay(cx);
+            }
+            return true;
+        }
+
         // 1. Delete confirmation modal
         if self.delete_confirm_state.is_some() {
             if key == "escape" {

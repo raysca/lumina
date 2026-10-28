@@ -46,6 +46,20 @@ impl LuminaApp {
         }
     }
 
+    /// Zooms the image viewer by `delta` (used by scroll-wheel/pinch).
+    pub fn zoom_viewer_by(&mut self, delta: f32, cx: &mut Context<Self>) {
+        if self
+            .selected_item
+            .as_ref()
+            .is_some_and(|item| item.media_type == MediaType::Video)
+        {
+            return;
+        }
+        self.viewer_state
+            .set_zoom(self.viewer_state.zoom_scale + delta);
+        cx.notify();
+    }
+
     pub fn open_selected_in_default_app(&self) {
         if let Some(ref item) = self.selected_item {
             self.open_item_in_default_app(&item.path);

@@ -100,7 +100,12 @@ impl OnboardingView {
                                     .rounded_lg()
                                     .text_xs()
                                     .text_color(theme::text())
-                                    .child("🎞 Photos & Videos"),
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1p5()
+                                    .child(render_icon(Icon::Film, px(11.0), theme::text()))
+                                    .child("Photos & Videos"),
                             )
                             .child(
                                 div()
@@ -112,7 +117,12 @@ impl OnboardingView {
                                     .rounded_lg()
                                     .text_xs()
                                     .text_color(theme::text())
-                                    .child("🏎 0ms UI Blocking"),
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1p5()
+                                    .child(render_icon(Icon::Zap, px(11.0), theme::text()))
+                                    .child("0ms UI Blocking"),
                             ),
                     )
                     // Primary Actions
@@ -158,7 +168,12 @@ impl OnboardingView {
                                     .items_center()
                                     .text_sm()
                                     .text_color(theme::text())
-                                    .child("📂 Quick Open: Pictures")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(render_icon(Icon::Folder, px(13.0), theme::text()))
+                                    .child("Quick Open: Pictures")
                                     .on_click(on_pick_desktop_pics)
                                     .into_any_element()
                             } else {

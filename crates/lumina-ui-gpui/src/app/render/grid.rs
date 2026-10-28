@@ -235,7 +235,7 @@ impl LuminaApp {
                                                     Empty.into_any_element()
                                                 })
                                                 // Video Duration Overlay (bottom-right)
-                                                .child(if is_video {
+                                                .child(if is_video && !dur_text.is_empty() {
                                                     div()
                                                         .absolute()
                                                         .bottom_1p5()

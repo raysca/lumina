@@ -30,10 +30,17 @@ fn main() {
                 eprintln!("Warning: Failed to load bundled IBM Plex fonts: {:?}", e);
             }
 
-            let bounds = Bounds::centered(None, size(px(1280.0), px(840.0)), cx);
+            let restored = crate::config::AppConfig::load().restored_window_bounds();
+            let bounds = match restored {
+                Some((x, y, width, height)) => {
+                    Bounds::new(point(px(x), px(y)), size(px(width), px(height)))
+                }
+                None => Bounds::centered(None, size(px(1280.0), px(840.0)), cx),
+            };
             if let Err(e) = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_min_size: Some(size(px(960.0), px(600.0))),
                     titlebar: Some(TitlebarOptions {
                         title: Some("Lumina".into()),
                         appears_transparent: true,

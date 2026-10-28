@@ -90,6 +90,7 @@ impl InspectorView {
                                     } else {
                                         "undock-inspector-btn"
                                     })
+                                    .tooltip(theme::tooltip_label("Open inspector in a window"))
                                     .w(px(24.0))
                                     .h(px(24.0))
                                     .rounded_md()

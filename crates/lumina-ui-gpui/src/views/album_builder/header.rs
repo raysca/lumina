@@ -1,6 +1,7 @@
 use gpui::*;
 use lumina_core::MatchMode;
 
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -22,9 +23,8 @@ pub(super) fn render_title_row(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> 
                 .flex()
                 .justify_center()
                 .items_center()
-                .text_sm()
                 .text_color(theme::accent())
-                .child("⚙"),
+                .child(render_icon(Icon::Sliders, px(16.0), theme::accent())),
         )
         .child(
             div()

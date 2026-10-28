@@ -22,6 +22,16 @@ pub struct AppConfig {
     pub grid_columns: usize,
     #[serde(default = "default_card_fit_mode")]
     pub card_fit_mode: bool,
+    #[serde(default)]
+    pub inspector_tab: Option<String>,
+    #[serde(default)]
+    pub window_x: Option<f32>,
+    #[serde(default)]
+    pub window_y: Option<f32>,
+    #[serde(default)]
+    pub window_width: Option<f32>,
+    #[serde(default)]
+    pub window_height: Option<f32>,
 }
 
 fn default_sidebar_width() -> f32 {
@@ -63,6 +73,11 @@ impl Default for AppConfig {
             layout_mode: default_layout_mode(),
             grid_columns: default_grid_columns(),
             card_fit_mode: default_card_fit_mode(),
+            inspector_tab: None,
+            window_x: None,
+            window_y: None,
+            window_width: None,
+            window_height: None,
         }
     }
 }
@@ -102,6 +117,26 @@ impl AppConfig {
         Ok(())
     }
 
+    /// Restores the last inspector tab, defaulting to Info.
+    pub fn restored_inspector_tab(&self) -> crate::views::inspector::InspectorTab {
+        crate::views::inspector::InspectorTab::from_config_key(self.inspector_tab.as_deref())
+    }
+
+    /// Returns persisted window geometry when it looks usable.
+    pub fn restored_window_bounds(&self) -> Option<(f32, f32, f32, f32)> {
+        let (x, y, width, height) = (
+            self.window_x?,
+            self.window_y?,
+            self.window_width?,
+            self.window_height?,
+        );
+        if width >= 960.0 && height >= 600.0 && width.is_finite() && height.is_finite() {
+            Some((x, y, width, height))
+        } else {
+            None
+        }
+    }
+
     /// Maps the persisted layout string back to a [`LayoutMode`], defaulting to Browser.
     pub fn restored_layout_mode(&self) -> LayoutMode {
         match self.layout_mode.as_str() {
@@ -137,6 +172,11 @@ mod tests {
             layout_mode: "viewer".to_string(),
             grid_columns: 7,
             card_fit_mode: false,
+            inspector_tab: Some("location".to_string()),
+            window_x: Some(120.0),
+            window_y: Some(80.0),
+            window_width: Some(1440.0),
+            window_height: Some(900.0),
             ..AppConfig::default()
         };
         cfg.save_to(&path).unwrap();
@@ -146,6 +186,15 @@ mod tests {
         assert_eq!(loaded.grid_columns, 7);
         assert!(!loaded.card_fit_mode);
         assert_eq!(loaded.restored_layout_mode(), LayoutMode::Viewer);
+        assert_eq!(
+            loaded.restored_inspector_tab(),
+            crate::views::inspector::InspectorTab::Location
+        );
+        assert_eq!(loaded.restored_inspector_tab().config_key(), "location");
+        assert_eq!(
+            loaded.restored_window_bounds(),
+            Some((120.0, 80.0, 1440.0, 900.0))
+        );
 
         let _ = std::fs::remove_file(&path);
     }
@@ -163,6 +212,22 @@ mod tests {
 
         cfg.layout_mode = "not-a-mode".to_string();
         assert_eq!(cfg.restored_layout_mode(), LayoutMode::Browser);
+    }
+
+    #[test]
+    fn test_restored_window_bounds_rejects_unusable_geometry() {
+        let mut cfg = AppConfig::default();
+        assert_eq!(cfg.restored_window_bounds(), None);
+
+        cfg.window_x = Some(10.0);
+        cfg.window_y = Some(10.0);
+        cfg.window_width = Some(400.0);
+        cfg.window_height = Some(200.0);
+        assert_eq!(cfg.restored_window_bounds(), None);
+
+        cfg.window_width = Some(1200.0);
+        cfg.window_height = Some(800.0);
+        assert!(cfg.restored_window_bounds().is_some());
     }
 
     #[test]

@@ -20,6 +20,8 @@ core handles cataloguing, decoding, and search.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
 - **Floating panels** — detachable inspector and PiP windows.
+- **Keyboard-first** — arrows/Home/End/Page navigation with scroll-into-view, and
+  a built-in shortcut cheat sheet (⌘/) plus manual rescan (⌘R).
 
 > **Status note:** local semantic/AI search ("Phase 10" in the roadmap) is a
 > planned feature and is **not implemented** in this tree.

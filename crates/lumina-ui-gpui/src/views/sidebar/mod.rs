@@ -68,9 +68,13 @@ impl SidebarView {
                         .justify_center()
                         .items_center()
                         .cursor_pointer()
-                        .text_xs()
                         .text_color(theme::text_muted())
-                        .child("⊞")
+                        .child(crate::icons::render_icon(
+                            crate::icons::Icon::PanelLeft,
+                            px(16.0),
+                            theme::text_muted(),
+                        ))
+                        .tooltip(theme::tooltip_label("Expand sidebar"))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.toggle_sidebar(cx);
                         })),
@@ -91,9 +95,12 @@ impl SidebarView {
             .text_color(theme::text())
             .child(
                 div()
+                    .id("sidebar-scroll")
                     .flex()
+                    .flex_1()
                     .flex_col()
                     .gap_4()
+                    .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
                     .child(sections::render_events_section(this, cx))
                     .child(sections::render_smart_albums_section(this, cx))

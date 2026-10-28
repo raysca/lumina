@@ -74,6 +74,8 @@ impl MediaContextMenu {
                     .left(px(x))
                     .top(px(y))
                     .w(px(230.0))
+                    .max_h(px((win_h - 16.0).max(120.0)))
+                    .overflow_y_scroll()
                     .bg(theme::bg_hud())
                     .border_1()
                     .border_color(theme::border())

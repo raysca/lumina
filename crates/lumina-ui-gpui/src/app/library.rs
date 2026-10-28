@@ -328,6 +328,23 @@ impl LuminaApp {
         self.clear_selection(cx);
     }
 
+    pub fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
+        self.shortcuts_overlay_open = !self.shortcuts_overlay_open;
+        cx.notify();
+    }
+
+    pub fn close_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
+        if self.shortcuts_overlay_open {
+            self.shortcuts_overlay_open = false;
+            cx.notify();
+        }
+    }
+
+    /// Records a short user-facing confirmation for the status bar.
+    pub fn set_last_action(&mut self, message: impl Into<String>) {
+        self.last_action = Some(message.into());
+    }
+
     /// Drops keyboard focus from the toolbar search field.
     pub fn blur_search(&mut self, cx: &mut Context<Self>) {
         if self.search_focused {

@@ -22,6 +22,26 @@ pub enum InspectorTab {
     Tags,
 }
 
+impl InspectorTab {
+    pub fn config_key(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Camera => "camera",
+            Self::Location => "location",
+            Self::Tags => "tags",
+        }
+    }
+
+    pub fn from_config_key(value: Option<&str>) -> Self {
+        match value {
+            Some("camera") => Self::Camera,
+            Some("location") => Self::Location,
+            Some("tags") => Self::Tags,
+            _ => Self::Info,
+        }
+    }
+}
+
 pub fn render_meta_row(label: &str, value: &str) -> impl IntoElement {
     div()
         .flex()

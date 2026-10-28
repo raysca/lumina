@@ -32,6 +32,7 @@ impl LuminaApp {
             .child(
                 if self.sidebar_collapsed {
                     theme::control("sidebar-toggle-btn")
+                        .tooltip(theme::tooltip_label("Toggle sidebar"))
                 } else {
                     theme::control_on("sidebar-toggle-btn")
                 }
@@ -99,7 +100,17 @@ impl LuminaApp {
                     .items_center()
                     .gap_1p5()
                     .text_xs()
-                    .child(div().text_color(theme::text_muted()).child("Library"))
+                    .child(
+                        div()
+                            .id("breadcrumb-library-btn")
+                            .cursor_pointer()
+                            .hover(|s| s.text_color(theme::text()))
+                            .text_color(theme::text_muted())
+                            .child("Library")
+                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.select_album(AlbumSelection::AllLibrary, cx);
+                            })),
+                    )
                     .child(div().text_color(theme::text_disabled()).child(
                         crate::icons::render_icon(
                             crate::icons::Icon::ChevronRight,

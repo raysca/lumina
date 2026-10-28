@@ -386,6 +386,7 @@ impl LuminaApp {
             self.selection = AlbumSelection::User(album_id);
             self.selected_index = None;
             self.selected_item = None;
+            self.set_last_action(format!("Created smart album \"{}\"", title));
             self.refresh_album_counts();
             cx.notify();
         }

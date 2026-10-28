@@ -4,7 +4,8 @@
 //! shadows only on floating panels, amber is the single accent and always means selection.
 #![allow(dead_code)]
 use gpui::{
-    div, prelude::*, px, rgb, rgba, transparent_black, Div, ElementId, Rgba, SharedString, Stateful,
+    div, prelude::*, px, rgb, rgba, transparent_black, AnyView, App, Context, Div, ElementId,
+    Render, Rgba, SharedString, Stateful, Window,
 };
 
 macro_rules! tokens {
@@ -328,6 +329,34 @@ pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         base.text_color(text_muted())
             .hover(|s| s.text_color(text()).bg(bg_control_hover()))
     }
+}
+
+/// Small floating label used for hover tooltips.
+struct TooltipLabel {
+    text: SharedString,
+}
+
+impl Render for TooltipLabel {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .bg(bg_hud())
+            .border_1()
+            .border_color(border())
+            .rounded_md()
+            .text_xs()
+            .text_color(text())
+            .child(self.text.clone())
+    }
+}
+
+/// Builds a tooltip closure for `.tooltip(...)`.
+pub fn tooltip_label(
+    text: impl Into<SharedString>,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let text = text.into();
+    move |_window, cx| cx.new(|_cx| TooltipLabel { text: text.clone() }).into()
 }
 
 #[cfg(test)]

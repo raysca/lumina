@@ -228,6 +228,7 @@ impl Render for FloatingInspectorView {
                             .child(
                                 div()
                                     .id("floating-inspector-close-btn")
+                                    .tooltip(theme::tooltip_label("Close inspector"))
                                     .w(px(20.0))
                                     .h(px(20.0))
                                     .rounded_md()

@@ -138,6 +138,14 @@ pub struct LuminaApp {
     pub card_fit_mode: bool,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
+    /// Most recent action feedback shown in the status bar.
+    pub last_action: Option<String>,
+    /// Keyboard shortcut cheat sheet visibility.
+    pub shortcuts_overlay_open: bool,
+    /// Last persisted window bounds: (x, y, width, height).
+    pub window_bounds: Option<(f32, f32, f32, f32)>,
+    pub(crate) window_bounds_subscription: Option<Subscription>,
+    pub(crate) last_bounds_save: Option<std::time::Instant>,
 
     // Phase 8 Visual Smart Album Builder State
     pub album_draft: AlbumDraftState,
@@ -240,7 +248,7 @@ impl LuminaApp {
             inspector_open: config.inspector_visible,
             inspector_width: config.inspector_width,
             is_dragging_inspector_resizer: false,
-            inspector_tab: crate::views::inspector::InspectorTab::Info,
+            inspector_tab: config.restored_inspector_tab(),
             floating_inspector_window: None,
             floating_pip_window: None,
             selection: AlbumSelection::AllLibrary,
@@ -253,6 +261,11 @@ impl LuminaApp {
             layout_mode: restored_layout,
             card_fit_mode: config.card_fit_mode,
             error_message: None,
+            last_action: None,
+            shortcuts_overlay_open: false,
+            window_bounds: config.restored_window_bounds(),
+            window_bounds_subscription: None,
+            last_bounds_save: None,
             album_draft: AlbumDraftState::default(),
             delete_confirm_state: None,
             viewer_state: ViewerState::default(),
@@ -297,20 +310,32 @@ impl LuminaApp {
     }
 
     pub fn save_config(&mut self) {
-        let mut cfg = self.config.clone();
-        cfg.sidebar_width = self.sidebar_width;
-        cfg.inspector_width = self.inspector_width;
-        cfg.sidebar_visible = !self.sidebar_collapsed;
-        cfg.inspector_visible = self.inspector_open;
-        cfg.layout_mode = match self.layout_mode {
-            LayoutMode::Browser => "browser".to_string(),
-            LayoutMode::Split => "split".to_string(),
-            LayoutMode::Viewer => "viewer".to_string(),
-        };
-        cfg.grid_columns = self.grid_columns.clamp(2, 8);
-        cfg.card_fit_mode = self.card_fit_mode;
-        if let Err(err) = cfg.save() {
-            self.error_message = Some(format!("Could not save settings: {err}"));
+        #[cfg(test)]
+        return;
+        #[cfg(not(test))]
+        {
+            let mut cfg = self.config.clone();
+            cfg.sidebar_width = self.sidebar_width;
+            cfg.inspector_width = self.inspector_width;
+            cfg.sidebar_visible = !self.sidebar_collapsed;
+            cfg.inspector_visible = self.inspector_open;
+            cfg.layout_mode = match self.layout_mode {
+                LayoutMode::Browser => "browser".to_string(),
+                LayoutMode::Split => "split".to_string(),
+                LayoutMode::Viewer => "viewer".to_string(),
+            };
+            cfg.grid_columns = self.grid_columns.clamp(2, 8);
+            cfg.card_fit_mode = self.card_fit_mode;
+            cfg.inspector_tab = Some(self.inspector_tab.config_key().to_string());
+            if let Some((x, y, width, height)) = self.window_bounds {
+                cfg.window_x = Some(x);
+                cfg.window_y = Some(y);
+                cfg.window_width = Some(width);
+                cfg.window_height = Some(height);
+            }
+            if let Err(err) = cfg.save() {
+                self.error_message = Some(format!("Could not save settings: {err}"));
+            }
         }
     }
 
