@@ -1,3 +1,10 @@
 /target
 **/*.rs.bk
 .DS_Store
+
+# Local build/package output
+*.dmg
+*.app
+
+# Generated screenshots (stale; regenerate with the app)
+/screenshots/
