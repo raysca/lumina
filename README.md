@@ -66,7 +66,7 @@ Use **Choose Folder** to open a photo library. Lumina stores its catalog in
 
 ## UI testing
 
-Two layers of UI coverage live alongside the unit tests:
+Three layers of UI coverage live alongside the unit tests:
 
 1. **In-process UI automation** (`cargo test -p lumina-ui-gpui ui_automation`):
    drives the real GPUI view tree with synthetic platform input — mouse clicks
@@ -80,6 +80,20 @@ Two layers of UI coverage live alongside the unit tests:
    saves a screenshot to `target/ui-smoke/window.png` when Screen Recording is
    permitted, and shuts the app down. It skips cleanly on headless CI and needs
    no Accessibility permissions.
+3. **OS-level UI automation** (`make ui-e2e`): launches the real binary with an
+   isolated `HOME` and a seeded library, waits for the native window, then posts
+   real macOS keyboard events (CGEvent) and verifies outcomes through screenshots
+   (pixel diffs), `config.json`, and the SQLite catalog:
+   - `i` toggles the inspector and persists `inspector_visible`
+   - `⌘/` opens the shortcut sheet; `Esc` closes it (window screenshot diff)
+   - `Space` opens the viewer; `Esc` returns (window screenshot diff)
+   - `Home` + `F` favorites the first item (verified in `catalog.db`)
+
+   Launch/window/screenshot/config/catalog checks run without extra permissions.
+   The synthetic-input tests require **Accessibility** ("PostEvent") permission for
+   the harness app (System Settings → Privacy & Security → Accessibility → DeepSeek
+   Harness / your terminal). Without it the script reports SKIP and exits 0; set
+   `LUMINA_REQUIRE_UI_PERMISSIONS=1` to make a missing grant fatal.
 
 ## Layout
 

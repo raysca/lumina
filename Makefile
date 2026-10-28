@@ -1,4 +1,4 @@
-.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg ui-smoke
+.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg ui-smoke ui-e2e
 
 # Keep in sync with crates/*/Cargo.toml and resources/Info.plist
 VERSION := 0.2.0
@@ -76,6 +76,10 @@ bench:
 ## Launch the real app window and verify it appears (permission-light smoke test)
 ui-smoke:
 	./scripts/live_ui_smoke.sh
+
+## Drive the real app window with OS-level input (needs Accessibility permission)
+ui-e2e:
+	./scripts/live_ui_automation.sh
 
 ## Lint workspace with Clippy
 lint:

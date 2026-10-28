@@ -40,3 +40,6 @@ jobs:
 
       - name: Live UI smoke (skips on headless runners)
         run: ./scripts/live_ui_smoke.sh
+
+      - name: Live UI automation (interaction tests need Accessibility; skips otherwise)
+        run: ./scripts/live_ui_automation.sh
