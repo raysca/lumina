@@ -37,6 +37,31 @@ impl LuminaApp {
             return;
         }
 
+        if key == "home" {
+            self.select_index(0, cx);
+            return;
+        }
+
+        if key == "end" {
+            let count = self.get_active_count();
+            if count > 0 {
+                self.select_index(count - 1, cx);
+            }
+            return;
+        }
+
+        if key == "pageup" {
+            let step = (self.grid_columns.clamp(2, 8) * 4) as isize;
+            self.navigate_selection(-step, cx);
+            return;
+        }
+
+        if key == "pagedown" {
+            let step = (self.grid_columns.clamp(2, 8) * 4) as isize;
+            self.navigate_selection(step, cx);
+            return;
+        }
+
         if key == "left" {
             self.navigate_selection(-1, cx);
             return;

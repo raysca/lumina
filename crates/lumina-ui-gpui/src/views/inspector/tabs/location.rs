@@ -5,7 +5,7 @@ use crate::theme;
 use crate::views::inspector::body::render_meta_row;
 use crate::LuminaApp;
 
-pub fn render_location_tab(weak_app: WeakEntity<LuminaApp>, item: &MediaItem) -> AnyElement {
+pub fn render_location_tab(_weak_app: WeakEntity<LuminaApp>, item: &MediaItem) -> AnyElement {
     let has_coords = item.latitude.is_some() && item.longitude.is_some();
 
     div()
@@ -54,28 +54,9 @@ pub fn render_location_tab(weak_app: WeakEntity<LuminaApp>, item: &MediaItem) ->
                 )
                 .child(
                     div()
-                        .id("assign-coordinates-btn")
-                        .h(px(26.0))
-                        .px_2()
-                        .rounded_md()
-                        .bg(theme::bg_control())
-                        .border_1()
-                        .border_color(theme::border_subtle())
-                        .hover(|s| s.bg(theme::bg_control_hover()))
-                        .cursor_pointer()
-                        .flex()
-                        .justify_center()
-                        .items_center()
                         .text_xs()
-                        .text_color(theme::text())
-                        .child("+ Assign Coordinates...")
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = weak_app.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.set_search_query("has:gps", cx);
-                                });
-                            }
-                        }),
+                        .text_color(theme::text_subtle())
+                        .child("Coordinate editing is not available yet."),
                 )
                 .into_any_element()
         } else {

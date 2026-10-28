@@ -56,8 +56,6 @@ pub fn render_info_tab(
     };
 
     let path_str = path.display().to_string();
-    let item_year = item.year;
-    let app_adjust_date = weak_app.clone();
     let app_caption_start = weak_app.clone();
 
     div()
@@ -142,41 +140,12 @@ pub fn render_info_tab(
                 // Date taken
                 .child(render_info_field_row(
                     "Date taken",
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme::text())
-                                .child(date_taken_str),
-                        )
-                        .child(
-                            div()
-                                .id("adjust-date-btn")
-                                .px_2()
-                                .py_0p5()
-                                .bg(theme::bg_raised())
-                                .hover(|s| {
-                                    s.bg(theme::bg_control_hover()).text_color(theme::text())
-                                })
-                                .border_1()
-                                .border_color(theme::border())
-                                .rounded_md()
-                                .cursor_pointer()
-                                .text_xs()
-                                .text_color(theme::text_muted())
-                                .child("Adjust...")
-                                .on_click(move |_e, _w, cx| {
-                                    if let Some(app) = app_adjust_date.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.set_active_year(Some(item_year), cx);
-                                        });
-                                    }
-                                }),
-                        ),
+                    div().flex().flex_row().items_center().gap_2().child(
+                        div()
+                            .text_xs()
+                            .text_color(theme::text())
+                            .child(date_taken_str),
+                    ),
                 ))
                 // Rating (interactive gold star icons)
                 .child(render_info_field_row(

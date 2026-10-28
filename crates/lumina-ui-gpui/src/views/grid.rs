@@ -1,4 +1,4 @@
-use gpui::RenderImage;
+use gpui::{RenderImage, UniformListScrollHandle};
 use lru::LruCache;
 use lumina_core::{LuminaEngine, MediaId};
 use parking_lot::Mutex;
@@ -14,6 +14,7 @@ pub struct GridState {
     pub scan_progress: usize,
     pub texture_cache: Arc<Mutex<LruCache<MediaId, Arc<RenderImage>>>>,
     pub in_flight: Arc<Mutex<HashSet<MediaId>>>,
+    pub scroll_handle: UniformListScrollHandle,
 }
 
 impl GridState {
@@ -28,6 +29,7 @@ impl GridState {
             scan_progress: 0,
             texture_cache: Arc::new(Mutex::new(LruCache::new(cache_capacity))),
             in_flight: Arc::new(Mutex::new(HashSet::new())),
+            scroll_handle: UniformListScrollHandle::new(),
         }
     }
 }

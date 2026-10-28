@@ -332,7 +332,7 @@ fn render_single_body(
                                             ));
                                         }),
                                 )
-                                // 4. Open With ▾
+                                // 4. Open in default application
                                 .child(
                                     div()
                                         .id("info-quick-open-with-btn")
@@ -346,7 +346,7 @@ fn render_single_body(
                                         .cursor_pointer()
                                         .text_xs()
                                         .text_color(theme::text())
-                                        .child("Open With ▾")
+                                        .child("Open")
                                         .on_click(move |_e, _w, cx| {
                                             if let Some(app) = app_open_with.upgrade() {
                                                 app.update(cx, |this, _cx| {

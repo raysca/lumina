@@ -48,10 +48,19 @@ impl TagManagerModal {
             .justify_center()
             .items_center()
             .p_8()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    this.close_tag_manager(cx);
+                }),
+            )
             // Clean, Dark Modal Card matching the design system
             .child(
                 div()
                     .id("tag-manager-dialog")
+                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
+                        cx.stop_propagation();
+                    })
                     .w(px(720.0))
                     .max_h(px(720.0))
                     .bg(theme::bg_pane())

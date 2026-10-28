@@ -47,6 +47,12 @@ impl AlbumBuilderModal {
             .flex()
             .justify_center()
             .items_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    this.close_album_builder(cx);
+                }),
+            )
             .child(
                 div()
                     .id("album-builder-modal-card")

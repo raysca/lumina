@@ -60,6 +60,7 @@ impl LuminaApp {
                             |this, _e: &ClickEvent, _w, cx| {
                                 this.layout_mode = LayoutMode::Browser;
                                 this.is_fullscreen_viewer = false;
+                                this.save_config();
                                 cx.notify();
                             },
                         )),
@@ -69,6 +70,7 @@ impl LuminaApp {
                             .child("Split")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.layout_mode = LayoutMode::Split;
+                                this.save_config();
                                 cx.notify();
                             })),
                     )
@@ -82,6 +84,7 @@ impl LuminaApp {
                             |this, _e: &ClickEvent, _w, cx| {
                                 this.layout_mode = LayoutMode::Viewer;
                                 this.is_fullscreen_viewer = true;
+                                this.save_config();
                                 cx.notify();
                             },
                         )),
@@ -178,11 +181,11 @@ impl LuminaApp {
                 theme::control_primary("change-folder-btn")
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(crate::icons::render_icon(
-                        crate::icons::Icon::ArrowDownToLine,
+                        crate::icons::Icon::Folder,
                         px(13.0),
                         theme::accent_fg(),
                     ))
-                    .child("Import")
+                    .child("Switch Library…")
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.pick_folder_dialog(cx);
                     })),

@@ -216,6 +216,7 @@ impl SearchBarView {
                             .child("Fit")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.card_fit_mode = true;
+                                this.save_config();
                                 cx.notify();
                             })),
                     )
@@ -224,6 +225,7 @@ impl SearchBarView {
                             .child("Square")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.card_fit_mode = false;
+                                this.save_config();
                                 cx.notify();
                             })),
                     ),
@@ -284,6 +286,7 @@ impl SearchBarView {
                                         .on_click(cx.listener(
                                             move |this, _e: &ClickEvent, _w, cx| {
                                                 this.grid_columns = target_cols;
+                                                this.save_config();
                                                 cx.notify();
                                             },
                                         ))

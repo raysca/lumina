@@ -57,6 +57,12 @@ impl LuminaApp {
         let row_h = self.row_height();
         let total_rows = effective_count.div_ceil(cols);
 
+        let scroll_handle = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.scroll_handle.clone())
+            .unwrap_or_default();
+
         div()
             .flex_1()
             .h_full()
@@ -333,6 +339,7 @@ impl LuminaApp {
                         rows
                     }),
                 )
+                .track_scroll(scroll_handle)
                 .h_full(),
             )
             .into_any_element()

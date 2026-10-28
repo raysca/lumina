@@ -35,6 +35,7 @@ pub enum Icon {
     ChevronLeft,
     ChevronRight,
     Zap,
+    Folder,
 }
 
 impl Icon {
@@ -74,6 +75,7 @@ impl Icon {
         Icon::ChevronLeft,
         Icon::ChevronRight,
         Icon::Zap,
+        Icon::Folder,
     ];
 
     pub fn path(self) -> &'static str {
@@ -110,6 +112,7 @@ impl Icon {
             Self::ChevronLeft => "icons/chevron-left.svg",
             Self::ChevronRight => "icons/chevron-right.svg",
             Self::Zap => "icons/zap.svg",
+            Self::Folder => "icons/folder.svg",
         }
     }
 }

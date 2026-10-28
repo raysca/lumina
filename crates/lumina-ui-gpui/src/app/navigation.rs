@@ -54,6 +54,18 @@ impl LuminaApp {
         if let Some(item) = slice.into_iter().next() {
             self.select_item_internal(item, cx);
         }
+        self.reveal_grid_selection();
+    }
+
+    /// Keeps the keyboard-selected row visible in the virtualized grid.
+    pub(crate) fn reveal_grid_selection(&self) {
+        let (Some(state), Some(index)) = (self.grid_state.as_ref(), self.selected_index) else {
+            return;
+        };
+        let cols = self.grid_columns.clamp(2, 8);
+        state
+            .scroll_handle
+            .scroll_to_item(index / cols, gpui::ScrollStrategy::Center);
     }
 
     pub fn navigate_selection(&mut self, delta: isize, cx: &mut Context<Self>) {

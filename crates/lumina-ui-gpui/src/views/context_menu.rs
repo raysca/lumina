@@ -346,12 +346,13 @@ impl MediaContextMenu {
                             }),
                         )
                     })
-                    // 13. Open With
+                    // 13. Open in default application
                     .child({
                         let path_for_open = path.clone();
-                        Self::render_submenu_item(
+                        Self::render_menu_item(
                             "open-with-menu-btn",
-                            "Open With",
+                            "Open in Default App",
+                            None,
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);

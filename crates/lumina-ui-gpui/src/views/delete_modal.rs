@@ -30,9 +30,18 @@ impl DeleteConfirmModal {
             .justify_center()
             .items_center()
             .p_8()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    this.close_delete_modal(cx);
+                }),
+            )
             .child(
                 div()
                     .id("delete-confirm-dialog")
+                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
+                        cx.stop_propagation();
+                    })
                     .w(px(520.0))
                     .bg(theme::bg_app())
                     .border_1()
