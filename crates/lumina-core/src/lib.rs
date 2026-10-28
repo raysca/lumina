@@ -5,6 +5,7 @@ pub mod geocoder;
 pub mod scanner;
 pub mod search;
 pub mod smart_albums;
+pub mod watcher;
 
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -24,6 +25,7 @@ pub use search::StructuredQuery;
 pub use smart_albums::{
     MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, SystemAlbum,
 };
+pub use watcher::LibraryWatcher;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
@@ -153,6 +155,7 @@ pub struct LuminaEngine {
     decoder: DecoderPipeline,
     event_tx: Sender<EngineEvent>,
     active_scan_cancel: Arc<Mutex<Arc<AtomicBool>>>,
+    _watcher: Option<LibraryWatcher>,
 }
 
 impl LuminaEngine {
@@ -184,6 +187,18 @@ impl LuminaEngine {
         let cancel_flag = Arc::new(AtomicBool::new(false));
         let active_scan_cancel = Arc::new(Mutex::new(cancel_flag.clone()));
 
+        // Start the real-time filesystem watcher alongside the initial scan so
+        // external add/modify/delete operations are reflected without a manual
+        // rescan. It lives as long as the engine (or any surviving clone).
+        let watcher =
+            match LibraryWatcher::new(library_root.clone(), catalog.clone(), event_tx.clone()) {
+                Ok(watcher) => Some(watcher),
+                Err(err) => {
+                    eprintln!("lumina: real-time filesystem watcher unavailable: {err:?}");
+                    None
+                }
+            };
+
         let engine = Arc::new(Self {
             library_root: library_root.clone(),
             catalog,
@@ -191,6 +206,7 @@ impl LuminaEngine {
             decoder,
             event_tx: event_tx.clone(),
             active_scan_cancel,
+            _watcher: watcher,
         });
 
         // Trigger initial background scan

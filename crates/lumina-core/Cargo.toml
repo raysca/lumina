@@ -17,6 +17,7 @@ dirs = "5.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 zune-jpeg = "0.4"
 
+notify-debouncer-mini = "0.4"
 rusqlite = { version = "0.31", features = ["bundled"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
