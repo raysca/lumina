@@ -134,6 +134,13 @@ docs/             roadmap, architecture, accessibility, notes
   and acceptance criteria in `RELEASING.md` are met.
 - No telemetry, analytics, crash uploaders, or network calls without explicit
   product approval and documentation.
+- Do not add Google Photos, iCloud Photos, Dropbox, OneDrive or Google Drive
+  account integrations, remote library browsing, or two-way sync. The only
+  approved future network feature that handles user media is optional backup to
+  user-owned S3-compatible storage: credentials only in the OS credential store,
+  client-side encryption, no secrets in config/database/logs, and no automatic
+  deletion of local or remote data. Update checks remain explicit opt-in and
+  must not upload user data.
 
 ## 6. Testing strategy
 
@@ -362,6 +369,9 @@ A change is done only when all applicable items are true:
   UI shell, real player, macOS decode fallbacks, live UI harness and release
   scripts still have macOS-specific paths. Keep releases macOS-only until the
   acceptance criteria in `RELEASING.md` are met.
+- S3-compatible backup is planned post-1.0 and is not implemented. Cloud
+  photo-library accounts (Google/iCloud) and two-way sync are out of scope; do
+  not describe them as supported.
 - Lumina is MIT licensed. Do not relicense the project or remove the LICENSE
   file without maintainer approval, and keep bundled third-party notices accurate.
 

@@ -16,6 +16,26 @@ Guiding principles:
 - **Honest support** — do not claim a platform, format, or accessibility level
   that is not tested and released.
 
+## Privacy and credentials model
+
+Local-first is a product constraint, not a temporary state:
+
+- No Lumina account. No Google Photos, iCloud Photos, Dropbox, OneDrive or
+  Google Drive account integration; no remote library browsing and no two-way
+  sync.
+- No telemetry, analytics, crash uploads or background network calls by default.
+- Network use is limited to explicit user actions: **optional backup to
+  user-owned S3-compatible storage** (post-1.0, see section 14) and opt-in update
+  checks. Neither creates a Lumina account or a cloud photo service.
+- Backup credentials belong in the OS credential store (macOS Keychain, Windows
+  Credential Manager, Linux Secret Service), never in config.json, SQLite, logs
+  or diagnostics.
+- Backup manifests, catalog snapshots and XMP sidecars are client-side encrypted
+  by default with a user-held key; Lumina does not escrow keys. Losing the key
+  means losing access to that encrypted backup.
+- Local or remote data is never auto-deleted. Restores and deletions require
+  explicit confirmation.
+
 ## Current baseline (v0.2.0, macOS)
 
 **Shipped:** macOS app; SQLite catalog with FTS5; EXIF/GPS extraction with
@@ -73,6 +93,7 @@ data loss, or a mouse:
 | **0.7** | Cross-platform | Windows and Linux ports, native packages, per-platform CI and signing. |
 | **0.8** | Semantic search | On-device embeddings and hybrid search after the core experience is solid. |
 | **1.0** | Grade A | Hardening, docs, update mechanism, support policy, full platform test matrix. |
+| **1.1** | Private backup | Optional client-side-encrypted backup to user-owned S3-compatible storage; OS credential storage; verify/restore; no sync or browsing. |
 
 Milestones are sequential for a reason: import and organization create the
 library that later features such as duplicate detection and semantic search
@@ -360,6 +381,43 @@ cross-platform claims exist only after the documented acceptance criteria pass.
 **Acceptance:** a design document with model/size/privacy tradeoffs is approved
 before implementation; offline tests prove indexing, ranking, and memory limits.
 
+## 14. Optional private backup to S3-compatible storage (post-1.0)
+
+This is the only planned network feature that handles user media. It is
+deliberately narrower than cloud support: no accounts, no remote browsing, no
+two-way sync, no sharing.
+
+**Scope:**
+
+- Manual or optional scheduled backup of originals, XMP sidecars and a catalog
+  snapshot to a bucket the user owns and controls.
+- User supplies endpoint, region, bucket, prefix and credentials; support AWS
+  S3, Cloudflare R2, Backblaze B2 (S3 API), Wasabi, MinIO and other
+  S3-compatible stores. Path-style and virtual-host addressing.
+- Credentials live only in the OS credential store. Provide test connection,
+  revoke and rotate flows; redact credentials from logs and error messages.
+- Resumable multipart uploads, SHA-256 manifests/checksums, retry with backoff,
+  bandwidth/concurrency limits and an offline queue.
+- Client-side encryption for manifests, catalog snapshots and sidecars with a
+  user-held key; originals can optionally be encrypted too. No key escrow.
+- Incremental backup, dry-run preview and a verify mode that checks remote
+  checksums without downloading everything.
+- Restore into an empty library first; never overwrite or delete local data
+  without confirmation. Never auto-delete remote objects.
+- Settings > Backup with status, last successful run, failures, pause/cancel and
+  clear quota/auth errors.
+- Tests: mocked S3 plus MinIO/contract tests, partial upload/failure injection,
+  credential-redaction tests, restore round-trip and documented key-loss
+  behavior.
+
+**Explicitly out of scope for this feature:** Google Photos, iCloud Photos,
+Dropbox, OneDrive and Google Drive accounts; remote library browsing; sync
+conflicts; remote sharing; any server operated by Lumina.
+
+**Acceptance:** a user can configure a bucket with least-privilege credentials,
+back up and restore a library with verified checksums, disconnect or rotate
+credentials, and see no secrets in config, database, logs or diagnostics.
+
 ## Backlog: candidate features and priority
 
 | Priority | Item | Milestone | Notes |
@@ -385,10 +443,14 @@ before implementation; offline tests prove indexing, ranking, and memory limits.
 | P2 | Batch rename/file move | 0.5+ | Higher risk; dry-run first. |
 | P2 | Quick Look/Finder extension | 0.5+ | Nice system integration. |
 | P2 | Semantic search | 0.8 | Design spike first. |
+| P2 | Optional client-side-encrypted S3-compatible backup | 1.1 | User-owned bucket, OS credential store, no sync/browsing. |
 
 ## Out of scope for the near term
 
-- Cloud accounts, sync, and sharing services (local-first product).
+- Google Photos, iCloud Photos, Dropbox, OneDrive and Google Drive account
+  integration, remote library browsing and two-way sync. Optional S3-compatible
+  backup (section 14) is separate and post-1.0.
+- Cloud sharing/social services. The native macOS share sheet remains in scope.
 - Generative AI editing or cloud inference.
 - Telemetry or analytics by default.
 - A full professional RAW develop/editor suite; basic non-destructive rotate/crop
