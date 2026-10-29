@@ -10,7 +10,9 @@ use crate::app::types::{
     BatchSelectionSummary, DeleteConfirmState, LayoutMode, TagSortOrder, UiMessage,
 };
 use crate::app::windows::{open_floating_inspector_window, open_floating_pip_window};
-use crate::config::AppConfig;
+#[cfg(not(test))]
+use crate::config::LastView;
+use crate::config::{AppConfig, RestoredSession};
 use crate::player;
 use crate::views::context_menu::ContextMenuState;
 use crate::views::grid::GridState;
@@ -141,6 +143,9 @@ pub struct LuminaApp {
     pub search_query: String,
     pub search_focused: bool,
     pub active_year: Option<i32>,
+    /// Captured from AppConfig at startup and applied once after the initial
+    /// library scan. Cleared by user-initiated open_library.
+    pub(crate) pending_restore: Option<RestoredSession>,
     pub is_fullscreen_viewer: bool,
     pub is_immersive_fullscreen: bool,
     pub immersive_hud_visible: bool,
@@ -278,6 +283,7 @@ impl LuminaApp {
             search_query: String::new(),
             search_focused: false,
             active_year: None,
+            pending_restore: Some(config.restored_session()),
             is_fullscreen_viewer: false,
             is_immersive_fullscreen: false,
             immersive_hud_visible: true,
@@ -335,7 +341,8 @@ impl LuminaApp {
         #[cfg(not(test))]
         if let Some(ref path) = config.last_library_path {
             if path.exists() && path.is_dir() {
-                app.open_library(path.clone(), cx);
+                // Startup keeps the pending restore; a user-chosen folder clears it.
+                app.open_library_inner(path.clone(), cx);
             }
         }
 
@@ -362,6 +369,23 @@ impl LuminaApp {
             cfg.inspector_tab = Some(self.inspector_tab.config_key().to_string());
             cfg.sort_field = Some(self.sort.field_key().to_string());
             cfg.sort_direction = Some(self.sort.direction_key().to_string());
+            // Keep the on-disk session intact until the startup restore has been
+            // applied; otherwise a window-bounds save during the initial scan could
+            // overwrite it before it is used.
+            if self.pending_restore.is_none() {
+                cfg.last_view = Some(LastView::from_selection(&self.selection).token());
+                cfg.last_search_query = if self.search_query.is_empty() {
+                    None
+                } else {
+                    Some(self.search_query.clone())
+                };
+                cfg.last_active_year = self.active_year;
+                cfg.last_selected_media_id = self.selected_item.as_ref().map(|item| item.id.0);
+            }
+            // The grid scroll row is deliberately not persisted: GPUI 0.2.2 only
+            // exposes UniformListScrollHandle::logical_scroll_top_index under the
+            // test-support feature, so production cannot read the top row without
+            // inventing one. The restored selection's row is revealed instead.
             if let Some((x, y, width, height)) = self.window_bounds {
                 cfg.window_x = Some(x);
                 cfg.window_y = Some(y);
