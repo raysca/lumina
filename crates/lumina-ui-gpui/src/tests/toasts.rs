@@ -75,6 +75,18 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
     render_ui(cx);
 }
 
+fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
+    cx.update(|window, cx| {
+        let handle = view.read(cx).focus_handle.clone();
+        window.focus(&handle);
+    });
+}
+
+fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
+    cx.simulate_keystrokes(keys);
+    render_ui(cx);
+}
+
 #[core::prelude::v1::test]
 fn toast_renders_with_message_and_dismiss_control() {
     let (temp_dir, engine) = seed_library("render", 4);
@@ -174,6 +186,145 @@ fn toast_undo_invokes_undo_last() {
         assert!(
             !toast.undo_available,
             "an undo does not push another undo entry"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn toast_rating_and_tag_hooks_offer_undo() {
+    let (temp_dir, engine) = seed_library("hooks", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.selected_indices.insert(0);
+        app.set_rating_selected(4, cx);
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let toast = app
+            .toast
+            .current()
+            .expect("rating must confirm with a toast");
+        assert_eq!(toast.message, "Rated 1 item(s)");
+        assert!(toast.undo_available, "rating must offer Undo");
+        assert_eq!(app.get_item_rating(&item), 4);
+    });
+
+    view.update(vcx, |app, cx| app.batch_add_tag("travel".to_string(), cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let toast = app
+            .toast
+            .current()
+            .expect("adding a tag must confirm with a toast");
+        assert_eq!(toast.message, "Added tag \"travel\"");
+        assert!(toast.undo_available, "tag add must offer Undo");
+        assert!(
+            app.selected_item_tags.contains(&"travel".to_string()),
+            "the tag must be applied before Undo"
+        );
+    });
+
+    // The toast's Undo reverses the most recent reversible action.
+    click(vcx, "toast-undo");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_item_tags.contains(&"travel".to_string()),
+            "toast Undo must remove the tag"
+        );
+        assert!(
+            app.toast
+                .current()
+                .is_some_and(|toast| toast.message.starts_with("Undid")),
+            "undo must confirm with a fresh toast"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn escape_dismisses_toast_without_stealing_modal_or_viewer_escape() {
+    let (temp_dir, engine) = seed_library("escape_toast", 2);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Grid: Escape dismisses the toast before the grid's own Escape chain.
+    view.update(vcx, |app, cx| {
+        app.select_item(item.clone(), cx);
+        app.show_toast("Saved", cx);
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "Escape must dismiss a visible toast"
+        );
+        assert!(
+            app.selected_item.is_some(),
+            "toast dismissal must consume Escape before grid selection clearing"
+        );
+    });
+
+    // Modal: Escape still closes the dialog first and leaves the toast alone.
+    view.update(vcx, |app, cx| {
+        app.show_toast("Saved", cx);
+        app.open_album_builder(cx);
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.album_draft.modal_open,
+            "Escape must close the modal first"
+        );
+        assert!(
+            app.toast.current().is_some(),
+            "modal Escape must not dismiss the toast beneath it"
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "a later Escape must dismiss the toast"
+        );
+    });
+
+    // Viewer: Escape still closes the viewer and the toast survives it.
+    view.update(vcx, |app, cx| {
+        app.show_toast("Saved", cx);
+        app.open_viewer(item.clone(), cx);
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.is_fullscreen_viewer,
+            "Escape must still close the viewer"
+        );
+        assert!(
+            app.toast.current().is_some(),
+            "viewer Escape must not dismiss the toast"
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "the grid Escape after the viewer must dismiss the toast"
         );
     });
 

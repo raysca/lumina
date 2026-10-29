@@ -162,11 +162,13 @@ impl LuminaApp {
                 after,
             });
             self.sync_metadata_sidecars(&[item.id]);
-            self.set_last_action(if trimmed.is_empty() {
+            let message = if trimmed.is_empty() {
                 "Caption removed"
             } else {
                 "Caption saved"
-            });
+            };
+            self.set_last_action(message);
+            self.show_undo_toast(message, cx);
         }
         cx.notify();
     }
@@ -224,11 +226,13 @@ impl LuminaApp {
             after,
         });
         self.sync_metadata_sidecars(&[item.id]);
-        self.set_last_action(if trimmed.is_empty() {
+        let message = if trimmed.is_empty() {
             "Title removed"
         } else {
             "Title saved"
-        });
+        };
+        self.set_last_action(message);
+        self.show_undo_toast(message, cx);
         cx.notify();
     }
 
@@ -290,6 +294,7 @@ impl LuminaApp {
         }
         self.refresh_album_counts();
         self.set_last_action("Date updated");
+        self.show_undo_toast("Date updated", cx);
         cx.notify();
     }
 
@@ -367,11 +372,13 @@ impl LuminaApp {
         {
             self.selected_item = Some(updated);
         }
-        self.set_last_action(if lat.is_some() {
+        let message = if lat.is_some() {
             "Location updated"
         } else {
             "Location removed"
-        });
+        };
+        self.set_last_action(message);
+        self.show_undo_toast(message, cx);
         cx.notify();
     }
 

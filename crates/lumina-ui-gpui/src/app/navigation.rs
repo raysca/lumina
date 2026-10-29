@@ -10,20 +10,72 @@ use crate::theme;
 impl LuminaApp {
     pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) {
         let ids = self.get_selected_ids();
-        for id in ids {
-            let current = self.item_ratings.get(&id).copied().unwrap_or(0);
-            let new_r = if current == rating { 0 } else { rating };
-            self.set_item_rating(id, new_r, cx);
+        if ids.is_empty() {
+            return;
         }
+        let mut changed = 0usize;
+        for id in &ids {
+            let current = self.item_ratings.get(id).copied().unwrap_or(0);
+            let new_r = if current == rating { 0 } else { rating };
+            if current == new_r {
+                continue;
+            }
+            self.set_item_rating(*id, new_r, cx);
+            // A failed write reverts the optimistic map entry, so only count
+            // changes that actually stuck before confirming them.
+            if self.item_ratings.get(id).copied().unwrap_or(0) == new_r {
+                changed += 1;
+            }
+        }
+        if changed == 0 {
+            cx.notify();
+            return;
+        }
+        let cleared = ids
+            .iter()
+            .all(|id| self.item_ratings.get(id).copied().unwrap_or(0) == 0);
+        self.show_undo_toast(
+            if cleared {
+                "Rating cleared".to_string()
+            } else {
+                format!("Rated {} item(s)", changed)
+            },
+            cx,
+        );
     }
 
     pub fn set_color_label_selected(&mut self, label: u8, cx: &mut Context<Self>) {
         let ids = self.get_selected_ids();
-        for id in ids {
-            let current = self.item_color_labels.get(&id).copied().unwrap_or(0);
-            let new_l = if current == label { 0 } else { label };
-            self.set_item_color_label(id, new_l, cx);
+        if ids.is_empty() {
+            return;
         }
+        let mut changed = 0usize;
+        for id in &ids {
+            let current = self.item_color_labels.get(id).copied().unwrap_or(0);
+            let new_l = if current == label { 0 } else { label };
+            if current == new_l {
+                continue;
+            }
+            self.set_item_color_label(*id, new_l, cx);
+            if self.item_color_labels.get(id).copied().unwrap_or(0) == new_l {
+                changed += 1;
+            }
+        }
+        if changed == 0 {
+            cx.notify();
+            return;
+        }
+        let cleared = ids
+            .iter()
+            .all(|id| self.item_color_labels.get(id).copied().unwrap_or(0) == 0);
+        self.show_undo_toast(
+            if cleared {
+                "Color label removed".to_string()
+            } else {
+                format!("Color label updated for {} item(s)", changed)
+            },
+            cx,
+        );
     }
 
     pub fn toggle_favorite_selected(&mut self, cx: &mut Context<Self>) {

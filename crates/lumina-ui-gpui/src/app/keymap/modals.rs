@@ -455,6 +455,24 @@ impl LuminaApp {
             return true;
         }
 
+        // 7. Dismiss a visible toast from the keyboard.
+        //
+        // This sits after every modal and inline-editor branch above, so those
+        // keep Escape precedence: Escape cancels the editor or closes the
+        // dialog, and a toast underneath stays until the next Escape or its
+        // auto-dismiss timer. The fullscreen viewer and card context menu also
+        // own Escape for navigation and are handled after this shield, so the
+        // toast yields to them and remains dismissible with the pointer.
+        if key == "escape"
+            && !cmd_or_ctrl
+            && self.toast.is_visible()
+            && !self.is_fullscreen_viewer
+            && self.context_menu_state.is_none()
+        {
+            self.dismiss_toast(cx);
+            return true;
+        }
+
         false
     }
 }

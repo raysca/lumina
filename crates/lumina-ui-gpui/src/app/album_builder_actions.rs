@@ -81,6 +81,7 @@ impl LuminaApp {
                 }
                 self.refresh_album_counts();
                 self.set_last_action("Deleted smart album");
+                self.show_toast("Deleted smart album", cx);
                 cx.notify();
             }
             Ok(false) => self.set_error("Smart album not found", cx),
@@ -451,12 +452,14 @@ impl LuminaApp {
                 self.selection = AlbumSelection::User(album_id);
                 self.selected_index = None;
                 self.selected_item = None;
-                self.set_last_action(if editing_id.is_some() {
+                let message = if editing_id.is_some() {
                     format!("Updated smart album \"{}\"", title)
                 } else {
                     format!("Created smart album \"{}\"", title)
-                });
+                };
+                self.set_last_action(message.clone());
                 self.refresh_album_counts();
+                self.show_toast(message, cx);
                 cx.notify();
             }
             Err(err) => self.set_error(format!("Could not save smart album: {err}"), cx),

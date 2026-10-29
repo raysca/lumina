@@ -26,6 +26,14 @@ impl LuminaApp {
                     changes: vec![(item.id, item.is_trashed, new_trashed)],
                 });
                 self.refresh_album_counts();
+                self.show_undo_toast(
+                    if new_trashed {
+                        "Moved to Trash"
+                    } else {
+                        "Restored from Trash"
+                    },
+                    cx,
+                );
                 if let Some(idx) = self.selected_index {
                     self.select_index(idx, cx);
                 } else {
@@ -59,12 +67,14 @@ impl LuminaApp {
             return;
         }
         self.push_undo(UndoAction::Trashed { changes });
-        self.set_last_action(if new_trashed {
+        let message = if new_trashed {
             format!("Moved {} item(s) to Trash", ids.len())
         } else {
             format!("Restored {} item(s)", ids.len())
-        });
+        };
+        self.set_last_action(message.clone());
         self.refresh_album_counts();
+        self.show_undo_toast(message, cx);
         self.clear_selection(cx);
     }
 
@@ -181,8 +191,10 @@ impl LuminaApp {
             return;
         }
         self.push_undo(UndoAction::Trashed { changes });
-        self.set_last_action(format!("Restored {} item(s)", ids.len()));
+        let message = format!("Restored {} item(s)", ids.len());
+        self.set_last_action(message.clone());
         self.refresh_album_counts();
+        self.show_undo_toast(message, cx);
         self.clear_selection(cx);
     }
 }

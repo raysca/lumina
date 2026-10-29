@@ -57,6 +57,7 @@ impl LuminaApp {
         self.sync_metadata_sidecars(&ids);
         self.refresh_selected_tags();
         self.refresh_album_counts();
+        self.show_undo_toast(format!("Added tag \"{}\"", clean), cx);
         cx.notify();
     }
 
@@ -87,9 +88,11 @@ impl LuminaApp {
             added: false,
         });
         self.sync_metadata_sidecars(&ids);
-        self.set_last_action(format!("Removed tag \"{}\"", clean));
+        let message = format!("Removed tag \"{}\"", clean);
+        self.set_last_action(message.clone());
         self.refresh_selected_tags();
         self.refresh_album_counts();
+        self.show_undo_toast(message, cx);
         cx.notify();
     }
 
@@ -128,8 +131,14 @@ impl LuminaApp {
             let new_tag = std::mem::take(&mut self.editing_tag_buffer);
             let clean_new = new_tag.trim().to_lowercase();
             if !clean_new.is_empty() && clean_new != old_tag {
-                if let Some(ref state) = self.grid_state {
-                    let _ = state.engine.rename_tag(&old_tag, &clean_new);
+                let result = if let Some(ref state) = self.grid_state {
+                    state.engine.rename_tag(&old_tag, &clean_new).map(|_| ())
+                } else {
+                    Ok(())
+                };
+                if let Err(err) = result {
+                    self.set_error(format!("Could not rename tag: {err}"), cx);
+                    return;
                 }
                 if let AlbumSelection::Tag(ref curr) = self.selection {
                     if curr == &old_tag {
@@ -148,7 +157,9 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
-                self.set_last_action(format!("Renamed tag to \"{}\"", clean_new));
+                let message = format!("Renamed tag to \"{}\"", clean_new);
+                self.set_last_action(message.clone());
+                self.show_toast(message, cx);
             }
         }
         cx.notify();
@@ -229,8 +240,14 @@ impl LuminaApp {
             let new_tag = self.tag_manager.editing_buffer.trim().to_lowercase();
             self.tag_manager.editing_buffer.clear();
             if !new_tag.is_empty() && new_tag != old_tag.to_lowercase() {
-                if let Some(ref state) = self.grid_state {
-                    let _ = state.engine.rename_tag(&old_tag, &new_tag);
+                let result = if let Some(ref state) = self.grid_state {
+                    state.engine.rename_tag(&old_tag, &new_tag).map(|_| ())
+                } else {
+                    Ok(())
+                };
+                if let Err(err) = result {
+                    self.set_error(format!("Could not rename tag: {err}"), cx);
+                    return;
                 }
                 let old_query = format!("tag:{}", old_tag);
                 let old_query_quoted = format!("tag:\"{}\"", old_tag);
@@ -239,6 +256,7 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
+                self.show_toast(format!("Renamed tag to \"{}\"", new_tag), cx);
             }
             cx.notify();
         }
