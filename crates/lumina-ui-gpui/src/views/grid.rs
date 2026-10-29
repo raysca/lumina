@@ -7,6 +7,148 @@ use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+/// Horizontal padding inside a grid row, in pixels.
+///
+/// The renderer and the pointer-anchored zoom math both use this value so the
+/// column under the pointer cannot drift from the painted layout.
+pub(crate) const GRID_ROW_PADDING_X: f32 = 16.0;
+
+/// Gap between cards in a grid row, in pixels.
+///
+/// Shared with the renderer for the same reason as `GRID_ROW_PADDING_X`.
+pub(crate) const GRID_CARD_GAP: f32 = 10.0;
+
+/// Measured geometry of the scrollable media grid in window pixels.
+///
+/// The uniform list scroll handle exposes the viewport bounds, offset, and
+/// maximum offset, but not a usable per-row bounds list (see
+/// `GridZoomAnchor::at_pointer`). Callers therefore supply the row height that
+/// the current density renders.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GridZoomGeometry {
+    /// Left edge of the scrollable list in window space.
+    pub left: f32,
+    /// Top edge of the scrollable list in window space.
+    pub top: f32,
+    /// Visible width of the scrollable list.
+    pub width: f32,
+    /// Visible height of the scrollable list.
+    pub height: f32,
+    /// GPUI vertical scroll offset: zero at the top, negative as the content
+    /// scrolls up.
+    pub scroll_y: f32,
+    /// Rendered height of one row at `columns`.
+    pub row_height: f32,
+    /// Columns rendered before the density change.
+    pub columns: usize,
+    /// Flat item count in the active view.
+    pub item_count: usize,
+}
+
+/// The item under the pointer when a density change starts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GridZoomAnchor {
+    /// Flat index of the item under the pointer.
+    pub item: usize,
+    /// Row that item occupied before the density change.
+    pub row: usize,
+    /// Pointer position inside the row, as a 0..=1 fraction of the row height.
+    ///
+    /// Zoom preserves this fraction rather than an absolute pixel distance so
+    /// the pointer stays at the same relative place inside the row.
+    pub fraction_within_row: f32,
+}
+
+impl GridZoomAnchor {
+    /// Captures the item under the pointer for a later density change.
+    ///
+    /// Returns `None` when the grid has no items or the measured geometry is
+    /// not usable yet (before the first prepaint of this layout).
+    ///
+    /// GPUI 0.2.2's `UniformList` never fills `ScrollHandle::child_bounds`
+    /// (it calls `Interactivity::prepaint` directly), so `top_item()` and
+    /// `bounds_for_item()` stay empty for this list. The visible row is
+    /// derived from the public `offset()` instead of inventing a top item.
+    pub fn at_pointer(pointer_x: f32, pointer_y: f32, geometry: GridZoomGeometry) -> Option<Self> {
+        let columns = geometry.columns.clamp(2, 8);
+        if geometry.item_count == 0
+            || geometry.row_height <= 0.0
+            || geometry.width <= 0.0
+            || geometry.height <= 0.0
+            || !geometry.scroll_y.is_finite()
+            || !geometry.row_height.is_finite()
+        {
+            return None;
+        }
+
+        let content_y = pointer_y - geometry.top - geometry.scroll_y;
+        if !content_y.is_finite() || content_y < 0.0 {
+            return None;
+        }
+
+        let total_rows = geometry.item_count.div_ceil(columns);
+        let row = ((content_y / geometry.row_height).floor() as usize).min(total_rows - 1);
+        let row_top = row as f32 * geometry.row_height;
+        let fraction_within_row = ((content_y - row_top) / geometry.row_height).clamp(0.0, 1.0);
+        let column = column_at_pointer(pointer_x, geometry.left, geometry.width, columns);
+        let item = (row * columns + column).min(geometry.item_count - 1);
+
+        Some(Self {
+            item,
+            row,
+            fraction_within_row,
+        })
+    }
+
+    /// Content scroll offset (a positive distance from the content top) that
+    /// keeps this anchor at the same window position after the density change.
+    ///
+    /// The result is clamped to the scrollable range of the new layout. Row
+    /// boundaries move when the column count changes, so this preserves the
+    /// anchor item's row and the pointer's fractional position inside it; it
+    /// is not a pixel-exact transform.
+    pub fn target_scroll_offset(
+        self,
+        pointer_y: f32,
+        geometry: GridZoomGeometry,
+        new_columns: usize,
+        new_row_height: f32,
+    ) -> f32 {
+        let current_offset = (-geometry.scroll_y).max(0.0);
+        if geometry.item_count == 0 || new_row_height <= 0.0 || geometry.height <= 0.0 {
+            return current_offset;
+        }
+
+        let new_columns = new_columns.clamp(2, 8);
+        let total_rows = geometry.item_count.div_ceil(new_columns);
+        let new_row = (self.item / new_columns).min(total_rows.saturating_sub(1));
+        let target_content_y =
+            new_row as f32 * new_row_height + self.fraction_within_row * new_row_height;
+        // Distance from the content top to the pointer, and the scroll offset
+        // that puts the target row at that same distance.
+        let pointer_distance = pointer_y - geometry.top;
+        let target_scroll = target_content_y - pointer_distance;
+        let max_scroll = (total_rows as f32 * new_row_height - geometry.height).max(0.0);
+        target_scroll.clamp(0.0, max_scroll)
+    }
+}
+
+/// Column under `pointer_x` for a row laid out with the grid's padding and gap.
+fn column_at_pointer(pointer_x: f32, left: f32, width: f32, columns: usize) -> usize {
+    let inner_width = width - 2.0 * GRID_ROW_PADDING_X;
+    let card_space = inner_width - columns.saturating_sub(1) as f32 * GRID_CARD_GAP;
+    if !card_space.is_finite() || card_space <= 0.0 {
+        return 0;
+    }
+    let card_width = card_space / columns as f32;
+    if card_width <= 0.0 {
+        return 0;
+    }
+    let relative = pointer_x - left - GRID_ROW_PADDING_X;
+    ((relative / (card_width + GRID_CARD_GAP)).floor() as isize)
+        .clamp(0, columns.saturating_sub(1) as isize) as usize
+}
+
 /// Grid-owned playback resume state.
 ///
 /// The position map is shared with AppConfig so the existing config save path

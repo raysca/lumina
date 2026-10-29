@@ -1657,6 +1657,311 @@ fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
+/// Sends a wheel event at `position` after moving the pointer there, because
+/// GPUI hit-tests scroll events against the last mouse position.
+fn wheel(
+    cx: &mut VisualTestContext,
+    position: gpui::Point<gpui::Pixels>,
+    delta: gpui::ScrollDelta,
+    modifiers: gpui::Modifiers,
+) {
+    cx.simulate_mouse_move(position, None, gpui::Modifiers::default());
+    cx.simulate_event(gpui::ScrollWheelEvent {
+        position,
+        delta,
+        modifiers,
+        touch_phase: gpui::TouchPhase::Moved,
+    });
+    render_ui(cx);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_zoom_anchor_preserves_pointer_row_and_fraction() {
+    use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
+
+    // 920px wide list with the grid's 16px side padding and 10px gaps leaves
+    // 214.5px cards at four columns, so x=600 is inside the third column.
+    let geometry = GridZoomGeometry {
+        left: 100.0,
+        top: 100.0,
+        width: 920.0,
+        height: 600.0,
+        scroll_y: -100.0,
+        row_height: 200.0,
+        columns: 4,
+        item_count: 40,
+    };
+    // Window y=300 maps to content y=300: row 1, half way down the row.
+    let anchor = GridZoomAnchor::at_pointer(600.0, 300.0, geometry)
+        .expect("a pointer inside the viewport must anchor an item");
+    assert_eq!(anchor.row, 1, "content y=300 sits in the second 200px row");
+    assert_eq!(
+        anchor.item,
+        4 + 2,
+        "row 1 x 4 columns + column index 2 must anchor item 6"
+    );
+    assert!(
+        (anchor.fraction_within_row - 0.5).abs() < 0.001,
+        "the pointer is half way down the row, got {}",
+        anchor.fraction_within_row
+    );
+
+    let target = anchor.target_scroll_offset(300.0, geometry, 3, 260.0);
+    // Item 6 becomes row 2 at three columns; half of a 260px row puts the
+    // content top at 2*260 + 130 = 650, so the viewport needs 450px of scroll.
+    assert!(
+        (target - 450.0).abs() < 0.001,
+        "item 6 must land in row 2 with the pointer half a row down, got {target}"
+    );
+
+    // The pointer now sits inside row 2, which is the anchor item's new row.
+    let new_content_y = 300.0 - geometry.top - (-target);
+    assert_eq!(
+        (new_content_y / 260.0).floor() as usize,
+        anchor.item / 3,
+        "the anchor item's row must remain under the pointer after zoom"
+    );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_zoom_anchor_clamps_partial_rows_and_invalid_geometry() {
+    use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
+
+    // Five items at four columns: the last row is partial. A pointer in the
+    // empty part of that row still anchors the final real item.
+    let geometry = GridZoomGeometry {
+        left: 0.0,
+        top: 0.0,
+        width: 920.0,
+        height: 600.0,
+        scroll_y: 0.0,
+        row_height: 200.0,
+        columns: 4,
+        item_count: 5,
+    };
+    let anchor = GridZoomAnchor::at_pointer(880.0, 350.0, geometry)
+        .expect("a pointer over the last partial row must anchor an item");
+    assert_eq!(
+        anchor.item, 4,
+        "the anchor must clamp to the last real item, not invent a sixth"
+    );
+
+    // Two columns at 380px rows: item 4 becomes row 2, but the desired 695px
+    // offset exceeds the 540px scroll range, so it clamps to the end.
+    let target = anchor.target_scroll_offset(350.0, geometry, 2, 380.0);
+    assert!(
+        (target - 540.0).abs() < 0.001,
+        "the target offset must clamp to the new content height, got {target}"
+    );
+
+    assert!(
+        GridZoomAnchor::at_pointer(
+            0.0,
+            0.0,
+            GridZoomGeometry {
+                height: 0.0,
+                ..geometry
+            }
+        )
+        .is_none(),
+        "an unmeasured viewport cannot anchor a pointer"
+    );
+    assert!(
+        GridZoomAnchor::at_pointer(
+            0.0,
+            50.0,
+            GridZoomGeometry {
+                top: 100.0,
+                ..geometry
+            }
+        )
+        .is_none(),
+        "a pointer above the content cannot anchor an item"
+    );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
+    use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
+
+    let (temp_dir, engine) = seed_library("grid_wheel_zoom", 40);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 4;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let pointer = surface.center();
+
+    // A plain wheel must keep scrolling: density and selection stay untouched.
+    wheel(
+        vcx,
+        pointer,
+        gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-600.0))),
+        gpui::Modifiers::default(),
+    );
+    let (offset_after_plain, columns_after_plain) = view.update(vcx, |app, _| {
+        let scroll_handle = app
+            .grid_state
+            .as_ref()
+            .expect("the test harness installs grid state")
+            .scroll_handle
+            .clone();
+        let state = scroll_handle.0.borrow();
+        (state.base_handle.offset().y, app.grid_columns)
+    });
+    assert_eq!(
+        columns_after_plain, 4,
+        "a plain wheel must not change grid density"
+    );
+    assert!(
+        offset_after_plain < gpui::px(0.0),
+        "a plain wheel must scroll the grid, got offset {offset_after_plain:?}"
+    );
+
+    // Capture the item under the pointer with the same public geometry the
+    // production handler reads from the scroll handle.
+    let (geometry, anchor) = view.update(vcx, |app, _| {
+        let scroll_handle = app
+            .grid_state
+            .as_ref()
+            .expect("the test harness installs grid state")
+            .scroll_handle
+            .clone();
+        let state = scroll_handle.0.borrow();
+        let bounds = state.base_handle.bounds();
+        let geometry = GridZoomGeometry {
+            left: f32::from(bounds.origin.x),
+            top: f32::from(bounds.origin.y),
+            width: f32::from(bounds.size.width),
+            height: f32::from(bounds.size.height),
+            scroll_y: f32::from(state.base_handle.offset().y),
+            row_height: app.row_height(),
+            columns: app.grid_columns,
+            item_count: app.get_active_count(),
+        };
+        drop(state);
+        let anchor =
+            GridZoomAnchor::at_pointer(f32::from(pointer.x), f32::from(pointer.y), geometry)
+                .expect("the pointer must be inside the measured grid viewport");
+        (geometry, anchor)
+    });
+    assert!(
+        geometry.height > 0.0 && geometry.width > 0.0,
+        "the scroll handle must expose real viewport bounds, got {geometry:?}"
+    );
+
+    // Cmd+wheel up tightens the grid without starting a drag or a click.
+    wheel(
+        vcx,
+        pointer,
+        gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
+        gpui::Modifiers::secondary_key(),
+    );
+
+    let (columns_after_zoom, selection_len, dragging) = view.update(vcx, |app, _| {
+        (
+            app.grid_columns,
+            app.selected_indices.len(),
+            app.grid_drag.active,
+        )
+    });
+    assert_eq!(
+        columns_after_zoom, 3,
+        "Cmd+wheel up must make the grid denser (one fewer column)"
+    );
+    assert_eq!(
+        selection_len, 0,
+        "a zoom gesture must not select an item as if it were a click"
+    );
+    assert!(!dragging, "a Cmd+wheel event must not start a drag");
+
+    // The anchor item's new row must still sit under the pointer.
+    let (row_under_pointer, row_height, new_columns) = view.update(vcx, |app, _| {
+        let scroll_handle = app
+            .grid_state
+            .as_ref()
+            .expect("the test harness installs grid state")
+            .scroll_handle
+            .clone();
+        let state = scroll_handle.0.borrow();
+        let bounds = state.base_handle.bounds();
+        let scroll_y = f32::from(state.base_handle.offset().y);
+        let row_height = app.row_height();
+        let content_y = f32::from(pointer.y) - f32::from(bounds.origin.y) - scroll_y;
+        (
+            (content_y / row_height).floor() as usize,
+            row_height,
+            app.grid_columns,
+        )
+    });
+    assert_eq!(
+        row_under_pointer,
+        anchor.item / new_columns,
+        "the anchored item's new row must stay under the pointer (row {row_under_pointer}, row height {row_height}, {new_columns} columns)"
+    );
+
+    // At the loosest setting Cmd+wheel cannot zoom further; it must also not
+    // silently scroll the grid. Two columns leave the 40 items scrollable, so
+    // the offset assertion exercises the event-delta undo.
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 2;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let offset_before_limit = view.update(vcx, |app, _| {
+        app.grid_state
+            .as_ref()
+            .expect("the test harness installs grid state")
+            .scroll_handle
+            .0
+            .borrow()
+            .base_handle
+            .offset()
+            .y
+    });
+    assert!(
+        offset_before_limit < gpui::px(0.0),
+        "the limit check must run on a scrollable grid, got {offset_before_limit:?}"
+    );
+    wheel(
+        vcx,
+        pointer,
+        gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
+        gpui::Modifiers::secondary_key(),
+    );
+    let (columns_at_limit, offset_at_limit) = view.update(vcx, |app, _| {
+        (
+            app.grid_columns,
+            app.grid_state
+                .as_ref()
+                .expect("the test harness installs grid state")
+                .scroll_handle
+                .0
+                .borrow()
+                .base_handle
+                .offset()
+                .y,
+        )
+    });
+    assert_eq!(
+        columns_at_limit, 2,
+        "density must stay clamped at 2 columns"
+    );
+    assert!(
+        (f32::from(offset_at_limit) - f32::from(offset_before_limit)).abs() < 0.5,
+        "a Cmd+wheel that cannot zoom must leave the scroll offset alone: before={offset_before_limit:?} after={offset_at_limit:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
 #[core::prelude::v1::test]
 fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
     let (temp_dir, engine) = seed_library("batch_meta", 4);

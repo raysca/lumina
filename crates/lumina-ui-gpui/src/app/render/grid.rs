@@ -7,6 +7,7 @@ use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::grid::{GRID_CARD_GAP, GRID_ROW_PADDING_X};
 use crate::views::sidebar::AlbumSelection;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
@@ -80,6 +81,17 @@ impl LuminaApp {
                     this.finish_grid_drag(cx);
                 }),
             )
+            // Cmd/Ctrl + wheel changes column density around the pointer. A
+            // plain wheel is left alone so the uniform list keeps scrolling.
+            // The handler runs in the bubble phase after the list's own scroll
+            // listener, and restores the offset it would have scrolled.
+            .on_scroll_wheel(cx.listener(
+                |this, event: &ScrollWheelEvent, window, cx| {
+                    if this.zoom_grid_with_wheel(event, window, cx) {
+                        cx.stop_propagation();
+                    }
+                },
+            ))
             .child(
                 uniform_list(
                     "media-grid",
@@ -533,10 +545,10 @@ impl LuminaApp {
                                     .id(row_ix)
                                     .w_full()
                                     .h(px(row_h))
-                                    .px_4()
+                                    .px(px(GRID_ROW_PADDING_X))
                                     .flex()
                                     .flex_row()
-                                    .gap(px(10.0))
+                                    .gap(px(GRID_CARD_GAP))
                                     .children(row_cards),
                             );
                         }

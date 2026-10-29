@@ -4,6 +4,10 @@ use lumina_core::MediaItem;
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::views::context_menu::ContextMenuState;
+use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
+
+/// Wheel delta below which a Cmd/Ctrl + wheel event is treated as noise.
+const GRID_ZOOM_WHEEL_EPSILON: f32 = 0.01;
 
 impl LuminaApp {
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -111,6 +115,117 @@ impl LuminaApp {
             self.save_config();
             cx.notify();
         }
+    }
+
+    /// Cmd/Ctrl + wheel over the media grid changes column density while
+    /// keeping the item under the pointer anchored as closely as the new row
+    /// layout allows.
+    ///
+    /// Returns `true` when the event belongs to the zoom gesture, so the caller
+    /// can stop propagation; plain wheel scrolling must stay scrolling.
+    ///
+    /// The uniform list's own scroll listener runs before this bubble handler
+    /// (child listeners bubble first), so the event delta is removed from the
+    /// live offset to recover the pre-gesture scroll position. The new offset is
+    /// applied to the public scroll handle and clamped against the new content
+    /// height in the next prepaint.
+    ///
+    /// Limitation: a column change moves row boundaries, so the item under the
+    /// pointer can change horizontally. This preserves the anchor item's new row
+    /// and the pointer's fractional position within that row; it is not a
+    /// pixel-exact zoom transform.
+    pub fn zoom_grid_with_wheel(
+        &mut self,
+        event: &ScrollWheelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !event.modifiers.secondary() {
+            return false;
+        }
+
+        let delta_y = f32::from(event.delta.pixel_delta(window.line_height()).y);
+        if !delta_y.is_finite() || delta_y.abs() < GRID_ZOOM_WHEEL_EPSILON {
+            return false;
+        }
+
+        let item_count = self.get_active_count();
+        if item_count == 0 {
+            return false;
+        }
+        let Some(scroll_handle) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.scroll_handle.clone())
+        else {
+            return false;
+        };
+
+        let columns = self.grid_columns.clamp(2, 8);
+        // Wheel up (positive delta) tightens the grid (fewer, larger cards),
+        // matching the Cmd+= / Cmd+- semantics.
+        let step: isize = if delta_y > 0.0 { -1 } else { 1 };
+        let new_columns = (columns as isize + step).clamp(2, 8) as usize;
+
+        let (viewport, offset_after, max_offset) = {
+            let state = scroll_handle.0.borrow();
+            let base = &state.base_handle;
+            (base.bounds(), base.offset(), base.max_offset())
+        };
+        // When the pointer is over the list, its own scroll listener has already
+        // applied this event's scroll delta; undo it so a zoom step never also
+        // scrolls. Outside the list (for example the surface's top padding) no
+        // scroll was applied. `max_offset` is from the layout the event was
+        // dispatched against.
+        let scroll_y_before = if viewport.contains(&event.position) {
+            (offset_after.y - px(delta_y)).clamp(-max_offset.height, px(0.0))
+        } else {
+            offset_after.y
+        };
+
+        let geometry = GridZoomGeometry {
+            left: f32::from(viewport.origin.x),
+            top: f32::from(viewport.origin.y),
+            width: f32::from(viewport.size.width),
+            height: f32::from(viewport.size.height),
+            scroll_y: f32::from(scroll_y_before),
+            row_height: self.row_height(),
+            columns,
+            item_count,
+        };
+        let anchor = GridZoomAnchor::at_pointer(
+            f32::from(event.position.x),
+            f32::from(event.position.y),
+            geometry,
+        );
+
+        self.grid_columns = new_columns;
+        let new_row_height = self.row_height();
+        let target_offset = match anchor {
+            Some(anchor) => anchor.target_scroll_offset(
+                f32::from(event.position.y),
+                geometry,
+                new_columns,
+                new_row_height,
+            ),
+            // No usable geometry (before the first prepaint): change density
+            // without a scroll adjustment.
+            None => f32::from(-scroll_y_before),
+        };
+
+        // Apply after the column change; the next prepaint clamps this against
+        // the new content height.
+        {
+            let state = scroll_handle.0.borrow();
+            let base = &state.base_handle;
+            base.set_offset(point(base.offset().x, px(-target_offset)));
+        }
+
+        // Wheel bursts are high frequency; debounce the config write through the
+        // existing session-save path instead of writing on every tick.
+        self.schedule_session_save(cx);
+        cx.notify();
+        true
     }
 
     pub fn start_caption_input(&mut self, cx: &mut Context<Self>) {
