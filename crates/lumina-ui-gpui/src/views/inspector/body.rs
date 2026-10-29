@@ -102,6 +102,10 @@ pub fn render_inspector_body(
             is_trash,
             rating,
             color_label,
+            caption_input_active,
+            caption_input_buffer,
+            title_input_active,
+            title_input_buffer,
         );
     }
 

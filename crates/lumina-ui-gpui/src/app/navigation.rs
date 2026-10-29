@@ -1,10 +1,11 @@
 use gpui::*;
 use lumina_core::{MediaId, MediaItem, MediaType};
 use std::cmp;
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 
+use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::{BatchSelectionSummary, UiMessage};
-use crate::app::undo::UndoAction;
+use crate::app::undo::{BatchField, UndoAction};
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
@@ -597,6 +598,7 @@ impl LuminaApp {
         self.tag_input_buffer.clear();
         self.caption.input_active = false;
         self.caption.input_buffer.clear();
+        self.cancel_batch_edit();
 
         if let Some(ref state) = self.grid_state {
             self.selected_item_tags = state.engine.get_tags_for_item(item.id);
@@ -689,6 +691,433 @@ impl LuminaApp {
         cx.notify();
     }
 
+    // ---- Drag selection -------------------------------------------------
+
+    /// Starts a pointer drag-selection gesture at `position`.
+    ///
+    /// `anchor` is the card the press landed on; a background press passes
+    /// `None` and the first card the pointer sweeps becomes the anchor.
+    /// `additive` keeps the current selection as the base, so a drag beginning
+    /// on an already-selected card cannot collapse a multi-selection.
+    pub fn begin_grid_drag(
+        &mut self,
+        position: Point<Pixels>,
+        anchor: Option<usize>,
+        additive: bool,
+    ) {
+        self.grid_drag = crate::app::state::GridDragState {
+            start: Some(position),
+            current: Some(position),
+            anchor,
+            base: if additive {
+                self.selected_indices.clone()
+            } else {
+                BTreeSet::new()
+            },
+            hovered: anchor,
+            active: true,
+            moved: false,
+            suppress_click: false,
+        };
+    }
+
+    /// Updates the live drag from a raw pointer move.
+    ///
+    /// Returns true once the gesture has moved past the click threshold. A move
+    /// with no button held abandons a stale gesture: a mouse-up delivered
+    /// outside the window never reaches the grid.
+    pub fn grid_pointer_moved(
+        &mut self,
+        position: Point<Pixels>,
+        pressed: Option<MouseButton>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.grid_drag.active {
+            return false;
+        }
+        if pressed != Some(MouseButton::Left) {
+            self.grid_drag.clear();
+            cx.notify();
+            return false;
+        }
+        self.update_grid_drag_position(position, cx)
+    }
+
+    fn update_grid_drag_position(
+        &mut self,
+        position: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.grid_drag.active {
+            return false;
+        }
+        self.grid_drag.current = Some(position);
+        if let Some(start) = self.grid_drag.start {
+            if (start.x - position.x).abs() > px(GRID_DRAG_THRESHOLD)
+                || (start.y - position.y).abs() > px(GRID_DRAG_THRESHOLD)
+            {
+                self.grid_drag.moved = true;
+            }
+        }
+        if self.grid_drag.moved {
+            cx.notify();
+        }
+        self.grid_drag.moved
+    }
+
+    /// Extends the drag selection to the card under the pointer.
+    pub fn drag_over_card(
+        &mut self,
+        index: usize,
+        position: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.grid_drag.active {
+            return;
+        }
+        if !self.update_grid_drag_position(position, cx) {
+            return;
+        }
+        self.grid_drag.hovered = Some(index);
+        if self.grid_drag.anchor.is_none() {
+            self.grid_drag.anchor = Some(index);
+        }
+        self.apply_grid_drag_range(index, cx);
+    }
+
+    /// Replaces the selection with the drag base plus the contiguous anchor
+    /// range. The base preserves a multi-selection the drag started inside.
+    fn apply_grid_drag_range(&mut self, target: usize, cx: &mut Context<Self>) {
+        let total = self.get_active_count();
+        if total == 0 {
+            return;
+        }
+        let Some(anchor) = self.grid_drag.anchor.map(|anchor| anchor.min(total - 1)) else {
+            return;
+        };
+        let target = target.min(total - 1);
+        let start = cmp::min(anchor, target);
+        let end = cmp::max(anchor, target);
+        let mut next = self.grid_drag.base.clone();
+        next.extend(start..=end);
+        if next == self.selected_indices && self.selected_index == Some(target) {
+            return;
+        }
+        self.selected_indices = next;
+        self.selected_index = Some(target);
+        self.update_batch_summary();
+        self.schedule_session_save(cx);
+        cx.notify();
+    }
+
+    /// Finishes the gesture on mouse-up.
+    ///
+    /// A still press on empty space clears the selection; a moved gesture
+    /// finalizes the focused item and suppresses the click that follows.
+    pub fn finish_grid_drag(&mut self, cx: &mut Context<Self>) {
+        if !self.grid_drag.active {
+            return;
+        }
+        let moved = self.grid_drag.moved;
+        let anchor = self.grid_drag.anchor;
+        if !moved {
+            if anchor.is_none() {
+                // Plain click on the grid background keeps its old meaning.
+                self.clear_selection(cx);
+            } else {
+                self.grid_drag.clear();
+                cx.notify();
+            }
+            return;
+        }
+        // Re-apply over the release target so a drag that ended over a gap still
+        // includes the card it started on.
+        if let Some(target) = self.grid_drag.hovered.or(anchor) {
+            self.apply_grid_drag_range(target, cx);
+        } else if self.grid_drag.base.is_empty() {
+            self.clear_selection(cx);
+            return;
+        }
+        if let Some(index) = self.selected_index {
+            if let Some(item) = self.get_active_slice(index..index + 1).into_iter().next() {
+                self.select_item_internal(item, cx);
+            }
+        }
+        self.refresh_selected_tags();
+        self.update_batch_summary();
+        self.schedule_session_save(cx);
+        self.grid_drag.clear();
+        self.grid_drag.suppress_click = true;
+        cx.notify();
+    }
+
+    /// True when the click that follows a drag must be ignored. Consumes the
+    /// suppression so a later, genuine click is not swallowed.
+    pub fn consume_grid_drag_click(&mut self) -> bool {
+        let suppress = self.grid_drag.moved || self.grid_drag.suppress_click;
+        if suppress {
+            self.grid_drag.suppress_click = false;
+        }
+        suppress
+    }
+
+    // ---- Batch metadata -------------------------------------------------
+
+    /// Cancels a batch inline edit without applying it.
+    ///
+    /// Single-item editing is untouched: `caption.batch.field` is only set
+    /// while the batch inspector owns the shared inline buffers.
+    pub(crate) fn cancel_batch_edit(&mut self) {
+        if self.caption.batch.field.take().is_some() {
+            self.caption.title_input_active = false;
+            self.caption.title_input_buffer.clear();
+            self.caption.input_active = false;
+            self.caption.input_buffer.clear();
+        }
+        self.caption.batch.initial_buffer.clear();
+    }
+
+    /// Recomputes the mixed-value summary for the current batch selection.
+    ///
+    /// Inactive inline buffers mirror the summary so the shared inspector
+    /// render path can display "Mixed" or the shared value without a second
+    /// data channel through `render_inspector_body`.
+    fn refresh_batch_metadata(&mut self, items: &[MediaItem]) {
+        if self.selected_indices.len() <= 1 {
+            self.cancel_batch_edit();
+            self.batch_metadata = BatchMetadataSummary::default();
+            return;
+        }
+        let title = summarize_batch_text(items.iter().map(|item| item.title.clone()));
+        let captions: Vec<Option<String>> = items
+            .iter()
+            .map(|item| {
+                self.item_captions
+                    .get(&item.id)
+                    .cloned()
+                    .filter(|caption| !caption.is_empty())
+            })
+            .collect();
+        let caption = summarize_batch_text(captions);
+        self.batch_metadata = BatchMetadataSummary { title, caption };
+        if !self.caption.title_input_active {
+            self.caption.title_input_buffer = batch_field_display(&self.batch_metadata.title);
+        }
+        if !self.caption.input_active {
+            self.caption.input_buffer = batch_field_display(&self.batch_metadata.caption);
+        }
+    }
+
+    fn refresh_selected_item_from_engine(&mut self) {
+        if let Some(id) = self.selected_item.as_ref().map(|item| item.id) {
+            if let Some(updated) = self
+                .grid_state
+                .as_ref()
+                .and_then(|state| state.engine.get_item_by_id(id))
+            {
+                self.selected_item = Some(updated);
+            }
+        }
+    }
+
+    /// Applies one title to every selected item as a single undo step.
+    ///
+    /// All-or-nothing from the UI's point of view: when a write fails, titles
+    /// already written by this call are restored before the error is reported.
+    pub fn apply_batch_title(&mut self, value: Option<String>, cx: &mut Context<Self>) {
+        let items = self.get_selected_items();
+        if items.is_empty() {
+            return;
+        }
+        let changes: Vec<(MediaId, Option<String>, Option<String>)> = items
+            .iter()
+            .map(|item| (item.id, item.title.clone(), value.clone()))
+            .filter(|(_, before, after)| before != after)
+            .collect();
+        if changes.is_empty() {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+
+        let mut applied: Vec<(MediaId, Option<String>)> = Vec::with_capacity(changes.len());
+        let mut failure = None;
+        for (id, before, after) in &changes {
+            let result = match self.grid_state.as_ref() {
+                Some(state) => state.engine.set_title(*id, after.as_deref()),
+                None => Ok(()),
+            };
+            match result {
+                Ok(()) => applied.push((*id, before.clone())),
+                Err(err) => {
+                    failure = Some(err.to_string());
+                    break;
+                }
+            }
+        }
+        if let Some(err) = failure {
+            let rollback = self.revert_batch_titles(&applied);
+            self.refresh_selected_item_from_engine();
+            self.update_batch_summary();
+            let detail = match rollback {
+                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
+                None => err,
+            };
+            self.set_error(
+                format!(
+                    "Could not apply title to {} item(s): {detail}",
+                    changes.len()
+                ),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
+        self.refresh_selected_item_from_engine();
+        self.push_undo(UndoAction::BatchMetadata {
+            field: BatchField::Title,
+            changes,
+        });
+        self.sync_metadata_sidecars(&ids);
+        self.update_batch_summary();
+        let message = if value.is_some() {
+            format!("Title applied to {} item(s)", ids.len())
+        } else {
+            format!("Title removed from {} item(s)", ids.len())
+        };
+        self.set_last_action(message.clone());
+        self.show_undo_toast(message, cx);
+    }
+
+    fn revert_batch_titles(&self, applied: &[(MediaId, Option<String>)]) -> Option<String> {
+        let mut rollback_error = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before) in applied.iter().rev() {
+                if let Err(err) = state.engine.set_title(*id, before.as_deref()) {
+                    rollback_error = Some(err.to_string());
+                }
+            }
+        }
+        rollback_error
+    }
+
+    fn revert_batch_captions(&self, applied: &[(MediaId, Option<String>)]) -> Option<String> {
+        let mut rollback_error = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before) in applied.iter().rev() {
+                if let Err(err) = state
+                    .engine
+                    .set_caption(*id, before.as_deref().unwrap_or(""))
+                {
+                    rollback_error = Some(err.to_string());
+                }
+            }
+        }
+        rollback_error
+    }
+
+    /// Applies one caption to every selected item as a single undo step.
+    ///
+    /// The optimistic caption map is reverted in full when any write fails.
+    pub fn apply_batch_caption(&mut self, value: Option<String>, cx: &mut Context<Self>) {
+        let items = self.get_selected_items();
+        if items.is_empty() {
+            return;
+        }
+        let changes: Vec<(MediaId, Option<String>, Option<String>)> = items
+            .iter()
+            .map(|item| {
+                (
+                    item.id,
+                    self.item_captions
+                        .get(&item.id)
+                        .cloned()
+                        .filter(|caption| !caption.is_empty()),
+                    value.clone(),
+                )
+            })
+            .filter(|(_, before, after)| before != after)
+            .collect();
+        if changes.is_empty() {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+
+        for (id, _, after) in &changes {
+            match after {
+                Some(caption) => {
+                    self.item_captions.insert(*id, caption.clone());
+                }
+                None => {
+                    self.item_captions.remove(id);
+                }
+            }
+        }
+        let mut applied: Vec<(MediaId, Option<String>)> = Vec::with_capacity(changes.len());
+        let mut failure = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before, after) in &changes {
+                match state
+                    .engine
+                    .set_caption(*id, after.as_deref().unwrap_or(""))
+                {
+                    Ok(()) => applied.push((*id, before.clone())),
+                    Err(err) => {
+                        failure = Some(err.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(err) = failure {
+            let rollback = self.revert_batch_captions(&applied);
+            // Restore every optimistic entry, including items whose write was
+            // never attempted, so the cache can never lead the catalog.
+            for (id, before, _) in &changes {
+                match before {
+                    Some(caption) => {
+                        self.item_captions.insert(*id, caption.clone());
+                    }
+                    None => {
+                        self.item_captions.remove(id);
+                    }
+                }
+            }
+            self.update_batch_summary();
+            let detail = match rollback {
+                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
+                None => err,
+            };
+            self.set_error(
+                format!(
+                    "Could not apply caption to {} item(s): {detail}",
+                    changes.len()
+                ),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
+        self.push_undo(UndoAction::BatchMetadata {
+            field: BatchField::Caption,
+            changes,
+        });
+        self.sync_metadata_sidecars(&ids);
+        self.update_batch_summary();
+        let message = if value.is_some() {
+            format!("Caption applied to {} item(s)", ids.len())
+        } else {
+            format!("Caption removed from {} item(s)", ids.len())
+        };
+        self.set_last_action(message.clone());
+        self.show_undo_toast(message, cx);
+    }
+
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
         let total = self.get_active_count();
         if total == 0 {
@@ -717,6 +1146,9 @@ impl LuminaApp {
         self.viewer_image = None;
         self.selected_item_tags.clear();
         self.batch_summary = BatchSelectionSummary::default();
+        self.batch_metadata = BatchMetadataSummary::default();
+        self.grid_drag.clear();
+        self.cancel_batch_edit();
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
         // Clearing selection must forget the persisted item too (view/search
@@ -751,6 +1183,7 @@ impl LuminaApp {
             } else {
                 self.batch_summary = BatchSelectionSummary::default();
             }
+            self.refresh_batch_metadata(&[]);
             return;
         }
 
@@ -779,6 +1212,7 @@ impl LuminaApp {
             raw_count,
             fav_count,
         };
+        self.refresh_batch_metadata(&items);
     }
 
     pub fn get_selected_items(&self) -> Vec<MediaItem> {
@@ -991,5 +1425,35 @@ impl LuminaApp {
                 6 => Some(theme::label_purple()),
                 _ => None,
             })
+    }
+}
+
+/// Summarizes one text field across the batch selection.
+///
+/// `mixed` is true when the items disagree; `common` then carries `None`
+/// because there is no single value to show. An empty iterator (no selection)
+/// yields the default "not set" summary.
+fn summarize_batch_text<I>(values: I) -> BatchFieldSummary
+where
+    I: IntoIterator<Item = Option<String>>,
+{
+    let mut values = values.into_iter();
+    let Some(first) = values.next() else {
+        return BatchFieldSummary::default();
+    };
+    let mixed = values.any(|value| value != first);
+    BatchFieldSummary {
+        mixed,
+        common: if mixed { None } else { first },
+    }
+}
+
+/// Renders a summary for the shared inline buffers: "Mixed" when the selection
+/// disagrees, otherwise the shared value (empty means "not set").
+fn batch_field_display(field: &BatchFieldSummary) -> String {
+    if field.mixed {
+        "Mixed".to_string()
+    } else {
+        field.common.clone().unwrap_or_default()
     }
 }

@@ -114,6 +114,17 @@ impl LuminaApp {
     }
 
     pub fn start_caption_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            let existing = self.batch_draft(&self.batch_metadata.caption);
+            self.caption.batch = crate::app::state::BatchEditState {
+                field: Some(crate::app::state::BatchEditField::Caption),
+                initial_buffer: existing.clone(),
+            };
+            self.caption.input_active = true;
+            self.caption.input_buffer = existing;
+            cx.notify();
+            return;
+        }
         let existing = self
             .selected_item
             .as_ref()
@@ -126,6 +137,10 @@ impl LuminaApp {
     }
 
     pub fn commit_caption_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            self.commit_batch_caption_input(cx);
+            return;
+        }
         let caption = std::mem::take(&mut self.caption.input_buffer);
         self.caption.input_active = false;
         if let Some(item) = self.selected_item.clone() {
@@ -179,10 +194,86 @@ impl LuminaApp {
     pub fn cancel_caption_input(&mut self, cx: &mut Context<Self>) {
         self.caption.input_active = false;
         self.caption.input_buffer.clear();
+        let was_batch = self.caption.batch.field.take().is_some();
+        self.caption.batch.initial_buffer.clear();
+        if was_batch {
+            // Restore the "Mixed" / shared value the batch row shows when idle.
+            self.update_batch_summary();
+        }
         cx.notify();
     }
 
+    /// Draft a batch field opens with: the shared value, or empty when the
+    /// selection disagrees so an unchanged Enter is a no-op.
+    fn batch_draft(&self, field: &crate::app::state::BatchFieldSummary) -> String {
+        if field.mixed {
+            String::new()
+        } else {
+            field.common.clone().unwrap_or_default()
+        }
+    }
+
+    fn commit_batch_caption_input(&mut self, cx: &mut Context<Self>) {
+        let buffer = std::mem::take(&mut self.caption.input_buffer);
+        let initial = std::mem::take(&mut self.caption.batch.initial_buffer);
+        let field = self.caption.batch.field.take();
+        self.caption.input_active = false;
+        if field != Some(crate::app::state::BatchEditField::Caption) {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        if buffer == initial {
+            // Untouched draft: never overwrite N items silently.
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        let trimmed = buffer.trim().to_string();
+        let after = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        };
+        self.apply_batch_caption(after, cx);
+    }
+
+    fn commit_batch_title_input(&mut self, cx: &mut Context<Self>) {
+        let buffer = std::mem::take(&mut self.caption.title_input_buffer);
+        let initial = std::mem::take(&mut self.caption.batch.initial_buffer);
+        let field = self.caption.batch.field.take();
+        self.caption.title_input_active = false;
+        if field != Some(crate::app::state::BatchEditField::Title) {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        if buffer == initial {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        let trimmed = buffer.trim().to_string();
+        let after = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        };
+        self.apply_batch_title(after, cx);
+    }
+
     pub fn start_title_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            let existing = self.batch_draft(&self.batch_metadata.title);
+            self.caption.batch = crate::app::state::BatchEditState {
+                field: Some(crate::app::state::BatchEditField::Title),
+                initial_buffer: existing.clone(),
+            };
+            self.caption.title_input_active = true;
+            self.caption.title_input_buffer = existing;
+            cx.notify();
+            return;
+        }
         let existing = self
             .selected_item
             .as_ref()
@@ -194,6 +285,10 @@ impl LuminaApp {
     }
 
     pub fn commit_title_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            self.commit_batch_title_input(cx);
+            return;
+        }
         let value = std::mem::take(&mut self.caption.title_input_buffer);
         self.caption.title_input_active = false;
         let Some(item) = self.selected_item.clone() else {
@@ -242,6 +337,11 @@ impl LuminaApp {
     pub fn cancel_title_input(&mut self, cx: &mut Context<Self>) {
         self.caption.title_input_active = false;
         self.caption.title_input_buffer.clear();
+        let was_batch = self.caption.batch.field.take().is_some();
+        self.caption.batch.initial_buffer.clear();
+        if was_batch {
+            self.update_batch_summary();
+        }
         cx.notify();
     }
 

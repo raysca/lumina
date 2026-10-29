@@ -48,13 +48,36 @@ impl LuminaApp {
             .flex_1()
             .h_full()
             .overflow_hidden()
+            .relative()
             .pt_2()
+            // A press on the grid background starts a marquee drag instead of
+            // clearing immediately, so a sweep can build a selection. A still
+            // press still clears (see finish_grid_drag).
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
-                    if !this.selected_indices.is_empty() || this.selected_index.is_some() {
-                        this.clear_selection(cx);
-                    }
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    let mods = window.modifiers();
+                    this.begin_grid_drag(
+                        event.position,
+                        None,
+                        mods.shift || mods.secondary() || mods.control,
+                    );
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                this.grid_pointer_moved(event.position, event.pressed_button, cx);
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                    this.finish_grid_drag(cx);
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                    this.finish_grid_drag(cx);
                 }),
             )
             .child(
@@ -177,6 +200,11 @@ impl LuminaApp {
                                         .justify_between()
                                         .on_click(cx.listener(
                                             move |this, event: &ClickEvent, window, cx| {
+                                                // A sweep that ends over this card must not
+                                                // collapse the selection it just built.
+                                                if this.consume_grid_drag_click() {
+                                                    return;
+                                                }
                                                 let mods = window.modifiers();
                                                 let is_shift = mods.shift;
                                                 let is_cmd = mods.secondary() || mods.control;
@@ -194,9 +222,43 @@ impl LuminaApp {
                                                 }
                                             },
                                         ))
-                                        .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
-                                            cx.stop_propagation();
-                                        })
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(
+                                                move |this, event: &MouseDownEvent, window, cx| {
+                                                    let mods = window.modifiers();
+                                                    let additive = mods.shift
+                                                        || mods.secondary()
+                                                        || mods.control
+                                                        || (this.selected_indices.len() > 1
+                                                            && this
+                                                                .selected_indices
+                                                                .contains(&card_index));
+                                                    this.begin_grid_drag(
+                                                        event.position,
+                                                        Some(card_index),
+                                                        additive,
+                                                    );
+                                                    // Keep the press away from the grid
+                                                    // background's own drag start.
+                                                    cx.stop_propagation();
+                                                    cx.notify();
+                                                },
+                                            ),
+                                        )
+                                        .on_mouse_move(cx.listener(
+                                            move |this, event: &MouseMoveEvent, _window, cx| {
+                                                if event.pressed_button
+                                                    == Some(MouseButton::Left)
+                                                {
+                                                    this.drag_over_card(
+                                                        card_index,
+                                                        event.position,
+                                                        cx,
+                                                    );
+                                                }
+                                            },
+                                        ))
                                         .on_mouse_down(
                                             MouseButton::Right,
                                             cx.listener(move |this, e: &MouseDownEvent, _w, cx| {
@@ -484,6 +546,50 @@ impl LuminaApp {
                 )
                 .track_scroll(scroll_handle)
                 .h_full(),
+            )
+            // Marquee rectangle, painted in window coordinates so it follows the
+            // pointer regardless of which card is hovered. Card selection
+            // feedback (accent border + check badge) remains the structural cue;
+            // this is an additive visual on top.
+            .child(self.render_grid_drag_rect())
+            .into_any_element()
+    }
+
+    /// Paints the drag selection rectangle while a moved gesture is live.
+    ///
+    /// The canvas is non-interactive, so it never steals hover or click events
+    /// from the cards underneath.
+    fn render_grid_drag_rect(&self) -> AnyElement {
+        let (Some(start), Some(current)) = (self.grid_drag.start, self.grid_drag.current) else {
+            return Empty.into_any_element();
+        };
+        if !self.grid_drag.active || !self.grid_drag.moved {
+            return Empty.into_any_element();
+        }
+        div()
+            .id("grid-selection-rect")
+            .debug_selector(|| "grid-selection-rect".to_string())
+            .absolute()
+            .inset_0()
+            .child(
+                canvas(
+                    move |_bounds, _window, _cx| (),
+                    move |_bounds, _prepaint, window, _cx| {
+                        let top_left =
+                            point(cmp::min(start.x, current.x), cmp::min(start.y, current.y));
+                        let bottom_right =
+                            point(cmp::max(start.x, current.x), cmp::max(start.y, current.y));
+                        window.paint_quad(
+                            fill(
+                                Bounds::from_corners(top_left, bottom_right),
+                                rgba(0x3b82f61f),
+                            )
+                            .border_widths(px(1.0))
+                            .border_color(theme::accent()),
+                        );
+                    },
+                )
+                .size_full(),
             )
             .into_any_element()
     }

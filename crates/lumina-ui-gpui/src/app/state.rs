@@ -177,6 +177,79 @@ pub struct CaptionState {
     pub date_input_buffer: String,
     pub location_input_active: bool,
     pub location_input_buffer: String,
+    /// Bookkeeping for the batch variant of the same inline editor.
+    pub batch: BatchEditState,
+}
+
+/// A metadata field the batch inspector can edit for the whole selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchEditField {
+    Title,
+    Caption,
+}
+
+/// Bookkeeping for the batch inline editor.
+///
+/// The batch editor reuses the single-item CaptionState buffers, because the
+/// inspector render path is shared. `initial_buffer` records the draft the
+/// editor opened with so committing an untouched draft can never overwrite N
+/// items (selecting a mixed-value batch and pressing Enter must be a no-op).
+#[derive(Debug, Default)]
+pub struct BatchEditState {
+    pub field: Option<BatchEditField>,
+    pub initial_buffer: String,
+}
+
+/// One metadata field summarized across the batch selection.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BatchFieldSummary {
+    /// True when the selected items disagree, so the inspector shows "Mixed".
+    pub mixed: bool,
+    /// Shared value when every item agrees; `None` also covers "not set".
+    pub common: Option<String>,
+}
+
+/// Mixed-value-aware title/caption summary for the batch inspector.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BatchMetadataSummary {
+    pub title: BatchFieldSummary,
+    pub caption: BatchFieldSummary,
+}
+
+/// Pointer distance that turns a press into a drag rather than a click.
+pub const GRID_DRAG_THRESHOLD: f32 = 4.0;
+
+/// Pointer drag-selection state for the library grid.
+///
+/// Grouped rather than flat fields so a stray mouse-up, Escape, or a view change
+/// can reset the whole gesture with one assignment.
+#[derive(Debug, Default)]
+pub struct GridDragState {
+    /// Window-space position where the left button went down.
+    pub start: Option<Point<Pixels>>,
+    /// Latest pointer position seen while the gesture is live.
+    pub current: Option<Point<Pixels>>,
+    /// Card the gesture is anchored to; `None` for a background drag until the
+    /// pointer first sweeps a card, which then becomes the anchor.
+    pub anchor: Option<usize>,
+    /// Selection captured at mouse-down that the drag adds to.
+    pub base: BTreeSet<usize>,
+    /// Card under the pointer at the last update.
+    pub hovered: Option<usize>,
+    /// True between left-button down and mouse-up.
+    pub active: bool,
+    /// True once the pointer moved past GRID_DRAG_THRESHOLD.
+    pub moved: bool,
+    /// Set when a moved gesture ends; the click that follows must not change
+    /// the selection the drag just built.
+    pub suppress_click: bool,
+}
+
+impl GridDragState {
+    /// Resets the whole gesture.
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
 }
 
 pub struct LuminaApp {
@@ -188,6 +261,10 @@ pub struct LuminaApp {
     pub selection_anchor: Option<usize>,
     pub selected_item_tags: Vec<String>,
     pub batch_summary: BatchSelectionSummary,
+    /// Mixed-value-aware title/caption summary for the batch inspector.
+    pub batch_metadata: BatchMetadataSummary,
+    /// Live pointer drag-selection over the grid (marquee or additive sweep).
+    pub grid_drag: GridDragState,
     pub viewer_image: Option<Arc<RenderImage>>,
     pub has_desktop_pics: bool,
     pub ui_tx: async_channel::Sender<UiMessage>,
@@ -344,6 +421,8 @@ impl LuminaApp {
             selection_anchor: None,
             selected_item_tags: Vec::new(),
             batch_summary: BatchSelectionSummary::default(),
+            batch_metadata: BatchMetadataSummary::default(),
+            grid_drag: GridDragState::default(),
             viewer_image: None,
             has_desktop_pics,
             ui_tx,

@@ -17,6 +17,10 @@ pub fn render_batch_body(
     is_trash: bool,
     rating: u8,
     color_label: Option<u8>,
+    caption_input_active: bool,
+    caption_input_buffer: &str,
+    title_input_active: bool,
+    title_input_buffer: &str,
 ) -> AnyElement {
     let count = summary.count;
     let total_bytes = summary.total_bytes;
@@ -64,6 +68,55 @@ pub fn render_batch_body(
                         .text_color(theme::text_muted())
                         .child(format!("Total Size: {}", format_bytes(total_bytes))),
                 ),
+        )
+        // Mixed-value-aware metadata editing. Applying either field writes one
+        // grouped undo entry for the whole selection.
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_2p5()
+                .rounded_lg()
+                .bg(theme::bg_pane())
+                .border_1()
+                .border_color(theme::border_subtle())
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::text_subtle())
+                                .child("BATCH METADATA"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme::text_disabled())
+                                .child(format!("Applies to all {} · one undo step", count)),
+                        ),
+                )
+                .child(render_batch_metadata_row(
+                    BatchMetadataRow::Title,
+                    "TITLE",
+                    "batch-title-input",
+                    title_input_buffer,
+                    title_input_active,
+                    weak_app.clone(),
+                ))
+                .child(render_batch_metadata_row(
+                    BatchMetadataRow::Caption,
+                    "CAPTION",
+                    "batch-caption-input",
+                    caption_input_buffer,
+                    caption_input_active,
+                    weak_app.clone(),
+                )),
         )
         // Batch Actions Box
         .child(if is_trash {
@@ -393,5 +446,116 @@ pub fn render_batch_body(
             tag_input_active,
             tag_input_buffer,
         ))
+        .into_any_element()
+}
+
+/// Which batch metadata field a row edits.
+#[derive(Clone, Copy)]
+enum BatchMetadataRow {
+    Title,
+    Caption,
+}
+
+/// One editable metadata row in the batch inspector.
+///
+/// The value comes from the shared inline buffers, kept in sync by the app: an
+/// idle buffer holds the shared value or "Mixed", and the active buffer holds
+/// the draft. Clicking opens the same inline editor the single-item inspector
+/// uses, so the keyboard path (Enter apply, Escape cancel) is shared.
+fn render_batch_metadata_row(
+    row: BatchMetadataRow,
+    label: &'static str,
+    selector: &'static str,
+    value: &str,
+    editing: bool,
+    weak_app: WeakEntity<LuminaApp>,
+) -> AnyElement {
+    let display = if value.is_empty() {
+        "Not set".to_string()
+    } else {
+        value.to_string()
+    };
+    let mixed = !editing && value == "Mixed";
+    let hint = if editing {
+        "Enter to apply · Esc to cancel"
+    } else {
+        "Click to edit"
+    };
+    let app = weak_app;
+    div()
+        .id(selector)
+        .debug_selector(move || selector.to_string())
+        .w_full()
+        .p_2()
+        .rounded_md()
+        .bg(if editing {
+            theme::bg_control()
+        } else {
+            theme::bg_raised()
+        })
+        .border_1()
+        .border_color(if editing {
+            theme::accent()
+        } else {
+            theme::border_subtle()
+        })
+        .cursor_pointer()
+        .flex()
+        .flex_col()
+        .gap(px(3.0))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .justify_between()
+                .items_center()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme::text_subtle())
+                        .child(label),
+                )
+                .child(if mixed {
+                    div()
+                        .debug_selector(move || format!("{selector}-mixed"))
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded_full()
+                        .bg(theme::accent())
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme::accent_fg())
+                        .child("Mixed")
+                        .into_any_element()
+                } else {
+                    Empty.into_any_element()
+                }),
+        )
+        .child(
+            div()
+                .text_xs()
+                .font_family(theme::FONT_MONO)
+                .text_color(if editing || mixed {
+                    theme::accent()
+                } else {
+                    theme::text()
+                })
+                .child(display),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::text_disabled())
+                .child(hint),
+        )
+        .on_click(move |_e, _window, cx| {
+            if let Some(app) = app.upgrade() {
+                app.update(cx, |this, cx| match row {
+                    BatchMetadataRow::Title => this.start_title_input(cx),
+                    BatchMetadataRow::Caption => this.start_caption_input(cx),
+                });
+            }
+        })
         .into_any_element()
 }

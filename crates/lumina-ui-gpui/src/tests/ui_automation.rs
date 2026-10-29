@@ -1377,3 +1377,478 @@ fn ui_automation_search_suggestion_click_applies_without_blurring() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
+    use std::collections::BTreeSet;
+
+    let (temp_dir, engine) = seed_library("grid_drag_range", 8);
+    let items = engine.get_item_slice(0..8);
+    let cards: Vec<&'static str> = items
+        .iter()
+        .map(|item| leak(format!("media-card-{}", item.id.0)))
+        .collect();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    let start = bounds_center(vcx, cards[0]);
+    let end = bounds_center(vcx, cards[2]);
+    vcx.simulate_mouse_down(start, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    vcx.simulate_mouse_move(
+        end,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        assert!(app.grid_drag.active, "a sweeping press must stay a drag");
+        assert!(
+            app.grid_drag.moved,
+            "moving past the threshold marks the drag"
+        );
+        assert_eq!(
+            app.grid_drag.anchor,
+            Some(0),
+            "the pressed card is the anchor"
+        );
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 1, 2]),
+            "dragging over cards extends a contiguous range"
+        );
+        assert_eq!(app.selected_index, Some(2));
+    });
+    let marquee = vcx
+        .debug_bounds("grid-selection-rect")
+        .expect("the marquee rectangle must paint while a moved drag is live");
+    assert!(
+        marquee.size.width > gpui::px(0.0) && marquee.size.height > gpui::px(0.0),
+        "the marquee surface must cover the grid instead of collapsing to zero size"
+    );
+
+    vcx.simulate_mouse_up(end, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.grid_drag.active, "mouse-up resets the drag");
+        assert_eq!(
+            app.selected_indices.len(),
+            3,
+            "the release must not collapse the drag selection into a single click"
+        );
+        assert_eq!(app.batch_summary.count, 3, "the inspector shows the range");
+    });
+    // Note: GPUI 0.2.2 keeps debug_bounds entries for selectors that stopped
+    // painting, so disappearance is asserted through the drag state above
+    // rather than through the bounds map.
+
+    // Suppression must be consumed: the next genuine click is still a single select.
+    click(vcx, cards[1]);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([1usize]),
+            "a plain click after a drag selects exactly one card"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_drag_from_selected_card_preserves_multi_selection() {
+    use std::collections::BTreeSet;
+
+    let (temp_dir, engine) = seed_library("grid_drag_preserve", 8);
+    let items = engine.get_item_slice(0..8);
+    let cards: Vec<&'static str> = items
+        .iter()
+        .map(|item| leak(format!("media-card-{}", item.id.0)))
+        .collect();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Build {0,1,2} the keyboard-equivalent way: click then Shift+click.
+    click(vcx, cards[0]);
+    let shift_click = bounds_center(vcx, cards[2]);
+    vcx.simulate_click(
+        shift_click,
+        gpui::Modifiers {
+            shift: true,
+            ..Default::default()
+        },
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_indices, BTreeSet::from([0usize, 1, 2]));
+    });
+
+    // Drag from an already-selected card, staying inside it (moved but no new card).
+    let start = bounds_center(vcx, cards[1]);
+    let end = gpui::point(start.x + gpui::px(24.0), start.y);
+    vcx.simulate_mouse_down(start, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    vcx.simulate_mouse_move(
+        end,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.grid_drag.moved);
+        assert_eq!(
+            app.grid_drag.anchor,
+            Some(1),
+            "the dragged card is the anchor"
+        );
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 1, 2]),
+            "dragging from a selected card must not collapse the multi-selection"
+        );
+    });
+
+    // The release lands on the same card, so a click event fires: it must be
+    // suppressed rather than reducing the selection back to {1}.
+    vcx.simulate_mouse_up(end, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 1, 2]),
+            "the drag-end click must not clear the multi-selection"
+        );
+        assert!(!app.grid_drag.active);
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_drag_with_cmd_is_additive() {
+    use std::collections::BTreeSet;
+
+    let (temp_dir, engine) = seed_library("grid_drag_cmd", 8);
+    let items = engine.get_item_slice(0..8);
+    let cards: Vec<&'static str> = items
+        .iter()
+        .map(|item| leak(format!("media-card-{}", item.id.0)))
+        .collect();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, cards[0]);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_indices, BTreeSet::from([0usize]));
+    });
+
+    let cmd = gpui::Modifiers::secondary_key();
+    let start = bounds_center(vcx, cards[3]);
+    let end = bounds_center(vcx, cards[5]);
+    vcx.simulate_mouse_down(start, gpui::MouseButton::Left, cmd);
+    render_ui(vcx);
+    vcx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), cmd);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 3, 4, 5]),
+            "Cmd-drag adds the swept range to the existing selection"
+        );
+        assert_eq!(app.grid_drag.anchor, Some(3));
+    });
+
+    vcx.simulate_mouse_up(end, gpui::MouseButton::Left, cmd);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 3, 4, 5]),
+            "the additive selection survives the release"
+        );
+        assert!(!app.grid_drag.active);
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
+    use std::collections::BTreeSet;
+
+    let (temp_dir, engine) = seed_library("grid_drag_bg", 8);
+    let items = engine.get_item_slice(0..8);
+    let cards: Vec<&'static str> = items
+        .iter()
+        .map(|item| leak(format!("media-card-{}", item.id.0)))
+        .collect();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let empty = gpui::point(
+        surface.origin.x + gpui::px(24.0),
+        surface.origin.y + surface.size.height - gpui::px(24.0),
+    );
+
+    vcx.simulate_mouse_down(empty, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    let first_card = bounds_center(vcx, cards[0]);
+    vcx.simulate_mouse_move(
+        first_card,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.grid_drag.anchor,
+            Some(0),
+            "the first swept card becomes the anchor"
+        );
+        assert_eq!(app.selected_indices, BTreeSet::from([0usize]));
+    });
+
+    let last_card = bounds_center(vcx, cards[2]);
+    vcx.simulate_mouse_move(
+        last_card,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([0usize, 1, 2]),
+            "a background marquee extends from the first swept card"
+        );
+    });
+
+    // Escape must abandon the live gesture (the grid keymap clears the batch).
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.grid_drag.active, "Escape resets the drag gesture");
+        assert!(
+            app.selected_indices.is_empty(),
+            "Escape clears the multi-selection it was building"
+        );
+    });
+
+    // Release after the cancel must not resurrect the drag.
+    vcx.simulate_mouse_up(
+        last_card,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.grid_drag.active);
+        assert!(app.selected_indices.is_empty());
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
+    let (temp_dir, engine) = seed_library("batch_meta", 4);
+    let items = engine.get_item_slice(0..4);
+    let first = items[0].clone();
+    let ids: Vec<_> = items[0..3].iter().map(|item| item.id).collect();
+    engine.set_title(first.id, Some("First")).unwrap();
+    engine.set_caption(first.id, "First caption").unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        // Test harnesses wire grid_state directly, so load the metadata caches
+        // the real open path fills.
+        app.refresh_after_history(cx);
+        app.selected_indices = [0usize, 1, 2].into_iter().collect();
+        app.selected_index = Some(0);
+        app.selected_item = Some(first.clone());
+        app.update_batch_summary();
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.batch_metadata.title.mixed,
+            "differing titles must be flagged mixed"
+        );
+        assert_eq!(app.batch_metadata.title.common, None);
+        assert!(
+            app.batch_metadata.caption.mixed,
+            "differing captions must be flagged mixed"
+        );
+        assert_eq!(
+            app.caption.title_input_buffer, "Mixed",
+            "the batch inspector shows Mixed for differing titles"
+        );
+        assert_eq!(app.caption.input_buffer, "Mixed");
+
+        app.start_title_input(cx);
+        assert_eq!(
+            app.caption.title_input_buffer, "",
+            "a mixed draft starts empty so an unchanged Enter cannot overwrite N items"
+        );
+        app.caption.title_input_buffer = "Batch Title".to_string();
+        app.commit_title_input(cx);
+    });
+
+    let titles: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().title)
+        .collect();
+    assert_eq!(
+        titles,
+        vec![Some("Batch Title".to_string()); 3],
+        "the batch title must apply to every selected item"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "applying to N items must create exactly one undo entry"
+        );
+        assert!(
+            matches!(
+                &app.undo.undo_stack[0],
+                crate::app::undo::UndoAction::BatchMetadata {
+                    field: crate::app::undo::BatchField::Title,
+                    ..
+                }
+            ),
+            "the entry must be the grouped batch variant"
+        );
+        assert!(!app.batch_metadata.title.mixed);
+        assert_eq!(
+            app.batch_metadata.title.common.as_deref(),
+            Some("Batch Title"),
+            "the summary refreshes after the apply"
+        );
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    let restored: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().title)
+        .collect();
+    assert_eq!(
+        restored,
+        vec![Some("First".to_string()), None, None],
+        "one Cmd+Z must restore every item touched by the batch"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.undo.undo_stack.is_empty());
+        assert!(
+            app.batch_metadata.title.mixed,
+            "undo refreshes the mixed-value summary"
+        );
+    });
+
+    // Same contract for captions, with the optimistic map reverted on undo.
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        assert_eq!(app.caption.input_buffer, "", "mixed captions start empty");
+        app.caption.input_buffer = "Shared caption".to_string();
+        app.commit_caption_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        for id in &ids {
+            assert_eq!(
+                app.item_captions.get(id).map(String::as_str),
+                Some("Shared caption")
+            );
+        }
+        assert_eq!(app.undo.undo_stack.len(), 1);
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_captions.get(&first.id).map(String::as_str),
+            Some("First caption")
+        );
+        assert!(!app.item_captions.contains_key(&ids[1]));
+        assert!(!app.item_captions.contains_key(&ids[2]));
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_batch_inspector_metadata_edit_ui_path() {
+    let (temp_dir, engine) = seed_library("batch_meta_ui", 3);
+    let items = engine.get_item_slice(0..3);
+    let first = items[0].clone();
+    let second = items[1].clone();
+    engine.set_title(first.id, Some("First")).unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.selected_indices = [0usize, 1].into_iter().collect();
+        app.selected_index = Some(0);
+        app.selected_item = Some(first.clone());
+        app.update_batch_summary();
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    assert!(
+        vcx.debug_bounds("batch-title-input").is_some(),
+        "the batch inspector must render the title editor"
+    );
+    assert!(
+        vcx.debug_bounds("batch-caption-input").is_some(),
+        "the batch inspector must render the caption editor"
+    );
+    assert!(
+        vcx.debug_bounds("batch-title-input-mixed").is_some(),
+        "differing titles must show the Mixed marker"
+    );
+
+    focus_app(vcx, &view);
+    click(vcx, "batch-title-input");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.caption.title_input_active,
+            "clicking the batch title row opens the inline editor"
+        );
+        assert_eq!(
+            app.caption.title_input_buffer, "",
+            "mixed draft starts empty"
+        );
+    });
+    type_text(vcx, "shared");
+    keystrokes(vcx, "enter");
+
+    view.update(vcx, |app, _| {
+        assert!(!app.caption.title_input_active, "Enter closes the editor");
+        assert_eq!(
+            engine.get_item_by_id(first.id).unwrap().title.as_deref(),
+            Some("shared")
+        );
+        assert_eq!(
+            engine.get_item_by_id(second.id).unwrap().title.as_deref(),
+            Some("shared")
+        );
+        assert_eq!(app.undo.undo_stack.len(), 1);
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

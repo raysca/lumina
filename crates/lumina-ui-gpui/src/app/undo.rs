@@ -12,6 +12,13 @@ use crate::app::LuminaApp;
 
 const MAX_UNDO: usize = 100;
 
+/// Metadata field a grouped batch edit covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchField {
+    Title,
+    Caption,
+}
+
 #[derive(Debug, Clone)]
 pub enum UndoAction {
     Rating {
@@ -58,6 +65,13 @@ pub enum UndoAction {
     Trashed {
         changes: Vec<(MediaId, bool, bool)>,
     },
+    /// One grouped undo entry for a batch title/caption edit: a single undo
+    /// restores every touched item.
+    BatchMetadata {
+        field: BatchField,
+        /// (id, before, after)
+        changes: Vec<(MediaId, Option<String>, Option<String>)>,
+    },
 }
 
 #[derive(Default)]
@@ -78,6 +92,9 @@ impl UndoAction {
             UndoAction::Favorite { changes } | UndoAction::Trashed { changes } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
+            UndoAction::BatchMetadata { changes, .. } => {
+                changes.iter().map(|(id, _, _)| *id).collect()
+            }
             UndoAction::Tags { ids, .. } => ids.clone(),
         }
     }
@@ -93,6 +110,10 @@ impl UndoAction {
             UndoAction::Location { .. } => "location",
             UndoAction::Tags { .. } => "tag edit",
             UndoAction::Trashed { .. } => "trash",
+            UndoAction::BatchMetadata { field, .. } => match field {
+                BatchField::Title => "batch title",
+                BatchField::Caption => "batch caption",
+            },
         }
     }
 
@@ -160,6 +181,18 @@ impl UndoAction {
             UndoAction::Trashed { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_trashed(ids, value)
             }),
+            UndoAction::BatchMetadata { field, changes } => {
+                for (id, b, a) in changes {
+                    let value = if before { b } else { a };
+                    match field {
+                        BatchField::Title => engine.set_title(*id, value.as_deref())?,
+                        BatchField::Caption => {
+                            engine.set_caption(*id, value.as_deref().unwrap_or(""))?
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -287,6 +320,8 @@ impl LuminaApp {
                 self.selected_item = Some(item);
             }
         }
+        // Batch labels and mixed-value summaries read the refreshed maps.
+        self.update_batch_summary();
         self.refresh_album_counts();
         cx.notify();
     }
