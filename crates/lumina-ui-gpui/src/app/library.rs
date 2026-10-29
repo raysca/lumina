@@ -130,6 +130,11 @@ impl LuminaApp {
                     self.video.playback_time = player.position();
                     if !player.is_playing() {
                         self.video.is_playing = false;
+                        // Playback can end while a scrub drag is active. Do not
+                        // leave the transport/playhead stuck in scrub mode.
+                        self.video.is_scrubbing = false;
+                        self.video.scrub_time = None;
+                        self.video.last_scrub_seek = None;
                         self.stop_video_ticker();
                         cx.notify();
                     } else if let Some(frame) = player.next_frame() {
