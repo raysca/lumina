@@ -1160,3 +1160,100 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn test_video_resume_start_selection_is_bounded() {
+    use crate::config::resume_start_time;
+
+    assert_eq!(
+        resume_start_time(Some(42.0), 120.0),
+        42.0,
+        "a saved mid-video position must be used"
+    );
+    assert_eq!(
+        resume_start_time(Some(118.5), 120.0),
+        0.0,
+        "a position near the end must restart from the start"
+    );
+    assert_eq!(
+        resume_start_time(Some(42.0), 30.0),
+        0.0,
+        "a position beyond the duration is invalid"
+    );
+    assert_eq!(resume_start_time(Some(0.0), 120.0), 0.0);
+    assert_eq!(resume_start_time(Some(-5.0), 120.0), 0.0);
+    assert_eq!(resume_start_time(Some(f64::NAN), 120.0), 0.0);
+    assert_eq!(resume_start_time(None, 120.0), 0.0);
+    assert_eq!(
+        resume_start_time(Some(42.0), 0.0),
+        0.0,
+        "an unknown duration must not produce a seek target"
+    );
+}
+
+#[core::prelude::v1::test]
+fn test_video_resume_progress_throttle_and_close() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+    let video_id = video.id;
+
+    view.update(cx, |app, cx| {
+        // Without a catalog, the selected video is the playback identity (the
+        // production path always has grid state and tracks the loaded media id).
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 30.0;
+
+        // The first background update seeds the position.
+        app.video.playback_time = 4.0;
+        app.note_video_resume_progress();
+        assert_eq!(app.config.resume_positions.get(video_id), Some(4.0));
+
+        // A small advance is throttled; a large one commits.
+        app.video.playback_time = 7.0;
+        app.note_video_resume_progress();
+        assert_eq!(
+            app.config.resume_positions.get(video_id),
+            Some(4.0),
+            "progress under five seconds must not rewrite the resume point"
+        );
+        app.video.playback_time = 12.0;
+        app.note_video_resume_progress();
+        assert_eq!(app.config.resume_positions.get(video_id), Some(12.0));
+
+        // Reaching the end margin clears the stale point once.
+        app.video.playback_time = 29.0;
+        app.note_video_resume_progress();
+        assert_eq!(
+            app.config.resume_positions.get(video_id),
+            None,
+            "a position near the end must be dropped"
+        );
+
+        // Pause commits the live position through the normal save path.
+        app.video.playback_time = 20.0;
+        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.is_playing = true;
+        app.toggle_video_play(cx);
+        assert!(!app.video.is_playing);
+        assert_eq!(
+            app.config.resume_positions.get(video_id),
+            Some(20.0),
+            "pausing must persist the current position"
+        );
+
+        // Viewer close commits the final position too, even though the sample
+        // path has no decodable movie (position falls back to playback_time).
+        app.video.playback_time = 23.0;
+        app.close_viewer(cx);
+        assert!(!app.is_fullscreen_viewer);
+        assert_eq!(
+            app.config.resume_positions.get(video_id),
+            Some(23.0),
+            "closing the viewer must save the final position"
+        );
+    });
+    cx.run_until_parked();
+}

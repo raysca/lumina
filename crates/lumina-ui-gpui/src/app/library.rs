@@ -227,6 +227,8 @@ impl LuminaApp {
                             state.total_count = state.engine.total_count();
                             state.texture_cache.lock().pop(&id);
                             state.in_flight.lock().remove(&id);
+                            // The media is gone; its resume point can never load.
+                            state.video_resume.positions.remove(id);
                             should_refresh_counts = true;
                             // Removals shift every following index; clear rather than
                             // risk batch actions targeting different files.
@@ -294,6 +296,9 @@ impl LuminaApp {
                         }
                     }
                 }
+                // Throttled by playback progress, not wall-clock time, so tests
+                // stay deterministic and the map does not churn every frame.
+                self.note_video_resume_progress();
             }
             UiMessage::FloatingInspectorClosed => {
                 self.floating_inspector_closed(cx);
@@ -342,7 +347,10 @@ impl LuminaApp {
             }
         };
 
-        let grid_state = GridState::new(engine);
+        // Share the config's resume map so playback positions recorded in the
+        // grid are what the next config save writes to disk.
+        let grid_state =
+            GridState::with_resume_positions(engine, self.config.resume_positions.clone());
         self.grid_state = Some(grid_state);
         self.selected_item = None;
         self.selected_index = None;

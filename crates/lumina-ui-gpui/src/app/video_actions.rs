@@ -1,13 +1,14 @@
 use gpui::*;
-use lumina_core::MediaType;
+use lumina_core::{MediaId, MediaType};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::types::UiMessage;
+use crate::app::types::{format_duration_badge, UiMessage};
 use crate::app::LuminaApp;
 use crate::bridge::video_frame_to_gpui_image;
+use crate::config::resume_start_time;
 use crate::player::{self, VideoPlayerBackend};
 
 /// Minimum interval between scrubbing seeks.
@@ -18,6 +19,14 @@ use crate::player::{self, VideoPlayerBackend};
 /// pointer always commits the final destination immediately.
 const SCRUB_SEEK_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Playback progress (in seconds) between background resume-point updates.
+///
+/// Frame ticks arrive at display rate; writing the resume map every frame would
+/// be pointless churn. A fixed playback-progress interval keeps updates
+/// deterministic and free of wall-clock timers, and pause/stop/close always
+/// commit the final position.
+const RESUME_PROGRESS_INTERVAL: f64 = 5.0;
+
 /// Resolve a 0..=1 scrub fraction against the playback duration.
 fn scrub_target_time(duration: f64, pct: f64) -> f64 {
     let duration = duration.max(0.0);
@@ -25,6 +34,122 @@ fn scrub_target_time(duration: f64, pct: f64) -> f64 {
 }
 
 impl LuminaApp {
+    /// Duration used to validate a resume position: player metadata first,
+    /// then the selected item's catalog duration before the player loads.
+    fn resume_duration(&self) -> f64 {
+        if self.video.duration.is_finite() && self.video.duration > 0.0 {
+            return self.video.duration;
+        }
+        self.selected_item
+            .as_ref()
+            .filter(|item| item.media_type == MediaType::Video)
+            .map(|item| item.duration_secs())
+            .filter(|secs| secs.is_finite() && *secs > 0.0)
+            .unwrap_or(0.0)
+    }
+
+    /// Media id whose player owns the current resume point.
+    ///
+    /// The grid tracks the id that was actually loaded, so switching videos
+    /// cannot attribute the old position to the new selection. Tests that run
+    /// without a catalog fall back to the selected video; production always has
+    /// a grid state while a library is open.
+    fn active_resume_media_id(&self) -> Option<MediaId> {
+        if let Some(state) = self.grid_state.as_ref() {
+            return state.video_resume.current();
+        }
+        #[cfg(test)]
+        {
+            self.selected_item
+                .as_ref()
+                .filter(|item| item.media_type == MediaType::Video)
+                .map(|item| item.id)
+        }
+        #[cfg(not(test))]
+        {
+            None
+        }
+    }
+
+    /// Best known current playback position. The backend position wins when it
+    /// is usable; the tracked playback time covers a missing or not-yet-loaded
+    /// player (seeks and tests).
+    fn current_player_position(&self) -> f64 {
+        match self.video.player.as_ref().map(|player| player.position()) {
+            Some(position) if position.is_finite() && position > 0.0 => position,
+            _ => self.video.playback_time,
+        }
+    }
+
+    /// Records a resume point for the active video. Returns false when the
+    /// value is invalid, the duration is unknown, or there is no active media.
+    fn record_video_resume(&self, seconds: f64) -> bool {
+        let duration = self.resume_duration();
+        if !seconds.is_finite() || seconds <= 0.0 || duration <= 0.0 {
+            return false;
+        }
+        if let Some(state) = self.grid_state.as_ref() {
+            return state.video_resume.record_current(seconds, duration);
+        }
+        #[cfg(test)]
+        {
+            let Some(id) = self.active_resume_media_id() else {
+                return false;
+            };
+            self.config.resume_positions.record(id, seconds, duration);
+            true
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
+
+    /// Commits the current playback position to the resume map.
+    fn persist_video_resume_now(&self) -> bool {
+        self.record_video_resume(self.current_player_position())
+    }
+
+    /// Throttled resume update during playback, called from the frame tick.
+    ///
+    /// Updates only when the position moved by at least RESUME_PROGRESS_INTERVAL
+    /// since the last saved point, then persists through the normal config save
+    /// path so a quit or crash loses at most one interval. A position inside the
+    /// end margin clears the stale point once so a finished video does not
+    /// reopen near the end.
+    pub(crate) fn note_video_resume_progress(&mut self) {
+        let position = self.video.playback_time;
+        if !position.is_finite() || position <= 0.0 {
+            return;
+        }
+        let duration = self.resume_duration();
+        let Some(id) = self.active_resume_media_id() else {
+            return;
+        };
+        let saved = self
+            .grid_state
+            .as_ref()
+            .and_then(|state| state.video_resume.saved(id))
+            .or_else(|| self.config.resume_positions.get(id));
+
+        if resume_start_time(Some(position), duration) <= 0.0 {
+            // At the start (first second) or inside the end margin the saved
+            // point is stale for this playback; clear it once.
+            if saved.is_some() && self.record_video_resume(position) {
+                self.save_config();
+            }
+            return;
+        }
+        if let Some(saved) = saved {
+            if (position - saved).abs() < RESUME_PROGRESS_INTERVAL {
+                return;
+            }
+        }
+        if self.record_video_resume(position) {
+            self.save_config();
+        }
+    }
+
     pub fn open_floating_pip(&mut self, cx: &mut Context<Self>) {
         let is_video = self
             .selected_item
@@ -66,21 +191,46 @@ impl LuminaApp {
     }
 
     pub fn load_video_player(&mut self, path: &Path, cx: &mut Context<Self>) {
+        // Finish the previous video before associating the player with the new
+        // media id; the selection already points at the new item here.
         self.stop_video_player();
+        let media_id = self
+            .selected_item
+            .as_ref()
+            .filter(|item| item.media_type == MediaType::Video && item.path.as_path() == path)
+            .map(|item| item.id);
+        if let (Some(id), Some(state)) = (media_id, self.grid_state.as_ref()) {
+            state.video_resume.begin(id);
+        }
+
         let mut player = player::create_native_player();
+        self.video.playback_time = 0.0;
         if let Ok(meta) = player.load(path) {
             player.set_looping(self.video.is_looping);
             player.set_volume(self.video.volume);
             player.set_muted(self.video.is_muted);
             player.set_rate(self.video.playback_speed);
             self.video.duration = meta.duration_secs;
-            self.video.playback_time = 0.0;
+            let saved = media_id.and_then(|id| {
+                self.grid_state
+                    .as_ref()
+                    .and_then(|state| state.video_resume.saved(id))
+            });
+            let start = resume_start_time(saved, meta.duration_secs);
+            self.video.playback_time = start;
+            if start > 0.0 {
+                player.seek(start);
+                self.last_action = Some(format!("Resumed at {}", format_duration_badge(start)));
+            }
             if let Some(frame) = player.next_frame() {
                 if let Ok(img) = video_frame_to_gpui_image(frame) {
                     self.viewer_image = Some(img);
                 }
             }
             self.video.player = Some(player);
+        } else if let Some(state) = self.grid_state.as_ref() {
+            // A failed load has no resume point to finish.
+            state.video_resume.finish();
         }
         cx.notify();
     }
@@ -89,6 +239,27 @@ impl LuminaApp {
         self.stop_video_ticker();
         if let Some(ref mut player) = self.video.player {
             player.pause();
+        }
+        // Commit the position before dropping the handle. This runs on viewer
+        // close, media change, floating-PiP close, and library shutdown.
+        self.persist_video_resume_now();
+        if !self.is_fullscreen_viewer {
+            // The viewer is closing (or PiP is): drop resume points whose media
+            // left the catalog. The save that follows this stop persists the
+            // pruned map. Keep the set bounded so this stays a short batch.
+            if let Some(state) = self
+                .grid_state
+                .as_ref()
+                .filter(|state| !state.video_resume.positions.is_empty())
+            {
+                let engine = state.engine.clone();
+                state
+                    .video_resume
+                    .prune_missing(|id| engine.get_item_by_id(id).is_some());
+            }
+        }
+        if let Some(state) = self.grid_state.as_ref() {
+            state.video_resume.finish();
         }
         self.video.player = None;
         self.video.is_playing = false;
@@ -141,6 +312,11 @@ impl LuminaApp {
                 player.pause();
                 self.video.is_playing = false;
                 self.stop_video_ticker();
+                // Pausing is a deliberate stopping point: commit the position
+                // through the normal config save path instead of waiting for
+                // the next periodic save.
+                self.persist_video_resume_now();
+                self.save_config();
             } else {
                 player.play();
                 self.video.is_playing = true;
