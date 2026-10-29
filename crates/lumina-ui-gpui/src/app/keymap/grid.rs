@@ -5,7 +5,13 @@ use crate::views::sidebar::AlbumSelection;
 
 impl LuminaApp {
     /// Handles grid navigation, zoom, selection, and contextual shortcuts.
-    pub fn handle_grid_key_down(&mut self, key: &str, cmd_or_ctrl: bool, cx: &mut Context<Self>) {
+    pub fn handle_grid_key_down(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        shift: bool,
+        cx: &mut Context<Self>,
+    ) {
         if !cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
             if self.selected_indices.len() > 1 {
                 self.batch_toggle_favorite(cx);
@@ -26,6 +32,42 @@ impl LuminaApp {
             return;
         }
 
+        // Shift+arrow extends the selection from the anchor without moving it.
+        if shift && !cmd_or_ctrl {
+            let handled = match key {
+                "left" => {
+                    self.extend_selection(-1, cx);
+                    true
+                }
+                "right" => {
+                    self.extend_selection(1, cx);
+                    true
+                }
+                "up" => {
+                    self.extend_selection(-(self.grid_columns as isize), cx);
+                    true
+                }
+                "down" => {
+                    self.extend_selection(self.grid_columns as isize, cx);
+                    true
+                }
+                "home" => {
+                    self.extend_selection_to(0, cx);
+                    true
+                }
+                "end" => {
+                    let count = self.get_active_count();
+                    if count > 0 {
+                        self.extend_selection_to(count - 1, cx);
+                    }
+                    true
+                }
+                _ => false,
+            };
+            if handled {
+                return;
+            }
+        }
         // Grid Zoom shortcuts: Cmd/Ctrl + and Cmd/Ctrl -
         if cmd_or_ctrl && (key == "=" || key == "+") {
             self.zoom_in_grid(cx);

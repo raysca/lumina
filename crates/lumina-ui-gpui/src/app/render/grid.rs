@@ -1,12 +1,24 @@
 use std::cmp;
 
 use gpui::*;
-use lumina_core::MediaType;
+use lumina_core::{MediaType, SmartAlbum, SystemAlbum};
 
 use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::sidebar::AlbumSelection;
+
+/// Actions offered by a grid empty state. Kept as data so the same button helper
+/// can render every state without duplicating click wiring.
+#[derive(Clone)]
+enum EmptyAction {
+    ClearSearch,
+    ShowAll,
+    EditSmartAlbum(SmartAlbum),
+    OpenLibrary,
+    ManageTags,
+}
 
 impl LuminaApp {
     pub(crate) fn render_browser_grid(
@@ -17,40 +29,7 @@ impl LuminaApp {
         let effective_count = total_count;
 
         if effective_count == 0 {
-            let empty_msg = if !self.search_query.is_empty() {
-                format!("No matches for \"{}\"", self.search_query)
-            } else {
-                match &self.selection {
-                    crate::views::sidebar::AlbumSelection::Trash => {
-                        "Deleted items stay here until you empty the Trash".to_string()
-                    }
-                    crate::views::sidebar::AlbumSelection::System(
-                        lumina_core::SystemAlbum::Favorites,
-                    ) => "No favorites yet — press F on any photo to favorite".to_string(),
-                    crate::views::sidebar::AlbumSelection::User(_) => {
-                        "Nothing matches this album yet — edit rules".to_string()
-                    }
-                    crate::views::sidebar::AlbumSelection::Tag(t) => {
-                        format!("No items tagged with #{t}")
-                    }
-                    _ => "No photos or videos found in this view".to_string(),
-                }
-            };
-            return div()
-                .flex_1()
-                .h_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap_2()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(theme::text_subtle())
-                        .child(empty_msg),
-                )
-                .into_any_element();
+            return self.render_empty_state(cx);
         }
 
         let cols = self.grid_columns.clamp(2, 8);
@@ -64,10 +43,20 @@ impl LuminaApp {
             .unwrap_or_default();
 
         div()
+            .id("media-grid-surface")
+            .debug_selector(|| "media-grid-surface".to_string())
             .flex_1()
             .h_full()
             .overflow_hidden()
             .pt_2()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                    if !this.selected_indices.is_empty() || this.selected_index.is_some() {
+                        this.clear_selection(cx);
+                    }
+                }),
+            )
             .child(
                 uniform_list(
                     "media-grid",
@@ -182,6 +171,9 @@ impl LuminaApp {
                                                 }
                                             },
                                         ))
+                                        .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
+                                            cx.stop_propagation();
+                                        })
                                         .on_mouse_down(
                                             MouseButton::Right,
                                             cx.listener(move |this, e: &MouseDownEvent, _w, cx| {
@@ -346,5 +338,192 @@ impl LuminaApp {
                 .h_full(),
             )
             .into_any_element()
+    }
+
+    /// Renders an empty view with a clear next action instead of a dead-end line.
+    fn render_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
+        let user_album = match &self.selection {
+            AlbumSelection::User(id) => self
+                .user_smart_albums
+                .iter()
+                .find(|album| album.id == *id)
+                .cloned(),
+            _ => None,
+        };
+
+        let (icon, title, body, primary, secondary) = if !self.search_query.is_empty() {
+            (
+                Icon::Search,
+                "No matches".to_string(),
+                format!(
+                    "Nothing matches “{}”. Try a broader search or clear it.",
+                    self.search_query
+                ),
+                ("Clear search".to_string(), EmptyAction::ClearSearch),
+                Some(("Show all photos".to_string(), EmptyAction::ShowAll)),
+            )
+        } else {
+            match &self.selection {
+                AlbumSelection::Trash => (
+                    Icon::Trash,
+                    "Trash is empty".to_string(),
+                    "Deleted items stay here until you permanently remove them.".to_string(),
+                    ("Show all photos".to_string(), EmptyAction::ShowAll),
+                    None,
+                ),
+                AlbumSelection::System(SystemAlbum::Favorites) => (
+                    Icon::Heart,
+                    "No favorites yet".to_string(),
+                    "Press F on any photo or video to add it here.".to_string(),
+                    ("Show all photos".to_string(), EmptyAction::ShowAll),
+                    None,
+                ),
+                AlbumSelection::User(_) => match user_album {
+                    Some(album) => (
+                        Icon::Sliders,
+                        "Nothing matches this smart album".to_string(),
+                        "Adjust its rules or show everything in the library.".to_string(),
+                        ("Edit rules".to_string(), EmptyAction::EditSmartAlbum(album)),
+                        Some(("Show all photos".to_string(), EmptyAction::ShowAll)),
+                    ),
+                    None => (
+                        Icon::Sliders,
+                        "Nothing matches this view".to_string(),
+                        "The smart album may have been removed. Show everything instead."
+                            .to_string(),
+                        ("Show all photos".to_string(), EmptyAction::ShowAll),
+                        None,
+                    ),
+                },
+                AlbumSelection::Tag(tag) => (
+                    Icon::Tag,
+                    "No items found".to_string(),
+                    format!("Nothing is tagged #{tag} yet. Try another tag or show everything."),
+                    ("Show all photos".to_string(), EmptyAction::ShowAll),
+                    Some(("Manage tags".to_string(), EmptyAction::ManageTags)),
+                ),
+                _ => {
+                    if self.total_library_count == 0 {
+                        (
+                            Icon::Folder,
+                            "Your library is empty".to_string(),
+                            "Open a folder to start building your local photo and video library."
+                                .to_string(),
+                            ("Open Library…".to_string(), EmptyAction::OpenLibrary),
+                            None,
+                        )
+                    } else {
+                        (
+                            Icon::Image,
+                            "No media in this view".to_string(),
+                            "Try another view or show everything in the library.".to_string(),
+                            ("Show all photos".to_string(), EmptyAction::ShowAll),
+                            None,
+                        )
+                    }
+                }
+            }
+        };
+
+        let primary_button =
+            self.empty_action_button("empty-primary", primary.0, primary.1, true, cx);
+        let secondary_button = secondary.map(|(label, action)| {
+            self.empty_action_button("empty-secondary", label, action, false, cx)
+        });
+
+        div()
+            .id("empty-state")
+            .debug_selector(|| "empty-state".to_string())
+            .flex_1()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .p_8()
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(440.0))
+                    .p_6()
+                    .rounded_xl()
+                    .bg(theme::bg_pane())
+                    .border_1()
+                    .border_color(theme::border_subtle())
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        div()
+                            .w(px(44.0))
+                            .h(px(44.0))
+                            .rounded_lg()
+                            .bg(theme::bg_control())
+                            .border_1()
+                            .border_color(theme::selection_border())
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(render_icon(icon, px(20.0), theme::accent())),
+                    )
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::text())
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(360.0))
+                            .text_sm()
+                            .text_color(theme::text_muted())
+                            .text_center()
+                            .child(body),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap_2()
+                            .child(primary_button)
+                            .children(secondary_button),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn empty_action_button(
+        &self,
+        id: &'static str,
+        label: String,
+        action: EmptyAction,
+        primary: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let button = if primary {
+            theme::control_primary(id)
+        } else {
+            theme::control(id)
+        };
+        button
+            .debug_selector(move || id.to_string())
+            .px_3()
+            .child(label)
+            .on_click(cx.listener(move |this, _event, _window, cx| {
+                this.perform_empty_action(action.clone(), cx);
+            }))
+            .into_any_element()
+    }
+
+    fn perform_empty_action(&mut self, action: EmptyAction, cx: &mut Context<Self>) {
+        match action {
+            EmptyAction::ClearSearch => self.clear_search(cx),
+            EmptyAction::ShowAll => self.select_album(AlbumSelection::AllLibrary, cx),
+            EmptyAction::EditSmartAlbum(album) => self.open_album_builder_for_edit(album, cx),
+            EmptyAction::OpenLibrary => self.pick_folder_dialog(cx),
+            EmptyAction::ManageTags => self.open_tag_manager(cx),
+        }
     }
 }

@@ -98,6 +98,52 @@ impl LuminaApp {
         self.select_index(new_idx, cx);
     }
 
+    /// Extends the current selection by a keyboard delta while keeping the
+    /// original anchor fixed. Shift+arrow should grow a range, not move it.
+    pub fn extend_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let total_count = self.get_active_count();
+        if total_count == 0 {
+            return;
+        }
+        let current = self.selected_index.unwrap_or(0);
+        let target = if delta < 0 {
+            current.saturating_sub((-delta) as usize)
+        } else {
+            cmp::min(current + delta as usize, total_count.saturating_sub(1))
+        };
+        self.extend_selection_to(target, cx);
+    }
+
+    /// Selects the contiguous range from the anchor to `index`, inclusive.
+    pub fn extend_selection_to(&mut self, index: usize, cx: &mut Context<Self>) {
+        let total_count = self.get_active_count();
+        if total_count == 0 {
+            return;
+        }
+
+        let target = cmp::min(index, total_count.saturating_sub(1));
+        let anchor = self
+            .selection_anchor
+            .unwrap_or(self.selected_index.unwrap_or(target));
+        if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(anchor);
+        }
+
+        let start = cmp::min(anchor, target);
+        let end = cmp::max(anchor, target);
+        self.selected_indices.clear();
+        self.selected_indices.extend(start..=end);
+        self.selected_index = Some(target);
+
+        if let Some(item) = self.get_active_slice(target..target + 1).into_iter().next() {
+            self.select_item_internal(item, cx);
+        }
+        self.refresh_selected_tags();
+        self.update_batch_summary();
+        self.reveal_grid_selection();
+        cx.notify();
+    }
+
     pub fn select_item_at(&mut self, item: MediaItem, index: usize, cx: &mut Context<Self>) {
         self.selected_indices.clear();
         self.selected_indices.insert(index);

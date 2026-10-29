@@ -268,6 +268,89 @@ fn ui_automation_grid_and_viewer_journey() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_selection_contract_and_empty_space_click() {
+    let (temp_dir, engine) = seed_library("selection_contract", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(0), "card click selects");
+    });
+
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let empty_point = gpui::point(
+        surface.origin.x + gpui::px(24.0),
+        surface.origin.y + surface.size.height - gpui::px(24.0),
+    );
+    vcx.simulate_click(empty_point, gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.selected_indices.is_empty(),
+            "empty space clears selection"
+        );
+        assert!(
+            app.selected_index.is_none(),
+            "empty space clears the focus index"
+        );
+        assert!(
+            app.selected_item.is_none(),
+            "empty space clears selected metadata"
+        );
+    });
+
+    click(vcx, card);
+    keystrokes(vcx, "shift-right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(1), "Shift+Right moves the focus");
+        assert!(app.selected_indices.contains(&0));
+        assert!(app.selected_indices.contains(&1));
+    });
+    keystrokes(vcx, "shift-right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(2));
+        assert_eq!(
+            app.selected_indices.len(),
+            3,
+            "Shift+Right grows from the anchor"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_empty_search_state_offers_a_clear_action() {
+    let (temp_dir, engine) = seed_library("empty_search", 8);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.set_search_query("no-such-photo", cx);
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("empty-state").is_some());
+    assert!(vcx.debug_bounds("empty-primary").is_some());
+
+    click(vcx, "empty-primary");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "empty state must clear the search"
+        );
+        assert!(app.selected_item.is_none());
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_modals_dismiss_on_backdrop() {
     let (temp_dir, engine) = seed_library("modals", 8);
     let mut cx = gpui::TestAppContext::single();
