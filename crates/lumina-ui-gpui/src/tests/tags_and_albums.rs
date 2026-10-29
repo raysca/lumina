@@ -1,3 +1,4 @@
+use crate::tests::ui_automation::{app_with_library, seed_library};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
 use lumina_core::*;
@@ -418,4 +419,138 @@ fn test_tag_manager_modular_flow() {
         app.close_tag_manager(cx);
         assert!(!app.tag_manager.open);
     });
+}
+
+#[core::prelude::v1::test]
+fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
+    let (temp_dir, engine) = seed_library("untagged_count", 2);
+    let items = engine.get_item_slice(0..2);
+    assert_eq!(items.len(), 2, "the fixture must create two media items");
+    let first_item = items[0].clone();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.untagged_count, 2,
+            "a freshly scanned library must be entirely untagged"
+        );
+
+        app.selected_indices = [0].into_iter().collect();
+        app.selection_anchor = Some(0);
+        app.selected_index = Some(0);
+        app.selected_item = Some(first_item.clone());
+        app.update_batch_summary();
+
+        app.batch_add_tag("travel".to_string(), cx);
+        assert_eq!(
+            app.untagged_count, 1,
+            "adding a tag must refresh the cached untagged count"
+        );
+
+        app.batch_remove_tag("travel".to_string(), cx);
+        assert_eq!(
+            app.untagged_count, 2,
+            "removing the last tag must return the item to Untagged"
+        );
+
+        app.batch_add_tag("travel".to_string(), cx);
+        assert_eq!(app.untagged_count, 1);
+        assert!(app.error_message.is_none(), "the tag writes must succeed");
+
+        app.select_album(AlbumSelection::Tag("travel".to_string()), cx);
+        app.start_tag_rename("travel".to_string(), cx);
+        app.editing_tag_buffer = "trip".to_string();
+        app.commit_tag_rename(cx);
+        assert_eq!(
+            app.untagged_count, 1,
+            "renaming a tag must not change untagged membership"
+        );
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Tag("trip".to_string()),
+            "the active tag view must follow the rename"
+        );
+
+        app.start_tag_merge("trip".to_string(), cx);
+        app.commit_tag_merge("getaway".to_string(), cx);
+        assert_eq!(
+            app.untagged_count, 1,
+            "merging tags must leave the item tagged"
+        );
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Tag("getaway".to_string()),
+            "the active tag view must follow the merge target"
+        );
+
+        app.delete_tag_globally("getaway".to_string(), cx);
+        assert_eq!(
+            app.untagged_count, 2,
+            "deleting the last tag must refresh the untagged count"
+        );
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "deleting the active tag must fall back to All"
+        );
+        assert!(
+            app.library_tag_counts.is_empty(),
+            "the sidebar tag list must be refreshed after the delete"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
+    let (temp_dir, engine) = seed_library("tag_error", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine
+        .add_tags_batch(&[item.id], &["travel".to_string()])
+        .unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        assert!(app
+            .library_tag_counts
+            .iter()
+            .any(|(tag, _)| tag == "travel"));
+        app.select_album(AlbumSelection::Tag("travel".to_string()), cx);
+
+        // The UI crate has no raw SQL handle, so the catalog failure is injected
+        // at the shared mutation funnel every tag handler reports through.
+        let failure: anyhow::Result<usize> = Err(anyhow::anyhow!("database is locked"));
+        let applied = app.apply_tag_mutation("Could not delete tag", failure, cx);
+
+        assert!(
+            applied.is_none(),
+            "a failed tag mutation must not report success to the caller"
+        );
+        assert_eq!(
+            app.error_message.as_deref(),
+            Some("Could not delete tag: database is locked"),
+            "the catalog error must be visible in the banner"
+        );
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Tag("travel".to_string()),
+            "a failed delete must keep the active tag view"
+        );
+        assert!(
+            app.library_tag_counts
+                .iter()
+                .any(|(tag, _)| tag == "travel"),
+            "a failed delete must not remove the tag from the sidebar"
+        );
+
+        app.dismiss_error(cx);
+        assert!(app.error_message.is_none());
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
 }

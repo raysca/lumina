@@ -9,7 +9,10 @@
 use crate::*;
 use lumina_core::{EngineEvent, LuminaEngine};
 
-fn seed_library(prefix: &str, count: usize) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+pub(crate) fn seed_library(
+    prefix: &str,
+    count: usize,
+) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
     let temp_dir = std::env::temp_dir().join(format!(
         "lumina_uitest_{}_{}",
         prefix,
@@ -146,7 +149,7 @@ fn select_media_ids(app: &mut LuminaApp, ids: &[lumina_core::MediaId]) {
     app.update_batch_summary();
 }
 
-fn app_with_library(
+pub(crate) fn app_with_library(
     cx: &mut TestAppContext,
     engine: std::sync::Arc<LuminaEngine>,
 ) -> (Entity<LuminaApp>, &mut VisualTestContext) {
@@ -2561,6 +2564,106 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
             );
         }
         assert_eq!(app.undo.undo_stack.len(), 3);
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
+    let (temp_dir, engine) = seed_library("untagged_view", 3);
+    let items = engine.get_item_slice(0..3);
+    assert_eq!(items.len(), 3, "the fixture must create three media items");
+    let tagged: Vec<_> = items.iter().take(2).map(|item| item.id).collect();
+    engine
+        .add_tags_batch(&tagged, &["travel".to_string()])
+        .unwrap();
+    let untagged_item = items[2].clone();
+    let card = leak(format!("media-card-{}", untagged_item.id.0));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.untagged_count, 1,
+            "two tagged items must leave exactly one untagged item"
+        );
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+    });
+    assert!(
+        vcx.debug_bounds("sidebar-nav-Untagged").is_some(),
+        "the TAGS section must paint a live Untagged row"
+    );
+
+    click(vcx, "sidebar-nav-Untagged");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::Untagged);
+        assert_eq!(
+            app.get_active_count(),
+            1,
+            "the Untagged view must count only untagged media"
+        );
+        let slice = app.get_active_slice(0..1);
+        assert_eq!(slice.len(), 1);
+        assert_eq!(
+            slice[0].id, untagged_item.id,
+            "items with tag rows must be filtered out of the Untagged view"
+        );
+    });
+
+    // Clicking the active row toggles back to All; selecting it again restores.
+    click(vcx, "sidebar-nav-Untagged");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::AllLibrary)
+    });
+    click(vcx, "sidebar-nav-Untagged");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::Untagged)
+    });
+
+    // Tag the last untagged item through the real batch action.
+    click(vcx, card);
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|item| item.id),
+            Some(untagged_item.id),
+            "clicking the only card selects the untagged item"
+        );
+        app.batch_add_tag("everything".to_string(), cx);
+        assert_eq!(
+            app.untagged_count, 0,
+            "tagging the last untagged item must refresh the cached count"
+        );
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Untagged,
+            "the view must remain Untagged while it becomes empty"
+        );
+        assert!(
+            app.selected_item.is_none(),
+            "an emptied view must drop the stale position-based selection"
+        );
+        assert!(app.selected_indices.is_empty());
+    });
+
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("empty-state").is_some(),
+        "an empty Untagged view must paint its empty state"
+    );
+    assert!(
+        vcx.debug_bounds("empty-primary").is_some(),
+        "the empty Untagged view must offer a next action"
+    );
+    click(vcx, "empty-primary");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "Show all must leave the empty Untagged view"
+        );
+        assert_eq!(app.get_active_count(), 3);
     });
 
     let _ = std::fs::remove_dir_all(&temp_dir);

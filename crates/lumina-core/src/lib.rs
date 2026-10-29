@@ -770,6 +770,23 @@ impl LuminaEngine {
         self.catalog.query_tag_counts().unwrap_or_default()
     }
 
+    /// Counts active media items that carry no tags at all.
+    pub fn query_untagged_count(&self) -> usize {
+        self.catalog.query_untagged_count().unwrap_or(0)
+    }
+
+    /// Lists a page of active untagged media using the requested ordering.
+    pub fn query_untagged_sorted(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
+        self.catalog
+            .query_untagged_sorted(limit, offset, sort)
+            .unwrap_or_default()
+    }
+
     pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
         self.catalog.rename_tag(old_tag, new_tag)
     }

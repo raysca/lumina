@@ -577,6 +577,9 @@ impl LuminaApp {
                 };
                 state.engine.search_query_count(&query)
             }
+            // Cached by refresh_album_counts; querying per frame would run SQL
+            // on every render even when the count is stable.
+            AlbumSelection::Untagged => self.untagged_count,
         }
     }
 
@@ -638,6 +641,9 @@ impl LuminaApp {
                 state
                     .engine
                     .search_query_sorted(&query, limit, offset, self.sort)
+            }
+            AlbumSelection::Untagged => {
+                state.engine.query_untagged_sorted(limit, offset, self.sort)
             }
         }
     }
@@ -907,6 +913,7 @@ impl LuminaApp {
             self.user_album_counts = usr;
             self.user_smart_albums = albums;
             self.library_tag_counts = engine.query_tag_counts();
+            self.untagged_count = engine.query_untagged_count();
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();
             self.item_captions = engine.get_captions_map();

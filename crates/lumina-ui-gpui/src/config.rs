@@ -84,6 +84,9 @@ impl LastView {
             AlbumSelection::System(_) => LastView::All,
             AlbumSelection::User(id) => LastView::User(*id),
             AlbumSelection::Tag(tag) => LastView::Tag(tag.clone()),
+            // Untagged has no persisted token yet; it restores as All rather
+            // than inventing a session format for a derived view.
+            AlbumSelection::Untagged => LastView::All,
         }
     }
 

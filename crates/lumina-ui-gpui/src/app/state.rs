@@ -348,6 +348,8 @@ pub struct LuminaApp {
     pub user_album_counts: HashMap<i64, usize>,
     pub user_smart_albums: Vec<SmartAlbum>,
     pub library_tag_counts: Vec<(String, usize)>,
+    /// Cached count of active media with no tags, shown by the Untagged row.
+    pub untagged_count: usize,
     pub tag_input_buffer: String,
     pub tag_input_active: bool,
     pub editing_tag: Option<String>,
@@ -485,6 +487,7 @@ impl LuminaApp {
             user_album_counts: HashMap::new(),
             user_smart_albums: Vec::new(),
             library_tag_counts: Vec::new(),
+            untagged_count: 0,
             tag_input_buffer: String::new(),
             tag_input_active: false,
             editing_tag: None,

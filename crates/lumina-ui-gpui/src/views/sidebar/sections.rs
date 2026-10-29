@@ -343,26 +343,15 @@ pub(super) fn render_smart_albums_section(
         )
         .children(if user_albums.is_empty() {
             if this.grid_state.is_none() {
-                vec![
-                    render_nav_item(
-                        "Fast Glass",
-                        0,
-                        false,
-                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.open_album_builder(cx);
-                        }),
-                    )
-                    .into_any_element(),
-                    render_nav_item(
-                        "Untagged",
-                        18,
-                        false,
-                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.open_album_builder(cx);
-                        }),
-                    )
-                    .into_any_element(),
-                ]
+                vec![render_nav_item(
+                    "Fast Glass",
+                    0,
+                    false,
+                    cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.open_album_builder(cx);
+                    }),
+                )
+                .into_any_element()]
             } else {
                 Vec::new()
             }
@@ -427,6 +416,18 @@ pub(super) fn render_tags_section(
                         })),
                 ),
         )
+        .child(render_nav_item(
+            "Untagged",
+            this.untagged_count,
+            this.selection == AlbumSelection::Untagged,
+            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                if this.selection == AlbumSelection::Untagged {
+                    this.select_album(AlbumSelection::AllLibrary, cx);
+                } else {
+                    this.select_album(AlbumSelection::Untagged, cx);
+                }
+            }),
+        ))
         .children(
             tags.iter()
                 .map(|(tag_name, count)| {
@@ -608,6 +609,8 @@ fn render_nav_item(
     is_active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let label_text = label.to_string();
+    let debug_label = label_text.clone();
     let bg_color = if is_active {
         theme::selection_bg()
     } else {
@@ -625,7 +628,8 @@ fn render_nav_item(
     };
 
     div()
-        .id(ElementId::Name(label.to_string().into()))
+        .id(ElementId::Name(label_text.clone().into()))
+        .debug_selector(move || format!("sidebar-nav-{debug_label}"))
         .px_2()
         .py_1p5()
         .rounded_md()
@@ -652,7 +656,7 @@ fn render_nav_item(
                     FontWeight::NORMAL
                 })
                 .text_color(text_color)
-                .child(label.to_string()),
+                .child(label_text),
         )
         .child(if count > 0 {
             div()

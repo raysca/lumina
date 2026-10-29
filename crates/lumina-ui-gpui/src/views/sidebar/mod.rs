@@ -12,6 +12,8 @@ pub enum AlbumSelection {
     System(SystemAlbum),
     User(i64),
     Tag(String),
+    /// Active media that carries no tags at all.
+    Untagged,
     Trash,
 }
 

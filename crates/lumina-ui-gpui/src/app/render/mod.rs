@@ -222,6 +222,7 @@ impl Render for LuminaApp {
                 .map(|a| a.title.clone())
                 .unwrap_or_else(|| "Album".into()),
             AlbumSelection::Tag(tag) => format!("#{tag}"),
+            AlbumSelection::Untagged => "Untagged".into(),
             AlbumSelection::Trash => "Recently Deleted".into(),
         };
 

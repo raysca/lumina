@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Transaction};
 
 use super::Catalog;
-use crate::{MediaId, MediaItem};
+use crate::{MediaId, MediaItem, SortSpec};
 
 impl Catalog {
     /// Deletes existing FTS5 index rows for a set of media items before tag mutations.
@@ -323,6 +323,66 @@ impl Catalog {
         self.rename_tag(source_tag, target_tag)
     }
 
+    /// Counts active media items that have no `media_tags` rows at all.
+    ///
+    /// Hidden and trashed items are excluded to match the other sidebar counts.
+    /// The correlated `NOT EXISTS` uses `idx_media_tags_media_id`, so this is
+    /// one aggregate query and never a full scan of the tag table.
+    pub fn query_untagged_count(&self) -> Result<usize> {
+        let conn = self.conn.lock();
+        let count: i64 = conn.query_row(
+            r#"
+            SELECT COUNT(*)
+            FROM media_items m
+            WHERE m.is_trashed = 0
+              AND m.is_hidden = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM media_tags mt WHERE mt.media_id = m.id
+              );
+            "#,
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
+    /// Queries a page of active media items that have no `media_tags` rows.
+    ///
+    /// Uses the same media column list and `map_query_rows` mapper as the rest
+    /// of the catalog so callers receive complete [`MediaItem`]s, and applies
+    /// the caller's [`SortSpec`] instead of re-sorting a page in the UI.
+    pub fn query_untagged_sorted(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
+        let conn = self.conn.lock();
+        let sql = format!(
+            r#"
+            SELECT
+                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
+                m.media_type, m.width, m.height, m.duration_ms,
+                m.timestamp_epoch_ms, m.year, m.month, m.day,
+                m.latitude, m.longitude, m.altitude,
+                m.country_code, m.admin1_region, m.city,
+                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
+                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            FROM media_items m
+            WHERE m.is_trashed = 0
+              AND m.is_hidden = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM media_tags mt WHERE mt.media_id = m.id
+              )
+            ORDER BY {}
+            LIMIT ?1 OFFSET ?2;
+            "#,
+            sort.order_by("m.")
+        );
+        let mut stmt = conn.prepare_cached(&sql)?;
+        Self::map_query_rows(&mut stmt, params![limit as i64, offset as i64])
+    }
+
     /// Queries media items matching a specific tag.
     pub fn get_items_by_tag(
         &self,
@@ -350,5 +410,203 @@ impl Catalog {
             "#,
         )?;
         Self::map_query_rows(&mut stmt, params![clean, limit as i64, offset as i64])
+    }
+}
+
+#[cfg(test)]
+mod untagged_media_tests {
+    use super::*;
+    use crate::{MediaType, SortDirection, SortField};
+
+    fn media_item(path: &str, timestamp_epoch_ms: i64, hidden: bool, trashed: bool) -> MediaItem {
+        let path = std::path::PathBuf::from(path);
+        let parent_dir = path
+            .parent()
+            .map(|parent| parent.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let file_name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        MediaItem {
+            id: MediaId(0),
+            path,
+            parent_dir,
+            file_name,
+            title: None,
+            file_size: 1024,
+            mtime_epoch_ms: timestamp_epoch_ms,
+            media_type: MediaType::Image,
+            width: 640,
+            height: 480,
+            duration_ms: None,
+            timestamp_epoch_ms,
+            year: 2026,
+            month: 1,
+            day: 1,
+            latitude: None,
+            longitude: None,
+            altitude: None,
+            country_code: None,
+            admin1_region: None,
+            city: None,
+            make: None,
+            model: None,
+            lens: None,
+            focal_length: None,
+            f_number: None,
+            iso: None,
+            exposure_time: None,
+            is_favorite: false,
+            is_hidden: hidden,
+            is_trashed: trashed,
+        }
+    }
+
+    #[test]
+    fn untagged_count_and_query_exclude_tagged_hidden_and_trashed() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let inserted = catalog
+            .insert_or_update_batch(&[
+                media_item("/lib/untagged_a.jpg", 1_000, false, false),
+                media_item("/lib/tagged.jpg", 2_000, false, false),
+                media_item("/lib/hidden.jpg", 3_000, true, false),
+                media_item("/lib/trashed.jpg", 4_000, false, true),
+                media_item("/lib/untagged_b.jpg", 5_000, false, false),
+            ])
+            .expect("insert media");
+
+        catalog
+            .add_tags_batch(&[inserted[1].id], &["travel".to_string()])
+            .expect("tag one item");
+
+        assert_eq!(
+            catalog.query_untagged_count().expect("count untagged"),
+            2,
+            "only active, untagged media may be counted"
+        );
+
+        let default_page = catalog
+            .query_untagged_sorted(10, 0, SortSpec::default())
+            .expect("query untagged");
+        assert_eq!(
+            default_page.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![inserted[4].id, inserted[0].id],
+            "untagged media must follow the requested date-desc order"
+        );
+
+        let by_name = catalog
+            .query_untagged_sorted(
+                10,
+                0,
+                SortSpec {
+                    field: SortField::FileName,
+                    direction: SortDirection::Ascending,
+                },
+            )
+            .expect("query untagged by name");
+        assert_eq!(
+            by_name.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![inserted[0].id, inserted[4].id],
+            "the caller's SortSpec must be honored, not a fixed SQL order"
+        );
+
+        let second_page = catalog
+            .query_untagged_sorted(1, 1, SortSpec::default())
+            .expect("page untagged");
+        assert_eq!(second_page.len(), 1, "limit and offset must page");
+        assert_eq!(second_page[0].id, inserted[0].id);
+
+        assert!(
+            catalog
+                .query_untagged_sorted(10, 2, SortSpec::default())
+                .expect("page past the end")
+                .is_empty(),
+            "an offset past the last untagged item must return an empty page"
+        );
+    }
+
+    #[test]
+    fn untagged_count_tracks_add_remove_rename_merge_and_delete() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let inserted = catalog
+            .insert_or_update_batch(&[
+                media_item("/lib/first.jpg", 1_000, false, false),
+                media_item("/lib/second.jpg", 2_000, false, false),
+            ])
+            .expect("insert media");
+        let first = inserted[0].id;
+
+        assert_eq!(
+            catalog.query_untagged_count().expect("initial count"),
+            2,
+            "a fresh catalog has every item untagged"
+        );
+
+        catalog
+            .add_tags_batch(&[first], &["travel".to_string()])
+            .expect("add tag");
+        assert_eq!(
+            catalog.query_untagged_count().expect("count after add"),
+            1,
+            "tagging an item must remove it from the untagged count"
+        );
+
+        catalog
+            .add_tags_batch(&[first], &["vacation".to_string()])
+            .expect("add second tag");
+        assert_eq!(
+            catalog
+                .query_untagged_count()
+                .expect("count after second add"),
+            1,
+            "extra tags must not change the untagged count"
+        );
+
+        catalog
+            .remove_tags_batch(&[first], &["vacation".to_string()])
+            .expect("remove tag");
+        assert_eq!(
+            catalog.query_untagged_count().expect("count after remove"),
+            1,
+            "removing one of two tags keeps the item tagged"
+        );
+
+        assert_eq!(
+            catalog.rename_tag("travel", "journey").expect("rename tag"),
+            1
+        );
+        assert_eq!(
+            catalog.query_untagged_count().expect("count after rename"),
+            1,
+            "renaming a tag must not change untagged membership"
+        );
+
+        assert_eq!(catalog.merge_tags("journey", "trip").expect("merge tag"), 1);
+        assert_eq!(
+            catalog.query_untagged_count().expect("count after merge"),
+            1,
+            "merging tags must leave tagged items tagged"
+        );
+
+        assert_eq!(
+            catalog
+                .delete_tag_globally("trip")
+                .expect("delete tag globally"),
+            1
+        );
+        assert_eq!(
+            catalog.query_untagged_count().expect("count after delete"),
+            2,
+            "deleting the last tag must return the item to untagged"
+        );
+        assert_eq!(
+            catalog
+                .query_untagged_sorted(10, 0, SortSpec::default())
+                .expect("query after delete")
+                .len(),
+            2,
+            "the sorted query must agree with the refreshed count"
+        );
     }
 }
