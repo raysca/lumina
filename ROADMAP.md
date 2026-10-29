@@ -2,6 +2,7 @@
 
 This is the forward-looking product roadmap. The historical implementation plan
 for the v0.2 architecture lives in [docs/roadmap_v2.md](docs/roadmap_v2.md).
+Everyday interaction details live in [docs/ux_audit.md](docs/ux_audit.md).
 
 Guiding principles:
 
@@ -86,8 +87,8 @@ data loss, or a mouse:
 | Milestone | Theme | Band | Primary outcomes |
 | --- | --- | --- | --- |
 | **0.2.x** | Release hardening | Top | Signed/notarized macOS release; CI validated; e2e permission run; release notes and support docs. |
-| **0.3** | Import and onboarding | **Top** | Onboarding, real import/copy workflow, drag-and-drop, import templates and copy verification, migration importers, multiple/external roots, recent libraries, progress/error recovery. |
-| **0.4** | Metadata, keywords and quick edits | **Top** | Hierarchical keywords, IPTC/XMP templates, batch metadata, non-destructive quick edits, external editor handoff. |
+| **0.3** | Import, onboarding and everyday UX | **Top** | Import/copy, drag-and-drop, templates/verification, migration importers, recent libraries, plus UX-1: selection/open semantics, navigation continuity, feedback and motion foundation. |
+| **0.4** | Metadata, keywords, quick edits and precision UX | **Top** | Hierarchical keywords, IPTC/XMP templates, batch metadata, quick edits, external editor handoff, plus UX-2: grid/viewer zoom, video drag-scrub/resume, search/tag polish. |
 | **0.5** | Private S3-compatible backup | **Mid** | Optional client-side-encrypted backup to user-owned S3-compatible storage; OS credential storage; verify/restore; no sync or browsing. |
 | **0.6** | Organize and media experience | **Mid** | Curated albums, smart-album polish, culling/pick-reject, compare/slideshow/map, video improvements, duplicates/stacks, share/export presets, RAW/HEIC/color validation. |
 | **0.7** | Polish and access | **Mid** | Theme/accent, toasts/empty/loading states, help, accessibility, localization. |
@@ -104,8 +105,10 @@ need to be useful. Dates are intentionally omitted until scope is estimated.
 
 **Top (0.2.x-0.4):**
 
-1. Import/copy and onboarding. This is the first feature wave.
-2. Metadata, keywords and quick edits. This is the second feature wave.
+1. Import/copy and onboarding, plus UX-1 feel and orientation. This is the first
+   feature wave.
+2. Metadata, keywords and quick edits, plus UX-2 precision browsing. This is the
+   second feature wave.
 
 **Mid (0.5-0.7):**
 
@@ -311,33 +314,49 @@ search history, quick rating/color filters, compare, slideshow, or map.
 and slideshow are keyboard-operable; map/duplicate views have empty and error
 states; no feature blocks the UI thread.
 
-## 9. UX polish and system integration
+## 9. Everyday interaction and UX polish
 
-**Current:** dark graphite theme, status bar feedback, error banner, preferences
+Detailed audit: [docs/ux_audit.md](docs/ux_audit.md).
+
+**Current:** dark graphite theme, status-bar feedback, error banner, preferences
 (General/Storage/About), native menus, command palette, tooltips, shortcut
-sheet, persisted window/UI state. No light theme, accent customization, toasts,
-skeletons, shortcut customization, update mechanism, or diagnostics bundle.
+sheet, persisted window/layout/sort. There is no explicit motion system,
+selection/open animation, back/forward history, restored browsing context,
+toast stack, skeleton cards, pointer-anchored zoom, real video scrub previews,
+or video resume.
 
 **Target:**
 
-- Light theme and an accent-color choice; high-contrast option.
-- Consistent toasts for success/failure and undo affordances; do not rely only
-  on the status bar.
-- Skeleton/loading states for thumbnails, import, search, and large albums.
-- Better empty states with the next action and a keyboard hint.
-- Preferences expansion: appearance, thumbnail cache limits, import behavior,
-  video defaults, backup/restore, diagnostics.
-- User-customizable keyboard shortcuts with conflict detection.
-- Recent libraries, reopen last window/tab, and multi-window support if the
-  product needs it.
-- In-app update check (explicitly opt-in; local-first constraint) and release
-  notes.
-- "Export diagnostics" bundle: logs, versions, platform, cache/DB sizes, no
-  private media data by default.
+- **Selection and open contract:** single click selects, double click opens,
+  Enter/Space opens, Escape returns; click on empty grid clears; Shift+arrow
+  extends; hover/focus/pressed states are distinct.
+- **Motion:** shared-element viewer open/close, item crossfade, overlay timing
+  tokens, thumbnail fade-in, reduced-motion mode.
+- **Navigation:** back/forward, clickable breadcrumbs, restored last
+  album/search/selection/scroll, recent libraries and recent views.
+- **Zoom:** pointer/keyboard-anchored grid zoom with animated reflow;
+  cursor-anchored viewer zoom, pinch, fit/100/200 presets, zoom HUD.
+- **Video:** drag-scrub with real frame previews, buffered range, resume
+  position, auto-hide HUD, persisted speed/volume.
+- **Feedback:** skeleton/error states, actionable empty states, toasts with
+  undo, background job center for import/export/scan/backup.
+- **System:** light/system theme, accent, density, motion settings, shortcut
+  customization, expanded Preferences, tabs/recent views, diagnostics.
+
+### UX passes
+
+| Pass | Target | Focus |
+| --- | --- | --- |
+| **UX-1 Feel** | 0.3 | Selection/open semantics, view restore, skeletons/toasts, non-blocking jobs, motion foundation. |
+| **UX-2 Precision** | 0.4 | Zoom anchors, video drag-scrub/resume, search/filter/tag polish, mixed-value batch editing. |
+| **UX-3 Immersion** | 0.6 | Compare/slideshow/map, viewer quick edits/external editor, video tracks/chapters. |
+| **UX-4 Personalization** | 0.7 | Theme/density/motion settings, shortcuts, preferences, accessibility/i18n. |
 
 **Acceptance:** every interactive control has hover/active/focus/disabled states;
-errors are actionable; no dead ends; polish changes are covered by visual/UI
-automation where practical.
+single click never opens and double click never merely selects; viewer open and
+return preserve context; zoom anchors on the pointer; video scrubbing shows the
+destination frame; errors are actionable; reduced motion is honored. The full
+interaction audit and test plan are in [docs/ux_audit.md](docs/ux_audit.md).
 
 ## 10. Accessibility and localization
 
@@ -495,18 +514,24 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P0 | Top | Signed/notarized release + CI validation | 0.2.x | Needs Apple credentials and a native CI run. |
 | P0 | Top | Onboarding + import/copy + import templates/verification | 0.3 | Core new-user and data-ingestion path. |
 | P0 | Top | Migration importers (Photos, Takeout, Lightroom) | 0.3 | Removes switching friction. |
+| P0 | Top | Selection/open/hover states + motion foundation | 0.3 | UX-1; single click selects, double click opens. |
+| P0 | Top | Back/forward, restore last view/selection/scroll | 0.3 | UX-1 navigation continuity. |
+| P0 | Top | Skeletons, actionable empty states, toasts/undo, background jobs | 0.3 | UX-1 feedback and orientation. |
+| P0 | Top | Grid/viewer zoom anchoring + pinch/presets | 0.4 | UX-2 precision browsing. |
+| P0 | Top | Video drag-scrub with real previews + resume | 0.4 | UX-2 everyday media controls. |
+| P0 | Top | Search/filter/tag/smart-album polish | 0.4 | UX-2 correctness and discoverability. |
 | P0 | Top | Hierarchical keywords + IPTC/XMP metadata templates | 0.4 | Creator/rights/contact/keywords; sidecar round-trip. |
 | P0 | Top | Quick non-destructive edits + external editor handoff | 0.4 | Crop/rotate/auto-enhance; version history. |
 | P0 | Top | Batch metadata + grouped undo | 0.4 | Apply templates/keywords to a selection. |
 | P1 | Mid | Private S3-compatible backup (encrypted, OS credentials) | 0.5 | User-owned bucket; no sync/browsing. |
 | P1 | Mid | Curated albums + smart-album polish | 0.6 | Preview, pin, rule import/export. |
 | P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. |
-| P1 | Mid | Map and slideshow | 0.6 | Presentation and geography. |
-| P1 | Mid | Video improvements: resume, scrub previews, tracks | 0.6 | Viewer parity. |
+| P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. |
+| P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. |
 | P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. |
-| P1 | Mid | Light theme/accent, toasts, skeletons | 0.7 | UX consistency. |
+| P1 | Mid | Light/system theme, accent, density, motion settings | 0.7 | UX-4 consistency. |
 | P1 | Mid | Accessibility bridge, focus order, reduced motion | 0.7 | Grade A requirement. |
 | P1 | Mid | Locale catalog (one non-English locale) | 0.7 | i18n proof. |
 | P2 | Lower | Windows/Linux port | 0.8 | Large; follow RELEASING plan. |
