@@ -326,6 +326,111 @@ fn ui_automation_selection_contract_and_empty_space_click() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_card_skeleton_selection_and_open() {
+    let (temp_dir, engine) = seed_library("card_states", 8);
+    // Seed fixtures contain invalid JPEG bytes, which is exactly the
+    // "texture not decoded yet" state the skeleton exists for.
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let skeleton = leak(format!("media-card-skeleton-{}", first_id));
+    let selected = leak(format!("media-card-selected-{}", first_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    assert!(
+        vcx.debug_bounds(skeleton).is_some(),
+        "a card without a decoded texture must paint media-card-skeleton-<id>"
+    );
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("every card must paint its photo area");
+    let skeleton_bounds = vcx
+        .debug_bounds(skeleton)
+        .expect("skeleton bounds disappeared between assertions");
+    assert!(
+        photo_bounds.contains(&skeleton_bounds.center()),
+        "the skeleton must sit inside the card photo area"
+    );
+    assert_eq!(
+        photo_bounds.size, skeleton_bounds.size,
+        "the skeleton must fill the photo area so the layout cannot jump on reveal"
+    );
+    assert!(
+        vcx.debug_bounds(selected).is_none(),
+        "an unselected card must not paint the selected marker"
+    );
+
+    click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(0), "single-click still selects");
+        assert!(app.selected_item.is_some());
+    });
+    assert!(
+        vcx.debug_bounds(selected).is_some(),
+        "selecting a card must paint media-card-selected-<id>"
+    );
+
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "double-click must still open the viewer"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_texture_replaces_skeleton() {
+    let (temp_dir, engine) = seed_library("card_reveal", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let card_id = item.id.0;
+    let photo = leak(format!("media-card-photo-{}", card_id));
+    let skeleton = leak(format!("media-card-skeleton-{}", card_id));
+    let thumb = leak(format!("media-card-thumb-{}", card_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    assert!(vcx.debug_bounds(skeleton).is_some());
+    assert!(vcx.debug_bounds(thumb).is_none());
+
+    let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(4, 4),
+    )]));
+    view.update(vcx, |app, cx| {
+        let state = app
+            .grid_state
+            .as_ref()
+            .expect("grid state is installed by the test harness");
+        state.texture_cache.lock().put(item.id, texture);
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    // debug_bounds is cumulative across frames, so the reveal is proven by the
+    // thumbnail appearing rather than by the skeleton's stale bounds vanishing.
+    assert!(
+        vcx.debug_bounds(thumb).is_some(),
+        "a cached texture must paint inside the photo area"
+    );
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("the photo area must stay painted across the reveal");
+    let thumb_bounds = vcx
+        .debug_bounds(thumb)
+        .expect("thumbnail bounds disappeared between assertions");
+    assert_eq!(
+        photo_bounds.size, thumb_bounds.size,
+        "the revealed thumbnail must keep the same layout as the skeleton"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_empty_search_state_offers_a_clear_action() {
     let (temp_dir, engine) = seed_library("empty_search", 8);
     let mut cx = gpui::TestAppContext::single();

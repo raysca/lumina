@@ -123,13 +123,22 @@ impl LuminaApp {
                                 let item_for_context = item.clone();
                                 let dur_text = format_duration_badge(item.duration_secs());
                                 let fit_mode = this.card_fit_mode;
+                                let hover_group: SharedString =
+                                    format!("media-card-hover-{}", item_id_num).into();
 
                                 row_cards.push(
                                     div()
                                         .id(item_id_num)
+                                        // Stable automation contract for card state:
+                                        // media-card-<id>, media-card-photo-<id>,
+                                        // media-card-skeleton-<id>, media-card-thumb-<id>,
+                                        // media-card-selected-<id>.
                                         .debug_selector(move || {
                                             format!("media-card-{}", item_id_num)
                                         })
+                                        // The hover group lets the informational "Open" hint
+                                        // appear only while the card is hovered.
+                                        .group(hover_group.clone())
                                         .flex_1()
                                         .h(px(row_h - 10.0))
                                         .p(px(8.0))
@@ -142,10 +151,24 @@ impl LuminaApp {
                                             theme::border_subtle()
                                         })
                                         .hover(move |s| {
+                                            let s = s.bg(theme::bg_raised());
                                             if is_selected {
-                                                s.border_color(theme::accent())
+                                                s.border_color(theme::accent_hover())
                                             } else {
                                                 s.border_color(theme::border_strong())
+                                            }
+                                        })
+                                        // GPUI 0.2.2 has no semantic pressed state, so the press
+                                        // cue is a transient surface step. Selection and keyboard
+                                        // focus stay structural: accent border + check badge, not
+                                        // colour alone.
+                                        .active(move |s| {
+                                            if is_selected {
+                                                s.bg(theme::selection_bg_hover())
+                                                    .border_color(theme::accent())
+                                            } else {
+                                                s.bg(theme::bg_control())
+                                                    .border_color(theme::border_strong())
                                             }
                                         })
                                         .cursor_pointer()
@@ -185,17 +208,32 @@ impl LuminaApp {
                                                 );
                                             }),
                                         )
-                                        // Inner Photo Container
+                                        // Inner Photo Container. The tinted gradient is
+                                        // always present so a decoded thumbnail replaces the
+                                        // skeleton without a black flash or a layout jump.
                                         .child(
                                             div()
+                                                .debug_selector(move || {
+                                                    format!("media-card-photo-{}", item_id_num)
+                                                })
                                                 .w_full()
                                                 .flex_1()
-                                                .bg(theme::bg_app())
+                                                .bg(linear_gradient(
+                                                    135.0,
+                                                    linear_color_stop(theme::bg_raised(), 0.0),
+                                                    linear_color_stop(theme::bg_app(), 1.0),
+                                                ))
                                                 .rounded(px(4.0))
                                                 .overflow_hidden()
                                                 .relative()
                                                 .child(if let Some(render_img) = texture {
                                                     div()
+                                                        .debug_selector(move || {
+                                                            format!(
+                                                                "media-card-thumb-{}",
+                                                                item_id_num
+                                                            )
+                                                        })
                                                         .size_full()
                                                         .child(
                                                             img(render_img).size_full().object_fit(
@@ -208,9 +246,41 @@ impl LuminaApp {
                                                         )
                                                         .into_any_element()
                                                 } else {
+                                                    // Static skeleton placeholder. The seed
+                                                    // fixtures decode to no texture, so this is
+                                                    // also the automation signal for "not yet
+                                                    // decoded" (media-card-skeleton-<id>).
                                                     div()
+                                                        .debug_selector(move || {
+                                                            format!(
+                                                                "media-card-skeleton-{}",
+                                                                item_id_num
+                                                            )
+                                                        })
                                                         .size_full()
-                                                        .bg(theme::bg_app())
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .child(
+                                                            div()
+                                                                .size(px(34.0))
+                                                                .rounded_full()
+                                                                .bg(theme::bg_control())
+                                                                .border_1()
+                                                                .border_color(theme::border_subtle())
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .child(render_icon(
+                                                                    if is_video {
+                                                                        Icon::Film
+                                                                    } else {
+                                                                        Icon::Image
+                                                                    },
+                                                                    px(17.0),
+                                                                    theme::text_subtle(),
+                                                                )),
+                                                        )
                                                         .into_any_element()
                                                 })
                                                 // Favorite Heart Overlay (bottom-left)
@@ -255,6 +325,74 @@ impl LuminaApp {
                                                         .into_any_element()
                                                 } else {
                                                     Empty.into_any_element()
+                                                })
+                                                // Hover affordance: purely informational and
+                                                // mouse-only in appearance, but the same action
+                                                // has a keyboard path (Enter or double-click
+                                                // opens the viewer).
+                                                .child(
+                                                    div()
+                                                        .id(ElementId::named_usize(
+                                                            "media-card-open-hint",
+                                                            item_id_num,
+                                                        ))
+                                                        .absolute()
+                                                        .top_1p5()
+                                                        .left_1p5()
+                                                        .px_1p5()
+                                                        .py_0p5()
+                                                        .rounded(px(4.0))
+                                                        .bg(theme::scrim())
+                                                        .border_1()
+                                                        .border_color(theme::border_subtle())
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .gap_1()
+                                                        .text_xs()
+                                                        .text_color(theme::text())
+                                                        .opacity(0.0)
+                                                        .group_hover(hover_group, |s| {
+                                                            s.opacity(1.0)
+                                                        })
+                                                        .tooltip(theme::tooltip_label(
+                                                            "Open (double-click or Enter)",
+                                                        ))
+                                                        .child(render_icon(
+                                                            Icon::Maximize,
+                                                            px(10.0),
+                                                            theme::text_muted(),
+                                                        ))
+                                                        .child("Open"),
+                                                )
+                                                // Selection marker: a check badge in addition
+                                                // to the accent border, so focus/selection do
+                                                // not depend on colour alone.
+                                                .child(if is_selected {
+                                                    div()
+                                                        .debug_selector(move || {
+                                                            format!(
+                                                                "media-card-selected-{}",
+                                                                item_id_num
+                                                            )
+                                                        })
+                                                        .absolute()
+                                                        .top_1p5()
+                                                        .right_1p5()
+                                                        .size(px(16.0))
+                                                        .rounded_full()
+                                                        .bg(theme::accent())
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .child(render_icon(
+                                                            Icon::Check,
+                                                            px(10.0),
+                                                            theme::accent_fg(),
+                                                        ))
+                                                        .into_any_element()
+                                                } else {
+                                                    Empty.into_any_element()
                                                 }),
                                         )
                                         // Info Area Below Photo
@@ -265,11 +403,21 @@ impl LuminaApp {
                                                 .flex_col()
                                                 .gap_1()
                                                 .child(
+                                                    // Tooltips are an established GPUI
+                                                    // pattern here; the full filename stays
+                                                    // reachable when the row is truncated.
                                                     div()
+                                                        .id(ElementId::named_usize(
+                                                            "media-card-name",
+                                                            item_id_num,
+                                                        ))
                                                         .text_xs()
                                                         .font_family(theme::FONT_MONO)
                                                         .text_color(theme::text_muted())
                                                         .truncate()
+                                                        .tooltip(theme::tooltip_label(
+                                                            item.file_name.clone(),
+                                                        ))
                                                         .child(item.file_name.clone()),
                                                 )
                                                 .child(
