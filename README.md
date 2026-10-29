@@ -166,6 +166,7 @@ docs/                Roadmap, system design, technical notes
 - [Implementation plan](docs/implementation_plan.md)
 - [Releasing & notarization](RELEASING.md)
 - [Accessibility & localization](docs/accessibility.md)
+- [Engineering & review guide](AGENTS.md)
 
 ## Third-party assets
 
