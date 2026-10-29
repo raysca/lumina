@@ -926,6 +926,18 @@ impl LuminaApp {
                 })
                 .collect();
         }
+
+        // Tag mutations, scan removals, and undo/redo all refresh counts here.
+        // If the active tag view lost its last item, drop the stale
+        // position-based selection instead of leaving it pointing nowhere.
+        if matches!(
+            self.selection,
+            AlbumSelection::Tag(_) | AlbumSelection::Untagged
+        ) && self.get_active_count() == 0
+            && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+        {
+            self.clear_selection_fields();
+        }
     }
 }
 

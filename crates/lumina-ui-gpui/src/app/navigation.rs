@@ -1343,6 +1343,19 @@ impl LuminaApp {
     }
 
     pub fn clear_selection(&mut self, cx: &mut Context<Self>) {
+        self.clear_selection_fields();
+        // Clearing selection must forget the persisted item too (view/search
+        // changes reach here after updating their own fields).
+        self.schedule_session_save(cx);
+        cx.notify();
+    }
+
+    /// Clears every selection-derived field without saving or rendering.
+    ///
+    /// Count refreshes run inside scan, undo, and tag-mutation paths that
+    /// already notify their own caller, so they use this version to drop a
+    /// selection that no longer belongs to the active view.
+    pub(crate) fn clear_selection_fields(&mut self) {
         self.selected_indices.clear();
         self.selection_anchor = None;
         self.selected_index = None;
@@ -1355,10 +1368,6 @@ impl LuminaApp {
         self.cancel_batch_edit();
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
-        // Clearing selection must forget the persisted item too (view/search
-        // changes reach here after updating their own fields).
-        self.schedule_session_save(cx);
-        cx.notify();
     }
 
     pub fn update_batch_summary(&mut self) {

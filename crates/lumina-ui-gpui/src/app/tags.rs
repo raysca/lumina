@@ -51,24 +51,6 @@ impl LuminaApp {
         }
     }
 
-    /// Clears the selection when a tag-based view lost its last item.
-    ///
-    /// Removing the tag that produced the view can empty it; a position-based
-    /// selection would otherwise point past the end of the grid.
-    fn reconcile_empty_tag_view(&mut self, cx: &mut Context<Self>) {
-        if !matches!(
-            self.selection,
-            AlbumSelection::Untagged | AlbumSelection::Tag(_)
-        ) {
-            return;
-        }
-        if self.get_active_count() == 0
-            && (self.selected_item.is_some() || !self.selected_indices.is_empty())
-        {
-            self.clear_selection(cx);
-        }
-    }
-
     pub fn batch_add_tag(&mut self, tag: String, cx: &mut Context<Self>) {
         let clean = tag.trim().to_lowercase();
         if clean.is_empty() {
@@ -100,7 +82,6 @@ impl LuminaApp {
         self.sync_metadata_sidecars(&ids);
         self.refresh_selected_tags();
         self.refresh_album_counts();
-        self.reconcile_empty_tag_view(cx);
         self.show_undo_toast(format!("Added tag \"{}\"", clean), cx);
         cx.notify();
     }
@@ -138,7 +119,6 @@ impl LuminaApp {
         self.set_last_action(message.clone());
         self.refresh_selected_tags();
         self.refresh_album_counts();
-        self.reconcile_empty_tag_view(cx);
         self.show_undo_toast(message, cx);
         cx.notify();
     }
@@ -205,7 +185,6 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
-                self.reconcile_empty_tag_view(cx);
                 let message = format!("Renamed tag to \"{}\"", clean_new);
                 self.set_last_action(message.clone());
                 self.show_toast(message, cx);
@@ -252,7 +231,6 @@ impl LuminaApp {
             .retain(|selected| !selected.eq_ignore_ascii_case(&clean));
         self.refresh_selected_tags();
         self.refresh_album_counts();
-        self.reconcile_empty_tag_view(cx);
         cx.notify();
     }
 
@@ -320,7 +298,6 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
-                self.reconcile_empty_tag_view(cx);
                 self.show_toast(format!("Renamed tag to \"{}\"", new_tag), cx);
             }
             cx.notify();
@@ -371,7 +348,6 @@ impl LuminaApp {
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
-                self.reconcile_empty_tag_view(cx);
             }
             cx.notify();
         }
@@ -423,7 +399,6 @@ impl LuminaApp {
             .retain(|selected| !deleted.iter().any(|tag| tag == &selected.to_lowercase()));
         self.refresh_selected_tags();
         self.refresh_album_counts();
-        self.reconcile_empty_tag_view(cx);
         if !failures.is_empty() {
             let details = failures
                 .iter()
