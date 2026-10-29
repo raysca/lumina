@@ -326,6 +326,38 @@ fn ui_automation_selection_contract_and_empty_space_click() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_tag_double_click_starts_rename() {
+    let (temp_dir, engine) = seed_library("tag_rename", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine
+        .add_tags_batch(&[item.id], &["travel".to_string()])
+        .unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    assert!(
+        vcx.debug_bounds("sidebar-tag-filter-travel").is_some(),
+        "the tagged item must create a sidebar tag row"
+    );
+    double_click(vcx, "sidebar-tag-filter-travel");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.editing_tag.as_deref(),
+            Some("travel"),
+            "double-clicking a tag must begin its inline rename"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_card_skeleton_selection_and_open() {
     let (temp_dir, engine) = seed_library("card_states", 8);
     // Seed fixtures contain invalid JPEG bytes, which is exactly the

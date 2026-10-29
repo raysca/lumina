@@ -119,7 +119,6 @@ impl LuminaApp {
         cx.notify();
     }
 
-    #[cfg(test)]
     pub fn start_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
         self.editing_tag = Some(tag.clone());
         self.editing_tag_buffer = tag;

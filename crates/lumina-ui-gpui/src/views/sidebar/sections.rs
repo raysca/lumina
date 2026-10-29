@@ -513,10 +513,14 @@ pub(super) fn render_tags_section(
                             .into_any_element()
                     } else {
                         let dot_color = tag_color(&tag_str);
+                        let tag_for_debug = tag_str.clone();
 
                         div()
                             .id(ElementId::Name(
                                 format!("sidebar-tag-item-{}", tag_str).into(),
+                            ))
+                            .tooltip(theme::tooltip_label(
+                                "Click to filter · double-click to rename",
                             ))
                             .px_2()
                             .py_1p5()
@@ -542,6 +546,9 @@ pub(super) fn render_tags_section(
                                     .id(ElementId::Name(
                                         format!("sidebar-tag-filter-{}", tag_str).into(),
                                     ))
+                                    .debug_selector(move || {
+                                        format!("sidebar-tag-filter-{}", tag_for_debug)
+                                    })
                                     .flex_1()
                                     .cursor_pointer()
                                     .flex()
@@ -564,8 +571,10 @@ pub(super) fn render_tags_section(
                                             })
                                             .child(tag_str.clone()),
                                     )
-                                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                        if matches!(&this.selection, AlbumSelection::Tag(t) if t == &tag_for_select) {
+                                    .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
+                                        if e.click_count() >= 2 {
+                                            this.start_tag_rename(tag_for_select.clone(), cx);
+                                        } else if matches!(&this.selection, AlbumSelection::Tag(t) if t == &tag_for_select) {
                                             this.select_album(AlbumSelection::AllLibrary, cx);
                                         } else {
                                             this.select_album(
