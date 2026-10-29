@@ -896,3 +896,267 @@ fn test_viewer_cursor_anchored_zoom_action() {
     });
     cx.run_until_parked();
 }
+
+#[core::prelude::v1::test]
+fn test_video_scrub_state_transitions_and_commit() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+        // No player backend is loaded here (the sample path does not exist), so
+        // this exercises the state/seek-commit boundary directly. The drag
+        // wiring test below runs the same path with a native player handle.
+        app.video.duration = 42.0;
+
+        assert!(!app.video.is_scrubbing, "viewer opens with no active scrub");
+        assert!(app.video.scrub_time.is_none());
+
+        // Pointer-down starts scrubbing and seeks to the pressed position.
+        app.begin_video_scrub(0.25, cx);
+        assert!(app.video.is_scrubbing);
+        assert!((app.video.scrub_time.unwrap() - 10.5).abs() < 1e-6);
+        assert!((app.video.playback_time - 10.5).abs() < 1e-6);
+
+        // Pointer-move always advances the destination, even when the player
+        // seek inside the throttle window is coalesced.
+        app.update_video_scrub(0.75, cx);
+        assert!(app.video.is_scrubbing);
+        assert!((app.video.scrub_time.unwrap() - 31.5).abs() < 1e-6);
+        assert!(
+            (app.video.playback_time - 10.5).abs() < 1e-6,
+            "a move inside one throttle window must not queue another seek"
+        );
+
+        // Pointer-up ends scrubbing and commits the final destination.
+        app.end_video_scrub(cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!(app.video.last_scrub_seek.is_none());
+        assert!((app.video.playback_time - 31.5).abs() < 1e-6);
+
+        // Releasing again or moving without a drag is a no-op, not a stray seek.
+        app.end_video_scrub(cx);
+        app.update_video_scrub(0.1, cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!((app.video.playback_time - 31.5).abs() < 1e-6);
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_clamps_to_duration_and_catalog_fallback() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+
+        // Player metadata is authoritative once known.
+        app.video.duration = 42.0;
+        app.video.playback_time = 0.0;
+        app.begin_video_scrub(-0.25, cx);
+        assert_eq!(app.video.scrub_time, Some(0.0));
+        assert_eq!(app.video.playback_time, 0.0);
+        app.update_video_scrub(1.5, cx);
+        assert!((app.video.scrub_time.unwrap() - 42.0).abs() < 1e-6);
+        app.end_video_scrub(cx);
+        assert!((app.video.playback_time - 42.0).abs() < 1e-6);
+
+        // Before player metadata arrives the catalog duration drives the track;
+        // the sample video is 15 seconds.
+        app.video.duration = 0.0;
+        app.video.playback_time = 0.0;
+        app.begin_video_scrub(2.0, cx);
+        assert!((app.video.scrub_time.unwrap() - 15.0).abs() < 1e-6);
+        app.end_video_scrub(cx);
+
+        // A video with no duration at all clamps to zero instead of inventing one.
+        if let Some(item) = app.selected_item.as_mut() {
+            item.duration_ms = None;
+        }
+        app.video.duration = 0.0;
+        app.video.playback_time = 3.0;
+        app.begin_video_scrub(0.5, cx);
+        assert_eq!(app.video.scrub_time, Some(0.0));
+        assert_eq!(app.video.playback_time, 0.0);
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_resets_on_viewer_close_and_media_change() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let sample = get_sample_items();
+    let video = sample[1].clone();
+    let photo = sample[0].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 31.0;
+
+        // Closing the viewer stops playback and clears the armed drag.
+        app.begin_video_scrub(0.5, cx);
+        assert!(app.video.is_scrubbing);
+        app.close_viewer(cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!(app.video.last_scrub_seek.is_none());
+
+        // Switching media tears the video player down; no stale scrub survives.
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 31.0;
+        app.begin_video_scrub(0.25, cx);
+        assert!(app.video.is_scrubbing);
+        app.open_viewer(photo.clone(), cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+
+        // Stopping the player directly also clears scrub state.
+        app.open_viewer(video, cx);
+        app.video.duration = 31.0;
+        app.begin_video_scrub(0.75, cx);
+        assert!(app.video.is_scrubbing);
+        app.stop_video_player();
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
+    // The root render path shows onboarding when no library is open, so the
+    // scrubber can only be verified through a real (temporary) library.
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_video_scrub_drag_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock must be after the Unix epoch")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
+    std::fs::write(temp_dir.join("photo1.jpg"), b"test-jpeg-content")
+        .expect("temp photo must be writable");
+    std::fs::write(temp_dir.join("photo2.jpg"), b"test-jpeg-content")
+        .expect("temp photo must be writable");
+    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
+        temp_dir.clone(),
+        temp_dir.join("catalog.db"),
+        Some(temp_dir.join("cache")),
+    )
+    .expect("temp engine must open");
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    assert!(engine.total_count() >= 2);
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(vcx, |app, cx| {
+        app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        app.layout_mode = LayoutMode::Viewer;
+        app.video.duration = 60.0;
+        // A native player handle exists on macOS even without a loaded movie;
+        // the drag path reaches the real seek bridge without requiring decoded
+        // frames (the bridge exposes no still for arbitrary scrub positions).
+        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.window_bounds = Some((0.0, 0.0, 1024.0, 768.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(768.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let track = vcx
+        .debug_bounds("video-scrubber")
+        .expect("video scrubber track must be painted in the viewer");
+    let left: f32 = track.left().into();
+    let width: f32 = track.size.width.into();
+    let y: f32 = track.center().y.into();
+    assert!(
+        width > 100.0,
+        "scrubber must have a usable width, got {width}"
+    );
+
+    let press = gpui::point(gpui::px(left + width * 0.25), gpui::px(y));
+    let drag = gpui::point(gpui::px(left + width * 0.75), gpui::px(y));
+
+    vcx.simulate_mouse_down(press, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.video.is_scrubbing, "pointer down must start scrubbing");
+        let destination = app
+            .video
+            .scrub_time
+            .expect("scrub destination must be tracked");
+        assert!(
+            (destination - 15.0).abs() < 1.0,
+            "press at 25% must land near 15s, got {destination}"
+        );
+    });
+
+    vcx.simulate_mouse_move(
+        drag,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.video.is_scrubbing,
+            "dragging with the button held must keep scrubbing"
+        );
+        let destination = app
+            .video
+            .scrub_time
+            .expect("scrub destination must follow the pointer");
+        assert!(
+            (destination - 45.0).abs() < 1.0,
+            "drag to 75% must track near 45s, got {destination}"
+        );
+    });
+
+    vcx.simulate_mouse_up(drag, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.video.is_scrubbing, "pointer up must end scrubbing");
+        assert!(app.video.scrub_time.is_none());
+        assert!(
+            (app.video.playback_time - 45.0).abs() < 1.0,
+            "release must commit the final destination, got {}",
+            app.video.playback_time
+        );
+    });
+
+    // A press + release without movement remains click-to-seek.
+    let click = gpui::point(gpui::px(left + width * 0.5), gpui::px(y));
+    vcx.simulate_click(click, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.video.is_scrubbing);
+        assert!(
+            (app.video.playback_time - 30.0).abs() < 1.0,
+            "click at 50% must seek near 30s, got {}",
+            app.video.playback_time
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

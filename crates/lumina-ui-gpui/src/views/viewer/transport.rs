@@ -1,10 +1,29 @@
 use gpui::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use super::utils::format_playback_speed;
 use crate::app::types::format_time_fractional;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+
+/// Convert a window-space pointer position into a 0..=1 fraction of the scrub
+/// track. Bounds are captured during prepaint, so drag mapping stays correct
+/// across resizes and layout changes without hard-coded geometry.
+fn scrub_fraction(
+    position: Point<Pixels>,
+    track_bounds: &Rc<RefCell<Option<Bounds<Pixels>>>>,
+) -> Option<f64> {
+    let bounds = (*track_bounds.borrow())?;
+    let width: f32 = bounds.size.width.into();
+    if width <= 0.0 {
+        return None;
+    }
+    let left: f32 = bounds.origin.x.into();
+    let pointer_x: f32 = position.x.into();
+    Some(f64::from(((pointer_x - left) / width).clamp(0.0, 1.0)))
+}
 
 pub struct ViewerTransport;
 
@@ -18,11 +37,46 @@ impl ViewerTransport {
                 .map(|i| i.duration_secs())
                 .unwrap_or(0.0)
         };
-        let current_time = this.video.playback_time;
+        let is_scrubbing = this.video.is_scrubbing;
+        let scrub_time = this.video.scrub_time;
+        // While scrubbing, the destination owns the playhead and time readout so
+        // feedback follows the pointer even when seeks are coalesced.
+        let current_time = if is_scrubbing {
+            scrub_time.unwrap_or(this.video.playback_time)
+        } else {
+            this.video.playback_time
+        };
         let progress_pct = if duration > 0.0 {
             (current_time / duration).clamp(0.0, 1.0)
         } else {
             0.0
+        };
+        // Hover markers yield to the scrub destination while dragging.
+        let hover_pct = if is_scrubbing {
+            None
+        } else {
+            this.video.hover_pct
+        };
+        let hover_time = if is_scrubbing {
+            None
+        } else {
+            this.video.hover_time
+        };
+        // Preview card source: hover time when idle, destination time while
+        // scrubbing. The image is a generated gradient placeholder: the native
+        // AVFoundation bridge exposes no decoded still for arbitrary scrub
+        // positions, so this must not be described as a decoded-frame preview.
+        let preview = if is_scrubbing {
+            scrub_time.map(|time| {
+                let pct = if duration > 0.0 {
+                    (time / duration).clamp(0.0, 1.0) as f32
+                } else {
+                    0.0
+                };
+                (pct, time)
+            })
+        } else {
+            hover_pct.zip(hover_time)
         };
 
         let vol = this.video.volume.clamp(0.0, 1.0);
@@ -35,59 +89,60 @@ impl ViewerTransport {
             .flex()
             .flex_col()
             .gap_2()
-            // Floating Hover Preview Thumbnail Card (above scrubber, only when hovering)
-            .child(
-                if let (Some(hover_pct), Some(hover_time)) =
-                    (this.video.hover_pct, this.video.hover_time)
-                {
-                    let hover_img = crate::app::types::generate_gradient_image(
-                        (82, 148, 185),
-                        (175, 205, 220),
-                        144,
-                        82,
-                    );
-                    div()
-                        .id("video-hover-preview-card")
-                        .absolute()
-                        .bottom(px(84.0))
-                        .left(relative((hover_pct - 0.08).clamp(0.01, 0.81)))
-                        .w(px(144.0))
-                        .h(px(82.0))
-                        .rounded_md()
-                        .overflow_hidden()
-                        .border_1()
-                        .border_color(theme::border_strong())
-                        .bg(theme::bg_hud())
-                        .shadow_2xl()
-                        .child(img(hover_img).size_full().object_fit(ObjectFit::Cover))
-                        .child(
-                            div()
-                                .absolute()
-                                .bottom_1()
-                                .left_0()
-                                .right_0()
-                                .flex()
-                                .justify_center()
-                                .child(
-                                    div()
-                                        .px_2()
-                                        .py_0p5()
-                                        .bg(theme::bg_media())
-                                        .rounded_sm()
-                                        .text_xs()
-                                        .font_family(theme::FONT_MONO)
-                                        .text_size(px(10.5))
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(theme::text())
-                                        .child(format_time_fractional(hover_time)),
-                                ),
-                        )
-                        .into_any_element()
-                } else {
-                    Empty.into_any_element()
-                },
-            )
-            // Storyboard Filmstrip Scrubber Track
+            // Floating scrub/hover preview card (above the scrubber). The image is
+            // a placeholder gradient, not a decoded video frame; see the preview
+            // comment above.
+            .child(if let Some((preview_pct, preview_time)) = preview {
+                let preview_img = crate::app::types::generate_gradient_image(
+                    (82, 148, 185),
+                    (175, 205, 220),
+                    144,
+                    82,
+                );
+                div()
+                    .id("video-hover-preview-card")
+                    .absolute()
+                    .bottom(px(84.0))
+                    .left(relative((preview_pct - 0.08).clamp(0.01, 0.81)))
+                    .w(px(144.0))
+                    .h(px(82.0))
+                    .rounded_md()
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(theme::border_strong())
+                    .bg(theme::bg_hud())
+                    .shadow_2xl()
+                    .child(img(preview_img).size_full().object_fit(ObjectFit::Cover))
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom_1()
+                            .left_0()
+                            .right_0()
+                            .flex()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .bg(theme::bg_media())
+                                    .rounded_sm()
+                                    .text_xs()
+                                    .font_family(theme::FONT_MONO)
+                                    .text_size(px(10.5))
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(theme::text())
+                                    .child(format_time_fractional(preview_time)),
+                            ),
+                    )
+                    .into_any_element()
+            } else {
+                Empty.into_any_element()
+            })
+            // Storyboard Filmstrip Scrubber Track: press, drag, and release map
+            // directly to a timeline position. Pointer moves update the visible
+            // destination on every event while seeks are coalesced in
+            // LuminaApp::update_video_scrub.
             .child({
                 let num_slices = 16;
                 let mut track_slices = div()
@@ -112,35 +167,79 @@ impl ViewerTransport {
                     );
                 }
 
-                let mut hit_row = div().absolute().inset_0().flex().flex_row();
-                for i in 0..32 {
-                    let pct = (i as f32 + 0.5) / 32.0;
-                    hit_row = hit_row.child(
-                        div()
-                            .id(ElementId::NamedInteger("scrub-seg".into(), i as u64))
-                            .flex_1()
-                            .h_full()
-                            .on_mouse_move(cx.listener(move |this, _e: &MouseMoveEvent, _w, cx| {
-                                this.set_video_hover_scrub(Some(pct), cx);
-                            }))
-                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                this.seek_video_percent(pct as f64, cx);
-                            })),
-                    );
-                }
+                // The full-size filmstrip surface is the first child, so its
+                // prepaint bounds are the track rect used to map pointer X to a
+                // 0..=1 timeline fraction.
+                let track_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
 
                 div()
+                    .on_children_prepainted({
+                        let track_bounds = track_bounds.clone();
+                        move |child_bounds: Vec<Bounds<Pixels>>, _window, _cx| {
+                            if let Some(bounds) = child_bounds.first() {
+                                *track_bounds.borrow_mut() = Some(*bounds);
+                            }
+                        }
+                    })
                     .id("video-scrubber-track")
+                    .debug_selector(|| "video-scrubber".to_string())
                     .w_full()
                     .h(px(34.0))
                     .rounded_md()
                     .border_1()
-                    .border_color(theme::border())
+                    .border_color(if is_scrubbing {
+                        theme::accent()
+                    } else {
+                        theme::border()
+                    })
                     .relative()
                     .cursor_pointer()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener({
+                            let track_bounds = track_bounds.clone();
+                            move |this, event: &MouseDownEvent, _window, cx| {
+                                if let Some(pct) = scrub_fraction(event.position, &track_bounds) {
+                                    this.begin_video_scrub(pct, cx);
+                                }
+                            }
+                        }),
+                    )
+                    .on_mouse_move(cx.listener({
+                        let track_bounds = track_bounds.clone();
+                        move |this, event: &MouseMoveEvent, _window, cx| {
+                            let Some(pct) = scrub_fraction(event.position, &track_bounds) else {
+                                return;
+                            };
+                            if this.video.is_scrubbing {
+                                this.update_video_scrub(pct, cx);
+                            } else {
+                                this.set_video_hover_scrub(Some(pct as f32), cx);
+                            }
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                            this.end_video_scrub(cx);
+                        }),
+                    )
+                    // A release can land outside the track mid-drag; the
+                    // capture-phase out-handler commits the final destination there.
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                            this.end_video_scrub(cx);
+                        }),
+                    )
+                    .on_hover(cx.listener(|this, hovered: &bool, _window, cx| {
+                        if !*hovered && !this.video.is_scrubbing {
+                            this.set_video_hover_scrub(None, cx);
+                        }
+                    }))
                     .child(track_slices)
-                    // Hover needle indicator (only when hovering)
-                    .child(if let Some(hover_pct) = this.video.hover_pct {
+                    // Hover needle indicator, hidden while a scrub owns the playhead.
+                    .child(if let Some(hover_pct) = hover_pct {
                         div()
                             .absolute()
                             .top_0()
@@ -152,18 +251,17 @@ impl ViewerTransport {
                     } else {
                         Empty.into_any_element()
                     })
-                    // Current Playhead needle indicator
+                    // Current playhead: follows the scrub destination while dragging.
                     .child(
                         div()
                             .absolute()
                             .top_0()
                             .bottom_0()
                             .left(relative(progress_pct as f32))
-                            .w(px(2.5))
+                            .w(px(if is_scrubbing { 3.5 } else { 2.5 }))
                             .bg(theme::accent())
                             .shadow_md(),
                     )
-                    .child(hit_row)
             })
             // Controls Row
             .child(
@@ -265,7 +363,9 @@ impl ViewerTransport {
                                         this.seek_video_relative(5.0, cx);
                                     })),
                             )
-                            // Monospace Time Display: 0:16.04 / 0:42.00
+                            // Monospace Time Display: 0:16.04 / 0:42.00. While
+                            // scrubbing this shows the pointer destination, not the
+                            // backend's last decoded position.
                             .child(
                                 div()
                                     .ml_2()
@@ -278,7 +378,23 @@ impl ViewerTransport {
                                         format_time_fractional(current_time),
                                         format_time_fractional(duration)
                                     )),
-                            ),
+                            )
+                            // Explicit scrub-state pill so the drag is unmistakable
+                            // beyond the accent border and playhead.
+                            .child(if is_scrubbing {
+                                div()
+                                    .px_1p5()
+                                    .py_0p5()
+                                    .bg(theme::selection_bg())
+                                    .rounded_sm()
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(theme::accent())
+                                    .child("SCRUB")
+                                    .into_any_element()
+                            } else {
+                                Empty.into_any_element()
+                            }),
                     )
                     // Right Controls: Volume Icon, Volume Slider, Speed, Loop, PiP, Fullscreen
                     .child(

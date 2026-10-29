@@ -73,6 +73,17 @@ pub struct VideoPlaybackState {
     pub speed_menu_open: bool,
     pub hover_time: Option<f64>,
     pub hover_pct: Option<f32>,
+    /// True while the user drags the viewer transport scrubber. The transport
+    /// renders the playhead and time readout from `scrub_time` while this is set,
+    /// and releasing the pointer commits the final seek.
+    pub is_scrubbing: bool,
+    /// Destination timestamp for the active scrub drag. `None` whenever
+    /// `is_scrubbing` is false.
+    pub scrub_time: Option<f64>,
+    /// Last time a coalesced scrub seek was sent to the player backend. Drag
+    /// moves can arrive at display rate, so seeks are throttled to at most one
+    /// per interval while the destination state still follows every move.
+    pub last_scrub_seek: Option<std::time::Instant>,
     pub ticker_active: Option<Arc<AtomicBool>>,
     pub ticker_handle: Option<std::thread::JoinHandle<()>>,
     pub frame_pending: Arc<AtomicBool>,
