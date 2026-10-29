@@ -36,6 +36,17 @@ pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
 
+/// Viewer rotation is stored as clockwise quarter turns in 0..=3.
+pub const QUARTER_TURNS: u8 = 4;
+
+/// Normalizes any signed quarter-turn count into the stored 0..=3 range.
+///
+/// Rotate Left subtracts a turn from 0, which must wrap to 3 instead of
+/// underflowing; a full four turns is the identity.
+pub fn normalize_quarter_turns(turns: i32) -> u8 {
+    turns.rem_euclid(QUARTER_TURNS as i32) as u8
+}
+
 /// Never overwrite an existing export: photo.jpg -> photo (1).jpg, photo (2).jpg...
 fn unique_destination(directory: &Path, file_name: &str) -> PathBuf {
     let candidate = directory.join(file_name);
@@ -494,6 +505,35 @@ impl LuminaEngine {
         self.catalog.set_color_label(id, label)
     }
 
+    /// Sets the persisted clockwise quarter-turn rotation for every id.
+    ///
+    /// Rotation is display-only: the original file is never rewritten. The
+    /// catalog write is one transaction, and cached thumbnails for the affected
+    /// items are dropped because the cache key has no rotation component, so an
+    /// unchanged key would otherwise keep serving the previous orientation.
+    pub fn set_rotation(&self, ids: &[MediaId], quarters: u8) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut affected = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(item) = self.catalog.get_item_by_id(*id)? {
+                affected.push(item);
+            }
+        }
+        self.catalog.set_rotation(ids, quarters)?;
+        for item in &affected {
+            self.cache
+                .remove_cached_item(&item.path, item.file_size, item.mtime_epoch_ms);
+        }
+        Ok(())
+    }
+
+    /// Persisted clockwise quarter turns for an item (0 when unset).
+    pub fn get_rotation(&self, id: MediaId) -> Result<u8> {
+        self.catalog.get_rotation(id)
+    }
+
     pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
         self.catalog.set_title(id, title)
     }
@@ -760,6 +800,17 @@ impl LuminaEngine {
                 }
             };
 
+            // Rotation is applied after the cache lookup: cached bytes stay in the
+            // file's own orientation, so changing the angle never makes the key
+            // (path, size, mtime, target) stale.
+            let rotation = match catalog.get_rotation(id) {
+                Ok(quarters) => quarters,
+                Err(err) => {
+                    log::warn!("failed to read rotation for {id:?}: {err:?}");
+                    0
+                }
+            };
+
             // Check disk cache first
             if let Some(frame) = cache.get_cached(
                 id,
@@ -768,7 +819,7 @@ impl LuminaEngine {
                 item.mtime_epoch_ms,
                 target_size,
             ) {
-                callback(Some(frame));
+                callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
                 return;
             }
 
@@ -781,7 +832,7 @@ impl LuminaEngine {
                         target_size,
                         &frame,
                     );
-                    callback(Some(frame));
+                    callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
                 }
                 Err(err) => {
                     log::warn!("failed to decode thumbnail for {:?}: {err:?}", item.path);
@@ -867,5 +918,115 @@ impl LuminaEngine {
                 .event_tx
                 .send(EngineEvent::ScanComplete { total_items });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn temp_library(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("lumina_{prefix}_{nanos}"));
+        fs::create_dir_all(&dir).expect("temp library dir must be creatable");
+        dir
+    }
+
+    fn request_thumbnail_frame(
+        engine: &LuminaEngine,
+        id: MediaId,
+        target_size: u32,
+    ) -> DecodedFrame {
+        let (tx, rx) = mpsc::channel();
+        engine.request_thumbnail(id, target_size, move |frame| {
+            let _ = tx.send(frame);
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("thumbnail callback must arrive")
+            .expect("thumbnail must decode")
+    }
+
+    #[test]
+    fn engine_rotation_persists_and_rotates_decodes_without_touching_originals() {
+        let dir = temp_library("engine_rotation");
+        let image_path = dir.join("landscape.png");
+        let source = image::RgbaImage::from_fn(8, 4, |x, y| {
+            image::Rgba([(x * 20) as u8, (y * 30) as u8, 40, 255])
+        });
+        source
+            .save(&image_path)
+            .expect("test image must be writable");
+        let original_bytes = fs::read(&image_path).expect("test image must be readable");
+
+        let (engine, events) = LuminaEngine::open_with_paths(
+            dir.clone(),
+            dir.join("catalog.db"),
+            Some(dir.join("cache")),
+        )
+        .expect("engine must open");
+        while let Ok(event) = events.recv_timeout(Duration::from_secs(10)) {
+            if matches!(event, EngineEvent::ScanComplete { .. }) {
+                break;
+            }
+        }
+
+        let item = engine
+            .get_item_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("scanned image must be cataloged");
+        assert_eq!(
+            engine
+                .get_rotation(item.id)
+                .expect("rotation read must work"),
+            0,
+            "a scanned item must start unrotated"
+        );
+
+        let unrotated = request_thumbnail_frame(&engine, item.id, 320);
+        assert_eq!((unrotated.width, unrotated.height), (8, 4));
+
+        engine
+            .set_rotation(&[item.id], 1)
+            .expect("rotation write must succeed");
+        assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 1);
+
+        let rotated = request_thumbnail_frame(&engine, item.id, 320);
+        assert_eq!(
+            (rotated.width, rotated.height),
+            (4, 8),
+            "thumbnail decode must apply the stored quarter turn"
+        );
+
+        // A repeated request can be served from the disk cache; rotation is
+        // applied after the cache lookup, so the cached bytes stay valid.
+        let cached_rotated = request_thumbnail_frame(&engine, item.id, 320);
+        assert_eq!(
+            (cached_rotated.width, cached_rotated.height),
+            (4, 8),
+            "the cached frame must be rotated on every request"
+        );
+
+        assert_eq!(
+            fs::read(&image_path).expect("original must stay readable"),
+            original_bytes,
+            "rotation must never rewrite the original file"
+        );
+
+        engine
+            .set_rotation(&[], 3)
+            .expect("an empty rotation batch must be a no-op");
+        engine
+            .set_rotation(&[item.id, MediaId(9_999)], 3)
+            .expect("unknown ids must not fail the batch");
+        assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 3);
+
+        drop(engine);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

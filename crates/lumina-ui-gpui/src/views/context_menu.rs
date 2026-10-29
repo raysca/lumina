@@ -1,5 +1,6 @@
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::viewer_state::ViewerRotation;
 use crate::{AlbumSelection, LuminaApp};
 use gpui::*;
 use lumina_core::MediaItem;
@@ -32,7 +33,7 @@ impl MediaContextMenu {
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
         let menu_w = 230.0;
-        let menu_h = 410.0;
+        let menu_h = 470.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
         let win_h: f32 = win_size.height.into();
@@ -401,6 +402,35 @@ impl MediaContextMenu {
                             }),
                         )
                     })
+                    // Quick-edit rotation is a display-only catalog edit. Videos
+                    // are omitted rather than offering a control that cannot
+                    // rotate the player surface.
+                    .children((!is_video && !is_trash).then(|| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .child(Self::render_menu_item(
+                                "quick-edit-rotate-left",
+                                "Rotate Left",
+                                None,
+                                false,
+                                cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                    this.close_context_menu(cx);
+                                    this.rotate_viewer_selected(ViewerRotation::Left, cx);
+                                }),
+                            ))
+                            .child(Self::render_menu_item(
+                                "quick-edit-rotate-right",
+                                "Rotate Right",
+                                None,
+                                false,
+                                cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                    this.close_context_menu(cx);
+                                    this.rotate_viewer_selected(ViewerRotation::Right, cx);
+                                }),
+                            ))
+                    }))
                     // Divider
                     .child(Self::render_divider())
                     // 15. Delete / Trash

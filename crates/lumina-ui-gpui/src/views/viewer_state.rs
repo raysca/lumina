@@ -1,3 +1,60 @@
+use lumina_core::normalize_quarter_turns;
+
+/// Viewer quick-edit rotation direction.
+///
+/// Rotation is a display-only catalog edit: it changes how the still is
+/// presented and never rewrites the original file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewerRotation {
+    /// Counter-clockwise 90° (decrements the stored quarter turn).
+    Left,
+    /// Clockwise 90° (increments the stored quarter turn).
+    Right,
+}
+
+impl ViewerRotation {
+    /// Both controls in top-bar and context-menu order.
+    pub const ALL: [Self; 2] = [Self::Left, Self::Right];
+
+    /// Signed quarter-turn delta applied to the stored 0..=3 value.
+    pub fn delta(self) -> i32 {
+        match self {
+            Self::Left => -1,
+            Self::Right => 1,
+        }
+    }
+
+    /// Menu and tooltip label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Left => "Rotate Left",
+            Self::Right => "Rotate Right",
+        }
+    }
+
+    /// Tooltip text; the display-only hint keeps the non-destructive promise
+    /// visible next to the control.
+    pub fn tooltip(self) -> &'static str {
+        match self {
+            Self::Left => "Rotate Left 90° (display only)",
+            Self::Right => "Rotate Right 90° (display only)",
+        }
+    }
+
+    /// Stable automation selector for this control.
+    pub fn debug_selector(self) -> &'static str {
+        match self {
+            Self::Left => "quick-edit-rotate-left",
+            Self::Right => "quick-edit-rotate-right",
+        }
+    }
+
+    /// Applies this direction to a stored quarter-turn value, wrapping 0..=3.
+    pub fn apply_to(self, quarters: u8) -> u8 {
+        normalize_quarter_turns(quarters as i32 + self.delta())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ViewerState {
     pub zoom_scale: f32,
@@ -485,5 +542,44 @@ mod tests {
         state.zoom_at(-6.0, (500.0, 300.0), canvas_center);
         assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
         assert!(state.pan_offset.0.is_finite() && state.pan_offset.1.is_finite());
+    }
+
+    #[test]
+    fn test_viewer_rotation_wraps_quarter_turns() {
+        assert_eq!(ViewerRotation::Right.apply_to(0), 1);
+        assert_eq!(ViewerRotation::Right.apply_to(1), 2);
+        assert_eq!(ViewerRotation::Right.apply_to(2), 3);
+        assert_eq!(
+            ViewerRotation::Right.apply_to(3),
+            0,
+            "Rotate Right from 3 must wrap to 0"
+        );
+        assert_eq!(
+            ViewerRotation::Left.apply_to(0),
+            3,
+            "Rotate Left from 0 must wrap to 3"
+        );
+        assert_eq!(ViewerRotation::Left.apply_to(3), 2);
+        assert_eq!(ViewerRotation::Left.apply_to(1), 0);
+
+        let mut quarters = 0;
+        for _ in 0..4 {
+            quarters = ViewerRotation::Right.apply_to(quarters);
+        }
+        assert_eq!(quarters, 0, "four right turns are the identity");
+
+        assert_eq!(
+            ViewerRotation::ALL
+                .into_iter()
+                .map(ViewerRotation::debug_selector)
+                .collect::<Vec<_>>(),
+            vec!["quick-edit-rotate-left", "quick-edit-rotate-right"],
+            "the automation contract must stay stable"
+        );
+        assert_eq!(
+            ViewerRotation::Left.delta() + ViewerRotation::Right.delta(),
+            0,
+            "left and right must be inverse directions"
+        );
     }
 }

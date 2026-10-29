@@ -1257,3 +1257,195 @@ fn test_video_resume_progress_throttle_and_close() {
     });
     cx.run_until_parked();
 }
+
+/// Builds a temporary library with a real catalog so rotation persistence and
+/// thumbnail invalidation are exercised end to end.
+fn rotation_test_library(
+    prefix: &str,
+) -> (
+    std::path::PathBuf,
+    std::sync::Arc<lumina_core::LuminaEngine>,
+) {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_{prefix}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock must be after the Unix epoch")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
+    for index in 0..2 {
+        std::fs::write(
+            temp_dir.join(format!("photo{index}.jpg")),
+            b"test-jpeg-content",
+        )
+        .expect("temp photo must be writable");
+    }
+    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
+        temp_dir.clone(),
+        temp_dir.join("catalog.db"),
+        Some(temp_dir.join("cache")),
+    )
+    .expect("temp engine must open");
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    (temp_dir, engine)
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
+    use crate::views::grid::GridState;
+
+    let (temp_dir, engine) = rotation_test_library("viewer_rotate_controls");
+    let item = engine
+        .get_item_slice(0..1)
+        .into_iter()
+        .next()
+        .expect("scanned photo must be cataloged");
+    let item_id = item.id;
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(4, 4),
+    )]));
+    view.update(vcx, |app, cx| {
+        app.grid_state = Some(GridState::new(engine.clone()));
+        app.select_item_at(item.clone(), 0, cx);
+        app.open_viewer(item.clone(), cx);
+        app.layout_mode = LayoutMode::Viewer;
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        let state = app
+            .grid_state
+            .as_ref()
+            .expect("grid state must be installed");
+        state.texture_cache.lock().put(item_id, texture.clone());
+        app.viewer_image = Some(texture);
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    assert_eq!(
+        engine
+            .get_rotation(item_id)
+            .expect("rotation read must work"),
+        0,
+        "a scanned photo must start unrotated"
+    );
+
+    let left = vcx
+        .debug_bounds("quick-edit-rotate-left")
+        .expect("the viewer top bar must paint the Rotate Left control");
+    let right = vcx
+        .debug_bounds("quick-edit-rotate-right")
+        .expect("the viewer top bar must paint the Rotate Right control");
+
+    vcx.simulate_click(right.center(), gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            engine
+                .get_rotation(item_id)
+                .expect("rotation read must work"),
+            1,
+            "Rotate Right must persist one clockwise quarter turn"
+        );
+        let state = app
+            .grid_state
+            .as_ref()
+            .expect("grid state must be installed");
+        assert!(
+            !state.texture_cache.lock().contains(&item_id),
+            "the cached thumbnail must be invalidated so the grid re-decodes"
+        );
+        assert!(
+            app.viewer_image.is_none(),
+            "the viewer image must be cleared for the rotated re-request"
+        );
+        assert_eq!(app.last_action.as_deref(), Some("Rotated right"));
+    });
+
+    vcx.simulate_click(right.center(), gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    vcx.simulate_click(left.center(), gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            engine
+                .get_rotation(item_id)
+                .expect("rotation read must work"),
+            1,
+            "right, right, left must land back on one quarter turn"
+        );
+        assert!(
+            app.error_message.is_none(),
+            "rotation must not raise a banner"
+        );
+    });
+
+    // The context menu exposes the same quick edits. The viewer is closed so the
+    // shared debug selector is unique to the menu (the top bar is not painted).
+    view.update(vcx, |app, cx| {
+        app.close_viewer(cx);
+        app.open_card_context_menu(
+            item.clone(),
+            0,
+            gpui::point(gpui::px(40.0), gpui::px(40.0)),
+            cx,
+        );
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+    let menu_right = vcx
+        .debug_bounds("quick-edit-rotate-right")
+        .expect("the context menu must offer Rotate Right");
+    vcx.simulate_click(menu_right.center(), gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            engine
+                .get_rotation(item_id)
+                .expect("rotation read must work"),
+            2,
+            "the context-menu rotate control must persist the same edit"
+        );
+        assert!(
+            app.context_menu_state.is_none(),
+            "the context menu must close after rotating"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_rotate_video_is_a_clear_no_op() {
+    use crate::views::viewer_state::ViewerRotation;
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+        app.rotate_viewer_selected(ViewerRotation::Right, cx);
+        assert_eq!(
+            app.last_action.as_deref(),
+            Some("Rotation is not supported for video"),
+            "video rotation must report a clear no-op"
+        );
+        assert!(
+            app.error_message.is_none(),
+            "an unsupported video rotation is not an error"
+        );
+    });
+    cx.run_until_parked();
+}

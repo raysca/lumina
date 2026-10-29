@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::Catalog;
-use crate::{MediaId, MediaItem, MediaType, SortSpec};
+use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
 
 impl Catalog {
     pub fn insert_or_update_batch(&self, items: &[MediaItem]) -> Result<Vec<MediaItem>> {
@@ -309,6 +309,43 @@ impl Catalog {
         Ok(map)
     }
 
+    /// Sets the persisted clockwise quarter-turn rotation for every id.
+    ///
+    /// Only the catalog column changes; the original file is never rewritten.
+    /// The update is one transaction and normalizes `quarters` to 0..=3. An
+    /// empty id list is a no-op, and ids with no row are skipped without
+    /// failing the batch.
+    pub fn set_rotation(&self, ids: &[MediaId], quarters: u8) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let normalized = normalize_quarter_turns(quarters as i32);
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt =
+                tx.prepare_cached("UPDATE media_items SET rotation_quarters = ?1 WHERE id = ?2;")?;
+            for id in ids {
+                stmt.execute(params![normalized as i32, id.0 as i64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Persisted clockwise quarter turns for `id` (0 when unset or absent).
+    pub fn get_rotation(&self, id: MediaId) -> Result<u8> {
+        let conn = self.conn.lock();
+        let quarters: Option<i32> = conn
+            .query_row(
+                "SELECT rotation_quarters FROM media_items WHERE id = ?1;",
+                params![id.0 as i64],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(normalize_quarter_turns(quarters.unwrap_or(0)))
+    }
+
     pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
         let conn = self.conn.lock();
         let trimmed = title.map(str::trim).filter(|value| !value.is_empty());
@@ -517,5 +554,192 @@ impl Catalog {
             map.insert(id, c);
         }
         Ok(map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SCHEMA_VERSION;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_catalog(prefix: &str) -> (PathBuf, PathBuf) {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("lumina_{prefix}_{nanos}"));
+        std::fs::create_dir_all(&dir).expect("temp catalog dir must be creatable");
+        let db = dir.join("catalog.db");
+        (dir, db)
+    }
+
+    fn sample_item(index: usize) -> MediaItem {
+        let file_name = format!("IMG_{index:04}.HEIC");
+        MediaItem {
+            id: MediaId(0),
+            path: PathBuf::from(format!("/library/{file_name}")),
+            parent_dir: "/library".to_string(),
+            file_name,
+            title: None,
+            file_size: 4_500_000,
+            mtime_epoch_ms: 1_642_200_000_000,
+            media_type: MediaType::Image,
+            width: 4032,
+            height: 3024,
+            duration_ms: None,
+            timestamp_epoch_ms: 1_642_200_000_000,
+            year: 2022,
+            month: 1,
+            day: 15,
+            latitude: None,
+            longitude: None,
+            altitude: None,
+            country_code: None,
+            admin1_region: None,
+            city: None,
+            make: None,
+            model: None,
+            lens: None,
+            focal_length: None,
+            f_number: None,
+            iso: None,
+            exposure_time: None,
+            is_favorite: false,
+            is_hidden: false,
+            is_trashed: false,
+        }
+    }
+
+    fn user_version(catalog: &Catalog) -> i64 {
+        catalog
+            .conn
+            .lock()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("user_version must be readable")
+    }
+
+    #[test]
+    fn rotation_migration_is_idempotent_and_roundtrips() {
+        let (dir, db) = temp_catalog("rotation_migration");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        assert_eq!(
+            user_version(&catalog),
+            SCHEMA_VERSION,
+            "a new catalog must be stamped with the current schema version"
+        );
+
+        let inserted = catalog
+            .insert_or_update_batch(&[sample_item(1)])
+            .expect("sample item must insert");
+        let id = inserted[0].id;
+        assert_eq!(
+            catalog.get_rotation(id).expect("rotation read must work"),
+            0,
+            "new items start unrotated"
+        );
+        catalog
+            .set_rotation(&[id], 1)
+            .expect("rotation write must succeed");
+        assert_eq!(catalog.get_rotation(id).expect("rotation read"), 1);
+
+        // Simulate a catalog created before display rotation existed.
+        catalog
+            .conn
+            .lock()
+            .execute("ALTER TABLE media_items DROP COLUMN rotation_quarters;", [])
+            .expect("pre-migration schema must be reproducible");
+        drop(catalog);
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen and migrate");
+        assert_eq!(
+            user_version(&catalog),
+            SCHEMA_VERSION,
+            "the migration must stamp the bumped schema version"
+        );
+        assert_eq!(
+            catalog
+                .get_rotation(id)
+                .expect("rotation read after migration"),
+            0,
+            "the migration must default existing rows to 0"
+        );
+        catalog
+            .set_rotation(&[id], 2)
+            .expect("rotation write after migration");
+        drop(catalog);
+
+        // Reopening runs the same probes again; the migration must be idempotent.
+        let catalog = Catalog::open(&db).expect("catalog must reopen twice");
+        assert_eq!(
+            catalog.get_rotation(id).expect("rotation must persist"),
+            2,
+            "rotation must survive a reopen"
+        );
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_rotation_is_transactional_normalized_and_survives_rescan() {
+        let (dir, db) = temp_catalog("rotation_set");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        let inserted = catalog
+            .insert_or_update_batch(&[sample_item(1), sample_item(2)])
+            .expect("sample items must insert");
+        let ids: Vec<MediaId> = inserted.iter().map(|item| item.id).collect();
+
+        assert!(
+            catalog.set_rotation(&[], 3).is_ok(),
+            "an empty id list must be a successful no-op"
+        );
+
+        catalog
+            .set_rotation(&ids, 7)
+            .expect("out-of-range turns must normalize, not fail");
+        assert_eq!(catalog.get_rotation(ids[0]).expect("rotation read"), 3);
+        assert_eq!(catalog.get_rotation(ids[1]).expect("rotation read"), 3);
+
+        // A rescan re-inserts the same rows through ON CONFLICT; the update path
+        // must not reset the user's rotation.
+        let mut rescanned = inserted.clone();
+        for item in &mut rescanned {
+            item.file_size += 1;
+        }
+        catalog
+            .insert_or_update_batch(&rescanned)
+            .expect("rescan must update rows");
+        assert_eq!(
+            catalog
+                .get_rotation(ids[0])
+                .expect("rotation read after rescan"),
+            3,
+            "a rescan must preserve the stored rotation"
+        );
+
+        // Unknown ids must not abort the batch for known ones.
+        catalog
+            .set_rotation(&[ids[0], MediaId(9_999)], 2)
+            .expect("mixed id list must succeed");
+        assert_eq!(catalog.get_rotation(ids[0]).expect("rotation read"), 2);
+        assert_eq!(
+            catalog
+                .get_rotation(MediaId(9_999))
+                .expect("missing id reads 0"),
+            0
+        );
+
+        // The shared media mapper must still read the full row after the column
+        // was appended to the table.
+        let item = catalog
+            .get_item_by_id(ids[0])
+            .expect("item lookup must work")
+            .expect("inserted item must exist");
+        assert_eq!(item.file_name, "IMG_0001.HEIC");
+        assert_eq!(item.file_size, rescanned[0].file_size);
+        assert_eq!(item.is_favorite, rescanned[0].is_favorite);
+
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

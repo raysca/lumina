@@ -57,7 +57,8 @@ impl Catalog {
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 rating INTEGER NOT NULL DEFAULT 0,
                 color_label INTEGER NOT NULL DEFAULT 0,
-                title TEXT
+                title TEXT,
+                rotation_quarters INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -189,6 +190,20 @@ impl Catalog {
             .exists([])?;
         if !has_title {
             let _ = conn.execute("ALTER TABLE media_items ADD COLUMN title TEXT;", []);
+        }
+
+        // Display-only viewer rotation, stored as clockwise quarter turns (0..=3).
+        // Existing libraries default to 0, which preserves their current framing.
+        let has_rotation: bool = conn
+            .prepare(
+                "SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'rotation_quarters'",
+            )?
+            .exists([])?;
+        if !has_rotation {
+            conn.execute(
+                "ALTER TABLE media_items ADD COLUMN rotation_quarters INTEGER NOT NULL DEFAULT 0;",
+                [],
+            )?;
         }
 
         // Check if existing media_search_fts table has the 'tags' column (for migration from older schemas)

@@ -273,6 +273,56 @@ impl DecoderPipeline {
         }
     }
 
+    /// Rotates a decoded frame clockwise by `quarters` quarter turns.
+    ///
+    /// This is a display-only remap of the decoded pixel buffer; the media file
+    /// is never touched. Frames whose buffer is not a 4-byte-per-pixel layout are
+    /// returned unchanged rather than reinterpreted as pixels.
+    pub fn rotate_frame(frame: DecodedFrame, quarters: u8) -> DecodedFrame {
+        let quarters = crate::normalize_quarter_turns(quarters as i32);
+        if quarters == 0 {
+            return frame;
+        }
+
+        let width = frame.width as usize;
+        let height = frame.height as usize;
+        const BYTES_PER_PIXEL: usize = 4;
+        let expected = width.saturating_mul(height).saturating_mul(BYTES_PER_PIXEL);
+        if width == 0 || height == 0 || frame.data.len() != expected {
+            return frame;
+        }
+
+        let (rotated_width, rotated_height) = if quarters == 2 {
+            (width, height)
+        } else {
+            (height, width)
+        };
+        let mut data = vec![0u8; expected];
+        for y in 0..height {
+            for x in 0..width {
+                let source = (y * width + x) * BYTES_PER_PIXEL;
+                let (target_x, target_y) = match quarters {
+                    // Clockwise: the left column becomes the top row.
+                    1 => (height - 1 - y, x),
+                    // Half turn: both axes mirrored.
+                    2 => (width - 1 - x, height - 1 - y),
+                    // Counter-clockwise: the top row becomes the left column.
+                    _ => (y, width - 1 - x),
+                };
+                let target = (target_y * rotated_width + target_x) * BYTES_PER_PIXEL;
+                data[target..target + BYTES_PER_PIXEL]
+                    .copy_from_slice(&frame.data[source..source + BYTES_PER_PIXEL]);
+            }
+        }
+
+        DecodedFrame {
+            width: rotated_width as u32,
+            height: rotated_height as u32,
+            data,
+            ..frame
+        }
+    }
+
     fn resize_to_frame(id: MediaId, img: DynamicImage, target_size: u32) -> Result<DecodedFrame> {
         let (w, h) = img.dimensions();
         let resized = if w > target_size || h > target_size {
@@ -327,5 +377,119 @@ mod tests {
         )
         .expect("fast command should run");
         assert!(status.success());
+    }
+
+    fn test_frame(width: u32, height: u32, pixels: &[[u8; 4]]) -> DecodedFrame {
+        let mut data = Vec::with_capacity(pixels.len() * 4);
+        for pixel in pixels {
+            data.extend_from_slice(pixel);
+        }
+        DecodedFrame {
+            id: MediaId(1),
+            width,
+            height,
+            format: PixelFormat::Bgra8,
+            data,
+        }
+    }
+
+    fn flatten(pixels: &[[u8; 4]]) -> Vec<u8> {
+        pixels.iter().flatten().copied().collect()
+    }
+
+    #[test]
+    fn quarter_turn_normalization_wraps_signed_values() {
+        assert_eq!(crate::normalize_quarter_turns(0), 0);
+        assert_eq!(crate::normalize_quarter_turns(1), 1);
+        assert_eq!(crate::normalize_quarter_turns(3), 3);
+        assert_eq!(crate::normalize_quarter_turns(4), 0, "a full turn is 0");
+        assert_eq!(
+            crate::normalize_quarter_turns(-1),
+            3,
+            "Rotate Left from 0 must wrap to 3"
+        );
+        assert_eq!(crate::normalize_quarter_turns(-4), 0);
+        assert_eq!(crate::normalize_quarter_turns(7), 3);
+        assert_eq!(crate::normalize_quarter_turns(i32::MIN), 0);
+    }
+
+    #[test]
+    fn rotate_frame_maps_pixels_for_each_quarter_turn() {
+        let a = [10, 11, 12, 13];
+        let b = [20, 21, 22, 23];
+        let c = [30, 31, 32, 33];
+        let d = [40, 41, 42, 43];
+        let pixels = [a, b, c, d];
+
+        let source = test_frame(2, 2, &pixels);
+        let original_data = source.data.clone();
+        let right = DecoderPipeline::rotate_frame(source, 1);
+        assert_eq!((right.width, right.height), (2, 2));
+        assert_eq!(right.data, flatten(&[c, a, d, b]), "clockwise turn");
+
+        let left = DecoderPipeline::rotate_frame(test_frame(2, 2, &pixels), 3);
+        assert_eq!(left.data, flatten(&[b, d, a, c]), "counter-clockwise turn");
+
+        let half = DecoderPipeline::rotate_frame(test_frame(2, 2, &pixels), 2);
+        assert_eq!(half.data, flatten(&[d, c, b, a]), "half turn");
+
+        let mut repeated = test_frame(2, 2, &pixels);
+        for _ in 0..4 {
+            repeated = DecoderPipeline::rotate_frame(repeated, 1);
+        }
+        assert_eq!(repeated.data, original_data, "four turns are the identity");
+
+        let round_trip = DecoderPipeline::rotate_frame(right, 3);
+        assert_eq!(
+            round_trip.data, original_data,
+            "a left turn must undo a right turn"
+        );
+    }
+
+    #[test]
+    fn rotate_frame_swaps_the_long_edge_for_quarter_turns() {
+        let wide = test_frame(2, 1, &[[1, 2, 3, 4], [5, 6, 7, 8]]);
+        let quarter = DecoderPipeline::rotate_frame(wide, 1);
+        assert_eq!(
+            (quarter.width, quarter.height),
+            (1, 2),
+            "a 90° turn must swap width and height"
+        );
+        assert_eq!(
+            quarter.data,
+            flatten(&[[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "the left pixel becomes the top pixel"
+        );
+
+        let half = DecoderPipeline::rotate_frame(
+            test_frame(
+                3,
+                2,
+                &[
+                    [1, 1, 1, 1],
+                    [2, 2, 2, 2],
+                    [3, 3, 3, 3],
+                    [4, 4, 4, 4],
+                    [5, 5, 5, 5],
+                    [6, 6, 6, 6],
+                ],
+            ),
+            2,
+        );
+        assert_eq!((half.width, half.height), (3, 2), "a half turn keeps size");
+    }
+
+    #[test]
+    fn rotate_frame_leaves_unsupported_buffers_unchanged() {
+        let odd = DecodedFrame {
+            id: MediaId(1),
+            width: 2,
+            height: 1,
+            format: PixelFormat::Rgba8,
+            data: vec![1, 2, 3],
+        };
+        let rotated = DecoderPipeline::rotate_frame(odd, 1);
+        assert_eq!((rotated.width, rotated.height), (2, 1));
+        assert_eq!(rotated.data, vec![1, 2, 3]);
     }
 }

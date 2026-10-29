@@ -3,10 +3,10 @@ use lumina_core::{MediaItem, MediaType};
 use std::path::Path;
 use std::process::Command;
 
-use crate::app::types::LayoutMode;
+use crate::app::types::{LayoutMode, UiMessage};
 use crate::app::LuminaApp;
 use crate::config::validate_external_editor;
-use crate::views::viewer_state::ViewerZoomPreset;
+use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
 
 /// Banner shown when Edit in External Editor has no configured application.
 pub(crate) const EXTERNAL_EDITOR_UNSET_MESSAGE: &str =
@@ -17,6 +17,10 @@ pub(crate) const EXTERNAL_EDITOR_INVALID_MESSAGE: &str =
 /// Banner shown when the media file has gone away since it was selected.
 pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
     "The file is no longer available; nothing was launched.";
+
+/// Decode size requested for the full-viewer still, matching the selection path
+/// in `select_item_internal`; the grid requests 320 and the viewer 1024.
+const VIEWER_IMAGE_SIZE: u32 = 1024;
 
 /// Builds the launch command for `file` in `editor` without running it.
 ///
@@ -295,6 +299,72 @@ impl LuminaApp {
     /// Resets zoom and pan to fit from the HUD reset control.
     pub fn reset_viewer_zoom(&mut self, cx: &mut Context<Self>) {
         self.viewer_state.reset();
+        cx.notify();
+    }
+
+    /// Rotates the selected still one quarter turn and persists the rotation.
+    ///
+    /// The original file is never rewritten: only the catalog's
+    /// `rotation_quarters` column changes, and the decoder applies the turn when
+    /// thumbnail and viewer frames are requested. The in-memory texture for the
+    /// item is dropped and both surfaces are re-requested so the grid and the
+    /// viewer show the new orientation. Video is a deliberate no-op because the
+    /// player surface is not rotated; the status line says so.
+    pub fn rotate_viewer_selected(&mut self, direction: ViewerRotation, cx: &mut Context<Self>) {
+        let Some(item) = self.selected_item.clone() else {
+            self.set_last_action("Select an item to rotate");
+            cx.notify();
+            return;
+        };
+        if item.media_type == MediaType::Video {
+            self.set_last_action("Rotation is not supported for video");
+            cx.notify();
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            self.set_error("Open a library before rotating", cx);
+            return;
+        };
+        let current = match engine.get_rotation(item.id) {
+            Ok(quarters) => quarters,
+            Err(err) => {
+                self.set_error(format!("Could not read rotation: {err}"), cx);
+                return;
+            }
+        };
+        let next = direction.apply_to(current);
+        if let Err(err) = engine.set_rotation(&[item.id], next) {
+            self.set_error(format!("Could not rotate item: {err}"), cx);
+            return;
+        }
+
+        // The GPU texture cache has no rotation component in its entry, so drop
+        // it (and any in-flight marker) to make the grid decode the frame again
+        // instead of painting the previous angle.
+        if let Some(state) = self.grid_state.as_ref() {
+            state.texture_cache.lock().pop(&item.id);
+            state.in_flight.lock().remove(&item.id);
+        }
+        self.viewer_image = None;
+
+        // Re-request the full viewer frame through the normal background path so
+        // the displayed image is transformed by the decoder, not by the UI.
+        if let Some(state) = self.grid_state.as_ref() {
+            let tx = self.ui_tx.clone();
+            let id = item.id;
+            state
+                .engine
+                .request_thumbnail(id, VIEWER_IMAGE_SIZE, move |frame| {
+                    if let Some(frame) = frame {
+                        let _ = tx.send_blocking(UiMessage::ViewerLoaded { id, frame });
+                    }
+                });
+        }
+        self.queue_thumbnail_request(item.id);
+        self.set_last_action(match direction {
+            ViewerRotation::Left => "Rotated left",
+            ViewerRotation::Right => "Rotated right",
+        });
         cx.notify();
     }
 

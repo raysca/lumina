@@ -5,7 +5,7 @@ use crate::app::types::{format_bytes, month_name, LayoutMode};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::viewer_state::ViewerZoomPreset;
+use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
 
 pub struct ViewerTopBar;
 
@@ -114,6 +114,48 @@ impl ViewerTopBar {
         }
 
         hud.child(Self::render_zoom_reset(cx))
+    }
+
+    /// Quick-edit rotate control. It stays visible for video so the no-op is
+    /// discoverable, but the tooltip states that video rotation is unsupported.
+    fn render_rotate_button(
+        direction: ViewerRotation,
+        is_video: bool,
+        cx: &mut Context<LuminaApp>,
+    ) -> Stateful<Div> {
+        let id = direction.debug_selector();
+        let tooltip = if is_video {
+            format!("{} (not supported for video)", direction.label())
+        } else {
+            direction.tooltip().to_string()
+        };
+        div()
+            .id(id)
+            .debug_selector(move || id.to_string())
+            .tooltip(theme::tooltip_label(tooltip))
+            .h(px(22.0))
+            .px(px(2.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.0))
+            .bg(theme::bg_control())
+            .border_1()
+            .border_color(theme::border())
+            .hover(|style| style.bg(theme::bg_control_hover()))
+            .cursor_pointer()
+            .text_color(theme::text_muted())
+            .child(render_icon(
+                match direction {
+                    ViewerRotation::Left => Icon::RotateCcw,
+                    ViewerRotation::Right => Icon::RotateCw,
+                },
+                px(13.0),
+                theme::text_muted(),
+            ))
+            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
+                this.rotate_viewer_selected(direction, cx);
+            }))
     }
 
     pub fn render(
@@ -316,16 +358,32 @@ impl ViewerTopBar {
             )
             // Center Section: Breadcrumb, Filename, Specs Line
             .child(center_section)
-            // Right Section: Zoom HUD, Favorite, Info, Open, Reveal in Finder
+            // Right Section: Zoom HUD, Quick Edit, Favorite, Info, Open, Reveal.
+            // The gap tightens slightly so the added quick-edit controls keep the
+            // HUD clear of the filename down to the 1024px minimum width.
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap_1p5()
+                    .gap(px(4.0))
                     .flex_shrink_0()
                     // Zoom HUD keeps the current zoom and presets discoverable.
                     .child(Self::render_zoom_hud(this, cx))
+                    // Quick-edit rotation. Non-destructive: the catalog stores the
+                    // quarter turn and the original file is never rewritten.
+                    .child(
+                        div()
+                            .id("viewer-quick-edit")
+                            .debug_selector(|| "viewer-quick-edit".to_string())
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(2.0))
+                            .children(ViewerRotation::ALL.into_iter().map(|direction| {
+                                Self::render_rotate_button(direction, is_video, cx)
+                            })),
+                    )
                     // Favorite Heart Button
                     .child(
                         div()
