@@ -2,6 +2,9 @@
 
 This roadmap translates [`system_design_v2.md`](system_design_v2.md) into concrete, testable phases.
 
+> **Historical:** the phases below document the v0.2 implementation. For the
+> forward-looking product roadmap, see [ROADMAP.md](../ROADMAP.md).
+
 ---
 
 ## Phased Implementation Roadmap
