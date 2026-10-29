@@ -1,3 +1,4 @@
+mod editor_handoff;
 mod interaction;
 mod tags_and_albums;
 mod toasts;

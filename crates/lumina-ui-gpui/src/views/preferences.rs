@@ -155,6 +155,26 @@ fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 ),
             ],
         ))
+        .child(section_title("EXTERNAL EDITOR"))
+        .child(
+            div()
+                .debug_selector(|| "preferences-external-editor".to_string())
+                .child(field("Editor", &app.external_editor_label())),
+        )
+        .child(button_row(
+            cx,
+            vec![(
+                "preferences-choose-editor",
+                "Choose Editor…",
+                |this, cx| this.choose_external_editor(cx),
+            )],
+        ))
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .child("Used by Edit in External Editor in the viewer and media context menu."),
+        )
         .child(section_title("DIAGNOSTICS"))
         .child(field(
             "Log file",

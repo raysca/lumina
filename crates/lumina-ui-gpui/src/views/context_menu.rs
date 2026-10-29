@@ -32,7 +32,7 @@ impl MediaContextMenu {
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
         let menu_w = 230.0;
-        let menu_h = 380.0;
+        let menu_h = 410.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
         let win_h: f32 = win_size.height.into();
@@ -72,6 +72,7 @@ impl MediaContextMenu {
                 div()
                     .id("media-context-menu-popover")
                     .debug_selector(|| "context-menu".to_string())
+                    .occlude()
                     .absolute()
                     .left(px(x))
                     .top(px(y))
@@ -386,9 +387,23 @@ impl MediaContextMenu {
                             }),
                         )
                     })
+                    // 14. Edit in the external editor configured in Preferences
+                    .child({
+                        let path_for_edit = path.clone();
+                        Self::render_menu_item(
+                            "edit-external-menu-btn",
+                            "Edit in External Editor",
+                            None,
+                            false,
+                            cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.close_context_menu(cx);
+                                this.open_item_in_external_editor(&path_for_edit, cx);
+                            }),
+                        )
+                    })
                     // Divider
                     .child(Self::render_divider())
-                    // 14. Delete / Trash
+                    // 15. Delete / Trash
                     .child(if is_trash {
                         div()
                             .flex()
@@ -478,6 +493,7 @@ impl MediaContextMenu {
     ) -> impl IntoElement {
         div()
             .id(id_str)
+            .debug_selector(move || id_str.to_string())
             .px_2p5()
             .py_1p5()
             .rounded_md()

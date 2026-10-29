@@ -152,4 +152,59 @@ impl LuminaApp {
             })
             .unwrap_or_else(|| "No library open".to_string())
     }
+
+    /// Label for the configured external editor; "Not set" when unset or when
+    /// the saved value fails use-time validation.
+    pub fn external_editor_label(&self) -> String {
+        self.config
+            .validated_external_editor()
+            .map(str::to_string)
+            .unwrap_or_else(|| "Not set".to_string())
+    }
+
+    /// Persists the external editor choice and saves the config.
+    ///
+    /// The raw value is stored so a temporarily unavailable app can be
+    /// re-validated when the action runs; empty values clear the setting.
+    pub fn set_external_editor(&mut self, editor: Option<String>, cx: &mut Context<Self>) {
+        self.config.external_editor = editor
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        self.save_config();
+        cx.notify();
+    }
+
+    /// Opens the native macOS application picker for the external editor.
+    ///
+    /// Test builds compile the dialog out so no test can open a real dialog;
+    /// tests call `Self::set_external_editor` directly instead.
+    pub fn choose_external_editor(&mut self, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        {
+            let _ = (self, cx);
+        }
+        #[cfg(not(test))]
+        {
+            cx.spawn(async move |this, async_cx| {
+                let mut dialog = rfd::AsyncFileDialog::new()
+                    .set_title("Choose External Editor")
+                    .add_filter("Applications", &["app"]);
+                if Path::new("/Applications").is_dir() {
+                    dialog = dialog.set_directory("/Applications");
+                }
+                let Some(handle) = dialog.pick_file().await else {
+                    return;
+                };
+                let path = handle.path();
+                let Some(editor) = path.to_str().map(str::to_string) else {
+                    log::warn!("chosen external editor path is not valid UTF-8: {path:?}");
+                    return;
+                };
+                let _ = this.update(async_cx, |this, cx| {
+                    this.set_external_editor(Some(editor), cx);
+                });
+            })
+            .detach();
+        }
+    }
 }

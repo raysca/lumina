@@ -1,10 +1,48 @@
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 use std::path::Path;
+use std::process::Command;
 
 use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
+use crate::config::validate_external_editor;
 use crate::views::viewer_state::ViewerZoomPreset;
+
+/// Banner shown when Edit in External Editor has no configured application.
+pub(crate) const EXTERNAL_EDITOR_UNSET_MESSAGE: &str =
+    "No external editor configured. Choose an external editor in Preferences.";
+/// Banner shown when the saved application value or target path is unusable.
+pub(crate) const EXTERNAL_EDITOR_INVALID_MESSAGE: &str =
+    "The external editor setting is invalid. Choose an external editor in Preferences.";
+/// Banner shown when the media file has gone away since it was selected.
+pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
+    "The file is no longer available; nothing was launched.";
+
+/// Builds the launch command for `file` in `editor` without running it.
+///
+/// `editor` is an absolute application path or bundle identifier and `file` is
+/// the media path. Returns `None` when either value is unusable so callers can
+/// report the configuration error instead of launching a process. The app and
+/// file are separate [`Command`] arguments, never a shell string, so spaces and
+/// shell metacharacters in either value have no special meaning.
+pub(crate) fn external_editor_command(editor: &str, file: &Path) -> Option<Command> {
+    let app = validate_external_editor(Some(editor))?;
+    if file.as_os_str().is_empty() {
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open");
+        command.arg("-a").arg(app).arg(file);
+        Some(command)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut command = Command::new(app);
+        command.arg(file);
+        Some(command)
+    }
+}
 
 impl LuminaApp {
     pub fn reveal_item_in_finder(&self, path: &Path) {
@@ -114,6 +152,34 @@ impl LuminaApp {
     pub fn open_selected_in_default_app(&self) {
         if let Some(ref item) = self.selected_item {
             self.open_item_in_default_app(&item.path);
+        }
+    }
+
+    /// Opens `path` in the configured external editor.
+    ///
+    /// Open in Default App is deliberately separate and never consults this
+    /// setting. Missing configuration, an invalid saved app, or a missing file
+    /// surface in the existing error banner instead of launching anything.
+    pub fn open_item_in_external_editor(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let Some(raw) = self.config.external_editor.clone() else {
+            self.set_error(EXTERNAL_EDITOR_UNSET_MESSAGE, cx);
+            return;
+        };
+        let Some(editor) = validate_external_editor(Some(&raw)).map(str::to_string) else {
+            self.set_error(EXTERNAL_EDITOR_INVALID_MESSAGE, cx);
+            return;
+        };
+        // Never hand an empty or vanished path to the launcher.
+        if path.as_os_str().is_empty() || !path.exists() {
+            self.set_error(EXTERNAL_EDITOR_FILE_MISSING_MESSAGE, cx);
+            return;
+        }
+        let Some(mut command) = external_editor_command(&editor, path) else {
+            self.set_error(EXTERNAL_EDITOR_INVALID_MESSAGE, cx);
+            return;
+        };
+        if let Err(err) = command.spawn() {
+            self.set_error(format!("Could not open in external editor: {err}"), cx);
         }
     }
 

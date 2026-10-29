@@ -369,6 +369,37 @@ pub struct AppConfig {
     /// older config files without this key start empty.
     #[serde(default)]
     pub resume_positions: ResumePositions,
+    /// External editor used by "Edit in External Editor": an absolute macOS
+    /// application path or a bundle identifier. `None` (the serde default)
+    /// means unset. Values are validated when the action runs, so a hand-edited
+    /// or stale config can never launch an unexpected process.
+    #[serde(default)]
+    pub external_editor: Option<String>,
+}
+
+/// Validates an external editor setting at use time.
+///
+/// Accepts an absolute application path (for example
+/// `/Applications/TextEdit.app`) or a bundle identifier (for example
+/// `com.apple.TextEdit`). Empty, whitespace-only, control-character,
+/// option-like, or otherwise malformed values return `None` so a broken config
+/// can never be executed. The caller is still responsible for passing the app
+/// and file as separate [`std::process::Command`] arguments.
+pub fn validate_external_editor(raw: Option<&str>) -> Option<&str> {
+    let editor = raw?.trim();
+    if editor.is_empty() || editor.starts_with('-') || editor.chars().any(char::is_control) {
+        return None;
+    }
+    if editor.starts_with('/') {
+        // The filesystem root is not an application bundle.
+        return (editor.len() > 1).then_some(editor);
+    }
+    let has_name_character = editor.chars().any(|c| c.is_ascii_alphanumeric());
+    let is_bundle_identifier = has_name_character
+        && editor
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'));
+    is_bundle_identifier.then_some(editor)
 }
 
 fn default_sidebar_width() -> f32 {
@@ -423,6 +454,7 @@ impl Default for AppConfig {
             last_selected_media_id: None,
             recent_searches: Vec::new(),
             resume_positions: ResumePositions::default(),
+            external_editor: None,
         }
     }
 }
@@ -521,6 +553,14 @@ impl AppConfig {
             active_year: self.last_active_year,
             selected_media_id: self.last_selected_media_id,
         }
+    }
+
+    /// Returns the configured external editor after use-time validation.
+    ///
+    /// Unset, empty, or malformed values all return `None`; callers that need
+    /// to distinguish "unset" from "invalid" should inspect the raw field.
+    pub fn validated_external_editor(&self) -> Option<&str> {
+        validate_external_editor(self.external_editor.as_deref())
     }
 
     /// Forgets the saved session so a newly opened library starts from All.

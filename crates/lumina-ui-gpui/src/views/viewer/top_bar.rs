@@ -454,6 +454,31 @@ impl ViewerTopBar {
                                 this.open_selected_in_default_app();
                             }))
                     })
+                    // Edit in External Editor (uses the Preferences app)
+                    .child({
+                        let p_clone = path.clone();
+                        div()
+                            .id("viewer-external-editor-btn")
+                            .debug_selector(|| "viewer-external-editor-btn".to_string())
+                            .tooltip(theme::tooltip_label("Edit in External Editor"))
+                            .px_2p5()
+                            .py_1()
+                            .bg(theme::bg_control())
+                            .border_1()
+                            .border_color(theme::border())
+                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::text())
+                            // A short label keeps the right cluster narrow enough
+                            // for the zoom HUD to clear the filename at 1400px;
+                            // the tooltip and context menu carry the full name.
+                            .child("Edit")
+                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.open_item_in_external_editor(&p_clone, cx);
+                            }))
+                    })
                     // Reveal in Finder Button
                     .child({
                         let p_clone = path.clone();
