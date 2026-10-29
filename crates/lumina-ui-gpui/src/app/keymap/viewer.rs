@@ -2,10 +2,13 @@ use gpui::*;
 use lumina_core::MediaType;
 
 use crate::app::LuminaApp;
+use crate::views::viewer_state::ViewerZoomPreset;
 
 impl LuminaApp {
     /// Handles shortcuts when fullscreen viewer is open.
-    /// Returns `true` if handled.
+    ///
+    /// Zoom: `+`/`-` step by 0.25, `0` resets to fit, `Z` toggles fit/2x, and
+    /// `1`/`2`/`4` jump to the Fit/2x/4x presets. Returns `true` if handled.
     pub fn handle_viewer_key_down(
         &mut self,
         key: &str,
@@ -40,6 +43,19 @@ impl LuminaApp {
         if key == "0" {
             self.set_viewer_zoom(1.0, cx);
             return true;
+        }
+        // Zoom presets: 1 = Fit, 2 = 2x, 4 = 4x. Existing 0/Z/+/- stay unchanged.
+        if !cmd_or_ctrl {
+            let preset = match key {
+                "1" => Some(ViewerZoomPreset::Fit),
+                "2" => Some(ViewerZoomPreset::TwoX),
+                "4" => Some(ViewerZoomPreset::FourX),
+                _ => None,
+            };
+            if let Some(preset) = preset {
+                self.apply_viewer_zoom_preset(preset, cx);
+                return true;
+            }
         }
         if !cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
             self.toggle_viewer_zoom(cx);

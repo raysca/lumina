@@ -5,10 +5,117 @@ use crate::app::types::{format_bytes, month_name, LayoutMode};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::viewer_state::ViewerZoomPreset;
 
 pub struct ViewerTopBar;
 
+/// Window width below which the top bar drops the breadcrumb date and specs
+/// line and switches open/reveal to icon actions so the zoom HUD cannot crowd
+/// the filename.
+const COMPACT_WINDOW_WIDTH: f32 = 1400.0;
+/// Width assumed before window bounds have been observed.
+const DEFAULT_WINDOW_WIDTH: f32 = 1440.0;
+
 impl ViewerTopBar {
+    fn render_zoom_button(
+        preset: ViewerZoomPreset,
+        active: bool,
+        cx: &mut Context<LuminaApp>,
+    ) -> Stateful<Div> {
+        let id = match preset {
+            ViewerZoomPreset::Fit => "viewer-zoom-fit",
+            ViewerZoomPreset::TwoX => "viewer-zoom-2x",
+            ViewerZoomPreset::FourX => "viewer-zoom-4x",
+        };
+        let button = div()
+            .id(id)
+            .debug_selector(move || id.to_string())
+            .tooltip(theme::tooltip_label(preset.tooltip()))
+            .h(px(18.0))
+            .px(px(4.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.0))
+            .text_size(px(10.0))
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
+                this.apply_viewer_zoom_preset(preset, cx);
+            }))
+            .child(preset.label());
+
+        if active {
+            button
+                .bg(theme::selection_bg())
+                .text_color(theme::selection_fg())
+        } else {
+            button.text_color(theme::text_muted()).hover(|style| {
+                style
+                    .bg(theme::bg_control_hover())
+                    .text_color(theme::text())
+            })
+        }
+    }
+
+    fn render_zoom_reset(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+        div()
+            .id("viewer-zoom-reset")
+            .debug_selector(|| "viewer-zoom-reset".to_string())
+            .tooltip(theme::tooltip_label("Reset zoom and pan (0)"))
+            .h(px(18.0))
+            .px(px(3.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .text_color(theme::text_muted())
+            .hover(|style| style.bg(theme::bg_control_hover()))
+            .child(render_icon(Icon::RotateCcw, px(11.0), theme::text_muted()))
+            .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                this.reset_viewer_zoom(cx);
+            }))
+    }
+
+    fn render_zoom_hud(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+        let state = this.viewer_state;
+        let mut hud = div()
+            .id("viewer-zoom-hud")
+            .debug_selector(|| "viewer-zoom-hud".to_string())
+            .h(px(24.0))
+            .px(px(1.0))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(1.0))
+            .rounded(px(6.0))
+            .bg(theme::bg_control())
+            .border_1()
+            .border_color(theme::border())
+            .child(
+                div()
+                    .id("viewer-zoom-label")
+                    .debug_selector(|| "viewer-zoom-label".to_string())
+                    .tooltip(theme::tooltip_label("Zoom relative to fit"))
+                    .min_w(px(30.0))
+                    .text_center()
+                    .font_family(theme::FONT_MONO)
+                    .text_size(px(11.0))
+                    .text_color(theme::text())
+                    .child(state.zoom_label()),
+            );
+
+        for preset in ViewerZoomPreset::ALL {
+            hud = hud.child(Self::render_zoom_button(
+                preset,
+                state.matches_preset(preset),
+                cx,
+            ));
+        }
+
+        hud.child(Self::render_zoom_reset(cx))
+    }
+
     pub fn render(
         this: &LuminaApp,
         item: &MediaItem,
@@ -56,7 +163,82 @@ impl ViewerTopBar {
         let size_str = format_bytes(item.file_size);
         let is_fav = item.is_favorite;
 
+        // The HUD adds a compact control group to the right cluster. At narrow
+        // widths the breadcrumb date, specs line, and long action labels yield
+        // space so the filename and mode switcher stay readable at 1024px.
+        let window_width = this
+            .window_bounds
+            .map(|(_, _, width, _)| width)
+            .unwrap_or(DEFAULT_WINDOW_WIDTH);
+        let compact = window_width < COMPACT_WINDOW_WIDTH;
+        let open_label = if is_video {
+            if compact {
+                "Open"
+            } else {
+                "Open in QuickTime"
+            }
+        } else if compact {
+            "Open"
+        } else {
+            "Open in Preview"
+        };
+        let reveal_label = if compact {
+            "Reveal"
+        } else {
+            "Reveal in Finder"
+        };
+
+        let mut center_section = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1p5()
+            .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden();
+
+        // At compact widths the filename gets the whole center section. The
+        // breadcrumb date is secondary information that remains in the inspector.
+        if !compact {
+            center_section = center_section
+                .child(div().text_color(theme::text_muted()).child(date_prefix))
+                .child(div().text_color(theme::text_disabled()).child(render_icon(
+                    Icon::ChevronRight,
+                    px(10.0),
+                    theme::text_disabled(),
+                )));
+        }
+
+        center_section = center_section.child(
+            div()
+                .id("viewer-filename")
+                .debug_selector(|| "viewer-filename".to_string())
+                .min_w(px(70.0))
+                .truncate()
+                .font_weight(FontWeight::BOLD)
+                .text_color(theme::text())
+                .child(file_name),
+        );
+
+        if !compact {
+            center_section = center_section.child(
+                div()
+                    .id("viewer-specs")
+                    .debug_selector(|| "viewer-specs".to_string())
+                    .ml_2()
+                    .min_w(px(0.0))
+                    .truncate()
+                    .text_color(theme::text_subtle())
+                    .child(format!(
+                        "{} × {} · {}{} · {}",
+                        width, height, codec_label, fps_label, size_str
+                    )),
+            );
+        }
+
         div()
+            .id("viewer-top-bar")
+            .debug_selector(|| "viewer-top-bar".to_string())
             .w_full()
             .h(px(52.0))
             .px_4()
@@ -76,6 +258,7 @@ impl ViewerTopBar {
                     .flex_row()
                     .items_center()
                     .gap_3()
+                    .flex_shrink_0()
                     // Traffic lights spacer when windowed
                     .child(div().w(px(64.0)))
                     // Segmented Switcher: [ Browser | Split | Viewer ]
@@ -131,41 +314,24 @@ impl ViewerTopBar {
                             ),
                     ),
             )
-            // Center Section: Breadcrumb & Specs Line
+            // Center Section: Breadcrumb, Filename, Specs Line
+            .child(center_section)
+            // Right Section: Zoom HUD, Favorite, Info, Open, Reveal in Finder
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap_1p5()
-                    .child(div().text_color(theme::text_muted()).child(date_prefix))
-                    .child(div().text_color(theme::text_disabled()).child(render_icon(
-                        Icon::ChevronRight,
-                        px(10.0),
-                        theme::text_disabled(),
-                    )))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(theme::text())
-                            .child(file_name),
-                    )
-                    .child(div().ml_2().text_color(theme::text_subtle()).child(format!(
-                        "{} × {} · {}{} · {}",
-                        width, height, codec_label, fps_label, size_str
-                    ))),
-            )
-            // Right Section: Favorite, Info, QuickTime, Reveal in Finder
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
+                    .flex_shrink_0()
+                    // Zoom HUD keeps the current zoom and presets discoverable.
+                    .child(Self::render_zoom_hud(this, cx))
                     // Favorite Heart Button
                     .child(
                         div()
                             .id("viewer-fav-btn")
+                            .debug_selector(|| "viewer-fav-btn".to_string())
+                            .tooltip(theme::tooltip_label("Toggle favorite"))
                             .px_2()
                             .py_1()
                             .rounded_md()
@@ -202,6 +368,7 @@ impl ViewerTopBar {
                     .child(
                         div()
                             .id("viewer-info-btn")
+                            .debug_selector(|| "viewer-info-btn".to_string())
                             .px_2p5()
                             .py_1()
                             .bg(if is_inspector_open {
@@ -246,6 +413,12 @@ impl ViewerTopBar {
                     .child({
                         div()
                             .id("viewer-quicktime-btn")
+                            .debug_selector(|| "viewer-quicktime-btn".to_string())
+                            .tooltip(theme::tooltip_label(if is_video {
+                                "Open in QuickTime (O)"
+                            } else {
+                                "Open in Preview (O)"
+                            }))
                             .px_2p5()
                             .py_1()
                             .bg(theme::bg_control())
@@ -258,22 +431,25 @@ impl ViewerTopBar {
                             .flex_row()
                             .items_center()
                             .gap_1p5()
-                            .child(
+                            .child(if compact {
+                                render_icon(Icon::ExternalLink, px(13.0), theme::text())
+                                    .into_any_element()
+                            } else {
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme::text())
-                                    .child(if is_video {
-                                        "Open in QuickTime"
-                                    } else {
-                                        "Open in Preview"
-                                    }),
-                            )
-                            .child(
+                                    .child(open_label)
+                                    .into_any_element()
+                            })
+                            .child(if compact {
+                                Empty.into_any_element()
+                            } else {
                                 div()
                                     .text_size(px(10.0))
                                     .text_color(theme::text_subtle())
-                                    .child("O"),
-                            )
+                                    .child("O")
+                                    .into_any_element()
+                            })
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, _cx| {
                                 this.open_selected_in_default_app();
                             }))
@@ -283,6 +459,8 @@ impl ViewerTopBar {
                         let p_clone = path.clone();
                         div()
                             .id("viewer-finder-btn")
+                            .debug_selector(|| "viewer-finder-btn".to_string())
+                            .tooltip(theme::tooltip_label("Reveal in Finder"))
                             .px_2p5()
                             .py_1()
                             .bg(theme::bg_control())
@@ -293,7 +471,12 @@ impl ViewerTopBar {
                             .cursor_pointer()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme::text())
-                            .child("Reveal in Finder")
+                            .child(if compact {
+                                render_icon(Icon::Folder, px(13.0), theme::text())
+                                    .into_any_element()
+                            } else {
+                                reveal_label.into_any_element()
+                            })
                             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, _cx| {
                                 this.reveal_item_in_finder(&p_clone);
                             }))

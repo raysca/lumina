@@ -553,3 +553,239 @@ fn test_viewer_player_ux_and_navigation_controls() {
     });
     cx.run_until_parked();
 }
+
+fn press_viewer_key(
+    app: &mut LuminaApp,
+    key: &str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<LuminaApp>,
+) {
+    app.handle_key_down(
+        &KeyDownEvent {
+            keystroke: Keystroke::parse(key).expect("test keystroke must parse"),
+            is_held: false,
+        },
+        window,
+        cx,
+    );
+}
+
+fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
+    cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear();
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
+    use crate::views::viewer_state::{ViewerZoomPreset, ZOOM_MAX_SCALE, ZOOM_MIN_SCALE};
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let sample = get_sample_items();
+    let photo = sample[0].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(photo.clone(), 0, cx);
+        app.open_viewer(photo.clone(), cx);
+        assert_eq!(app.viewer_state.zoom_label(), "Fit");
+
+        // Preset actions drive both scale and HUD text.
+        app.apply_viewer_zoom_preset(ViewerZoomPreset::TwoX, cx);
+        assert_eq!(app.viewer_state.zoom_scale, 2.0);
+        assert_eq!(app.viewer_state.zoom_label(), "200%");
+        app.apply_viewer_zoom_preset(ViewerZoomPreset::FourX, cx);
+        assert_eq!(app.viewer_state.zoom_scale, 4.0);
+        assert_eq!(app.viewer_state.zoom_label(), "400%");
+        app.apply_viewer_zoom_preset(ViewerZoomPreset::Fit, cx);
+        assert_eq!(app.viewer_state.zoom_scale, ZOOM_MIN_SCALE);
+        assert_eq!(app.viewer_state.zoom_label(), "Fit");
+
+        // Reset restores fit and clears pan without leaving drag state behind.
+        app.set_viewer_zoom(2.0, cx);
+        app.start_viewer_drag(10.0, 10.0, cx);
+        app.drag_viewer_to(40.0, 30.0, cx);
+        assert_eq!(app.viewer_state.pan_offset, (30.0, 20.0));
+        app.reset_viewer_zoom(cx);
+        assert_eq!(app.viewer_state.zoom_scale, ZOOM_MIN_SCALE);
+        assert_eq!(app.viewer_state.pan_offset, (0.0, 0.0));
+        assert!(!app.viewer_state.is_dragging);
+
+        // Existing stepping behavior is unchanged.
+        app.zoom_in_viewer(cx);
+        assert_eq!(app.viewer_state.zoom_scale, 1.25);
+        app.zoom_out_viewer(cx);
+        assert_eq!(app.viewer_state.zoom_scale, 1.0);
+        app.set_viewer_zoom(99.0, cx);
+        assert_eq!(app.viewer_state.zoom_scale, ZOOM_MAX_SCALE);
+    });
+    cx.run_until_parked();
+
+    // Keyboard: added 1/2/4 presets plus preserved +, -, 0 and Z paths.
+    cx.update(|window, app_cx| {
+        view.update(app_cx, |app, cx| {
+            app.select_item_at(photo.clone(), 0, cx);
+            app.open_viewer(photo.clone(), cx);
+
+            press_viewer_key(app, "2", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 2.0, "2 must select 2x");
+            press_viewer_key(app, "4", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 4.0, "4 must select 4x");
+            press_viewer_key(app, "1", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.0, "1 must select Fit");
+
+            press_viewer_key(app, "=", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.25, "+ must still step in");
+            press_viewer_key(app, "0", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.0, "0 must still reset");
+            press_viewer_key(app, "z", window, cx);
+            assert_eq!(
+                app.viewer_state.zoom_scale, 2.0,
+                "Z must still toggle to 2x"
+            );
+            press_viewer_key(app, "z", window, cx);
+            assert_eq!(
+                app.viewer_state.zoom_scale, 1.0,
+                "Z must still toggle to Fit"
+            );
+            press_viewer_key(app, "-", window, cx);
+            assert_eq!(
+                app.viewer_state.zoom_scale, 1.0,
+                "- must still step down and clamp at Fit"
+            );
+        });
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "lumina_viewer_zoom_hud_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::write(temp_dir.join("photo1.jpg"), b"test-jpeg-content").unwrap();
+    std::fs::write(temp_dir.join("photo2.jpg"), b"test-jpeg-content").unwrap();
+    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
+        temp_dir.clone(),
+        temp_dir.join("catalog.db"),
+        Some(temp_dir.join("cache")),
+    )
+    .unwrap();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    assert!(engine.total_count() >= 2);
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let photo = get_sample_items()[0].clone();
+
+    view.update(vcx, |app, cx| {
+        app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
+        app.select_item_at(photo.clone(), 0, cx);
+        app.open_viewer(photo.clone(), cx);
+        app.layout_mode = LayoutMode::Viewer;
+        app.window_bounds = Some((0.0, 0.0, 1024.0, 768.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(768.0)));
+    render_viewer_ui(vcx);
+    // The bounds observer fires on the resize frame; draw again so the top bar
+    // renders with the observed width.
+    render_viewer_ui(vcx);
+
+    for selector in [
+        "viewer-top-bar",
+        "viewer-filename",
+        "viewer-zoom-hud",
+        "viewer-zoom-label",
+        "viewer-zoom-fit",
+        "viewer-zoom-2x",
+        "viewer-zoom-4x",
+        "viewer-zoom-reset",
+        "mode-browser",
+        "mode-split",
+        "mode-viewer",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "{selector} must be painted in the viewer top bar at 1024x768"
+        );
+    }
+
+    let filename = vcx.debug_bounds("viewer-filename").unwrap();
+    let hud = vcx.debug_bounds("viewer-zoom-hud").unwrap();
+    let top_bar = vcx.debug_bounds("viewer-top-bar").unwrap();
+    assert!(
+        filename.size.width > gpui::px(40.0),
+        "filename must retain readable width at 1024x768, got {:?} (hud={hud:?}, top_bar={top_bar:?})",
+        filename.size.width
+    );
+    assert!(
+        hud.left() >= filename.right(),
+        "zoom HUD must sit clear of the filename at 1024x768: filename={filename:?} hud={hud:?}"
+    );
+    assert!(
+        hud.right() <= top_bar.right(),
+        "zoom HUD must stay inside the top bar at 1024x768"
+    );
+
+    // HUD controls are wired to the same preset and reset actions as the keys.
+    let zoom_2x = vcx.debug_bounds("viewer-zoom-2x").unwrap().center();
+    vcx.simulate_click(zoom_2x, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _cx| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 2.0,
+            "clicking 2x must apply the preset"
+        );
+    });
+    let zoom_reset = vcx.debug_bounds("viewer-zoom-reset").unwrap().center();
+    vcx.simulate_click(zoom_reset, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _cx| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 1.0,
+            "clicking reset must return to Fit"
+        );
+    });
+
+    // Threshold band: at 1400px the specs line and full action labels return.
+    // The filename must keep its 70px floor and the HUD must stay clear rather
+    // than collapsing the center section.
+    view.update(vcx, |app, cx| {
+        app.window_bounds = Some((0.0, 0.0, 1400.0, 768.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1400.0), gpui::px(768.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-specs").is_some(),
+        "specs line must return at 1400px"
+    );
+    let filename_wide = vcx.debug_bounds("viewer-filename").unwrap();
+    let hud_wide = vcx.debug_bounds("viewer-zoom-hud").unwrap();
+    assert!(
+        filename_wide.size.width >= gpui::px(70.0),
+        "filename must keep its width floor at 1400px, got {:?}",
+        filename_wide.size.width
+    );
+    assert!(
+        hud_wide.left() >= filename_wide.right(),
+        "zoom HUD must stay clear of the filename at 1400px: filename={filename_wide:?} hud={hud_wide:?} specs={:?}",
+        vcx.debug_bounds("viewer-specs")
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

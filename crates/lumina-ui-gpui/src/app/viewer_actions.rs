@@ -4,6 +4,7 @@ use std::path::Path;
 
 use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
+use crate::views::viewer_state::ViewerZoomPreset;
 
 impl LuminaApp {
     pub fn reveal_item_in_finder(&self, path: &Path) {
@@ -166,6 +167,18 @@ impl LuminaApp {
 
     pub fn toggle_viewer_zoom(&mut self, cx: &mut Context<Self>) {
         self.viewer_state.toggle_zoom();
+        cx.notify();
+    }
+
+    /// Applies an explicit zoom preset from the HUD or the 1/2/4 keys.
+    pub fn apply_viewer_zoom_preset(&mut self, preset: ViewerZoomPreset, cx: &mut Context<Self>) {
+        self.viewer_state.apply_preset(preset);
+        cx.notify();
+    }
+
+    /// Resets zoom and pan to fit from the HUD reset control.
+    pub fn reset_viewer_zoom(&mut self, cx: &mut Context<Self>) {
+        self.viewer_state.reset();
         cx.notify();
     }
 

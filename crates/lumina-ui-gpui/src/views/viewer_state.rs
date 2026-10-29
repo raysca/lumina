@@ -7,10 +7,69 @@ pub struct ViewerState {
     pub drag_start_pan: (f32, f32),
 }
 
+/// Minimum viewer zoom. 1.0 means "fit", not pixel-accurate 100%.
+pub const ZOOM_MIN_SCALE: f32 = 1.0;
+/// Maximum viewer zoom multiple relative to fit.
+pub const ZOOM_MAX_SCALE: f32 = 5.0;
+/// Wheel and +/- keyboard step.
+pub const ZOOM_STEP: f32 = 0.25;
+
+/// Explicit zoom presets surfaced by the viewer HUD and number keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewerZoomPreset {
+    /// Fit the media to the viewport (1.0x).
+    Fit,
+    /// Twice the fit scale.
+    TwoX,
+    /// Four times the fit scale.
+    FourX,
+}
+
+impl ViewerZoomPreset {
+    /// Every preset in HUD order.
+    pub const ALL: [Self; 3] = [Self::Fit, Self::TwoX, Self::FourX];
+
+    /// Scale multiple applied by this preset.
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Fit => ZOOM_MIN_SCALE,
+            Self::TwoX => 2.0,
+            Self::FourX => 4.0,
+        }
+    }
+
+    /// Compact HUD label for the preset itself.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Fit => "Fit",
+            Self::TwoX => "2x",
+            Self::FourX => "4x",
+        }
+    }
+
+    /// Single-key viewer shortcut for this preset. `0` remains reset.
+    pub fn shortcut(self) -> &'static str {
+        match self {
+            Self::Fit => "1",
+            Self::TwoX => "2",
+            Self::FourX => "4",
+        }
+    }
+
+    /// Tooltip text pairing the label with its shortcut.
+    pub fn tooltip(self) -> String {
+        match self {
+            Self::Fit => format!("Fit ({})", self.shortcut()),
+            Self::TwoX => format!("2x zoom ({})", self.shortcut()),
+            Self::FourX => format!("4x zoom ({})", self.shortcut()),
+        }
+    }
+}
+
 impl Default for ViewerState {
     fn default() -> Self {
         Self {
-            zoom_scale: 1.0,
+            zoom_scale: ZOOM_MIN_SCALE,
             pan_offset: (0.0, 0.0),
             is_dragging: false,
             drag_start_mouse: (0.0, 0.0),
@@ -21,7 +80,7 @@ impl Default for ViewerState {
 
 impl ViewerState {
     pub fn reset(&mut self) {
-        self.zoom_scale = 1.0;
+        self.zoom_scale = ZOOM_MIN_SCALE;
         self.pan_offset = (0.0, 0.0);
         self.is_dragging = false;
         self.drag_start_mouse = (0.0, 0.0);
@@ -29,9 +88,9 @@ impl ViewerState {
     }
 
     pub fn set_zoom(&mut self, scale: f32) {
-        self.zoom_scale = scale.clamp(1.0, 5.0);
-        if (self.zoom_scale - 1.0).abs() < 0.01 {
-            self.zoom_scale = 1.0;
+        self.zoom_scale = scale.clamp(ZOOM_MIN_SCALE, ZOOM_MAX_SCALE);
+        if (self.zoom_scale - ZOOM_MIN_SCALE).abs() < 0.01 {
+            self.zoom_scale = ZOOM_MIN_SCALE;
             self.pan_offset = (0.0, 0.0);
         } else {
             self.clamp_pan();
@@ -39,11 +98,11 @@ impl ViewerState {
     }
 
     pub fn zoom_in(&mut self) {
-        self.set_zoom(self.zoom_scale + 0.25);
+        self.set_zoom(self.zoom_scale + ZOOM_STEP);
     }
 
     pub fn zoom_out(&mut self) {
-        self.set_zoom(self.zoom_scale - 0.25);
+        self.set_zoom(self.zoom_scale - ZOOM_STEP);
     }
 
     pub fn toggle_zoom(&mut self) {
@@ -54,8 +113,36 @@ impl ViewerState {
         }
     }
 
+    /// Applies an explicit zoom preset (HUD buttons and 1/2/4 shortcuts).
+    /// Fit clears pan through `set_zoom`, matching the existing reset-on-fit rule.
+    pub fn apply_preset(&mut self, preset: ViewerZoomPreset) {
+        self.set_zoom(preset.scale());
+    }
+
+    /// True when the current zoom sits on the given preset.
+    pub fn matches_preset(&self, preset: ViewerZoomPreset) -> bool {
+        (self.zoom_scale - preset.scale()).abs() < 0.005
+    }
+
+    /// HUD label: "Fit" at fit, otherwise the percentage relative to fit.
+    ///
+    /// 1.0 is not a pixel-accurate 100%, so percentages are explicitly relative
+    /// to the fitted media size.
+    pub fn zoom_label(&self) -> String {
+        let scale = if self.zoom_scale.is_finite() {
+            self.zoom_scale
+        } else {
+            ZOOM_MIN_SCALE
+        };
+        if (scale - ZOOM_MIN_SCALE).abs() < 0.005 {
+            "Fit".to_string()
+        } else {
+            format!("{}%", (scale * 100.0).round() as i32)
+        }
+    }
+
     pub fn start_drag(&mut self, mouse_x: f32, mouse_y: f32) {
-        if self.zoom_scale > 1.0 {
+        if self.zoom_scale > ZOOM_MIN_SCALE {
             self.is_dragging = true;
             self.drag_start_mouse = (mouse_x, mouse_y);
             self.drag_start_pan = self.pan_offset;
@@ -63,7 +150,7 @@ impl ViewerState {
     }
 
     pub fn drag_to(&mut self, mouse_x: f32, mouse_y: f32) {
-        if self.is_dragging && self.zoom_scale > 1.0 {
+        if self.is_dragging && self.zoom_scale > ZOOM_MIN_SCALE {
             let dx = mouse_x - self.drag_start_mouse.0;
             let dy = mouse_y - self.drag_start_mouse.1;
             self.pan_offset = (self.drag_start_pan.0 + dx, self.drag_start_pan.1 + dy);
@@ -77,7 +164,7 @@ impl ViewerState {
 
     #[cfg(test)]
     pub fn pan_by(&mut self, dx: f32, dy: f32) {
-        if self.zoom_scale > 1.0 {
+        if self.zoom_scale > ZOOM_MIN_SCALE {
             self.pan_offset.0 += dx;
             self.pan_offset.1 += dy;
             self.clamp_pan();
@@ -85,7 +172,7 @@ impl ViewerState {
     }
 
     fn clamp_pan(&mut self) {
-        let max_pan = (self.zoom_scale - 1.0) * 800.0;
+        let max_pan = (self.zoom_scale - ZOOM_MIN_SCALE) * 800.0;
         self.pan_offset.0 = self.pan_offset.0.clamp(-max_pan, max_pan);
         self.pan_offset.1 = self.pan_offset.1.clamp(-max_pan, max_pan);
     }
@@ -168,5 +255,51 @@ mod tests {
 
         state.set_zoom(1.0);
         assert_eq!(state.pan_offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_viewer_zoom_presets_apply_and_clamp() {
+        let mut state = ViewerState::default();
+
+        state.apply_preset(ViewerZoomPreset::TwoX);
+        assert_eq!(state.zoom_scale, 2.0);
+        assert!(state.matches_preset(ViewerZoomPreset::TwoX));
+        assert!(!state.matches_preset(ViewerZoomPreset::FourX));
+
+        state.apply_preset(ViewerZoomPreset::FourX);
+        assert_eq!(state.zoom_scale, 4.0);
+        state.pan_by(100.0, 100.0);
+        assert_ne!(state.pan_offset, (0.0, 0.0));
+
+        state.apply_preset(ViewerZoomPreset::Fit);
+        assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
+        assert_eq!(state.pan_offset, (0.0, 0.0), "Fit must clear pan");
+
+        // Presets cannot escape the supported range.
+        state.set_zoom(f32::INFINITY);
+        assert_eq!(state.zoom_scale, ZOOM_MAX_SCALE);
+        state.set_zoom(f32::NEG_INFINITY);
+        assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
+    }
+
+    #[test]
+    fn test_viewer_zoom_hud_label_formatting() {
+        let mut state = ViewerState::default();
+        assert_eq!(state.zoom_label(), "Fit");
+
+        state.set_zoom(2.0);
+        assert_eq!(state.zoom_label(), "200%");
+        state.set_zoom(4.0);
+        assert_eq!(state.zoom_label(), "400%");
+        state.set_zoom(1.25);
+        assert_eq!(state.zoom_label(), "125%");
+        state.set_zoom(2.5);
+        assert_eq!(state.zoom_label(), "250%");
+        state.set_zoom(5.0);
+        assert_eq!(state.zoom_label(), "500%");
+
+        // A corrupt/non-finite scale must not render "NaN%" or "0%".
+        state.zoom_scale = f32::NAN;
+        assert_eq!(state.zoom_label(), "Fit");
     }
 }
