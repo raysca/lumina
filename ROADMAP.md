@@ -25,7 +25,7 @@ Local-first is a product constraint, not a temporary state:
   sync.
 - No telemetry, analytics, crash uploads or background network calls by default.
 - Network use is limited to explicit user actions: **optional backup to
-  user-owned S3-compatible storage** (post-1.0, see section 14) and opt-in update
+  user-owned S3-compatible storage** (mid-roadmap, see section 15) and opt-in update
   checks. Neither creates a Lumina account or a cloud photo service.
 - Backup credentials belong in the OS credential store (macOS Keychain, Windows
   Credential Manager, Linux Secret Service), never in config.json, SQLite, logs
@@ -83,21 +83,46 @@ data loss, or a mouse:
 
 ## Milestones
 
-| Milestone | Theme | Primary outcomes |
-| --- | --- | --- |
-| **0.2.x** | Release hardening | Signed/notarized macOS release; CI validated; e2e permission run; release notes and support docs. |
-| **0.3** | First-run and import | Onboarding, real import/copy workflow, drag-and-drop, recent libraries, progress/error recovery. |
-| **0.4** | Organize | Tags hierarchy and Untagged, curated albums, smart-album polish, full batch edit and undo. |
-| **0.5** | Media experience | Video improvements, compare/slideshow/map, share and export presets. |
-| **0.6** | Polish and access | Theme/accent, toasts/empty/loading states, help, accessibility, localization. |
-| **0.7** | Cross-platform | Windows and Linux ports, native packages, per-platform CI and signing. |
-| **0.8** | Semantic search | On-device embeddings and hybrid search after the core experience is solid. |
-| **1.0** | Grade A | Hardening, docs, update mechanism, support policy, full platform test matrix. |
-| **1.1** | Private backup | Optional client-side-encrypted backup to user-owned S3-compatible storage; OS credential storage; verify/restore; no sync or browsing. |
+| Milestone | Theme | Band | Primary outcomes |
+| --- | --- | --- | --- |
+| **0.2.x** | Release hardening | Top | Signed/notarized macOS release; CI validated; e2e permission run; release notes and support docs. |
+| **0.3** | Import and onboarding | **Top** | Onboarding, real import/copy workflow, drag-and-drop, import templates and copy verification, migration importers, multiple/external roots, recent libraries, progress/error recovery. |
+| **0.4** | Metadata, keywords and quick edits | **Top** | Hierarchical keywords, IPTC/XMP templates, batch metadata, non-destructive quick edits, external editor handoff. |
+| **0.5** | Private S3-compatible backup | **Mid** | Optional client-side-encrypted backup to user-owned S3-compatible storage; OS credential storage; verify/restore; no sync or browsing. |
+| **0.6** | Organize and media experience | **Mid** | Curated albums, smart-album polish, culling/pick-reject, compare/slideshow/map, video improvements, duplicates/stacks, share/export presets, RAW/HEIC/color validation. |
+| **0.7** | Polish and access | **Mid** | Theme/accent, toasts/empty/loading states, help, accessibility, localization. |
+| **0.8** | Cross-platform | Lower | Windows and Linux ports, native packages, per-platform CI and signing. |
+| **1.0** | Grade A | Top | Hardening, docs, update mechanism, support policy, full platform test matrix. |
+| **1.1** | Local intelligence | **Down** | People and pets clustering, OCR/object indexing, memories and auto-curation. |
+| **1.2** | Semantic search | **Down** | On-device embeddings and hybrid search after the core experience is solid. |
 
 Milestones are sequential for a reason: import and organization create the
 library that later features such as duplicate detection and semantic search
 need to be useful. Dates are intentionally omitted until scope is estimated.
+
+## Priority order
+
+**Top (0.2.x-0.4):**
+
+1. Import/copy and onboarding. This is the first feature wave.
+2. Metadata, keywords and quick edits. This is the second feature wave.
+
+**Mid (0.5-0.7):**
+
+3. Private S3-compatible backup.
+4. Organize/media workflow (albums, culling, video, map, duplicates).
+5. UX polish, accessibility and localization.
+
+**Lower / down the release roadmap:**
+
+6. Cross-platform port.
+7. People/pets, OCR/object indexing, memories and auto-curation.
+8. Semantic search.
+
+This order is intentional. Cloud photo libraries remain out of scope; the only
+network feature that handles user media is the optional S3 backup in the middle
+of the roadmap.
+
 
 ## 1. Onboarding and first-run
 
@@ -144,7 +169,35 @@ in-app backup/restore.
 file operation is reversible or explicitly confirmed; no media is deleted
 without visible confirmation; missing-file repairs have tests.
 
-## 3. Tags, untagged media, and cleanup
+## 3. Metadata, keywords, and quick edits (top priority)
+
+**Current:** tags are flat; metadata editing covers title/date/location/caption
+but not IPTC rights/creator fields; XMP is partial; there are no
+non-destructive edits or external editor handoff. This is the second top
+priority after import/copy.
+
+**Metadata and keywords:**
+
+- Hierarchical keywords/collections with aliases, autocomplete, controlled
+  vocabulary and bulk apply (coordinated with the tag manager in section 4).
+- IPTC/XMP templates: creator, copyright, rights usage, contact, keywords, date
+  offset and GPS; apply to a selection, import/export templates, and write
+  sidecars.
+- Batch metadata copy/paste and reusable templates.
+
+**Quick edits:**
+
+- Non-destructive rotate, crop, straighten, auto-enhance, red-eye, basic
+  exposure/white-balance/contrast and simple filters/presets.
+- Per-item version history, undo, batch apply and originals preserved.
+- External editor handoff to Affinity/Photoshop/Lightroom/Pixelmator with a
+  round-trip version stack; do not build a full RAW editor.
+- Validate RAW/HEIC orientation and basic color handling for edited previews.
+
+**Acceptance:** edits never overwrite originals; every edit is undoable and
+reproducible; metadata templates round-trip through XMP; a selection can
+receive keywords and a preset without opening each item.
+## 4. Tags, untagged media, and cleanup
 
 **Current:** tag manager supports search, rename, merge, delete, bulk delete,
 and sort. Tags are flat; tagging is applied from the inspector/batch dock; an
@@ -171,7 +224,7 @@ or cleanup workflow.
 mouse; tag operations are undoable; merge/rename preserves all item links;
 tag counts and search stay correct after every operation.
 
-## 4. Smart albums, curated albums, and organization
+## 5. Smart albums, curated albums, and organization
 
 **Current:** system smart albums plus user smart albums with create/edit/delete
 and rule builder. No curated/static albums, album previews, pinning, nesting,
@@ -193,7 +246,7 @@ or rule import/export.
 portable; counts update after watcher changes; no orphaned albums after item
 deletion.
 
-## 5. Multi-select and batch editing
+## 6. Multi-select and batch editing
 
 **Current:** range/cmd selection, select-all, batch favorite/tags/trash/export,
 and batch rating/color in the inspector. No rubber-band selection, mixed-value
@@ -213,7 +266,7 @@ editing, batch title/date/location/caption, or grouped undo.
 **Acceptance:** no accidental partial edits; mixed values are shown honestly;
 undo restores every touched item in one step; large selections stay responsive.
 
-## 6. Video player
+## 7. Video player
 
 **Current:** AVFoundation playback with play/pause, scrubbing, frame stepping,
 speed menu, mute/volume, loop, PiP, fullscreen, and hover seek. No resume,
@@ -236,7 +289,7 @@ scrub thumbnails, chapters, subtitle/audio track selection, or loop range.
 unsupported formats fail with a clear message; video shortcuts are documented
 and tested.
 
-## 7. Browsing, search, and viewer
+## 8. Browsing, search, and viewer
 
 **Current:** structured query grammar, FTS5 search, timeline buckets, sorting,
 grid density, zoom/pan, filmstrip, keyboard navigation. No saved searches,
@@ -258,7 +311,7 @@ search history, quick rating/color filters, compare, slideshow, or map.
 and slideshow are keyboard-operable; map/duplicate views have empty and error
 states; no feature blocks the UI thread.
 
-## 8. UX polish and system integration
+## 9. UX polish and system integration
 
 **Current:** dark graphite theme, status bar feedback, error banner, preferences
 (General/Storage/About), native menus, command palette, tooltips, shortcut
@@ -286,7 +339,7 @@ skeletons, shortcut customization, update mechanism, or diagnostics bundle.
 errors are actionable; no dead ends; polish changes are covered by visual/UI
 automation where practical.
 
-## 9. Accessibility and localization
+## 10. Accessibility and localization
 
 **Current:** keyboard-first navigation, command palette, native menu bar,
 tooltips, shortcut sheet. GPUI 0.2.2 exposes no NSAccessibility tree, so
@@ -307,7 +360,7 @@ VoiceOver sees only the window. i18n catalog exists but ships en-US only.
 **Acceptance:** a VoiceOver user can import/open a library, search, select, tag,
 view, and export without a mouse; no keyboard trap; documented limitations.
 
-## 10. Data safety, portability, and diagnostics
+## 11. Data safety, portability, and diagnostics
 
 **Current:** SQLite migrations and backups, sidecars for title/rating/tags/caption,
 undo, single-instance lock, logging, cache eviction. Date/location are not in
@@ -327,7 +380,7 @@ sidecars; no backup/restore UI; global tag operations are outside undo.
 sidecars + catalog backup and recover organization; no metadata is trapped in
 a single database.
 
-## 11. Performance, reliability, and scale
+## 12. Performance, reliability, and scale
 
 **Current:** 250k synthetic insert/search/smart-album gates; cache budgets;
 background scanning/decoding; UI automation; CI perf/coverage/audit jobs.
@@ -346,7 +399,7 @@ background scanning/decoding; UI automation; CI perf/coverage/audit jobs.
 matrix; every failure has a recovery path; perf gates stay green in release
 mode (seek <1 ms, query <5 ms, smart album <8 ms).
 
-## 12. Platform and release
+## 13. Platform and release
 
 **Current:** macOS 12+ only; universal build, signing, notarization, DMG/zip and
 tag-driven release workflow are implemented but not yet exercised with real
@@ -365,23 +418,40 @@ credentials. Windows/Linux are planned in [RELEASING.md](RELEASING.md#windows-an
 **Acceptance:** users can install and update a signed build; artifacts verify;
 cross-platform claims exist only after the documented acceptance criteria pass.
 
-## 13. Semantic search (Phase 10)
+## 14. Local intelligence: people, OCR, memories and semantic search (down)
 
 **Current:** not implemented. Structured and FTS search only.
 
-**Target design spike first:**
+These are deliberately down the release roadmap. They must be on-device,
+opt-in, revocable and deletable; no cloud inference and no network upload.
+
+**People and pets:**
+
+- Local face/pet clustering with user-assigned names, merge/split and
+  privacy controls. Index is opt-in and can be deleted.
+
+**OCR and object/scene indexing:**
+
+- OCR screenshots/documents for text search.
+- Local object/scene tags for queries such as "beach", "dog" or "receipt".
+
+**Memories and auto-curation:**
+
+- "This day", trips, best-of-month and similar smart collections.
+- Slideshow/memory presentation and controls over what gets surfaced.
+
+**Semantic search:**
 
 - On-device embedding model (size, license, quality, languages).
 - Vector storage and incremental indexing in SQLite; no network.
 - Hybrid ranking with structured/FTS filters; explainable results.
-- Background embedding worker with progress, cancellation, and cache budget.
-- UX: a clear "search by meaning" entry point, result provenance, and the
-  ability to disable/delete embeddings.
+- A clear "search by meaning" entry point, result provenance, and the ability
+  to disable/delete embeddings.
 
 **Acceptance:** a design document with model/size/privacy tradeoffs is approved
-before implementation; offline tests prove indexing, ranking, and memory limits.
-
-## 14. Optional private backup to S3-compatible storage (post-1.0)
+before implementation; offline tests prove indexing, ranking and memory limits;
+the user can delete every index and cache.
+## 15. Optional private backup to S3-compatible storage (mid, 0.5)
 
 This is the only planned network feature that handles user media. It is
 deliberately narrower than cloud support: no accounts, no remote browsing, no
@@ -420,36 +490,41 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 
 ## Backlog: candidate features and priority
 
-| Priority | Item | Milestone | Notes |
-| --- | --- | --- | --- |
-| P0 | Signed/notarized release + CI validation | 0.2.x | Needs Apple credentials and a native CI run. |
-| P0 | First-run onboarding + import/copy | 0.3 | Core new-user and data-ingestion path. |
-| P0 | First-class Untagged + tag cleanup | 0.4 | High everyday value. |
-| P0 | Batch metadata edit + grouped undo | 0.4 | Title/date/location/caption and mixed values. |
-| P1 | Curated albums | 0.4 | Needed alongside smart albums. |
-| P1 | Smart-album previews, pinning, rule import/export | 0.4 | Organization polish. |
-| P1 | Video resume, scrub previews, subtitles/audio tracks | 0.5 | Viewer parity. |
-| P1 | Compare, slideshow, map | 0.5 | Browse and presentation. |
-| P1 | Duplicate detection and burst stacks | 0.5 | Large-library cleanup. |
-| P1 | Share sheet and export presets | 0.5 | Distribution workflows. |
-| P1 | Light theme/accent, toasts, skeletons | 0.6 | UX consistency. |
-| P1 | Accessibility bridge, focus order, reduced motion | 0.6 | Grade A requirement. |
-| P1 | Locale catalog (one non-English locale) | 0.6 | i18n proof. |
-| P1 | XMP date/GPS + backup/restore UI | 0.4-0.6 | Portability and safety. |
-| P1 | Windows/Linux port | 0.7 | Large; follow RELEASING plan. |
-| P2 | In-app updates and release notes | 0.6+ | Requires feed/signing infrastructure. |
-| P2 | Diagnostics bundle and health check | 0.6 | Support quality. |
-| P2 | Custom keyboard shortcuts | 0.6+ | Power-user polish. |
-| P2 | Batch rename/file move | 0.5+ | Higher risk; dry-run first. |
-| P2 | Quick Look/Finder extension | 0.5+ | Nice system integration. |
-| P2 | Semantic search | 0.8 | Design spike first. |
-| P2 | Optional client-side-encrypted S3-compatible backup | 1.1 | User-owned bucket, OS credential store, no sync/browsing. |
+| Priority | Band | Item | Milestone | Notes |
+| --- | --- | --- | --- | --- |
+| P0 | Top | Signed/notarized release + CI validation | 0.2.x | Needs Apple credentials and a native CI run. |
+| P0 | Top | Onboarding + import/copy + import templates/verification | 0.3 | Core new-user and data-ingestion path. |
+| P0 | Top | Migration importers (Photos, Takeout, Lightroom) | 0.3 | Removes switching friction. |
+| P0 | Top | Hierarchical keywords + IPTC/XMP metadata templates | 0.4 | Creator/rights/contact/keywords; sidecar round-trip. |
+| P0 | Top | Quick non-destructive edits + external editor handoff | 0.4 | Crop/rotate/auto-enhance; version history. |
+| P0 | Top | Batch metadata + grouped undo | 0.4 | Apply templates/keywords to a selection. |
+| P1 | Mid | Private S3-compatible backup (encrypted, OS credentials) | 0.5 | User-owned bucket; no sync/browsing. |
+| P1 | Mid | Curated albums + smart-album polish | 0.6 | Preview, pin, rule import/export. |
+| P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. |
+| P1 | Mid | Map and slideshow | 0.6 | Presentation and geography. |
+| P1 | Mid | Video improvements: resume, scrub previews, tracks | 0.6 | Viewer parity. |
+| P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. |
+| P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. |
+| P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. |
+| P1 | Mid | Light theme/accent, toasts, skeletons | 0.7 | UX consistency. |
+| P1 | Mid | Accessibility bridge, focus order, reduced motion | 0.7 | Grade A requirement. |
+| P1 | Mid | Locale catalog (one non-English locale) | 0.7 | i18n proof. |
+| P2 | Lower | Windows/Linux port | 0.8 | Large; follow RELEASING plan. |
+| P2 | Lower | In-app updates and release notes | 0.7+ | Requires feed/signing infrastructure. |
+| P2 | Lower | Diagnostics bundle and health check | 0.7 | Support quality. |
+| P2 | Lower | Custom keyboard shortcuts | 0.7+ | Power-user polish. |
+| P2 | Lower | Batch rename/file move | 0.6+ | Higher risk; dry-run first. |
+| P2 | Lower | Quick Look/Finder extension | 0.6+ | Nice system integration. |
+| P2 | Down | People and pets clustering | 1.1 | On-device, opt-in, deletable. |
+| P2 | Down | OCR/object indexing | 1.1 | Local only. |
+| P2 | Down | Memories and auto-curation | 1.1 | Depends on indexing. |
+| P2 | Down | Semantic search | 1.2 | Design spike first. |
 
 ## Out of scope for the near term
 
 - Google Photos, iCloud Photos, Dropbox, OneDrive and Google Drive account
   integration, remote library browsing and two-way sync. Optional S3-compatible
-  backup (section 14) is separate and post-1.0.
+  backup (section 15) is separate and mid-roadmap.
 - Cloud sharing/social services. The native macOS share sheet remains in scope.
 - Generative AI editing or cloud inference.
 - Telemetry or analytics by default.

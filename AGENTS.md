@@ -369,9 +369,9 @@ A change is done only when all applicable items are true:
   UI shell, real player, macOS decode fallbacks, live UI harness and release
   scripts still have macOS-specific paths. Keep releases macOS-only until the
   acceptance criteria in `RELEASING.md` are met.
-- S3-compatible backup is planned post-1.0 and is not implemented. Cloud
-  photo-library accounts (Google/iCloud) and two-way sync are out of scope; do
-  not describe them as supported.
+- S3-compatible backup is planned for the mid-roadmap (0.5) and is not
+  implemented. Cloud photo-library accounts (Google/iCloud) and two-way sync are
+  out of scope; do not describe them as supported.
 - Lumina is MIT licensed. Do not relicense the project or remove the LICENSE
   file without maintainer approval, and keep bundled third-party notices accurate.
 
