@@ -129,6 +129,9 @@ docs/             roadmap, architecture, accessibility, notes
   concrete need, license review, and CI/platform compatibility.
 - macOS-only code stays in clearly marked modules (`build.rs`, player bridge,
   release scripts). Headless core stays cross-platform where practical.
+- Windows and Linux are planned release targets, not current support. Do not add
+  platform claims, CI release jobs, or "portable" abstractions until the porting
+  and acceptance criteria in `RELEASING.md` are met.
 - No telemetry, analytics, crash uploaders, or network calls without explicit
   product approval and documentation.
 
@@ -355,6 +358,10 @@ A change is done only when all applicable items are true:
   drafts until verified and published.
 - DMG creation may be blocked in sandboxed sessions; use `LUMINA_SKIP_DMG=1`
   only for local verification, not as a release substitute.
+- Windows and Linux are planned release targets but are not supported yet: the
+  UI shell, real player, macOS decode fallbacks, live UI harness and release
+  scripts still have macOS-specific paths. Keep releases macOS-only until the
+  acceptance criteria in `RELEASING.md` are met.
 - No license has been selected yet; legal review is required before distribution.
 
 When blocked or uncertain, state the concrete condition and the evidence, not a

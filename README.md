@@ -5,6 +5,12 @@ A native, local-first photo & video manager for macOS, built in Rust with
 framework). The interface targets 120 FPS ProMotion rendering while a headless
 core handles cataloguing, decoding, and search.
 
+> **Platform status:** macOS 12+ is the only supported and released platform
+> today. Windows and Linux are planned future targets; the current UI, player,
+> decoder fallbacks and release scripts still contain macOS-specific paths. See
+> [RELEASING.md](RELEASING.md#windows-and-linux-planned). Do not treat current
+> packages or scripts as Windows/Linux support.
+
 ## Features
 
 - **SQLite catalog with FTS5** — filename, folder, camera/lens, location, tags,
@@ -47,8 +53,9 @@ core handles cataloguing, decoding, and search.
 
 ## Requirements
 
-- macOS 12 or newer (the video bridge and packaging targets are macOS-only)
-- Xcode Command Line Tools (cc, AVFoundation, AppKit)
+- macOS 12 or newer for the current release (Windows and Linux are planned but
+  not yet supported; their video/player/packaging backends are not implemented)
+- Xcode Command Line Tools (cc, AVFoundation, AppKit) on macOS
 - Rust stable — see rust-toolchain.toml
 
 ## Quick start
