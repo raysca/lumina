@@ -1,10 +1,50 @@
-/target
+# Rust build output
+/target/
 **/*.rs.bk
-.DS_Store
 
-# Local build/package output
+# OS metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea/
+.vscode/
+.fleet/
+.zed/
+*.swp
+*.swo
+*~
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+.direnv/
+.envrc
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+
+# Coverage and profiling output
+/lcov.info
+/coverage/
+*.profraw
+*.profdata
+
+# Local build, package and automation output
 *.dmg
 *.app
+/dist/
+*.dSYM/
+*.log
 
 # Generated screenshots (stale; regenerate with the app)
 /screenshots/

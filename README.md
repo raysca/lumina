@@ -178,10 +178,12 @@ docs/                Roadmap, system design, technical notes
 ## Third-party assets
 
 IBM Plex Sans/Mono fonts (SIL OFL 1.1) and Lucide icons (ISC) are bundled; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Rust crate licenses are
-recorded in Cargo.lock.
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Dependency versions are pinned
+in Cargo.lock; each crate keeps its own license.
 
 ## License
 
-No license has been selected for this repository yet. Add a LICENSE file
-before distributing binaries or accepting outside contributions.
+Lumina is released under the [MIT License](LICENSE).
+
+Copyright © 2026 Lumina contributors. Bundled third-party assets remain under
+their own licenses (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).

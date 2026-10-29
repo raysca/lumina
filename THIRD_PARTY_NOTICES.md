@@ -1,6 +1,8 @@
 # Third-Party Notices
 
-This repository bundles the following third-party assets.
+This repository bundles the following third-party assets. Lumina itself is
+released under the MIT License; see [LICENSE](LICENSE). The assets below remain
+under their respective licenses.
 
 ## Fonts — IBM Plex
 

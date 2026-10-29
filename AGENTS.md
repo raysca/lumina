@@ -362,7 +362,8 @@ A change is done only when all applicable items are true:
   UI shell, real player, macOS decode fallbacks, live UI harness and release
   scripts still have macOS-specific paths. Keep releases macOS-only until the
   acceptance criteria in `RELEASING.md` are met.
-- No license has been selected yet; legal review is required before distribution.
+- Lumina is MIT licensed. Do not relicense the project or remove the LICENSE
+  file without maintainer approval, and keep bundled third-party notices accurate.
 
 When blocked or uncertain, state the concrete condition and the evidence, not a
 guess. Remaining work is better than a false completion claim.
