@@ -5,6 +5,7 @@ use lumina_core::{
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::app::types::{
     BatchSelectionSummary, DeleteConfirmState, LayoutMode, TagSortOrder, UiMessage,
@@ -18,6 +19,44 @@ use crate::views::context_menu::ContextMenuState;
 use crate::views::grid::GridState;
 use crate::views::sidebar::AlbumSelection;
 use crate::views::viewer::ViewerState;
+
+/// How long selection/view/search changes settle before the restored session
+/// is written to disk. Keeps arrow-key navigation and typing from saving on
+/// every event while still persisting a change the user made a moment ago.
+pub(crate) const SESSION_SAVE_DEBOUNCE: Duration = Duration::from_millis(400);
+
+/// Generation guard for the debounced session save.
+///
+/// Every scheduled save takes the next generation id and only the newest id may
+/// write. A change that arrives while a timer is waiting therefore supersedes
+/// the older timer, which becomes a no-op instead of persisting stale state.
+#[derive(Debug, Default)]
+pub(crate) struct SessionSaveState {
+    generation: u64,
+}
+
+impl SessionSaveState {
+    /// Arms the next save and returns the generation its timer must present.
+    fn arm(&mut self) -> u64 {
+        self.generation = self.generation.wrapping_add(1);
+        self.generation
+    }
+
+    /// Arms a save unless the startup restore still owns the on-disk session.
+    /// Returns `None` when the caller must leave the config file untouched.
+    pub(crate) fn arm_if_allowed(&mut self, allowed: bool) -> Option<u64> {
+        if allowed {
+            Some(self.arm())
+        } else {
+            None
+        }
+    }
+
+    /// True when `generation` is still the newest armed save.
+    pub(crate) fn is_current(&self, generation: u64) -> bool {
+        generation == self.generation
+    }
+}
 
 /// Hardware-accelerated video playback state.
 #[derive(Default)]
@@ -163,6 +202,12 @@ pub struct LuminaApp {
     pub window_bounds: Option<(f32, f32, f32, f32)>,
     pub(crate) window_bounds_subscription: Option<Subscription>,
     pub(crate) last_bounds_save: Option<std::time::Instant>,
+    /// Debounced, generation-guarded writer for the restored-session fields.
+    ///
+    /// Only the non-test scheduler reads this field; test builds compile that
+    /// path out so no test can spawn a timer or touch the user's config.
+    #[cfg_attr(test, allow(dead_code))]
+    pub(crate) session_save: SessionSaveState,
 
     // Phase 8 Visual Smart Album Builder State
     pub album_draft: AlbumDraftState,
@@ -296,6 +341,7 @@ impl LuminaApp {
             window_bounds: config.restored_window_bounds(),
             window_bounds_subscription: None,
             last_bounds_save: None,
+            session_save: SessionSaveState::default(),
             album_draft: AlbumDraftState::default(),
             delete_confirm_state: None,
             viewer_state: ViewerState::default(),
@@ -398,6 +444,47 @@ impl LuminaApp {
         }
     }
 
+    /// Schedules a debounced write of the restored-session fields.
+    ///
+    /// Selection, view, search, and year changes are high-frequency (arrow keys,
+    /// typing), so saving synchronously on every change would hammer the config
+    /// file with half-typed queries. The timer coalesces them and the generation
+    /// guard lets only the newest scheduled save write.
+    ///
+    /// While [`LuminaApp::pending_restore`] is set the on-disk session belongs to
+    /// the startup restore and must not be overwritten; scheduling resumes once
+    /// the restore has been applied.
+    pub(crate) fn schedule_session_save(&mut self, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        {
+            // Tests must never spawn timers or write the user's config.
+            let _ = (self, cx);
+        }
+        #[cfg(not(test))]
+        {
+            let Some(generation) = self
+                .session_save
+                .arm_if_allowed(self.pending_restore.is_none())
+            else {
+                return;
+            };
+            cx.spawn(async move |this, async_cx| {
+                async_cx
+                    .background_executor()
+                    .timer(SESSION_SAVE_DEBOUNCE)
+                    .await;
+                // A newer change supersedes this timer, so a stale task can never
+                // persist an older view or selection.
+                let _ = this.update(async_cx, |this, _cx| {
+                    if this.session_save.is_current(generation) {
+                        this.save_config();
+                    }
+                });
+            })
+            .detach();
+        }
+    }
+
     pub fn copy_to_clipboard(&self, text: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
     }
@@ -453,5 +540,64 @@ impl LuminaApp {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod session_save_tests {
+    use super::{SessionSaveState, SESSION_SAVE_DEBOUNCE};
+    use std::time::Duration;
+
+    #[core::prelude::v1::test]
+    fn session_save_config_generation_guard_accepts_only_the_newest() {
+        let mut state = SessionSaveState::default();
+        let first = state.arm();
+        let second = state.arm();
+        assert!(
+            !state.is_current(first),
+            "a superseded timer must not write the session"
+        );
+        assert!(
+            state.is_current(second),
+            "the newest timer must write the session"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn session_save_config_waits_for_the_pending_restore() {
+        let mut state = SessionSaveState::default();
+        assert_eq!(
+            state.arm_if_allowed(false),
+            None,
+            "no timer may be armed while the startup restore owns the config"
+        );
+        assert_eq!(
+            state.arm_if_allowed(true),
+            Some(1),
+            "scheduling resumes once the restore is applied"
+        );
+        assert!(state.is_current(1));
+    }
+
+    #[core::prelude::v1::test]
+    fn session_save_config_generation_guard_handles_wraparound() {
+        let mut state = SessionSaveState {
+            generation: u64::MAX,
+        };
+        assert_eq!(state.arm(), 0, "generation ids wrap without panicking");
+        assert!(state.is_current(0));
+        assert!(!state.is_current(u64::MAX));
+    }
+
+    #[core::prelude::v1::test]
+    fn session_save_config_debounce_delay_stays_in_the_agreed_range() {
+        assert!(
+            SESSION_SAVE_DEBOUNCE >= Duration::from_millis(300),
+            "session saves should wait at least 300ms before writing"
+        );
+        assert!(
+            SESSION_SAVE_DEBOUNCE <= Duration::from_millis(500),
+            "session saves should settle within 500ms"
+        );
     }
 }

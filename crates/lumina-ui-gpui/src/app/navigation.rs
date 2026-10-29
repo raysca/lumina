@@ -128,6 +128,8 @@ impl LuminaApp {
             self.select_item_internal(item, cx);
         }
         self.reveal_grid_selection();
+        // Persist the new selection on a short timer, not on every arrow key.
+        self.schedule_session_save(cx);
     }
 
     /// Keeps the keyboard-selected row visible in the virtualized grid.
@@ -200,6 +202,7 @@ impl LuminaApp {
         self.refresh_selected_tags();
         self.update_batch_summary();
         self.reveal_grid_selection();
+        self.schedule_session_save(cx);
         cx.notify();
     }
 
@@ -209,10 +212,12 @@ impl LuminaApp {
         self.selection_anchor = Some(index);
         self.selected_index = Some(index);
         self.select_item_internal(item, cx);
+        self.schedule_session_save(cx);
     }
 
     pub fn select_item(&mut self, item: MediaItem, cx: &mut Context<Self>) {
         self.select_item_internal(item, cx);
+        self.schedule_session_save(cx);
     }
 
     pub(crate) fn select_item_internal(&mut self, item: MediaItem, cx: &mut Context<Self>) {
@@ -310,6 +315,7 @@ impl LuminaApp {
             self.select_item_internal(item, cx);
             self.refresh_selected_tags();
         }
+        self.schedule_session_save(cx);
         cx.notify();
     }
 
@@ -329,6 +335,7 @@ impl LuminaApp {
         }
         self.update_batch_summary();
         self.refresh_selected_tags();
+        self.schedule_session_save(cx);
         cx.notify();
     }
 
@@ -342,6 +349,9 @@ impl LuminaApp {
         self.batch_summary = BatchSelectionSummary::default();
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
+        // Clearing selection must forget the persisted item too (view/search
+        // changes reach here after updating their own fields).
+        self.schedule_session_save(cx);
         cx.notify();
     }
 

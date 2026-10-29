@@ -84,6 +84,9 @@ impl LuminaApp {
             self.select_item_internal(item.clone(), cx);
         }
         self.context_menu_state = Some(ContextMenuState { position, item });
+        // Right-clicking a card can change the selected item; persist it on the
+        // same debounced path as keyboard and left-click selection.
+        self.schedule_session_save(cx);
         cx.notify();
     }
 
