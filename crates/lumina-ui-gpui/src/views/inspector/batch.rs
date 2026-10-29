@@ -21,6 +21,10 @@ pub fn render_batch_body(
     caption_input_buffer: &str,
     title_input_active: bool,
     title_input_buffer: &str,
+    date_input_active: bool,
+    date_input_buffer: &str,
+    location_input_active: bool,
+    location_input_buffer: &str,
 ) -> AnyElement {
     let count = summary.count;
     let total_bytes = summary.total_bytes;
@@ -115,6 +119,22 @@ pub fn render_batch_body(
                     "batch-caption-input",
                     caption_input_buffer,
                     caption_input_active,
+                    weak_app.clone(),
+                ))
+                .child(render_batch_metadata_row(
+                    BatchMetadataRow::Date,
+                    "DATE",
+                    "batch-date-input",
+                    date_input_buffer,
+                    date_input_active,
+                    weak_app.clone(),
+                ))
+                .child(render_batch_metadata_row(
+                    BatchMetadataRow::Location,
+                    "LOCATION",
+                    "batch-location-input",
+                    location_input_buffer,
+                    location_input_active,
                     weak_app.clone(),
                 )),
         )
@@ -454,6 +474,8 @@ pub fn render_batch_body(
 enum BatchMetadataRow {
     Title,
     Caption,
+    Date,
+    Location,
 }
 
 /// One editable metadata row in the batch inspector.
@@ -554,6 +576,8 @@ fn render_batch_metadata_row(
                 app.update(cx, |this, cx| match row {
                     BatchMetadataRow::Title => this.start_title_input(cx),
                     BatchMetadataRow::Caption => this.start_caption_input(cx),
+                    BatchMetadataRow::Date => this.start_date_input(cx),
+                    BatchMetadataRow::Location => this.start_location_input(cx),
                 });
             }
         })

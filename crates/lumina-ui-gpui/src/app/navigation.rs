@@ -3,9 +3,10 @@ use lumina_core::{MediaId, MediaItem, MediaType};
 use std::cmp;
 use std::collections::{BTreeSet, VecDeque};
 
+use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::{BatchSelectionSummary, UiMessage};
-use crate::app::undo::{BatchField, UndoAction};
+use crate::app::undo::{AppliedLocationChange, BatchField, BatchLocationChange, UndoAction};
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
@@ -873,6 +874,10 @@ impl LuminaApp {
             self.caption.title_input_buffer.clear();
             self.caption.input_active = false;
             self.caption.input_buffer.clear();
+            self.caption.date_input_active = false;
+            self.caption.date_input_buffer.clear();
+            self.caption.location_input_active = false;
+            self.caption.location_input_buffer.clear();
         }
         self.caption.batch.initial_buffer.clear();
     }
@@ -899,12 +904,26 @@ impl LuminaApp {
             })
             .collect();
         let caption = summarize_batch_text(captions);
-        self.batch_metadata = BatchMetadataSummary { title, caption };
+        let date = summarize_batch_timestamps(items.iter().map(|item| item.timestamp_epoch_ms));
+        let location =
+            summarize_batch_locations(items.iter().map(|item| (item.latitude, item.longitude)));
+        self.batch_metadata = BatchMetadataSummary {
+            title,
+            caption,
+            date,
+            location,
+        };
         if !self.caption.title_input_active {
             self.caption.title_input_buffer = batch_field_display(&self.batch_metadata.title);
         }
         if !self.caption.input_active {
             self.caption.input_buffer = batch_field_display(&self.batch_metadata.caption);
+        }
+        if !self.caption.date_input_active {
+            self.caption.date_input_buffer = batch_field_display(&self.batch_metadata.date);
+        }
+        if !self.caption.location_input_active {
+            self.caption.location_input_buffer = batch_field_display(&self.batch_metadata.location);
         }
     }
 
@@ -1116,6 +1135,191 @@ impl LuminaApp {
         };
         self.set_last_action(message.clone());
         self.show_undo_toast(message, cx);
+    }
+
+    /// Applies one date to every selected item as a single undo step.
+    ///
+    /// Accepts the same syntax as the single-item editor. A date without a time
+    /// keeps each item's existing time of day, mirroring the single-item path.
+    /// Items already at the target timestamp are left out of the undo entry, and
+    /// a failed write rolls back every timestamp this call already changed.
+    pub fn apply_batch_date(&mut self, value: &str, cx: &mut Context<Self>) {
+        let items = self.get_selected_items();
+        if items.is_empty() {
+            return;
+        }
+        let Some(first) = items.first() else {
+            return;
+        };
+        if parse_edited_timestamp(value, first.timestamp_epoch_ms).is_none() {
+            self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+
+        let mut changes: Vec<(MediaId, i64, i64)> = Vec::with_capacity(items.len());
+        for item in &items {
+            let Some(after) = parse_edited_timestamp(value, item.timestamp_epoch_ms) else {
+                self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+                self.update_batch_summary();
+                cx.notify();
+                return;
+            };
+            if after != item.timestamp_epoch_ms {
+                changes.push((item.id, item.timestamp_epoch_ms, after));
+            }
+        }
+        if changes.is_empty() {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+
+        let mut applied: Vec<(MediaId, i64)> = Vec::with_capacity(changes.len());
+        let mut failure = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before, after) in &changes {
+                match state.engine.set_timestamp(*id, *after) {
+                    Ok(()) => applied.push((*id, *before)),
+                    Err(err) => {
+                        failure = Some(err.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(err) = failure {
+            let rollback = self.revert_batch_dates(&applied);
+            self.refresh_selected_item_from_engine();
+            self.refresh_album_counts();
+            self.update_batch_summary();
+            let detail = match rollback {
+                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
+                None => err,
+            };
+            self.set_error(
+                format!(
+                    "Could not apply date to {} item(s): {detail}",
+                    changes.len()
+                ),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
+        self.push_undo(UndoAction::BatchDate { changes });
+        self.refresh_selected_item_from_engine();
+        self.refresh_album_counts();
+        self.update_batch_summary();
+        let message = format!("Date applied to {} item(s)", ids.len());
+        self.set_last_action(message.clone());
+        self.show_undo_toast(message, cx);
+    }
+
+    fn revert_batch_dates(&self, applied: &[(MediaId, i64)]) -> Option<String> {
+        let mut rollback_error = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before) in applied.iter().rev() {
+                if let Err(err) = state.engine.set_timestamp(*id, *before) {
+                    rollback_error = Some(err.to_string());
+                }
+            }
+        }
+        rollback_error
+    }
+
+    /// Applies one location to every selected item as a single undo step.
+    ///
+    /// The draft uses the single-item coordinate syntax (`latitude, longitude`;
+    /// an empty draft clears the location). A failed write restores the
+    /// coordinates already changed by this call before reporting the error.
+    pub fn apply_batch_location(&mut self, value: &str, cx: &mut Context<Self>) {
+        let items = self.get_selected_items();
+        if items.is_empty() {
+            return;
+        }
+        let (lat, lon) = match parse_location_coordinates(value) {
+            Ok(coords) => coords,
+            Err(message) => {
+                self.set_error(message, cx);
+                self.update_batch_summary();
+                cx.notify();
+                return;
+            }
+        };
+
+        let changes: Vec<BatchLocationChange> = items
+            .iter()
+            .filter_map(|item| {
+                let before = (item.latitude, item.longitude);
+                let after = (lat, lon);
+                (before != after).then_some((item.id, before, after))
+            })
+            .collect();
+        if changes.is_empty() {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+
+        let mut applied: Vec<AppliedLocationChange> = Vec::with_capacity(changes.len());
+        let mut failure = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before, after) in &changes {
+                match state.engine.set_location(*id, after.0, after.1) {
+                    Ok(()) => applied.push((*id, *before)),
+                    Err(err) => {
+                        failure = Some(err.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(err) = failure {
+            let rollback = self.revert_batch_locations(&applied);
+            self.refresh_selected_item_from_engine();
+            self.update_batch_summary();
+            let detail = match rollback {
+                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
+                None => err,
+            };
+            self.set_error(
+                format!(
+                    "Could not apply location to {} item(s): {detail}",
+                    changes.len()
+                ),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
+        self.push_undo(UndoAction::BatchLocation { changes });
+        self.refresh_selected_item_from_engine();
+        self.update_batch_summary();
+        let message = if lat.is_some() {
+            format!("Location applied to {} item(s)", ids.len())
+        } else {
+            format!("Location removed from {} item(s)", ids.len())
+        };
+        self.set_last_action(message.clone());
+        self.show_undo_toast(message, cx);
+    }
+
+    fn revert_batch_locations(&self, applied: &[AppliedLocationChange]) -> Option<String> {
+        let mut rollback_error = None;
+        if let Some(state) = self.grid_state.as_ref() {
+            for (id, before) in applied.iter().rev() {
+                if let Err(err) = state.engine.set_location(*id, before.0, before.1) {
+                    rollback_error = Some(err.to_string());
+                }
+            }
+        }
+        rollback_error
     }
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
@@ -1456,4 +1660,54 @@ fn batch_field_display(field: &BatchFieldSummary) -> String {
     } else {
         field.common.clone().unwrap_or_default()
     }
+}
+
+/// Summarizes capture timestamps across the batch selection.
+///
+/// A shared timestamp is rendered in the editor's own syntax so the batch row
+/// shows exactly the value typing the same text would restore.
+fn summarize_batch_timestamps<I>(values: I) -> BatchFieldSummary
+where
+    I: IntoIterator<Item = i64>,
+{
+    let mut values = values.into_iter();
+    let Some(first) = values.next() else {
+        return BatchFieldSummary::default();
+    };
+    let mixed = values.any(|value| value != first);
+    BatchFieldSummary {
+        mixed,
+        common: if mixed {
+            None
+        } else {
+            Some(format_batch_timestamp(first))
+        },
+    }
+}
+
+/// Summarizes coordinates across the batch selection using the single-item
+/// editor's `latitude, longitude` form. Items with no coordinates are "not set".
+fn summarize_batch_locations<I>(values: I) -> BatchFieldSummary
+where
+    I: IntoIterator<Item = (Option<f64>, Option<f64>)>,
+{
+    let mut values = values.into_iter();
+    let Some(first) = values.next() else {
+        return BatchFieldSummary::default();
+    };
+    let mixed = values.any(|value| value != first);
+    let common = match first {
+        (Some(lat), Some(lon)) => Some(format!("{lat:.6}, {lon:.6}")),
+        _ => None,
+    };
+    BatchFieldSummary {
+        mixed,
+        common: if mixed { None } else { common },
+    }
+}
+
+fn format_batch_timestamp(epoch_ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(epoch_ms)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_default()
 }

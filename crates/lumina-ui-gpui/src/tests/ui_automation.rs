@@ -44,6 +44,13 @@ fn leak(selector: String) -> &'static str {
     Box::leak(selector.into_boxed_str())
 }
 
+fn test_epoch_ms(value: &str) -> i64 {
+    chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
+        .expect("test fixture timestamps use the editor syntax")
+        .and_utc()
+        .timestamp_millis()
+}
+
 /// Draws the registered root view so layout, hit-testing and debug_bounds are
 /// populated for the current app state.
 fn render_ui(cx: &mut VisualTestContext) {
@@ -117,6 +124,26 @@ fn right_click(cx: &mut VisualTestContext, selector: &'static str) {
         gpui::Modifiers::default(),
     );
     render_ui(cx);
+}
+
+/// Selects items by identity so a rank-changing edit (for example a date
+/// rewrite that reorders the grid) cannot silently move the selection to other
+/// media before the next step of a test.
+fn select_media_ids(app: &mut LuminaApp, ids: &[lumina_core::MediaId]) {
+    let order = app.get_active_slice(0..app.get_active_count());
+    let mut indices = std::collections::BTreeSet::new();
+    for id in ids {
+        if let Some(index) = order.iter().position(|item| item.id == *id) {
+            indices.insert(index);
+        }
+    }
+    let Some(&first_index) = indices.iter().next() else {
+        return;
+    };
+    app.selected_indices = indices;
+    app.selected_index = Some(first_index);
+    app.selected_item = order.get(first_index).cloned();
+    app.update_batch_summary();
 }
 
 fn app_with_library(
@@ -2094,23 +2121,337 @@ fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
 }
 
 #[core::prelude::v1::test]
-fn ui_automation_batch_inspector_metadata_edit_ui_path() {
-    let (temp_dir, engine) = seed_library("batch_meta_ui", 3);
-    let items = engine.get_item_slice(0..3);
-    let first = items[0].clone();
-    let second = items[1].clone();
-    engine.set_title(first.id, Some("First")).unwrap();
+fn ui_automation_batch_date_mixed_apply_validation_and_grouped_undo() {
+    let (temp_dir, engine) = seed_library("batch_date", 4);
+    let dates = [
+        test_epoch_ms("2020-01-02 03:04:05"),
+        test_epoch_ms("2021-02-03 04:05:06"),
+        test_epoch_ms("2022-03-04 05:06:07"),
+        test_epoch_ms("2023-05-06 07:08:09"),
+    ];
+    for (item, date) in engine.get_item_slice(0..4).iter().zip(dates) {
+        engine.set_timestamp(item.id, date).unwrap();
+    }
 
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
-    view.update(vcx, |app, cx| {
-        app.inspector_open = true;
-        app.selected_indices = [0usize, 1].into_iter().collect();
+    // Derive the selection from the app's own sorted view: changing timestamps
+    // reorders the grid, so raw catalog order is not the rendered order.
+    let (ids, originals): (Vec<_>, Vec<_>) = view.update(vcx, |app, cx| {
+        let batch = app.get_active_slice(0..3);
+        app.refresh_after_history(cx);
+        app.selected_indices = (0..batch.len()).collect();
         app.selected_index = Some(0);
-        app.selected_item = Some(first.clone());
+        app.selected_item = Some(batch[0].clone());
         app.update_batch_summary();
         cx.notify();
+        (
+            batch.iter().map(|item| item.id).collect(),
+            batch.iter().map(|item| item.timestamp_epoch_ms).collect(),
+        )
+    });
+    render_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.batch_metadata.date.mixed,
+            "differing capture dates must be flagged mixed"
+        );
+        assert_eq!(app.batch_metadata.date.common, None);
+        assert_eq!(
+            app.caption.date_input_buffer, "Mixed",
+            "the batch inspector shows Mixed for differing dates"
+        );
+
+        // Invalid syntax must fail validation without touching any item.
+        app.start_date_input(cx);
+        app.caption.date_input_buffer = "not-a-date".to_string();
+        app.commit_date_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message
+                .as_deref()
+                .unwrap_or("")
+                .contains("Enter a date"),
+            "invalid date must surface a validation error, got {:?}",
+            app.error_message
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a rejected draft must not push an undo entry"
+        );
+    });
+    let unchanged: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().timestamp_epoch_ms)
+        .collect();
+    assert_eq!(
+        unchanged, originals,
+        "an invalid draft must not change any timestamp"
+    );
+
+    // A Mixed draft opens empty, so committing it untouched is a no-op.
+    view.update(vcx, |app, cx| {
+        app.dismiss_error(cx);
+        app.start_date_input(cx);
+        assert_eq!(
+            app.caption.date_input_buffer, "",
+            "a mixed draft starts empty so an unchanged Enter cannot rewrite N items"
+        );
+        app.commit_date_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "an untouched mixed draft must be a no-op"
+        );
+    });
+    let still_unchanged: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().timestamp_epoch_ms)
+        .collect();
+    assert_eq!(still_unchanged, originals);
+
+    view.update(vcx, |app, cx| {
+        app.start_date_input(cx);
+        app.caption.date_input_buffer = "2023-06-07 08:09:10".to_string();
+        app.commit_date_input(cx);
+    });
+    let applied: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().timestamp_epoch_ms)
+        .collect();
+    assert_eq!(
+        applied,
+        vec![test_epoch_ms("2023-06-07 08:09:10"); ids.len()],
+        "the batch date must apply to every selected item"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "applying to N items must create exactly one undo entry"
+        );
+        assert!(
+            matches!(
+                &app.undo.undo_stack[0],
+                crate::app::undo::UndoAction::BatchDate { .. }
+            ),
+            "the entry must be the grouped batch date variant"
+        );
+        assert!(!app.batch_metadata.date.mixed);
+        assert_eq!(
+            app.batch_metadata.date.common.as_deref(),
+            Some("2023-06-07 08:09:10")
+        );
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    let restored: Vec<_> = ids
+        .iter()
+        .map(|id| engine.get_item_by_id(*id).unwrap().timestamp_epoch_ms)
+        .collect();
+    assert_eq!(
+        restored, originals,
+        "one Cmd+Z must restore every date touched by the batch"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.undo.undo_stack.is_empty());
+        assert!(
+            app.batch_metadata.date.mixed,
+            "undo refreshes the mixed-value summary"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_batch_location_mixed_apply_validation_and_grouped_undo() {
+    let (temp_dir, engine) = seed_library("batch_location", 4);
+    let locations = [
+        (Some(48.8566), Some(2.3522)),
+        (Some(35.6762), Some(139.6503)),
+        (None, None),
+        (Some(51.5074), Some(-0.1278)),
+    ];
+    for (item, (lat, lon)) in engine.get_item_slice(0..4).iter().zip(locations) {
+        engine.set_location(item.id, lat, lon).unwrap();
+    }
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    // Read the selection from the rendered (sorted) view so the assertions do
+    // not depend on raw catalog order.
+    let (ids, originals): (Vec<_>, Vec<_>) = view.update(vcx, |app, cx| {
+        let batch = app.get_active_slice(0..3);
+        app.refresh_after_history(cx);
+        app.selected_indices = (0..batch.len()).collect();
+        app.selected_index = Some(0);
+        app.selected_item = Some(batch[0].clone());
+        app.update_batch_summary();
+        cx.notify();
+        (
+            batch.iter().map(|item| item.id).collect(),
+            batch
+                .iter()
+                .map(|item| (item.latitude, item.longitude))
+                .collect(),
+        )
+    });
+    render_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.batch_metadata.location.mixed,
+            "differing coordinates (including none) must be flagged mixed"
+        );
+        assert_eq!(
+            app.caption.location_input_buffer, "Mixed",
+            "the batch inspector shows Mixed for differing locations"
+        );
+
+        app.start_location_input(cx);
+        assert_eq!(
+            app.caption.location_input_buffer, "",
+            "a mixed location draft starts empty"
+        );
+        app.commit_location_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "an untouched mixed location draft must be a no-op"
+        );
+    });
+
+    view.update(vcx, |app, cx| {
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "not coordinates".to_string();
+        app.commit_location_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message
+                .as_deref()
+                .unwrap_or("")
+                .contains("Coordinates"),
+            "invalid coordinates must surface a validation error, got {:?}",
+            app.error_message
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a rejected location draft must not push an undo entry"
+        );
+    });
+    let unchanged: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            let item = engine.get_item_by_id(*id).unwrap();
+            (item.latitude, item.longitude)
+        })
+        .collect();
+    assert_eq!(
+        unchanged, originals,
+        "an invalid draft must not change any location"
+    );
+
+    let target = (40.7128, -74.0060);
+    view.update(vcx, |app, cx| {
+        app.dismiss_error(cx);
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "40.7128, -74.0060".to_string();
+        app.commit_location_input(cx);
+    });
+    let applied: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            let item = engine.get_item_by_id(*id).unwrap();
+            (item.latitude, item.longitude)
+        })
+        .collect();
+    assert_eq!(
+        applied,
+        vec![(Some(target.0), Some(target.1)); ids.len()],
+        "the batch location must apply to every selected item"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "applying to N items must create exactly one undo entry"
+        );
+        assert!(
+            matches!(
+                &app.undo.undo_stack[0],
+                crate::app::undo::UndoAction::BatchLocation { .. }
+            ),
+            "the entry must be the grouped batch location variant"
+        );
+        assert!(!app.batch_metadata.location.mixed);
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    let restored: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            let item = engine.get_item_by_id(*id).unwrap();
+            (item.latitude, item.longitude)
+        })
+        .collect();
+    assert_eq!(
+        restored, originals,
+        "one Cmd+Z must restore every location touched by the batch"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.undo.undo_stack.is_empty());
+        assert!(
+            app.batch_metadata.location.mixed,
+            "undo refreshes the mixed-value summary"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_batch_inspector_metadata_edit_ui_path() {
+    let (temp_dir, engine) = seed_library("batch_meta_ui", 3);
+    let annotated = engine.get_item_slice(0..1)[0].clone();
+    engine.set_title(annotated.id, Some("First")).unwrap();
+    engine
+        .set_timestamp(annotated.id, test_epoch_ms("2020-01-02 03:04:05"))
+        .unwrap();
+    engine
+        .set_location(annotated.id, Some(48.8566), Some(2.3522))
+        .unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    // Only the annotated item differs from its neighbour, so the title, date
+    // and location rows all show the Mixed marker.
+    let (first, second) = view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        let order = app.get_active_slice(0..app.get_active_count());
+        let first = order
+            .iter()
+            .find(|item| item.id == annotated.id)
+            .cloned()
+            .expect("the annotated item stays in the library");
+        let second = order
+            .iter()
+            .find(|item| item.id != annotated.id)
+            .cloned()
+            .expect("the seeded library has another item");
+        select_media_ids(app, &[first.id, second.id]);
+        cx.notify();
+        (first, second)
     });
     render_ui(vcx);
 
@@ -2125,6 +2466,22 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
     assert!(
         vcx.debug_bounds("batch-title-input-mixed").is_some(),
         "differing titles must show the Mixed marker"
+    );
+    assert!(
+        vcx.debug_bounds("batch-date-input").is_some(),
+        "the batch inspector must render the date editor"
+    );
+    assert!(
+        vcx.debug_bounds("batch-location-input").is_some(),
+        "the batch inspector must render the location editor"
+    );
+    assert!(
+        vcx.debug_bounds("batch-date-input-mixed").is_some(),
+        "differing dates must show the Mixed marker"
+    );
+    assert!(
+        vcx.debug_bounds("batch-location-input-mixed").is_some(),
+        "differing locations must show the Mixed marker"
     );
 
     focus_app(vcx, &view);
@@ -2153,6 +2510,57 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
             Some("shared")
         );
         assert_eq!(app.undo.undo_stack.len(), 1);
+    });
+
+    // Date and location use the same inline buffer path as title/caption, so
+    // they must be driveable through the rendered rows and the keyboard.
+    click(vcx, "batch-date-input");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.caption.date_input_active,
+            "clicking the batch date row opens the inline editor"
+        );
+    });
+    type_text(vcx, "2020-05-06");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        for id in [first.id, second.id] {
+            let item = engine.get_item_by_id(id).unwrap();
+            assert_eq!(
+                (item.year, item.month, item.day),
+                (2020, 5, 6),
+                "the typed batch date must reach every selected item"
+            );
+        }
+        assert_eq!(app.undo.undo_stack.len(), 2);
+    });
+
+    // The date rewrite can reorder the grid; re-anchor the selection by id.
+    view.update(vcx, |app, cx| {
+        select_media_ids(app, &[first.id, second.id]);
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    click(vcx, "batch-location-input");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.caption.location_input_active,
+            "clicking the batch location row opens the inline editor"
+        );
+    });
+    type_text(vcx, "40.7128, -74.0060");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        for id in [first.id, second.id] {
+            let item = engine.get_item_by_id(id).unwrap();
+            assert_eq!(
+                (item.latitude, item.longitude),
+                (Some(40.7128), Some(-74.0060)),
+                "the typed batch location must reach every selected item"
+            );
+        }
+        assert_eq!(app.undo.undo_stack.len(), 3);
     });
 
     let _ = std::fs::remove_dir_all(&temp_dir);

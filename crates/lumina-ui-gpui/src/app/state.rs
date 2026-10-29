@@ -186,6 +186,8 @@ pub struct CaptionState {
 pub enum BatchEditField {
     Title,
     Caption,
+    Date,
+    Location,
 }
 
 /// Bookkeeping for the batch inline editor.
@@ -214,6 +216,8 @@ pub struct BatchFieldSummary {
 pub struct BatchMetadataSummary {
     pub title: BatchFieldSummary,
     pub caption: BatchFieldSummary,
+    pub date: BatchFieldSummary,
+    pub location: BatchFieldSummary,
 }
 
 /// Pointer distance that turns a press into a drag rather than a click.

@@ -106,6 +106,10 @@ pub fn render_inspector_body(
             caption_input_buffer,
             title_input_active,
             title_input_buffer,
+            date_input_active,
+            date_input_buffer,
+            location_input_active,
+            location_input_buffer,
         );
     }
 

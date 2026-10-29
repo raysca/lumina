@@ -461,6 +461,17 @@ impl LuminaApp {
     }
 
     pub fn start_date_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            let existing = self.batch_draft(&self.batch_metadata.date);
+            self.caption.batch = crate::app::state::BatchEditState {
+                field: Some(crate::app::state::BatchEditField::Date),
+                initial_buffer: existing.clone(),
+            };
+            self.caption.date_input_active = true;
+            self.caption.date_input_buffer = existing;
+            cx.notify();
+            return;
+        }
         let current = self
             .selected_item
             .as_ref()
@@ -475,6 +486,10 @@ impl LuminaApp {
     }
 
     pub fn commit_date_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            self.commit_batch_date_input(cx);
+            return;
+        }
         let value = std::mem::take(&mut self.caption.date_input_buffer);
         self.caption.date_input_active = false;
         let Some(item) = self.selected_item.clone() else {
@@ -519,10 +534,26 @@ impl LuminaApp {
     pub fn cancel_date_input(&mut self, cx: &mut Context<Self>) {
         self.caption.date_input_active = false;
         self.caption.date_input_buffer.clear();
+        if self.caption.batch.field == Some(crate::app::state::BatchEditField::Date) {
+            self.caption.batch.field = None;
+            self.caption.batch.initial_buffer.clear();
+            self.update_batch_summary();
+        }
         cx.notify();
     }
 
     pub fn start_location_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            let existing = self.batch_draft(&self.batch_metadata.location);
+            self.caption.batch = crate::app::state::BatchEditState {
+                field: Some(crate::app::state::BatchEditField::Location),
+                initial_buffer: existing.clone(),
+            };
+            self.caption.location_input_active = true;
+            self.caption.location_input_buffer = existing;
+            cx.notify();
+            return;
+        }
         let buffer = self
             .selected_item
             .as_ref()
@@ -537,33 +568,22 @@ impl LuminaApp {
     }
 
     pub fn commit_location_input(&mut self, cx: &mut Context<Self>) {
+        if self.selected_indices.len() > 1 {
+            self.commit_batch_location_input(cx);
+            return;
+        }
         let value = std::mem::take(&mut self.caption.location_input_buffer);
         self.caption.location_input_active = false;
         let Some(item) = self.selected_item.clone() else {
             cx.notify();
             return;
         };
-        let trimmed = value.trim();
-        let (lat, lon) = if trimmed.is_empty() {
-            (None, None)
-        } else {
-            let parts: Vec<&str> = trimmed
-                .split(|c: char| c == ',' || c.is_whitespace())
-                .filter(|part| !part.is_empty())
-                .collect();
-            if parts.len() != 2 {
-                self.set_error("Enter coordinates as latitude, longitude", cx);
+        let (lat, lon) = match parse_location_coordinates(&value) {
+            Ok(coords) => coords,
+            Err(message) => {
+                self.set_error(message, cx);
                 return;
             }
-            let (Ok(lat), Ok(lon)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) else {
-                self.set_error("Coordinates must be decimal numbers", cx);
-                return;
-            };
-            if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
-                self.set_error("Latitude must be -90..90 and longitude -180..180", cx);
-                return;
-            }
-            (Some(lat), Some(lon))
         };
         if (lat, lon) == (item.latitude, item.longitude) {
             cx.notify();
@@ -603,11 +623,89 @@ impl LuminaApp {
     pub fn cancel_location_input(&mut self, cx: &mut Context<Self>) {
         self.caption.location_input_active = false;
         self.caption.location_input_buffer.clear();
+        if self.caption.batch.field == Some(crate::app::state::BatchEditField::Location) {
+            self.caption.batch.field = None;
+            self.caption.batch.initial_buffer.clear();
+            self.update_batch_summary();
+        }
         cx.notify();
+    }
+
+    fn commit_batch_date_input(&mut self, cx: &mut Context<Self>) {
+        let buffer = std::mem::take(&mut self.caption.date_input_buffer);
+        let initial = std::mem::take(&mut self.caption.batch.initial_buffer);
+        let field = self.caption.batch.field.take();
+        self.caption.date_input_active = false;
+        if field != Some(crate::app::state::BatchEditField::Date) {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        if buffer == initial {
+            // Untouched draft: never rewrite the whole selection.
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        let trimmed = buffer.trim().to_string();
+        if trimmed.is_empty() {
+            self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        self.apply_batch_date(&trimmed, cx);
+    }
+
+    fn commit_batch_location_input(&mut self, cx: &mut Context<Self>) {
+        let buffer = std::mem::take(&mut self.caption.location_input_buffer);
+        let initial = std::mem::take(&mut self.caption.batch.initial_buffer);
+        let field = self.caption.batch.field.take();
+        self.caption.location_input_active = false;
+        if field != Some(crate::app::state::BatchEditField::Location) {
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        if buffer == initial {
+            // Untouched draft: never rewrite the whole selection.
+            self.update_batch_summary();
+            cx.notify();
+            return;
+        }
+        let trimmed = buffer.trim().to_string();
+        self.apply_batch_location(&trimmed, cx);
     }
 }
 
-fn parse_edited_timestamp(input: &str, current_epoch_ms: i64) -> Option<i64> {
+/// Parses the inspector's location draft: decimal degrees as
+/// `latitude, longitude`, accepting comma or whitespace separators. An empty
+/// draft clears the location. Shared by the single-item and batch editors so
+/// both accept exactly the same syntax.
+pub(crate) fn parse_location_coordinates(
+    input: &str,
+) -> Result<(Option<f64>, Option<f64>), &'static str> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Ok((None, None));
+    }
+    let parts: Vec<&str> = trimmed
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.len() != 2 {
+        return Err("Enter coordinates as latitude, longitude");
+    }
+    let (Ok(lat), Ok(lon)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) else {
+        return Err("Coordinates must be decimal numbers");
+    };
+    if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+        return Err("Latitude must be -90..90 and longitude -180..180");
+    }
+    Ok((Some(lat), Some(lon)))
+}
+
+pub(crate) fn parse_edited_timestamp(input: &str, current_epoch_ms: i64) -> Option<i64> {
     let trimmed = input.trim();
     if let Ok(datetime) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
         return Some(datetime.and_utc().timestamp_millis());

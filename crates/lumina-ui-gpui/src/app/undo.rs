@@ -12,6 +12,13 @@ use crate::app::LuminaApp;
 
 const MAX_UNDO: usize = 100;
 
+/// Latitude/longitude pair used by grouped location edits.
+pub type Coordinates = (Option<f64>, Option<f64>);
+/// One (id, before, after) row in a grouped batch location edit.
+pub type BatchLocationChange = (MediaId, Coordinates, Coordinates);
+/// One (id, before) row used while rolling back a failed batch location edit.
+pub type AppliedLocationChange = (MediaId, Coordinates);
+
 /// Metadata field a grouped batch edit covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BatchField {
@@ -72,6 +79,16 @@ pub enum UndoAction {
         /// (id, before, after)
         changes: Vec<(MediaId, Option<String>, Option<String>)>,
     },
+    /// One grouped undo entry for a batch date edit.
+    /// (id, before_epoch_ms, after_epoch_ms)
+    BatchDate {
+        changes: Vec<(MediaId, i64, i64)>,
+    },
+    /// One grouped undo entry for a batch location edit.
+    /// (id, before, after)
+    BatchLocation {
+        changes: Vec<BatchLocationChange>,
+    },
 }
 
 #[derive(Default)]
@@ -95,6 +112,8 @@ impl UndoAction {
             UndoAction::BatchMetadata { changes, .. } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
+            UndoAction::BatchDate { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
+            UndoAction::BatchLocation { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::Tags { ids, .. } => ids.clone(),
         }
     }
@@ -114,6 +133,8 @@ impl UndoAction {
                 BatchField::Title => "batch title",
                 BatchField::Caption => "batch caption",
             },
+            UndoAction::BatchDate { .. } => "batch date",
+            UndoAction::BatchLocation { .. } => "batch location",
         }
     }
 
@@ -190,6 +211,19 @@ impl UndoAction {
                             engine.set_caption(*id, value.as_deref().unwrap_or(""))?
                         }
                     }
+                }
+                Ok(())
+            }
+            UndoAction::BatchDate { changes } => {
+                for (id, b, a) in changes {
+                    engine.set_timestamp(*id, if before { *b } else { *a })?;
+                }
+                Ok(())
+            }
+            UndoAction::BatchLocation { changes } => {
+                for (id, b, a) in changes {
+                    let (lat, lon) = if before { b } else { a };
+                    engine.set_location(*id, *lat, *lon)?;
                 }
                 Ok(())
             }
