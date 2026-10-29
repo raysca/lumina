@@ -47,17 +47,67 @@ impl LuminaApp {
         }
     }
 
-    /// Zooms the image viewer by `delta` (used by scroll-wheel/pinch).
-    pub fn zoom_viewer_by(&mut self, delta: f32, cx: &mut Context<Self>) {
-        if self
-            .selected_item
+    /// True when the viewer is showing a video, where zoom/pan is disabled so
+    /// the wheel stays available to the transport controls.
+    fn viewer_zoom_disabled_for_video(&self) -> bool {
+        self.selected_item
             .as_ref()
             .is_some_and(|item| item.media_type == MediaType::Video)
-        {
+    }
+
+    /// Zooms the image viewer by `delta` (used by scroll-wheel/pinch).
+    pub fn zoom_viewer_by(&mut self, delta: f32, cx: &mut Context<Self>) {
+        if self.viewer_zoom_disabled_for_video() {
             return;
         }
         self.viewer_state
             .set_zoom(self.viewer_state.zoom_scale + delta);
+        cx.notify();
+    }
+
+    /// Zoom by `delta` anchored to the content point under the wheel cursor.
+    ///
+    /// `cursor` is the wheel position in window-content pixels
+    /// (`ScrollWheelEvent::position`) and `window_viewport` is the drawable
+    /// window size (`Window::viewport_size()`). Both are supplied by the
+    /// viewport's scroll handler.
+    ///
+    /// Approximation: GPUI 0.2.2 does not expose the laid-out
+    /// `media-canvas-fit` bounds to a scroll listener, so the viewer canvas
+    /// center is taken as the center of the window content area. In the
+    /// fullscreen viewer the canvas spans the window width and is inset only by
+    /// the top bar and bottom tray, so the anchor lands within a few pixels; in
+    /// Split/Viewer pane layouts the canvas is offset by the sidebar and year
+    /// rail, so the anchor is directionally correct rather than pixel-exact.
+    ///
+    /// The wheel step, 1.0..5.0 clamp, and Fit-recenters rule all come from
+    /// `ViewerState::zoom_at`, so keyboard/HUD zoom is unchanged.
+    ///
+    /// When geometry is unusable (zero-sized or non-finite viewport, non-finite
+    /// cursor) it falls back to center-anchored zoom rather than inventing an
+    /// anchor.
+    pub fn zoom_viewer_at(
+        &mut self,
+        delta: f32,
+        cursor: (f32, f32),
+        window_viewport: (f32, f32),
+        cx: &mut Context<Self>,
+    ) {
+        if self.viewer_zoom_disabled_for_video() {
+            return;
+        }
+        let has_geometry = cursor.0.is_finite()
+            && cursor.1.is_finite()
+            && window_viewport.0.is_finite()
+            && window_viewport.1.is_finite()
+            && window_viewport.0 > 0.0
+            && window_viewport.1 > 0.0;
+        if !has_geometry {
+            self.zoom_viewer_by(delta, cx);
+            return;
+        }
+        let canvas_center = (window_viewport.0 * 0.5, window_viewport.1 * 0.5);
+        self.viewer_state.zoom_at(delta, cursor, canvas_center);
         cx.notify();
     }
 

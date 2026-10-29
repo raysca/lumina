@@ -4,6 +4,7 @@ use lumina_core::MediaType;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::viewer_state::ZOOM_STEP;
 
 pub struct ViewerViewport;
 
@@ -137,7 +138,7 @@ impl ViewerViewport {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .on_scroll_wheel(cx.listener(|this, e: &ScrollWheelEvent, _w, cx| {
+                    .on_scroll_wheel(cx.listener(|this, e: &ScrollWheelEvent, w, cx| {
                         let dy = match e.delta {
                             ScrollDelta::Pixels(p) => f32::from(p.y),
                             ScrollDelta::Lines(p) => p.y * 10.0,
@@ -145,7 +146,19 @@ impl ViewerViewport {
                         if dy.abs() < 0.01 {
                             return;
                         }
-                        this.zoom_viewer_by(dy.signum() * 0.25, cx);
+                        // Keep the content point under the cursor fixed while
+                        // zooming. The position is in window-content pixels and
+                        // the window viewport stands in for canvas geometry; see
+                        // LuminaApp::zoom_viewer_at for the approximation.
+                        eprintln!("DEBUG scroll handler dy={dy} pos={:?}", e.position);
+                        let cursor = (f32::from(e.position.x), f32::from(e.position.y));
+                        let viewport_size = w.viewport_size();
+                        eprintln!("DEBUG viewport={viewport_size:?}");
+                        let viewport = (
+                            f32::from(viewport_size.width),
+                            f32::from(viewport_size.height),
+                        );
+                        this.zoom_viewer_at(dy.signum() * ZOOM_STEP, cursor, viewport, cx);
                     }))
                     .child(if let Some(render_img) = preview_image {
                         if is_zoomed {

@@ -101,6 +101,63 @@ impl ViewerState {
         self.set_zoom(self.zoom_scale + ZOOM_STEP);
     }
 
+    /// Zooms by `delta` around the content point under the cursor.
+    ///
+    /// `cursor` is the wheel position and `canvas_center` is the center of the
+    /// viewer canvas, both in window-content pixels. The renderer applies a
+    /// uniform scale about the canvas center plus `pan_offset`, so the content
+    /// point `anchor = cursor - canvas_center` stays under the cursor when
+    ///
+    /// ```text
+    /// pan' = anchor + (pan - anchor) * (scale' / scale)
+    /// ```
+    ///
+    /// Non-finite input is ignored rather than poisoning zoom/pan. Returning to
+    /// Fit keeps the existing recenter rule, and any resulting pan is clamped to
+    /// the same range as dragging.
+    pub fn zoom_at(&mut self, delta: f32, cursor: (f32, f32), canvas_center: (f32, f32)) {
+        if !delta.is_finite()
+            || !cursor.0.is_finite()
+            || !cursor.1.is_finite()
+            || !canvas_center.0.is_finite()
+            || !canvas_center.1.is_finite()
+        {
+            return;
+        }
+
+        // A corrupt scale should recover instead of propagating NaN into pan.
+        if !self.zoom_scale.is_finite() {
+            self.zoom_scale = ZOOM_MIN_SCALE;
+            self.pan_offset = (0.0, 0.0);
+        }
+
+        let scale_before = self.zoom_scale;
+        let scale_after = (scale_before + delta).clamp(ZOOM_MIN_SCALE, ZOOM_MAX_SCALE);
+        if !scale_after.is_finite() || (scale_after - scale_before).abs() < f32::EPSILON {
+            return;
+        }
+
+        let ratio = scale_after / scale_before;
+        let anchor = (cursor.0 - canvas_center.0, cursor.1 - canvas_center.1);
+        let pan = (
+            anchor.0 + (self.pan_offset.0 - anchor.0) * ratio,
+            anchor.1 + (self.pan_offset.1 - anchor.1) * ratio,
+        );
+        if !pan.0.is_finite() || !pan.1.is_finite() {
+            return;
+        }
+
+        self.zoom_scale = scale_after;
+        if (scale_after - ZOOM_MIN_SCALE).abs() < 0.01 {
+            // Fit always recenters, matching `set_zoom`.
+            self.zoom_scale = ZOOM_MIN_SCALE;
+            self.pan_offset = (0.0, 0.0);
+        } else {
+            self.pan_offset = pan;
+            self.clamp_pan();
+        }
+    }
+
     pub fn zoom_out(&mut self) {
         self.set_zoom(self.zoom_scale - ZOOM_STEP);
     }
@@ -301,5 +358,132 @@ mod tests {
         // A corrupt/non-finite scale must not render "NaN%" or "0%".
         state.zoom_scale = f32::NAN;
         assert_eq!(state.zoom_label(), "Fit");
+    }
+
+    /// Content-space coordinate currently sitting under `anchor` (cursor minus
+    /// canvas center), derived from the same transform the renderer applies.
+    fn anchored_content_point(state: &ViewerState, anchor: (f32, f32)) -> (f32, f32) {
+        (
+            (anchor.0 - state.pan_offset.0) / state.zoom_scale,
+            (anchor.1 - state.pan_offset.1) / state.zoom_scale,
+        )
+    }
+
+    #[test]
+    fn test_viewer_zoom_at_cursor_moves_pan_toward_cursor() {
+        let mut state = ViewerState::default();
+        let canvas_center = (400.0, 300.0);
+        // Cursor right of and above the canvas center.
+        let cursor = (640.0, 180.0);
+        let anchor = (cursor.0 - canvas_center.0, cursor.1 - canvas_center.1);
+        let content_before = anchored_content_point(&state, anchor);
+
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+
+        assert_eq!(state.zoom_scale, 1.25);
+        assert!(
+            state.pan_offset.0 < 0.0,
+            "zooming in with the cursor right of center must shift content left, got {:?}",
+            state.pan_offset
+        );
+        assert!(
+            state.pan_offset.1 > 0.0,
+            "zooming in with the cursor above center must shift content down, got {:?}",
+            state.pan_offset
+        );
+
+        let content_after = anchored_content_point(&state, anchor);
+        assert!(
+            (content_after.0 - content_before.0).abs() < 0.01
+                && (content_after.1 - content_before.1).abs() < 0.01,
+            "the content point under the cursor must stay anchored: before={content_before:?} after={content_after:?}"
+        );
+    }
+
+    #[test]
+    fn test_viewer_zoom_out_preserves_cursor_anchor() {
+        let mut state = ViewerState::default();
+        let canvas_center = (400.0, 300.0);
+        let cursor = (640.0, 180.0);
+        let anchor = (cursor.0 - canvas_center.0, cursor.1 - canvas_center.1);
+
+        state.set_zoom(2.0);
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+        assert_eq!(state.zoom_scale, 2.25);
+        let content_before = anchored_content_point(&state, anchor);
+
+        state.zoom_at(-ZOOM_STEP, cursor, canvas_center);
+        assert_eq!(state.zoom_scale, 2.0, "zoom out must return to 2x");
+        let content_after = anchored_content_point(&state, anchor);
+        assert!(
+            (content_after.0 - content_before.0).abs() < 0.01
+                && (content_after.1 - content_before.1).abs() < 0.01,
+            "zooming out must keep the same anchor: before={content_before:?} after={content_after:?}"
+        );
+
+        // Stepping back in at the same cursor restores the previous pan exactly.
+        let pan_at_two = state.pan_offset;
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+        state.zoom_at(-ZOOM_STEP, cursor, canvas_center);
+        assert!(
+            (state.pan_offset.0 - pan_at_two.0).abs() < 0.01
+                && (state.pan_offset.1 - pan_at_two.1).abs() < 0.01,
+            "in/out at one cursor must be reversible: expected {pan_at_two:?}, got {:?}",
+            state.pan_offset
+        );
+    }
+
+    #[test]
+    fn test_viewer_zoom_at_fit_resets_pan() {
+        let mut state = ViewerState::default();
+        let canvas_center = (400.0, 300.0);
+        let cursor = (700.0, 200.0);
+
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+        assert_eq!(state.zoom_scale, 1.5);
+        assert_ne!(state.pan_offset, (0.0, 0.0), "zooming in must move pan");
+
+        // Zooming out past Fit clamps to 1.0 and recenters, like the HUD reset.
+        state.zoom_at(-10.0, cursor, canvas_center);
+        assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
+        assert_eq!(state.pan_offset, (0.0, 0.0), "Fit must clear pan");
+
+        // Starting the next zoom from Fit is still anchored to the cursor.
+        state.zoom_at(ZOOM_STEP, cursor, canvas_center);
+        assert_eq!(state.zoom_scale, 1.25);
+        assert!(state.pan_offset.0 < 0.0 && state.pan_offset.1 > 0.0);
+    }
+
+    #[test]
+    fn test_viewer_zoom_at_clamping_stays_finite() {
+        let mut state = ViewerState::default();
+        let canvas_center = (400.0, 300.0);
+
+        // A cursor far outside the canvas anchors a huge pan; the existing pan
+        // clamp must bound it without producing NaN or infinity.
+        state.zoom_at(ZOOM_STEP, (10_000.0, -10_000.0), canvas_center);
+        let max_pan = (state.zoom_scale - ZOOM_MIN_SCALE) * 800.0;
+        assert!(state.pan_offset.0.is_finite() && state.pan_offset.1.is_finite());
+        assert!(state.pan_offset.0 >= -max_pan && state.pan_offset.0 <= max_pan);
+        assert!(state.pan_offset.1 >= -max_pan && state.pan_offset.1 <= max_pan);
+
+        // Zooming in at the ceiling is a no-op, and non-finite input is ignored.
+        state.set_zoom(ZOOM_MAX_SCALE);
+        let pan_at_max = state.pan_offset;
+        state.zoom_at(ZOOM_STEP, (900.0, 700.0), canvas_center);
+        assert_eq!(state.zoom_scale, ZOOM_MAX_SCALE);
+        assert_eq!(state.pan_offset, pan_at_max);
+        state.zoom_at(f32::NAN, (900.0, 700.0), canvas_center);
+        state.zoom_at(ZOOM_STEP, (f32::INFINITY, 0.0), canvas_center);
+        state.zoom_at(ZOOM_STEP, (0.0, 0.0), (f32::NAN, 0.0));
+        assert_eq!(state.zoom_scale, ZOOM_MAX_SCALE);
+        assert_eq!(state.pan_offset, pan_at_max);
+
+        // A corrupt scale is repaired by the next zoomed event.
+        state.zoom_scale = f32::NAN;
+        state.zoom_at(-6.0, (500.0, 300.0), canvas_center);
+        assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
+        assert!(state.pan_offset.0.is_finite() && state.pan_offset.1.is_finite());
     }
 }
