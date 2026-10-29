@@ -429,25 +429,58 @@ impl LuminaApp {
 
         // 6. Toolbar search bar input focus
         if self.search_focused {
-            if key == "escape" || key == "enter" || key == "return" {
-                self.search_focused = false;
-                cx.notify();
+            if key == "escape" {
+                // Escape layers: first hide the suggestion dropdown, then blur.
+                if !self.search_suggestions.dismissed && !self.search_suggestion_items().is_empty()
+                {
+                    self.dismiss_search_suggestions();
+                    cx.notify();
+                } else {
+                    self.search_focused = false;
+                    self.search_suggestions.dismissed = false;
+                    self.search_suggestions.selected = None;
+                    cx.notify();
+                }
+                return true;
+            }
+            if key == "enter" || key == "return" {
+                if !self.search_suggestions.dismissed {
+                    if let Some(index) = self.search_suggestions.selected {
+                        let suggestion_count = self.search_suggestion_items().len();
+                        if index < suggestion_count {
+                            self.apply_search_suggestion_at(index, cx);
+                            self.record_current_search();
+                            cx.notify();
+                            return true;
+                        }
+                    }
+                }
+                // No highlighted suggestion: keep the existing commit behavior.
+                self.commit_search(cx);
+                return true;
+            }
+            if key == "up" || key == "down" {
+                // Moving the highlight must not edit the query.
+                self.move_search_suggestion(if key == "up" { -1 } else { 1 }, cx);
                 return true;
             }
             if key == "backspace" {
                 self.search_query.pop();
+                self.reset_search_suggestions();
                 self.clear_selection(cx);
                 return true;
             }
             if !cmd_or_ctrl {
                 if key == "space" {
                     self.search_query.push(' ');
+                    self.reset_search_suggestions();
                     self.clear_selection(cx);
                     return true;
                 } else if key.chars().count() == 1
                     && !key.chars().next().is_some_and(|c| c.is_control())
                 {
                     self.search_query.push_str(key);
+                    self.reset_search_suggestions();
                     self.clear_selection(cx);
                     return true;
                 }

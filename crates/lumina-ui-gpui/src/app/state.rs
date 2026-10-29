@@ -59,6 +59,19 @@ impl SessionSaveState {
     }
 }
 
+/// Toolbar search suggestion dropdown state.
+///
+/// Candidate suggestions are derived on demand from the cached recent-search
+/// list and cached library tag counts, so nothing here requires SQL. Only the
+/// dismissal flag and the keyboard highlight need to be stored.
+#[derive(Debug, Default)]
+pub struct SearchSuggestionState {
+    /// True after Escape hides the dropdown while the field keeps focus.
+    pub dismissed: bool,
+    /// Highlighted suggestion row; `None` until the user presses an arrow key.
+    pub selected: Option<usize>,
+}
+
 /// Hardware-accelerated video playback state.
 #[derive(Default)]
 pub struct VideoPlaybackState {
@@ -193,6 +206,7 @@ pub struct LuminaApp {
     pub selection: AlbumSelection,
     pub search_query: String,
     pub search_focused: bool,
+    pub search_suggestions: SearchSuggestionState,
     pub active_year: Option<i32>,
     /// Bounded Back/Forward trail of browsing destinations (album, search,
     /// year, selection, viewer). Transient overlays are never recorded.
@@ -272,9 +286,13 @@ pub struct LuminaApp {
 impl LuminaApp {
     pub fn new(cx: &mut Context<Self>) -> Self {
         #[cfg(test)]
-        let config = AppConfig::default();
+        let mut config = AppConfig::default();
         #[cfg(not(test))]
-        let config = AppConfig::load();
+        let mut config = AppConfig::load();
+        // Keep stale or hand-edited config files from unbounded history growth.
+        config
+            .recent_searches
+            .truncate(crate::app::library::MAX_RECENT_SEARCHES);
         let default_pics =
             dirs::picture_dir().or_else(|| dirs::home_dir().map(|h| h.join("Pictures")));
         let has_desktop_pics = default_pics
@@ -342,6 +360,7 @@ impl LuminaApp {
             selection: AlbumSelection::AllLibrary,
             search_query: String::new(),
             search_focused: false,
+            search_suggestions: SearchSuggestionState::default(),
             active_year: None,
             navigation_history: NavigationHistory::new(NavigationSnapshot::default()),
             pending_restore: Some(config.restored_session()),

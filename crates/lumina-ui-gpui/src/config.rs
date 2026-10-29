@@ -153,6 +153,11 @@ pub struct AppConfig {
     /// Database id of the selected media item when the config was saved.
     #[serde(default)]
     pub last_selected_media_id: Option<u64>,
+    /// Most recent committed toolbar searches, newest first. The app trims and
+    /// bounds this list when recording; `serde(default)` keeps existing config
+    /// files loading and keeps tests off the real config path.
+    #[serde(default)]
+    pub recent_searches: Vec<String>,
 }
 
 fn default_sidebar_width() -> f32 {
@@ -205,6 +210,7 @@ impl Default for AppConfig {
             last_search_query: None,
             last_active_year: None,
             last_selected_media_id: None,
+            recent_searches: Vec::new(),
         }
     }
 }
@@ -454,6 +460,37 @@ mod tests {
                 selected_media_id: Some(42),
             },
             "a saved session must round-trip through the config file"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_recent_searches_default_and_roundtrip() {
+        assert!(
+            AppConfig::default().recent_searches.is_empty(),
+            "a new config must start without search history"
+        );
+
+        let path = temp_config_path("recent_searches");
+        let cfg = AppConfig {
+            recent_searches: vec!["camera:sony".to_string(), "is:favorite".to_string()],
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.recent_searches,
+            vec!["camera:sony".to_string(), "is:favorite".to_string()],
+            "recent searches must round-trip through the config file"
+        );
+
+        // Older config files predate the field and must still load.
+        std::fs::write(&path, br#"{"last_view":"all"}"#).unwrap();
+        assert!(
+            AppConfig::load_from(&path).recent_searches.is_empty(),
+            "a missing recent_searches key must default to an empty history"
         );
 
         let _ = std::fs::remove_file(&path);

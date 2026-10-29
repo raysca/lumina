@@ -1190,3 +1190,158 @@ fn ui_automation_navigation_edge_no_ops() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
+    let (temp_dir, engine) = seed_library("search_suggestions", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert!(app.search_focused, "clicking the field focuses search");
+        assert!(
+            !app.search_suggestions.dismissed,
+            "focusing the field opens suggestions"
+        );
+        assert!(
+            !app.search_suggestion_items().is_empty(),
+            "an empty query offers recent searches and operators"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("search-suggestions").is_some(),
+        "the dropdown must paint under the focused field"
+    );
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "the first suggestion row must be painted"
+    );
+
+    type_text(vcx, "is:f");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "is:f");
+        let items = app.search_suggestion_items();
+        assert!(
+            items.iter().any(|item| item == "is:favorite"),
+            "the matching operator must be suggested: {items:?}"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| item.to_lowercase().contains("is:f")),
+            "suggestions must be filtered by the typed token: {items:?}"
+        );
+    });
+
+    keystrokes(vcx, "down");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_suggestions.selected,
+            Some(0),
+            "ArrowDown highlights the first suggestion"
+        );
+        assert_eq!(
+            app.search_query, "is:f",
+            "moving the highlight must not edit the query"
+        );
+    });
+
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "is:favorite",
+            "Enter applies the highlighted suggestion"
+        );
+        assert!(
+            app.search_focused,
+            "applying a suggestion keeps the field focused for refinement"
+        );
+        assert!(
+            app.search_suggestions.dismissed,
+            "applying a suggestion closes the dropdown"
+        );
+        assert_eq!(
+            app.config.recent_searches.first().map(String::as_str),
+            Some("is:favorite"),
+            "an applied suggestion is a committed search"
+        );
+    });
+
+    // Escape hides the open dropdown first and only the second Escape blurs.
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert!(!app.search_suggestions.dismissed);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_focused,
+            "the first Escape only closes the dropdown"
+        );
+        assert!(app.search_suggestions.dismissed);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.search_focused,
+            "the second Escape unfocuses the search field"
+        );
+    });
+
+    // Committing the same query again must not duplicate recent history.
+    click(vcx, "search-input");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.search_focused, "Enter without a highlight unfocuses");
+        assert_eq!(
+            app.config
+                .recent_searches
+                .iter()
+                .filter(|entry| entry.eq_ignore_ascii_case("is:favorite"))
+                .count(),
+            1,
+            "recent searches dedupe case-insensitively"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_search_suggestion_click_applies_without_blurring() {
+    let (temp_dir, engine) = seed_library("search_suggestion_click", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        app.config.recent_searches = vec!["camera:sony".to_string(), "is:video".to_string()];
+    });
+
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_suggestion_items().first().map(String::as_str),
+            Some("camera:sony"),
+            "the newest recent search is the first empty-query suggestion"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "the recent-search row must be painted"
+    );
+
+    click(vcx, "search-suggestion-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "camera:sony",
+            "clicking a suggestion applies it"
+        );
+        assert!(
+            app.search_focused,
+            "clicking inside the dropdown must not blur the search field"
+        );
+        assert!(app.search_suggestions.dismissed);
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

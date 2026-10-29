@@ -45,7 +45,7 @@ impl SearchBarView {
             "Search — try camera:sony iso:>3200".to_string()
         };
 
-        div()
+        let field = div()
             .id("search-input-box")
             .debug_selector(|| "search-input".to_string())
             .w(px(280.0))
@@ -67,6 +67,7 @@ impl SearchBarView {
             .text_xs()
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.search_focused = true;
+                this.reset_search_suggestions();
                 cx.notify();
             }))
             .child(crate::icons::render_icon(
@@ -122,7 +123,86 @@ impl SearchBarView {
                                 this.clear_search(cx);
                             })),
                     )
-            }))
+            }));
+
+        // Relative wrapper so the suggestion dropdown can anchor under the
+        // field and paint above the filter bar.
+        div()
+            .relative()
+            .w(px(280.0))
+            .child(field)
+            .children(Self::render_suggestions(this, cx))
+    }
+
+    /// Compact suggestion dropdown anchored under the focused search field.
+    ///
+    /// The panel is deferred so it paints after the filter bar even though it is
+    /// a toolbar child; the occluding card keeps pointer events off the grid
+    /// beneath it.
+    fn render_suggestions(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
+        if !this.search_focused || this.search_suggestions.dismissed {
+            return None;
+        }
+        let items = this.search_suggestion_items();
+        if items.is_empty() {
+            return None;
+        }
+        let selected = this.search_suggestions.selected;
+
+        let panel = div()
+            .id("search-suggestions-panel")
+            .debug_selector(|| "search-suggestions".to_string())
+            .absolute()
+            .top(px(30.0))
+            .right(px(0.0))
+            .w(px(320.0))
+            .p(px(4.0))
+            .bg(theme::bg_pane())
+            .border_1()
+            .border_color(theme::border())
+            .rounded(px(6.0))
+            .shadow_2xl()
+            .occlude()
+            .flex()
+            .flex_col()
+            .gap(px(1.0))
+            .on_mouse_down(MouseButton::Left, |_event, _window, cx| {
+                // Keep the field focused and the dropdown mounted while the
+                // pointer is inside the panel.
+                cx.stop_propagation();
+            })
+            .children(items.into_iter().enumerate().map(|(index, suggestion)| {
+                let active = selected == Some(index);
+                let row = div()
+                    .id(("search-suggestion-row", index))
+                    .debug_selector(move || format!("search-suggestion-{index}"))
+                    .h(px(24.0))
+                    .px_2()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .rounded(px(4.0))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_xs()
+                    .cursor_pointer();
+                let row = if active {
+                    row.bg(theme::selection_bg())
+                        .text_color(theme::selection_fg())
+                        .hover(|style| style.bg(theme::selection_bg_hover()))
+                } else {
+                    row.text_color(theme::text())
+                        .hover(|style| style.bg(theme::bg_control_hover()))
+                };
+                row.child(suggestion).on_click(cx.listener(
+                    move |this, _event: &ClickEvent, _window, cx| {
+                        cx.stop_propagation();
+                        this.apply_search_suggestion_at(index, cx);
+                    },
+                ))
+            }));
+
+        Some(gpui::deferred(panel).with_priority(1).into_any_element())
     }
 
     /// Filter bar under the toolbar: quick filters, view fit/square toggle, zoom slider.
