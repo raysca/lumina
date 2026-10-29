@@ -210,6 +210,7 @@ impl LuminaApp {
             self.refresh_after_history(cx);
             self.sync_metadata_sidecars(&affected);
             self.set_last_action(format!("Undid {label}"));
+            self.announce_history(format!("Undid {label}"), false, cx);
         } else {
             self.undo.undo_stack.push(action);
         }
@@ -229,10 +230,23 @@ impl LuminaApp {
             self.refresh_after_history(cx);
             self.sync_metadata_sidecars(&affected);
             self.set_last_action(format!("Redid {label}"));
+            // Redo pushes the action back onto the undo stack, so the toast can
+            // offer Undo to reverse it again.
+            self.announce_history(format!("Redid {label}"), true, cx);
         } else {
             self.undo.redo_stack.push(action);
         }
         cx.notify();
+    }
+
+    /// Mirrors a successful history step into the toast channel so keyboard
+    /// undo/redo gets the same feedback as other reversible actions.
+    fn announce_history(&mut self, message: String, undo_available: bool, cx: &mut Context<Self>) {
+        if undo_available {
+            self.show_undo_toast(message, cx);
+        } else {
+            self.show_toast(message, cx);
+        }
     }
 
     fn apply_history_action(

@@ -192,6 +192,7 @@ impl Render for LuminaApp {
                 .font_family(theme::FONT_SANS)
                 .flex()
                 .flex_col()
+                .relative()
                 .child(self.render_error_banner(cx))
                 .child(OnboardingView::render(
                     cx.listener(|this, _event: &ClickEvent, _window, cx| {
@@ -205,6 +206,7 @@ impl Render for LuminaApp {
                     }),
                     self.has_desktop_pics,
                 ))
+                .child(self.render_toast_overlay(cx))
                 .into_any_element();
         }
 
@@ -413,6 +415,8 @@ impl Render for LuminaApp {
             .child(self.render_status_bar(total_count))
             // 5. Floating Multi-Select Action Dock (Bottom Center)
             .child(self.render_action_dock(is_fullscreen_viewer, cx))
+            // 5b. Transient success toast (Bottom Right), below modals
+            .child(self.render_toast_overlay(cx))
             // 6. Fullscreen Detail Viewer Modal
             .child(self.render_viewer_modal(cx))
             // 7. Visual Smart Album Builder Modal

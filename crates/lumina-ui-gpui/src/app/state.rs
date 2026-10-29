@@ -150,6 +150,8 @@ pub struct LuminaApp {
     pub error_message: Option<String>,
     /// Most recent action feedback shown in the status bar.
     pub last_action: Option<String>,
+    /// Transient success/info toast shown bottom-right (errors stay in the banner).
+    pub toast: crate::views::toast::ToastState,
     /// Keyboard shortcut cheat sheet visibility.
     pub shortcuts_overlay_open: bool,
     /// Last persisted window bounds: (x, y, width, height).
@@ -283,6 +285,7 @@ impl LuminaApp {
             card_fit_mode: config.card_fit_mode,
             error_message: None,
             last_action: None,
+            toast: crate::views::toast::ToastState::default(),
             shortcuts_overlay_open: false,
             window_bounds: config.restored_window_bounds(),
             window_bounds_subscription: None,

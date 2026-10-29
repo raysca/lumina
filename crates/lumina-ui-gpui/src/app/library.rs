@@ -256,7 +256,7 @@ impl LuminaApp {
                 }
                 self.set_last_action(summary);
                 if report.failed.is_empty() {
-                    cx.notify();
+                    self.show_toast(format!("Exported {} item(s)", report.exported), cx);
                 } else {
                     let details = report
                         .failed
@@ -312,7 +312,13 @@ impl LuminaApp {
                         cx,
                     );
                 } else {
-                    cx.notify();
+                    self.show_toast(
+                        format!(
+                            "Imported {} sidecar(s), {} updated",
+                            report.imported, report.updated
+                        ),
+                        cx,
+                    );
                 }
             }
             Err(err) => self.set_error(format!("XMP import failed: {err}"), cx),

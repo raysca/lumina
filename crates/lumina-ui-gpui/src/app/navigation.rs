@@ -45,7 +45,14 @@ impl LuminaApp {
                     changes: vec![(item.id, item.is_favorite, new_fav)],
                 });
                 self.refresh_album_counts();
-                cx.notify();
+                self.show_undo_toast(
+                    if new_fav {
+                        "Added to favorites"
+                    } else {
+                        "Removed from favorites"
+                    },
+                    cx,
+                );
             }
             Err(err) => self.set_error(format!("Could not update favorite: {err}"), cx),
         }
@@ -440,7 +447,14 @@ impl LuminaApp {
                 }
                 self.push_undo(UndoAction::Favorite { changes });
                 self.refresh_album_counts();
-                cx.notify();
+                self.show_undo_toast(
+                    if new_fav {
+                        format!("Added {} item(s) to favorites", ids.len())
+                    } else {
+                        format!("Removed {} item(s) from favorites", ids.len())
+                    },
+                    cx,
+                );
             }
             Err(err) => self.set_error(format!("Could not update favorites: {err}"), cx),
         }
