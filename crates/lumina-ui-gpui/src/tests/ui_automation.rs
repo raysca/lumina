@@ -987,3 +987,206 @@ fn ui_automation_resize_updates_persisted_bounds() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn ui_automation_navigation_album_back_forward() {
+    let (temp_dir, engine) = seed_library("nav_album", 8);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.select_album(
+            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
+            cx,
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
+            "the album change must reach the browsing destination"
+        );
+    });
+
+    click(vcx, "nav-back");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "Back must return to the previous album"
+        );
+    });
+    click(vcx, "nav-forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
+            "Forward must revisit the album"
+        );
+    });
+
+    // Edge: nothing follows the newest entry, so Forward is a disabled no-op.
+    click(vcx, "nav-forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
+            "Forward at the end of the trail must be a no-op"
+        );
+    });
+    click(vcx, "nav-back");
+    click(vcx, "nav-back");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "Back at the oldest entry must stay put"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_navigation_search_back() {
+    let (temp_dir, engine) = seed_library("nav_search", 8);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| app.set_search_query("is:video", cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "is:video");
+    });
+
+    click(vcx, "nav-back");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "Back must restore the pre-search view"
+        );
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+    });
+    click(vcx, "nav-forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "is:video",
+            "Forward must restore the search destination"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_navigation_viewer_back_closes_and_forward_reopens() {
+    let (temp_dir, engine) = seed_library("nav_viewer", 8);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let card = leak(format!("media-card-{}", item.id.0));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, card);
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "double-click must open the viewer"
+        );
+        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-[");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.is_fullscreen_viewer,
+            "Back from the viewer must close it and return to the grid"
+        );
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.id),
+            Some(item.id),
+            "Back must keep the grid selection on the item that was open"
+        );
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-]");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "Forward must reopen the viewer on the same destination"
+        );
+        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
+    });
+
+    // Close again, then prove the oldest edge cannot trap the user.
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "cmd-[");
+    view.update(vcx, |app, _| {
+        assert!(!app.is_fullscreen_viewer);
+        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_navigation_edge_no_ops() {
+    let (temp_dir, engine) = seed_library("nav_edges", 8);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "cmd-]");
+    click(vcx, "nav-back");
+    click(vcx, "nav-forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+        assert!(app.search_query.is_empty());
+        assert!(!app.is_fullscreen_viewer);
+        assert!(app.selected_item.is_none());
+    });
+
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Trash, cx);
+    });
+    render_ui(vcx);
+    click(vcx, "nav-forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Trash,
+            "Forward at the newest entry must not move"
+        );
+    });
+
+    click(vcx, "nav-back");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-[");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "Cmd+[ at the oldest entry must stay put"
+        );
+    });
+    keystrokes(vcx, "cmd-]");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Trash,
+            "Cmd+] must still move Forward after a Back"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

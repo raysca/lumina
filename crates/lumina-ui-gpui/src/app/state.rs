@@ -7,6 +7,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::app::navigation::{NavigationHistory, NavigationSnapshot};
 use crate::app::types::{
     BatchSelectionSummary, DeleteConfirmState, LayoutMode, TagSortOrder, UiMessage,
 };
@@ -182,6 +183,9 @@ pub struct LuminaApp {
     pub search_query: String,
     pub search_focused: bool,
     pub active_year: Option<i32>,
+    /// Bounded Back/Forward trail of browsing destinations (album, search,
+    /// year, selection, viewer). Transient overlays are never recorded.
+    pub(crate) navigation_history: NavigationHistory,
     /// Captured from AppConfig at startup and applied once after the initial
     /// library scan. Cleared by user-initiated open_library.
     pub(crate) pending_restore: Option<RestoredSession>,
@@ -328,6 +332,7 @@ impl LuminaApp {
             search_query: String::new(),
             search_focused: false,
             active_year: None,
+            navigation_history: NavigationHistory::new(NavigationSnapshot::default()),
             pending_restore: Some(config.restored_session()),
             is_fullscreen_viewer: false,
             is_immersive_fullscreen: false,

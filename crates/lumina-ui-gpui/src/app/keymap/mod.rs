@@ -22,6 +22,17 @@ impl LuminaApp {
             return;
         }
 
+        // Cmd+[ / Cmd+]: browsing Back / Forward. Secondary modifier only, so
+        // the viewer's plain [ / ] previous/next shortcuts keep working.
+        if cmd_or_ctrl && key == "[" {
+            self.navigate_back(cx);
+            return;
+        }
+        if cmd_or_ctrl && key == "]" {
+            self.navigate_forward(cx);
+            return;
+        }
+
         // Global Selection and Search Shortcuts
         if cmd_or_ctrl && key.eq_ignore_ascii_case("a") {
             self.select_all(cx);

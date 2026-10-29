@@ -6,6 +6,54 @@ use crate::theme;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
+/// Back/Forward toolbar control.
+///
+/// The same `debug_selector` is painted when disabled so automation can find
+/// the control at the edges instead of treating it as missing.
+fn navigation_button(
+    selector: &'static str,
+    icon: crate::icons::Icon,
+    tooltip: &'static str,
+    enabled: bool,
+    backwards: bool,
+    cx: &mut Context<LuminaApp>,
+) -> Stateful<Div> {
+    let base = div()
+        .id(selector)
+        .debug_selector(move || selector.to_string())
+        .tooltip(theme::tooltip_label(tooltip))
+        .w(px(28.0))
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(theme::border())
+        .bg(theme::bg_control());
+    if enabled {
+        base.text_color(theme::text())
+            .cursor_pointer()
+            .hover(|style| style.bg(theme::bg_control_hover()))
+            .child(crate::icons::render_icon(icon, px(13.0), theme::text()))
+            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
+                if backwards {
+                    this.navigate_back(cx);
+                } else {
+                    this.navigate_forward(cx);
+                }
+            }))
+    } else {
+        base.text_color(theme::text_disabled())
+            .cursor_not_allowed()
+            .child(crate::icons::render_icon(
+                icon,
+                px(13.0),
+                theme::text_disabled(),
+            ))
+    }
+}
+
 impl LuminaApp {
     pub(crate) fn render_toolbar(
         &self,
@@ -51,6 +99,23 @@ impl LuminaApp {
                     this.toggle_sidebar(cx);
                 })),
             )
+            // Browsing history: Back / Forward
+            .child(navigation_button(
+                "nav-back",
+                crate::icons::Icon::ChevronLeft,
+                "Back (⌘[)",
+                self.can_navigate_back(),
+                true,
+                cx,
+            ))
+            .child(navigation_button(
+                "nav-forward",
+                crate::icons::Icon::ChevronRight,
+                "Forward (⌘])",
+                self.can_navigate_forward(),
+                false,
+                cx,
+            ))
             // Segmented mode switcher: [ Browser | Split | Viewer ]
             .child(
                 theme::segmented("layout-mode-switcher")
@@ -156,7 +221,6 @@ impl LuminaApp {
                             .bg(theme::danger_bg())
                             .border_color(theme::danger_border())
                             .text_color(theme::danger_text())
-                            .hover(|s| s.bg(theme::danger_bg_hover()))
                             .child("Empty Trash")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.prompt_empty_trash(cx);

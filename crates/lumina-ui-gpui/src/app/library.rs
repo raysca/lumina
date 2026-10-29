@@ -201,6 +201,8 @@ impl LuminaApp {
         self.search_focused = false;
         self.active_year = None;
         self.is_fullscreen_viewer = false;
+        // A new library is a jump, not user navigation: start a fresh trail.
+        self.reset_navigation_history();
 
         // Drop and join the previous event-receiver thread to prevent orphaned threads.
         if let Some(handle) = self.event_receiver_thread.take() {
@@ -478,11 +480,13 @@ impl LuminaApp {
     }
 
     pub fn select_album(&mut self, selection: AlbumSelection, cx: &mut Context<Self>) {
+        let departing = self.navigation_snapshot();
         self.selection = selection;
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
         self.clear_selection(cx);
+        self.record_navigation_change(departing);
     }
 
     pub fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
@@ -524,6 +528,7 @@ impl LuminaApp {
     }
 
     pub fn append_search_pill(&mut self, pill: &str, cx: &mut Context<Self>) {
+        let departing = self.navigation_snapshot();
         if self.search_query.is_empty() {
             self.search_query = pill.to_string();
         } else if !self.search_query.contains(pill) {
@@ -531,26 +536,33 @@ impl LuminaApp {
         }
         self.active_year = None;
         self.clear_selection(cx);
+        self.record_navigation_change(departing);
     }
 
     pub fn clear_search(&mut self, cx: &mut Context<Self>) {
+        let departing = self.navigation_snapshot();
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
         self.clear_selection(cx);
+        self.record_navigation_change(departing);
     }
 
     pub fn set_search_query(&mut self, query: &str, cx: &mut Context<Self>) {
+        let departing = self.navigation_snapshot();
         self.search_query = query.to_string();
         self.active_year = None;
         self.clear_selection(cx);
+        self.record_navigation_change(departing);
     }
 
     pub fn set_active_year(&mut self, year: Option<i32>, cx: &mut Context<Self>) {
+        let departing = self.navigation_snapshot();
         self.active_year = year;
         self.search_query.clear();
         self.search_focused = false;
         self.clear_selection(cx);
+        self.record_navigation_change(departing);
     }
 
     /// Applies the one-shot session captured at startup.
@@ -600,6 +612,9 @@ impl LuminaApp {
                 }
             }
         }
+        // The startup restore is a jump, not user navigation: seed the trail
+        // with the restored destination so Back cannot return to pre-restore state.
+        self.reset_navigation_history();
         // Persist the applied session once so a startup window-bounds save cannot
         // leave an empty session on disk before the initial scan finishes.
         self.save_config();
@@ -610,7 +625,7 @@ impl LuminaApp {
     ///
     /// The core engine has no index-of-id query for filtered views, so this walks
     /// the active slices once in bounded chunks during restore only.
-    fn find_active_index(&self, id: MediaId) -> Option<usize> {
+    pub(crate) fn find_active_index(&self, id: MediaId) -> Option<usize> {
         const CHUNK: usize = 512;
         let total = self.get_active_count();
         let mut offset = 0;
