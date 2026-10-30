@@ -122,7 +122,7 @@ fn double_click(cx: &mut VisualTestContext, selector: &'static str) {
     render_ui(cx);
 }
 
-fn right_click(cx: &mut VisualTestContext, selector: &'static str) {
+pub(crate) fn right_click(cx: &mut VisualTestContext, selector: &'static str) {
     let position = bounds_center(cx, selector);
     cx.simulate_mouse_down(
         position,

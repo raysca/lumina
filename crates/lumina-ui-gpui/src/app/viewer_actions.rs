@@ -249,16 +249,16 @@ impl LuminaApp {
     }
 
     pub fn open_viewer(&mut self, item: MediaItem, cx: &mut Context<Self>) {
+        // With PiP open, playing a video means playing it there.
+        if self.video.in_pip && item.media_type == MediaType::Video {
+            self.select_item(item.clone(), cx);
+            self.play_in_pip(item, cx);
+            return;
+        }
         self.select_item(item, cx);
         self.is_fullscreen_viewer = true;
         self.viewer_state.reset();
-        if let Some(ref it) = self.selected_item {
-            if it.media_type == MediaType::Video {
-                self.load_video_player(&it.path.clone(), cx);
-            } else {
-                self.stop_video_player();
-            }
-        }
+        self.sync_viewer_player(cx);
         cx.notify();
     }
 
@@ -274,7 +274,7 @@ impl LuminaApp {
         self.immersive_hud_visible = true;
         self.viewer_shortcuts_open = false;
         self.viewer_state.reset();
-        if self.floating_pip_window.is_none() {
+        if !self.video.in_pip {
             self.stop_video_player();
         }
         self.save_config();

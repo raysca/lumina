@@ -26,6 +26,8 @@ fn scrub_segment_percent(index: usize, segments: usize) -> f64 {
 
 pub struct FloatingPipPlayerView {
     pub app: WeakEntity<LuminaApp>,
+    /// This window's id, sent on close so the app can ignore a stale window.
+    pub window_id: WindowId,
     pub is_hovered: bool,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub _subscription: Option<Subscription>,
@@ -35,6 +37,7 @@ impl FloatingPipPlayerView {
     pub fn new(
         app: WeakEntity<LuminaApp>,
         ui_tx: async_channel::Sender<UiMessage>,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let _subscription = app.upgrade().map(|app_entity| {
@@ -44,6 +47,7 @@ impl FloatingPipPlayerView {
         });
         Self {
             app,
+            window_id: window.window_handle().window_id(),
             is_hovered: false,
             ui_tx,
             _subscription,
@@ -53,7 +57,9 @@ impl FloatingPipPlayerView {
 
 impl Drop for FloatingPipPlayerView {
     fn drop(&mut self) {
-        let _ = self.ui_tx.send_blocking(UiMessage::FloatingPipClosed);
+        let _ = self
+            .ui_tx
+            .send_blocking(UiMessage::FloatingPipClosed(self.window_id));
     }
 }
 
@@ -75,13 +81,20 @@ impl Render for FloatingPipPlayerView {
             }
         };
 
-        // This window paints `viewer_image` too; evict retired frames here
+        // This window paints `video.pip_frame`; evict retired frames here
         // so playback cannot pile them up while the main window is hidden.
         let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_images));
         crate::app::viewer_actions::evict_retired_images(retired, window, cx);
 
         let app_read = app.read(cx);
-        let preview_image = app_read.viewer_image.clone();
+        let preview_image = app_read.video.pip_frame.clone();
+        let has_player = app_read.video.player.is_some();
+        let title = app_read
+            .video
+            .item
+            .as_ref()
+            .map(|item| item.file_name.clone())
+            .unwrap_or_default();
         let is_playing = app_read.video.is_playing;
         let is_muted = app_read.video.is_muted;
         let current_time = app_read.video.playback_time;
@@ -134,7 +147,11 @@ impl Render for FloatingPipPlayerView {
                             .items_center()
                             .text_xs()
                             .text_color(theme::text_subtle())
-                            .child("Loading video...")
+                            .child(if has_player {
+                                "Loading video…"
+                            } else {
+                                "This video can't be played"
+                            })
                             .into_any_element()
                     }),
             )
@@ -142,6 +159,9 @@ impl Render for FloatingPipPlayerView {
             .child(if is_hovered {
                 div()
                     .absolute()
+                    // Presses on the controls must not reach the video surface,
+                    // which starts a window drag on mouse-down.
+                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
                     .top_0()
                     .left_0()
                     .right_0()
@@ -170,7 +190,9 @@ impl Render for FloatingPipPlayerView {
                                     .text_xs()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(theme::text())
-                                    .child("PICTURE-IN-PICTURE"),
+                                    .max_w(px(260.0))
+                                    .truncate()
+                                    .child(title),
                             ),
                     )
                     .child(
@@ -183,6 +205,7 @@ impl Render for FloatingPipPlayerView {
                             .child(
                                 div()
                                     .id("pip-return-to-viewer-btn")
+                                    .debug_selector(|| "pip-expand".to_string())
                                     .tooltip(theme::tooltip_label("Expand to main viewer"))
                                     .px_2()
                                     .py_0p5()
@@ -214,6 +237,7 @@ impl Render for FloatingPipPlayerView {
                             .child(
                                 div()
                                     .id("pip-close-btn")
+                                    .debug_selector(|| "pip-close".to_string())
                                     .tooltip(theme::tooltip_label("Close PiP"))
                                     .w(px(20.0))
                                     .h(px(20.0))
@@ -230,7 +254,7 @@ impl Render for FloatingPipPlayerView {
                                         move |_this, _e: &ClickEvent, window, cx| {
                                             if let Some(app_entity) = app_close.upgrade() {
                                                 app_entity.update(cx, |app, cx| {
-                                                    app.floating_pip_closed(cx);
+                                                    app.close_pip(cx);
                                                 });
                                             }
                                             window.remove_window();
@@ -246,6 +270,7 @@ impl Render for FloatingPipPlayerView {
             .child(if is_hovered {
                 div()
                     .absolute()
+                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
                     .bottom_0()
                     .left_0()
                     .right_0()
@@ -314,6 +339,8 @@ impl Render for FloatingPipPlayerView {
                                     .child(
                                         div()
                                             .id("pip-play-pause-btn")
+                                            .debug_selector(|| "pip-play-pause".to_string())
+                                            .tooltip(theme::tooltip_label("Play/Pause"))
                                             .px_2()
                                             .py_0p5()
                                             .bg(if is_playing {
@@ -369,6 +396,8 @@ impl Render for FloatingPipPlayerView {
                                     .child(
                                         div()
                                             .id("pip-mute-btn")
+                                            .debug_selector(|| "pip-mute".to_string())
+                                            .tooltip(theme::tooltip_label("Mute"))
                                             .px_2()
                                             .py_0p5()
                                             .bg(if is_muted {

@@ -1,5 +1,4 @@
 use crate::app::{LuminaApp, UiMessage};
-use crate::player::VideoPlayerBackend;
 use crate::views::floating_inspector::FloatingInspectorView;
 use crate::views::floating_pip::FloatingPipPlayerView;
 use gpui::*;
@@ -53,16 +52,14 @@ pub fn open_floating_pip_window(
     ui_tx: async_channel::Sender<UiMessage>,
     cx: &mut App,
 ) {
-    if let Some(app) = weak_app.upgrade() {
-        app.update(cx, |this, _cx| {
-            if !this.video.is_playing {
-                if let Some(ref mut player) = this.video.player {
-                    player.play();
-                    this.video.is_playing = true;
-                    this.start_video_ticker();
-                }
-            }
-        });
+    // Two quick requests can queue before the first window registers, and a
+    // PiP closed in the meantime needs no window.
+    let wanted = weak_app.upgrade().is_some_and(|app| {
+        let app = app.read(cx);
+        app.video.in_pip && app.floating_pip_window.is_none()
+    });
+    if !wanted {
+        return;
     }
 
     let bounds = Bounds::centered(None, size(px(480.0), px(270.0)), cx);
@@ -82,7 +79,7 @@ pub fn open_floating_pip_window(
             }),
             ..Default::default()
         },
-        |_, cx| cx.new(|cx| FloatingPipPlayerView::new(weak_app_clone, tx_clone, cx)),
+        |window, cx| cx.new(|cx| FloatingPipPlayerView::new(weak_app_clone, tx_clone, window, cx)),
     ) {
         Ok(handle) => {
             if let Some(app) = weak_app.upgrade() {
@@ -94,6 +91,13 @@ pub fn open_floating_pip_window(
         }
         Err(e) => {
             log::error!("failed to open floating PiP window: {e:?}");
+            // No window means no PiP: do not leave the video playing unseen.
+            if let Some(app) = weak_app.upgrade() {
+                app.update(cx, |this, cx| {
+                    this.close_pip(cx);
+                    this.set_error(format!("Could not open Picture-in-Picture: {e}"), cx);
+                });
+            }
         }
     }
 }

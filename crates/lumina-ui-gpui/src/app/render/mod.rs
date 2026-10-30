@@ -57,7 +57,7 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 19] = [
+        let rows: [(&str, &str); 20] = [
             ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
             ("⌘,", "Preferences"),
@@ -75,6 +75,7 @@ impl LuminaApp {
             ("Z / O", "Toggle 1:1 zoom"),
             ("J / K / L", "Video rewind / play / forward"),
             ("M", "Mute audio"),
+            ("⌥P", "Picture-in-Picture on / off"),
             ("Esc", "Close / go back"),
             ("⌘/", "Toggle this help"),
         ];

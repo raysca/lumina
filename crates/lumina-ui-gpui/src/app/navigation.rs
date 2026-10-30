@@ -290,13 +290,7 @@ impl LuminaApp {
                 // `select_item_internal` already started video only when the
                 // viewer was open while selecting; cover the closed -> open jump.
                 if !viewer_was_open {
-                    if let Some(item) = self.selected_item.clone() {
-                        if item.media_type == MediaType::Video {
-                            self.load_video_player(&item.path.clone(), cx);
-                        } else {
-                            self.stop_video_player();
-                        }
-                    }
+                    self.sync_viewer_player(cx);
                 }
             } else {
                 // The saved media item is gone: never open a viewer with no item.
@@ -327,7 +321,11 @@ impl LuminaApp {
 
     /// Resolves a saved media position without per-frame SQL, reusing the
     /// restore-time chunk walk when the saved index no longer matches.
-    fn navigation_index_for(&self, id: MediaId, saved_index: Option<usize>) -> Option<usize> {
+    pub(crate) fn navigation_index_for(
+        &self,
+        id: MediaId,
+        saved_index: Option<usize>,
+    ) -> Option<usize> {
         let total = self.get_active_count();
         if total == 0 {
             return None;
@@ -555,9 +553,8 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Test-only selection helper: the grid is the only production entry point
-    /// now that the Split filmstrip (its last caller) is gone.
-    #[cfg(test)]
+    /// Selects `item` at grid position `index`, keeping the position-based
+    /// selection (index, anchor, set) in step with it.
     pub fn select_item_at(&mut self, item: MediaItem, index: usize, cx: &mut Context<Self>) {
         self.selected_indices.clear();
         self.selected_indices.insert(index);
@@ -602,11 +599,7 @@ impl LuminaApp {
         }
 
         if self.is_fullscreen_viewer {
-            if item.media_type == MediaType::Video {
-                self.load_video_player(&item.path.clone(), cx);
-            } else {
-                self.stop_video_player();
-            }
+            self.sync_viewer_player(cx);
         }
 
         self.update_batch_summary();

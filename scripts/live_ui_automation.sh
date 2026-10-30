@@ -76,10 +76,10 @@ import CoreGraphics
 import Foundation
 guard CommandLine.arguments.count >= 3, let pid = pid_t(CommandLine.arguments[1]) else { exit(2) }
 let name = CommandLine.arguments[2]
-let withCommand = CommandLine.arguments.count > 3 && CommandLine.arguments[3] == "cmd"
+let modifier = CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : ""
 let keycodes: [String: CGKeyCode] = [
     "i": 34, "f": 3, "escape": 53, "home": 115, "space": 49,
-    "right": 124, "left": 123, "slash": 44
+    "right": 124, "left": 123, "slash": 44, "p": 35
 ]
 guard let code = keycodes[name] else { exit(3) }
 NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
@@ -87,10 +87,33 @@ usleep(250_000)
 let source = CGEventSource(stateID: .hidSystemState)
 for pressed in [true, false] {
     guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: pressed) else { exit(4) }
-    if withCommand { event.flags = .maskCommand }
+    if modifier == "cmd" { event.flags = .maskCommand }
+    if modifier == "alt" { event.flags = .maskAlternate }
     event.postToPid(pid)
 }
 print("posted \(name)")
+SWIFT
+
+# Counts the app's on-screen windows, including the small PiP window that the
+# main-window probe filters out.
+cat > "$OUT_DIR/window_count.swift" <<'SWIFT'
+import CoreGraphics
+import Foundation
+guard CommandLine.arguments.count > 1, let target = Int(CommandLine.arguments[1]) else {
+    print(0)
+    exit(0)
+}
+let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+let count = windows.filter { w in
+    guard let pid = w[kCGWindowOwnerPID as String] as? Int, pid == target,
+          let layer = w[kCGWindowLayer as String] as? Int, layer <= 3,
+          let bounds = w[kCGWindowBounds as String] as? [String: Any],
+          let width = (bounds["Width"] as? NSNumber)?.intValue,
+          let height = (bounds["Height"] as? NSNumber)?.intValue
+    else { return false }
+    return width >= 200 && height >= 150
+}.count
+print(count)
 SWIFT
 
 # --- helpers --------------------------------------------------------------
@@ -174,6 +197,16 @@ inject() {
     sleep 0.6
 }
 
+wait_windows() {
+    local expected="$1" deadline=$((SECONDS + TIMEOUT_SECS))
+    while (( SECONDS < deadline )); do
+        local count; count="$(swift "$OUT_DIR/window_count.swift" "$APP_PID" 2>/dev/null || echo 0)"
+        if [[ "$count" == "$expected" ]]; then return 0; fi
+        sleep 0.3
+    done
+    return 1
+}
+
 window_info() {
     swift "$OUT_DIR/window_probe.swift" "$APP_PID" 2>/dev/null || true
 }
@@ -188,6 +221,9 @@ SMOKE_HOME="$(mktemp -d "${TMPDIR:-/tmp}/lumina-e2e.XXXXXX")"
 LIB_DIR="$SMOKE_HOME/pics"
 mkdir -p "$LIB_DIR"
 for name in one two three; do cp resources/app_icon.png "$LIB_DIR/$name.png"; done
+# A real clip for PiP; newest mtime so date-descending order puts it first.
+touch -t 202001010000 "$LIB_DIR"/*.png
+cp crates/lumina-ui-gpui/tests/fixtures/clip.mp4 "$LIB_DIR/clip.mp4"
 CONF_DIR="$SMOKE_HOME/Library/Application Support/lumina"
 mkdir -p "$CONF_DIR"
 CONF="$CONF_DIR/config.json"
@@ -217,8 +253,8 @@ WINDOW_ID="$(printf '%s' "$FOUND" | awk '{print $2}')"
 WINDOW_SIZE="$(printf '%s' "$FOUND" | awk '{print $3}')"
 echo "PASS: window $WINDOW_ID ($WINDOW_SIZE) appeared"
 
-wait_db "SELECT COUNT(*) FROM media_items" "3" || fail "catalog did not index the seeded library"
-echo "PASS: catalog indexed 3 seeded images"
+wait_db "SELECT COUNT(*) FROM media_items" "4" || fail "catalog did not index the seeded library"
+echo "PASS: catalog indexed 3 seeded images and 1 video"
 
 wait_config "inspector_visible" "False" || true
 capture base || fail "could not capture the window"
@@ -273,7 +309,25 @@ capture viewer_closed || fail "screenshot failed after closing viewer"
 changed "$OUT_DIR/viewer_open.png" "$OUT_DIR/viewer_closed.png" || fail "escape did not close the viewer"
 echo "PASS: Escape closed the viewer (pixel diff)"
 
-# 4. Keyboard action mutates the catalog database.
+# 4. Picture-in-Picture follows the user around (video sorts first).
+wait_windows 1 || fail "expected only the main window before PiP"
+inject home
+inject p alt
+wait_windows 2 || fail "Option-P on the selected video did not open the PiP window"
+echo "PASS: Option-P opened the PiP window"
+inject right
+capture pip_viewer_before || fail "screenshot failed"
+inject space
+capture pip_viewer_open || fail "screenshot failed after space"
+changed "$OUT_DIR/pip_viewer_before.png" "$OUT_DIR/pip_viewer_open.png" || fail "space on a photo did not open the viewer while PiP played"
+wait_windows 2 || fail "viewing a photo closed the PiP window"
+echo "PASS: viewing a photo kept PiP open"
+inject escape
+inject p alt
+wait_windows 1 || fail "Option-P did not close the PiP window"
+echo "PASS: Option-P closed the PiP window"
+
+# 5. Keyboard action mutates the catalog database.
 inject home
 inject f
 wait_db "SELECT COUNT(*) FROM media_items WHERE is_favorite = 1" "1" || fail "keyboard favorite did not reach sqlite"

@@ -28,7 +28,18 @@ fn test_floating_windows_lifecycle() {
 
     cx.run_until_parked();
 
-    // 3. Open floating PiP player
+    // 3. Open floating PiP player. The window only opens for a PiP session.
+    cx.update(|_w, app_cx| {
+        open_floating_pip_window(weak_app.clone(), ui_tx.clone(), app_cx);
+    });
+    cx.run_until_parked();
+    view.update(cx, |app, _cx| {
+        assert!(
+            app.floating_pip_window.is_none(),
+            "a PiP window must not open without a PiP session"
+        );
+        app.video.in_pip = true;
+    });
     cx.update(|_w, app_cx| {
         open_floating_pip_window(weak_app.clone(), ui_tx.clone(), app_cx);
     });
@@ -41,8 +52,10 @@ fn test_floating_windows_lifecycle() {
 
     // 4. Close floating PiP
     view.update(cx, |app, cx| {
-        app.floating_pip_closed(cx);
+        let window = app.floating_pip_window.unwrap().window_id();
+        app.floating_pip_closed(window, cx);
         assert!(app.floating_pip_window.is_none());
+        assert!(!app.video.in_pip, "closing the window ends the PiP session");
     });
 
     cx.run_until_parked();

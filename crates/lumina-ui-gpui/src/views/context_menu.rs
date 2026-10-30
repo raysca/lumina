@@ -117,17 +117,21 @@ impl MediaContextMenu {
                             }),
                         )
                     }))
-                    // 3. Play in Picture-in-Picture
-                    .child(Self::render_menu_item(
-                        "pip-menu-btn",
-                        "Play in Picture-in-Picture",
-                        Some("⌥P"),
-                        false,
-                        cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.close_context_menu(cx);
-                            this.open_floating_pip(cx);
-                        }),
-                    ))
+                    // 3. Play in Picture-in-Picture (videos only; acts on the
+                    // right-clicked item, not the selection)
+                    .children(is_video.then(|| {
+                        let item_for_pip = item.clone();
+                        Self::render_menu_item(
+                            "pip-menu-btn",
+                            "Play in Picture-in-Picture",
+                            Some("⌥P"),
+                            false,
+                            cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.close_context_menu(cx);
+                                this.play_in_pip(item_for_pip.clone(), cx);
+                            }),
+                        )
+                    }))
                     // 4. Get Info
                     .child(Self::render_menu_item(
                         "inspect-menu-btn",

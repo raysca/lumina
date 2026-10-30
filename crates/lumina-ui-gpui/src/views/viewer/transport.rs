@@ -609,7 +609,9 @@ impl ViewerTransport {
                                     .child(render_icon(Icon::Pip, px(12.0), theme::text()))
                                     .child("PIP")
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.open_floating_pip(cx);
+                                        if let Some(item) = this.selected_item.clone() {
+                                            this.play_in_pip(item, cx);
+                                        }
                                     })),
                             )
                             // Fullscreen Toggle Button

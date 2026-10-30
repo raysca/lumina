@@ -26,11 +26,12 @@ impl LuminaApp {
                     changes: vec![(item.id, item.is_trashed, new_trashed)],
                 });
                 self.refresh_album_counts();
+                let closed_pip = new_trashed && self.close_pip_for_removed(&[item.id], cx);
                 self.show_undo_toast(
-                    if new_trashed {
-                        "Moved to Trash"
-                    } else {
-                        "Restored from Trash"
+                    match (new_trashed, closed_pip) {
+                        (true, true) => "Moved to Trash · Picture-in-Picture closed",
+                        (true, false) => "Moved to Trash",
+                        _ => "Restored from Trash",
                     },
                     cx,
                 );
@@ -67,10 +68,14 @@ impl LuminaApp {
             return;
         }
         self.push_undo(UndoAction::Trashed { changes });
-        let message = if new_trashed {
-            format!("Moved {} item(s) to Trash", ids.len())
-        } else {
-            format!("Restored {} item(s)", ids.len())
+        let closed_pip = new_trashed && self.close_pip_for_removed(&ids, cx);
+        let message = match (new_trashed, closed_pip) {
+            (true, true) => format!(
+                "Moved {} item(s) to Trash · Picture-in-Picture closed",
+                ids.len()
+            ),
+            (true, false) => format!("Moved {} item(s) to Trash", ids.len()),
+            _ => format!("Restored {} item(s)", ids.len()),
         };
         self.set_last_action(message.clone());
         self.refresh_album_counts();
@@ -142,24 +147,48 @@ impl LuminaApp {
             if st.target == DeletionTarget::PermanentDisk && !st.permanent_acknowledged {
                 return;
             }
+            // Emptying the Trash removes a trashed video playing in PiP.
+            let removed_pip: Vec<MediaId> = match st.intent {
+                DeleteIntent::DeleteSelected => st.item_ids.clone(),
+                DeleteIntent::EmptyTrash => self
+                    .video
+                    .item
+                    .as_ref()
+                    .filter(|_| self.video.in_pip)
+                    .and_then(|item| {
+                        let state = self.grid_state.as_ref()?;
+                        state.engine.get_item_by_id(item.id)
+                    })
+                    .filter(|item| item.is_trashed)
+                    .map(|item| vec![item.id])
+                    .unwrap_or_default(),
+            };
             if let Some(ref state) = self.grid_state {
-                match st.intent {
-                    DeleteIntent::EmptyTrash => {
-                        let _ = state.engine.empty_trash(st.target);
-                    }
-                    DeleteIntent::DeleteSelected => {
-                        let _ = state
-                            .engine
-                            .permanently_delete_items(&st.item_ids, st.target);
-                    }
+                let result = match st.intent {
+                    DeleteIntent::EmptyTrash => state.engine.empty_trash(st.target).map(|_| ()),
+                    DeleteIntent::DeleteSelected => state
+                        .engine
+                        .permanently_delete_items(&st.item_ids, st.target)
+                        .map(|_| ()),
+                };
+                if let Err(err) = result {
+                    self.set_error(format!("Could not delete: {err}"), cx);
+                    self.refresh_album_counts();
+                    return;
                 }
             }
-            self.set_last_action(match st.intent {
+            let closed_pip = self.close_pip_for_removed(&removed_pip, cx);
+            let mut message = match st.intent {
                 DeleteIntent::EmptyTrash => "Trash emptied".to_string(),
                 DeleteIntent::DeleteSelected => {
                     format!("Permanently deleted {} item(s)", st.item_ids.len())
                 }
-            });
+            };
+            if closed_pip {
+                message.push_str(" · Picture-in-Picture closed");
+                self.show_toast(message.clone(), cx);
+            }
+            self.set_last_action(message);
             self.refresh_album_counts();
             self.clear_selection(cx);
         }

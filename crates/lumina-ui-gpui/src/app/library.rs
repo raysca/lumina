@@ -286,7 +286,12 @@ impl LuminaApp {
                 }
             }
             UiMessage::ViewerLoaded { id, frame } => {
-                if let Some(ref current) = self.selected_item {
+                // A poster must not replace live frames of the video the
+                // viewer is playing.
+                let playing_here = !self.video.in_pip
+                    && self.video.player.is_some()
+                    && self.video.item.as_ref().is_some_and(|item| item.id == id);
+                if let Some(current) = self.selected_item.as_ref().filter(|_| !playing_here) {
                     if current.id == id {
                         if let Ok(gpui_img) = frame_to_gpui_image(frame) {
                             self.set_viewer_image(Some(gpui_img));
@@ -354,7 +359,7 @@ impl LuminaApp {
                     cx.notify();
                 } else if let Some(frame) = frame {
                     if let Ok(img) = video_frame_to_gpui_image(frame) {
-                        self.set_viewer_image(Some(img));
+                        self.show_video_frame(img);
                         if !playing {
                             // One frame is all the paused refresh needs.
                             self.video.seek_refresh_until = None;
@@ -375,8 +380,8 @@ impl LuminaApp {
             UiMessage::FloatingInspectorClosed => {
                 self.floating_inspector_closed(cx);
             }
-            UiMessage::FloatingPipClosed => {
-                self.floating_pip_closed(cx);
+            UiMessage::FloatingPipClosed(window) => {
+                self.floating_pip_closed(window, cx);
             }
             UiMessage::OpenFloatingInspector | UiMessage::OpenFloatingPip => {}
         }
@@ -406,6 +411,8 @@ impl LuminaApp {
         if let Some(ref state) = self.grid_state {
             state.engine.cancel_scan();
         }
+        // PiP plays media from the library being closed.
+        self.close_pip(cx);
 
         self.config.last_library_path = Some(path.clone());
         let _ = self.config.save();

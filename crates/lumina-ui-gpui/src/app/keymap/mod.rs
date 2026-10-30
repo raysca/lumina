@@ -115,6 +115,11 @@ impl LuminaApp {
             return;
         }
 
+        if key.eq_ignore_ascii_case("p") && keystroke.modifiers.alt && !cmd_or_ctrl {
+            self.toggle_pip(cx);
+            return;
+        }
+
         // Grid & Browser Shortcuts
         self.handle_grid_key_down(key, cmd_or_ctrl, keystroke.modifiers.shift, cx);
     }

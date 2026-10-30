@@ -74,6 +74,16 @@ pub struct SearchSuggestionState {
 #[derive(Default)]
 pub struct VideoPlaybackState {
     pub player: Option<player::NativeVideoPlayer>,
+    /// Media the player session belongs to. Set when a load is attempted, so
+    /// it survives a backend that cannot decode the file.
+    pub item: Option<lumina_core::MediaItem>,
+    /// True while the session is presented in the floating PiP window rather
+    /// than the viewer. Frames then go to `pip_frame`, and the viewer and grid
+    /// leave the player alone.
+    pub in_pip: bool,
+    /// Latest decoded frame for the PiP window; kept apart from
+    /// `viewer_image` so browsing photos cannot overwrite the video.
+    pub pip_frame: Option<Arc<RenderImage>>,
     pub is_playing: bool,
     pub playback_time: f64,
     pub duration: f64,

@@ -1,6 +1,5 @@
 use gpui::*;
-use lumina_core::{MediaId, MediaType};
-use std::path::Path;
+use lumina_core::{MediaId, MediaItem, MediaType};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -44,13 +43,15 @@ fn scrub_target_time(duration: f64, pct: f64) -> f64 {
 
 impl LuminaApp {
     /// Duration used to validate a resume position: player metadata first,
-    /// then the selected item's catalog duration before the player loads.
+    /// then the session item's catalog duration before the player loads.
     fn resume_duration(&self) -> f64 {
         if self.video.duration.is_finite() && self.video.duration > 0.0 {
             return self.video.duration;
         }
-        self.selected_item
+        self.video
+            .item
             .as_ref()
+            .or(self.selected_item.as_ref())
             .filter(|item| item.media_type == MediaType::Video)
             .map(|item| item.duration_secs())
             .filter(|secs| secs.is_finite() && *secs > 0.0)
@@ -159,62 +160,21 @@ impl LuminaApp {
         }
     }
 
-    pub fn open_floating_pip(&mut self, cx: &mut Context<Self>) {
-        let is_video = self
-            .selected_item
-            .as_ref()
-            .map(|i| i.media_type == MediaType::Video)
-            .unwrap_or(false);
-
-        if !is_video {
-            return;
-        }
-
-        // Close fullscreen viewer so user can browse grid
-        self.is_fullscreen_viewer = false;
-        self.viewer_state.reset();
-
-        if self.floating_pip_window.is_some() {
-            cx.notify();
-            return;
-        }
-
-        // Defer window creation to next tick of GPUI event loop
-        let _ = self.ui_tx.send_blocking(UiMessage::OpenFloatingPip);
-        cx.notify();
-    }
-
-    pub fn expand_pip_to_viewer(&mut self, cx: &mut Context<Self>) {
-        self.floating_pip_window = None;
-        self.is_fullscreen_viewer = true;
-        self.viewer_state.reset();
-        cx.notify();
-    }
-
-    pub fn floating_pip_closed(&mut self, cx: &mut Context<Self>) {
-        self.floating_pip_window = None;
-        if !self.is_fullscreen_viewer {
-            self.stop_video_player();
-        }
-        cx.notify();
-    }
-
-    pub fn load_video_player(&mut self, path: &Path, cx: &mut Context<Self>) {
+    /// Starts a player session for `item`, replacing any current one. Frames
+    /// go to the viewer or, while `video.in_pip` is set, to the PiP window.
+    pub fn load_video_player(&mut self, item: &MediaItem, cx: &mut Context<Self>) {
         // Finish the previous video before associating the player with the new
-        // media id; the selection already points at the new item here.
+        // media id.
         self.stop_video_player();
-        let media_id = self
-            .selected_item
-            .as_ref()
-            .filter(|item| item.media_type == MediaType::Video && item.path.as_path() == path)
-            .map(|item| item.id);
-        if let (Some(id), Some(state)) = (media_id, self.grid_state.as_ref()) {
-            state.video_resume.begin(id);
+        if let Some(state) = self.grid_state.as_ref() {
+            state.video_resume.begin(item.id);
         }
+        self.video.item = Some(item.clone());
+        let media_id = Some(item.id);
 
         let mut player = player::create_native_player();
         self.video.playback_time = 0.0;
-        if let Ok(meta) = player.load(path) {
+        if let Ok(meta) = player.load(&item.path) {
             player.set_looping(self.video.is_looping);
             player.set_volume(self.video.volume);
             player.set_muted(self.video.is_muted);
@@ -231,12 +191,13 @@ impl LuminaApp {
                 player.seek(start);
                 self.last_action = Some(format!("Resumed at {}", format_duration_badge(start)));
             }
-            if let Some(frame) = player.next_frame() {
-                if let Ok(img) = video_frame_to_gpui_image(frame) {
-                    self.set_viewer_image(Some(img));
-                }
-            }
+            let first_frame = player
+                .next_frame()
+                .and_then(|frame| video_frame_to_gpui_image(frame).ok());
             self.video.player = Some(player);
+            if let Some(img) = first_frame {
+                self.show_video_frame(img);
+            }
         } else if let Some(state) = self.grid_state.as_ref() {
             // A failed load has no resume point to finish.
             state.video_resume.finish();
@@ -271,6 +232,7 @@ impl LuminaApp {
             state.video_resume.finish();
         }
         self.video.player = None;
+        self.video.item = None;
         self.video.is_playing = false;
         // Closing the viewer, changing media, or otherwise stopping playback
         // must never leave a scrub drag armed against a stale destination.
@@ -278,6 +240,17 @@ impl LuminaApp {
         self.video.scrub_time = None;
         self.video.last_scrub_seek = None;
         self.video.seek_refresh_until = None;
+    }
+
+    /// Shows a decoded video frame wherever the session is presented.
+    pub(crate) fn show_video_frame(&mut self, image: Arc<RenderImage>) {
+        if !self.video.in_pip {
+            self.set_viewer_image(Some(image));
+            return;
+        }
+        if let Some(old) = self.video.pip_frame.replace(image) {
+            self.retire_image(old);
+        }
     }
 
     /// Starts the frame ticker only when it is not already running.
@@ -423,17 +396,22 @@ impl LuminaApp {
         self.video.playback_time = target;
         let mut rendered = false;
         let mut seeked = false;
+        let mut frame = None;
         if let Some(ref mut player) = self.video.player {
             player.seek(target);
             seeked = true;
             // Fast path: AVFoundation sometimes has the destination frame
             // ready synchronously (for example when it is already decoded).
-            if let Some(frame) = player.next_frame() {
-                if let Ok(img) = video_frame_to_gpui_image(frame) {
-                    self.set_viewer_image(Some(img));
-                    rendered = true;
-                }
+            if let Some(img) = player
+                .next_frame()
+                .and_then(|frame| video_frame_to_gpui_image(frame).ok())
+            {
+                frame = Some(img);
             }
+        }
+        if let Some(img) = frame {
+            self.show_video_frame(img);
+            rendered = true;
         }
         if rendered {
             self.video.seek_refresh_until = None;

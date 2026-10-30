@@ -5,6 +5,7 @@ pub mod keymap;
 pub mod library;
 pub mod navigation;
 pub mod panels;
+pub mod pip;
 pub mod preferences;
 pub mod render;
 pub mod sort;

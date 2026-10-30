@@ -28,6 +28,8 @@ pub enum CommandId {
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
     ToggleFavorite,
+    TogglePip,
+    PipPlayPause,
 }
 
 pub struct Command {
@@ -195,6 +197,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "F",
             keywords: "heart star like",
         },
+        Command {
+            id: CommandId::TogglePip,
+            key: "command.toggle_pip",
+            shortcut: "⌥P",
+            keywords: "pip picture in picture video float detach",
+        },
+        Command {
+            id: CommandId::PipPlayPause,
+            key: "command.pip_play_pause",
+            shortcut: "",
+            keywords: "pip picture in picture video pause resume",
+        },
     ]
 }
 
@@ -276,6 +290,8 @@ impl LuminaApp {
                 self.batch_toggle_favorite(cx)
             }
             CommandId::ToggleFavorite => self.toggle_favorite_selected(cx),
+            CommandId::TogglePip => self.toggle_pip(cx),
+            CommandId::PipPlayPause => self.toggle_pip_playback(cx),
         }
     }
 }

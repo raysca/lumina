@@ -4,6 +4,7 @@ mod interaction;
 mod multi_select;
 mod overlay_isolation;
 mod palette_and_empty;
+mod pip;
 mod preferences;
 mod tags_and_albums;
 mod toasts;

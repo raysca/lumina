@@ -1904,8 +1904,8 @@ fn pip_window_evicts_retired_frames_while_the_main_window_is_not_drawing() {
     // window whose display link has stopped.
     let app = cx.new(LuminaApp::new);
     let ui_tx = app.read_with(&cx, |app, _| app.ui_tx.clone());
-    let (_pip, vcx) = cx.add_window_view(|_window, cx| {
-        crate::views::floating_pip::FloatingPipPlayerView::new(app.downgrade(), ui_tx, cx)
+    let (_pip, vcx) = cx.add_window_view(|window, cx| {
+        crate::views::floating_pip::FloatingPipPlayerView::new(app.downgrade(), ui_tx, window, cx)
     });
 
     app.update(vcx, |app, _| {

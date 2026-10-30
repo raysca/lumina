@@ -81,7 +81,28 @@ impl LuminaApp {
             .map(|i| i.media_type == MediaType::Video)
             .unwrap_or(false);
 
-        if is_video && !cmd_or_ctrl {
+        if key.eq_ignore_ascii_case("p") && keystroke.modifiers.alt && !cmd_or_ctrl {
+            self.toggle_pip(cx);
+            return true;
+        }
+        // While PiP owns the player the viewer shows this video's poster;
+        // Space/K play it in PiP instead of controlling PiP's video.
+        if is_video
+            && self.video.in_pip
+            && !cmd_or_ctrl
+            && (key == "space" || key.eq_ignore_ascii_case("k"))
+        {
+            let is_pip_video =
+                self.video.item.as_ref().map(|v| v.id) == self.selected_item.as_ref().map(|s| s.id);
+            if is_pip_video {
+                self.expand_pip_to_viewer(cx);
+            } else if let Some(item) = self.selected_item.clone() {
+                self.play_in_pip(item, cx);
+            }
+            return true;
+        }
+
+        if is_video && !self.video.in_pip && !cmd_or_ctrl {
             if key == "space" || key.eq_ignore_ascii_case("k") {
                 self.toggle_video_play(cx);
                 return true;
@@ -108,10 +129,6 @@ impl LuminaApp {
             }
             if key.eq_ignore_ascii_case("m") {
                 self.toggle_video_mute(cx);
-                return true;
-            }
-            if key.eq_ignore_ascii_case("p") && keystroke.modifiers.alt {
-                self.open_floating_pip(cx);
                 return true;
             }
             if key == "left" {

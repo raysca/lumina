@@ -24,7 +24,9 @@ core handles cataloguing, decoding, and search.
   name, size or rating (ascending/descending, persisted), zoom/pan and 1:1 pixel
   inspection, previous/next navigation, keyboard-first shortcuts.
 - **Video playback** — native AVFoundation bridge with scrubbing, frame
-  stepping, speed, mute, looping, and a floating Picture-in-Picture window.
+  stepping, speed, mute and looping. Picture-in-Picture (⌥P) is a detached
+  player: it keeps playing while you browse and view photos, and opening
+  another video plays it there.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
 - **Metadata portability** — exporting a selection copies the originals and

@@ -29,15 +29,23 @@ pub struct DeleteConfirmState {
 #[allow(clippy::large_enum_variant)]
 pub enum UiMessage {
     Engine(EngineEvent),
-    ThumbnailLoaded { id: MediaId, frame: DecodedFrame },
-    ViewerLoaded { id: MediaId, frame: DecodedFrame },
+    ThumbnailLoaded {
+        id: MediaId,
+        frame: DecodedFrame,
+    },
+    ViewerLoaded {
+        id: MediaId,
+        frame: DecodedFrame,
+    },
     FolderPicked(PathBuf),
     ExportFolderPicked(PathBuf),
     VideoFrameTick,
     OpenFloatingInspector,
     OpenFloatingPip,
     FloatingInspectorClosed,
-    FloatingPipClosed,
+    /// A PiP window went away; carries its id so a late message from an old
+    /// window cannot end a newer session.
+    FloatingPipClosed(gpui::WindowId),
 }
 
 #[derive(Debug, Clone, Default)]

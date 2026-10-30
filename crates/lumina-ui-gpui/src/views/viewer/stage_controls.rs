@@ -193,3 +193,66 @@ fn nav_button(
             this.navigate_selection(delta, cx);
         }))
 }
+
+/// Bottom-center pill shown instead of the transport while PiP owns the
+/// player: this video can be played in PiP, or, when it is the PiP video,
+/// brought back into the viewer.
+pub fn render_pip_handoff(
+    this: &LuminaApp,
+    item: &lumina_core::MediaItem,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
+    let is_pip_video = this.video.item.as_ref().is_some_and(|v| v.id == item.id);
+    let (label, action) = if is_pip_video {
+        ("Show Here", "Playing in Picture-in-Picture")
+    } else {
+        (
+            "Play in Picture-in-Picture",
+            "Picture-in-Picture is playing another video",
+        )
+    };
+    let target = item.clone();
+    div()
+        .absolute()
+        .bottom(px(24.0))
+        .left_0()
+        .right_0()
+        .flex()
+        .justify_center()
+        .child(
+            theme::hud_panel("viewer-pip-handoff")
+                .debug_selector(|| "viewer-pip-handoff".to_string())
+                .occlude()
+                .h(px(40.0))
+                .px(px(12.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_3()
+                .child(render_icon(Icon::Pip, px(14.0), theme::text_muted()))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme::text_muted())
+                        .child(action),
+                )
+                .child(
+                    theme::control_primary("viewer-pip-handoff-btn")
+                        .debug_selector(|| "viewer-pip-handoff-btn".to_string())
+                        .tooltip(theme::tooltip_label(if is_pip_video {
+                            "Move the video from Picture-in-Picture into the viewer"
+                        } else {
+                            "Play this video in Picture-in-Picture (Space)"
+                        }))
+                        .child(label)
+                        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                            if is_pip_video {
+                                this.expand_pip_to_viewer(cx);
+                            } else {
+                                this.play_in_pip(target.clone(), cx);
+                            }
+                        })),
+                ),
+        )
+        .into_any_element()
+}

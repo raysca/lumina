@@ -47,3 +47,27 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   tags are plain names in the catalog (needs a schema change and a spec).
 - Selection outline sits on the square well, not hugging a contain-fit image
   as in the design; GPUI does not expose the decoded image's fitted rect.
+
+## Picture-in-Picture (agreed design)
+
+PiP is the detached video player. One player session exists, so at most one
+video plays; it is presented either in the viewer or in PiP.
+
+- Open with the viewer's PiP button, ⌥P (viewer or library, selected video),
+  the context menu (videos only, acts on the clicked item) or ⌘K. The viewer
+  closes and the video continues in PiP.
+- While PiP is open, browsing, viewing photos, switching albums and searching
+  leave it playing; PiP has its own frame slot.
+- Opening another video (double-click, Enter, Space, Play Video) loads it into
+  PiP; the viewer does not open. A video reached inside the viewer shows its
+  poster with a "Play in Picture-in-Picture" hand-off (Space).
+- Expand returns the video to the viewer at the same position. Closing PiP
+  stops playback and saves the resume point.
+- Moving the PiP video to Trash or deleting it closes PiP and says so in the
+  toast. Opening another library closes PiP.
+- Space in the grid is unchanged. ⌘K has Toggle Picture-in-Picture and
+  Play/Pause Picture-in-Picture.
+
+Not handled: a PiP video removed from disk outside Lumina keeps playing until
+the watcher's next rescan drops it from the library.
+

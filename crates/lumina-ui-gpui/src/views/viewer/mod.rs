@@ -89,8 +89,11 @@ impl MediaViewer {
                     .when(show_chrome && !is_video, |stage| {
                         stage.child(stage_controls::render_zoom_hud(this, cx))
                     })
-                    // Video Transport Bar (Scrubber + Dock)
-                    .child(if is_video && (!is_immersive || hud_visible) {
+                    // Video Transport Bar (Scrubber + Dock). While PiP owns the
+                    // player the viewer shows the poster and a hand-off pill.
+                    .child(if is_video && show_chrome && this.video.in_pip {
+                        stage_controls::render_pip_handoff(this, item, cx).into_any_element()
+                    } else if is_video && show_chrome {
                         ViewerTransport::render(this, cx).into_any_element()
                     } else {
                         Empty.into_any_element()
