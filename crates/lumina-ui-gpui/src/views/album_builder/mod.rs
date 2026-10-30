@@ -44,6 +44,7 @@ impl AlbumBuilderModal {
             .debug_selector(|| "album-builder-backdrop".to_string())
             .absolute()
             .inset_0()
+            .occlude()
             .bg(rgba(0x09090b99))
             .flex()
             .justify_center()

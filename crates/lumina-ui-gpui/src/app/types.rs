@@ -40,14 +40,6 @@ pub enum UiMessage {
     FloatingPipClosed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LayoutMode {
-    #[default]
-    Browser,
-    Split,
-    Viewer,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct BatchSelectionSummary {
     pub count: usize,

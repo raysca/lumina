@@ -27,9 +27,9 @@ impl MediaViewer {
         };
 
         let is_video = item.media_type == MediaType::Video;
-        let is_split_embedded =
-            this.layout_mode == crate::app::types::LayoutMode::Split && !this.is_fullscreen_viewer;
-        let is_inspector_open = this.inspector_open && !is_split_embedded;
+        // The viewer is always the fullscreen overlay, so the inspector drawer
+        // simply follows the app's inspector state.
+        let is_inspector_open = this.inspector_open;
         let is_immersive = this.is_immersive_fullscreen;
         let hud_visible = this.immersive_hud_visible;
 
@@ -88,7 +88,7 @@ impl MediaViewer {
                     }),
             )
             // 3. Bottom Tray: Adjacent Album Filmstrip & Keyboard Shortcuts Legend
-            .child(if (!is_immersive || hud_visible) && !is_split_embedded {
+            .child(if !is_immersive || hud_visible {
                 ViewerFilmstrip::render(this, item, cx).into_any_element()
             } else {
                 Empty.into_any_element()
@@ -96,6 +96,11 @@ impl MediaViewer {
             // 4. Floating Inspector Drawer (when opened)
             .child(if is_inspector_open && (!is_immersive || hud_visible) {
                 div()
+                    .id("viewer-info-drawer")
+                    .debug_selector(|| "viewer-info-drawer".to_string())
+                    // The drawer floats over the viewport; keep clicks inside it
+                    // from reaching the media canvas or the grid behind.
+                    .occlude()
                     .absolute()
                     .top(px(60.0))
                     .right_4()

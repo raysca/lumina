@@ -4,7 +4,6 @@ use gpui::*;
 
 use crate::actions::*;
 
-use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -12,9 +11,7 @@ use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::{AlbumSelection, SidebarView};
-use crate::views::viewer::MediaViewer;
 
-mod filmstrip;
 mod grid;
 mod overlays;
 mod rail;
@@ -86,6 +83,7 @@ impl LuminaApp {
             .debug_selector(|| "shortcuts-overlay".to_string())
             .absolute()
             .inset_0()
+            .occlude()
             .bg(theme::scrim())
             .flex()
             .justify_center()
@@ -163,6 +161,12 @@ impl LuminaApp {
 
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Evict replaced viewer frames before painting the new one.
+        crate::app::viewer_actions::evict_retired_viewer_images(
+            std::mem::take(&mut self.retired_viewer_images),
+            window,
+            cx,
+        );
         if self.window_bounds_subscription.is_none() {
             self.window_bounds_subscription =
                 Some(cx.observe_window_bounds(window, |this, window, cx| {
@@ -308,7 +312,7 @@ impl Render for LuminaApp {
             .child(self.render_error_banner(cx))
             // 1. Top 52px Toolbar
             .child(self.render_toolbar(&view_label, cx))
-            // 2. Filter bar: quick filters, timeline, grid density
+            // 2. View bar: fit/square toggle and grid density
             .child(SearchBarView::render(self, cx))
             // 3. Workspace Horizontal Split: Sidebar + Resizer + Canvas + Year Rail + Resizer + Inspector
             .child(
@@ -339,78 +343,39 @@ impl Render for LuminaApp {
                     } else {
                         Empty.into_any_element()
                     })
-                    // Center Canvas: Split mode, Viewer mode, or Browser Grid
-                    .child(
-                        if self.layout_mode == LayoutMode::Split && self.selected_item.is_some() {
-                            div()
-                                .flex_1()
-                                .h_full()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .w_full()
-                                        .relative()
-                                        .overflow_hidden()
-                                        .child(MediaViewer::render(self, cx)),
-                                )
-                                .child(self.render_filmstrip_bar(cx))
-                                .into_any_element()
-                        } else if self.layout_mode == LayoutMode::Viewer
-                            && self.selected_item.is_some()
-                        {
-                            div()
-                                .flex_1()
-                                .h_full()
-                                .relative()
-                                .overflow_hidden()
-                                .child(MediaViewer::render(self, cx))
-                                .into_any_element()
-                        } else {
-                            self.render_browser_grid(total_count, cx).into_any_element()
-                        },
-                    )
+                    // Center Canvas: the browser grid is the only non-modal
+                    // content. The media viewer is painted as a fullscreen
+                    // overlay above it (see render_viewer_modal).
+                    .child(self.render_browser_grid(total_count, cx))
                     // Pinned Vertical Year Rail
                     .child(self.render_year_rail(cx))
                     // Inspector Resizer Drag Handle (260–380px)
-                    .child(
-                        if inspector_open
-                            && !is_fullscreen_viewer
-                            && self.layout_mode != LayoutMode::Viewer
-                        {
-                            div()
-                                .id("inspector-resizer")
-                                .w(px(4.0))
-                                .h_full()
-                                .cursor_col_resize()
-                                .hover(|s| s.bg(theme::accent()))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                                        this.is_dragging_inspector_resizer = true;
-                                        cx.notify();
-                                    }),
-                                )
-                                .into_any_element()
-                        } else {
-                            Empty.into_any_element()
-                        },
-                    )
+                    .child(if inspector_open && !is_fullscreen_viewer {
+                        div()
+                            .id("inspector-resizer")
+                            .w(px(4.0))
+                            .h_full()
+                            .cursor_col_resize()
+                            .hover(|s| s.bg(theme::accent()))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                                    this.is_dragging_inspector_resizer = true;
+                                    cx.notify();
+                                }),
+                            )
+                            .into_any_element()
+                    } else {
+                        Empty.into_any_element()
+                    })
                     // Right Slide-out Metadata & Location Inspector
-                    .child(
-                        if inspector_open
-                            && !is_fullscreen_viewer
-                            && self.layout_mode != LayoutMode::Viewer
-                        {
-                            div()
-                                .child(InspectorView::render(self, cx))
-                                .into_any_element()
-                        } else {
-                            Empty.into_any_element()
-                        },
-                    ),
+                    .child(if inspector_open && !is_fullscreen_viewer {
+                        div()
+                            .child(InspectorView::render(self, cx))
+                            .into_any_element()
+                    } else {
+                        Empty.into_any_element()
+                    }),
             )
             // 4. Bottom 28px Status Bar
             .child(self.render_status_bar(total_count))

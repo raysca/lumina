@@ -44,6 +44,9 @@ impl TagManagerModal {
             .debug_selector(|| "tag-manager-backdrop".to_string())
             .absolute()
             .inset_0()
+            // The card is painted after this backdrop, so it stays clickable
+            // while the scrim blocks the grid/viewer underneath.
+            .occlude()
             .bg(theme::scrim())
             .flex()
             .justify_center()

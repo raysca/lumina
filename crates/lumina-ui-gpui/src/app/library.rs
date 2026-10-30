@@ -3,6 +3,7 @@ use lumina_core::{EngineEvent, LuminaEngine, MediaId, MediaItem, SmartAlbum, Sys
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
@@ -26,11 +27,23 @@ fn resolve_restored_view(view: LastView, user_albums: &[SmartAlbum]) -> AlbumSel
 /// Maximum number of committed queries kept in recent-search history.
 pub(crate) const MAX_RECENT_SEARCHES: usize = 10;
 
+/// How close the player position must be to the requested seek time before a
+/// paused frame poll is trusted.
+///
+/// The native bridge copies the pixel buffer for the item's *current* time, so
+/// polling before AVFoundation has applied the seek would hand back the
+/// pre-seek frame. The position gate covers both forward and backward seeks;
+/// the bounded refresh window still stops the polling.
+///
+/// Half a 30 fps frame, so a single frame step cannot pass the gate before
+/// the seek lands.
+const SEEK_FRAME_TOLERANCE_SECS: f64 = 0.016;
+
 /// Maximum number of rows rendered in the search suggestion dropdown.
 pub(crate) const MAX_SEARCH_SUGGESTIONS: usize = 8;
 
 /// Fields and quick-filter tokens offered when a query is empty or matches one
-/// of them. These mirror the query grammar and the filter-bar chips.
+/// of them. These mirror the query grammar.
 const SEARCH_FIELD_SUGGESTIONS: &[&str] = &[
     "is:favorite",
     "is:video",
@@ -264,7 +277,7 @@ impl LuminaApp {
                 if let Some(ref current) = self.selected_item {
                     if current.id == id {
                         if let Ok(gpui_img) = frame_to_gpui_image(frame) {
-                            self.viewer_image = Some(gpui_img);
+                            self.set_viewer_image(Some(gpui_img));
                             cx.notify();
                         }
                     }
@@ -278,23 +291,70 @@ impl LuminaApp {
             }
             UiMessage::VideoFrameTick => {
                 self.video.frame_pending.store(false, Ordering::Release);
+                let playing = self.video.is_playing;
+                let mut frame = None;
+                let mut playback_ended = false;
+                let mut stop_ticker = false;
+
                 if let Some(ref mut player) = self.video.player {
-                    self.video.playback_time = player.position();
-                    if !player.is_playing() {
-                        self.video.is_playing = false;
-                        // Playback can end while a scrub drag is active. Do not
-                        // leave the transport/playhead stuck in scrub mode.
-                        self.video.is_scrubbing = false;
-                        self.video.scrub_time = None;
-                        self.video.last_scrub_seek = None;
-                        self.stop_video_ticker();
-                        cx.notify();
-                    } else if let Some(frame) = player.next_frame() {
-                        if let Ok(img) = video_frame_to_gpui_image(frame) {
-                            self.viewer_image = Some(img);
-                            cx.notify();
+                    if playing {
+                        self.video.playback_time = player.position();
+                        if player.is_playing() {
+                            frame = player.next_frame();
+                        } else {
+                            playback_ended = true;
                         }
+                    } else if let Some(deadline) = self.video.seek_refresh_until {
+                        // Bounded post-seek refresh while paused. `seek_video_to_time`
+                        // and the coalesced drag seeks arm this deadline; polling
+                        // stops as soon as the frame arrives or the window expires,
+                        // so a missing frame can never keep the ticker alive.
+                        if Instant::now() >= deadline {
+                            stop_ticker = true;
+                        } else {
+                            // Only trust a frame once the player has actually
+                            // moved to the requested time; before that the
+                            // output would hand back the pre-seek frame.
+                            let target = self.video.playback_time;
+                            if (player.position() - target).abs() <= SEEK_FRAME_TOLERANCE_SECS {
+                                frame = player.next_frame();
+                            }
+                        }
+                    } else {
+                        // No playback and no pending refresh: the ticker has no
+                        // work. Stop it instead of polling a paused player.
+                        stop_ticker = true;
                     }
+                } else {
+                    self.video.seek_refresh_until = None;
+                    stop_ticker = true;
+                }
+
+                if playback_ended {
+                    self.video.is_playing = false;
+                    // Playback can end while a scrub drag is active. Do not
+                    // leave the transport/playhead stuck in scrub mode.
+                    self.video.is_scrubbing = false;
+                    self.video.scrub_time = None;
+                    self.video.last_scrub_seek = None;
+                    self.video.seek_refresh_until = None;
+                    self.stop_video_ticker();
+                    cx.notify();
+                } else if let Some(frame) = frame {
+                    if let Ok(img) = video_frame_to_gpui_image(frame) {
+                        self.set_viewer_image(Some(img));
+                        if !playing {
+                            // One frame is all the paused refresh needs.
+                            self.video.seek_refresh_until = None;
+                            self.stop_video_ticker();
+                        }
+                        cx.notify();
+                    }
+                } else if stop_ticker {
+                    if !playing {
+                        self.video.seek_refresh_until = None;
+                    }
+                    self.stop_video_ticker();
                 }
                 // Throttled by playback progress, not wall-clock time, so tests
                 // stay deterministic and the map does not churn every frame.
@@ -358,7 +418,7 @@ impl LuminaApp {
         self.selection_anchor = None;
         self.selected_item_tags.clear();
         self.batch_summary = Default::default();
-        self.viewer_image = None;
+        self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
         self.search_query.clear();
         self.search_focused = false;
@@ -779,18 +839,6 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn append_search_pill(&mut self, pill: &str, cx: &mut Context<Self>) {
-        let departing = self.navigation_snapshot();
-        if self.search_query.is_empty() {
-            self.search_query = pill.to_string();
-        } else if !self.search_query.contains(pill) {
-            self.search_query = format!("{} {}", self.search_query, pill);
-        }
-        self.active_year = None;
-        self.clear_selection(cx);
-        self.record_navigation_change(departing);
-    }
-
     pub fn clear_search(&mut self, cx: &mut Context<Self>) {
         let departing = self.navigation_snapshot();
         self.search_query.clear();
@@ -848,7 +896,7 @@ impl LuminaApp {
         self.selection_anchor = None;
         self.selected_item_tags.clear();
         self.batch_summary = Default::default();
-        self.viewer_image = None;
+        self.set_viewer_image(None);
 
         if let Some(id) = restored.selected_media_id {
             let media_id = MediaId(id);

@@ -26,6 +26,7 @@ impl DeleteConfirmModal {
             .debug_selector(|| "delete-modal-backdrop".to_string())
             .absolute()
             .inset_0()
+            .occlude()
             .bg(theme::scrim())
             .flex()
             .justify_center()

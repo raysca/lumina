@@ -3,7 +3,7 @@ use lumina_core::{MediaItem, MediaType};
 use std::path::Path;
 use std::process::Command;
 
-use crate::app::types::{LayoutMode, UiMessage};
+use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::config::validate_external_editor;
 use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
@@ -19,8 +19,13 @@ pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
     "The file is no longer available; nothing was launched.";
 
 /// Decode size requested for the full-viewer still, matching the selection path
-/// in `select_item_internal`; the grid requests 320 and the viewer 1024.
-const VIEWER_IMAGE_SIZE: u32 = 1024;
+/// in `select_item_internal`; the grid requests 320 and the viewer 2048.
+///
+/// Deliberate simplification: one fixed viewer decode instead of per-zoom
+/// tiers (2048 for 2x, 4096 for 4x). 2048 already exceeds a 1440-1660 px Fit
+/// viewport, so 2x has real pixels and 4x upscales the same texture; tiered
+/// decodes are deferred until zoom latency/memory is measured.
+pub(crate) const VIEWER_IMAGE_SIZE: u32 = 2048;
 
 /// Builds the launch command for `file` in `editor` without running it.
 ///
@@ -48,7 +53,37 @@ pub(crate) fn external_editor_command(editor: &str, file: &Path) -> Option<Comma
     }
 }
 
+/// Evicts viewer images retired by [`LuminaApp::set_viewer_image`] from every
+/// window's GPU atlas. Each window that paints `viewer_image` drains the queue,
+/// so PiP keeps evicting while an occluded main window is not drawing.
+pub(crate) fn evict_retired_viewer_images(
+    images: Vec<std::sync::Arc<RenderImage>>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    for image in images {
+        cx.drop_image(image, Some(window));
+    }
+}
+
 impl LuminaApp {
+    /// Replaces the viewer image, queueing the old one for GPU eviction.
+    ///
+    /// Only an image nobody else holds is retired: grid thumbnails shown as a
+    /// placeholder stay owned by the thumbnail cache and keep their texture.
+    pub(crate) fn set_viewer_image(&mut self, image: Option<std::sync::Arc<RenderImage>>) {
+        let old = std::mem::replace(&mut self.viewer_image, image);
+        if let Some(old) = old {
+            let replaced_by_self = self
+                .viewer_image
+                .as_ref()
+                .is_some_and(|new| new.id == old.id);
+            if !replaced_by_self && std::sync::Arc::strong_count(&old) == 1 {
+                self.retired_viewer_images.push(old);
+            }
+        }
+    }
+
     pub fn reveal_item_in_finder(&self, path: &Path) {
         #[cfg(target_os = "macos")]
         {
@@ -72,20 +107,29 @@ impl LuminaApp {
     }
 
     pub fn open_item_in_default_app(&self, path: &Path) {
-        #[cfg(target_os = "macos")]
+        // UI tests drive the viewer buttons through synthetic clicks; never
+        // launch a real Preview/QuickTime process from the test harness.
+        #[cfg(test)]
         {
-            let _ = std::process::Command::new("open").arg(path).spawn();
+            let _ = path;
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(not(test))]
         {
-            let _ = std::process::Command::new("xdg-open").arg(path).spawn();
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("cmd")
-                .args(["/c", "start", ""])
-                .arg(path)
-                .spawn();
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("open").arg(path).spawn();
+            }
+            #[cfg(target_os = "linux")]
+            {
+                let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let _ = std::process::Command::new("cmd")
+                    .args(["/c", "start", ""])
+                    .arg(path)
+                    .spawn();
+            }
         }
     }
 
@@ -148,7 +192,12 @@ impl LuminaApp {
             self.zoom_viewer_by(delta, cx);
             return;
         }
-        let canvas_center = (window_viewport.0 * 0.5, window_viewport.1 * 0.5);
+        let canvas_center = self
+            .viewer_state
+            .canvas
+            .map_or((window_viewport.0 * 0.5, window_viewport.1 * 0.5), |c| {
+                c.center
+            });
         self.viewer_state.zoom_at(delta, cursor, canvas_center);
         cx.notify();
     }
@@ -212,9 +261,6 @@ impl LuminaApp {
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;
         self.viewer_shortcuts_open = false;
-        if self.layout_mode == LayoutMode::Viewer {
-            self.layout_mode = LayoutMode::Browser;
-        }
         self.viewer_state.reset();
         if self.floating_pip_window.is_none() {
             self.stop_video_player();
@@ -270,6 +316,7 @@ impl LuminaApp {
         cx.notify();
     }
 
+    #[cfg(test)]
     pub fn set_viewer_zoom(&mut self, scale: f32, cx: &mut Context<Self>) {
         self.viewer_state.set_zoom(scale);
         cx.notify();
@@ -345,7 +392,7 @@ impl LuminaApp {
             state.texture_cache.lock().pop(&item.id);
             state.in_flight.lock().remove(&item.id);
         }
-        self.viewer_image = None;
+        self.set_viewer_image(None);
 
         // Re-request the full viewer frame through the normal background path so
         // the displayed image is transformed by the decoder, not by the UI.

@@ -4,8 +4,8 @@
 //! shadows only on floating panels, amber is the single accent and always means selection.
 #![allow(dead_code)]
 use gpui::{
-    div, prelude::*, px, rgb, rgba, transparent_black, AnyView, App, Context, Div, ElementId,
-    Render, Rgba, SharedString, Stateful, Window,
+    div, prelude::*, px, rgb, rgba, AnyView, App, Context, Div, ElementId, Render, Rgba,
+    SharedString, Stateful, Window,
 };
 
 macro_rules! tokens {
@@ -42,7 +42,7 @@ tokens! {
     /// Text/icons drawn on an `accent` fill.
     accent_fg = 0x1A1206;
 
-    // Selection (rows, chips, toggles that are "on").
+    // Selection (rows and toggles that are "on").
     selection_bg = 0x3A3426;
     selection_bg_hover = 0x453D2B;
     selection_border = 0x6B5A33;
@@ -113,37 +113,20 @@ pub fn control_primary(id: impl Into<ElementId>) -> Stateful<Div> {
         .hover(|s| s.bg(accent_hover()))
 }
 
-/// 24px pill used for filters and timeline buckets.
-pub fn chip(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
-    let base = div()
-        .id(id)
-        .h(px(24.0))
-        .px(px(10.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_1()
-        .rounded_full()
-        .border_1()
-        .cursor_pointer()
-        .text_xs();
-    if on {
-        base.bg(selection_bg())
-            .border_color(selection_border())
-            .text_color(selection_fg())
-            .hover(|s| s.bg(selection_bg_hover()))
-    } else {
-        base.bg(transparent_black())
-            .border_color(border())
-            .text_color(text_muted())
-            .hover(|s| s.border_color(border_strong()).text_color(text()))
-    }
-}
-
 /// Semi-transparent dark overlay for modals and viewports.
 #[inline]
 pub fn scrim() -> Rgba {
     rgba(0x000000cc)
+}
+
+/// Library card surface.
+///
+/// Cards are transparent by request: thumbnails sit directly on the library
+/// background instead of a raised panel. Selection is still shown by the
+/// accent outline and the card border.
+#[inline]
+pub fn card_surface() -> Rgba {
+    rgba(0x00000000)
 }
 
 pub const FONT_SANS: &str = "IBM Plex Sans";
@@ -377,6 +360,15 @@ mod tests {
         };
         let (x, y) = (l(a), l(b));
         (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    #[test]
+    fn card_surface_is_transparent() {
+        assert_eq!(
+            card_surface().a,
+            0.0,
+            "grid cards must not paint a surface behind thumbnails"
+        );
     }
 
     #[test]

@@ -1,6 +1,5 @@
 use gpui::*;
 
-use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -37,6 +36,9 @@ impl LuminaApp {
             .child(
                 div()
                     .id("multi-select-action-dock")
+                    // Clicks on the dock must not fall through to the grid,
+                    // which would clear the selection the dock acts on.
+                    .occlude()
                     .px_5()
                     .py_2p5()
                     .bg(theme::bg_hud())
@@ -70,6 +72,7 @@ impl LuminaApp {
                     .child(if self.selection != AlbumSelection::Trash {
                         div()
                             .id("batch-fav-dock-btn")
+                            .debug_selector(|| "batch-fav-dock-btn".to_string())
                             .px_2p5()
                             .py_1()
                             .bg(theme::bg_control())
@@ -167,6 +170,7 @@ impl LuminaApp {
                     .child(
                         div()
                             .id("batch-tags-dock-btn")
+                            .debug_selector(|| "batch-tags-dock-btn".to_string())
                             .px_2p5()
                             .py_1()
                             .bg(theme::accent())
@@ -183,7 +187,7 @@ impl LuminaApp {
                             .child("Add Tags")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.inspector_open = true;
-                                cx.notify();
+                                this.start_tag_input(cx);
                             })),
                     )
                     // Action: Export Selection
@@ -236,13 +240,14 @@ impl LuminaApp {
 
     /// Fullscreen viewer modal overlay
     pub(crate) fn render_viewer_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.is_fullscreen_viewer
-            && self.layout_mode != LayoutMode::Viewer
-            && self.selected_item.is_some()
-        {
+        if self.is_fullscreen_viewer && self.selected_item.is_some() {
             div()
                 .absolute()
                 .inset_0()
+                // Block hit-testing to the toolbar and grid painted beneath the
+                // fullscreen viewer. Children painted after this hitbox (the
+                // viewer itself) stay interactive.
+                .occlude()
                 .child(MediaViewer::render(self, cx))
                 .into_any_element()
         } else {

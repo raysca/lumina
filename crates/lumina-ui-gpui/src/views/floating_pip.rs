@@ -58,7 +58,7 @@ impl Drop for FloatingPipPlayerView {
 }
 
 impl Render for FloatingPipPlayerView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let app = match self.app.upgrade() {
             Some(app) => app,
             None => {
@@ -74,6 +74,11 @@ impl Render for FloatingPipPlayerView {
                     .into_any_element();
             }
         };
+
+        // This window paints `viewer_image` too; evict retired frames here
+        // so playback cannot pile them up while the main window is hidden.
+        let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_viewer_images));
+        crate::app::viewer_actions::evict_retired_viewer_images(retired, window, cx);
 
         let app_read = app.read(cx);
         let preview_image = app_read.viewer_image.clone();

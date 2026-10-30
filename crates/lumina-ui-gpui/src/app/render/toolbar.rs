@@ -1,12 +1,11 @@
 use gpui::*;
 
-use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
-/// Back/Forward toolbar control.
+/// Browsing Back toolbar control.
 ///
 /// The same `debug_selector` is painted when disabled so automation can find
 /// the control at the edges instead of treating it as missing.
@@ -15,7 +14,6 @@ fn navigation_button(
     icon: crate::icons::Icon,
     tooltip: &'static str,
     enabled: bool,
-    backwards: bool,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     let base = div()
@@ -36,12 +34,8 @@ fn navigation_button(
             .cursor_pointer()
             .hover(|style| style.bg(theme::bg_control_hover()))
             .child(crate::icons::render_icon(icon, px(13.0), theme::text()))
-            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
-                if backwards {
-                    this.navigate_back(cx);
-                } else {
-                    this.navigate_forward(cx);
-                }
+            .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                this.navigate_back(cx);
             }))
     } else {
         base.text_color(theme::text_disabled())
@@ -99,69 +93,14 @@ impl LuminaApp {
                     this.toggle_sidebar(cx);
                 })),
             )
-            // Browsing history: Back / Forward
+            // Browsing history: Back only (Forward was removed by design).
             .child(navigation_button(
                 "nav-back",
                 crate::icons::Icon::ChevronLeft,
                 "Back (⌘[)",
                 self.can_navigate_back(),
-                true,
                 cx,
             ))
-            .child(navigation_button(
-                "nav-forward",
-                crate::icons::Icon::ChevronRight,
-                "Forward (⌘])",
-                self.can_navigate_forward(),
-                false,
-                cx,
-            ))
-            // Segmented mode switcher: [ Browser | Split | Viewer ]
-            .child(
-                theme::segmented("layout-mode-switcher")
-                    .child(
-                        theme::segmented_item(
-                            "mode-browser",
-                            self.layout_mode == LayoutMode::Browser,
-                        )
-                        .debug_selector(|| "mode-browser".to_string())
-                        .child("Browser")
-                        .on_click(cx.listener(
-                            |this, _e: &ClickEvent, _w, cx| {
-                                this.layout_mode = LayoutMode::Browser;
-                                this.is_fullscreen_viewer = false;
-                                this.save_config();
-                                cx.notify();
-                            },
-                        )),
-                    )
-                    .child(
-                        theme::segmented_item("mode-split", self.layout_mode == LayoutMode::Split)
-                            .debug_selector(|| "mode-split".to_string())
-                            .child("Split")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.layout_mode = LayoutMode::Split;
-                                this.save_config();
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        theme::segmented_item(
-                            "mode-viewer",
-                            self.layout_mode == LayoutMode::Viewer,
-                        )
-                        .debug_selector(|| "mode-viewer".to_string())
-                        .child("Viewer")
-                        .on_click(cx.listener(
-                            |this, _e: &ClickEvent, _w, cx| {
-                                this.layout_mode = LayoutMode::Viewer;
-                                this.is_fullscreen_viewer = true;
-                                this.save_config();
-                                cx.notify();
-                            },
-                        )),
-                    ),
-            )
             // Breadcrumb: Library / year-view
             .child(
                 div()
@@ -242,6 +181,7 @@ impl LuminaApp {
             )
             .child(
                 theme::control("tags-toolbar-btn")
+                    .debug_selector(|| "tags-toolbar-btn".to_string())
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Tag,
                         px(13.0),

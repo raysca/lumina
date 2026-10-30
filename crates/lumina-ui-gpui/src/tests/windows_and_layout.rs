@@ -139,7 +139,7 @@ fn test_card_context_menu_lifecycle() {
 }
 
 #[core::prelude::v1::test]
-fn test_resizable_panes_and_layout_modes() {
+fn test_resizable_panes_and_viewer_open_close() {
     let mut cx = gpui::TestAppContext::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -147,13 +147,12 @@ fn test_resizable_panes_and_layout_modes() {
         // Reset to defaults for deterministic unit testing
         app.sidebar_width = 230.0;
         app.inspector_width = 310.0;
-        app.layout_mode = LayoutMode::Browser;
         app.grid_state = None;
 
         // 1. Initial dimensions
         assert_eq!(app.sidebar_width, 230.0);
         assert_eq!(app.inspector_width, 310.0);
-        assert_eq!(app.layout_mode, LayoutMode::Browser);
+        assert!(!app.is_fullscreen_viewer);
 
         // 2. Resizing sidebar
         app.sidebar_width = 280.0;
@@ -163,16 +162,26 @@ fn test_resizable_panes_and_layout_modes() {
         app.inspector_width = 350.0;
         assert_eq!(app.inspector_width, 350.0);
 
-        // 4. Switching layout modes
-        app.layout_mode = LayoutMode::Split;
-        assert_eq!(app.layout_mode, LayoutMode::Split);
+        // 4. Selecting does not open the viewer; opening is explicit.
+        let sample = get_sample_items();
+        let item = sample[2].clone();
+        app.handle_card_click(item.clone(), 2, false, false, cx);
+        assert!(
+            !app.is_fullscreen_viewer,
+            "a single card click must not open the fullscreen viewer"
+        );
+        assert_eq!(app.selected_index, Some(2));
 
-        app.layout_mode = LayoutMode::Viewer;
-        assert_eq!(app.layout_mode, LayoutMode::Viewer);
+        // 5. The viewer is the fullscreen overlay over the grid.
+        app.open_viewer(item.clone(), cx);
+        assert!(app.is_fullscreen_viewer);
+        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
 
+        // 6. Closing returns to the same grid selection.
         app.close_viewer(cx);
-        assert_eq!(app.layout_mode, LayoutMode::Browser);
         assert!(!app.is_fullscreen_viewer);
+        assert_eq!(app.selected_index, Some(2));
+        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
     });
     cx.run_until_parked();
 }
@@ -282,6 +291,68 @@ fn test_card_click_selection_and_clean_startup() {
         assert!(!app.is_fullscreen_viewer);
         assert_eq!(app.selected_index, Some(2));
     });
+}
+
+#[core::prelude::v1::test]
+fn test_grid_row_height_tracks_window_and_panel_chrome() {
+    use crate::views::grid::grid_metrics;
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    view.update(cx, |app, _cx| {
+        app.grid_state = None;
+        app.timeline_year_buckets.clear();
+        app.selected_item = None;
+        app.grid_columns = 4;
+        app.sidebar_width = 230.0;
+        app.sidebar_collapsed = false;
+        app.inspector_open = false;
+        app.is_fullscreen_viewer = false;
+        app.window_bounds = Some((0.0, 0.0, 1280.0, 840.0));
+
+        let base = grid_metrics(1280.0, 230.0, false, false, None, 4);
+        assert_eq!(app.grid_metrics(), base);
+        assert_eq!(app.row_height(), base.row_height);
+
+        // The collapsed sidebar is a 48px rail with no resizer, so the grid
+        // gets wider and the square well grows.
+        app.sidebar_collapsed = true;
+        let collapsed = grid_metrics(1280.0, 230.0, true, false, None, 4);
+        assert_eq!(app.row_height(), collapsed.row_height);
+        assert!(collapsed.row_height > base.row_height);
+
+        // Density changes the card width, so it also changes the square side.
+        app.grid_columns = 8;
+        let dense = grid_metrics(1280.0, 230.0, true, false, None, 8);
+        assert_eq!(app.row_height(), dense.row_height);
+        assert!(dense.row_height < collapsed.row_height);
+
+        // An open inspector with a selection narrows the grid; the fullscreen
+        // viewer overlay hides the inspector again.
+        app.selected_item = get_sample_items().into_iter().next();
+        app.inspector_open = true;
+        let with_inspector = grid_metrics(1280.0, 230.0, true, false, Some(app.inspector_width), 8);
+        assert_eq!(app.row_height(), with_inspector.row_height);
+        assert!(with_inspector.row_height < dense.row_height);
+
+        app.is_fullscreen_viewer = true;
+        assert_eq!(app.row_height(), dense.row_height);
+        app.is_fullscreen_viewer = false;
+        app.inspector_open = false;
+        app.selected_item = None;
+
+        // The year rail only takes space when the timeline has buckets.
+        app.grid_columns = 2;
+        let without_rail = grid_metrics(1280.0, 230.0, true, false, None, 2);
+        assert_eq!(app.row_height(), without_rail.row_height);
+        app.timeline_year_buckets = vec![(2024, 3)];
+        let with_rail = grid_metrics(1280.0, 230.0, true, true, None, 2);
+        assert_eq!(app.row_height(), with_rail.row_height);
+        assert!(with_rail.row_height < without_rail.row_height);
+    });
+
+    cx.run_until_parked();
 }
 
 #[core::prelude::v1::test]

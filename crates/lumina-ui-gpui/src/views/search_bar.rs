@@ -2,34 +2,6 @@ use crate::theme;
 use crate::LuminaApp;
 use gpui::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct FilterChipState {
-    all: bool,
-    favorites: bool,
-    videos: bool,
-    raw: bool,
-    places: bool,
-    tagged: bool,
-    rated_four_plus: bool,
-    color_label: bool,
-}
-
-/// Derives chip state from exact query tokens. Free text and structured
-/// filters should never leave the All chip looking active.
-fn filter_chip_state(query: &str) -> FilterChipState {
-    let tokens: Vec<&str> = query.split_whitespace().collect();
-    FilterChipState {
-        all: tokens.is_empty(),
-        favorites: tokens.contains(&"is:favorite"),
-        videos: tokens.contains(&"is:video"),
-        raw: tokens.contains(&"is:raw"),
-        places: tokens.contains(&"has:location"),
-        tagged: tokens.contains(&"has:tag"),
-        rated_four_plus: tokens.contains(&"rating:>=4"),
-        color_label: tokens.contains(&"has:color"),
-    }
-}
-
 pub struct SearchBarView;
 
 impl SearchBarView {
@@ -205,18 +177,8 @@ impl SearchBarView {
         Some(gpui::deferred(panel).with_priority(1).into_any_element())
     }
 
-    /// Filter bar under the toolbar: quick filters, view fit/square toggle, zoom slider.
+    /// Filter bar under the toolbar: view fit/square toggle and zoom slider.
     pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-        let chips = filter_chip_state(&this.search_query);
-        let is_fav = chips.favorites;
-        let is_video = chips.videos;
-        let is_raw = chips.raw;
-        let is_gps = chips.places;
-        let is_tagged = chips.tagged;
-        let is_rated_four_plus = chips.rated_four_plus;
-        let has_color = chips.color_label;
-        let is_all = chips.all;
-
         div()
             .w_full()
             .h(px(44.0))
@@ -229,141 +191,6 @@ impl SearchBarView {
             .flex_row()
             .items_center()
             .gap_2()
-            // 1. All
-            .child(
-                theme::chip("filter-chip-all", is_all)
-                    .child("All")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.clear_search(cx);
-                    })),
-            )
-            // 2. Favorites
-            .child(
-                theme::chip("filter-chip-favs", is_fav)
-                    .child("Favorites")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this.search_query.contains("is:favorite") {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "is:favorite")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("is:favorite", cx);
-                        }
-                    })),
-            )
-            // 3. Videos
-            .child(
-                theme::chip("filter-chip-videos", is_video)
-                    .child("Videos")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this.search_query.contains("is:video") {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "is:video")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("is:video", cx);
-                        }
-                    })),
-            )
-            // 4. RAW
-            .child(
-                theme::chip("filter-chip-raw", is_raw)
-                    .child("RAW")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this.search_query.contains("is:raw") {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "is:raw")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("is:raw", cx);
-                        }
-                    })),
-            )
-            // 5. Has GPS
-            .child(
-                theme::chip("filter-chip-gps", is_gps)
-                    .child("Places")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this.search_query.contains("has:location") {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "has:location")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("has:location", cx);
-                        }
-                    })),
-            )
-            // 6. Tagged
-            .child(
-                theme::chip("filter-chip-tagged", is_tagged)
-                    .child("Tagged")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this.search_query.contains("has:tag") {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "has:tag")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("has:tag", cx);
-                        }
-                    })),
-            )
-            // 7. Four stars and up
-            .child(
-                theme::chip("filter-chip-rated", is_rated_four_plus)
-                    .child("4★+")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this
-                            .search_query
-                            .split_whitespace()
-                            .any(|t| t == "rating:>=4")
-                        {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "rating:>=4")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("rating:>=4", cx);
-                        }
-                    })),
-            )
-            // 8. Has a color label
-            .child(
-                theme::chip("filter-chip-color", has_color)
-                    .child("Color")
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        if this
-                            .search_query
-                            .split_whitespace()
-                            .any(|t| t == "has:color")
-                        {
-                            let rest: Vec<&str> = this
-                                .search_query
-                                .split_whitespace()
-                                .filter(|t| *t != "has:color")
-                                .collect();
-                            this.set_search_query(&rest.join(" "), cx);
-                        } else {
-                            this.append_search_pill("has:color", cx);
-                        }
-                    })),
-            )
             .child(div().flex_1())
             // [ Fit | Square ] segmented toggle
             .child(
@@ -399,7 +226,7 @@ impl SearchBarView {
                     .child(
                         theme::control("grid-zoom-out-btn")
                             .debug_selector(|| "grid-zoom-out".to_string())
-                            .tooltip(theme::tooltip_label("Larger thumbnails"))
+                            .tooltip(theme::tooltip_label("Smaller thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()
@@ -457,7 +284,7 @@ impl SearchBarView {
                     .child(
                         theme::control("grid-zoom-in-btn")
                             .debug_selector(|| "grid-zoom-in".to_string())
-                            .tooltip(theme::tooltip_label("Smaller thumbnails"))
+                            .tooltip(theme::tooltip_label("Larger thumbnails"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()
@@ -468,45 +295,5 @@ impl SearchBarView {
                             })),
                     ),
             )
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::filter_chip_state;
-
-    #[test]
-    fn empty_query_lights_all() {
-        let chips = filter_chip_state("");
-        assert!(chips.all);
-        assert!(!chips.favorites && !chips.videos && !chips.raw);
-    }
-
-    #[test]
-    fn free_text_does_not_light_all() {
-        let chips = filter_chip_state("sunset");
-        assert!(!chips.all, "free text must not make All look active");
-    }
-
-    #[test]
-    fn structured_filters_are_detected_as_exact_tokens() {
-        let chips = filter_chip_state("is:favorite camera:sony");
-        assert!(!chips.all);
-        assert!(chips.favorites);
-        assert!(!chips.videos && !chips.raw && !chips.places && !chips.tagged);
-    }
-
-    #[test]
-    fn rating_and_color_filters_are_detected() {
-        let chips = filter_chip_state("rating:>=4 has:color");
-        assert!(chips.rated_four_plus);
-        assert!(chips.color_label);
-        assert!(!chips.all && !chips.favorites);
-    }
-
-    #[test]
-    fn substring_of_a_filter_token_is_not_a_filter() {
-        let chips = filter_chip_state("not:is:favorite");
-        assert!(!chips.all);
-        assert!(!chips.favorites);
     }
 }

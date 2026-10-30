@@ -43,7 +43,7 @@ pub(crate) fn seed_library(
     (temp_dir, engine)
 }
 
-fn leak(selector: String) -> &'static str {
+pub(crate) fn leak(selector: String) -> &'static str {
     Box::leak(selector.into_boxed_str())
 }
 
@@ -56,7 +56,7 @@ fn test_epoch_ms(value: &str) -> i64 {
 
 /// Draws the registered root view so layout, hit-testing and debug_bounds are
 /// populated for the current app state.
-fn render_ui(cx: &mut VisualTestContext) {
+pub(crate) fn render_ui(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
         window.draw(cx).clear();
@@ -71,19 +71,22 @@ fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
     });
 }
 
-fn bounds_center(cx: &mut VisualTestContext, selector: &'static str) -> gpui::Point<gpui::Pixels> {
+pub(crate) fn bounds_center(
+    cx: &mut VisualTestContext,
+    selector: &'static str,
+) -> gpui::Point<gpui::Pixels> {
     cx.debug_bounds(selector)
         .unwrap_or_else(|| panic!("no rendered bounds for selector {selector:?}"))
         .center()
 }
 
-fn click(cx: &mut VisualTestContext, selector: &'static str) {
+pub(crate) fn click(cx: &mut VisualTestContext, selector: &'static str) {
     let position = bounds_center(cx, selector);
     cx.simulate_click(position, gpui::Modifiers::default());
     render_ui(cx);
 }
 
-fn click_point(cx: &mut VisualTestContext, x: f32, y: f32) {
+pub(crate) fn click_point(cx: &mut VisualTestContext, x: f32, y: f32) {
     cx.simulate_click(
         gpui::point(gpui::px(x), gpui::px(y)),
         gpui::Modifiers::default(),
@@ -173,9 +176,7 @@ fn ui_automation_renders_all_core_controls() {
     assert!(vcx.debug_bounds("app-root").is_some());
     let selectors = [
         "sidebar-toggle",
-        "mode-browser",
-        "mode-split",
-        "mode-viewer",
+        "nav-back",
         "search-input",
         "switch-library",
         "inspector-toggle",
@@ -205,13 +206,6 @@ fn ui_automation_toolbar_buttons_by_mouse() {
     assert!(vcx.debug_bounds("expand-sidebar").is_some());
     click(vcx, "expand-sidebar");
     view.update(vcx, |app, _| assert!(!app.sidebar_collapsed));
-
-    click(vcx, "mode-split");
-    view.update(vcx, |app, _| assert_eq!(app.layout_mode, LayoutMode::Split));
-    click(vcx, "mode-browser");
-    view.update(vcx, |app, _| {
-        assert_eq!(app.layout_mode, LayoutMode::Browser)
-    });
 
     click(vcx, "fit-mode-square");
     view.update(vcx, |app, _| assert!(!app.card_fit_mode));
@@ -246,8 +240,17 @@ fn ui_automation_search_click_type_clear() {
         assert!(app.search_focused, "typing keeps search focused");
     });
 
-    // Clicking elsewhere must blur search so shortcuts work again.
-    click(vcx, "mode-browser");
+    // Clicking elsewhere must blur search so shortcuts work again. With the
+    // layout switcher gone, an empty grid point is the neutral rendered target.
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let empty_point = gpui::point(
+        surface.origin.x + gpui::px(24.0),
+        surface.origin.y + surface.size.height - gpui::px(24.0),
+    );
+    vcx.simulate_click(empty_point, gpui::Modifiers::default());
+    render_ui(vcx);
     view.update(vcx, |app, _| assert!(!app.search_focused));
     assert!(vcx.debug_bounds("clear-search").is_some());
 
@@ -293,6 +296,60 @@ fn ui_automation_grid_and_viewer_journey() {
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(0)));
     keystrokes(vcx, "pagedown");
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(7)));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_viewer_back_button_returns_to_grid() {
+    let (temp_dir, engine) = seed_library("viewer_back", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "double-click must open the viewer"
+        );
+    });
+
+    let back = vcx
+        .debug_bounds("viewer-back")
+        .expect("the viewer must paint its Back button");
+    let top_bar = vcx
+        .debug_bounds("viewer-top-bar")
+        .expect("the viewer must paint its top bar");
+    assert!(
+        back.left() >= top_bar.left() && back.right() <= top_bar.right(),
+        "the Back button must live inside the viewer top bar: back={back:?} top_bar={top_bar:?}"
+    );
+    assert!(
+        vcx.debug_bounds("nav-forward").is_none(),
+        "the removed Forward control must not be painted"
+    );
+
+    click(vcx, "viewer-back");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.is_fullscreen_viewer,
+            "the viewer Back button must return to the grid"
+        );
+        assert_eq!(
+            app.selected_item.as_ref().map(|item| item.id.0),
+            Some(first_id),
+            "the Back button must keep the grid selection"
+        );
+    });
+
+    // Escape remains an equivalent keyboard exit.
+    double_click(vcx, card);
+    view.update(vcx, |app, _| assert!(app.is_fullscreen_viewer));
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.is_fullscreen_viewer));
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
@@ -446,6 +503,64 @@ fn ui_automation_card_skeleton_selection_and_open() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_thumbnail_chrome_is_minimal() {
+    let (temp_dir, engine) = seed_library("card_chrome", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+    let selected = leak(format!("media-card-selected-{}", first_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Fix the window so the rendered card width and the production row-height
+    // formula use the same budget (the resize observer records the bounds).
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    click(vcx, card);
+    let card_bounds = vcx
+        .debug_bounds(card)
+        .expect("the card must still paint its hit target");
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("the card must paint its photo well");
+    let selected_bounds = vcx
+        .debug_bounds(selected)
+        .expect("selection must still paint its highlight");
+    let selected_w = f32::from(selected_bounds.size.width);
+    let selected_h = f32::from(selected_bounds.size.height);
+    let photo_w = f32::from(photo_bounds.size.width);
+    let photo_h = f32::from(photo_bounds.size.height);
+    assert!(
+        (selected_w - photo_w).abs() <= 1.0 && (selected_h - photo_h).abs() <= 1.0,
+        "the highlight must trace the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
+    );
+    assert!(
+        (selected_w - selected_h).abs() <= 2.0,
+        "the thumbnail highlight must be square: selected={selected_bounds:?}"
+    );
+    assert!(
+        photo_w > f32::from(card_bounds.size.width) * 0.8
+            && photo_h > f32::from(card_bounds.size.height) * 0.8,
+        "the photo well must still fill the card: card={card_bounds:?} photo={photo_bounds:?}"
+    );
+    // The removed check badge and hover "Open" hint never had debug
+    // selectors, so absence assertions on them could not fail; the square,
+    // photo-sized highlight above is the observable contract.
+
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "removing the hover hint must not remove the open action"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_card_texture_replaces_skeleton() {
     let (temp_dir, engine) = seed_library("card_reveal", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
@@ -487,6 +602,122 @@ fn ui_automation_card_texture_replaces_skeleton() {
     assert_eq!(
         photo_bounds.size, thumb_bounds.size,
         "the revealed thumbnail must keep the same layout as the skeleton"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_photo_well_is_square_at_all_densities() {
+    let (temp_dir, engine) = seed_library("square_well", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let info = leak(format!("media-card-info-{}", first_id));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Fix the window so the rendered card width and the production formula use
+    // the same budget; the resize observer records the new bounds before the
+    // next draw.
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    for columns in [2usize, 4, 8] {
+        view.update(vcx, |app, cx| {
+            app.grid_columns = columns;
+            cx.notify();
+        });
+        render_ui(vcx);
+
+        let photo_bounds = vcx
+            .debug_bounds(photo)
+            .unwrap_or_else(|| panic!("no photo well painted at {columns} columns"));
+        let width = f32::from(photo_bounds.size.width);
+        let height = f32::from(photo_bounds.size.height);
+        assert!(
+            (width - height).abs() <= 2.0,
+            "the photo well must be square at {columns} columns, got {width}x{height}"
+        );
+
+        let expected = view.update(vcx, |app, _| app.grid_metrics().photo_side);
+        assert!(
+            (height - expected).abs() <= 2.0,
+            "the rendered well ({height}) must use the derived side ({expected}) at {columns} columns"
+        );
+
+        // The filename label is gone: the band under the photo is only the
+        // rating/colour row plus its top padding.
+        let info_bounds = vcx
+            .debug_bounds(info)
+            .expect("every card must paint its rating/colour band");
+        let info_height = f32::from(info_bounds.size.height);
+        assert!(
+            (info_height - crate::views::grid::CARD_INFO_BAND_HEIGHT).abs() <= 1.0,
+            "the info band must be {}px tall, got {info_height}",
+            crate::views::grid::CARD_INFO_BAND_HEIGHT
+        );
+    }
+
+    // A live resize must relayout from the same formula, not a stale width.
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 4;
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    let resized = vcx
+        .debug_bounds(photo)
+        .expect("the photo well must survive a window resize");
+    let width = f32::from(resized.size.width);
+    let height = f32::from(resized.size.height);
+    assert!(
+        (width - height).abs() <= 2.0,
+        "the photo well must stay square after a resize, got {width}x{height}"
+    );
+
+    // The docked inspector narrows the grid: its width and 4px resizer must be
+    // part of the same budget.
+    view.update(vcx, |app, cx| {
+        app.selected_item = app.get_active_slice(0..1).first().cloned();
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let with_inspector = vcx
+        .debug_bounds(photo)
+        .expect("the photo well must stay painted with the inspector open");
+    let width = f32::from(with_inspector.size.width);
+    let height = f32::from(with_inspector.size.height);
+    let expected = view.update(vcx, |app, _| app.grid_metrics().photo_side);
+    assert!(
+        (width - height).abs() <= 2.0 && (height - expected).abs() <= 2.0,
+        "the inspector chrome must be budgeted: well {width}x{height}, expected {expected}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_tooltip_carries_the_filename() {
+    let (temp_dir, engine) = seed_library("card_tooltip", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let card = leak(format!("media-card-{}", item.id.0));
+
+    let mut cx = gpui::TestAppContext::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+
+    let center = bounds_center(vcx, card);
+    vcx.simulate_mouse_move(center, None, gpui::Modifiers::default());
+    // GPUI waits 500ms before building a tooltip.
+    vcx.background_executor
+        .advance_clock(std::time::Duration::from_millis(600));
+    vcx.run_until_parked();
+    render_ui(vcx);
+
+    assert!(
+        vcx.debug_bounds("media-card-name-tooltip").is_some(),
+        "hovering a card must show the filename tooltip that replaced the label"
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -1051,7 +1282,7 @@ fn ui_automation_resize_updates_persisted_bounds() {
 }
 
 #[core::prelude::v1::test]
-fn ui_automation_navigation_album_back_forward() {
+fn ui_automation_navigation_album_back() {
     let (temp_dir, engine) = seed_library("nav_album", 8);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -1079,25 +1310,8 @@ fn ui_automation_navigation_album_back_forward() {
             "Back must return to the previous album"
         );
     });
-    click(vcx, "nav-forward");
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.selection,
-            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
-            "Forward must revisit the album"
-        );
-    });
 
-    // Edge: nothing follows the newest entry, so Forward is a disabled no-op.
-    click(vcx, "nav-forward");
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.selection,
-            AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
-            "Forward at the end of the trail must be a no-op"
-        );
-    });
-    click(vcx, "nav-back");
+    // Edge: nothing precedes the oldest entry, so Back is a disabled no-op.
     click(vcx, "nav-back");
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -1130,19 +1344,12 @@ fn ui_automation_navigation_search_back() {
         );
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
-    click(vcx, "nav-forward");
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.search_query, "is:video",
-            "Forward must restore the search destination"
-        );
-    });
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
-fn ui_automation_navigation_viewer_back_closes_and_forward_reopens() {
+fn ui_automation_navigation_viewer_back_closes() {
     let (temp_dir, engine) = seed_library("nav_viewer", 8);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
@@ -1174,16 +1381,6 @@ fn ui_automation_navigation_viewer_back_closes_and_forward_reopens() {
         );
     });
 
-    focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-]");
-    view.update(vcx, |app, _| {
-        assert!(
-            app.is_fullscreen_viewer,
-            "Forward must reopen the viewer on the same destination"
-        );
-        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
-    });
-
     // Close again, then prove the oldest edge cannot trap the user.
     focus_app(vcx, &view);
     keystrokes(vcx, "cmd-[");
@@ -1205,9 +1402,9 @@ fn ui_automation_navigation_edge_no_ops() {
     render_ui(vcx);
     focus_app(vcx, &view);
     keystrokes(vcx, "cmd-[");
+    // Cmd+] is no longer a navigation shortcut.
     keystrokes(vcx, "cmd-]");
     click(vcx, "nav-back");
-    click(vcx, "nav-forward");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
         assert!(app.search_query.is_empty());
@@ -1219,14 +1416,6 @@ fn ui_automation_navigation_edge_no_ops() {
         app.select_album(AlbumSelection::Trash, cx);
     });
     render_ui(vcx);
-    click(vcx, "nav-forward");
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.selection,
-            AlbumSelection::Trash,
-            "Forward at the newest entry must not move"
-        );
-    });
 
     click(vcx, "nav-back");
     view.update(vcx, |app, _| {
@@ -1241,12 +1430,13 @@ fn ui_automation_navigation_edge_no_ops() {
             "Cmd+[ at the oldest entry must stay put"
         );
     });
+    // Forward was removed: the shortcut must not move the trail.
     keystrokes(vcx, "cmd-]");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
-            AlbumSelection::Trash,
-            "Cmd+] must still move Forward after a Back"
+            AlbumSelection::AllLibrary,
+            "Cmd+] must be inert now that Forward is removed"
         );
     });
 
@@ -1488,6 +1678,45 @@ fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
 }
 
 #[core::prelude::v1::test]
+fn ui_automation_grid_drag_across_rows_selects_a_rectangle() {
+    use std::collections::BTreeSet;
+
+    let (temp_dir, engine) = seed_library("grid_drag_rect", 12);
+    let items = engine.get_item_slice(0..12);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 4;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    // Card 1 (row 0, col 1) to card 6 (row 1, col 2).
+    let start = bounds_center(vcx, leak(format!("media-card-{}", items[1].id.0)));
+    let end = bounds_center(vcx, leak(format!("media-card-{}", items[6].id.0)));
+    vcx.simulate_mouse_down(start, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+    vcx.simulate_mouse_move(
+        end,
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    vcx.simulate_mouse_up(end, gpui::MouseButton::Left, gpui::Modifiers::default());
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            BTreeSet::from([1usize, 2, 5, 6]),
+            "a marquee across rows selects the swept rectangle, not the index run between corners"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn ui_automation_grid_drag_from_selected_card_preserves_multi_selection() {
     use std::collections::BTreeSet;
 
@@ -1577,8 +1806,9 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
     });
 
     let cmd = gpui::Modifiers::secondary_key();
-    let start = bounds_center(vcx, cards[3]);
-    let end = bounds_center(vcx, cards[5]);
+    // Same row at the default column count, so the swept rectangle is 2..=3.
+    let start = bounds_center(vcx, cards[2]);
+    let end = bounds_center(vcx, cards[3]);
     vcx.simulate_mouse_down(start, gpui::MouseButton::Left, cmd);
     render_ui(vcx);
     vcx.simulate_mouse_move(end, Some(gpui::MouseButton::Left), cmd);
@@ -1586,10 +1816,10 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_indices,
-            BTreeSet::from([0usize, 3, 4, 5]),
+            BTreeSet::from([0usize, 2, 3]),
             "Cmd-drag adds the swept range to the existing selection"
         );
-        assert_eq!(app.grid_drag.anchor, Some(3));
+        assert_eq!(app.grid_drag.anchor, Some(2));
     });
 
     vcx.simulate_mouse_up(end, gpui::MouseButton::Left, cmd);
@@ -1597,7 +1827,7 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_indices,
-            BTreeSet::from([0usize, 3, 4, 5]),
+            BTreeSet::from([0usize, 2, 3]),
             "the additive selection survives the release"
         );
         assert!(!app.grid_drag.active);
@@ -1703,6 +1933,55 @@ fn wheel(
         touch_phase: gpui::TouchPhase::Moved,
     });
     render_ui(cx);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_viewer_wheel_zoom_is_smooth() {
+    let (temp_dir, engine) = seed_library("wheel_smooth", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let item = view.update(vcx, |app, _| {
+        app.get_active_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("seeded library must have an item")
+    });
+    view.update(vcx, |app, cx| app.open_viewer(item, cx));
+    render_ui(vcx);
+
+    let center = vcx
+        .debug_bounds("viewer-viewport")
+        .expect("the viewer must paint its viewport")
+        .center();
+    let step = 40.0;
+    wheel(
+        vcx,
+        center,
+        gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
+        gpui::Modifiers::default(),
+    );
+    let one = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
+    assert!(
+        (one - 0.1_f32.exp()).abs() < 0.02,
+        "40px of wheel must zoom smoothly by ~10%, got {one}"
+    );
+    wheel(
+        vcx,
+        center,
+        gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
+        gpui::Modifiers::default(),
+    );
+    let two = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
+    assert!(
+        (two - one * 0.1_f32.exp()).abs() < 0.02,
+        "a second wheel event must zoom by the same ~10% ratio, got {two}"
+    );
+    assert!(
+        (two - 1.25).abs() > 0.02,
+        "wheel zoom must not snap to the old 0.25 keyboard step"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]

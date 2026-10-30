@@ -49,10 +49,10 @@ fn test_filter_changes_clear_multi_selection() {
         );
 
         app.selected_indices = [0usize, 1].into_iter().collect();
-        app.append_search_pill("is:video", cx);
+        app.set_search_query("is:video", cx);
         assert!(
             app.selected_indices.is_empty(),
-            "quick-filter chips must clear stale multi-selection"
+            "changing the search query must clear stale multi-selection"
         );
 
         app.selected_indices = [0usize].into_iter().collect();
@@ -128,8 +128,13 @@ fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
         app.zoom_viewer_by(0.5, cx);
         assert!((app.viewer_state.zoom_scale - 1.5).abs() < 0.01);
         app.zoom_viewer_by(10.0, cx);
-        assert_eq!(app.viewer_state.zoom_scale, 5.0);
-        app.zoom_viewer_by(-10.0, cx);
+        assert_eq!(app.viewer_state.zoom_scale, 11.5);
+        app.zoom_viewer_by(100.0, cx);
+        assert_eq!(
+            app.viewer_state.zoom_scale,
+            crate::views::viewer_state::ZOOM_MAX_SCALE
+        );
+        app.zoom_viewer_by(-100.0, cx);
         assert_eq!(app.viewer_state.zoom_scale, 1.0);
 
         app.selected_item = Some(sample[1].clone());

@@ -237,6 +237,7 @@ impl LuminaApp {
     pub fn open_tag_manager(&mut self, cx: &mut Context<Self>) {
         self.tag_manager.open = true;
         self.tag_manager.search.clear();
+        self.tag_manager.search_focused = true;
         self.tag_manager.selected.clear();
         self.tag_manager.editing = None;
         self.tag_manager.merge_source = None;
@@ -245,6 +246,7 @@ impl LuminaApp {
 
     pub fn close_tag_manager(&mut self, cx: &mut Context<Self>) {
         self.tag_manager.open = false;
+        self.tag_manager.search_focused = false;
         self.tag_manager.editing = None;
         self.tag_manager.merge_source = None;
         cx.notify();

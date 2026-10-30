@@ -20,8 +20,8 @@ even when the feature list is strong.
    empty, success and failure states are explicit and consistent.
 3. **Motion explains continuity.** An item opens from its card, closes back to
    it, and reduced-motion users get the same result without animation.
-4. **Navigation does not lose context.** Back/forward, restored view, selection
-   and scroll position are expected across viewer, albums and relaunch.
+4. **Navigation does not lose context.** Back, restored view, selection and
+   scroll position are expected across viewer, albums and relaunch.
 5. **Zoom anchors on intent.** Grid zoom follows the pointer or keyboard focus;
    viewer zoom follows the cursor and can be reset predictably.
 6. **Scrubbing is direct manipulation.** The video timeline responds while
@@ -36,21 +36,22 @@ even when the feature list is strong.
 **Current**
 
 - Grid navigation: arrows, Home/End, PageUp/PageDown, Cmd+A, Escape.
-- Viewer navigation: arrows, `[`/`]`, Escape; filmstrip shows a fixed window of
-  around eight items.
-- Breadcrumb is display-only. There is no back/forward history, recent view,
-  clickable breadcrumb, or restore of the last album/search/selection/scroll on
-  relaunch.
+- The media viewer is a fullscreen overlay over the grid. Arrows and `[`/`]`
+  navigate items, the viewer Back button (or Escape) returns to the grid, and
+  the filmstrip shows a fixed window of around eight items.
+- Breadcrumb is display-only. Back history exists (Cmd+[ and the fullscreen
+  viewer's Back button); there is no Forward, recent view, clickable breadcrumb,
+  or scroll-position restore.
 - Sidebar sections do not collapse; albums/tags cannot be pinned or reordered.
 - Switching library or album clears search, year and selection without a way to
   return.
 
 **Missing / weak**
 
-- No back/forward navigation or navigation stack.
+- No Forward history or branching trail; Back is a single linear stack.
 - No recent libraries or recent views.
-- No restored browsing state after relaunch (only window, layout, sort and
-  inspector state persist).
+- No restored browsing state after relaunch (only window, sort and inspector
+  state persist).
 - No scroll-position restore when returning from viewer or relaunch.
 - No clickable breadcrumb or "return to album" affordance.
 - No filmstrip scrolling beyond the fixed window; no jump-to-date.
@@ -58,16 +59,18 @@ even when the feature list is strong.
 
 **Target**
 
-- Cmd+[ / Cmd+] back and forward across album, search, viewer and settings.
+- Cmd+[ and the viewer Back button move back across album, search, viewer and
+  settings.
 - Persist last library, album, search, selection and scroll position; restore on
   launch with a clear reset action.
-- Breadcrumb segments clickable; viewer top bar returns to the source view.
+- Breadcrumb segments clickable; the viewer Back button returns to the source
+  view.
 - Scrollable filmstrip with current item centered; date jump.
 - Recent libraries and recent views with remove/clear.
 
 **Acceptance:** opening a photo and pressing Escape returns to exactly the same
 grid position and selection; relaunch restores the previous browsing context;
-back/forward never traps the user.
+Back never traps the user.
 
 ## 2. Selection and open semantics
 
@@ -135,8 +138,11 @@ layout shift or blocks input.
 
 - Grid zoom is discrete 2-8 columns via Cmd+plus/minus and the toolbar control;
   no pinch, no cursor anchoring, no animated reflow.
-- Viewer zoom: wheel zooms in 0.25 steps, Cmd+plus/minus, `0` resets to 1.0, `Z`
-  toggles fit/zoomed; pan works while zoomed.
+- Viewer zoom: Fit fills the canvas; wheel/trackpad zoom is smooth,
+  multiplicative and cursor-anchored; `0` Fit, `1`/`2`/`4` are 100%/200%/400%
+  of actual pixels, `Z` and double-click toggle Fit/100%; pan stops at the
+  media edges. Stills decode at most 2048px, so 100% of larger photos is an
+  enlarged decode.
 - No pinch gesture, no double-click-to-100%, no fit/100/200 presets, no
   cursor-anchored zoom, no animated reset, no pan inertia.
 - Zoom level is not visible except implicitly by the image size.
@@ -216,11 +222,11 @@ UI thread.
 
 **Current**
 
-- Quick chips: All, Favorites, Videos, RAW, Places, Tagged. No rating/color/date
-  filters. The All chip lights up during a free-text search because it only
-  checks the five chip tokens.
-- No search suggestions, autocomplete, recent searches, saved searches, or query
-  explanation.
+- No quick-filter chips: filtering runs through the search field and its
+  operator suggestions (is:favorite, is:video, is:raw, has:location, has:tag,
+  has:color, rating:>=4).
+- Search suggestions and recent searches exist; saved searches, query
+  explanation and date operators do not.
 - Tags list in the sidebar, but no Untagged node, no right-click rename/delete,
   and rename is only in the tag-manager modal.
 - Smart albums: no cover preview, pinning, reordering, descriptions, duplicate,
@@ -229,7 +235,8 @@ UI thread.
 
 **Target**
 
-- Correct filter-chip state for all query forms; add rating/color/date chips.
+- Keep the filter vocabulary discoverable through search suggestions; add date
+  operators and query explanation.
 - Search suggestions for tags, cameras, lenses, cities and operators; recent and
   saved searches.
 - First-class Untagged; tag right-click menu; drag tags onto selection; hierarchy
@@ -314,7 +321,7 @@ Target: 0.3. Low risk, high perceived quality.
 - Motion tokens and reduced-motion hook.
 - Skeleton cards, thumbnail fade-in, actionable empty states.
 - Toasts with undo, non-blocking export/import jobs, watcher summary.
-- Back/forward, restored last view/search/selection/scroll, recent libraries.
+- Back, restored last view/search/selection/scroll, recent libraries.
 
 ### UX-2: Precision browsing
 
@@ -325,7 +332,7 @@ Target: 0.4.
 - Scrollable filmstrip and jump-to-date.
 - Video drag scrubbing with real frame previews, buffered bar, resume position,
   auto-hide HUD, persisted speed/volume.
-- Correct filter chips and search suggestions/history.
+- Search suggestions/history and query explanation.
 - Untagged, tag context menu, smart-album previews/confirmation.
 - Mixed-value batch editing with grouped undo.
 
@@ -349,8 +356,8 @@ Target: 0.7.
 ## Test and measurement plan
 
 - UI automation: single vs double click, empty-space clear, shift/cmd selection,
-  viewer open/close/return, Escape chain, back/forward, restored view, zoom
-  anchors, video scrub state.
+  viewer open/close/return, viewer Back button, Escape chain, Back, restored
+  view, zoom anchors, video scrub state.
 - Visual checks: screenshot before/after for viewer transition, skeleton and
   empty states; no committed screenshots.
 - Performance budgets: selection feedback under 16 ms; viewer transition

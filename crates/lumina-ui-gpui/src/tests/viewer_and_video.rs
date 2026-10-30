@@ -1,3 +1,4 @@
+use crate::tests::ui_automation::{app_with_library, click, render_ui, seed_library};
 use crate::*;
 
 #[core::prelude::v1::test]
@@ -299,10 +300,7 @@ fn test_volume_slider_range_and_mute() {
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
-        // Test 6 discrete volume steps: 0.0, 0.2, 0.4, 0.6, 0.8, 1.0
-        let steps: Vec<f32> = (0..=5).map(|i| i as f32 / 5.0).collect();
-        assert_eq!(steps, vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]);
-
+        // The transport maps the pointer continuously; 0.0 is the mute step.
         // Mute step (0.0)
         app.set_video_volume(0.0, cx);
         assert_eq!(app.video.volume, 0.0);
@@ -315,6 +313,84 @@ fn test_volume_slider_range_and_mute() {
         app.set_video_volume(1.0, cx);
         assert_eq!(app.video.volume, 1.0);
     });
+}
+
+#[core::prelude::v1::test]
+fn test_volume_slider_pointer_mapping_and_drag() {
+    let (temp_dir, engine) = seed_library("volume_drag", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    let video = get_sample_items()
+        .into_iter()
+        .find(|item| item.media_type == lumina_core::MediaType::Video)
+        .expect("the sample set must contain a video");
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(video);
+        app.selected_index = Some(0);
+        app.selected_indices = [0].into_iter().collect();
+        app.is_fullscreen_viewer = true;
+        app.video.duration = 60.0;
+        app.video.volume = 0.5;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    let bounds = vcx
+        .debug_bounds("video-volume-slider")
+        .expect("the transport must paint the volume slider");
+    let left: f32 = bounds.origin.x.into();
+    let width: f32 = bounds.size.width.into();
+    let y: f32 = bounds.center().y.into();
+    assert!(
+        width > 40.0,
+        "the volume hit area must be usable: {width}px"
+    );
+    let point_at = |fraction: f32| gpui::point(gpui::px(left + width * fraction), gpui::px(y));
+
+    vcx.simulate_click(point_at(0.75), gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            (app.video.volume - 0.75).abs() < 0.03,
+            "a click at 75% must set ~0.75 volume, got {}",
+            app.video.volume
+        );
+    });
+
+    vcx.simulate_mouse_down(
+        point_at(0.75),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.video.adjusting_volume, "press must arm the volume drag");
+    });
+    vcx.simulate_mouse_move(
+        point_at(0.20),
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            (app.video.volume - 0.20).abs() < 0.03,
+            "dragging to 20% must follow the pointer, got {}",
+            app.video.volume
+        );
+    });
+    vcx.simulate_mouse_up(
+        point_at(0.20),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.video.adjusting_volume, "release must end the drag");
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -428,9 +504,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
         // 1. Open photo item in viewer
         app.select_item_at(photo_item.clone(), 0, cx);
         app.open_viewer(photo_item.clone(), cx);
-        app.layout_mode = LayoutMode::Viewer;
         assert!(app.is_fullscreen_viewer);
-        assert_eq!(app.layout_mode, LayoutMode::Viewer);
 
         // Double click / zoom toggle
         assert_eq!(app.viewer_state.zoom_scale, 1.0);
@@ -470,11 +544,9 @@ fn test_viewer_player_ux_and_navigation_controls() {
         // Render viewer with all elements active to verify GPUI tree construction
         let _el = MediaViewer::render(app, cx);
 
-        // 3. Layout Mode Switcher in Viewer Top Bar:
-        // Switching to Browser via close_viewer resets viewer state and restores Browser mode
+        // 3. Closing the viewer resets viewer state and returns to the grid.
         app.close_viewer(cx);
         assert!(!app.is_fullscreen_viewer);
-        assert_eq!(app.layout_mode, LayoutMode::Browser);
         assert_eq!(app.viewer_state.zoom_scale, 1.0);
     });
     cx.run_until_parked();
@@ -487,7 +559,8 @@ fn test_viewer_player_ux_and_navigation_controls() {
             app.open_viewer(photo_item.clone(), cx);
             assert!(app.is_fullscreen_viewer);
 
-            // Space on photo closes viewer
+            // Space on a still must not close the viewer; Escape and the
+            // viewer Back button are the exits.
             app.handle_key_down(
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("space").unwrap(),
@@ -497,8 +570,8 @@ fn test_viewer_player_ux_and_navigation_controls() {
                 cx,
             );
             assert!(
-                !app.is_fullscreen_viewer,
-                "Space on photo must close viewer"
+                app.is_fullscreen_viewer,
+                "Space on a photo must not close the viewer"
             );
 
             // Open video in viewer
@@ -630,21 +703,40 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
             app.select_item_at(photo.clone(), 0, cx);
             app.open_viewer(photo.clone(), cx);
 
-            press_viewer_key(app, "2", window, cx);
-            assert_eq!(app.viewer_state.zoom_scale, 2.0, "2 must select 2x");
-            press_viewer_key(app, "4", window, cx);
-            assert_eq!(app.viewer_state.zoom_scale, 4.0, "4 must select 4x");
+            // 3000px long edge on a 2x screen over a 900pt fit: 100% = 1.667x.
+            app.viewer_state.canvas = crate::views::viewer_state::ViewerCanvas::new(
+                (1200.0, 600.0),
+                (600.0, 300.0),
+                1.5,
+                3000.0,
+                2.0,
+            );
+            let actual = 1500.0 / 900.0;
             press_viewer_key(app, "1", window, cx);
-            assert_eq!(app.viewer_state.zoom_scale, 1.0, "1 must select Fit");
+            assert!(
+                (app.viewer_state.zoom_scale - actual).abs() < 1e-4,
+                "1 must select actual pixels"
+            );
+            assert_eq!(app.viewer_state.zoom_label(), "100%");
+            press_viewer_key(app, "2", window, cx);
+            assert!(
+                (app.viewer_state.zoom_scale - 2.0 * actual).abs() < 1e-4,
+                "2 must select 200% of actual pixels"
+            );
+            assert_eq!(app.viewer_state.zoom_label(), "200%");
+            press_viewer_key(app, "4", window, cx);
+            assert_eq!(app.viewer_state.zoom_label(), "400%", "4 must select 400%");
+            press_viewer_key(app, "0", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.0, "0 must select Fit");
 
             press_viewer_key(app, "=", window, cx);
             assert_eq!(app.viewer_state.zoom_scale, 1.25, "+ must still step in");
             press_viewer_key(app, "0", window, cx);
             assert_eq!(app.viewer_state.zoom_scale, 1.0, "0 must still reset");
             press_viewer_key(app, "z", window, cx);
-            assert_eq!(
-                app.viewer_state.zoom_scale, 2.0,
-                "Z must still toggle to 2x"
+            assert!(
+                (app.viewer_state.zoom_scale - actual).abs() < 1e-4,
+                "Z must toggle Fit to actual pixels"
             );
             press_viewer_key(app, "z", window, cx);
             assert_eq!(
@@ -694,7 +786,6 @@ fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
         app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
         app.select_item_at(photo.clone(), 0, cx);
         app.open_viewer(photo.clone(), cx);
-        app.layout_mode = LayoutMode::Viewer;
         app.window_bounds = Some((0.0, 0.0, 1024.0, 768.0));
         cx.notify();
     });
@@ -713,9 +804,7 @@ fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
         "viewer-zoom-2x",
         "viewer-zoom-4x",
         "viewer-zoom-reset",
-        "mode-browser",
-        "mode-split",
-        "mode-viewer",
+        "viewer-back",
     ] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
@@ -1071,7 +1160,6 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
         app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
         app.select_item_at(video.clone(), 1, cx);
         app.open_viewer(video.clone(), cx);
-        app.layout_mode = LayoutMode::Viewer;
         app.video.duration = 60.0;
         // A native player handle exists on macOS even without a loaded movie;
         // the drag path reaches the real seek bridge without requiring decoded
@@ -1317,7 +1405,6 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
         app.grid_state = Some(GridState::new(engine.clone()));
         app.select_item_at(item.clone(), 0, cx);
         app.open_viewer(item.clone(), cx);
-        app.layout_mode = LayoutMode::Viewer;
         app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
         let state = app
             .grid_state
@@ -1448,4 +1535,388 @@ fn test_viewer_rotate_video_is_a_clear_no_op() {
         );
     });
     cx.run_until_parked();
+}
+
+/// Synthetic double-click at a window-space position. The click count is read
+/// from the mouse-up event, matching the platform driver used by the app.
+fn double_click_at(cx: &mut gpui::VisualTestContext, position: gpui::Point<gpui::Pixels>) {
+    cx.simulate_event(gpui::MouseDownEvent {
+        position,
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Left,
+        click_count: 2,
+        first_mouse: false,
+    });
+    cx.simulate_event(gpui::MouseUpEvent {
+        position,
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Left,
+        click_count: 2,
+    });
+    render_viewer_ui(cx);
+}
+
+/// Opens the overlay viewer with a known gradient texture so the painted media
+/// element has deterministic bounds independent of real decoder output.
+fn viewer_with_gradient<'a>(
+    cx: &'a mut gpui::TestAppContext,
+    prefix: &str,
+    width: f32,
+    height: f32,
+) -> (
+    std::path::PathBuf,
+    gpui::Entity<LuminaApp>,
+    &'a mut gpui::VisualTestContext,
+) {
+    let (temp_dir, engine) = seed_library(prefix, 4);
+    let (view, vcx) = app_with_library(cx, engine);
+    let photo = view.update(vcx, |app, _| {
+        app.get_active_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("seeded library must have an item")
+    });
+    view.update(vcx, |app, app_cx| {
+        app.open_viewer(photo, app_cx);
+        // The seeded JPEG payload is not a real image, so this gradient stays
+        // the displayed texture for the whole test.
+        app.viewer_image = Some(generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            800,
+            600,
+        ));
+        app.window_bounds = Some((0.0, 0.0, width, height));
+        app_cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(width), gpui::px(height)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+    (temp_dir, view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_zoom_changes_painted_media_bounds() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_zoom_paint", 1440.0, 900.0);
+
+    let fit = vcx
+        .debug_bounds("viewer-media")
+        .expect("the Fit viewer must paint the media element");
+    assert!(
+        f32::from(fit.size.width) > 0.0 && f32::from(fit.size.height) > 0.0,
+        "test premise: the Fit media must have painted bounds, got {fit:?}"
+    );
+
+    click(vcx, "viewer-zoom-2x");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 2.0,
+            "clicking 2x must apply the 2x preset"
+        );
+    });
+
+    let zoomed = vcx
+        .debug_bounds("viewer-media")
+        .expect("the 2x viewer must paint the media element");
+    assert!(
+        f32::from(zoomed.size.width) > f32::from(fit.size.width) * 1.5,
+        "2x must enlarge the painted media width, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
+    );
+    assert!(
+        f32::from(zoomed.size.height) > f32::from(fit.size.height) * 1.5,
+        "2x must enlarge the painted media height, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_double_click_zoom_is_media_bounded() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_double_click", 1440.0, 900.0);
+
+    let viewport = vcx
+        .debug_bounds("viewer-viewport")
+        .expect("the viewer must paint its viewport");
+    let media = vcx
+        .debug_bounds("viewer-media")
+        .expect("the viewer must paint the media element");
+
+    // Left edge of the viewport, vertically centred: outside the 800x600 media
+    // that sits in the middle of the 1440px canvas.
+    let letterbox = gpui::point(viewport.left() + gpui::px(8.0), viewport.center().y);
+    // The media element fills the canvas; the visible picture is the
+    // contained rect from the captured canvas geometry.
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.viewer_state.hits_media(letterbox),
+            "test premise: the letterbox point must be outside the visible media; point={letterbox:?} canvas={:?}",
+            app.viewer_state.canvas
+        );
+    });
+
+    double_click_at(vcx, letterbox);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 1.0,
+            "a double-click in the letterbox around the media must not zoom"
+        );
+    });
+
+    double_click_at(vcx, media.center());
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 2.0,
+            "a double-click on the media itself must toggle the zoom"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn test_inspector_filename_wraps_inside_the_open_drawer() {
+    let (temp_dir, engine) = seed_library("inspector_filename_wrap", 4);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let photo = view.update(vcx, |app, _| {
+        app.get_active_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("seeded library must have an item")
+    });
+    let long_name =
+        "Screenshot_2026-10-30_at_10.00.00_AM_with_a_very_long_descriptive_suffix_that_cannot_fit.png";
+    view.update(vcx, |app, app_cx| {
+        app.open_viewer(photo, app_cx);
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        if let Some(item) = app.selected_item.as_mut() {
+            item.file_name = long_name.to_string();
+        }
+        app_cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let drawer = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("an open inspector must paint the info drawer");
+    let name = vcx
+        .debug_bounds("inspector-filename")
+        .expect("the inspector hero must paint the filename");
+    assert!(
+        name.left() >= drawer.left() && name.right() <= drawer.right(),
+        "a long filename must stay inside the drawer instead of widening it: name={name:?} drawer={drawer:?}"
+    );
+    // text_xs is 12px with GPUI's 1.618 line height, so one line is ~19px;
+    // more than 24px proves the name wrapped onto multiple lines.
+    assert!(
+        f32::from(name.size.height) > 24.0,
+        "a long filename must wrap to more than one line, got {name:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
+    use crate::player::VideoFrame;
+    let frame = || VideoFrame {
+        width: 2,
+        height: 2,
+        data: vec![0; 16],
+    };
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    let cached = crate::bridge::video_frame_to_gpui_image(frame()).expect("2x2 BGRA frame");
+    view.update(vcx, |app, _| {
+        app.set_viewer_image(Some(crate::bridge::video_frame_to_gpui_image(frame()).unwrap()));
+        app.set_viewer_image(Some(crate::bridge::video_frame_to_gpui_image(frame()).unwrap()));
+        assert_eq!(
+            app.retired_viewer_images.len(),
+            1,
+            "a replaced video frame must be queued for atlas eviction, or GPU memory grows every frame"
+        );
+        app.set_viewer_image(Some(cached.clone()));
+        app.set_viewer_image(None);
+        assert_eq!(
+            app.retired_viewer_images.len(),
+            2,
+            "an image still held by the thumbnail cache must keep its texture"
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.retired_viewer_images.is_empty(),
+            "render must drain the eviction queue"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn scrub_and_volume_drags_keep_tracking_after_leaving_the_control() {
+    let (temp_dir, engine) = crate::tests::ui_automation::seed_library("drag_off_control", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+    view.update(vcx, |app, cx| {
+        app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 60.0;
+        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(768.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    // Scrubber: press at 25%, then drift 80px above the 34px track to 75%.
+    let track = vcx
+        .debug_bounds("video-scrubber")
+        .expect("video scrubber track must be painted in the viewer");
+    let (left, width): (f32, f32) = (track.left().into(), track.size.width.into());
+    let y: f32 = track.center().y.into();
+    let left_button = Some(gpui::MouseButton::Left);
+    vcx.simulate_mouse_down(
+        gpui::point(gpui::px(left + width * 0.25), gpui::px(y)),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_viewer_ui(vcx);
+    let off_track = gpui::point(gpui::px(left + width * 0.75), gpui::px(y - 80.0));
+    vcx.simulate_mouse_move(off_track, left_button, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        let destination = app.video.scrub_time.expect("scrub must still be live");
+        assert!(
+            (destination - 45.0).abs() < 1.0,
+            "a scrub drag must follow the pointer off the track, got {destination}"
+        );
+    });
+    vcx.simulate_mouse_up(
+        off_track,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| assert!(!app.video.is_scrubbing));
+
+    // Volume: press at 25%, then drift 60px above the 24px slider to 90%.
+    let slider = vcx
+        .debug_bounds("video-volume-slider")
+        .expect("volume slider must be painted in the viewer");
+    let (left, width): (f32, f32) = (slider.left().into(), slider.size.width.into());
+    let y: f32 = slider.center().y.into();
+    vcx.simulate_mouse_down(
+        gpui::point(gpui::px(left + width * 0.25), gpui::px(y)),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_viewer_ui(vcx);
+    let off_slider = gpui::point(gpui::px(left + width * 0.9), gpui::px(y - 60.0));
+    vcx.simulate_mouse_move(off_slider, left_button, gpui::Modifiers::default());
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            (app.video.volume - 0.9).abs() < 0.05,
+            "a volume drag must follow the pointer off the slider, got {}",
+            app.video.volume
+        );
+    });
+    vcx.simulate_mouse_up(
+        off_slider,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_viewer_ui(vcx);
+    view.update(vcx, |app, _| assert!(!app.video.adjusting_volume));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_fills_canvas_and_offers_actual_pixels() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_actual", 1440.0, 900.0);
+    view.update(vcx, |app, cx| {
+        // A 4000x3000 original shown through the 800x600 gradient decode.
+        let item = app.selected_item.as_mut().expect("viewer has an item");
+        item.width = 4000;
+        item.height = 3000;
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        let canvas = app
+            .viewer_state
+            .canvas
+            .expect("painting the viewer must capture canvas geometry");
+        assert!(
+            canvas.fitted.0 > 800.0 || canvas.fitted.1 > 600.0,
+            "Fit must enlarge media to the canvas like Photos, got {:?}",
+            canvas.fitted
+        );
+        assert!(
+            (canvas.fitted.0 - canvas.size.0).abs() < 0.5
+                || (canvas.fitted.1 - canvas.size.1).abs() < 0.5,
+            "Fit must touch the canvas on one axis, got {canvas:?}"
+        );
+
+        app.apply_viewer_zoom_preset(crate::views::viewer_state::ViewerZoomPreset::Actual, cx);
+        assert!(
+            (app.viewer_state.zoom_scale - canvas.actual_scale).abs() < 1e-4,
+            "100% must map one source pixel to one screen pixel"
+        );
+        assert_eq!(app.viewer_state.zoom_label(), "100%");
+
+        app.viewer_state.pan_by(100_000.0, 100_000.0);
+        let max_x = (canvas.fitted.0 * app.viewer_state.zoom_scale - canvas.size.0) * 0.5;
+        assert!(
+            (app.viewer_state.pan_offset.0 - max_x).abs() < 0.5,
+            "pan must stop at the media edge, not run off-screen"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn pip_window_evicts_retired_frames_while_the_main_window_is_not_drawing() {
+    use crate::player::VideoFrame;
+    let frame = || {
+        crate::bridge::video_frame_to_gpui_image(VideoFrame {
+            width: 2,
+            height: 2,
+            data: vec![0; 16],
+        })
+        .expect("2x2 BGRA frame")
+    };
+    let mut cx = gpui::TestAppContext::single();
+    // The main app has no window here, standing in for an occluded main
+    // window whose display link has stopped.
+    let app = cx.new(LuminaApp::new);
+    let ui_tx = app.read_with(&cx, |app, _| app.ui_tx.clone());
+    let (_pip, vcx) = cx.add_window_view(|_window, cx| {
+        crate::views::floating_pip::FloatingPipPlayerView::new(app.downgrade(), ui_tx, cx)
+    });
+
+    app.update(vcx, |app, _| {
+        app.set_viewer_image(Some(frame()));
+        app.set_viewer_image(Some(frame()));
+        assert_eq!(app.retired_viewer_images.len(), 1);
+    });
+    render_ui(vcx);
+    app.update(vcx, |app, _| {
+        assert!(
+            app.retired_viewer_images.is_empty(),
+            "PiP playback must evict retired frames even when the main window is not drawing"
+        );
+    });
 }

@@ -8,16 +8,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::app::navigation::{NavigationHistory, NavigationSnapshot};
-use crate::app::types::{
-    BatchSelectionSummary, DeleteConfirmState, LayoutMode, TagSortOrder, UiMessage,
-};
+use crate::app::types::{BatchSelectionSummary, DeleteConfirmState, TagSortOrder, UiMessage};
 use crate::app::windows::{open_floating_inspector_window, open_floating_pip_window};
 #[cfg(not(test))]
 use crate::config::LastView;
 use crate::config::{AppConfig, RestoredSession};
 use crate::player;
 use crate::views::context_menu::ContextMenuState;
-use crate::views::grid::GridState;
+use crate::views::grid::{grid_metrics, GridMetrics, GridState, DEFAULT_WINDOW_WIDTH};
 use crate::views::sidebar::AlbumSelection;
 use crate::views::viewer::ViewerState;
 
@@ -83,6 +81,8 @@ pub struct VideoPlaybackState {
     pub is_looping: bool,
     pub is_muted: bool,
     pub volume: f32,
+    /// True while the pointer is dragging the transport volume slider.
+    pub adjusting_volume: bool,
     pub speed_menu_open: bool,
     pub hover_time: Option<f64>,
     pub hover_pct: Option<f32>,
@@ -97,6 +97,14 @@ pub struct VideoPlaybackState {
     /// moves can arrive at display rate, so seeks are throttled to at most one
     /// per interval while the destination state still follows every move.
     pub last_scrub_seek: Option<std::time::Instant>,
+    /// Deadline for the bounded post-seek frame refresh.
+    ///
+    /// A zero-tolerance AVFoundation seek completes asynchronously, so the
+    /// destination frame is not available in the same call. After a seek while
+    /// paused (including a committed scrub drag) the ticker is started and
+    /// polls `next_frame` until a frame arrives or this deadline passes.
+    /// `None` whenever no refresh is pending.
+    pub seek_refresh_until: Option<std::time::Instant>,
     pub ticker_active: Option<Arc<AtomicBool>>,
     pub ticker_handle: Option<std::thread::JoinHandle<()>>,
     pub frame_pending: Arc<AtomicBool>,
@@ -106,6 +114,10 @@ pub struct VideoPlaybackState {
 pub struct TagManagerState {
     pub open: bool,
     pub search: String,
+    /// Whether the filter field is the active keyboard target. Typing already
+    /// filters while the modal is open; this drives the focus ring and the
+    /// explicit click target.
+    pub search_focused: bool,
     pub sort: TagSortOrder,
     pub selected: HashSet<String>,
     pub editing: Option<String>,
@@ -118,6 +130,7 @@ impl Default for TagManagerState {
         Self {
             open: false,
             search: String::new(),
+            search_focused: false,
             sort: TagSortOrder::Alphabetical,
             selected: HashSet::new(),
             editing: None,
@@ -270,6 +283,10 @@ pub struct LuminaApp {
     /// Live pointer drag-selection over the grid (marquee or additive sweep).
     pub grid_drag: GridDragState,
     pub viewer_image: Option<Arc<RenderImage>>,
+    /// Replaced viewer images awaiting GPU atlas eviction on the next render.
+    /// GPUI never evicts a `RenderImage` on its own, so without this every
+    /// video frame and opened photo would stay resident on the GPU.
+    pub retired_viewer_images: Vec<Arc<RenderImage>>,
     pub has_desktop_pics: bool,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub focus_handle: FocusHandle,
@@ -289,8 +306,8 @@ pub struct LuminaApp {
     pub search_focused: bool,
     pub search_suggestions: SearchSuggestionState,
     pub active_year: Option<i32>,
-    /// Bounded Back/Forward trail of browsing destinations (album, search,
-    /// year, selection, viewer). Transient overlays are never recorded.
+    /// Bounded Back trail of browsing destinations (album, search, year,
+    /// selection, viewer). Transient overlays are never recorded.
     pub(crate) navigation_history: NavigationHistory,
     /// Captured from AppConfig at startup and applied once after the initial
     /// library scan. Cleared by user-initiated open_library.
@@ -298,7 +315,6 @@ pub struct LuminaApp {
     pub is_fullscreen_viewer: bool,
     pub is_immersive_fullscreen: bool,
     pub immersive_hud_visible: bool,
-    pub layout_mode: LayoutMode,
     pub card_fit_mode: bool,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
@@ -415,8 +431,6 @@ impl LuminaApp {
         })
         .detach();
 
-        let restored_layout = config.restored_layout_mode();
-
         #[cfg_attr(test, allow(unused_mut))]
         let mut app = Self {
             config: config.clone(),
@@ -430,6 +444,7 @@ impl LuminaApp {
             batch_metadata: BatchMetadataSummary::default(),
             grid_drag: GridDragState::default(),
             viewer_image: None,
+            retired_viewer_images: Vec::new(),
             has_desktop_pics,
             ui_tx,
             focus_handle,
@@ -452,7 +467,6 @@ impl LuminaApp {
             is_fullscreen_viewer: false,
             is_immersive_fullscreen: false,
             immersive_hud_visible: true,
-            layout_mode: restored_layout,
             card_fit_mode: config.card_fit_mode,
             error_message: None,
             last_action: None,
@@ -526,11 +540,6 @@ impl LuminaApp {
             cfg.inspector_width = self.inspector_width;
             cfg.sidebar_visible = !self.sidebar_collapsed;
             cfg.inspector_visible = self.inspector_open;
-            cfg.layout_mode = match self.layout_mode {
-                LayoutMode::Browser => "browser".to_string(),
-                LayoutMode::Split => "split".to_string(),
-                LayoutMode::Viewer => "viewer".to_string(),
-            };
             cfg.grid_columns = self.grid_columns.clamp(2, 8);
             cfg.card_fit_mode = self.card_fit_mode;
             cfg.inspector_tab = Some(self.inspector_tab.config_key().to_string());
@@ -610,17 +619,32 @@ impl LuminaApp {
         cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
     }
 
+    /// Grid geometry for the current window and layout chrome.
+    ///
+    /// The card's photo well is a square derived from the actual card width, so
+    /// row height depends on the window width, the painted sidebar/rail/inspector,
+    /// and the column count. `window_bounds` is the center-pane budget; the
+    /// 1280px fallback matches the app's default window before the bounds
+    /// observer reports a real size.
+    pub(crate) fn grid_metrics(&self) -> GridMetrics {
+        let window_width = self
+            .window_bounds
+            .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width);
+        let inspector_width =
+            (self.inspector_open && self.selected_item.is_some() && !self.is_fullscreen_viewer)
+                .then_some(self.inspector_width);
+        grid_metrics(
+            window_width,
+            self.sidebar_width,
+            self.sidebar_collapsed,
+            !self.timeline_year_buckets.is_empty(),
+            inspector_width,
+            self.grid_columns,
+        )
+    }
+
     pub fn row_height(&self) -> f32 {
-        match self.grid_columns {
-            2 => 380.0,
-            3 => 260.0,
-            4 => 200.0,
-            5 => 170.0,
-            6 => 140.0,
-            7 => 120.0,
-            8 => 100.0,
-            _ => 200.0,
-        }
+        self.grid_metrics().row_height
     }
 
     pub(crate) fn queue_thumbnail_request(&self, item_id: MediaId) {

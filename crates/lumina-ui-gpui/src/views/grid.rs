@@ -1,5 +1,6 @@
 use crate::config::ResumePositions;
-use gpui::{RenderImage, UniformListScrollHandle};
+use crate::theme;
+use gpui::*;
 use lru::LruCache;
 use lumina_core::{LuminaEngine, MediaId};
 use parking_lot::Mutex;
@@ -17,6 +18,136 @@ pub(crate) const GRID_ROW_PADDING_X: f32 = 16.0;
 ///
 /// Shared with the renderer for the same reason as `GRID_ROW_PADDING_X`.
 pub(crate) const GRID_CARD_GAP: f32 = 10.0;
+
+/// Padding between the card border and its content, in pixels.
+///
+/// The renderer and [`grid_metrics`] share it so the square photo well cannot
+/// drift from the painted card box.
+pub(crate) const CARD_PADDING: f32 = 8.0;
+
+/// The card's 1px border on each side. Included in the card's fixed height.
+pub(crate) const CARD_BORDER: f32 = 1.0;
+
+/// Top padding above the rating/colour row, in pixels.
+pub(crate) const CARD_INFO_BAND_TOP: f32 = 6.0;
+
+/// Fixed height of the rating/colour row, in pixels.
+pub(crate) const CARD_RATING_ROW_HEIGHT: f32 = 12.0;
+
+/// Height the info band occupies under the photo well. The filename label is
+/// not part of it anymore; the full name lives on the card tooltip.
+pub(crate) const CARD_INFO_BAND_HEIGHT: f32 = CARD_INFO_BAND_TOP + CARD_RATING_ROW_HEIGHT;
+
+/// Empty space below each card inside its uniform-list row, in pixels.
+pub(crate) const CARD_ROW_GAP: f32 = 10.0;
+
+/// Width of the pinned year rail when the timeline has buckets.
+pub(crate) const YEAR_RAIL_WIDTH: f32 = 32.0;
+
+/// Width of the collapsed sidebar rail (it never fully disappears).
+pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 48.0;
+
+/// Width of the sidebar/inspector drag handles.
+pub(crate) const RESIZER_WIDTH: f32 = 4.0;
+
+/// Window width used before the bounds observer reports a real size.
+pub(crate) const DEFAULT_WINDOW_WIDTH: f32 = 1280.0;
+
+/// Smallest photo well side, so a very narrow window cannot collapse rows.
+pub(crate) const PHOTO_SIDE_MIN: f32 = 48.0;
+
+/// Largest photo well side, so a very wide window cannot produce huge rows.
+pub(crate) const PHOTO_SIDE_MAX: f32 = 640.0;
+
+/// Grid layout derived from the window width and the chrome beside the grid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GridMetrics {
+    /// Side of the square photo well, in pixels.
+    pub photo_side: f32,
+    /// Full uniform-list row height: the card plus [`CARD_ROW_GAP`].
+    pub row_height: f32,
+}
+
+/// Derives the square photo well and row height from the actual card width.
+///
+/// The center pane loses the sidebar (or its 48px collapsed rail) plus a 4px
+/// resizer, the 32px year rail when it is painted, and the inspector plus its
+/// 4px resizer when it is painted. Each row then loses
+/// `2 * GRID_ROW_PADDING_X` and `(columns - 1) * GRID_CARD_GAP` before the
+/// remaining width is split between the columns. The photo well is the card's
+/// content width, and the row is the well plus the card chrome, the fixed info
+/// band, and the gap below the card.
+pub(crate) fn grid_metrics(
+    window_width: f32,
+    sidebar_width: f32,
+    sidebar_collapsed: bool,
+    year_rail_visible: bool,
+    inspector_width: Option<f32>,
+    columns: usize,
+) -> GridMetrics {
+    let columns = columns.clamp(2, 8) as f32;
+    let sidebar = if sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        sidebar_width.max(0.0) + RESIZER_WIDTH
+    };
+    let year_rail = if year_rail_visible {
+        YEAR_RAIL_WIDTH
+    } else {
+        0.0
+    };
+    let inspector = inspector_width.map_or(0.0, |width| width.max(0.0) + RESIZER_WIDTH);
+    let grid_width = (window_width - sidebar - year_rail - inspector).max(0.0);
+    let card_width = (grid_width - 2.0 * GRID_ROW_PADDING_X - GRID_CARD_GAP * (columns - 1.0))
+        .max(0.0)
+        / columns;
+    let photo_side =
+        (card_width - 2.0 * CARD_PADDING - 2.0 * CARD_BORDER).clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
+    GridMetrics {
+        row_height: photo_side
+            + 2.0 * CARD_PADDING
+            + 2.0 * CARD_BORDER
+            + CARD_INFO_BAND_HEIGHT
+            + CARD_ROW_GAP,
+        photo_side,
+    }
+}
+
+/// Hover tooltip that keeps the full filename reachable now that the card no
+/// longer prints it under the photo.
+pub(crate) struct MediaCardTooltip {
+    name: SharedString,
+}
+
+impl MediaCardTooltip {
+    pub(crate) fn new(name: impl Into<SharedString>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+impl Render for MediaCardTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .debug_selector(|| "media-card-name-tooltip".to_string())
+            .px_2()
+            .py_1()
+            .bg(theme::bg_hud())
+            .border_1()
+            .border_color(theme::border())
+            .rounded_md()
+            .text_xs()
+            .text_color(theme::text())
+            .child(self.name.clone())
+    }
+}
+
+/// Builds the card tooltip closure carrying the full filename.
+pub(crate) fn media_card_tooltip(
+    name: impl Into<SharedString>,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let name = name.into();
+    move |_window, cx| cx.new(|_cx| MediaCardTooltip::new(name.clone())).into()
+}
 
 /// Measured geometry of the scrollable media grid in window pixels.
 ///
@@ -237,5 +368,98 @@ impl GridState {
         let mut state = Self::new(engine);
         state.video_resume.positions = resume_positions;
         state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CARD_CHROME: f32 =
+        CARD_ROW_GAP + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER + CARD_INFO_BAND_HEIGHT;
+
+    #[core::prelude::v1::test]
+    fn metrics_derive_expected_squares_at_default_window() {
+        // 1280px window, expanded sidebar (230 + 4px), year rail (32px), no inspector.
+        let four = grid_metrics(1280.0, 230.0, false, true, None, 4);
+        assert!(
+            (four.photo_side - 220.0).abs() < 0.01,
+            "got {}",
+            four.photo_side
+        );
+        assert!(
+            (four.row_height - 266.0).abs() < 0.01,
+            "got {}",
+            four.row_height
+        );
+
+        let two = grid_metrics(1280.0, 230.0, false, true, None, 2);
+        assert!(
+            (two.photo_side - 468.0).abs() < 0.01,
+            "got {}",
+            two.photo_side
+        );
+
+        let eight = grid_metrics(1280.0, 230.0, false, true, None, 8);
+        assert!(
+            (eight.photo_side - 96.0).abs() < 0.01,
+            "got {}",
+            eight.photo_side
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn metrics_account_for_each_layout_chrome() {
+        // Hidden year rail: the grid gains its 32px.
+        let no_rail = grid_metrics(1280.0, 230.0, false, false, None, 4);
+        assert!(
+            (no_rail.photo_side - 228.0).abs() < 0.01,
+            "got {}",
+            no_rail.photo_side
+        );
+
+        // Collapsed sidebar is a 48px rail with no resizer.
+        let collapsed = grid_metrics(1280.0, 230.0, true, true, None, 4);
+        assert!(
+            (collapsed.photo_side - 266.5).abs() < 0.01,
+            "got {}",
+            collapsed.photo_side
+        );
+
+        // Open inspector: its width plus the 4px resizer are gone from the grid.
+        let with_inspector = grid_metrics(1280.0, 230.0, false, true, Some(310.0), 4);
+        assert!(
+            (with_inspector.photo_side - 141.5).abs() < 0.01,
+            "got {}",
+            with_inspector.photo_side
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn metrics_clamp_extreme_windows_and_keep_the_row_identity() {
+        let narrow = grid_metrics(700.0, 230.0, false, false, None, 8);
+        assert_eq!(narrow.photo_side, PHOTO_SIDE_MIN);
+        assert!((narrow.row_height - narrow.photo_side - CARD_CHROME).abs() < 0.01);
+
+        let wide = grid_metrics(6000.0, 230.0, false, true, None, 2);
+        assert_eq!(wide.photo_side, PHOTO_SIDE_MAX);
+        assert!((wide.row_height - wide.photo_side - CARD_CHROME).abs() < 0.01);
+
+        for width in [640.0, 960.0, 1280.0, 1920.0, 3008.0] {
+            for columns in 2..=8 {
+                for rail in [false, true] {
+                    let metrics = grid_metrics(width, 230.0, false, rail, None, columns);
+                    assert!(metrics.photo_side >= PHOTO_SIDE_MIN);
+                    assert!(metrics.photo_side <= PHOTO_SIDE_MAX);
+                    assert!((metrics.row_height - metrics.photo_side - CARD_CHROME).abs() < 0.01);
+                }
+            }
+        }
+    }
+
+    #[core::prelude::v1::test]
+    fn card_tooltip_payload_keeps_the_complete_filename() {
+        let tooltip = MediaCardTooltip::new("IMG_2036.HEIC");
+        assert_eq!(tooltip.name, "IMG_2036.HEIC");
     }
 }

@@ -7,8 +7,8 @@ use crate::views::viewer_state::ViewerZoomPreset;
 impl LuminaApp {
     /// Handles shortcuts when fullscreen viewer is open.
     ///
-    /// Zoom: `+`/`-` step by 0.25, `0` resets to fit, `Z` toggles fit/2x, and
-    /// `1`/`2`/`4` jump to the Fit/2x/4x presets. Returns `true` if handled.
+    /// Zoom: `+`/`-` step by 0.25, `0` is Fit, `1`/`2`/`4` are 100%/200%/400%
+    /// of actual pixels, and `Z` toggles Fit/100%. Returns `true` if handled.
     pub fn handle_viewer_key_down(
         &mut self,
         key: &str,
@@ -31,7 +31,7 @@ impl LuminaApp {
             return true;
         }
 
-        // Viewer Zoom Shortcuts: + / - / 0 / Z (Works for both images and video)
+        // Viewer Zoom Shortcuts: + / - / 0 / 1 / 2 / 4 / Z (images and video)
         if key == "=" || key == "+" {
             self.zoom_in_viewer(cx);
             return true;
@@ -40,14 +40,11 @@ impl LuminaApp {
             self.zoom_out_viewer(cx);
             return true;
         }
-        if key == "0" {
-            self.set_viewer_zoom(1.0, cx);
-            return true;
-        }
-        // Zoom presets: 1 = Fit, 2 = 2x, 4 = 4x. Existing 0/Z/+/- stay unchanged.
+        // Zoom presets: 0 = Fit, 1 = actual pixels, 2 = 2x, 4 = 4x.
         if !cmd_or_ctrl {
             let preset = match key {
-                "1" => Some(ViewerZoomPreset::Fit),
+                "0" => Some(ViewerZoomPreset::Fit),
+                "1" => Some(ViewerZoomPreset::Actual),
                 "2" => Some(ViewerZoomPreset::TwoX),
                 "4" => Some(ViewerZoomPreset::FourX),
                 _ => None,
@@ -125,10 +122,9 @@ impl LuminaApp {
                 self.seek_video_relative(5.0, cx);
                 return true;
             }
-        } else if !is_video && !cmd_or_ctrl && key == "space" {
-            self.close_viewer(cx);
-            return true;
         }
+        // Space on a still intentionally does nothing: it must not close the
+        // viewer. Escape and the viewer Back button are the exits.
 
         if key == "escape" {
             if self.video.speed_menu_open {

@@ -7,7 +7,10 @@ use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::grid::{GRID_CARD_GAP, GRID_ROW_PADDING_X};
+use crate::views::grid::{
+    media_card_tooltip, CARD_INFO_BAND_TOP, CARD_PADDING, CARD_RATING_ROW_HEIGHT, CARD_ROW_GAP,
+    GRID_CARD_GAP, GRID_ROW_PADDING_X,
+};
 use crate::views::sidebar::AlbumSelection;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
@@ -34,7 +37,9 @@ impl LuminaApp {
         }
 
         let cols = self.grid_columns.clamp(2, 8);
-        let row_h = self.row_height();
+        let metrics = self.grid_metrics();
+        let row_h = metrics.row_height;
+        let photo_side = metrics.photo_side;
         let total_rows = effective_count.div_ceil(cols);
 
         let scroll_handle = self
@@ -158,8 +163,16 @@ impl LuminaApp {
                                 let item_for_context = item.clone();
                                 let dur_text = format_duration_badge(item.duration_secs());
                                 let fit_mode = this.card_fit_mode;
-                                let hover_group: SharedString =
-                                    format!("media-card-hover-{}", item_id_num).into();
+                                let has_texture = texture.is_some();
+                                let photo_background: Background = if has_texture {
+                                    theme::card_surface().into()
+                                } else {
+                                    linear_gradient(
+                                        135.0,
+                                        linear_color_stop(theme::bg_raised(), 0.0),
+                                        linear_color_stop(theme::bg_app(), 1.0),
+                                    )
+                                };
 
                                 row_cards.push(
                                     div()
@@ -171,42 +184,19 @@ impl LuminaApp {
                                         .debug_selector(move || {
                                             format!("media-card-{}", item_id_num)
                                         })
-                                        // The hover group lets the informational "Open" hint
-                                        // appear only while the card is hovered.
-                                        .group(hover_group.clone())
                                         .flex_1()
-                                        .h(px(row_h - 10.0))
-                                        .p(px(8.0))
-                                        .bg(theme::bg_pane())
-                                        .rounded(px(8.0))
-                                        .border_1()
-                                        .border_color(if is_selected {
-                                            theme::accent()
-                                        } else {
-                                            theme::border_subtle()
-                                        })
-                                        .hover(move |s| {
-                                            let s = s.bg(theme::bg_raised());
-                                            if is_selected {
-                                                s.border_color(theme::accent_hover())
-                                            } else {
-                                                s.border_color(theme::border_strong())
-                                            }
-                                        })
-                                        // GPUI 0.2.2 has no semantic pressed state, so the press
-                                        // cue is a transient surface step. Selection and keyboard
-                                        // focus stay structural: accent border + check badge, not
-                                        // colour alone.
-                                        .active(move |s| {
-                                            if is_selected {
-                                                s.bg(theme::selection_bg_hover())
-                                                    .border_color(theme::accent())
-                                            } else {
-                                                s.bg(theme::bg_control())
-                                                    .border_color(theme::border_strong())
-                                            }
-                                        })
+                                        .h(px(row_h - CARD_ROW_GAP))
+                                        .p(px(CARD_PADDING))
+                                        // No card surface and no border: the thumbnail sits
+                                        // directly on the library background (FIXES.md).
+                                        // Selection is the only chrome, drawn as a full-card
+                                        // accent outline when the card is selected.
+                                        .bg(theme::card_surface())
                                         .cursor_pointer()
+                                        // The full filename lives on the tooltip now
+                                        // that the card no longer prints it below
+                                        // the photo.
+                                        .tooltip(media_card_tooltip(item.file_name.clone()))
                                         .flex()
                                         .flex_col()
                                         .justify_between()
@@ -291,13 +281,17 @@ impl LuminaApp {
                                                     format!("media-card-photo-{}", item_id_num)
                                                 })
                                                 .w_full()
-                                                .flex_1()
-                                                .bg(linear_gradient(
-                                                    135.0,
-                                                    linear_color_stop(theme::bg_raised(), 0.0),
-                                                    linear_color_stop(theme::bg_app(), 1.0),
-                                                ))
-                                                .rounded(px(4.0))
+                                                // Square well: the height is the
+                                                // card's content width, derived by
+                                                // `LuminaApp::grid_metrics`.
+                                                .h(px(photo_side))
+                                                .flex_shrink_0()
+                                                // The loading gradient is only needed while
+                                                // the thumbnail is missing; a decoded image
+                                                // has no background around it.
+                                                .bg(photo_background)
+                                                // Square well and square highlight: no
+                                                // corner radius on the thumbnail (FIXES.md).
                                                 .overflow_hidden()
                                                 .relative()
                                                 .child(if let Some(render_img) = texture {
@@ -400,48 +394,9 @@ impl LuminaApp {
                                                 } else {
                                                     Empty.into_any_element()
                                                 })
-                                                // Hover affordance: purely informational and
-                                                // mouse-only in appearance, but the same action
-                                                // has a keyboard path (Enter or double-click
-                                                // opens the viewer).
-                                                .child(
-                                                    div()
-                                                        .id(ElementId::named_usize(
-                                                            "media-card-open-hint",
-                                                            item_id_num,
-                                                        ))
-                                                        .absolute()
-                                                        .top_1p5()
-                                                        .left_1p5()
-                                                        .px_1p5()
-                                                        .py_0p5()
-                                                        .rounded(px(4.0))
-                                                        .bg(theme::scrim())
-                                                        .border_1()
-                                                        .border_color(theme::border_subtle())
-                                                        .flex()
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap_1()
-                                                        .text_xs()
-                                                        .text_color(theme::text())
-                                                        .opacity(0.0)
-                                                        .group_hover(hover_group, |s| {
-                                                            s.opacity(1.0)
-                                                        })
-                                                        .tooltip(theme::tooltip_label(
-                                                            "Open (double-click or Enter)",
-                                                        ))
-                                                        .child(render_icon(
-                                                            Icon::Maximize,
-                                                            px(10.0),
-                                                            theme::text_muted(),
-                                                        ))
-                                                        .child("Open"),
-                                                )
-                                                // Selection marker: a check badge in addition
-                                                // to the accent border, so focus/selection do
-                                                // not depend on colour alone.
+                                                // Selection highlight: the accent outline
+                                                // only. There is no check badge (FIXES.md);
+                                                // the card border already carries the state.
                                                 .child(if is_selected {
                                                     div()
                                                         .debug_selector(move || {
@@ -451,52 +406,31 @@ impl LuminaApp {
                                                             )
                                                         })
                                                         .absolute()
-                                                        .top_1p5()
-                                                        .right_1p5()
-                                                        .size(px(16.0))
-                                                        .rounded_full()
-                                                        .bg(theme::accent())
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .child(render_icon(
-                                                            Icon::Check,
-                                                            px(10.0),
-                                                            theme::accent_fg(),
-                                                        ))
+                                                        .inset_0()
+                                                        // Square like the thumbnail; no rounded
+                                                        // highlight (FIXES.md).
+                                                        .border_2()
+                                                        .border_color(theme::accent())
                                                         .into_any_element()
                                                 } else {
                                                     Empty.into_any_element()
                                                 }),
                                         )
-                                        // Info Area Below Photo
+                                        // Rating / colour row below the photo well.
+                                        // The filename lives on the card tooltip now;
+                                        // this band is exactly CARD_INFO_BAND_HEIGHT so
+                                        // `row_height()` and the rendered card agree.
                                         .child(
                                             div()
-                                                .pt_1p5()
+                                                .debug_selector(move || {
+                                                    format!("media-card-info-{}", item_id_num)
+                                                })
+                                                .pt(px(CARD_INFO_BAND_TOP))
                                                 .flex()
                                                 .flex_col()
-                                                .gap_1()
-                                                .child(
-                                                    // Tooltips are an established GPUI
-                                                    // pattern here; the full filename stays
-                                                    // reachable when the row is truncated.
-                                                    div()
-                                                        .id(ElementId::named_usize(
-                                                            "media-card-name",
-                                                            item_id_num,
-                                                        ))
-                                                        .text_xs()
-                                                        .font_family(theme::FONT_MONO)
-                                                        .text_color(theme::text_muted())
-                                                        .truncate()
-                                                        .tooltip(theme::tooltip_label(
-                                                            item.file_name.clone(),
-                                                        ))
-                                                        .child(item.file_name.clone()),
-                                                )
                                                 .child(
                                                     div()
-                                                        .h(px(12.0))
+                                                        .h(px(CARD_RATING_ROW_HEIGHT))
                                                         .flex()
                                                         .flex_row()
                                                         .justify_between()
@@ -537,7 +471,7 @@ impl LuminaApp {
 
                             while row_cards.len() < cols {
                                 row_cards
-                                    .push(div().flex_1().h(px(row_h - 10.0)).into_any_element());
+                                    .push(div().flex_1().h(px(row_h - CARD_ROW_GAP)).into_any_element());
                             }
 
                             rows.push(
@@ -561,7 +495,7 @@ impl LuminaApp {
             )
             // Marquee rectangle, painted in window coordinates so it follows the
             // pointer regardless of which card is hovered. Card selection
-            // feedback (accent border + check badge) remains the structural cue;
+            // feedback (the accent border) remains the structural cue;
             // this is an additive visual on top.
             .child(self.render_grid_drag_rect())
             .into_any_element()

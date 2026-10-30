@@ -3,7 +3,6 @@
 use gpui::*;
 use lumina_core::{SortDirection, SortField};
 
-use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,9 +22,6 @@ pub enum CommandId {
     SortRating,
     SortAsc,
     SortDesc,
-    LayoutBrowser,
-    LayoutSplit,
-    LayoutViewer,
     ToggleFit,
     ZoomInGrid,
     ZoomOutGrid,
@@ -137,24 +133,6 @@ pub fn commands() -> &'static [Command] {
             keywords: "direction decreasing",
         },
         Command {
-            id: CommandId::LayoutBrowser,
-            key: "command.layout_browser",
-            shortcut: "",
-            keywords: "grid mode",
-        },
-        Command {
-            id: CommandId::LayoutSplit,
-            key: "command.layout_split",
-            shortcut: "",
-            keywords: "grid viewer mode",
-        },
-        Command {
-            id: CommandId::LayoutViewer,
-            key: "command.layout_viewer",
-            shortcut: "",
-            keywords: "full viewer mode",
-        },
-        Command {
             id: CommandId::ToggleFit,
             key: "command.toggle_fit",
             shortcut: "",
@@ -241,9 +219,6 @@ impl LuminaApp {
             CommandId::SortRating => self.set_sort_field(SortField::Rating, cx),
             CommandId::SortAsc => self.set_sort_direction(SortDirection::Ascending, cx),
             CommandId::SortDesc => self.set_sort_direction(SortDirection::Descending, cx),
-            CommandId::LayoutBrowser => self.set_layout_mode(LayoutMode::Browser, cx),
-            CommandId::LayoutSplit => self.set_layout_mode(LayoutMode::Split, cx),
-            CommandId::LayoutViewer => self.set_layout_mode(LayoutMode::Viewer, cx),
             CommandId::ToggleFit => {
                 self.card_fit_mode = !self.card_fit_mode;
                 self.save_config();
@@ -252,12 +227,5 @@ impl LuminaApp {
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
         }
-    }
-
-    fn set_layout_mode(&mut self, mode: LayoutMode, cx: &mut Context<Self>) {
-        self.layout_mode = mode;
-        self.save_config();
-        self.set_last_action(format!("Layout: {:?}", mode));
-        cx.notify();
     }
 }

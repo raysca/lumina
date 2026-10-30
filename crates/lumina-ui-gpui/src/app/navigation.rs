@@ -7,11 +7,12 @@ use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::{BatchSelectionSummary, UiMessage};
 use crate::app::undo::{AppliedLocationChange, BatchField, BatchLocationChange, UndoAction};
+use crate::app::viewer_actions::VIEWER_IMAGE_SIZE;
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
 
-/// Longest browsing trail kept for Back/Forward. Older destinations fall off
+/// Longest browsing trail kept for Back. Older destinations fall off
 /// the front so the stack stays bounded no matter how long a session runs.
 pub(crate) const NAVIGATION_HISTORY_LIMIT: usize = 50;
 
@@ -63,7 +64,7 @@ impl NavigationSnapshot {
     }
 }
 
-/// Bounded Back/Forward trail of browsing destinations.
+/// Bounded Back trail of browsing destinations.
 #[derive(Debug)]
 pub(crate) struct NavigationHistory {
     entries: VecDeque<NavigationSnapshot>,
@@ -84,10 +85,6 @@ impl NavigationHistory {
 
     pub(crate) fn can_go_back(&self) -> bool {
         !self.restoring && self.cursor > 0
-    }
-
-    pub(crate) fn can_go_forward(&self) -> bool {
-        !self.restoring && self.cursor + 1 < self.entries.len()
     }
 
     pub(crate) fn is_restoring(&self) -> bool {
@@ -175,14 +172,6 @@ impl NavigationHistory {
         self.entries.get(self.cursor).cloned()
     }
 
-    pub(crate) fn go_forward(&mut self) -> Option<NavigationSnapshot> {
-        if self.restoring || self.cursor + 1 >= self.entries.len() {
-            return None;
-        }
-        self.cursor += 1;
-        self.entries.get(self.cursor).cloned()
-    }
-
     /// Keeps the record in sync when a saved album/tag/media had to fall back
     /// to the nearest valid view.
     pub(crate) fn replace_current(&mut self, snapshot: NavigationSnapshot) {
@@ -199,7 +188,7 @@ impl NavigationHistory {
 }
 
 impl LuminaApp {
-    /// Snapshot of the durable browsing destination used by Back/Forward.
+    /// Snapshot of the durable browsing destination used by Back.
     pub(crate) fn navigation_snapshot(&self) -> NavigationSnapshot {
         NavigationSnapshot {
             selection: self.selection.clone(),
@@ -233,31 +222,10 @@ impl LuminaApp {
             || self.navigation_history.has_pending_destination(&current)
     }
 
-    pub fn can_navigate_forward(&self) -> bool {
-        let current = self.navigation_snapshot();
-        self.navigation_history.can_go_forward()
-            && !self.navigation_history.has_pending_destination(&current)
-    }
-
     pub fn navigate_back(&mut self, cx: &mut Context<Self>) {
         self.navigation_history
             .sync_pending(self.navigation_snapshot());
         let Some(snapshot) = self.navigation_history.go_back() else {
-            cx.notify();
-            return;
-        };
-        self.apply_navigation_snapshot(snapshot, cx);
-    }
-
-    pub fn navigate_forward(&mut self, cx: &mut Context<Self>) {
-        let current = self.navigation_snapshot();
-        if self.navigation_history.has_pending_destination(&current) {
-            // An unrecorded destination cuts the forward branch; moving forward
-            // now would silently discard the place the user is looking at.
-            cx.notify();
-            return;
-        }
-        let Some(snapshot) = self.navigation_history.go_forward() else {
             cx.notify();
             return;
         };
@@ -578,6 +546,9 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Test-only selection helper: the grid is the only production entry point
+    /// now that the Split filmstrip (its last caller) is gone.
+    #[cfg(test)]
     pub fn select_item_at(&mut self, item: MediaItem, index: usize, cx: &mut Context<Self>) {
         self.selected_indices.clear();
         self.selected_indices.insert(index);
@@ -594,23 +565,27 @@ impl LuminaApp {
 
     pub(crate) fn select_item_internal(&mut self, item: MediaItem, cx: &mut Context<Self>) {
         self.selected_item = Some(item.clone());
-        self.viewer_image = None;
+        self.set_viewer_image(None);
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
         self.caption.input_active = false;
         self.caption.input_buffer.clear();
         self.cancel_batch_edit();
 
+        let cached = self
+            .grid_state
+            .as_ref()
+            .and_then(|state| state.texture_cache.lock().get(&item.id).cloned());
+        if cached.is_some() {
+            self.set_viewer_image(cached);
+        }
         if let Some(ref state) = self.grid_state {
             self.selected_item_tags = state.engine.get_tags_for_item(item.id);
-            if let Some(cached) = state.texture_cache.lock().get(&item.id).cloned() {
-                self.viewer_image = Some(cached);
-            }
 
             let tx = self.ui_tx.clone();
             state
                 .engine
-                .request_thumbnail(item.id, 1024, move |frame_opt| {
+                .request_thumbnail(item.id, VIEWER_IMAGE_SIZE, move |frame_opt| {
                     if let Some(frame) = frame_opt {
                         let _ = tx.send_blocking(UiMessage::ViewerLoaded { id: item.id, frame });
                     }
@@ -667,7 +642,7 @@ impl LuminaApp {
                     } else {
                         self.selected_index = None;
                         self.selected_item = None;
-                        self.viewer_image = None;
+                        self.set_viewer_image(None);
                         self.selected_item_tags.clear();
                     }
                 }
@@ -786,8 +761,9 @@ impl LuminaApp {
         self.apply_grid_drag_range(index, cx);
     }
 
-    /// Replaces the selection with the drag base plus the contiguous anchor
-    /// range. The base preserves a multi-selection the drag started inside.
+    /// Replaces the selection with the drag base plus the grid rectangle
+    /// spanned by the anchor and target cards, matching the marquee. The base
+    /// preserves a multi-selection the drag started inside.
     fn apply_grid_drag_range(&mut self, target: usize, cx: &mut Context<Self>) {
         let total = self.get_active_count();
         if total == 0 {
@@ -797,10 +773,17 @@ impl LuminaApp {
             return;
         };
         let target = target.min(total - 1);
-        let start = cmp::min(anchor, target);
-        let end = cmp::max(anchor, target);
+        // Must match the column count `render_browser_grid` lays out.
+        let cols = self.grid_columns.clamp(2, 8);
+        let (rows, columns) = (
+            cmp::min(anchor / cols, target / cols)..=cmp::max(anchor / cols, target / cols),
+            cmp::min(anchor % cols, target % cols)..=cmp::max(anchor % cols, target % cols),
+        );
         let mut next = self.grid_drag.base.clone();
-        next.extend(start..=end);
+        next.extend(
+            rows.flat_map(|row| columns.clone().map(move |col| row * cols + col))
+                .filter(|&index| index < total),
+        );
         if next == self.selected_indices && self.selected_index == Some(target) {
             return;
         }
@@ -1360,7 +1343,7 @@ impl LuminaApp {
         self.selection_anchor = None;
         self.selected_index = None;
         self.selected_item = None;
-        self.viewer_image = None;
+        self.set_viewer_image(None);
         self.selected_item_tags.clear();
         self.batch_summary = BatchSelectionSummary::default();
         self.batch_metadata = BatchMetadataSummary::default();

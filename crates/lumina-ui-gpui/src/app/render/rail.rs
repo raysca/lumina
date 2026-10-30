@@ -1,12 +1,11 @@
 use gpui::*;
 
-use crate::app::types::LayoutMode;
 use crate::app::LuminaApp;
 use crate::theme;
 
 impl LuminaApp {
     pub(crate) fn render_year_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.layout_mode != LayoutMode::Browser || self.timeline_year_buckets.is_empty() {
+        if self.timeline_year_buckets.is_empty() {
             return Empty.into_any_element();
         }
 

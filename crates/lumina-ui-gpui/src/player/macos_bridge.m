@@ -257,6 +257,12 @@
     }
 
     CMTime itemTime = [_playerItem currentTime];
+    // Only hand back a frame AVFoundation has not vended yet. Without this the
+    // caller re-uploads the same picture on every poll, and after a seek it
+    // could take the pre-seek frame as the destination.
+    if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) {
+        return NO;
+    }
     CVPixelBufferRef buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
     if (!buf) {
         return NO;

@@ -257,12 +257,17 @@ fn render_single_body(
                 .child(
                     div()
                         .flex_1()
+                        // Without min_w(0) the automatic flex minimum is the
+                        // text's unwrapped min-content width, so a long name
+                        // widens the row instead of wrapping (BUG 12).
+                        .min_w(px(0.0))
                         .flex()
                         .flex_col()
                         .gap_1()
                         // Title
                         .child(
                             div()
+                                .w_full()
                                 .text_base()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme::text())
@@ -271,6 +276,9 @@ fn render_single_body(
                         // Filename
                         .child(
                             div()
+                                .id("inspector-filename")
+                                .debug_selector(|| "inspector-filename".to_string())
+                                .w_full()
                                 .text_xs()
                                 .font_family(theme::FONT_MONO)
                                 .text_color(theme::text_subtle())

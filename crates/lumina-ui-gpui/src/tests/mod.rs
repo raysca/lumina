@@ -1,7 +1,9 @@
 mod editor_handoff;
 mod interaction;
+mod overlay_isolation;
 mod tags_and_albums;
 mod toasts;
 mod ui_automation;
+mod video_scrub;
 mod viewer_and_video;
 mod windows_and_layout;

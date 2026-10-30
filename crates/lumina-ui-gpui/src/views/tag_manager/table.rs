@@ -45,6 +45,7 @@ impl TagManagerTable {
                         let is_selected = app.tag_manager.selected.contains(tag_name);
                         let is_this_source = is_merge_active && merge_source == tag_name;
 
+                        let tag_for_row = tag_name.clone();
                         let tag_for_select = tag_name.clone();
                         let tag_for_rename = tag_name.clone();
                         let tag_for_merge = tag_name.clone();
@@ -55,6 +56,7 @@ impl TagManagerTable {
                             .id(ElementId::Name(
                                 format!("modal-tag-row-{}", tag_name).into(),
                             ))
+                            .debug_selector(|| format!("tag-manager-row-{}", tag_name))
                             .w_full()
                             .px_3()
                             .py_2()
@@ -74,6 +76,12 @@ impl TagManagerTable {
                             .flex_row()
                             .justify_between()
                             .items_center()
+                            .cursor_pointer()
+                            // The whole row surface toggles selection; the controls
+                            // inside it stop propagation so they act exactly once.
+                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.toggle_tag_manager_selection(tag_for_row.clone(), cx);
+                            }))
                             // Left: Checkbox + Tag Pill
                             .child(
                                 div()
@@ -86,6 +94,9 @@ impl TagManagerTable {
                                             .id(ElementId::Name(
                                                 format!("modal-tag-cb-{}", tag_name).into(),
                                             ))
+                                            .debug_selector(|| {
+                                                format!("tag-manager-checkbox-{}", tag_name)
+                                            })
                                             .w(px(16.0))
                                             .h(px(16.0))
                                             .rounded_sm()
@@ -119,6 +130,7 @@ impl TagManagerTable {
                                             })
                                             .on_click(cx.listener(
                                                 move |this, _e: &ClickEvent, _w, cx| {
+                                                    cx.stop_propagation();
                                                     this.toggle_tag_manager_selection(
                                                         tag_for_select.clone(),
                                                         cx,
@@ -139,6 +151,9 @@ impl TagManagerTable {
                                                 format!("modal-tag-name-filter-{}", tag_name)
                                                     .into(),
                                             ))
+                                            .debug_selector(|| {
+                                                format!("tag-manager-name-{}", tag_name)
+                                            })
                                             .cursor_pointer()
                                             .hover(|s| s.text_color(theme::accent()))
                                             .text_xs()
@@ -147,6 +162,7 @@ impl TagManagerTable {
                                             .child(format!("#{}", tag_name))
                                             .on_click(cx.listener(
                                                 move |this, _e: &ClickEvent, _w, cx| {
+                                                    cx.stop_propagation();
                                                     let query = format!("tag:{}", tag_for_filter);
                                                     this.set_search_query(&query, cx);
                                                     this.close_tag_manager(cx);
@@ -204,6 +220,7 @@ impl TagManagerTable {
                                                     .child("Save")
                                                     .on_click(cx.listener(
                                                         |this, _e: &ClickEvent, _w, cx| {
+                                                            cx.stop_propagation();
                                                             this.commit_modal_tag_rename(cx);
                                                         },
                                                     )),
@@ -229,6 +246,7 @@ impl TagManagerTable {
                                                     ))
                                                     .on_click(cx.listener(
                                                         |this, _e: &ClickEvent, _w, cx| {
+                                                            cx.stop_propagation();
                                                             this.cancel_modal_tag_rename(cx);
                                                         },
                                                     )),
@@ -253,6 +271,7 @@ impl TagManagerTable {
                                                 .child("Merge Here")
                                                 .on_click(cx.listener(
                                                     move |this, _e: &ClickEvent, _w, cx| {
+                                                        cx.stop_propagation();
                                                         this.commit_tag_merge(
                                                             tag_for_merge.clone(),
                                                             cx,
@@ -279,6 +298,9 @@ impl TagManagerTable {
                                                         format!("modal-rename-btn-{}", tag_name)
                                                             .into(),
                                                     ))
+                                                    .debug_selector(|| {
+                                                        format!("tag-manager-rename-{}", tag_name)
+                                                    })
                                                     .px_2()
                                                     .py_1()
                                                     .rounded_md()
@@ -293,6 +315,7 @@ impl TagManagerTable {
                                                     .child("✎ Rename")
                                                     .on_click(cx.listener(
                                                         move |this, _e: &ClickEvent, _w, cx| {
+                                                            cx.stop_propagation();
                                                             this.start_modal_tag_rename(
                                                                 tag_for_rename.clone(),
                                                                 cx,
@@ -306,6 +329,9 @@ impl TagManagerTable {
                                                         format!("modal-merge-btn-{}", tag_name)
                                                             .into(),
                                                     ))
+                                                    .debug_selector(|| {
+                                                        format!("tag-manager-merge-{}", tag_name)
+                                                    })
                                                     .px_2()
                                                     .py_1()
                                                     .rounded_md()
@@ -320,6 +346,7 @@ impl TagManagerTable {
                                                     .child("⇄ Merge")
                                                     .on_click(cx.listener(
                                                         move |this, _e: &ClickEvent, _w, cx| {
+                                                            cx.stop_propagation();
                                                             this.start_tag_merge(
                                                                 tag_for_merge.clone(),
                                                                 cx,
@@ -333,6 +360,9 @@ impl TagManagerTable {
                                                         format!("modal-del-btn-{}", tag_name)
                                                             .into(),
                                                     ))
+                                                    .debug_selector(|| {
+                                                        format!("tag-manager-delete-{}", tag_name)
+                                                    })
                                                     .px_2()
                                                     .py_1()
                                                     .rounded_md()
@@ -351,6 +381,7 @@ impl TagManagerTable {
                                                     ))
                                                     .on_click(cx.listener(
                                                         move |this, _e: &ClickEvent, _w, cx| {
+                                                            cx.stop_propagation();
                                                             this.delete_tag_globally(
                                                                 tag_for_delete.clone(),
                                                                 cx,

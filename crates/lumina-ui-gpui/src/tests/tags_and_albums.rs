@@ -1,4 +1,4 @@
-use crate::tests::ui_automation::{app_with_library, seed_library};
+use crate::tests::ui_automation::{app_with_library, click, leak, render_ui, seed_library};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
 use lumina_core::*;
@@ -550,6 +550,196 @@ fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
 
         app.dismiss_error(cx);
         assert!(app.error_message.is_none());
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 (BUGS.md item 17): rendered tag-manager interaction tests.
+//
+// These drive synthetic clicks at the rendered bounds of the controls the
+// modal paints. Before Phase 6 the rows carried no debug selectors and the
+// row surface had no click handler, so nothing inside the card could be
+// exercised by automation.
+// ---------------------------------------------------------------------------
+
+/// Seeds a one-item library with the given tags applied to that item.
+fn tagged_library(
+    prefix: &str,
+    tags: &[&str],
+) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+    let (temp_dir, engine) = seed_library(prefix, 1);
+    let item = engine
+        .get_item_slice(0..1)
+        .into_iter()
+        .next()
+        .expect("the fixture must create one media item");
+    let tags: Vec<String> = tags.iter().map(|tag| (*tag).to_string()).collect();
+    engine
+        .add_tags_batch(&[item.id], &tags)
+        .expect("seeding tags must succeed");
+    (temp_dir, engine)
+}
+
+/// Refreshes the tag list and opens the modal, then paints the real view tree.
+fn open_tag_manager(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTestContext) {
+    view.update(vcx, |app, cx| {
+        app.refresh_tag_counts();
+        app.open_tag_manager(cx);
+    });
+    render_ui(vcx);
+}
+
+/// Builds a per-tag selector such as `tag-manager-row-alpha`.
+fn tag_selector(control: &str, tag: &str) -> &'static str {
+    leak(format!("tag-manager-{control}-{tag}"))
+}
+
+#[core::prelude::v1::test]
+fn rendered_row_click_toggles_tag_manager_selection() {
+    let (temp_dir, engine) = tagged_library("tag_row_click", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_tag_manager(&view, vcx);
+
+    click(vcx, tag_selector("row", "alpha"));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tag_manager.selected.contains("alpha"),
+            "clicking a row surface must select that tag"
+        );
+        assert_eq!(
+            app.tag_manager.selected.len(),
+            1,
+            "one row click must toggle exactly one tag"
+        );
+    });
+
+    click(vcx, tag_selector("row", "alpha"));
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.tag_manager.selected.contains("alpha"),
+            "clicking the same row again must deselect the tag"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn rendered_checkbox_click_toggles_selection_exactly_once() {
+    let (temp_dir, engine) = tagged_library("tag_checkbox_click", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_tag_manager(&view, vcx);
+
+    click(vcx, tag_selector("checkbox", "alpha"));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tag_manager.selected.contains("alpha"),
+            "the checkbox must select the tag"
+        );
+        assert_eq!(
+            app.tag_manager.selected.len(),
+            1,
+            "the checkbox must not also bubble into the row and toggle twice"
+        );
+    });
+
+    click(vcx, tag_selector("checkbox", "alpha"));
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.tag_manager.selected.contains("alpha"),
+            "a second checkbox click must deselect the tag"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn rendered_rename_click_starts_editing_without_toggling_the_row() {
+    let (temp_dir, engine) = tagged_library("tag_rename_click", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_tag_manager(&view, vcx);
+
+    click(vcx, tag_selector("rename", "alpha"));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.editing.as_deref(),
+            Some("alpha"),
+            "clicking Rename must start editing that tag"
+        );
+        assert!(
+            app.tag_manager.selected.is_empty(),
+            "the Rename click must not also toggle the row selection"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn rendered_tag_name_click_filters_and_closes_the_manager() {
+    let (temp_dir, engine) = tagged_library("tag_name_click", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_tag_manager(&view, vcx);
+
+    click(vcx, tag_selector("name", "alpha"));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "tag:alpha",
+            "the tag-name click must filter the grid by that tag"
+        );
+        assert!(
+            !app.tag_manager.open,
+            "the tag-name click must close the tag manager"
+        );
+        assert!(
+            app.tag_manager.selected.is_empty(),
+            "the tag-name click must not also toggle the row selection"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn rendered_search_box_click_focuses_and_typing_filters() {
+    let (temp_dir, engine) = tagged_library("tag_search_click", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_tag_manager(&view, vcx);
+
+    // Start from the unfocused state so the click has to create focus.
+    view.update(vcx, |app, cx| {
+        app.tag_manager.search_focused = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    click(vcx, "tag-manager-search");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tag_manager.search_focused,
+            "clicking the search box must focus the filter field"
+        );
+    });
+
+    vcx.simulate_input("alp");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.search, "alp",
+            "typing while the manager is open must filter the tag list"
+        );
+        assert!(
+            app.tag_manager.search_focused,
+            "typing must not drop the filter field focus state"
+        );
     });
 
     let _ = std::fs::remove_dir_all(temp_dir);

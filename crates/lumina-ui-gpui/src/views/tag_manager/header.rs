@@ -198,17 +198,29 @@ impl TagManagerHeader {
             // Search box
             .child(
                 div()
+                    .id("tag-manager-search")
+                    .debug_selector(|| "tag-manager-search".to_string())
                     .flex_1()
                     .h(px(34.0))
                     .px_3()
                     .bg(theme::bg_app())
                     .border_1()
-                    .border_color(theme::border())
+                    // The filter field is keyboard-driven while the modal is open;
+                    // the accent border makes its focus state discoverable.
+                    .border_color(if app.tag_manager.search_focused {
+                        theme::accent()
+                    } else {
+                        theme::border()
+                    })
                     .rounded_lg()
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap_2()
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.tag_manager.search_focused = true;
+                        cx.notify();
+                    }))
                     .child(div().text_color(theme::text_subtle()).child(render_icon(
                         Icon::Search,
                         px(12.0),

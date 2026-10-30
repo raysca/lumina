@@ -7,7 +7,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::app::types::LayoutMode;
 use crate::views::sidebar::AlbumSelection;
 use lumina_core::{MediaId, SortDirection, SortField, SortSpec, SystemAlbum};
 
@@ -327,8 +326,6 @@ pub struct AppConfig {
     pub sidebar_visible: bool,
     #[serde(default = "default_inspector_visible")]
     pub inspector_visible: bool,
-    #[serde(default = "default_layout_mode")]
-    pub layout_mode: String,
     #[serde(default = "default_grid_columns")]
     pub grid_columns: usize,
     #[serde(default = "default_card_fit_mode")]
@@ -421,12 +418,9 @@ fn default_inspector_visible() -> bool {
     false
 }
 
-fn default_layout_mode() -> String {
-    "browser".to_string()
-}
-
+/// Five of the 2..=8 columns: the thumbnail slider's midpoint (50%).
 fn default_grid_columns() -> usize {
-    4
+    5
 }
 
 fn default_card_fit_mode() -> bool {
@@ -441,7 +435,6 @@ impl Default for AppConfig {
             inspector_width: default_inspector_width(),
             sidebar_visible: default_sidebar_visible(),
             inspector_visible: default_inspector_visible(),
-            layout_mode: default_layout_mode(),
             grid_columns: default_grid_columns(),
             card_fit_mode: default_card_fit_mode(),
             inspector_tab: None,
@@ -517,7 +510,6 @@ impl AppConfig {
         }
     }
 
-    /// Maps the persisted layout string back to a [`LayoutMode`], defaulting to Browser.
     /// Restores the persisted grid sort, defaulting to date taken descending.
     pub fn restored_sort(&self) -> SortSpec {
         let field = match self.sort_field.as_deref() {
@@ -531,14 +523,6 @@ impl AppConfig {
             _ => SortDirection::Descending,
         };
         SortSpec { field, direction }
-    }
-
-    pub fn restored_layout_mode(&self) -> LayoutMode {
-        match self.layout_mode.as_str() {
-            "split" => LayoutMode::Split,
-            "viewer" => LayoutMode::Viewer,
-            _ => LayoutMode::Browser,
-        }
     }
 
     /// Builds the one-shot session context applied after the startup library scan.
@@ -593,11 +577,10 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_mode_config_roundtrip_and_restore() {
-        let path = temp_config_path("layout");
+    fn test_config_roundtrip_and_restore() {
+        let path = temp_config_path("config_roundtrip");
 
         let cfg = AppConfig {
-            layout_mode: "viewer".to_string(),
             grid_columns: 7,
             card_fit_mode: false,
             inspector_tab: Some("location".to_string()),
@@ -610,10 +593,8 @@ mod tests {
         cfg.save_to(&path).unwrap();
 
         let loaded = AppConfig::load_from(&path);
-        assert_eq!(loaded.layout_mode, "viewer");
         assert_eq!(loaded.grid_columns, 7);
         assert!(!loaded.card_fit_mode);
-        assert_eq!(loaded.restored_layout_mode(), LayoutMode::Viewer);
         assert_eq!(
             loaded.restored_inspector_tab(),
             crate::views::inspector::InspectorTab::Location
@@ -625,21 +606,6 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_restored_layout_mode_mapping_and_fallback() {
-        let mut cfg = AppConfig::default();
-        assert_eq!(cfg.restored_layout_mode(), LayoutMode::Browser);
-
-        cfg.layout_mode = "split".to_string();
-        assert_eq!(cfg.restored_layout_mode(), LayoutMode::Split);
-
-        cfg.layout_mode = "viewer".to_string();
-        assert_eq!(cfg.restored_layout_mode(), LayoutMode::Viewer);
-
-        cfg.layout_mode = "not-a-mode".to_string();
-        assert_eq!(cfg.restored_layout_mode(), LayoutMode::Browser);
     }
 
     #[test]
@@ -663,9 +629,45 @@ mod tests {
         let path = std::env::temp_dir().join("lumina_cfg_test_does_not_exist_987654321.json");
         let _ = std::fs::remove_file(&path);
         let cfg = AppConfig::load_from(&path);
-        assert_eq!(cfg.layout_mode, "browser");
-        assert_eq!(cfg.grid_columns, 4);
+        assert_eq!(
+            cfg.grid_columns, 5,
+            "a fresh install starts at the 50% thumbnail size"
+        );
         assert!(cfg.card_fit_mode);
+    }
+
+    #[test]
+    fn test_legacy_config_with_layout_mode_still_loads() {
+        let path = temp_config_path("legacy_layout");
+
+        // Configs written before the layout-mode removal still carry the key.
+        // AppConfig has no deny_unknown_fields, so the old file must load and
+        // the unknown value is simply ignored.
+        let mut legacy = serde_json::to_value(AppConfig::default()).unwrap();
+        legacy
+            .as_object_mut()
+            .expect("AppConfig serializes to a JSON object")
+            .insert("layout_mode".to_string(), "viewer".into());
+        legacy["grid_columns"] = 6.into();
+        legacy["card_fit_mode"] = false.into();
+        std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.grid_columns, 6,
+            "a legacy config containing layout_mode must still deserialize its other fields"
+        );
+        assert!(!loaded.card_fit_mode);
+
+        // Saving again must not resurrect the removed field.
+        loaded.save_to(&path).unwrap();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !saved.contains("layout_mode"),
+            "layout_mode must not be written back after the removal"
+        );
+
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

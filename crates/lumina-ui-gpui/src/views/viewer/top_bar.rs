@@ -1,7 +1,7 @@
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
-use crate::app::types::{format_bytes, month_name, LayoutMode};
+use crate::app::types::{format_bytes, month_name};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -24,6 +24,7 @@ impl ViewerTopBar {
     ) -> Stateful<Div> {
         let id = match preset {
             ViewerZoomPreset::Fit => "viewer-zoom-fit",
+            ViewerZoomPreset::Actual => "viewer-zoom-actual",
             ViewerZoomPreset::TwoX => "viewer-zoom-2x",
             ViewerZoomPreset::FourX => "viewer-zoom-4x",
         };
@@ -96,7 +97,9 @@ impl ViewerTopBar {
                 div()
                     .id("viewer-zoom-label")
                     .debug_selector(|| "viewer-zoom-label".to_string())
-                    .tooltip(theme::tooltip_label("Zoom relative to fit"))
+                    .tooltip(theme::tooltip_label(
+                        "Zoom as a percentage of actual pixels",
+                    ))
                     .min_w(px(30.0))
                     .text_center()
                     .font_family(theme::FONT_MONO)
@@ -207,7 +210,7 @@ impl ViewerTopBar {
 
         // The HUD adds a compact control group to the right cluster. At narrow
         // widths the breadcrumb date, specs line, and long action labels yield
-        // space so the filename and mode switcher stay readable at 1024px.
+        // space so the filename stays readable at 1024px.
         let window_width = this
             .window_bounds
             .map(|(_, _, width, _)| width)
@@ -293,7 +296,7 @@ impl ViewerTopBar {
             .items_center()
             .text_xs()
             .text_color(theme::text())
-            // Left Section: Traffic Light Offset + Segmented Mode Switcher
+            // Left Section: Traffic Light Offset + the single Back control.
             .child(
                 div()
                     .flex()
@@ -303,57 +306,37 @@ impl ViewerTopBar {
                     .flex_shrink_0()
                     // Traffic lights spacer when windowed
                     .child(div().w(px(64.0)))
-                    // Segmented Switcher: [ Browser | Split | Viewer ]
+                    // One visible way back to the grid; Escape stays equivalent.
                     .child(
-                        theme::segmented("layout-mode-switcher")
-                            .child(
-                                theme::segmented_item(
-                                    "mode-browser",
-                                    this.layout_mode == LayoutMode::Browser
-                                        && !this.is_fullscreen_viewer,
-                                )
-                                .child("Browser")
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.close_viewer(cx);
-                                        this.layout_mode = LayoutMode::Browser;
-                                        this.save_config();
-                                        cx.notify();
-                                    },
-                                )),
-                            )
-                            .child(
-                                theme::segmented_item(
-                                    "mode-split",
-                                    this.layout_mode == LayoutMode::Split
-                                        && !this.is_fullscreen_viewer,
-                                )
-                                .child("Split")
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.close_viewer(cx);
-                                        this.layout_mode = LayoutMode::Split;
-                                        this.save_config();
-                                        cx.notify();
-                                    },
-                                )),
-                            )
-                            .child(
-                                theme::segmented_item(
-                                    "mode-viewer",
-                                    this.layout_mode == LayoutMode::Viewer
-                                        || this.is_fullscreen_viewer,
-                                )
-                                .child("Viewer")
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.layout_mode = LayoutMode::Viewer;
-                                        this.is_fullscreen_viewer = true;
-                                        this.save_config();
-                                        cx.notify();
-                                    },
-                                )),
-                            ),
+                        div()
+                            .id("viewer-back")
+                            .debug_selector(|| "viewer-back".to_string())
+                            .tooltip(theme::tooltip_label("Back to Library (Esc)"))
+                            .px_2p5()
+                            .py_1()
+                            .bg(theme::bg_control())
+                            .border_1()
+                            .border_color(theme::border())
+                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .rounded_md()
+                            .cursor_pointer()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1p5()
+                            .text_color(theme::text())
+                            .child(render_icon(Icon::ChevronLeft, px(13.0), theme::text()))
+                            .child(if compact {
+                                Empty.into_any_element()
+                            } else {
+                                div()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child("Library")
+                                    .into_any_element()
+                            })
+                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.close_viewer(cx);
+                            })),
                     ),
             )
             // Center Section: Breadcrumb, Filename, Specs Line

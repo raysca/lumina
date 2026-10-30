@@ -25,6 +25,49 @@ fn scrub_fraction(
     Some(f64::from(((pointer_x - left) / width).clamp(0.0, 1.0)))
 }
 
+/// Map a window-space pointer position onto the volume track's 0..=1 range.
+fn volume_fraction(
+    position: Point<Pixels>,
+    track_bounds: &Rc<RefCell<Option<Bounds<Pixels>>>>,
+) -> Option<f32> {
+    let bounds = (*track_bounds.borrow())?;
+    let width: f32 = bounds.size.width.into();
+    if width <= 0.0 {
+        return None;
+    }
+    let left: f32 = bounds.origin.x.into();
+    let pointer_x: f32 = position.x.into();
+    Some(((pointer_x - left) / width).clamp(0.0, 1.0))
+}
+
+/// While `active`, forwards every pressed-button mouse move in the window to
+/// `on_move`. `on_mouse_move` only fires while its element is hovered, so a
+/// drag on a thin track would freeze as soon as the pointer drifted off it.
+fn drag_tracker(
+    active: bool,
+    app: Entity<LuminaApp>,
+    on_move: impl Fn(&mut LuminaApp, Point<Pixels>, &mut Context<LuminaApp>) + 'static,
+) -> impl IntoElement {
+    let on_move = Rc::new(on_move);
+    canvas(
+        |_, _, _| {},
+        move |_, _, window, _| {
+            if !active {
+                return;
+            }
+            let (app, on_move) = (app.clone(), on_move.clone());
+            window.on_mouse_event(move |event: &MouseMoveEvent, phase, _window, cx| {
+                if phase == DispatchPhase::Bubble && event.pressed_button == Some(MouseButton::Left)
+                {
+                    app.update(cx, |this, cx| on_move(this, event.position, cx));
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
+}
+
 pub struct ViewerTransport;
 
 impl ViewerTransport {
@@ -62,24 +105,19 @@ impl ViewerTransport {
         } else {
             this.video.hover_time
         };
-        // Preview card source: hover time when idle, destination time while
-        // scrubbing. The image is a generated gradient placeholder: the native
-        // AVFoundation bridge exposes no decoded still for arbitrary scrub
-        // positions, so this must not be described as a decoded-frame preview.
-        let preview = if is_scrubbing {
-            scrub_time.map(|time| {
-                let pct = if duration > 0.0 {
-                    (time / duration).clamp(0.0, 1.0) as f32
-                } else {
-                    0.0
-                };
-                (pct, time)
-            })
+        // Honest scrub feedback: the native bridge cannot produce a decoded
+        // still for an arbitrary scrub position, so the transport shows a
+        // time-only badge next to the playhead instead of a synthetic image.
+        // The bottom thumbnail tray is a separate click-to-select filmstrip,
+        // not a drag scrubber; it intentionally has no time mapping.
+        let time_badge = if is_scrubbing {
+            scrub_time.map(|time| (progress_pct as f32, time))
         } else {
             hover_pct.zip(hover_time)
         };
 
         let vol = this.video.volume.clamp(0.0, 1.0);
+        let volume_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
 
         div()
             .w_full()
@@ -89,85 +127,38 @@ impl ViewerTransport {
             .flex()
             .flex_col()
             .gap_2()
-            // Floating scrub/hover preview card (above the scrubber). The image is
-            // a placeholder gradient, not a decoded video frame; see the preview
-            // comment above.
-            .child(if let Some((preview_pct, preview_time)) = preview {
-                let preview_img = crate::app::types::generate_gradient_image(
-                    (82, 148, 185),
-                    (175, 205, 220),
-                    144,
-                    82,
-                );
+            // Time-only scrub/hover feedback. No image is invented: this is
+            // exactly the destination timestamp the transport is seeking to.
+            .child(if let Some((badge_pct, badge_time)) = time_badge {
                 div()
-                    .id("video-hover-preview-card")
+                    .id("video-time-badge")
+                    .debug_selector(|| "video-time-badge".to_string())
                     .absolute()
                     .bottom(px(84.0))
-                    .left(relative((preview_pct - 0.08).clamp(0.01, 0.81)))
-                    .w(px(144.0))
-                    .h(px(82.0))
-                    .rounded_md()
-                    .overflow_hidden()
+                    .left(relative((badge_pct - 0.06).clamp(0.01, 0.85)))
+                    .px_2()
+                    .py_0p5()
+                    .bg(theme::bg_hud())
                     .border_1()
                     .border_color(theme::border_strong())
-                    .bg(theme::bg_hud())
-                    .shadow_2xl()
-                    .child(img(preview_img).size_full().object_fit(ObjectFit::Cover))
-                    .child(
-                        div()
-                            .absolute()
-                            .bottom_1()
-                            .left_0()
-                            .right_0()
-                            .flex()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py_0p5()
-                                    .bg(theme::bg_media())
-                                    .rounded_sm()
-                                    .text_xs()
-                                    .font_family(theme::FONT_MONO)
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text())
-                                    .child(format_time_fractional(preview_time)),
-                            ),
-                    )
+                    .rounded_sm()
+                    .shadow_lg()
+                    .text_xs()
+                    .font_family(theme::FONT_MONO)
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(theme::text())
+                    .child(format_time_fractional(badge_time))
                     .into_any_element()
             } else {
                 Empty.into_any_element()
             })
-            // Storyboard Filmstrip Scrubber Track: press, drag, and release map
-            // directly to a timeline position. Pointer moves update the visible
-            // destination on every event while seeks are coalesced in
-            // LuminaApp::update_video_scrub.
+            // Timeline scrubber track: press, drag, and release map directly to
+            // a timeline position. Pointer moves update the visible destination
+            // on every event while seeks are coalesced in
+            // LuminaApp::update_video_scrub. The background is a plain track;
+            // no thumbnail storyboard is fabricated.
             .child({
-                let num_slices = 16;
-                let mut track_slices = div()
-                    .size_full()
-                    .flex()
-                    .flex_row()
-                    .rounded_md()
-                    .overflow_hidden();
-                for s in 0..num_slices {
-                    let t = s as f32 / (num_slices - 1) as f32;
-                    let r = (0x95 as f32 * (1.0 - t) + 0x3f as f32 * t) as u32;
-                    let g = (0xc2 as f32 * (1.0 - t) + 0x73 as f32 * t) as u32;
-                    let b = (0xdc as f32 * (1.0 - t) + 0x98 as f32 * t) as u32;
-                    let col = (r << 16) | (g << 8) | b;
-                    track_slices = track_slices.child(
-                        div()
-                            .flex_1()
-                            .h_full()
-                            .bg(rgb(col))
-                            .border_r_1()
-                            .border_color(theme::border_subtle()),
-                    );
-                }
-
-                // The full-size filmstrip surface is the first child, so its
+                // The full-size track surface is the first child, so its
                 // prepaint bounds are the track rect used to map pointer X to a
                 // 0..=1 timeline fraction.
                 let track_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
@@ -211,9 +202,8 @@ impl ViewerTransport {
                             let Some(pct) = scrub_fraction(event.position, &track_bounds) else {
                                 return;
                             };
-                            if this.video.is_scrubbing {
-                                this.update_video_scrub(pct, cx);
-                            } else {
+                            // An active scrub is driven by the drag tracker.
+                            if !this.video.is_scrubbing {
                                 this.set_video_hover_scrub(Some(pct as f32), cx);
                             }
                         }
@@ -237,7 +227,7 @@ impl ViewerTransport {
                             this.set_video_hover_scrub(None, cx);
                         }
                     }))
-                    .child(track_slices)
+                    .child(div().size_full().rounded_md().bg(theme::bg_control()))
                     // Hover needle indicator, hidden while a scrub owns the playhead.
                     .child(if let Some(hover_pct) = hover_pct {
                         div()
@@ -251,6 +241,14 @@ impl ViewerTransport {
                     } else {
                         Empty.into_any_element()
                     })
+                    .child(drag_tracker(is_scrubbing, cx.entity(), {
+                        let track_bounds = track_bounds.clone();
+                        move |this, position, cx| {
+                            if let Some(pct) = scrub_fraction(position, &track_bounds) {
+                                this.update_video_scrub(pct, cx);
+                            }
+                        }
+                    }))
                     // Current playhead: follows the scrub destination while dragging.
                     .child(
                         div()
@@ -424,16 +422,54 @@ impl ViewerTransport {
                                         this.toggle_video_mute(cx);
                                     })),
                             )
-                            // Amber Volume Slider (Supports 0.0 to 1.0)
+                            // Amber Volume Slider: continuous 0.0..1.0 mapping with a
+                            // 24px hit area (the visible track is 4px) and pointer drag.
                             .child(
                                 div()
+                                    .on_children_prepainted({
+                                        let volume_bounds = volume_bounds.clone();
+                                        move |child_bounds: Vec<Bounds<Pixels>>, _window, _cx| {
+                                            if let Some(bounds) = child_bounds.first() {
+                                                *volume_bounds.borrow_mut() = Some(*bounds);
+                                            }
+                                        }
+                                    })
                                     .id("video-volume-slider")
-                                    .w(px(68.0))
-                                    .h(px(14.0))
+                                    .debug_selector(|| "video-volume-slider".to_string())
+                                    .w(px(88.0))
+                                    .h(px(24.0))
                                     .cursor_pointer()
                                     .relative()
                                     .flex()
                                     .items_center()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener({
+                                            let volume_bounds = volume_bounds.clone();
+                                            move |this, event: &MouseDownEvent, _window, cx| {
+                                                if let Some(pct) =
+                                                    volume_fraction(event.position, &volume_bounds)
+                                                {
+                                                    this.video.adjusting_volume = true;
+                                                    this.set_video_volume(pct, cx);
+                                                }
+                                            }
+                                        }),
+                                    )
+                                    .on_mouse_up(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                                            this.video.adjusting_volume = false;
+                                            cx.notify();
+                                        }),
+                                    )
+                                    .on_mouse_up_out(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                                            this.video.adjusting_volume = false;
+                                            cx.notify();
+                                        }),
+                                    )
                                     .child(
                                         div()
                                             .w_full()
@@ -458,29 +494,21 @@ impl ViewerTransport {
                                             .bg(theme::text())
                                             .shadow_sm(),
                                     )
-                                    // 6 steps: 0.0, 0.2, 0.4, 0.6, 0.8, 1.0 (enables clean mute)
-                                    .child({
-                                        let mut v_hits =
-                                            div().absolute().inset_0().flex().flex_row();
-                                        for i in 0..=5 {
-                                            let v_step = i as f32 / 5.0;
-                                            v_hits = v_hits.child(
-                                                div()
-                                                    .id(ElementId::NamedInteger(
-                                                        "vol-step".into(),
-                                                        i as u64,
-                                                    ))
-                                                    .flex_1()
-                                                    .h_full()
-                                                    .on_click(cx.listener(
-                                                        move |this, _e: &ClickEvent, _w, cx| {
-                                                            this.set_video_volume(v_step, cx);
-                                                        },
-                                                    )),
-                                            );
-                                        }
-                                        v_hits
-                                    }),
+                                    // Last child: the track bounds come from the first.
+                                    .child(drag_tracker(
+                                        this.video.adjusting_volume,
+                                        cx.entity(),
+                                        {
+                                            let volume_bounds = volume_bounds.clone();
+                                            move |this, position, cx| {
+                                                if let Some(pct) =
+                                                    volume_fraction(position, &volume_bounds)
+                                                {
+                                                    this.set_video_volume(pct, cx);
+                                                }
+                                            }
+                                        },
+                                    )),
                             )
                             // Speed Button: 1 ×
                             .child(

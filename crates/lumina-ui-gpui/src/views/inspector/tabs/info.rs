@@ -293,6 +293,10 @@ pub fn render_info_tab(
                         .child(
                             div()
                                 .flex_1()
+                                // Long absolute paths are a single unbroken
+                                // token; without min_w(0) they widen the row
+                                // instead of wrapping (BUG 12).
+                                .min_w(px(0.0))
                                 .text_xs()
                                 .font_family(theme::FONT_MONO)
                                 .text_color(theme::text_muted())
@@ -323,7 +327,7 @@ fn render_info_field_row(label: &str, content: impl IntoElement) -> impl IntoEle
                 .text_color(theme::text_muted())
                 .child(label.to_string()),
         )
-        .child(div().flex_1().child(content))
+        .child(div().flex_1().min_w(px(0.0)).child(content))
 }
 
 fn render_info_label_value_row(label: &str, value: &str) -> impl IntoElement {
@@ -343,6 +347,7 @@ fn render_info_label_value_row(label: &str, value: &str) -> impl IntoElement {
         .child(
             div()
                 .flex_1()
+                .min_w(px(0.0))
                 .text_xs()
                 .text_color(theme::text())
                 .child(value.to_string()),

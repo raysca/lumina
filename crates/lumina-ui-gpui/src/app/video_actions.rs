@@ -27,6 +27,15 @@ const SCRUB_SEEK_INTERVAL: Duration = Duration::from_millis(50);
 /// commit the final position.
 const RESUME_PROGRESS_INTERVAL: f64 = 5.0;
 
+/// How long a paused player is polled for the frame at a seek destination.
+///
+/// `AVPlayer.seekToTime` with zero tolerance completes asynchronously, so the
+/// destination frame is not guaranteed to exist when the seek returns. The
+/// viewer therefore polls for a bounded window after a seek instead of
+/// blocking or leaving a timer running forever. Playback keeps its normal
+/// continuous frame loop and does not use this window.
+const SEEK_REFRESH_WINDOW: Duration = Duration::from_millis(300);
+
 /// Resolve a 0..=1 scrub fraction against the playback duration.
 fn scrub_target_time(duration: f64, pct: f64) -> f64 {
     let duration = duration.max(0.0);
@@ -224,7 +233,7 @@ impl LuminaApp {
             }
             if let Some(frame) = player.next_frame() {
                 if let Ok(img) = video_frame_to_gpui_image(frame) {
-                    self.viewer_image = Some(img);
+                    self.set_viewer_image(Some(img));
                 }
             }
             self.video.player = Some(player);
@@ -268,6 +277,32 @@ impl LuminaApp {
         self.video.is_scrubbing = false;
         self.video.scrub_time = None;
         self.video.last_scrub_seek = None;
+        self.video.seek_refresh_until = None;
+    }
+
+    /// Starts the frame ticker only when it is not already running.
+    ///
+    /// The paused post-seek refresh arms a deadline on every coalesced seek, so
+    /// restarting the thread each time would churn. `ticker_active` is the
+    /// authoritative running flag (cleared by `stop_video_ticker`).
+    fn ensure_video_ticker(&mut self) {
+        if self.video.ticker_active.is_none() {
+            self.start_video_ticker();
+        }
+    }
+
+    /// Arms the bounded post-seek frame refresh for a paused player.
+    ///
+    /// While playing, the normal playback ticker already refreshes frames, so
+    /// this is a no-op. Seek code calls it after every real seek (including the
+    /// coalesced seeks issued during a scrub drag) so the picture can catch up
+    /// without blocking the UI thread.
+    fn arm_seek_refresh(&mut self) {
+        if self.video.is_playing || self.video.player.is_none() {
+            return;
+        }
+        self.video.seek_refresh_until = Some(Instant::now() + SEEK_REFRESH_WINDOW);
+        self.ensure_video_ticker();
     }
 
     pub fn start_video_ticker(&mut self) {
@@ -320,6 +355,9 @@ impl LuminaApp {
             } else {
                 player.play();
                 self.video.is_playing = true;
+                // Continuous playback owns frame updates; a paused seek refresh
+                // must not race the play ticker.
+                self.video.seek_refresh_until = None;
                 self.start_video_ticker();
             }
             cx.notify();
@@ -369,8 +407,13 @@ impl LuminaApp {
     /// frame. This is the cheap half of a seek, used for coalesced drag updates.
     fn apply_video_scrub_position(&mut self, target: f64) {
         self.video.playback_time = target;
+        let mut seeked = false;
         if let Some(ref mut player) = self.video.player {
             player.seek(target);
+            seeked = true;
+        }
+        if seeked {
+            self.arm_seek_refresh();
         }
     }
 
@@ -378,13 +421,24 @@ impl LuminaApp {
     /// seek behavior and also runs when a scrub drag is committed on release.
     fn seek_video_to_time(&mut self, target: f64) {
         self.video.playback_time = target;
+        let mut rendered = false;
+        let mut seeked = false;
         if let Some(ref mut player) = self.video.player {
             player.seek(target);
+            seeked = true;
+            // Fast path: AVFoundation sometimes has the destination frame
+            // ready synchronously (for example when it is already decoded).
             if let Some(frame) = player.next_frame() {
                 if let Ok(img) = video_frame_to_gpui_image(frame) {
-                    self.viewer_image = Some(img);
+                    self.set_viewer_image(Some(img));
+                    rendered = true;
                 }
             }
+        }
+        if rendered {
+            self.video.seek_refresh_until = None;
+        } else if seeked {
+            self.arm_seek_refresh();
         }
     }
 

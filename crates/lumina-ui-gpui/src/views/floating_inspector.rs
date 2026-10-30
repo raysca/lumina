@@ -41,7 +41,7 @@ impl Drop for FloatingInspectorView {
 }
 
 impl Render for FloatingInspectorView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let app = match self.app.upgrade() {
             Some(app) => app,
             None => {
@@ -57,6 +57,11 @@ impl Render for FloatingInspectorView {
                     .into_any_element();
             }
         };
+
+        // This window paints `viewer_image` too; evict retired frames here
+        // so playback cannot pile them up while the main window is hidden.
+        let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_viewer_images));
+        crate::app::viewer_actions::evict_retired_viewer_images(retired, window, cx);
 
         let app_clone = self.app.clone();
         let app_redock = self.app.clone();
@@ -95,6 +100,14 @@ impl Render for FloatingInspectorView {
             .as_ref()
             .map(|i| i.file_name.clone())
             .unwrap_or_else(|| "Media".to_string());
+        // The title is one unbreakable line in a fixed-height bar: truncate it
+        // and keep the full text in a tooltip so a long name can never push
+        // the Dock/Close controls out of the window (BUG 12).
+        let window_title = if selected_indices_len > 1 {
+            format!("{} items — Info", selected_indices_len)
+        } else {
+            format!("{} — Info", file_name)
+        };
 
         let app_key_event = self.app.clone();
         let app_traffic_close = self.app.clone();
@@ -179,14 +192,14 @@ impl Render for FloatingInspectorView {
                     // Center: Window Title
                     .child(
                         div()
+                            .id("floating-inspector-title")
+                            .min_w(px(0.0))
+                            .truncate()
+                            .tooltip(theme::tooltip_label(window_title.clone()))
                             .text_xs()
                             .font_weight(FontWeight::BOLD)
                             .text_color(theme::text())
-                            .child(if selected_indices_len > 1 {
-                                format!("{} items — Info", selected_indices_len)
-                            } else {
-                                format!("{} — Info", file_name)
-                            }),
+                            .child(window_title),
                     )
                     // Right: Actions (Dock & Close)
                     .child(
