@@ -1,6 +1,7 @@
 mod editor_handoff;
 mod inspector;
 mod interaction;
+mod multi_select;
 mod overlay_isolation;
 mod tags_and_albums;
 mod toasts;

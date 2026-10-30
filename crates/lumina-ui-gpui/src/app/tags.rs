@@ -61,21 +61,31 @@ impl LuminaApp {
             return;
         }
 
+        // Undo must only touch items this edit changes: items that already
+        // had the tag keep it present after an undo.
         let result = if let Some(ref state) = self.grid_state {
-            state
-                .engine
-                .add_tags_batch(&ids, std::slice::from_ref(&clean))
+            state.engine.ids_with_tag(&ids, &clean).and_then(|had| {
+                let had: std::collections::HashSet<_> = had.into_iter().collect();
+                let changed: Vec<_> = ids.iter().copied().filter(|id| !had.contains(id)).collect();
+                state
+                    .engine
+                    .add_tags_batch(&changed, std::slice::from_ref(&clean))?;
+                Ok(changed)
+            })
         } else {
-            Ok(())
+            Ok(Vec::new())
         };
-        if self
-            .apply_tag_mutation("Could not add tag", result, cx)
-            .is_none()
-        {
+        let Some(changed) = self.apply_tag_mutation("Could not add tag", result, cx) else {
+            return;
+        };
+        if changed.is_empty() {
+            // Nothing to write or undo; an undo toast here would undo an
+            // older, unrelated action.
+            cx.notify();
             return;
         }
         self.push_undo(crate::app::undo::UndoAction::Tags {
-            ids: ids.clone(),
+            ids: changed,
             tag: clean.clone(),
             added: true,
         });
@@ -96,21 +106,31 @@ impl LuminaApp {
             return;
         }
 
+        // Undo must only touch items this edit changes: items that already
+        // lacked the tag keep it absent after an undo.
         let result = if let Some(ref state) = self.grid_state {
-            state
-                .engine
-                .remove_tags_batch(&ids, std::slice::from_ref(&clean))
+            state.engine.ids_with_tag(&ids, &clean).and_then(|had| {
+                let had: std::collections::HashSet<_> = had.into_iter().collect();
+                let changed: Vec<_> = ids.iter().copied().filter(|id| had.contains(id)).collect();
+                state
+                    .engine
+                    .remove_tags_batch(&changed, std::slice::from_ref(&clean))?;
+                Ok(changed)
+            })
         } else {
-            Ok(())
+            Ok(Vec::new())
         };
-        if self
-            .apply_tag_mutation("Could not remove tag", result, cx)
-            .is_none()
-        {
+        let Some(changed) = self.apply_tag_mutation("Could not remove tag", result, cx) else {
+            return;
+        };
+        if changed.is_empty() {
+            // Nothing to write or undo; an undo toast here would undo an
+            // older, unrelated action.
+            cx.notify();
             return;
         }
         self.push_undo(crate::app::undo::UndoAction::Tags {
-            ids: ids.clone(),
+            ids: changed,
             tag: clean.clone(),
             added: false,
         });

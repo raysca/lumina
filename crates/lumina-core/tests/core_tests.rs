@@ -2061,3 +2061,74 @@ fn test_update_smart_album_title_match_mode_and_rules() {
     assert!(catalog.delete_smart_album(album.id).unwrap());
     assert!(catalog.list_smart_albums().unwrap().is_empty());
 }
+
+#[test]
+fn test_tag_counts_for_items_split_full_and_partial_tags() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..3)
+        .map(|i| {
+            sample_media_item(
+                &format!("/photos/count{i}.jpg"),
+                MediaType::Image,
+                1000 + i as i64,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .unwrap()
+        .iter()
+        .map(|it| it.id)
+        .collect();
+    catalog.add_tags_batch(&ids, &["trip".to_string()]).unwrap();
+    catalog
+        .add_tags_batch(&[ids[0]], &["street".to_string()])
+        .unwrap();
+    // A tag only on an unselected item must not appear.
+    catalog
+        .add_tags_batch(&[ids[2]], &["other".to_string()])
+        .unwrap();
+
+    assert_eq!(
+        catalog.tag_counts_for_items(&ids[..2]).unwrap(),
+        vec![("street".to_string(), 1), ("trip".to_string(), 2)],
+        "counts must cover only the given items, ordered by tag"
+    );
+    assert!(catalog.tag_counts_for_items(&[]).unwrap().is_empty());
+}
+
+#[test]
+fn test_ids_with_tag_returns_only_tagged_subset() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..3)
+        .map(|i| {
+            sample_media_item(
+                &format!("/photos/has{i}.jpg"),
+                MediaType::Image,
+                2000 + i as i64,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .unwrap()
+        .iter()
+        .map(|it| it.id)
+        .collect();
+    catalog
+        .add_tags_batch(&[ids[0], ids[2]], &["street".to_string()])
+        .unwrap();
+
+    let mut found = catalog.ids_with_tag(&ids[..2], "street").unwrap();
+    found.sort_by_key(|id| id.0);
+    assert_eq!(
+        found,
+        vec![ids[0]],
+        "only the queried ids that carry the tag are returned"
+    );
+    assert!(catalog.ids_with_tag(&ids, "missing").unwrap().is_empty());
+}

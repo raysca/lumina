@@ -166,6 +166,63 @@ impl Catalog {
         Ok(set.into_iter().collect())
     }
 
+    /// For each tag on any of `ids`, how many of those items carry it, ordered
+    /// by tag. The batch inspector uses this to tell tags on every selected
+    /// item from tags on only some of them.
+    pub fn tag_counts_for_items(&self, ids: &[MediaId]) -> Result<Vec<(String, usize)>> {
+        let conn = self.conn.lock();
+        let mut counts = std::collections::BTreeMap::<String, usize>::new();
+        // Chunks keep each statement under SQLite's bound-parameter limit; a
+        // (media_id, tag) row is unique, so per-chunk counts add up exactly.
+        for chunk in ids.chunks(500) {
+            let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{}", i)).collect();
+            let sql = format!(
+                "SELECT tag, COUNT(*) FROM media_tags WHERE media_id IN ({}) GROUP BY tag;",
+                placeholders.join(", ")
+            );
+            let raw_ids: Vec<i64> = chunk.iter().map(|id| id.0 as i64).collect();
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(raw_ids.iter()), |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+            })?;
+            for r in rows {
+                let (tag, n) = r?;
+                *counts.entry(tag).or_default() += n;
+            }
+        }
+        Ok(counts.into_iter().collect())
+    }
+
+    /// The subset of `ids` that carry `tag`. Tag undo uses it to record only
+    /// the items an add or remove actually changes.
+    pub fn ids_with_tag(&self, ids: &[MediaId], tag: &str) -> Result<Vec<MediaId>> {
+        let conn = self.conn.lock();
+        let mut found = Vec::new();
+        for chunk in ids.chunks(500) {
+            // ?1 is the tag; the ids follow from ?2.
+            let placeholders: Vec<String> =
+                (2..=chunk.len() + 1).map(|i| format!("?{}", i)).collect();
+            let sql = format!(
+                "SELECT media_id FROM media_tags WHERE tag = ?1 AND media_id IN ({});",
+                placeholders.join(", ")
+            );
+            let mut values: Vec<rusqlite::types::Value> = vec![tag.to_string().into()];
+            values.extend(
+                chunk
+                    .iter()
+                    .map(|id| rusqlite::types::Value::from(id.0 as i64)),
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(values.iter()), |row| {
+                row.get::<_, i64>(0)
+            })?;
+            for r in rows {
+                found.push(MediaId(r? as u64));
+            }
+        }
+        Ok(found)
+    }
+
     /// Returns all distinct tags in the catalog, ordered alphabetically.
     pub fn get_all_tags(&self) -> Result<Vec<String>> {
         let conn = self.conn.lock();

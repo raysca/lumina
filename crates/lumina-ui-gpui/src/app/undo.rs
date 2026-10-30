@@ -350,10 +350,11 @@ impl LuminaApp {
                 .as_ref()
                 .and_then(|item| state.engine.get_item_by_id(item.id));
             if let Some(item) = updated_selected {
-                self.selected_item_tags = state.engine.get_tags_for_item(item.id);
                 self.selected_item = Some(item);
             }
         }
+        // Covers both a single item and a multi-selection (per-tag counts).
+        self.refresh_selected_tags();
         // Batch labels and mixed-value summaries read the refreshed maps.
         self.update_batch_summary();
         self.refresh_album_counts();

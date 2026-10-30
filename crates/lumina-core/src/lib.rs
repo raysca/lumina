@@ -756,6 +756,11 @@ impl LuminaEngine {
         self.catalog.remove_tags_batch(ids, tags)
     }
 
+    /// The subset of `ids` that carry `tag`; see [`Catalog::ids_with_tag`].
+    pub fn ids_with_tag(&self, ids: &[MediaId], tag: &str) -> Result<Vec<MediaId>> {
+        self.catalog.ids_with_tag(ids, tag)
+    }
+
     pub fn get_tags_for_item(&self, id: MediaId) -> Vec<String> {
         self.catalog.get_tags_for_item(id).unwrap_or_default()
     }
@@ -764,6 +769,16 @@ impl LuminaEngine {
         self.catalog
             .get_tags_for_items_batch(ids)
             .unwrap_or_default()
+    }
+
+    /// Per-tag count across `ids`; see [`Catalog::tag_counts_for_items`].
+    pub fn tag_counts_for_items(&self, ids: &[MediaId]) -> Vec<(String, usize)> {
+        self.catalog
+            .tag_counts_for_items(ids)
+            .unwrap_or_else(|err| {
+                log::warn!("tag counts for selection failed: {err:#}");
+                Vec::new()
+            })
     }
 
     pub fn query_tag_counts(&self) -> Vec<(String, usize)> {

@@ -434,6 +434,7 @@ impl LuminaApp {
         self.selected_indices.clear();
         self.selection_anchor = None;
         self.selected_item_tags.clear();
+        self.selected_tag_counts.clear();
         self.batch_summary = Default::default();
         self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
@@ -912,6 +913,7 @@ impl LuminaApp {
         self.selected_indices.clear();
         self.selection_anchor = None;
         self.selected_item_tags.clear();
+        self.selected_tag_counts.clear();
         self.batch_summary = Default::default();
         self.set_viewer_image(None);
 

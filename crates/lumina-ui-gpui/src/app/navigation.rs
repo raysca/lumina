@@ -644,6 +644,7 @@ impl LuminaApp {
                         self.selected_item = None;
                         self.set_viewer_image(None);
                         self.selected_item_tags.clear();
+                        self.selected_tag_counts.clear();
                     }
                 }
             } else {
@@ -1345,6 +1346,7 @@ impl LuminaApp {
         self.selected_item = None;
         self.set_viewer_image(None);
         self.selected_item_tags.clear();
+        self.selected_tag_counts.clear();
         self.batch_summary = BatchSelectionSummary::default();
         self.batch_metadata = BatchMetadataSummary::default();
         self.grid_drag.clear();
@@ -1470,15 +1472,22 @@ impl LuminaApp {
     pub fn refresh_selected_tags(&mut self) {
         if let Some(ref state) = self.grid_state {
             let ids = self.get_selected_ids();
+            self.selected_tag_counts = Vec::new();
             if ids.is_empty() {
                 self.selected_item_tags = Vec::new();
             } else if ids.len() == 1 {
                 self.selected_item_tags = state.engine.get_tags_for_item(ids[0]);
             } else {
-                self.selected_item_tags = state.engine.get_tags_for_items_batch(&ids);
+                self.selected_tag_counts = state.engine.tag_counts_for_items(&ids);
+                self.selected_item_tags = self
+                    .selected_tag_counts
+                    .iter()
+                    .map(|(tag, _)| tag.clone())
+                    .collect();
             }
         } else {
             self.selected_item_tags = Vec::new();
+            self.selected_tag_counts = Vec::new();
         }
     }
 

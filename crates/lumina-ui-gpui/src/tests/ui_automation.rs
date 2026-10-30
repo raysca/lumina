@@ -64,7 +64,7 @@ pub(crate) fn render_ui(cx: &mut VisualTestContext) {
     cx.run_until_parked();
 }
 
-fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
+pub(crate) fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
     cx.update(|window, cx| {
         let handle = view.read(cx).focus_handle.clone();
         window.focus(&handle);
@@ -94,7 +94,7 @@ pub(crate) fn click_point(cx: &mut VisualTestContext, x: f32, y: f32) {
     render_ui(cx);
 }
 
-fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
+pub(crate) fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
     cx.simulate_keystrokes(keys);
     render_ui(cx);
 }

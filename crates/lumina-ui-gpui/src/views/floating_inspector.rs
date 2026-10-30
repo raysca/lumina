@@ -72,6 +72,7 @@ impl Render for FloatingInspectorView {
         let viewer_image = app_read.viewer_image.clone();
         let batch_summary = app_read.batch_summary.clone();
         let selected_item_tags = app_read.selected_item_tags.clone();
+        let selected_tag_counts = app_read.selected_tag_counts.clone();
         let library_tag_counts = app_read.library_tag_counts.clone();
         let tag_input_active = app_read.tag_input_active;
         let tag_input_buffer = app_read.tag_input_buffer.clone();
@@ -285,6 +286,7 @@ impl Render for FloatingInspectorView {
                         &batch_summary,
                         viewer_image,
                         &selected_item_tags,
+                        &selected_tag_counts,
                         &library_tag_counts,
                         tag_input_active,
                         &tag_input_buffer,

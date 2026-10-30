@@ -277,6 +277,10 @@ pub struct LuminaApp {
     pub selected_indices: BTreeSet<usize>,
     pub selection_anchor: Option<usize>,
     pub selected_item_tags: Vec<String>,
+    /// For a multi-selection, how many selected items carry each tag, so the
+    /// batch inspector can mark tags that are only on some of them. Empty for
+    /// a single item.
+    pub selected_tag_counts: Vec<(String, usize)>,
     pub batch_summary: BatchSelectionSummary,
     /// Mixed-value-aware title/caption summary for the batch inspector.
     pub batch_metadata: BatchMetadataSummary,
@@ -447,6 +451,7 @@ impl LuminaApp {
             selected_indices: BTreeSet::new(),
             selection_anchor: None,
             selected_item_tags: Vec::new(),
+            selected_tag_counts: Vec::new(),
             batch_summary: BatchSelectionSummary::default(),
             batch_metadata: BatchMetadataSummary::default(),
             grid_drag: GridDragState::default(),

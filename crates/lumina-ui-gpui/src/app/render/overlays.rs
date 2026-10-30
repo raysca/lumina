@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
@@ -6,7 +7,7 @@ use crate::theme;
 use crate::views::album_builder::AlbumBuilderModal;
 use crate::views::context_menu::MediaContextMenu;
 use crate::views::delete_modal::DeleteConfirmModal;
-use crate::views::inspector::format_bytes;
+
 use crate::views::sidebar::AlbumSelection;
 use crate::views::tag_manager::TagManagerModal;
 use crate::views::viewer::MediaViewer;
@@ -21,219 +22,116 @@ impl LuminaApp {
         if self.selected_indices.len() <= 1 || is_fullscreen_viewer {
             return Empty.into_any_element();
         }
+        let in_trash = self.selection == AlbumSelection::Trash;
+        let separator = || div().w(px(1.0)).h(px(20.0)).bg(theme::border_strong());
 
-        let count = self.batch_summary.count;
-        let total_size_str = format_bytes(self.batch_summary.total_bytes);
+        let mut dock = div()
+            .id("multi-select-action-dock")
+            .debug_selector(|| "multi-select-action-dock".to_string())
+            // Clicks on the dock must not fall through to the grid,
+            // which would clear the selection the dock acts on.
+            .occlude()
+            .p(px(5.0))
+            .bg(theme::bg_hud())
+            .border_1()
+            .border_color(theme::border_strong())
+            .rounded(px(10.0))
+            .shadow_lg()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(4.0))
+            .text_xs()
+            .child(
+                div()
+                    .debug_selector(|| "batch-dock-count".to_string())
+                    .px(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme::text())
+                    .child(format!("{} selected", self.batch_summary.count)),
+            )
+            .child(separator());
+
+        if in_trash {
+            dock = dock
+                .child(
+                    dock_button("batch-restore-dock-btn", "Restore", None, theme::text()).on_click(
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.restore_selected_trash(cx);
+                        }),
+                    ),
+                )
+                .child(separator())
+                .child(
+                    dock_button(
+                        "batch-delete-immediately-dock-btn",
+                        "Delete Immediately",
+                        None,
+                        theme::danger_text(),
+                    )
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.prompt_delete_selected(cx);
+                    })),
+                );
+        } else {
+            dock = dock
+                .child(
+                    dock_button("batch-fav-dock-btn", "Favorite", None, theme::text()).on_click(
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.batch_toggle_favorite(cx);
+                        }),
+                    ),
+                )
+                .child(
+                    dock_button("batch-tags-dock-btn", "Tag", None, theme::text())
+                        .tooltip(theme::tooltip_label("Add a tag to every selected item"))
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.inspector_open = true;
+                            this.start_tag_input(cx);
+                        })),
+                )
+                .child(
+                    dock_button("batch-export-dock-btn", "Export…", None, theme::text()).on_click(
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.export_pick_folder(cx);
+                        }),
+                    ),
+                )
+                .child(separator())
+                .child(
+                    dock_button(
+                        "batch-trash-dock-btn",
+                        "",
+                        Some(Icon::Trash),
+                        theme::danger_text(),
+                    )
+                    .tooltip(theme::tooltip_label("Move to Trash"))
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.batch_trash_or_restore(cx);
+                    })),
+                );
+        }
 
         div()
             .absolute()
-            .bottom_6()
+            .bottom(px(20.0))
             .left_0()
             .right_0()
             .flex()
             .justify_center()
-            .items_center()
             .child(
-                div()
-                    .id("multi-select-action-dock")
-                    // Clicks on the dock must not fall through to the grid,
-                    // which would clear the selection the dock acts on.
-                    .occlude()
-                    .px_5()
-                    .py_2p5()
-                    .bg(theme::bg_hud())
-                    .border_1()
-                    .border_color(theme::accent())
-                    .rounded_xl()
-                    .shadow_lg()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .child(render_icon(Icon::Sparkles, px(14.0), theme::accent()))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text())
-                                    .child(format!(
-                                        "{} items selected ({})",
-                                        count, total_size_str
-                                    )),
-                            ),
+                dock.child(
+                    dock_button(
+                        "batch-clear-dock-btn",
+                        "",
+                        Some(Icon::X),
+                        theme::text_muted(),
                     )
-                    // Action: Batch Favorite (hidden in Trash view)
-                    .child(if self.selection != AlbumSelection::Trash {
-                        div()
-                            .id("batch-fav-dock-btn")
-                            .debug_selector(|| "batch-fav-dock-btn".to_string())
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .text_xs()
-                            .text_color(theme::rating())
-                            .child(render_icon(Icon::HeartFilled, px(12.0), theme::rating()))
-                            .child("Favorite")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.batch_toggle_favorite(cx);
-                            }))
-                            .into_any_element()
-                    } else {
-                        Empty.into_any_element()
-                    })
-                    // Action: Batch Trash or Restore / Delete Immediately
-                    .child(if self.selection == AlbumSelection::Trash {
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .id("batch-restore-dock-btn")
-                                    .px_2p5()
-                                    .py_1()
-                                    .bg(theme::selection_bg())
-                                    .hover(|s| s.bg(theme::selection_bg_hover()))
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_1p5()
-                                    .text_xs()
-                                    .text_color(theme::accent())
-                                    .child(render_icon(Icon::Undo2, px(12.0), theme::accent()))
-                                    .child("Restore")
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.restore_selected_trash(cx);
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .id("batch-delete-immediately-dock-btn")
-                                    .px_2p5()
-                                    .py_1()
-                                    .bg(theme::danger_bg())
-                                    .hover(|s| s.bg(theme::danger_bg_hover()))
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_1p5()
-                                    .text_xs()
-                                    .text_color(theme::text())
-                                    .child(render_icon(Icon::X, px(12.0), theme::text()))
-                                    .child("Delete Immediately")
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.prompt_delete_selected(cx);
-                                    })),
-                            )
-                            .into_any_element()
-                    } else {
-                        div()
-                            .id("batch-trash-dock-btn")
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::danger_bg()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .text_xs()
-                            .text_color(theme::danger_text())
-                            .child(render_icon(Icon::Trash, px(12.0), theme::danger_text()))
-                            .child("Trash")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.batch_trash_or_restore(cx);
-                            }))
-                            .into_any_element()
-                    })
-                    // Action: Open Tags Editor / Inspector
-                    .child(
-                        div()
-                            .id("batch-tags-dock-btn")
-                            .debug_selector(|| "batch-tags-dock-btn".to_string())
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::accent())
-                            .hover(|s| s.bg(theme::accent_hover()).text_color(theme::accent_fg()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_xs()
-                            .text_color(theme::accent_fg())
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .child(render_icon(Icon::Tag, px(12.0), theme::accent_fg()))
-                            .child("Add Tags")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.inspector_open = true;
-                                this.start_tag_input(cx);
-                            })),
-                    )
-                    // Action: Export Selection
-                    .child(
-                        div()
-                            .id("batch-export-dock-btn")
-                            .px_2()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .text_xs()
-                            .text_color(theme::text_muted())
-                            .child(render_icon(Icon::Folder, px(12.0), theme::text_muted()))
-                            .child("Export…")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.export_pick_folder(cx);
-                            })),
-                    )
-                    // Action: Clear Selection
-                    .child(
-                        div()
-                            .id("batch-clear-dock-btn")
-                            .px_2()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .text_xs()
-                            .text_color(theme::text_muted())
-                            .child(render_icon(Icon::X, px(12.0), theme::text_muted()))
-                            .child("Clear (Esc)")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.clear_selection(cx);
-                            })),
-                    ),
+                    .tooltip(theme::tooltip_label("Clear selection (Esc)"))
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.clear_selection(cx);
+                    })),
+                ),
             )
             .into_any_element()
     }
@@ -306,4 +204,28 @@ impl LuminaApp {
             Empty.into_any_element()
         }
     }
+}
+
+/// Flat dock button: a text label, or an icon alone when `label` is empty.
+fn dock_button(
+    id: &'static str,
+    label: &'static str,
+    icon: Option<Icon>,
+    color: Rgba,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .h(px(28.0))
+        .min_w(px(28.0))
+        .px(px(if label.is_empty() { 0.0 } else { 10.0 }))
+        .rounded(px(6.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::bg_control_hover()))
+        .text_color(color)
+        .children(icon.map(|icon| render_icon(icon, px(14.0), color)))
+        .when(!label.is_empty(), |d| d.child(label))
 }

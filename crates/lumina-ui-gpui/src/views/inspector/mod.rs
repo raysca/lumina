@@ -21,6 +21,7 @@ impl InspectorView {
         let batch_summary = this.batch_summary.clone();
         let viewer_image = this.viewer_image.clone();
         let tags = this.selected_item_tags.clone();
+        let tag_counts = this.selected_tag_counts.clone();
         let library_tag_counts = this.library_tag_counts.clone();
         let tag_input_active = this.tag_input_active;
         let tag_input_buffer = this.tag_input_buffer.clone();
@@ -175,6 +176,7 @@ impl InspectorView {
                         &batch_summary,
                         viewer_image,
                         &tags,
+                        &tag_counts,
                         &library_tag_counts,
                         tag_input_active,
                         &tag_input_buffer,

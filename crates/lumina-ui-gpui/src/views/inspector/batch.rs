@@ -11,6 +11,7 @@ pub fn render_batch_body(
     weak_app: WeakEntity<LuminaApp>,
     summary: &BatchSelectionSummary,
     tags: &[String],
+    tag_counts: &[(String, usize)],
     library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
@@ -32,6 +33,14 @@ pub fn render_batch_body(
     let videos_count = summary.videos_count;
     let raw_count = summary.raw_count;
     let fav_count = summary.fav_count;
+    // Without counts (not yet refreshed) every known tag is treated as on all.
+    let (on_all, partial): (Vec<String>, Vec<(String, usize)>) = if tag_counts.is_empty() {
+        (tags.to_vec(), Vec::new())
+    } else {
+        let (all, some): (Vec<_>, Vec<_>) =
+            tag_counts.iter().cloned().partition(|(_, n)| *n >= count);
+        (all.into_iter().map(|(tag, _)| tag).collect(), some)
+    };
 
     let app_restore = weak_app.clone();
     let app_delete = weak_app.clone();
@@ -72,6 +81,180 @@ pub fn render_batch_body(
                         .text_color(theme::text_muted())
                         .child(format!("Total Size: {}", format_bytes(total_bytes))),
                 ),
+        )
+        // Batch Rating & Color Labels
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_2p5()
+                .rounded_lg()
+                .bg(theme::bg_pane())
+                .border_1()
+                .border_color(theme::border_subtle())
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::text_subtle())
+                                .child("BATCH RATING"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(2.0))
+                                .children((1..=5).map(|star_val| {
+                                    let app_star = weak_app.clone();
+                                    let is_filled = star_val <= rating;
+                                    div()
+                                        .id(ElementId::NamedInteger(
+                                            "batch-star".into(),
+                                            star_val as u64,
+                                        ))
+                                        .cursor_pointer()
+                                        .px(px(2.0))
+                                        .py(px(1.0))
+                                        .text_sm()
+                                        .text_color(if is_filled {
+                                            theme::rating()
+                                        } else {
+                                            theme::text_disabled()
+                                        })
+                                        .hover(|s| s.text_color(theme::rating()))
+                                        .child(render_icon(
+                                            if is_filled {
+                                                Icon::StarFilled
+                                            } else {
+                                                Icon::Star
+                                            },
+                                            px(14.0),
+                                            if is_filled {
+                                                theme::rating()
+                                            } else {
+                                                theme::text_disabled()
+                                            },
+                                        ))
+                                        .on_click(move |_e, _window, cx| {
+                                            if let Some(app) = app_star.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.set_rating_selected(star_val, cx);
+                                                });
+                                            }
+                                        })
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .justify_between()
+                        .items_center()
+                        .pt_1()
+                        .border_t_1()
+                        .border_color(theme::border_subtle())
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::text_subtle())
+                                .child("COLOR LABEL"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
+                                .child({
+                                    let app_clear = weak_app.clone();
+                                    div()
+                                        .id("batch-label-0")
+                                        .cursor_pointer()
+                                        .text_xs()
+                                        .text_color(theme::text_disabled())
+                                        .hover(|s| s.text_color(theme::text()))
+                                        .child("⊘")
+                                        .on_click(move |_e, _window, cx| {
+                                            if let Some(app) = app_clear.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.set_color_label_selected(0, cx);
+                                                });
+                                            }
+                                        })
+                                })
+                                .children(
+                                    [
+                                        (1u8, theme::label_red()),
+                                        (2, theme::label_orange()),
+                                        (3, theme::label_yellow()),
+                                        (4, theme::label_green()),
+                                        (5, theme::label_blue()),
+                                        (6, theme::label_purple()),
+                                    ]
+                                    .into_iter()
+                                    .map(|(idx, color)| {
+                                        let app_dot = weak_app.clone();
+                                        let is_selected = color_label == Some(idx);
+                                        div()
+                                            .id(ElementId::NamedInteger(
+                                                "batch-label-dot".into(),
+                                                idx as u64,
+                                            ))
+                                            .size(px(12.0))
+                                            .rounded_full()
+                                            .bg(color)
+                                            .cursor_pointer()
+                                            .border_1()
+                                            .border_color(if is_selected {
+                                                theme::text()
+                                            } else {
+                                                theme::border_subtle()
+                                            })
+                                            .flex()
+                                            .justify_center()
+                                            .items_center()
+                                            .child(if is_selected {
+                                                div()
+                                                    .size(px(4.0))
+                                                    .rounded_full()
+                                                    .bg(theme::text())
+                                                    .into_any_element()
+                                            } else {
+                                                Empty.into_any_element()
+                                            })
+                                            .on_click(move |_e, _window, cx| {
+                                                if let Some(app) = app_dot.upgrade() {
+                                                    app.update(cx, |this, cx| {
+                                                        this.set_color_label_selected(idx, cx);
+                                                    });
+                                                }
+                                            })
+                                    }),
+                                ),
+                        ),
+                ),
+        )
+        // Keywords: tags on every selected item use the normal editor (× removes
+        // from all); tags on only some are listed below it as dashed chips.
+        .child(render_tags_section(
+            weak_app.clone(),
+            &on_all,
+            library_tag_counts,
+            tag_input_active,
+            tag_input_buffer,
+        ))
+        .children(
+            (!partial.is_empty()).then(|| render_partial_tags(weak_app.clone(), &partial, count)),
         )
         // Mixed-value-aware metadata editing. Applying either field writes one
         // grouped undo entry for the whole selection.
@@ -270,168 +453,6 @@ pub fn render_batch_body(
                 )
                 .into_any_element()
         })
-        // Batch Rating & Color Labels
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .p_2p5()
-                .rounded_lg()
-                .bg(theme::bg_pane())
-                .border_1()
-                .border_color(theme::border_subtle())
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme::text_subtle())
-                                .child("BATCH RATING"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(2.0))
-                                .children((1..=5).map(|star_val| {
-                                    let app_star = weak_app.clone();
-                                    let is_filled = star_val <= rating;
-                                    div()
-                                        .id(ElementId::NamedInteger(
-                                            "batch-star".into(),
-                                            star_val as u64,
-                                        ))
-                                        .cursor_pointer()
-                                        .px(px(2.0))
-                                        .py(px(1.0))
-                                        .text_sm()
-                                        .text_color(if is_filled {
-                                            theme::rating()
-                                        } else {
-                                            theme::text_disabled()
-                                        })
-                                        .hover(|s| s.text_color(theme::rating()))
-                                        .child(render_icon(
-                                            if is_filled {
-                                                Icon::StarFilled
-                                            } else {
-                                                Icon::Star
-                                            },
-                                            px(14.0),
-                                            if is_filled {
-                                                theme::rating()
-                                            } else {
-                                                theme::text_disabled()
-                                            },
-                                        ))
-                                        .on_click(move |_e, _window, cx| {
-                                            if let Some(app) = app_star.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.set_rating_selected(star_val, cx);
-                                                });
-                                            }
-                                        })
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .items_center()
-                        .pt_1()
-                        .border_t_1()
-                        .border_color(theme::border_subtle())
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme::text_subtle())
-                                .child("COLOR LABEL"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
-                                .child({
-                                    let app_clear = weak_app.clone();
-                                    div()
-                                        .id("batch-label-0")
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(theme::text_disabled())
-                                        .hover(|s| s.text_color(theme::text()))
-                                        .child("⊘")
-                                        .on_click(move |_e, _window, cx| {
-                                            if let Some(app) = app_clear.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.set_color_label_selected(0, cx);
-                                                });
-                                            }
-                                        })
-                                })
-                                .children(
-                                    [
-                                        (1u8, theme::label_red()),
-                                        (2, theme::label_orange()),
-                                        (3, theme::label_yellow()),
-                                        (4, theme::label_green()),
-                                        (5, theme::label_blue()),
-                                        (6, theme::label_purple()),
-                                    ]
-                                    .into_iter()
-                                    .map(|(idx, color)| {
-                                        let app_dot = weak_app.clone();
-                                        let is_selected = color_label == Some(idx);
-                                        div()
-                                            .id(ElementId::NamedInteger(
-                                                "batch-label-dot".into(),
-                                                idx as u64,
-                                            ))
-                                            .size(px(12.0))
-                                            .rounded_full()
-                                            .bg(color)
-                                            .cursor_pointer()
-                                            .border_1()
-                                            .border_color(if is_selected {
-                                                theme::text()
-                                            } else {
-                                                theme::border_subtle()
-                                            })
-                                            .flex()
-                                            .justify_center()
-                                            .items_center()
-                                            .child(if is_selected {
-                                                div()
-                                                    .size(px(4.0))
-                                                    .rounded_full()
-                                                    .bg(theme::text())
-                                                    .into_any_element()
-                                            } else {
-                                                Empty.into_any_element()
-                                            })
-                                            .on_click(move |_e, _window, cx| {
-                                                if let Some(app) = app_dot.upgrade() {
-                                                    app.update(cx, |this, cx| {
-                                                        this.set_color_label_selected(idx, cx);
-                                                    });
-                                                }
-                                            })
-                                    }),
-                                ),
-                        ),
-                ),
-        )
         // Aggregated Composition Section
         .child(
             div()
@@ -458,14 +479,73 @@ pub fn render_batch_body(
                     &format!("{}/{}", fav_count, count),
                 )),
         )
-        // Keywords & Tags Section
-        .child(render_tags_section(
-            weak_app,
-            tags,
-            library_tag_counts,
-            tag_input_active,
-            tag_input_buffer,
-        ))
+        .into_any_element()
+}
+
+/// Tags on only some of the selection: dashed chips with an `n/total` count.
+/// Clicking one adds it to every selected item.
+fn render_partial_tags(
+    weak_app: WeakEntity<LuminaApp>,
+    partial: &[(String, usize)],
+    total: usize,
+) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_1p5()
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .child("On some items · click to apply to all"),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .gap_1p5()
+                .children(partial.iter().map(|(tag, n)| {
+                    let app = weak_app.clone();
+                    let tag_for_click = tag.clone();
+                    let selector = format!("batch-partial-tag-{tag}");
+                    div()
+                        .id(ElementId::Name(selector.clone().into()))
+                        .debug_selector(move || selector.clone())
+                        .tooltip(theme::tooltip_label(format!(
+                            "On {n} of {total} · add to all"
+                        )))
+                        .h(px(24.0))
+                        .px(px(9.0))
+                        .rounded_full()
+                        .border_1()
+                        .border_dashed()
+                        .border_color(theme::text_disabled())
+                        .hover(|s| s.bg(theme::bg_control_hover()))
+                        .cursor_pointer()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .text_xs()
+                        .text_color(theme::text_muted())
+                        .child(tag.clone())
+                        .child(
+                            div()
+                                .font_family(theme::FONT_MONO)
+                                .text_size(px(10.0))
+                                .text_color(theme::text_subtle())
+                                .child(format!("{n}/{total}")),
+                        )
+                        .on_click(move |_e, _w, cx| {
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.batch_add_tag(tag_for_click.clone(), cx)
+                                });
+                            }
+                        })
+                })),
+        )
         .into_any_element()
 }
 
