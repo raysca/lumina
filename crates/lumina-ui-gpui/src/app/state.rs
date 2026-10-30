@@ -126,6 +126,8 @@ pub struct TagManagerState {
     /// Tag shown in the detail panel. Separate from `selected`, which holds
     /// the checkbox set for bulk actions.
     pub focused: Option<String>,
+    /// Tracks the list so ↑/↓ can keep the focused row in view.
+    pub list_scroll: gpui::ScrollHandle,
 }
 
 impl Default for TagManagerState {
@@ -140,6 +142,7 @@ impl Default for TagManagerState {
             editing_buffer: String::new(),
             merge_source: None,
             focused: None,
+            list_scroll: gpui::ScrollHandle::new(),
         }
     }
 }

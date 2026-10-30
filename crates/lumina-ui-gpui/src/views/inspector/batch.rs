@@ -3,6 +3,7 @@ use gpui::*;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::inspector::body::{format_bytes, render_meta_row};
+use crate::views::inspector::partial_tags;
 use crate::views::inspector::tabs::tags::render_tags_section;
 use crate::{BatchSelectionSummary, LuminaApp};
 
@@ -254,7 +255,8 @@ pub fn render_batch_body(
             tag_input_buffer,
         ))
         .children(
-            (!partial.is_empty()).then(|| render_partial_tags(weak_app.clone(), &partial, count)),
+            (!partial.is_empty())
+                .then(|| partial_tags::render_partial_tags(weak_app.clone(), &partial, count)),
         )
         // Mixed-value-aware metadata editing. Applying either field writes one
         // grouped undo entry for the whole selection.
@@ -478,73 +480,6 @@ pub fn render_batch_body(
                     "Favorited",
                     &format!("{}/{}", fav_count, count),
                 )),
-        )
-        .into_any_element()
-}
-
-/// Tags on only some of the selection: dashed chips with an `n/total` count.
-/// Clicking one adds it to every selected item.
-fn render_partial_tags(
-    weak_app: WeakEntity<LuminaApp>,
-    partial: &[(String, usize)],
-    total: usize,
-) -> AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap_1p5()
-        .child(
-            div()
-                .text_xs()
-                .text_color(theme::text_subtle())
-                .child("On some items · click to apply to all"),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .gap_1p5()
-                .children(partial.iter().map(|(tag, n)| {
-                    let app = weak_app.clone();
-                    let tag_for_click = tag.clone();
-                    let selector = format!("batch-partial-tag-{tag}");
-                    div()
-                        .id(ElementId::Name(selector.clone().into()))
-                        .debug_selector(move || selector.clone())
-                        .tooltip(theme::tooltip_label(format!(
-                            "On {n} of {total} · add to all"
-                        )))
-                        .h(px(24.0))
-                        .px(px(9.0))
-                        .rounded_full()
-                        .border_1()
-                        .border_dashed()
-                        .border_color(theme::text_disabled())
-                        .hover(|s| s.bg(theme::bg_control_hover()))
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(6.0))
-                        .text_xs()
-                        .text_color(theme::text_muted())
-                        .child(tag.clone())
-                        .child(
-                            div()
-                                .font_family(theme::FONT_MONO)
-                                .text_size(px(10.0))
-                                .text_color(theme::text_subtle())
-                                .child(format!("{n}/{total}")),
-                        )
-                        .on_click(move |_e, _w, cx| {
-                            if let Some(app) = app.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.batch_add_tag(tag_for_click.clone(), cx)
-                                });
-                            }
-                        })
-                })),
         )
         .into_any_element()
 }

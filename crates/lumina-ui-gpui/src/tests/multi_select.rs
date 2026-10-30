@@ -105,3 +105,53 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
+    let (temp_dir, engine) = seed_library("multi_partial_remove", 3);
+    let items = engine.get_item_slice(0..3);
+    let (a, b) = (items[0].clone(), items[1].clone());
+    let catalog = engine.catalog();
+    catalog
+        .add_tags_batch(&[a.id], &["street".to_string()])
+        .unwrap();
+
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+
+    click(vcx, leak(format!("media-card-{}", a.id.0)));
+    let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
+    vcx.simulate_click(second, gpui::Modifiers::command());
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    click(vcx, "batch-partial-tag-remove-street");
+    let has = |id| {
+        catalog
+            .get_tags_for_item(id)
+            .unwrap()
+            .contains(&"street".to_string())
+    };
+    assert!(
+        !has(a.id) && !has(b.id),
+        "the partial chip's × must remove the tag from every selected item"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-z");
+    assert!(
+        has(a.id),
+        "undo must restore the tag on the item that had it"
+    );
+    assert!(
+        !has(b.id),
+        "undo must not add the tag to an item that never had it"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

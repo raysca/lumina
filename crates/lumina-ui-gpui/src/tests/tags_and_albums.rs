@@ -792,3 +792,42 @@ fn keyboard_browses_tags_and_renames_the_focused_one() {
 
     let _ = std::fs::remove_dir_all(temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
+    let names: Vec<String> = (0..40).map(|i| format!("tag{i:02}")).collect();
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let (temp_dir, engine) = tagged_library("tag_scroll", &refs);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(640.0)));
+    open_tag_manager(&view, vcx);
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "up");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.tag_manager.focused.as_deref(), Some("tag39"));
+        assert!(
+            app.tag_manager.list_scroll.offset().y < gpui::px(0.0),
+            "focusing the last tag by keyboard must scroll the list to it"
+        );
+    });
+
+    click(vcx, "tag-manager-select-all");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.selected.len(),
+            40,
+            "select-all must check every shown tag"
+        );
+    });
+    click(vcx, "tag-manager-select-all");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tag_manager.selected.is_empty(),
+            "a second select-all click must clear the checks"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

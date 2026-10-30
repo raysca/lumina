@@ -386,7 +386,9 @@ impl StructuredQuery {
     }
 }
 
-fn tokenize_query(input: &str) -> Vec<String> {
+/// Splits a search query into terms, keeping `"quoted phrases"` (and
+/// `tag:"two words"`) together as one term.
+pub fn tokenize_query(input: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;

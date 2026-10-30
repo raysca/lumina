@@ -69,6 +69,7 @@ pub fn render_list(
                 .text_color(theme::text_subtle())
                 .child(
                     checkbox("tag-manager-select-all", all_checked)
+                        .debug_selector(|| "tag-manager-select-all".to_string())
                         .tooltip(theme::tooltip_label(if all_checked {
                             "Deselect all"
                         } else {
@@ -87,6 +88,7 @@ pub fn render_list(
                 .flex_1()
                 .min_h(px(0.0))
                 .overflow_y_scroll()
+                .track_scroll(&app.tag_manager.list_scroll)
                 .p(px(4.0))
                 .when(rows.is_empty(), |list| {
                     list.child(

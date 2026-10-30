@@ -765,12 +765,6 @@ impl LuminaEngine {
         self.catalog.get_tags_for_item(id).unwrap_or_default()
     }
 
-    pub fn get_tags_for_items_batch(&self, ids: &[MediaId]) -> Vec<String> {
-        self.catalog
-            .get_tags_for_items_batch(ids)
-            .unwrap_or_default()
-    }
-
     /// Per-tag count across `ids`; see [`Catalog::tag_counts_for_items`].
     pub fn tag_counts_for_items(&self, ids: &[MediaId]) -> Vec<(String, usize)> {
         self.catalog

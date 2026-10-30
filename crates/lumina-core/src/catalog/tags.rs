@@ -141,31 +141,6 @@ impl Catalog {
         Ok(tags)
     }
 
-    /// Retrieves distinct tags across a batch of media items (useful for multi-select inspector).
-    pub fn get_tags_for_items_batch(&self, ids: &[MediaId]) -> Result<Vec<String>> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let conn = self.conn.lock();
-        let mut set = std::collections::BTreeSet::new();
-        for chunk in ids.chunks(500) {
-            let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{}", i)).collect();
-            let sql = format!(
-                "SELECT DISTINCT tag FROM media_tags WHERE media_id IN ({}) ORDER BY tag ASC;",
-                placeholders.join(", ")
-            );
-            let raw_ids: Vec<i64> = chunk.iter().map(|id| id.0 as i64).collect();
-            let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(rusqlite::params_from_iter(raw_ids.iter()), |row| {
-                row.get::<_, String>(0)
-            })?;
-            for r in rows {
-                set.insert(r?);
-            }
-        }
-        Ok(set.into_iter().collect())
-    }
-
     /// For each tag on any of `ids`, how many of those items carry it, ordered
     /// by tag. The batch inspector uses this to tell tags on every selected
     /// item from tags on only some of them.

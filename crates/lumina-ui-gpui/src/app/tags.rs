@@ -270,6 +270,7 @@ impl LuminaApp {
         self.tag_manager.editing = None;
         self.tag_manager.merge_source = None;
         self.tag_manager.focused = None;
+        self.tag_manager.list_scroll = gpui::ScrollHandle::new();
         cx.notify();
     }
 
@@ -339,6 +340,8 @@ impl LuminaApp {
             None => 0,
         };
         self.tag_manager.focused = Some(rows[next].0.clone());
+        // The list's children are exactly these rows when it is non-empty.
+        self.tag_manager.list_scroll.scroll_to_item(next);
         cx.notify();
     }
 

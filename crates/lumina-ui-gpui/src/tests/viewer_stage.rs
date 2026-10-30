@@ -17,11 +17,6 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
     });
     render_ui(vcx);
 
-    assert!(
-        vcx.debug_bounds("viewer-bottom-tray").is_none(),
-        "v3 viewer has no filmstrip tray"
-    );
-
     click(vcx, "viewer-star-3");
     assert_eq!(
         engine.catalog().get_rating(first.id).unwrap(),

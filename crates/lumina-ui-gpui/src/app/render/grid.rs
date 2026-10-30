@@ -23,7 +23,7 @@ enum EmptyAction {
     OpenLibrary,
     ManageTags,
     Rescan,
-    /// Drops one whitespace-separated term from the search query.
+    /// Drops one search term (as `tokenize_query` splits them) from the query.
     RemoveSearchTerm(usize),
 }
 
@@ -392,7 +392,7 @@ impl LuminaApp {
                                                             ))
                                                         })
                                                         .when_some(item_color, |d, c| {
-                                                            d.child(div().size(px(8.0)).rounded_full().bg(c))
+                                                            d.child(theme::label_dot(c))
                                                         })
                                                         .into_any_element()
                                                 } else {
@@ -533,11 +533,7 @@ impl LuminaApp {
             _ => None,
         };
 
-        let search_terms: Vec<String> = self
-            .search_query
-            .split_whitespace()
-            .map(str::to_string)
-            .collect();
+        let search_terms = lumina_core::search::tokenize_query(&self.search_query);
         let (icon, title, body, primary, secondary) = if !self.search_query.is_empty() {
             (
                 Icon::Search,
@@ -598,7 +594,19 @@ impl LuminaApp {
                         .grid_state
                         .as_ref()
                         .map(|state| state.engine.library_root().display().to_string());
-                    if let (0, Some(root)) = (self.total_library_count, root) {
+                    let scanning = self.grid_state.as_ref().is_some_and(|s| s.is_scanning);
+                    if let (0, Some(root), true) = (self.total_library_count, &root, scanning) {
+                        (
+                            Icon::Folder,
+                            format!("Scanning {root}…"),
+                            "Photos and videos appear here as they are found.".to_string(),
+                            (
+                                "Choose Another Folder…".to_string(),
+                                EmptyAction::OpenLibrary,
+                            ),
+                            None,
+                        )
+                    } else if let (0, Some(root)) = (self.total_library_count, root) {
                         (
                             Icon::Folder,
                             format!("No photos or videos in {root}"),
@@ -776,13 +784,10 @@ impl LuminaApp {
             EmptyAction::ManageTags => self.open_tag_manager(cx),
             EmptyAction::Rescan => self.rescan_library(cx),
             EmptyAction::RemoveSearchTerm(index) => {
-                let rest: Vec<&str> = self
-                    .search_query
-                    .split_whitespace()
-                    .enumerate()
-                    .filter(|(i, _)| *i != index)
-                    .map(|(_, term)| term)
-                    .collect();
+                let mut rest = lumina_core::search::tokenize_query(&self.search_query);
+                if index < rest.len() {
+                    rest.remove(index);
+                }
                 let query = rest.join(" ");
                 self.set_search_query(&query, cx);
             }

@@ -38,7 +38,7 @@ even when the feature list is strong.
 - Grid navigation: arrows, Home/End, PageUp/PageDown, Cmd+A, Escape.
 - The media viewer is a fullscreen overlay over the grid. Arrows and `[`/`]`
   navigate items, the viewer Back button (or Escape) returns to the grid, and
-  the filmstrip shows a fixed window of around eight items.
+  stage prev/next buttons step through items (v3 removed the filmstrip).
 - Breadcrumb is display-only. Back history exists (Cmd+[ and the fullscreen
   viewer's Back button); there is no Forward, recent view, clickable breadcrumb,
   or scroll-position restore.
@@ -54,7 +54,7 @@ even when the feature list is strong.
   state persist).
 - No scroll-position restore when returning from viewer or relaunch.
 - No clickable breadcrumb or "return to album" affordance.
-- No filmstrip scrolling beyond the fixed window; no jump-to-date.
+- No jump-to-date.
 - No command-palette navigation history or recent commands.
 
 **Target**
@@ -65,7 +65,7 @@ even when the feature list is strong.
   launch with a clear reset action.
 - Breadcrumb segments clickable; the viewer Back button returns to the source
   view.
-- Scrollable filmstrip with current item centered; date jump.
+- Date jump.
 - Recent libraries and recent views with remove/clear.
 
 **Acceptance:** opening a photo and pressing Escape returns to exactly the same
@@ -329,7 +329,7 @@ Target: 0.4.
 
 - Pointer/keyboard-anchored grid zoom with animated reflow.
 - Viewer cursor-anchored zoom, pinch, double-click fit/100%, presets and HUD.
-- Scrollable filmstrip and jump-to-date.
+- Jump-to-date.
 - Video drag scrubbing with real frame previews, buffered bar, resume position,
   auto-hide HUD, persisted speed/volume.
 - Search suggestions/history and query explanation.

@@ -1,5 +1,6 @@
 pub mod batch;
 pub mod body;
+mod partial_tags;
 pub mod summary;
 pub mod tabs;
 

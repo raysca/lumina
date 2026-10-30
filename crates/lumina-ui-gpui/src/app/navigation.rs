@@ -353,10 +353,19 @@ impl LuminaApp {
         if ids.is_empty() {
             return;
         }
+        // Re-applying a rating every item already has clears it; otherwise the
+        // whole selection gets that rating (a mixed selection never toggles).
+        let new_r = if ids
+            .iter()
+            .all(|id| self.item_ratings.get(id).copied().unwrap_or(0) == rating)
+        {
+            0
+        } else {
+            rating
+        };
         let mut changed = 0usize;
         for id in &ids {
             let current = self.item_ratings.get(id).copied().unwrap_or(0);
-            let new_r = if current == rating { 0 } else { rating };
             if current == new_r {
                 continue;
             }
