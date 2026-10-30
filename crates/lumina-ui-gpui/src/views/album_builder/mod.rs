@@ -33,8 +33,13 @@ impl AlbumBuilderModal {
         };
 
         // Neutral placeholder tiles for the live preview strip; real matches are
-        // shown after the album is created.
-        let placeholder_thumb = generate_gradient_image((60, 60, 65), (35, 35, 40), 100, 100);
+        // shown after the album is created. Built once: a fresh image per render
+        // would upload a new GPU texture every frame that is never freed.
+        static PLACEHOLDER: std::sync::OnceLock<std::sync::Arc<RenderImage>> =
+            std::sync::OnceLock::new();
+        let placeholder_thumb = PLACEHOLDER
+            .get_or_init(|| generate_gradient_image((60, 60, 65), (35, 35, 40), 100, 100))
+            .clone();
         let thumb1 = placeholder_thumb.clone();
         let thumb2 = placeholder_thumb.clone();
         let thumb3 = placeholder_thumb;

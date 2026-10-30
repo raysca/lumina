@@ -60,8 +60,8 @@ impl Render for FloatingInspectorView {
 
         // This window paints `viewer_image` too; evict retired frames here
         // so playback cannot pile them up while the main window is hidden.
-        let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_viewer_images));
-        crate::app::viewer_actions::evict_retired_viewer_images(retired, window, cx);
+        let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_images));
+        crate::app::viewer_actions::evict_retired_images(retired, window, cx);
 
         let app_clone = self.app.clone();
         let app_redock = self.app.clone();

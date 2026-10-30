@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{DecodedFrame, MediaId, PixelFormat};
@@ -8,6 +10,12 @@ use crate::{DecodedFrame, MediaId, PixelFormat};
 #[derive(Clone)]
 pub struct DiskCache {
     cache_dir: PathBuf,
+    max_bytes: u64,
+    /// Bytes written since the last trim, shared by every clone so all decode
+    /// workers count toward the same budget.
+    written_since_trim: Arc<AtomicU64>,
+    /// Set while a trim runs so overlapping trims don't each delete to budget.
+    trimming: Arc<AtomicBool>,
 }
 
 /// Bump when the on-disk thumbnail encoding changes.
@@ -34,13 +42,27 @@ impl DiskCache {
         fs::create_dir_all(&cache_dir)
             .with_context(|| format!("Failed to create disk cache directory at {:?}", cache_dir))?;
 
-        Ok(Self { cache_dir })
+        Ok(Self::at(cache_dir, DEFAULT_MAX_CACHE_BYTES))
     }
 
     pub fn with_directory<P: AsRef<Path>>(dir: P) -> Result<Self> {
+        Self::with_budget(dir, DEFAULT_MAX_CACHE_BYTES)
+    }
+
+    /// A cache that trims itself back under `max_bytes` while it is written.
+    pub fn with_budget<P: AsRef<Path>>(dir: P, max_bytes: u64) -> Result<Self> {
         let cache_dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&cache_dir)?;
-        Ok(Self { cache_dir })
+        Ok(Self::at(cache_dir, max_bytes))
+    }
+
+    fn at(cache_dir: PathBuf, max_bytes: u64) -> Self {
+        Self {
+            cache_dir,
+            max_bytes,
+            written_since_trim: Arc::new(AtomicU64::new(0)),
+            trimming: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     pub fn compute_key(
@@ -144,7 +166,37 @@ impl DiskCache {
             }
             let _ = fs::remove_file(&temp_path);
         }
+        self.trim_if_due(out.len() as u64);
         Ok(())
+    }
+
+    /// Startup cleanup alone let the cache grow without bound during a long
+    /// session (each 2048px viewer frame is ~12 MB). Once an eighth of the
+    /// budget has been written, trim back under it on the writing (decode)
+    /// thread. Exactly one writer wins the reset and runs the trim.
+    // ponytail: each trim stats the whole cache dir (~every 190 MB written);
+    // keep a running size index if that shows up in profiles.
+    fn trim_if_due(&self, written: u64) {
+        let total = self
+            .written_since_trim
+            .fetch_add(written, Ordering::Relaxed)
+            + written;
+        let trim_every = (self.max_bytes / 8).max(1);
+        if total < trim_every
+            || self
+                .written_since_trim
+                .compare_exchange(total, 0, Ordering::Relaxed, Ordering::Relaxed)
+                .is_err()
+        {
+            return;
+        }
+        if self.trimming.swap(true, Ordering::Acquire) {
+            return;
+        }
+        if let Err(err) = self.cleanup(self.max_bytes, DEFAULT_MAX_CACHE_AGE) {
+            log::warn!("thumbnail cache trim failed: {err:?}");
+        }
+        self.trimming.store(false, Ordering::Release);
     }
 
     pub fn remove_cached(
@@ -275,6 +327,48 @@ mod tests {
             format: PixelFormat::Rgba8,
             data: vec![0u8; 16],
         }
+    }
+
+    /// Regression: the budget was only enforced at startup, so paging the
+    /// viewer grew the cache by ~6 MB per photo for the whole session.
+    #[test]
+    fn writes_keep_the_cache_within_budget_during_a_session() {
+        let budget = 8 * 1024;
+        let dir = temp_cache("budget").cache_dir().to_path_buf();
+        let cache = DiskCache::with_budget(&dir, budget).unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(dir.clone());
+        let big = DecodedFrame {
+            width: 16,
+            height: 16,
+            data: vec![0u8; 16 * 16 * 4],
+            ..frame()
+        };
+        for i in 0..64 {
+            cache
+                .put_cached(
+                    std::path::Path::new(&format!("/photos/{i}.jpg")),
+                    10,
+                    1000,
+                    2048,
+                    &big,
+                )
+                .unwrap();
+        }
+        let on_disk: u64 = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().metadata().unwrap().len())
+            .sum();
+        let written = 64 * (12 + big.data.len() as u64);
+        assert!(
+            on_disk <= budget + budget / 8 + 12 + big.data.len() as u64,
+            "cache must be trimmed while written: {on_disk} bytes on disk of {written} written, budget {budget}"
+        );
     }
 
     #[test]

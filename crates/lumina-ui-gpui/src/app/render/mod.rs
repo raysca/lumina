@@ -162,8 +162,8 @@ impl LuminaApp {
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Evict replaced viewer frames before painting the new one.
-        crate::app::viewer_actions::evict_retired_viewer_images(
-            std::mem::take(&mut self.retired_viewer_images),
+        crate::app::viewer_actions::evict_retired_images(
+            std::mem::take(&mut self.retired_images),
             window,
             cx,
         );

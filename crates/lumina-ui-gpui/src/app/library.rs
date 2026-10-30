@@ -195,6 +195,7 @@ impl LuminaApp {
                 let mut should_restore_session = false;
                 let had_multi_selection = !self.selected_indices.is_empty();
                 let selected_item_id = self.selected_item.as_ref().map(|item| item.id);
+                let mut removed_textures = Vec::new();
 
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
@@ -238,7 +239,9 @@ impl LuminaApp {
                         }
                         EngineEvent::ItemRemoved(id) => {
                             state.total_count = state.engine.total_count();
-                            state.texture_cache.lock().pop(&id);
+                            if let Some(old) = state.texture_cache.lock().pop(&id) {
+                                removed_textures.push(old);
+                            }
                             state.in_flight.lock().remove(&id);
                             // The media is gone; its resume point can never load.
                             state.video_resume.positions.remove(id);
@@ -253,6 +256,9 @@ impl LuminaApp {
                     }
                 }
 
+                for image in removed_textures {
+                    self.retire_image(image);
+                }
                 if should_clear_selection {
                     self.clear_selection(cx);
                 }
@@ -265,12 +271,18 @@ impl LuminaApp {
                 }
             }
             UiMessage::ThumbnailLoaded { id, frame } => {
-                if let Some(ref state) = self.grid_state {
-                    state.in_flight.lock().remove(&id);
-                    if let Ok(gpui_img) = frame_to_gpui_image(frame) {
-                        state.texture_cache.lock().put(id, gpui_img);
-                        cx.notify();
+                let Some(state) = self.grid_state.as_ref() else {
+                    return;
+                };
+                state.in_flight.lock().remove(&id);
+                if let Ok(gpui_img) = frame_to_gpui_image(frame) {
+                    // `push` hands back the LRU entry it evicts (or the entry it
+                    // replaces); its texture must be freed too.
+                    let evicted = state.texture_cache.lock().push(id, gpui_img);
+                    if let Some((_, old)) = evicted {
+                        self.retire_image(old);
                     }
+                    cx.notify();
                 }
             }
             UiMessage::ViewerLoaded { id, frame } => {
@@ -411,7 +423,12 @@ impl LuminaApp {
         // grid are what the next config save writes to disk.
         let grid_state =
             GridState::with_resume_positions(engine, self.config.resume_positions.clone());
-        self.grid_state = Some(grid_state);
+        if let Some(old) = self.grid_state.replace(grid_state) {
+            let mut cache = old.texture_cache.lock();
+            while let Some((_, image)) = cache.pop_lru() {
+                self.retire_image(image);
+            }
+        }
         self.selected_item = None;
         self.selected_index = None;
         self.selected_indices.clear();

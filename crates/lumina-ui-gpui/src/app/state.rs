@@ -283,10 +283,11 @@ pub struct LuminaApp {
     /// Live pointer drag-selection over the grid (marquee or additive sweep).
     pub grid_drag: GridDragState,
     pub viewer_image: Option<Arc<RenderImage>>,
-    /// Replaced viewer images awaiting GPU atlas eviction on the next render.
-    /// GPUI never evicts a `RenderImage` on its own, so without this every
-    /// video frame and opened photo would stay resident on the GPU.
-    pub retired_viewer_images: Vec<Arc<RenderImage>>,
+    /// Images no longer shown (replaced viewer frames, evicted thumbnails)
+    /// awaiting GPU atlas eviction. GPUI never evicts a `RenderImage` on its
+    /// own, so without this every video frame, opened photo and scrolled-past
+    /// thumbnail would stay resident on the GPU.
+    pub retired_images: Vec<Arc<RenderImage>>,
     pub has_desktop_pics: bool,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub focus_handle: FocusHandle,
@@ -424,6 +425,12 @@ impl LuminaApp {
                     other => {
                         let _ = weak_self.update(async_cx, |this, cx| {
                             this.handle_ui_message(other, cx);
+                            // No window is mid-update here, so every window's
+                            // atlas can drop them now. Waiting for a render
+                            // would pile up frames while minimized.
+                            for image in std::mem::take(&mut this.retired_images) {
+                                cx.drop_image(image, None);
+                            }
                         });
                     }
                 }
@@ -444,7 +451,7 @@ impl LuminaApp {
             batch_metadata: BatchMetadataSummary::default(),
             grid_drag: GridDragState::default(),
             viewer_image: None,
-            retired_viewer_images: Vec::new(),
+            retired_images: Vec::new(),
             has_desktop_pics,
             ui_tx,
             focus_handle,

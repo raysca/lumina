@@ -53,10 +53,11 @@ pub(crate) fn external_editor_command(editor: &str, file: &Path) -> Option<Comma
     }
 }
 
-/// Evicts viewer images retired by [`LuminaApp::set_viewer_image`] from every
-/// window's GPU atlas. Each window that paints `viewer_image` drains the queue,
-/// so PiP keeps evicting while an occluded main window is not drawing.
-pub(crate) fn evict_retired_viewer_images(
+/// Evicts images queued by [`LuminaApp::retire_image`] (replaced viewer
+/// frames, evicted thumbnails) from every window's GPU atlas. Renders drain
+/// the queue here; the UI message loop also drains it, so playback with every
+/// window minimized cannot pile frames up.
+pub(crate) fn evict_retired_images(
     images: Vec<std::sync::Arc<RenderImage>>,
     window: &mut Window,
     cx: &mut App,
@@ -78,9 +79,20 @@ impl LuminaApp {
                 .viewer_image
                 .as_ref()
                 .is_some_and(|new| new.id == old.id);
-            if !replaced_by_self && std::sync::Arc::strong_count(&old) == 1 {
-                self.retired_viewer_images.push(old);
+            if !replaced_by_self {
+                self.retire_image(old);
             }
+        }
+    }
+
+    /// Queues an image the app has stopped showing for GPU eviction.
+    ///
+    /// Only an image nobody else holds is retired: a thumbnail still shown as
+    /// the viewer placeholder (or vice versa) keeps its texture until the last
+    /// holder lets go and retires it.
+    pub(crate) fn retire_image(&mut self, image: std::sync::Arc<RenderImage>) {
+        if std::sync::Arc::strong_count(&image) == 1 {
+            self.retired_images.push(image);
         }
     }
 
@@ -388,9 +400,12 @@ impl LuminaApp {
         // The GPU texture cache has no rotation component in its entry, so drop
         // it (and any in-flight marker) to make the grid decode the frame again
         // instead of painting the previous angle.
-        if let Some(state) = self.grid_state.as_ref() {
-            state.texture_cache.lock().pop(&item.id);
+        let stale = self.grid_state.as_ref().and_then(|state| {
             state.in_flight.lock().remove(&item.id);
+            state.texture_cache.lock().pop(&item.id)
+        });
+        if let Some(stale) = stale {
+            self.retire_image(stale);
         }
         self.set_viewer_image(None);
 
