@@ -26,8 +26,9 @@ impl LuminaApp {
                     cx.notify();
                 }
                 _ => {
-                    if !cmd_or_ctrl && key.chars().count() == 1 {
-                        self.command_query.push_str(key);
+                    let typed = if key == "space" { " " } else { key };
+                    if !cmd_or_ctrl && typed.chars().count() == 1 {
+                        self.command_query.push_str(typed);
                         self.command_selected = 0;
                         cx.notify();
                     }

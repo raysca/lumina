@@ -22,6 +22,9 @@ enum EmptyAction {
     EditSmartAlbum(SmartAlbum),
     OpenLibrary,
     ManageTags,
+    Rescan,
+    /// Drops one whitespace-separated term from the search query.
+    RemoveSearchTerm(usize),
 }
 
 impl LuminaApp {
@@ -530,14 +533,23 @@ impl LuminaApp {
             _ => None,
         };
 
+        let search_terms: Vec<String> = self
+            .search_query
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
         let (icon, title, body, primary, secondary) = if !self.search_query.is_empty() {
             (
                 Icon::Search,
                 "No matches".to_string(),
-                format!(
-                    "Nothing matches “{}”. Try a broader search or clear it.",
-                    self.search_query
-                ),
+                if search_terms.len() > 1 {
+                    "Remove a filter to widen the search:".to_string()
+                } else {
+                    format!(
+                        "Nothing matches “{}”. Try a broader search or clear it.",
+                        self.search_query
+                    )
+                },
                 ("Clear search".to_string(), EmptyAction::ClearSearch),
                 Some(("Show all photos".to_string(), EmptyAction::ShowAll)),
             )
@@ -582,7 +594,24 @@ impl LuminaApp {
                     Some(("Manage tags".to_string(), EmptyAction::ManageTags)),
                 ),
                 _ => {
-                    if self.total_library_count == 0 {
+                    let root = self
+                        .grid_state
+                        .as_ref()
+                        .map(|state| state.engine.library_root().display().to_string());
+                    if let (0, Some(root)) = (self.total_library_count, root) {
+                        (
+                            Icon::Folder,
+                            format!("No photos or videos in {root}"),
+                            "Lumina looks for JPEG, HEIC, PNG, TIFF, WebP, RAW and video files, \
+                             including in subfolders."
+                                .to_string(),
+                            (
+                                "Choose Another Folder…".to_string(),
+                                EmptyAction::OpenLibrary,
+                            ),
+                            Some(("Rescan".to_string(), EmptyAction::Rescan)),
+                        )
+                    } else if self.total_library_count == 0 {
                         (
                             Icon::Folder,
                             "Your library is empty".to_string(),
@@ -624,45 +653,87 @@ impl LuminaApp {
                 div()
                     .w_full()
                     .max_w(px(440.0))
-                    .p_6()
-                    .rounded_xl()
-                    .bg(theme::bg_pane())
-                    .border_1()
-                    .border_color(theme::border_subtle())
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap_3()
+                    .gap_2p5()
                     .child(
                         div()
-                            .w(px(44.0))
-                            .h(px(44.0))
-                            .rounded_lg()
-                            .bg(theme::bg_control())
+                            .size(px(44.0))
+                            .rounded(px(10.0))
+                            .bg(theme::bg_pane())
                             .border_1()
-                            .border_color(theme::selection_border())
+                            .border_color(theme::border_subtle())
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(render_icon(icon, px(20.0), theme::accent())),
+                            .child(render_icon(icon, px(20.0), theme::text_subtle())),
                     )
                     .child(
                         div()
-                            .text_lg()
+                            .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::text())
+                            .text_center()
                             .child(title),
                     )
                     .child(
                         div()
                             .max_w(px(360.0))
-                            .text_sm()
+                            .text_xs()
                             .text_color(theme::text_muted())
                             .text_center()
                             .child(body),
                     )
+                    // Each search term is a chip; removing one widens the search.
+                    .when(search_terms.len() > 1, |col| {
+                        col.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_center()
+                                .gap_1p5()
+                                .children(search_terms.iter().enumerate().map(|(i, term)| {
+                                    div()
+                                        .id(("empty-search-term", i as u64))
+                                        .h(px(24.0))
+                                        .px(px(10.0))
+                                        .rounded_full()
+                                        .border_1()
+                                        .border_color(theme::selection_border())
+                                        .bg(theme::selection_bg())
+                                        .hover(|s| s.bg(theme::selection_bg_hover()))
+                                        .text_xs()
+                                        .text_color(theme::selection_fg())
+                                        .cursor_pointer()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .debug_selector(move || format!("empty-search-term-{i}"))
+                                        .tooltip(theme::tooltip_label(format!("Remove {term}")))
+                                        .font_family(theme::FONT_MONO)
+                                        .gap_1p5()
+                                        .child(term.clone())
+                                        .child(render_icon(
+                                            Icon::X,
+                                            px(10.0),
+                                            theme::selection_fg(),
+                                        ))
+                                        .on_click(cx.listener(
+                                            move |this, _e: &ClickEvent, _w, cx| {
+                                                this.perform_empty_action(
+                                                    EmptyAction::RemoveSearchTerm(i),
+                                                    cx,
+                                                );
+                                            },
+                                        ))
+                                })),
+                        )
+                    })
                     .child(
                         div()
+                            .mt_1p5()
                             .flex()
                             .flex_row()
                             .gap_2()
@@ -703,6 +774,18 @@ impl LuminaApp {
             EmptyAction::EditSmartAlbum(album) => self.open_album_builder_for_edit(album, cx),
             EmptyAction::OpenLibrary => self.pick_folder_dialog(cx),
             EmptyAction::ManageTags => self.open_tag_manager(cx),
+            EmptyAction::Rescan => self.rescan_library(cx),
+            EmptyAction::RemoveSearchTerm(index) => {
+                let rest: Vec<&str> = self
+                    .search_query
+                    .split_whitespace()
+                    .enumerate()
+                    .filter(|(i, _)| *i != index)
+                    .map(|(_, term)| term)
+                    .collect();
+                let query = rest.join(" ");
+                self.set_search_query(&query, cx);
+            }
         }
     }
 }

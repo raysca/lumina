@@ -3,6 +3,7 @@ mod inspector;
 mod interaction;
 mod multi_select;
 mod overlay_isolation;
+mod palette_and_empty;
 mod tags_and_albums;
 mod toasts;
 mod ui_automation;

@@ -25,6 +25,9 @@ pub enum CommandId {
     ToggleFit,
     ZoomInGrid,
     ZoomOutGrid,
+    /// Sets the selection's rating; 0 clears it.
+    Rate(u8),
+    ToggleFavorite,
 }
 
 pub struct Command {
@@ -150,6 +153,48 @@ pub fn commands() -> &'static [Command] {
             shortcut: "⌘-",
             keywords: "columns density smaller",
         },
+        Command {
+            id: CommandId::Rate(1),
+            key: "command.rate_1",
+            shortcut: "",
+            keywords: "rating stars one",
+        },
+        Command {
+            id: CommandId::Rate(2),
+            key: "command.rate_2",
+            shortcut: "",
+            keywords: "rating stars two",
+        },
+        Command {
+            id: CommandId::Rate(3),
+            key: "command.rate_3",
+            shortcut: "",
+            keywords: "rating stars three",
+        },
+        Command {
+            id: CommandId::Rate(4),
+            key: "command.rate_4",
+            shortcut: "",
+            keywords: "rating stars four",
+        },
+        Command {
+            id: CommandId::Rate(5),
+            key: "command.rate_5",
+            shortcut: "",
+            keywords: "rating stars five",
+        },
+        Command {
+            id: CommandId::Rate(0),
+            key: "command.clear_rating",
+            shortcut: "",
+            keywords: "rating stars remove unrate",
+        },
+        Command {
+            id: CommandId::ToggleFavorite,
+            key: "command.toggle_favorite",
+            shortcut: "F",
+            keywords: "heart star like",
+        },
     ]
 }
 
@@ -226,6 +271,11 @@ impl LuminaApp {
             }
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
+            CommandId::Rate(rating) => self.set_rating_selected(rating, cx),
+            CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
+                self.batch_toggle_favorite(cx)
+            }
+            CommandId::ToggleFavorite => self.toggle_favorite_selected(cx),
         }
     }
 }

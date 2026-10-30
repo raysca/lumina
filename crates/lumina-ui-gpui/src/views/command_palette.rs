@@ -1,5 +1,6 @@
 //! Cmd+K command palette overlay.
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
@@ -35,12 +36,13 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                 .id("command-palette")
                 .debug_selector(|| "command-palette".to_string())
                 .occlude()
-                .w(px(560.0))
-                .max_h(px(470.0))
-                .bg(theme::bg_pane())
+                .w(px(640.0))
+                .max_h(px(480.0))
+                .bg(theme::bg_raised())
                 .border_1()
-                .border_color(theme::border())
-                .rounded_xl()
+                .border_color(theme::border_strong())
+                .rounded(px(10.0))
+                .overflow_hidden()
                 .shadow_2xl()
                 .flex()
                 .flex_col()
@@ -54,16 +56,17 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .flex()
                         .flex_row()
                         .items_center()
-                        .gap_2()
-                        .px_4()
-                        .py_3()
+                        .gap_3()
+                        .h(px(52.0))
+                        .flex_shrink_0()
+                        .px(px(18.0))
                         .border_b_1()
                         .border_color(theme::border_subtle())
-                        .child(render_icon(Icon::Search, px(14.0), theme::text_muted()))
+                        .child(render_icon(Icon::Search, px(16.0), theme::text_muted()))
                         .child(
                             div()
                                 .flex_1()
-                                .text_sm()
+                                .text_base()
                                 .text_color(if query.is_empty() {
                                     theme::text_subtle()
                                 } else {
@@ -75,17 +78,27 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                     format!("{}|", query)
                                 }),
                         )
-                        .child(theme::kbd("⌘K")),
+                        .child(theme::kbd("esc")),
                 )
                 .child(
                     div()
                         .id("command-list")
-                        .max_h(px(340.0))
+                        .flex_1()
+                        .min_h(px(0.0))
                         .overflow_y_scroll()
-                        .p_2()
+                        .p(px(6.0))
                         .flex()
                         .flex_col()
-                        .gap_0p5()
+                        .child(
+                            div()
+                                .px(px(12.0))
+                                .pt(px(6.0))
+                                .pb(px(4.0))
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme::text_subtle())
+                                .child("COMMANDS"),
+                        )
                         .children(commands.is_empty().then(|| {
                             div()
                                 .px_3()
@@ -101,26 +114,29 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                             div()
                                 .id(("command-row", index as u64))
                                 .debug_selector(move || format!("command-item-{debug_key}"))
-                                .px_3()
-                                .py_2()
-                                .rounded_md()
+                                .h(px(34.0))
+                                .px(px(12.0))
+                                .rounded(px(6.0))
                                 .cursor_pointer()
                                 .flex()
                                 .flex_row()
                                 .justify_between()
                                 .items_center()
                                 .gap_3()
-                                .bg(if is_selected {
-                                    theme::selection_bg()
-                                } else {
-                                    theme::bg_pane()
+                                .map(|row| {
+                                    // The active row is the ↵ target, so it
+                                    // gets the full accent fill.
+                                    if is_selected {
+                                        row.bg(theme::accent())
+                                    } else {
+                                        row.hover(|s| s.bg(theme::bg_control_hover()))
+                                    }
                                 })
-                                .hover(|s| s.bg(theme::selection_bg_hover()))
                                 .child(
                                     div()
-                                        .text_xs()
+                                        .text_sm()
                                         .text_color(if is_selected {
-                                            theme::accent()
+                                            theme::accent_fg()
                                         } else {
                                             theme::text()
                                         })
@@ -130,7 +146,11 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                     div()
                                         .text_xs()
                                         .font_family(theme::FONT_MONO)
-                                        .text_color(theme::text_subtle())
+                                        .text_color(if is_selected {
+                                            theme::accent_fg()
+                                        } else {
+                                            theme::text_subtle()
+                                        })
                                         .child(command.shortcut),
                                 )
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -140,10 +160,14 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                 )
                 .child(
                     div()
-                        .px_4()
-                        .py_2()
+                        .h(px(32.0))
+                        .flex_shrink_0()
+                        .px(px(18.0))
+                        .flex()
+                        .items_center()
                         .border_t_1()
                         .border_color(theme::border_subtle())
+                        .bg(theme::bg_pane())
                         .text_xs()
                         .text_color(theme::text_subtle())
                         .child("↑ ↓ navigate · ↵ run · Esc close"),

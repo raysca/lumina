@@ -44,6 +44,13 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.toggle_fit" => "Toggle Fit / Square Cards",
         "command.zoom_in" => "Zoom Grid In",
         "command.zoom_out" => "Zoom Grid Out",
+        "command.rate_1" => "Rate 1 Star",
+        "command.rate_2" => "Rate 2 Stars",
+        "command.rate_3" => "Rate 3 Stars",
+        "command.rate_4" => "Rate 4 Stars",
+        "command.rate_5" => "Rate 5 Stars",
+        "command.clear_rating" => "Clear Rating",
+        "command.toggle_favorite" => "Toggle Favorite",
         _ => return None,
     })
 }
