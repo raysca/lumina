@@ -26,7 +26,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 | 4 | Multi-select dock restyle, batch rating and tags up top, partial tags | V3MultiSelect | done |
 | 5 | Tag manager: list + detail panel in the existing floating sheet; ↑↓/↵ keys | V3TagManager | done |
 | 6 | Command palette, empty states, undo toast restyle | V3Palette, V3States | done |
-| 7 | Preferences restyle | V3Prefs | |
+| 7 | Preferences restyle | V3Prefs | done |
 
 ## Open items
 
