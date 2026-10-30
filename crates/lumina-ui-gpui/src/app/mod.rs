@@ -8,6 +8,7 @@ pub mod panels;
 pub mod pip;
 pub mod preferences;
 pub mod render;
+pub mod smart_draft;
 pub mod sort;
 pub mod state;
 pub mod tags;

@@ -1218,11 +1218,6 @@ fn ui_automation_smart_album_edit_and_delete() {
     view.update(vcx, |app, cx| {
         app.open_album_builder(cx);
         app.album_draft.album_title = "Round Trip".to_string();
-        app.album_draft.rules = vec![lumina_core::SmartAlbumRule {
-            field: lumina_core::RuleField::IsFavorite,
-            operator: lumina_core::RuleOperator::Equals,
-            value: lumina_core::RuleValue::Bool(true),
-        }];
         app.save_draft_smart_album(cx);
     });
     let album = view.update(vcx, |app, _| {

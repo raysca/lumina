@@ -71,3 +71,29 @@ video plays; it is presented either in the viewer or in PiP.
 Not handled: a PiP video removed from disk outside Lumina keeps playing until
 the watcher's next rescan drops it from the library.
 
+## Smart album builder (agreed design)
+
+Modelled on Photos' New Smart Album sheet.
+
+- Open with ⌥⌘N, File → New Smart Album…, ⌘K or the sidebar +. Edit with
+  ⌘K "Edit Smart Album…" (the album shown in the grid) or the sidebar row.
+- Sheet: name field (empty means "Untitled Smart Album"), "Match all/any of
+  the following conditions", one `[field] [operator] [value] [−] [+]` row per
+  condition, a strip of the first 8 matching thumbnails and "N items match"
+  beside Cancel / OK. Count and preview re-query when a rule changes, never
+  on render.
+- Conditions: Kind (photo includes RAW / video), Favourite, Date (is, before,
+  after, in the range, in the last N days/weeks/months), Tag (picked from the
+  library's tags, or contains / empty), Stars (is, at least, at most),
+  Colour label, Camera, Lens, Aperture, ISO, Focal length, Filename, Place
+  (city, region or country code). Fields and values saved by older builds
+  (Year, City, Kind RAW / non-RAW photo…) still show, edit and save.
+- Typed dates use `YYYY-MM-DD` and `YYYY-MM-DD to YYYY-MM-DD`, compared
+  against the naive capture time, like the timeline. A month is 30 days.
+- OK is disabled and the row is outlined while any value is empty or invalid.
+- Keyboard: Tab / Shift-Tab move focus; Enter, Space or Down open a popup;
+  arrows and Enter pick; Esc closes a popup, then the sheet; Enter in a text
+  field or ⌘Enter is OK.
+- Removed: presets, placeholder preview tiles and the "Show in sidebar"
+  toggle that never saved.
+

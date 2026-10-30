@@ -1,13 +1,15 @@
-mod dropdowns;
-mod footer;
-mod header;
-mod rule_row;
+//! Smart album builder sheet, modelled on Photos' New Smart Album:
+//! name, "Match all/any of the following conditions", one row per condition,
+//! then a live count and preview of the first matches.
 
+mod rows;
+
+use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::SmartAlbum;
 
+use crate::app::smart_draft::{match_label, DraftFocus};
 use crate::theme;
-use crate::{generate_gradient_image, LuminaApp};
+use crate::LuminaApp;
 
 pub struct AlbumBuilderModal;
 
@@ -16,33 +18,9 @@ impl AlbumBuilderModal {
         if !app.album_draft.modal_open {
             return Empty.into_any_element();
         }
-
-        let match_mode = app.album_draft.match_mode;
-        let rules_count = app.album_draft.rules.len();
-
-        let match_count = if let Some(ref state) = app.grid_state {
-            let temp_album = SmartAlbum::new(
-                app.album_draft.album_title.clone(),
-                "folder".to_string(),
-                match_mode,
-                app.album_draft.rules.clone(),
-            );
-            state.engine.query_smart_album_count(&temp_album)
-        } else {
-            24
-        };
-
-        // Neutral placeholder tiles for the live preview strip; real matches are
-        // shown after the album is created. Built once: a fresh image per render
-        // would upload a new GPU texture every frame that is never freed.
-        static PLACEHOLDER: std::sync::OnceLock<std::sync::Arc<RenderImage>> =
-            std::sync::OnceLock::new();
-        let placeholder_thumb = PLACEHOLDER
-            .get_or_init(|| generate_gradient_image((60, 60, 65), (35, 35, 40), 100, 100))
-            .clone();
-        let thumb1 = placeholder_thumb.clone();
-        let thumb2 = placeholder_thumb.clone();
-        let thumb3 = placeholder_thumb;
+        let draft = &app.album_draft;
+        let focus = draft.focus;
+        let popup_on_match = draft.popup.map(|p| p.target) == Some(DraftFocus::Match);
 
         div()
             .id("album-builder-backdrop")
@@ -74,13 +52,47 @@ impl AlbumBuilderModal {
                     .p_5()
                     .flex()
                     .flex_col()
-                    .gap_4()
+                    .gap_3()
+                    .text_color(theme::text())
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                         cx.stop_propagation();
                     })
-                    .child(header::render_title_row(app, cx))
-                    .child(header::render_presets_row(cx))
-                    .child(header::render_match_mode_row(match_mode, cx))
+                    .child(
+                        rows::text_field(
+                            "album-builder-title".to_string(),
+                            &draft.album_title,
+                            "Untitled Smart Album",
+                            focus == DraftFocus::Title,
+                            false,
+                            DraftFocus::Title,
+                            cx,
+                        )
+                        .h(px(32.0))
+                        .text_sm(),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .text_sm()
+                            .text_color(theme::text_muted())
+                            .child("Match")
+                            .child(
+                                rows::picker(
+                                    "album-builder-match".to_string(),
+                                    match_label(draft.match_mode),
+                                    focus == DraftFocus::Match,
+                                    false,
+                                    DraftFocus::Match,
+                                    cx,
+                                )
+                                .w(px(70.0)),
+                            )
+                            .child("of the following conditions:"),
+                    )
+                    .when(popup_on_match, |el| el.child(rows::render_popup(app, cx)))
                     .child(
                         div()
                             .id("album-builder-scroll-content")
@@ -89,21 +101,110 @@ impl AlbumBuilderModal {
                             .overflow_y_scroll()
                             .flex()
                             .flex_col()
-                            .gap_2p5()
-                            .children(app.album_draft.rules.iter().enumerate().map(
-                                |(idx, rule)| {
-                                    rule_row::render_rule_row(app, idx, rule, rules_count, cx)
-                                },
-                            )),
+                            .gap_2()
+                            .children(
+                                draft
+                                    .rows
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, row)| rows::render_row(app, i, row, cx)),
+                            ),
                     )
-                    .child(footer::render_live_preview(
-                        match_count,
-                        thumb1,
-                        thumb2,
-                        thumb3,
-                    ))
-                    .child(footer::render_footer_actions(app, cx)),
+                    .child(render_preview(app))
+                    .child(render_footer(app, cx)),
             )
             .into_any_element()
     }
+}
+
+/// The first matches as thumbnails; tiles decode like grid cards.
+fn render_preview(app: &LuminaApp) -> impl IntoElement {
+    let textures = app.grid_state.as_ref().map(|state| &state.texture_cache);
+    div()
+        .h(px(56.0))
+        .flex()
+        .flex_row()
+        .gap_1p5()
+        .children(app.album_draft.preview.iter().map(|item| {
+            let id = item.id;
+            let texture = textures.and_then(|cache| cache.lock().get(&id).cloned());
+            if texture.is_none() {
+                app.queue_thumbnail_request(id);
+            }
+            div()
+                .debug_selector(move || format!("album-builder-preview-{}", id.0))
+                .size(px(56.0))
+                .rounded(px(4.0))
+                .overflow_hidden()
+                .bg(theme::bg_raised())
+                .children(texture.map(|t| img(t).size_full().object_fit(ObjectFit::Cover)))
+        }))
+}
+
+fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let draft = &app.album_draft;
+    let valid = draft.match_count.is_some();
+    let (status, color) = match draft.match_count {
+        None => (
+            "Fix the highlighted conditions".to_string(),
+            theme::danger_text(),
+        ),
+        Some(0) => ("No items match".to_string(), theme::text_muted()),
+        Some(1) => ("1 item matches".to_string(), theme::text_muted()),
+        Some(n) => (format!("{n} items match"), theme::text_muted()),
+    };
+    let ring = |focused: bool| {
+        if focused {
+            theme::text()
+        } else {
+            theme::border()
+        }
+    };
+    let ok = if valid {
+        theme::control_primary("album-builder-save")
+    } else {
+        theme::control("album-builder-save")
+            .text_color(theme::text_disabled())
+            .cursor_default()
+    };
+
+    div()
+        .w_full()
+        .pt_1()
+        .flex()
+        .flex_row()
+        .justify_between()
+        .items_center()
+        .child(
+            div()
+                .debug_selector(|| "album-builder-count".to_string())
+                .text_xs()
+                .text_color(color)
+                .child(status),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .gap_2()
+                .child(
+                    theme::control("album-builder-cancel")
+                        .debug_selector(|| "album-builder-cancel".to_string())
+                        .border_color(ring(draft.focus == DraftFocus::Cancel))
+                        .child("Cancel")
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.close_album_builder(cx);
+                        })),
+                )
+                .child(
+                    ok.debug_selector(|| "album-builder-save".to_string())
+                        .when(draft.focus == DraftFocus::Save, |b| {
+                            b.border_color(theme::text())
+                        })
+                        .child("OK")
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.save_draft_smart_album(cx);
+                        })),
+                ),
+        )
 }

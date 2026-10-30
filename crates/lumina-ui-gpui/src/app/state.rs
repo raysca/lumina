@@ -1,7 +1,5 @@
 use gpui::*;
-use lumina_core::{
-    MatchMode, MediaId, MediaItem, SmartAlbum, SmartAlbumRule, SortSpec, SystemAlbum,
-};
+use lumina_core::{MatchMode, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -157,22 +155,20 @@ impl Default for TagManagerState {
     }
 }
 
-/// Visual smart-album builder draft state.
+/// Smart album builder sheet state. See `smart_draft` for the row model.
 pub struct AlbumDraftState {
     pub modal_open: bool,
     pub editing_album_id: Option<i64>,
+    /// Empty means "Untitled Smart Album".
     pub album_title: String,
-    pub title_focused: bool,
     pub match_mode: MatchMode,
-    pub logic_dropdown_open: bool,
-    pub rules: Vec<SmartAlbumRule>,
-    pub match_count: usize,
-    pub field_dropdown: Option<usize>,
-    pub operator_dropdown: Option<usize>,
-    pub value_dropdown: Option<usize>,
-    pub rule_value_editing: Option<usize>,
-    pub rule_value_buffer: String,
-    pub show_in_sidebar: bool,
+    pub rows: Vec<crate::app::smart_draft::DraftRow>,
+    pub focus: crate::app::smart_draft::DraftFocus,
+    pub popup: Option<crate::app::smart_draft::DraftPopup>,
+    /// Live match count; `None` while any row is invalid.
+    pub match_count: Option<usize>,
+    /// The first few matches, shown as thumbnails.
+    pub preview: Vec<MediaItem>,
 }
 
 impl Default for AlbumDraftState {
@@ -180,18 +176,13 @@ impl Default for AlbumDraftState {
         Self {
             modal_open: false,
             editing_album_id: None,
-            album_title: "My Smart Album".to_string(),
-            title_focused: false,
+            album_title: String::new(),
             match_mode: MatchMode::All,
-            logic_dropdown_open: false,
-            rules: Vec::new(),
-            match_count: 0,
-            field_dropdown: None,
-            operator_dropdown: None,
-            value_dropdown: None,
-            rule_value_editing: None,
-            rule_value_buffer: String::new(),
-            show_in_sidebar: true,
+            rows: Vec::new(),
+            focus: crate::app::smart_draft::DraftFocus::Title,
+            popup: None,
+            match_count: None,
+            preview: Vec::new(),
         }
     }
 }

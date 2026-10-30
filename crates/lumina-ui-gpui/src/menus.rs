@@ -22,6 +22,8 @@ pub fn build_menus() -> Vec<Menu> {
                 MenuItem::action("Open Library…", OpenLibrary),
                 MenuItem::action("Rescan Library", RescanLibrary),
                 MenuItem::separator(),
+                MenuItem::action("New Smart Album…", NewSmartAlbum),
+                MenuItem::separator(),
                 MenuItem::action("Import XMP Metadata", ImportXmp),
             ],
         },

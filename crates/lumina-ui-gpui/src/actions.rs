@@ -14,6 +14,7 @@ actions!(
         QuitApp,
         ToggleSidebar,
         ToggleInspector,
-        ImportXmp
+        ImportXmp,
+        NewSmartAlbum
     ]
 );

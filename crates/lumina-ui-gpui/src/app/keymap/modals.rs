@@ -1,5 +1,4 @@
 use gpui::*;
-use lumina_core::{RuleField, RuleValue};
 
 use crate::app::LuminaApp;
 
@@ -11,6 +10,7 @@ impl LuminaApp {
         &mut self,
         key: &str,
         cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
         cx: &mut Context<Self>,
     ) -> bool {
         // 0. Command palette
@@ -63,133 +63,9 @@ impl LuminaApp {
             return true;
         }
 
-        // 2. Smart album builder modal
+        // 2. Smart album builder sheet
         if self.album_draft.modal_open {
-            if let Some(index) = self.album_draft.rule_value_editing {
-                if key == "escape" {
-                    self.cancel_editing_rule_value(cx);
-                    return true;
-                }
-                if key == "enter" || key == "return" {
-                    self.commit_editing_rule_value(cx);
-                    return true;
-                }
-                if key == "backspace" {
-                    self.album_draft.rule_value_buffer.pop();
-                    let buf = self.album_draft.rule_value_buffer.clone();
-                    if index < self.album_draft.rules.len() {
-                        let rule = &mut self.album_draft.rules[index];
-                        match rule.field {
-                            RuleField::Iso | RuleField::Year | RuleField::Month => {
-                                let num = buf.parse::<i64>().unwrap_or(0);
-                                rule.value = RuleValue::Integer(num);
-                            }
-                            RuleField::FNumber => {
-                                let num = buf.parse::<f64>().unwrap_or(0.0);
-                                rule.value = RuleValue::Number(num);
-                            }
-                            _ => {
-                                rule.value = RuleValue::Text(buf);
-                            }
-                        }
-                    }
-                    self.update_draft_count();
-                    cx.notify();
-                    return true;
-                }
-                if !cmd_or_ctrl {
-                    if key == "space" {
-                        self.album_draft.rule_value_buffer.push(' ');
-                        let buf = self.album_draft.rule_value_buffer.clone();
-                        if index < self.album_draft.rules.len() {
-                            self.album_draft.rules[index].value = RuleValue::Text(buf);
-                        }
-                        self.update_draft_count();
-                        cx.notify();
-                        return true;
-                    } else if key.chars().count() == 1
-                        && !key.chars().next().is_some_and(|c| c.is_control())
-                    {
-                        self.album_draft.rule_value_buffer.push_str(key);
-                        let buf = self.album_draft.rule_value_buffer.clone();
-                        if index < self.album_draft.rules.len() {
-                            let rule = &mut self.album_draft.rules[index];
-                            match rule.field {
-                                RuleField::Iso | RuleField::Year | RuleField::Month => {
-                                    let num = buf.parse::<i64>().unwrap_or(0);
-                                    rule.value = RuleValue::Integer(num);
-                                }
-                                RuleField::FNumber => {
-                                    let num = buf.parse::<f64>().unwrap_or(0.0);
-                                    rule.value = RuleValue::Number(num);
-                                }
-                                _ => {
-                                    rule.value = RuleValue::Text(buf);
-                                }
-                            }
-                        }
-                        self.update_draft_count();
-                        cx.notify();
-                        return true;
-                    }
-                }
-                return true;
-            }
-
-            if self.album_draft.title_focused {
-                if key == "escape" {
-                    self.album_draft.title_focused = false;
-                    cx.notify();
-                    return true;
-                }
-                if key == "enter" || key == "return" {
-                    self.album_draft.title_focused = false;
-                    cx.notify();
-                    return true;
-                }
-                if key == "backspace" {
-                    self.album_draft.album_title.pop();
-                    self.update_draft_count();
-                    cx.notify();
-                    return true;
-                }
-                if !cmd_or_ctrl {
-                    if key == "space" {
-                        self.album_draft.album_title.push(' ');
-                        self.update_draft_count();
-                        cx.notify();
-                        return true;
-                    } else if key.chars().count() == 1
-                        && !key.chars().next().is_some_and(|c| c.is_control())
-                    {
-                        self.album_draft.album_title.push_str(key);
-                        self.update_draft_count();
-                        cx.notify();
-                        return true;
-                    }
-                }
-                return true;
-            }
-
-            if (self.album_draft.logic_dropdown_open
-                || self.album_draft.field_dropdown.is_some()
-                || self.album_draft.operator_dropdown.is_some()
-                || self.album_draft.value_dropdown.is_some())
-                && key == "escape"
-            {
-                self.album_draft.logic_dropdown_open = false;
-                self.album_draft.field_dropdown = None;
-                self.album_draft.operator_dropdown = None;
-                self.album_draft.value_dropdown = None;
-                cx.notify();
-                return true;
-            }
-
-            if key == "escape" {
-                self.close_album_builder(cx);
-            } else if key == "enter" || key == "return" {
-                self.save_draft_smart_album(cx);
-            }
+            self.handle_album_builder_key(key, cmd_or_ctrl, keystroke, cx);
             return true;
         }
 
@@ -521,5 +397,64 @@ impl LuminaApp {
         }
 
         false
+    }
+
+    /// Smart album builder keys. Popups take arrows/Enter/Space/Esc first;
+    /// otherwise Tab moves focus, ⌘Enter is OK and Esc is Cancel. In a text
+    /// field Enter is OK (the default button); elsewhere Enter/Space press
+    /// the focused control.
+    fn handle_album_builder_key(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) {
+        let shift = keystroke.modifiers.shift;
+        let enter = key == "enter" || key == "return";
+        if let Some(popup) = self.album_draft.popup {
+            match key {
+                "escape" => {
+                    self.album_draft.popup = None;
+                    cx.notify();
+                }
+                "up" => self.move_draft_popup_highlight(-1, cx),
+                "down" => self.move_draft_popup_highlight(1, cx),
+                "space" => self.pick_draft_option(popup.highlight, cx),
+                _ if enter => self.pick_draft_option(popup.highlight, cx),
+                "tab" => self.move_draft_focus(if shift { -1 } else { 1 }, cx),
+                _ => {}
+            }
+            return;
+        }
+        if enter && cmd_or_ctrl {
+            self.save_draft_smart_album(cx);
+            return;
+        }
+        match key {
+            "escape" => return self.close_album_builder(cx),
+            "tab" => return self.move_draft_focus(if shift { -1 } else { 1 }, cx),
+            _ => {}
+        }
+        if self.draft_focus_is_typed() {
+            if enter {
+                self.save_draft_smart_album(cx);
+            } else if key == "backspace" {
+                self.edit_draft_text(None, cx);
+            } else if !cmd_or_ctrl {
+                // key_char carries Shift (capitals, punctuation); key does not.
+                let typed = keystroke.key_char.as_deref().unwrap_or(match key {
+                    "space" => " ",
+                    k => k,
+                });
+                if typed.chars().count() == 1 && !typed.chars().any(char::is_control) {
+                    self.edit_draft_text(Some(typed), cx);
+                }
+            }
+        } else if enter || key == "space" {
+            self.activate_draft_focus(cx);
+        } else if key == "down" && !self.draft_popup_options(self.album_draft.focus).is_empty() {
+            self.toggle_draft_popup(self.album_draft.focus, cx);
+        }
     }
 }

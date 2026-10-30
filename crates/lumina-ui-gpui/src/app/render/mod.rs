@@ -57,7 +57,7 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 20] = [
+        let rows: [(&str, &str); 21] = [
             ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
             ("⌘,", "Preferences"),
@@ -76,6 +76,7 @@ impl LuminaApp {
             ("J / K / L", "Video rewind / play / forward"),
             ("M", "Mute audio"),
             ("⌥P", "Picture-in-Picture on / off"),
+            ("⌥⌘N", "New smart album"),
             ("Esc", "Close / go back"),
             ("⌘/", "Toggle this help"),
         ];
@@ -269,6 +270,9 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                 this.import_sidecars_selected(cx);
+            }))
+            .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
+                this.open_album_builder(cx);
             }))
             .on_action(cx.listener(|_this, _: &QuitApp, _w, cx| {
                 cx.quit();

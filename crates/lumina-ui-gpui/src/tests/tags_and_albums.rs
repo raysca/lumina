@@ -248,7 +248,7 @@ fn test_tag_manager_modal_lifecycle() {
 }
 
 #[core::prelude::v1::test]
-fn test_smart_album_builder_modal_and_sidebar_mutual_exclusion() {
+fn test_smart_album_and_tag_sidebar_selection_are_exclusive() {
     let mut cx = gpui::TestAppContext::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -289,90 +289,6 @@ fn test_smart_album_builder_modal_and_sidebar_mutual_exclusion() {
         // Toggling tag returns to AllLibrary
         app.select_album(AlbumSelection::AllLibrary, cx);
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
-    });
-    cx.run_until_parked();
-
-    // 2. Open Smart Album Builder Modal & test Editable Title
-    view.update(cx, |app, cx| {
-        app.open_album_builder(cx);
-        assert!(app.album_draft.modal_open);
-        assert_eq!(app.album_draft.album_title, "My Smart Album");
-
-        // Focus title
-        app.focus_draft_title(cx);
-        assert!(app.album_draft.title_focused);
-
-        // Edit title
-        app.album_draft.album_title = "My Smart Vacation".to_string();
-        app.unfocus_draft_title(cx);
-        assert!(!app.album_draft.title_focused);
-        assert_eq!(app.album_draft.album_title, "My Smart Vacation");
-    });
-    cx.run_until_parked();
-
-    // 3. Test Logic Dropdown selection
-    view.update(cx, |app, cx| {
-        assert_eq!(app.album_draft.match_mode, MatchMode::All);
-        app.toggle_draft_logic_dropdown(cx);
-        assert!(app.album_draft.logic_dropdown_open);
-
-        app.select_draft_logic(MatchMode::Any, cx);
-        assert_eq!(app.album_draft.match_mode, MatchMode::Any);
-        assert!(!app.album_draft.logic_dropdown_open);
-
-        app.toggle_draft_logic_dropdown(cx);
-        assert!(app.album_draft.logic_dropdown_open);
-        app.select_draft_logic(MatchMode::All, cx);
-        assert_eq!(app.album_draft.match_mode, MatchMode::All);
-        assert!(!app.album_draft.logic_dropdown_open);
-    });
-    cx.run_until_parked();
-
-    // 4. Test Condition Editing (Photo choice dropdown, Field dropdown, Operator dropdown, (+) insert and (✕) remove)
-    view.update(cx, |app, cx| {
-        assert_eq!(app.album_draft.rules.len(), 1);
-        assert_eq!(app.album_draft.rules[0].field, RuleField::IsFavorite);
-        assert_eq!(app.album_draft.rules[0].value, RuleValue::Bool(true));
-
-        // Change Photo choice to "video"
-        app.set_draft_rule_photo_choice(0, "video", cx);
-        assert_eq!(app.album_draft.rules[0].field, RuleField::MediaType);
-        assert_eq!(
-            app.album_draft.rules[0].value,
-            RuleValue::Text("video".to_string())
-        );
-
-        // Change Operator to "is not"
-        app.set_draft_rule_operator(0, RuleOperator::NotEquals, cx);
-        assert_eq!(app.album_draft.rules[0].operator, RuleOperator::NotEquals);
-
-        // Insert a second rule row using (+)
-        app.insert_draft_rule_after(0, cx);
-        assert_eq!(app.album_draft.rules.len(), 2);
-
-        // Change second rule Field to Tag
-        app.set_draft_rule_field(1, RuleField::Tag, cx);
-        assert_eq!(app.album_draft.rules[1].field, RuleField::Tag);
-
-        // Edit Tag rule value inline
-        app.start_editing_rule_value(1, cx);
-        assert_eq!(app.album_draft.rule_value_editing, Some(1));
-        app.album_draft.rule_value_buffer = "sunset".to_string();
-        app.commit_editing_rule_value(cx);
-        assert!(app.album_draft.rule_value_editing.is_none());
-        assert_eq!(
-            app.album_draft.rules[1].value,
-            RuleValue::Text("sunset".to_string())
-        );
-
-        // Remove first rule using (✕)
-        app.remove_draft_rule(0, cx);
-        assert_eq!(app.album_draft.rules.len(), 1);
-        assert_eq!(app.album_draft.rules[0].field, RuleField::Tag);
-
-        // Save smart album creates album and closes modal
-        app.save_draft_smart_album(cx);
-        assert!(!app.album_draft.modal_open);
     });
     cx.run_until_parked();
 

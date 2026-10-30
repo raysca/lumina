@@ -1,9 +1,7 @@
-use gpui::RenderImage;
 use lumina_core::{DecodedFrame, DeletionTarget, EngineEvent, MediaId};
 #[cfg(test)]
 use lumina_core::{MediaItem, MediaType};
 use std::path::PathBuf;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagSortOrder {
@@ -58,12 +56,14 @@ pub struct BatchSelectionSummary {
     pub fav_count: usize,
 }
 
+/// Test helper: a solid vertical gradient image.
+#[cfg(test)]
 pub fn generate_gradient_image(
     top: (u8, u8, u8),
     bottom: (u8, u8, u8),
     width: u32,
     height: u32,
-) -> Arc<RenderImage> {
+) -> std::sync::Arc<gpui::RenderImage> {
     // Compute in usize so large (but still valid) dimensions cannot overflow.
     let expected_len = (width as usize) * (height as usize) * 4;
     let mut data = Vec::with_capacity(expected_len);
@@ -87,9 +87,9 @@ pub fn generate_gradient_image(
     // image instead of unwinding through GPUI.
     let buffer = image::RgbaImage::from_raw(width, height, data)
         .unwrap_or_else(|| image::RgbaImage::new(width.max(1), height.max(1)));
-    Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(
-        buffer
-    )]))
+    std::sync::Arc::new(gpui::RenderImage::new(smallvec::smallvec![
+        image::Frame::new(buffer)
+    ]))
 }
 
 /// Duration text for the video badge; the play icon is rendered separately.

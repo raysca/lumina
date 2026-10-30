@@ -53,6 +53,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.toggle_favorite" => "Toggle Favorite",
         "command.toggle_pip" => "Toggle Picture-in-Picture",
         "command.pip_play_pause" => "Play/Pause Picture-in-Picture",
+        "command.new_smart_album" => "New Smart Album…",
+        "command.edit_smart_album" => "Edit Smart Album…",
         _ => return None,
     })
 }

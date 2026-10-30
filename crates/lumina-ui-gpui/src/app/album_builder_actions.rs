@@ -1,68 +1,76 @@
 use gpui::*;
-use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule};
+use lumina_core::{MatchMode, RuleField, SmartAlbum, SmartAlbumRule};
 
+use crate::app::smart_draft::field_label;
+use crate::app::smart_draft::{
+    focus_order, operator_label, operators, rules_from_rows, DraftFocus, DraftPopup, DraftRow,
+    ValueKind, FIELDS, UNITS,
+};
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
+/// Thumbnails in the builder's preview strip.
+const PREVIEW_LIMIT: usize = 8;
+
 impl LuminaApp {
+    /// New Smart Album… (⌥⌘N): an empty sheet with one "Favourite is Yes" row.
     pub fn open_album_builder(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.modal_open = true;
-        self.album_draft.editing_album_id = None;
-        self.album_draft.album_title = "My Smart Album".to_string();
-        self.album_draft.title_focused = false;
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.logic_dropdown_open = false;
-        self.album_draft.field_dropdown = None;
-        self.album_draft.operator_dropdown = None;
-        self.album_draft.value_dropdown = None;
-        self.album_draft.rule_value_editing = None;
-        self.album_draft.rule_value_buffer.clear();
-        self.album_draft.rules = vec![SmartAlbumRule {
-            field: RuleField::IsFavorite,
-            operator: RuleOperator::Equals,
-            value: RuleValue::Bool(true),
-        }];
-        self.update_draft_count();
+        self.open_draft(None, String::new(), MatchMode::All, &[], cx);
+    }
+
+    /// Edit Smart Album…: the sheet prefilled with a saved album.
+    pub fn open_album_builder_for_edit(&mut self, album: SmartAlbum, cx: &mut Context<Self>) {
+        self.open_draft(
+            Some(album.id),
+            album.title,
+            album.match_mode,
+            &album.rules,
+            cx,
+        );
+    }
+
+    /// Edits the smart album shown in the grid; a no-op elsewhere.
+    pub fn edit_selected_smart_album(&mut self, cx: &mut Context<Self>) {
+        let album = match self.selection {
+            AlbumSelection::User(id) => self.user_smart_albums.iter().find(|a| a.id == id).cloned(),
+            _ => None,
+        };
+        match album {
+            Some(album) => self.open_album_builder_for_edit(album, cx),
+            None => self.show_toast("Open a smart album to edit it", cx),
+        }
+    }
+
+    fn open_draft(
+        &mut self,
+        editing: Option<i64>,
+        title: String,
+        match_mode: MatchMode,
+        rules: &[SmartAlbumRule],
+        cx: &mut Context<Self>,
+    ) {
+        let rows: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
+        let draft = &mut self.album_draft;
+        draft.modal_open = true;
+        draft.editing_album_id = editing;
+        draft.album_title = title;
+        draft.match_mode = match_mode;
+        draft.rows = if rows.is_empty() {
+            vec![DraftRow::new(RuleField::IsFavorite)]
+        } else {
+            rows
+        };
+        draft.focus = DraftFocus::Title;
+        draft.popup = None;
+        self.refresh_draft_preview();
         cx.notify();
     }
 
     pub fn close_album_builder(&mut self, cx: &mut Context<Self>) {
         self.album_draft.modal_open = false;
         self.album_draft.editing_album_id = None;
-        self.album_draft.title_focused = false;
-        self.album_draft.logic_dropdown_open = false;
-        self.album_draft.field_dropdown = None;
-        self.album_draft.operator_dropdown = None;
-        self.album_draft.value_dropdown = None;
-        self.album_draft.rule_value_editing = None;
-        self.album_draft.rule_value_buffer.clear();
-        cx.notify();
-    }
-
-    /// Opens the smart-album builder prefilled with an existing album.
-    pub fn open_album_builder_for_edit(&mut self, album: SmartAlbum, cx: &mut Context<Self>) {
-        self.album_draft.modal_open = true;
-        self.album_draft.editing_album_id = Some(album.id);
-        self.album_draft.album_title = album.title.clone();
-        self.album_draft.title_focused = false;
-        self.album_draft.match_mode = album.match_mode;
-        self.album_draft.logic_dropdown_open = false;
-        self.album_draft.field_dropdown = None;
-        self.album_draft.operator_dropdown = None;
-        self.album_draft.value_dropdown = None;
-        self.album_draft.rule_value_editing = None;
-        self.album_draft.rule_value_buffer.clear();
-        self.album_draft.rules = if album.rules.is_empty() {
-            vec![SmartAlbumRule {
-                field: RuleField::IsFavorite,
-                operator: RuleOperator::Equals,
-                value: RuleValue::Bool(true),
-            }]
-        } else {
-            album.rules.clone()
-        };
-        self.album_draft.show_in_sidebar = true;
-        self.update_draft_count();
+        self.album_draft.popup = None;
+        self.album_draft.preview.clear();
         cx.notify();
     }
 
@@ -89,385 +97,295 @@ impl LuminaApp {
         }
     }
 
-    pub fn focus_draft_title(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.title_focused = true;
-        self.album_draft.logic_dropdown_open = false;
-        self.album_draft.field_dropdown = None;
-        self.album_draft.operator_dropdown = None;
-        self.album_draft.value_dropdown = None;
-        self.album_draft.rule_value_editing = None;
-        cx.notify();
+    /// Every row as a core rule, or `None` while any row is invalid.
+    pub fn draft_rules(&self) -> Option<Vec<SmartAlbumRule>> {
+        rules_from_rows(&self.album_draft.rows)
     }
 
-    #[cfg(test)]
-    pub fn unfocus_draft_title(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.title_focused = false;
-        cx.notify();
-    }
-
-    #[cfg(test)]
-    pub fn toggle_draft_logic_dropdown(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.logic_dropdown_open = !self.album_draft.logic_dropdown_open;
-        self.album_draft.field_dropdown = None;
-        self.album_draft.operator_dropdown = None;
-        self.album_draft.value_dropdown = None;
-        self.album_draft.title_focused = false;
-        self.album_draft.rule_value_editing = None;
-        cx.notify();
-    }
-
-    pub fn select_draft_logic(&mut self, mode: MatchMode, cx: &mut Context<Self>) {
-        self.album_draft.match_mode = mode;
-        self.album_draft.logic_dropdown_open = false;
-        self.update_draft_count();
-        cx.notify();
-    }
-
-    pub fn toggle_draft_field_dropdown(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.album_draft.field_dropdown == Some(index) {
-            self.album_draft.field_dropdown = None;
-        } else {
-            self.album_draft.field_dropdown = Some(index);
-            self.album_draft.operator_dropdown = None;
-            self.album_draft.value_dropdown = None;
-            self.album_draft.logic_dropdown_open = false;
-            self.album_draft.title_focused = false;
-            self.album_draft.rule_value_editing = None;
-        }
-        cx.notify();
-    }
-
-    pub fn set_draft_rule_field(&mut self, index: usize, field: RuleField, cx: &mut Context<Self>) {
-        if index < self.album_draft.rules.len() {
-            let (op, val) = match field {
-                RuleField::IsFavorite => (RuleOperator::Equals, RuleValue::Bool(true)),
-                RuleField::MediaType => {
-                    (RuleOperator::Equals, RuleValue::Text("video".to_string()))
-                }
-                RuleField::Tag => (RuleOperator::Equals, RuleValue::Text(String::new())),
-                RuleField::CameraMake => {
-                    (RuleOperator::Contains, RuleValue::Text("Sony".to_string()))
-                }
-                RuleField::CameraModel => (RuleOperator::Contains, RuleValue::Text(String::new())),
-                RuleField::Lens => (RuleOperator::Contains, RuleValue::Text(String::new())),
-                RuleField::City => (RuleOperator::Contains, RuleValue::Text(String::new())),
-                RuleField::Year => (RuleOperator::Equals, RuleValue::Integer(2026)),
-                RuleField::Iso => (RuleOperator::GreaterThan, RuleValue::Integer(1600)),
-                RuleField::FNumber => (RuleOperator::LessThan, RuleValue::Number(2.8)),
-                RuleField::Rating => (RuleOperator::GreaterThan, RuleValue::Integer(3)),
-                RuleField::ColorLabel => (RuleOperator::Equals, RuleValue::Integer(1)),
-                _ => (RuleOperator::Equals, RuleValue::Text(String::new())),
-            };
-            self.album_draft.rules[index] = SmartAlbumRule {
-                field,
-                operator: op,
-                value: val,
-            };
-            self.album_draft.field_dropdown = None;
-            self.update_draft_count();
-            cx.notify();
-        }
-    }
-
-    pub fn toggle_draft_operator_dropdown(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.album_draft.operator_dropdown == Some(index) {
-            self.album_draft.operator_dropdown = None;
-        } else {
-            self.album_draft.operator_dropdown = Some(index);
-            self.album_draft.field_dropdown = None;
-            self.album_draft.value_dropdown = None;
-            self.album_draft.logic_dropdown_open = false;
-            self.album_draft.title_focused = false;
-            self.album_draft.rule_value_editing = None;
-        }
-        cx.notify();
-    }
-
-    pub fn set_draft_rule_operator(
-        &mut self,
-        index: usize,
-        op: RuleOperator,
-        cx: &mut Context<Self>,
-    ) {
-        if index < self.album_draft.rules.len() {
-            self.album_draft.rules[index].operator = op;
-            self.album_draft.operator_dropdown = None;
-            self.update_draft_count();
-            cx.notify();
-        }
-    }
-
-    pub fn toggle_draft_value_dropdown(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.album_draft.value_dropdown == Some(index) {
-            self.album_draft.value_dropdown = None;
-        } else {
-            self.album_draft.value_dropdown = Some(index);
-            self.album_draft.field_dropdown = None;
-            self.album_draft.operator_dropdown = None;
-            self.album_draft.logic_dropdown_open = false;
-            self.album_draft.title_focused = false;
-            self.album_draft.rule_value_editing = None;
-        }
-        cx.notify();
-    }
-
-    pub fn set_draft_rule_photo_choice(
-        &mut self,
-        index: usize,
-        choice: &str,
-        cx: &mut Context<Self>,
-    ) {
-        if index < self.album_draft.rules.len() {
-            match choice {
-                "favourite" => {
-                    self.album_draft.rules[index].field = RuleField::IsFavorite;
-                    self.album_draft.rules[index].value = RuleValue::Bool(true);
-                }
-                "not favourite" => {
-                    self.album_draft.rules[index].field = RuleField::IsFavorite;
-                    self.album_draft.rules[index].value = RuleValue::Bool(false);
-                }
-                "video" => {
-                    self.album_draft.rules[index].field = RuleField::MediaType;
-                    self.album_draft.rules[index].value = RuleValue::Text("video".to_string());
-                }
-                "raw" => {
-                    self.album_draft.rules[index].field = RuleField::MediaType;
-                    self.album_draft.rules[index].value = RuleValue::Text("raw".to_string());
-                }
-                "still photo" => {
-                    self.album_draft.rules[index].field = RuleField::MediaType;
-                    self.album_draft.rules[index].value = RuleValue::Text("image".to_string());
-                }
-                _ => {}
-            }
-            self.album_draft.value_dropdown = None;
-            self.update_draft_count();
-            cx.notify();
-        }
-    }
-
-    pub fn start_editing_rule_value(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.album_draft.rules.len() {
-            self.album_draft.rule_value_editing = Some(index);
-            self.album_draft.rule_value_buffer = match &self.album_draft.rules[index].value {
-                RuleValue::Text(s) => s.clone(),
-                RuleValue::Number(n) => format!("{:.1}", n),
-                RuleValue::Integer(i) => format!("{}", i),
-                RuleValue::Bool(b) => format!("{}", b),
-                RuleValue::Range(min, max) => format!("{} - {}", min, max),
-            };
-            self.album_draft.title_focused = false;
-            self.album_draft.logic_dropdown_open = false;
-            self.album_draft.field_dropdown = None;
-            self.album_draft.operator_dropdown = None;
-            self.album_draft.value_dropdown = None;
-            cx.notify();
-        }
-    }
-
-    pub fn commit_editing_rule_value(&mut self, cx: &mut Context<Self>) {
-        if let Some(index) = self.album_draft.rule_value_editing.take() {
-            if index < self.album_draft.rules.len() {
-                let buf = self.album_draft.rule_value_buffer.trim();
-                let rule = &mut self.album_draft.rules[index];
-                match rule.field {
-                    RuleField::Iso
-                    | RuleField::Year
-                    | RuleField::Month
-                    | RuleField::Rating
-                    | RuleField::ColorLabel => {
-                        let num = buf.parse::<i64>().unwrap_or(0);
-                        rule.value = RuleValue::Integer(num);
-                    }
-                    RuleField::FNumber => {
-                        let num = buf.parse::<f64>().unwrap_or(0.0);
-                        rule.value = RuleValue::Number(num);
-                    }
-                    _ => {
-                        rule.value = RuleValue::Text(buf.to_string());
-                    }
-                }
-            }
-            self.update_draft_count();
-        }
-        cx.notify();
-    }
-
-    pub fn cancel_editing_rule_value(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.rule_value_editing = None;
-        self.album_draft.rule_value_buffer.clear();
-        cx.notify();
-    }
-
-    pub fn insert_draft_rule_after(&mut self, index: usize, cx: &mut Context<Self>) {
-        let insert_idx = if index < self.album_draft.rules.len() {
-            index + 1
-        } else {
-            self.album_draft.rules.len()
+    /// Re-runs the count and preview queries. Called after a rule changes,
+    /// never from render.
+    pub fn refresh_draft_preview(&mut self) {
+        let draft = &mut self.album_draft;
+        let (Some(rules), Some(state)) = (rules_from_rows(&draft.rows), self.grid_state.as_ref())
+        else {
+            draft.match_count = None;
+            draft.preview.clear();
+            return;
         };
-        self.album_draft.rules.insert(
-            insert_idx,
-            SmartAlbumRule {
-                field: RuleField::IsFavorite,
-                operator: RuleOperator::Equals,
-                value: RuleValue::Bool(true),
-            },
-        );
-        self.update_draft_count();
+        let album = SmartAlbum::new(String::new(), String::new(), draft.match_mode, rules);
+        draft.match_count = Some(state.engine.query_smart_album_count(&album));
+        draft.preview = state.engine.query_smart_album(&album, PREVIEW_LIMIT, 0);
+    }
+
+    pub fn set_draft_focus(&mut self, focus: DraftFocus, cx: &mut Context<Self>) {
+        self.album_draft.focus = focus;
+        self.album_draft.popup = None;
         cx.notify();
     }
 
-    pub fn update_draft_count(&mut self) {
-        if let Some(ref state) = self.grid_state {
-            let draft = lumina_core::SmartAlbum::new(
-                self.album_draft.album_title.clone(),
-                "folder".to_string(),
-                self.album_draft.match_mode,
-                self.album_draft.rules.clone(),
-            );
-            self.album_draft.match_count = state.engine.query_smart_album_count(&draft);
+    /// Labels for the popup that `target` opens; empty when it has none.
+    pub fn draft_popup_options(&self, target: DraftFocus) -> Vec<String> {
+        let rows = &self.album_draft.rows;
+        let to_strings = |labels: &[&str]| labels.iter().map(|s| s.to_string()).collect();
+        match target {
+            DraftFocus::Match => to_strings(&["all", "any"]),
+            DraftFocus::Field(_) => FIELDS.iter().map(|f| field_label(f).to_string()).collect(),
+            DraftFocus::Operator(i) => rows.get(i).map_or_else(Vec::new, |row| {
+                operators(&row.field)
+                    .iter()
+                    .map(|op| operator_label(&row.field, op).to_string())
+                    .collect()
+            }),
+            DraftFocus::Value(i) => match rows.get(i).map(DraftRow::kind) {
+                Some(ValueKind::Choice(options)) => {
+                    options.iter().map(|(_, label)| label.to_string()).collect()
+                }
+                Some(ValueKind::Tags) => self
+                    .library_tag_counts
+                    .iter()
+                    .map(|(tag, _)| tag.clone())
+                    .collect(),
+                _ => Vec::new(),
+            },
+            DraftFocus::Unit(_) => UNITS.iter().map(|(_, l)| l.to_string()).collect(),
+            _ => Vec::new(),
         }
     }
 
-    pub fn remove_draft_rule(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.album_draft.rules.len() > 1 && index < self.album_draft.rules.len() {
-            self.album_draft.rules.remove(index);
-            self.update_draft_count();
+    /// Index of the current value in `target`'s popup, for the highlight.
+    fn draft_popup_current(&self, target: DraftFocus) -> usize {
+        let rows = &self.album_draft.rows;
+        let position = match target {
+            DraftFocus::Match => Some((self.album_draft.match_mode == MatchMode::Any) as usize),
+            DraftFocus::Field(i) => rows
+                .get(i)
+                .and_then(|row| FIELDS.iter().position(|f| *f == row.field)),
+            DraftFocus::Operator(i) => rows.get(i).and_then(|row| {
+                operators(&row.field)
+                    .iter()
+                    .position(|o| *o == row.operator)
+            }),
+            DraftFocus::Value(i) => rows.get(i).and_then(|row| match row.kind() {
+                ValueKind::Choice(options) => options.iter().position(|(k, _)| *k == row.text),
+                _ => self
+                    .library_tag_counts
+                    .iter()
+                    .position(|(tag, _)| *tag == row.text),
+            }),
+            DraftFocus::Unit(i) => rows
+                .get(i)
+                .and_then(|row| UNITS.iter().position(|(u, _)| *u == row.unit)),
+            _ => None,
+        };
+        position.unwrap_or(0)
+    }
+
+    /// Opens `target`'s popup, or closes it when it is already open.
+    pub fn toggle_draft_popup(&mut self, target: DraftFocus, cx: &mut Context<Self>) {
+        self.album_draft.focus = target;
+        self.album_draft.popup = if self.album_draft.popup.map(|p| p.target) == Some(target) {
+            None
+        } else {
+            Some(DraftPopup {
+                target,
+                highlight: self.draft_popup_current(target),
+            })
+        };
+        cx.notify();
+    }
+
+    pub fn move_draft_popup_highlight(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let Some(popup) = self.album_draft.popup else {
+            return;
+        };
+        let count = self.draft_popup_options(popup.target).len();
+        if count > 0 {
+            let next = (popup.highlight as isize + delta).rem_euclid(count as isize) as usize;
+            self.album_draft.popup = Some(DraftPopup {
+                highlight: next,
+                ..popup
+            });
             cx.notify();
         }
     }
 
-    pub fn apply_template_untagged(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.album_title = "Untagged Photos".to_string();
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.rules = vec![SmartAlbumRule {
-            field: RuleField::Tag,
-            operator: RuleOperator::IsEmpty,
-            value: RuleValue::Text(String::new()),
-        }];
-        self.update_draft_count();
+    /// Applies option `index` of the open popup and closes it.
+    pub fn pick_draft_option(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(popup) = self.album_draft.popup.take() else {
+            return;
+        };
+        let tags = &self.library_tag_counts;
+        let draft = &mut self.album_draft;
+        match popup.target {
+            DraftFocus::Match => {
+                draft.match_mode = if index == 1 {
+                    MatchMode::Any
+                } else {
+                    MatchMode::All
+                };
+            }
+            DraftFocus::Field(i) => {
+                if let (Some(row), Some(field)) = (draft.rows.get_mut(i), FIELDS.get(index)) {
+                    if row.field != *field {
+                        *row = DraftRow::new(field.clone());
+                    }
+                }
+            }
+            DraftFocus::Operator(i) => {
+                if let Some(row) = draft.rows.get_mut(i) {
+                    if let Some(op) = operators(&row.field).get(index) {
+                        row.set_operator(op.clone());
+                    }
+                }
+            }
+            DraftFocus::Value(i) => {
+                if let Some(row) = draft.rows.get_mut(i) {
+                    let key = match row.kind() {
+                        ValueKind::Choice(options) => options.get(index).map(|o| o.0.to_string()),
+                        _ => tags.get(index).map(|(tag, _)| tag.clone()),
+                    };
+                    if let Some(key) = key {
+                        row.text = key;
+                    }
+                }
+            }
+            DraftFocus::Unit(i) => {
+                if let (Some(row), Some((unit, _))) = (draft.rows.get_mut(i), UNITS.get(index)) {
+                    row.unit = *unit;
+                }
+            }
+            _ => {}
+        }
+        self.refresh_draft_preview();
         cx.notify();
     }
 
-    pub fn apply_template_tagged(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.album_title = "Tagged Media".to_string();
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.rules = vec![SmartAlbumRule {
-            field: RuleField::Tag,
-            operator: RuleOperator::IsNotEmpty,
-            value: RuleValue::Text(String::new()),
-        }];
-        self.update_draft_count();
-        cx.notify();
+    /// Tab / Shift-Tab.
+    pub fn move_draft_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let order = focus_order(&self.album_draft.rows);
+        let current = order
+            .iter()
+            .position(|f| *f == self.album_draft.focus)
+            .unwrap_or(0);
+        let next = (current as isize + delta).rem_euclid(order.len() as isize) as usize;
+        self.set_draft_focus(order[next], cx);
     }
 
-    pub fn apply_template_sony_favorites(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.album_title = "Sony Favorites".to_string();
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.rules = vec![
-            SmartAlbumRule {
-                field: RuleField::IsFavorite,
-                operator: RuleOperator::Equals,
-                value: RuleValue::Bool(true),
+    /// Whether the focused control takes typed text.
+    pub fn draft_focus_is_typed(&self) -> bool {
+        match self.album_draft.focus {
+            DraftFocus::Title => true,
+            DraftFocus::Value(i) => self
+                .album_draft
+                .rows
+                .get(i)
+                .is_some_and(|row| row.kind().is_typed()),
+            _ => false,
+        }
+    }
+
+    /// Enter / Space on a focused control that is not a text field.
+    pub fn activate_draft_focus(&mut self, cx: &mut Context<Self>) {
+        match self.album_draft.focus {
+            DraftFocus::Remove(i) => self.remove_draft_row(i, cx),
+            DraftFocus::Add(i) => self.add_draft_row_after(i, cx),
+            DraftFocus::Cancel => self.close_album_builder(cx),
+            DraftFocus::Save => self.save_draft_smart_album(cx),
+            DraftFocus::Title => {}
+            target => {
+                if !self.draft_popup_options(target).is_empty() {
+                    self.toggle_draft_popup(target, cx);
+                }
+            }
+        }
+    }
+
+    /// Edits the focused text field: `Some(text)` appends, `None` deletes one
+    /// character.
+    pub fn edit_draft_text(&mut self, text: Option<&str>, cx: &mut Context<Self>) {
+        let focus = self.album_draft.focus;
+        let target = match focus {
+            DraftFocus::Title => &mut self.album_draft.album_title,
+            DraftFocus::Value(i) => match self.album_draft.rows.get_mut(i) {
+                Some(row) => &mut row.text,
+                None => return,
             },
-            SmartAlbumRule {
-                field: RuleField::CameraMake,
-                operator: RuleOperator::Contains,
-                value: RuleValue::Text("Sony".to_string()),
-            },
-        ];
-        self.update_draft_count();
+            _ => return,
+        };
+        match text {
+            Some(text) => target.push_str(text),
+            None => {
+                target.pop();
+            }
+        }
+        if focus != DraftFocus::Title {
+            self.refresh_draft_preview();
+        }
         cx.notify();
     }
 
-    pub fn apply_template_fast_apertures(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.album_title = "Fast Glass (f < 2.8)".to_string();
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.rules = vec![SmartAlbumRule {
-            field: RuleField::FNumber,
-            operator: RuleOperator::LessThan,
-            value: RuleValue::Number(2.8),
-        }];
-        self.update_draft_count();
+    pub fn add_draft_row_after(&mut self, index: usize, cx: &mut Context<Self>) {
+        let at = (index + 1).min(self.album_draft.rows.len());
+        self.album_draft
+            .rows
+            .insert(at, DraftRow::new(RuleField::IsFavorite));
+        self.album_draft.focus = DraftFocus::Field(at);
+        self.album_draft.popup = None;
+        self.refresh_draft_preview();
         cx.notify();
     }
 
-    pub fn apply_template_high_iso(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.album_title = "Low Light (ISO > 1600)".to_string();
-        self.album_draft.match_mode = MatchMode::All;
-        self.album_draft.rules = vec![SmartAlbumRule {
-            field: RuleField::Iso,
-            operator: RuleOperator::GreaterThan,
-            value: RuleValue::Integer(1600),
-        }];
-        self.update_draft_count();
-        cx.notify();
+    /// Removes a row; the last remaining row cannot be removed.
+    pub fn remove_draft_row(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.album_draft.rows.len() > 1 && index < self.album_draft.rows.len() {
+            self.album_draft.rows.remove(index);
+            let row = index.min(self.album_draft.rows.len() - 1);
+            self.album_draft.focus = DraftFocus::Field(row);
+            self.album_draft.popup = None;
+            self.refresh_draft_preview();
+            cx.notify();
+        }
     }
 
+    /// OK: saves when every row is valid, then shows the album.
     pub fn save_draft_smart_album(&mut self, cx: &mut Context<Self>) {
-        let title = if self.album_draft.album_title.trim().is_empty() {
-            "Custom Smart Album".to_string()
-        } else {
-            self.album_draft.album_title.trim().to_string()
+        let Some(rules) = self.draft_rules() else {
+            return;
+        };
+        let title = match self.album_draft.album_title.trim() {
+            "" => "Untitled Smart Album".to_string(),
+            title => title.to_string(),
         };
         let editing_id = self.album_draft.editing_album_id;
-        let result = if let Some(ref state) = self.grid_state {
-            match editing_id {
-                Some(album_id) => state
-                    .engine
-                    .update_smart_album(
-                        album_id,
-                        &title,
-                        "folder",
-                        self.album_draft.match_mode,
-                        &self.album_draft.rules,
-                    )
-                    .map(|_| album_id),
-                None => state
-                    .engine
-                    .create_smart_album(
-                        &title,
-                        "folder",
-                        self.album_draft.match_mode,
-                        &self.album_draft.rules,
-                    )
-                    .map(|album| album.id),
-            }
-        } else {
-            Ok(-1)
+        let mode = self.album_draft.match_mode;
+        let Some(state) = self.grid_state.as_ref() else {
+            return;
+        };
+        let result = match editing_id {
+            Some(id) => state
+                .engine
+                .update_smart_album(id, &title, "folder", mode, &rules)
+                .map(|_| id),
+            None => state
+                .engine
+                .create_smart_album(&title, "folder", mode, &rules)
+                .map(|album| album.id),
         };
 
         match result {
             Ok(album_id) => {
-                self.album_draft.modal_open = false;
-                self.album_draft.editing_album_id = None;
-                self.album_draft.title_focused = false;
-                self.album_draft.logic_dropdown_open = false;
-                self.album_draft.field_dropdown = None;
-                self.album_draft.operator_dropdown = None;
-                self.album_draft.value_dropdown = None;
-                self.album_draft.rule_value_editing = None;
-                self.album_draft.rule_value_buffer.clear();
-                self.selection = AlbumSelection::User(album_id);
-                self.selected_index = None;
-                self.selected_item = None;
+                self.close_album_builder(cx);
+                self.refresh_album_counts();
+                self.select_album(AlbumSelection::User(album_id), cx);
                 let message = if editing_id.is_some() {
                     format!("Updated smart album \"{}\"", title)
                 } else {
                     format!("Created smart album \"{}\"", title)
                 };
                 self.set_last_action(message.clone());
-                self.refresh_album_counts();
                 self.show_toast(message, cx);
-                cx.notify();
             }
             Err(err) => self.set_error(format!("Could not save smart album: {err}"), cx),
         }
-    }
-
-    pub fn toggle_draft_show_in_sidebar(&mut self, cx: &mut Context<Self>) {
-        self.album_draft.show_in_sidebar = !self.album_draft.show_in_sidebar;
-        cx.notify();
     }
 }

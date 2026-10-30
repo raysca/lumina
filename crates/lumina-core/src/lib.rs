@@ -27,7 +27,8 @@ pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, Scanner};
 pub use search::StructuredQuery;
 pub use smart_albums::{
-    MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, SystemAlbum,
+    parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum,
+    SmartAlbumRule, SystemAlbum,
 };
 pub use sort::{SortDirection, SortField, SortSpec};
 pub use watcher::LibraryWatcher;

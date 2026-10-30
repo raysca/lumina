@@ -2132,3 +2132,140 @@ fn test_ids_with_tag_returns_only_tagged_subset() {
     );
     assert!(catalog.ids_with_tag(&ids, "missing").unwrap().is_empty());
 }
+
+#[test]
+fn smart_album_builder_rules_match_expected_rows() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let day = |s: &str| lumina_core::parse_rule_date(s).expect("valid date");
+
+    let mut kyoto = sample_media_item(
+        "/p/kyoto.jpg",
+        MediaType::Image,
+        day("2024-05-01") + 3_600_000,
+        Some("Kyoto"),
+        None,
+    );
+    kyoto.is_favorite = true;
+    let paris = sample_media_item(
+        "/p/paris.dng",
+        MediaType::Raw,
+        day("2024-05-02") + 3_600_000,
+        Some("Paris"),
+        None,
+    );
+    let clip = sample_media_item(
+        "/p/clip.mp4",
+        MediaType::Video,
+        day("2024-06-15"),
+        None,
+        None,
+    );
+    catalog
+        .insert_or_update_batch(&[kyoto, paris, clip])
+        .unwrap();
+    let ids: Vec<_> = catalog
+        .query_smart_album(
+            &lumina_core::SmartAlbum::new("all".into(), "f".into(), MatchMode::All, vec![]),
+            10,
+            0,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|item| (item.file_name.clone(), item.id))
+        .collect();
+    let id = |name: &str| ids.iter().find(|(n, _)| n == name).unwrap().1;
+    catalog.set_rating(id("kyoto.jpg"), 4).unwrap();
+    catalog.set_rating(id("paris.dng"), 2).unwrap();
+
+    let names = |field: RuleField, operator: RuleOperator, value: RuleValue| {
+        let album = lumina_core::SmartAlbum::new(
+            "t".into(),
+            "f".into(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field,
+                operator,
+                value,
+            }],
+        );
+        let mut names: Vec<String> = catalog
+            .query_smart_album(&album, 10, 0)
+            .expect("rule compiles and runs")
+            .into_iter()
+            .map(|item| item.file_name)
+            .collect();
+        names.sort();
+        names
+    };
+    let text = |s: &str| RuleValue::Text(s.to_string());
+
+    assert_eq!(
+        names(RuleField::MediaType, RuleOperator::Equals, text("photo")),
+        ["kyoto.jpg", "paris.dng"],
+        "Kind is Photo must include RAW stills and exclude videos"
+    );
+    assert_eq!(
+        names(RuleField::MediaType, RuleOperator::NotEquals, text("photo")),
+        ["clip.mp4"]
+    );
+    assert_eq!(
+        names(RuleField::Date, RuleOperator::Equals, text("2024-05-01")),
+        ["kyoto.jpg"],
+        "Date is a day must cover that whole day only"
+    );
+    assert_eq!(
+        names(RuleField::Date, RuleOperator::LessThan, text("2024-05-02")),
+        ["kyoto.jpg"],
+        "before excludes the named day"
+    );
+    assert_eq!(
+        names(
+            RuleField::Date,
+            RuleOperator::GreaterThan,
+            text("2024-05-01")
+        ),
+        ["clip.mp4", "paris.dng"],
+        "after excludes the named day"
+    );
+    assert_eq!(
+        names(
+            RuleField::Date,
+            RuleOperator::Between,
+            text("2024-05-02 to 2024-06-15")
+        ),
+        ["clip.mp4", "paris.dng"],
+        "a range includes both end days"
+    );
+    assert_eq!(
+        names(
+            RuleField::Rating,
+            RuleOperator::AtLeast,
+            RuleValue::Integer(4)
+        ),
+        ["kyoto.jpg"]
+    );
+    assert_eq!(
+        names(
+            RuleField::Rating,
+            RuleOperator::AtMost,
+            RuleValue::Integer(2)
+        ),
+        ["clip.mp4", "paris.dng"],
+        "unrated items have zero stars"
+    );
+    assert_eq!(
+        names(RuleField::Place, RuleOperator::Contains, text("fr")),
+        ["paris.dng"],
+        "Place matches the country code"
+    );
+    assert_eq!(
+        names(RuleField::Place, RuleOperator::Contains, text("kyo")),
+        ["kyoto.jpg"]
+    );
+    assert_eq!(
+        names(RuleField::Place, RuleOperator::NotContains, text("paris")),
+        ["clip.mp4", "kyoto.jpg"],
+        "does not contain keeps items with no place"
+    );
+    assert!(lumina_core::split_date_range("2024-01-01..nope").is_none());
+}

@@ -30,6 +30,8 @@ pub enum CommandId {
     ToggleFavorite,
     TogglePip,
     PipPlayPause,
+    NewSmartAlbum,
+    EditSmartAlbum,
 }
 
 pub struct Command {
@@ -209,6 +211,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "pip picture in picture video pause resume",
         },
+        Command {
+            id: CommandId::NewSmartAlbum,
+            key: "command.new_smart_album",
+            shortcut: "⌥⌘N",
+            keywords: "smart album rules filter create",
+        },
+        Command {
+            id: CommandId::EditSmartAlbum,
+            key: "command.edit_smart_album",
+            shortcut: "",
+            keywords: "smart album rules filter change",
+        },
     ]
 }
 
@@ -292,6 +306,8 @@ impl LuminaApp {
             CommandId::ToggleFavorite => self.toggle_favorite_selected(cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
+            CommandId::NewSmartAlbum => self.open_album_builder(cx),
+            CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
         }
     }
 }

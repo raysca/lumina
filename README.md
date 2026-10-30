@@ -18,8 +18,12 @@ core handles cataloguing, decoding, and search.
   pre-aggregated for instant scrubbing.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a bundled GeoNames dataset.
-- **Smart albums** — 9 system albums plus a composable rule builder; user
-  albums can be renamed, re-edited and deleted from the sidebar row.
+- **Smart albums** — 9 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
+  match all/any of conditions on kind, favourite, date (including "in the
+  last N days/weeks/months"), tag, stars, colour label, camera, lens,
+  aperture, ISO, focal length, filename and place, with a live count and
+  preview. Albums can be re-edited (⌘K "Edit Smart Album…") and deleted from
+  the sidebar row.
 - **Fast grid & viewer** — virtualized grid, 2–8 column density, sort by date,
   name, size or rating (ascending/descending, persisted), zoom/pan and 1:1 pixel
   inspection, previous/next navigation, keyboard-first shortcuts.

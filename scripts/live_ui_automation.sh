@@ -79,7 +79,7 @@ let name = CommandLine.arguments[2]
 let modifier = CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : ""
 let keycodes: [String: CGKeyCode] = [
     "i": 34, "f": 3, "escape": 53, "home": 115, "space": 49,
-    "right": 124, "left": 123, "slash": 44, "p": 35
+    "right": 124, "left": 123, "slash": 44, "p": 35, "n": 45, "return": 36
 ]
 guard let code = keycodes[name] else { exit(3) }
 NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
@@ -87,8 +87,11 @@ usleep(250_000)
 let source = CGEventSource(stateID: .hidSystemState)
 for pressed in [true, false] {
     guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: pressed) else { exit(4) }
-    if modifier == "cmd" { event.flags = .maskCommand }
-    if modifier == "alt" { event.flags = .maskAlternate }
+    // Modifiers combine with "+", e.g. "alt+cmd".
+    var flags: CGEventFlags = []
+    if modifier.contains("cmd") { flags.insert(.maskCommand) }
+    if modifier.contains("alt") { flags.insert(.maskAlternate) }
+    event.flags = flags
     event.postToPid(pid)
 }
 print("posted \(name)")
@@ -332,5 +335,13 @@ inject home
 inject f
 wait_db "SELECT COUNT(*) FROM media_items WHERE is_favorite = 1" "1" || fail "keyboard favorite did not reach sqlite"
 echo "PASS: keyboard 'f' persisted a favorite in catalog.db"
+
+# 6. New Smart Album: Option-Cmd-N, then Cmd-Return saves the default
+#    "Favourite is Yes" condition as an untitled album.
+inject n alt+cmd
+inject return cmd
+wait_db "SELECT COUNT(*) FROM smart_albums WHERE title = 'Untitled Smart Album'" "1" \
+    || fail "Option-Cmd-N then Cmd-Return did not save a smart album"
+echo "PASS: keyboard-built smart album persisted in catalog.db"
 
 echo "PASS: live UI automation"

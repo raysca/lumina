@@ -18,7 +18,7 @@ impl LuminaApp {
         let cmd_or_ctrl = keystroke.modifiers.secondary() || keystroke.modifiers.control;
 
         // Shield modal dialogs: absorb keystrokes so background shortcuts don't mutate or delete files
-        if self.handle_modal_key_down(key, cmd_or_ctrl, cx) {
+        if self.handle_modal_key_down(key, cmd_or_ctrl, keystroke, cx) {
             return;
         }
 
@@ -48,6 +48,12 @@ impl LuminaApp {
             } else {
                 self.open_command_palette(cx);
             }
+            return;
+        }
+
+        // ⌥⌘N: New Smart Album…
+        if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("n") {
+            self.open_album_builder(cx);
             return;
         }
 

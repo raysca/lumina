@@ -1,7 +1,10 @@
 mod rules;
 mod system;
 
-pub use rules::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule};
+pub use rules::{
+    parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum,
+    SmartAlbumRule,
+};
 pub use system::SystemAlbum;
 
 #[cfg(test)]
@@ -73,6 +76,33 @@ mod tests {
         let (where_clause, params) = album.build_sql().unwrap();
         assert!(where_clause.contains("m.timestamp_epoch_ms >= ?"));
         assert_eq!(params.len(), 1);
+    }
+
+    #[test]
+    fn in_the_last_accepts_weeks_and_months() {
+        let cutoff = |text: &str| {
+            let album = SmartAlbum::new(
+                String::new(),
+                String::new(),
+                MatchMode::All,
+                vec![SmartAlbumRule {
+                    field: RuleField::Date,
+                    operator: RuleOperator::InTheLast,
+                    value: RuleValue::Text(text.to_string()),
+                }],
+            );
+            match album.build_sql().expect("compiles").1[0] {
+                rusqlite::types::Value::Integer(ms) => ms,
+                ref other => panic!("cutoff is an integer, got {other:?}"),
+            }
+        };
+        let day = 86_400_000;
+        let near = |a: i64, b: i64| (a - b).abs() < 60_000;
+        assert!(near(cutoff("2d") - cutoff("2w"), 12 * day));
+        assert!(
+            near(cutoff("1w") - cutoff("1mo"), 23 * day),
+            "mo is months (30 days), not minutes"
+        );
     }
 
     #[test]
