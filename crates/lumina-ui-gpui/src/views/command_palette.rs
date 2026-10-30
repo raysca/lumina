@@ -20,7 +20,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
         .debug_selector(|| "command-palette-overlay".to_string())
         .absolute()
         .inset_0()
-        .bg(theme::scrim())
+        .bg(theme::modal_dim())
         .flex()
         .justify_center()
         .items_start()
@@ -92,14 +92,10 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .flex()
                         .flex_col()
                         .child(
-                            div()
+                            theme::section_label("COMMANDS")
                                 .px(px(12.0))
                                 .pt(px(6.0))
-                                .pb(px(4.0))
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text_subtle())
-                                .child("COMMANDS"),
+                                .pb(px(4.0)),
                         )
                         .children(commands.is_empty().then(|| {
                             div()

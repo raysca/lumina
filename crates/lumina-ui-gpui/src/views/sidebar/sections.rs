@@ -41,15 +41,7 @@ pub(super) fn render_library_section(
         .flex()
         .flex_col()
         .gap_0p5()
-        .child(
-            div()
-                .px_2()
-                .py_1()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(theme::text_subtle())
-                .child("LIBRARY"),
-        )
+        .child(theme::section_label("LIBRARY").px_2().pt(px(16.0)).pb_1())
         .child(render_nav_item(
             "All Photos & Videos",
             if this.grid_state.is_some() {
@@ -188,16 +180,7 @@ pub(super) fn render_events_section(
         .flex()
         .flex_col()
         .gap_0p5()
-        .child(
-            div()
-                .px_2()
-                .pt_1()
-                .pb_0p5()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(theme::text_subtle())
-                .child("EVENTS"),
-        )
+        .child(theme::section_label("EVENTS").px_2().pt(px(16.0)).pb_1())
         .children(years.into_iter().map(|(year, count)| {
             let is_active = this.active_year == Some(year);
             render_nav_item(
@@ -232,7 +215,7 @@ fn render_user_smart_album_row(
         .items_center()
         .gap_1()
         .px_2()
-        .py_1()
+        .h(px(26.0))
         .rounded_md()
         .cursor_pointer()
         .bg(if is_active {
@@ -240,22 +223,33 @@ fn render_user_smart_album_row(
         } else {
             theme::bg_app()
         })
-        .hover(|s| s.bg(theme::selection_bg_hover()))
+        .hover(move |s| {
+            if is_active {
+                s.bg(theme::selection_bg_hover())
+            } else {
+                s.bg(theme::bg_raised())
+            }
+        })
         .child(
             div()
                 .flex_1()
-                .text_sm()
+                .text_size(px(13.0))
                 .text_color(if is_active {
-                    theme::accent()
+                    theme::selection_fg()
                 } else {
-                    theme::text()
+                    theme::text_row()
                 })
                 .child(album.title.clone()),
         )
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .font_family(theme::FONT_MONO)
+                .text_color(if is_active {
+                    theme::selection_count()
+                } else {
+                    theme::text_subtle()
+                })
                 .child(count.to_string()),
         )
         .child(
@@ -312,15 +306,9 @@ pub(super) fn render_smart_albums_section(
                 .justify_between()
                 .items_center()
                 .px_2()
-                .pt_1()
-                .pb_0p5()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text_subtle())
-                        .child("SMART ALBUMS"),
-                )
+                .pt(px(16.0))
+                .pb_1()
+                .child(theme::section_label("SMART ALBUMS"))
                 .child(
                     div()
                         .id("new-smart-album-btn")
@@ -393,14 +381,10 @@ pub(super) fn render_tags_section(
                 .justify_between()
                 .items_center()
                 .px_2()
-                .pt_1()
-                .pb_0p5()
+                .pt(px(16.0))
+                .pb_1()
                 .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text_subtle())
-                        .child("TAGS"),
+                    theme::section_label("TAGS"),
                 )
                 .child(
                     div()
@@ -410,7 +394,7 @@ pub(super) fn render_tags_section(
                         .text_xs()
                         .text_color(theme::accent())
                         .hover(|s| s.text_color(theme::accent_hover()))
-                        .child("Manage...")
+                        .child("Manage…")
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.open_tag_manager(cx);
                         })),
@@ -524,7 +508,7 @@ pub(super) fn render_tags_section(
                                 "Click to filter · double-click to rename",
                             ))
                             .px_2()
-                            .py_1p5()
+                            .h(px(26.0))
                             .rounded_md()
                             .bg(if is_active {
                                 theme::selection_bg()
@@ -559,16 +543,16 @@ pub(super) fn render_tags_section(
                                     .child(div().size(px(7.0)).rounded_full().bg(dot_color))
                                     .child(
                                         div()
-                                            .text_xs()
+                                            .text_size(px(13.0))
                                             .font_weight(if is_active {
                                                 FontWeight::MEDIUM
                                             } else {
                                                 FontWeight::NORMAL
                                             })
                                             .text_color(if is_active {
-                                                theme::accent()
+                                                theme::selection_fg()
                                             } else {
-                                                theme::text()
+                                                theme::text_row()
                                             })
                                             .child(tag_str.clone()),
                                     )
@@ -590,7 +574,7 @@ pub(super) fn render_tags_section(
                                     .text_xs()
                                     .font_family(theme::FONT_MONO)
                                     .text_color(if is_active {
-                                        theme::accent()
+                                        theme::selection_count()
                                     } else {
                                         theme::text_subtle()
                                     })
@@ -617,12 +601,12 @@ fn render_nav_item(
         theme::bg_app()
     };
     let text_color = if is_active {
-        theme::accent()
+        theme::selection_fg()
     } else {
-        theme::text()
+        theme::text_row()
     };
     let count_color = if is_active {
-        theme::accent()
+        theme::selection_count()
     } else {
         theme::text_subtle()
     };
@@ -631,7 +615,7 @@ fn render_nav_item(
         .id(ElementId::Name(label_text.clone().into()))
         .debug_selector(move || format!("sidebar-nav-{debug_label}"))
         .px_2()
-        .py_1p5()
+        .h(px(26.0))
         .rounded_md()
         .bg(bg_color)
         .hover(move |s| {
@@ -649,7 +633,7 @@ fn render_nav_item(
         .on_click(on_click)
         .child(
             div()
-                .text_xs()
+                .text_size(px(13.0))
                 .font_weight(if is_active {
                     FontWeight::MEDIUM
                 } else {

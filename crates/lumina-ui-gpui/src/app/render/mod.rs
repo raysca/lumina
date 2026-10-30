@@ -90,7 +90,7 @@ impl LuminaApp {
             .absolute()
             .inset_0()
             .occlude()
-            .bg(theme::scrim())
+            .bg(theme::modal_dim())
             .flex()
             .justify_center()
             .items_center()

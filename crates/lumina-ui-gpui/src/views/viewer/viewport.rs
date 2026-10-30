@@ -181,7 +181,7 @@ impl ViewerViewport {
                             .justify_center()
                             .items_center()
                             .text_color(theme::text_subtle())
-                            .child("Loading media...")
+                            .child("Loading media…")
                             .into_any_element()
                     })
                     .child({

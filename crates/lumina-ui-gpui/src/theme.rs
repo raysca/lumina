@@ -35,6 +35,10 @@ tokens! {
     text_muted = 0xA0A2A7;
     text_subtle = 0x74767C;
     text_disabled = 0x5A5D63;
+    /// Idle list/sidebar row text.
+    text_row = 0xC9CACD;
+    /// Section labels (LIBRARY, KEYWORDS, ...).
+    text_label = 0x8E9096;
 
     // Accent: primary actions, links, focus.
     accent = 0xF0B54B;
@@ -47,6 +51,10 @@ tokens! {
     selection_bg_hover = 0x453D2B;
     selection_border = 0x6B5A33;
     selection_fg = 0xF5DDA8;
+    /// Counts and hints inside a selected row.
+    selection_count = 0xC9AE76;
+    /// Shortcut hints on an `accent` fill (a hovered menu row).
+    accent_hint = 0x5A4214;
 
     // Metadata marks — identical everywhere they appear.
     rating = 0xF0B54B;
@@ -119,6 +127,23 @@ pub fn scrim() -> Rgba {
     rgba(0x000000cc)
 }
 
+/// Library dim behind modals and sheets: the grid stays readable, as in
+/// the designs (0.35–0.4).
+#[inline]
+pub fn modal_dim() -> Rgba {
+    rgba(0x00000066)
+}
+
+/// Section label (LIBRARY, KEYWORDS, ...): 11px semibold #8E9096. Callers
+/// add spacing; sidebar and inspector sections sit 16px below the previous.
+pub fn section_label(text: impl Into<SharedString>) -> Div {
+    div()
+        .text_size(px(11.0))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(text_label())
+        .child(text.into())
+}
+
 /// Marquee fill: the accent at 12%, so drag-selection stays amber.
 #[inline]
 pub fn selection_wash() -> Rgba {
@@ -182,13 +207,13 @@ pub fn menu_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .items_center()
         .justify_between()
         .rounded(px(4.0))
-        .text_xs()
+        .text_size(px(13.0))
         .cursor_pointer();
 
+    // The highlighted row is amber with dark text. Mouse hover can only
+    // change the fill (GPUI fixes text colour at layout), so it stays neutral.
     if active {
-        base.bg(selection_bg())
-            .text_color(selection_fg())
-            .hover(|s| s.bg(selection_bg_hover()))
+        base.bg(accent()).text_color(accent_fg())
     } else {
         base.text_color(text()).hover(|s| s.bg(bg_control_hover()))
     }
@@ -205,7 +230,7 @@ pub fn row(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .items_center()
         .gap_2()
         .rounded(px(4.0))
-        .text_xs()
+        .text_size(px(13.0))
         .cursor_pointer();
 
     if active {
@@ -213,7 +238,8 @@ pub fn row(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
             .text_color(selection_fg())
             .hover(|s| s.bg(selection_bg_hover()))
     } else {
-        base.text_color(text()).hover(|s| s.bg(bg_control_hover()))
+        base.text_color(text_row())
+            .hover(|s| s.bg(bg_control_hover()))
     }
 }
 

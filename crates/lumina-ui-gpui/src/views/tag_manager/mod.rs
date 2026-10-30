@@ -23,12 +23,14 @@ impl TagManagerModal {
             .absolute()
             .inset_0()
             // The card is painted after this backdrop, so it stays clickable
-            // while the scrim blocks the grid/viewer underneath.
+            // while the dim blocks the grid/viewer underneath.
             .occlude()
-            .bg(theme::scrim())
+            .bg(theme::modal_dim())
+            // A sheet hanging from under the toolbar, not a centred dialog.
             .flex()
             .justify_center()
-            .items_center()
+            .items_start()
+            .pt(px(52.0))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -43,11 +45,12 @@ impl TagManagerModal {
                         cx.stop_propagation();
                     })
                     .w(px((window_w - 48.0).clamp(640.0, 1000.0)))
-                    .h(px((window_h - 96.0).clamp(420.0, 720.0)))
+                    .h(px((window_h - 76.0).clamp(420.0, 720.0)))
                     .bg(theme::bg_raised())
                     .border_1()
+                    .border_t_0()
                     .border_color(theme::border_strong())
-                    .rounded(px(10.0))
+                    .rounded_b(px(10.0))
                     .shadow_lg()
                     .overflow_hidden()
                     .flex()

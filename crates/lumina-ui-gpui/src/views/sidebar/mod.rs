@@ -102,7 +102,7 @@ impl SidebarView {
                     .flex()
                     .flex_1()
                     .flex_col()
-                    .gap_4()
+                    .gap_0()
                     .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
                     .child(sections::render_events_section(this, cx))

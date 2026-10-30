@@ -151,7 +151,7 @@ impl OnboardingView {
                                     .items_center()
                                     .text_base()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Choose Photos Folder...")
+                                    .child("Choose Photos Folder…")
                                     .on_click(on_pick_folder),
                             )
                             .child(if has_desktop_pics {

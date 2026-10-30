@@ -138,13 +138,7 @@ fn section(title: &'static str, content: impl IntoElement) -> Div {
         .flex()
         .flex_col()
         .gap_2()
-        .child(
-            div()
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text_subtle())
-                .child(title),
-        )
+        .child(theme::section_label(title))
         .child(content)
 }
 

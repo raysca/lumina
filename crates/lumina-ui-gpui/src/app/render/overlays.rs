@@ -84,7 +84,7 @@ impl LuminaApp {
                 )
                 .child(
                     dock_button("batch-tags-dock-btn", "Tag", None, theme::text())
-                        .tooltip(theme::tooltip_label("Add a tag to every selected item"))
+                        .tooltip(theme::tooltip_label("Tag selection (T)"))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.begin_tagging_selection(cx);
                         })),
@@ -104,7 +104,7 @@ impl LuminaApp {
                         Some(Icon::Trash),
                         theme::danger_text(),
                     )
-                    .tooltip(theme::tooltip_label("Move to Trash"))
+                    .tooltip(theme::tooltip_label("Move to Trash (⌫)"))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.batch_trash_or_restore(cx);
                     })),

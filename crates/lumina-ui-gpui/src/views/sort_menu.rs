@@ -42,15 +42,7 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(
-                    div()
-                        .px_2()
-                        .py_1()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text_subtle())
-                        .child("SORT BY"),
-                )
+                .child(theme::section_label("SORT BY").px_2().py_1())
                 .children(fields.into_iter().map(|(label, field, selector)| {
                     let selected = current.field == field;
                     div()

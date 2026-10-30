@@ -100,13 +100,7 @@ pub fn render_batch_body(
                         .flex_row()
                         .justify_between()
                         .items_center()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme::text_subtle())
-                                .child("BATCH RATING"),
-                        )
+                        .child(theme::section_label("BATCH RATING"))
                         .child(
                             div()
                                 .flex()
@@ -163,13 +157,7 @@ pub fn render_batch_body(
                         .pt_1()
                         .border_t_1()
                         .border_color(theme::border_subtle())
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme::text_subtle())
-                                .child("COLOR LABEL"),
-                        )
+                        .child(theme::section_label("COLOR LABEL"))
                         .child(
                             div()
                                 .flex()
@@ -276,13 +264,7 @@ pub fn render_batch_body(
                         .flex_row()
                         .justify_between()
                         .items_center()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme::text_subtle())
-                                .child("BATCH METADATA"),
-                        )
+                        .child(theme::section_label("BATCH METADATA"))
                         .child(
                             div()
                                 .text_xs()
@@ -466,13 +448,7 @@ pub fn render_batch_body(
                 .bg(theme::bg_pane())
                 .border_1()
                 .border_color(theme::border_subtle())
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text_subtle())
-                        .child("SELECTION BREAKDOWN"),
-                )
+                .child(theme::section_label("SELECTION BREAKDOWN"))
                 .child(render_meta_row("Photos", &photos_count.to_string()))
                 .child(render_meta_row("Videos", &videos_count.to_string()))
                 .child(render_meta_row("RAW Media", &raw_count.to_string()))

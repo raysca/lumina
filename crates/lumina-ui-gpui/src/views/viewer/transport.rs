@@ -292,7 +292,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-step-back-btn")
-                                    .tooltip(theme::tooltip_label("Previous frame"))
+                                    .tooltip(theme::tooltip_label("Previous frame (,)"))
                                     .p_1()
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
@@ -336,7 +336,7 @@ impl ViewerTransport {
                             .child(
                                 div()
                                     .id("video-step-fwd-btn")
-                                    .tooltip(theme::tooltip_label("Next frame"))
+                                    .tooltip(theme::tooltip_label("Next frame (.)"))
                                     .p_1()
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(theme::accent()))
@@ -543,7 +543,7 @@ impl ViewerTransport {
                                 div()
                                     .id("video-loop-btn")
                                     .debug_selector(|| "video-loop".to_string())
-                                    .tooltip(theme::tooltip_label("Loop playback"))
+                                    .tooltip(theme::tooltip_label("Loop (⇧L)"))
                                     .px_2()
                                     .py_1()
                                     .bg(if this.video.is_looping {

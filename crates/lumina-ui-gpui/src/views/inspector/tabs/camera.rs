@@ -14,13 +14,7 @@ pub fn render_camera_tab(item: &MediaItem, type_label: &str) -> AnyElement {
         .bg(theme::bg_pane())
         .border_1()
         .border_color(theme::border_subtle())
-        .child(
-            div()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(theme::text_subtle())
-                .child("CAMERA & OPTICS"),
-        )
+        .child(theme::section_label("CAMERA & OPTICS"))
         // Progressive disclosure: hide if unknown!
         .children((item.model.is_some() || item.make.is_some()).then(|| {
             let camera_name = item.model.as_deref().or(item.make.as_deref()).unwrap_or("");

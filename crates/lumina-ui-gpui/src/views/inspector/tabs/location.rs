@@ -28,13 +28,7 @@ pub fn render_location_tab(
         .bg(theme::bg_pane())
         .border_1()
         .border_color(theme::border_subtle())
-        .child(
-            div()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(theme::text_subtle())
-                .child("GEOGRAPHY & GPS"),
-        )
+        .child(theme::section_label("GEOGRAPHY & GPS"))
         .children(item.city.as_ref().map(|c| render_meta_row("City", c)))
         .children(
             item.admin1_region

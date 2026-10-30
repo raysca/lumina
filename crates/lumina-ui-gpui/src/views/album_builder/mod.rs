@@ -28,10 +28,12 @@ impl AlbumBuilderModal {
             .absolute()
             .inset_0()
             .occlude()
-            .bg(rgba(0x09090b99))
+            .bg(theme::modal_dim())
+            // A sheet hanging from under the toolbar, not a centred dialog.
             .flex()
             .justify_center()
-            .items_center()
+            .items_start()
+            .pt(px(52.0))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -42,12 +44,13 @@ impl AlbumBuilderModal {
                 div()
                     .id("album-builder-modal-card")
                     .debug_selector(|| "album-builder-card".to_string())
-                    .w(px(640.0))
+                    .w(px(760.0))
                     .max_h(px(620.0))
-                    .bg(theme::bg_app())
+                    .bg(theme::bg_raised())
                     .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
+                    .border_t_0()
+                    .border_color(theme::border_strong())
+                    .rounded_b(px(10.0))
                     .shadow_lg()
                     .p_5()
                     .flex()

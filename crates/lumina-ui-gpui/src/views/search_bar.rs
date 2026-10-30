@@ -226,7 +226,7 @@ impl SearchBarView {
                     .child(
                         theme::control("grid-zoom-out-btn")
                             .debug_selector(|| "grid-zoom-out".to_string())
-                            .tooltip(theme::tooltip_label("Smaller thumbnails"))
+                            .tooltip(theme::tooltip_label("Smaller thumbnails (⌘-)"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()
@@ -284,7 +284,7 @@ impl SearchBarView {
                     .child(
                         theme::control("grid-zoom-in-btn")
                             .debug_selector(|| "grid-zoom-in".to_string())
-                            .tooltip(theme::tooltip_label("Larger thumbnails"))
+                            .tooltip(theme::tooltip_label("Larger thumbnails (⌘=)"))
                             .w(px(22.0))
                             .h(px(22.0))
                             .px_0()

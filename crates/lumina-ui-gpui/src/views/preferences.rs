@@ -90,7 +90,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .debug_selector(|| "preferences-overlay".to_string())
         .absolute()
         .inset_0()
-        .bg(theme::scrim())
+        .bg(theme::modal_dim())
         .flex()
         .justify_center()
         .items_center()
@@ -329,13 +329,9 @@ fn tilde(path: &std::path::Path) -> String {
 }
 
 fn section_title(text: &'static str, spaced: bool) -> Div {
-    div()
+    theme::section_label(text)
         .mt(px(if spaced { 22.0 } else { 0.0 }))
         .mb(px(8.0))
-        .text_xs()
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme::text_subtle())
-        .child(text)
 }
 
 /// A bordered group of rows with dividers between them.

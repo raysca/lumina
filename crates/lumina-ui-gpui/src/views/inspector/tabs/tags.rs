@@ -73,13 +73,7 @@ pub fn render_tags_section(
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text_subtle())
-                        .child("KEYWORDS & TAGS"),
-                )
+                .child(theme::section_label("KEYWORDS & TAGS"))
                 .child(
                     div()
                         .text_xs()
@@ -252,7 +246,7 @@ pub fn render_tags_section(
                         .text_xs()
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme::accent())
-                        .child("+ Add Tag..."),
+                        .child("+ Add Tag…"),
                 )
                 .on_click(move |_e, _window, cx| {
                     if let Some(app) = app_start_tag.upgrade() {

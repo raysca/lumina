@@ -9,6 +9,16 @@ use lumina_core::MediaItem;
 pub struct ContextMenuState {
     pub position: Point<Pixels>,
     pub item: MediaItem,
+    /// Row under the pointer. GPUI resolves text colour at layout, before
+    /// hover styles apply, so the hovered row's dark-on-amber text is
+    /// chosen from this state at render instead.
+    pub hovered: Option<&'static str>,
+}
+
+/// What every row needs to paint its hover state.
+struct RowHover {
+    hovered: Option<&'static str>,
+    app: WeakEntity<LuminaApp>,
 }
 
 pub struct MediaContextMenu;
@@ -25,6 +35,10 @@ impl MediaContextMenu {
         };
 
         let item = state.item.clone();
+        let hover = RowHover {
+            hovered: state.hovered,
+            app: cx.entity().downgrade(),
+        };
         let is_trash = app.selection == AlbumSelection::Trash;
         let is_fav = item.is_favorite;
         let is_video = item.media_type == lumina_core::MediaType::Video;
@@ -93,6 +107,7 @@ impl MediaContextMenu {
                     .child({
                         let item_for_viewer = item.clone();
                         Self::render_menu_item(
+                            &hover,
                             "preview-menu-btn",
                             "Open in Viewer",
                             Some("Space"),
@@ -107,6 +122,7 @@ impl MediaContextMenu {
                     .children(is_video.then(|| {
                         let item_for_vid = item.clone();
                         Self::render_menu_item(
+                            &hover,
                             "play-video-menu-btn",
                             "Play Video",
                             None,
@@ -122,6 +138,7 @@ impl MediaContextMenu {
                     .children(is_video.then(|| {
                         let item_for_pip = item.clone();
                         Self::render_menu_item(
+                            &hover,
                             "pip-menu-btn",
                             "Play in Picture-in-Picture",
                             Some("⌥P"),
@@ -134,6 +151,7 @@ impl MediaContextMenu {
                     }))
                     // 4. Get Info
                     .child(Self::render_menu_item(
+                        &hover,
                         "inspect-menu-btn",
                         "Get Info",
                         Some("⌘I"),
@@ -149,6 +167,7 @@ impl MediaContextMenu {
                     // 5. Toggle Favorite (only if not in Trash)
                     .child(if !is_trash {
                         Self::render_menu_item(
+                            &hover,
                             "fav-menu-btn",
                             if is_fav { "Unfavorite" } else { "Favorite" },
                             Some("F"),
@@ -296,6 +315,7 @@ impl MediaContextMenu {
                     .child(Self::render_divider())
                     // 8. Tags...
                     .child(Self::render_menu_item(
+                        &hover,
                         "tags-menu-btn",
                         "Tags…",
                         Some("T"),
@@ -307,6 +327,7 @@ impl MediaContextMenu {
                     ))
                     // 9. Add to Album
                     .child(Self::render_submenu_item(
+                        &hover,
                         "add-album-menu-btn",
                         "Add to Album",
                         false,
@@ -317,6 +338,7 @@ impl MediaContextMenu {
                     ))
                     // 10. New Album from Selection
                     .child(Self::render_menu_item(
+                        &hover,
                         "new-album-sel-menu-btn",
                         "New Album from Selection",
                         None,
@@ -328,6 +350,7 @@ impl MediaContextMenu {
                     ))
                     // 11. Export...
                     .child(Self::render_menu_item(
+                        &hover,
                         "export-menu-btn",
                         "Export…",
                         None,
@@ -339,6 +362,7 @@ impl MediaContextMenu {
                     ))
                     // 12. Import XMP metadata
                     .child(Self::render_menu_item(
+                        &hover,
                         "import-xmp-menu-btn",
                         "Import XMP Metadata",
                         None,
@@ -354,6 +378,7 @@ impl MediaContextMenu {
                     .child({
                         let path_for_copy = item.path.to_string_lossy().to_string();
                         Self::render_menu_item(
+                            &hover,
                             "copy-path-menu-btn",
                             "Copy File Path",
                             Some("⌥⌘C"),
@@ -368,6 +393,7 @@ impl MediaContextMenu {
                     .child({
                         let path_for_reveal = path.clone();
                         Self::render_menu_item(
+                            &hover,
                             "reveal-menu-btn",
                             "Reveal in Finder",
                             Some("⇧⌘R"),
@@ -382,6 +408,7 @@ impl MediaContextMenu {
                     .child({
                         let path_for_open = path.clone();
                         Self::render_menu_item(
+                            &hover,
                             "open-with-menu-btn",
                             "Open in Default App",
                             None,
@@ -396,6 +423,7 @@ impl MediaContextMenu {
                     .child({
                         let path_for_edit = path.clone();
                         Self::render_menu_item(
+                            &hover,
                             "edit-external-menu-btn",
                             "Edit in External Editor",
                             None,
@@ -415,6 +443,7 @@ impl MediaContextMenu {
                             .flex_col()
                             .gap_0p5()
                             .child(Self::render_menu_item(
+                                &hover,
                                 "quick-edit-rotate-left",
                                 "Rotate Left",
                                 None,
@@ -425,6 +454,7 @@ impl MediaContextMenu {
                                 }),
                             ))
                             .child(Self::render_menu_item(
+                                &hover,
                                 "quick-edit-rotate-right",
                                 "Rotate Right",
                                 None,
@@ -444,6 +474,7 @@ impl MediaContextMenu {
                             .flex_col()
                             .gap_0p5()
                             .child(Self::render_menu_item(
+                                &hover,
                                 "restore-menu-btn",
                                 "Restore from Trash",
                                 None,
@@ -454,8 +485,9 @@ impl MediaContextMenu {
                                 }),
                             ))
                             .child(Self::render_menu_item(
+                                &hover,
                                 "delete-perm-menu-btn",
-                                "Delete Immediately...",
+                                "Delete Immediately…",
                                 None,
                                 true,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -466,8 +498,9 @@ impl MediaContextMenu {
                             .into_any_element()
                     } else {
                         Self::render_menu_item(
+                            &hover,
                             "trash-menu-btn",
-                            "Delete...",
+                            "Delete…",
                             Some("⌘⌫"),
                             true,
                             cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -486,6 +519,7 @@ impl MediaContextMenu {
     }
 
     fn render_menu_item(
+        hover: &RowHover,
         id_str: &'static str,
         label: &'static str,
         shortcut: Option<&'static str>,
@@ -496,63 +530,100 @@ impl MediaContextMenu {
             div()
                 .text_xs()
                 .font_family(theme::FONT_MONO)
-                .text_color(theme::text_subtle())
+                .text_color(if hover.hovered == Some(id_str) && !is_destructive {
+                    theme::accent_hint()
+                } else {
+                    theme::text_subtle()
+                })
                 .child(sc)
                 .into_any_element()
         } else {
             Empty.into_any_element()
         };
-        Self::render_menu_row(id_str, label, trailing, is_destructive, on_click_handler)
+        Self::render_menu_row(
+            hover,
+            id_str,
+            label,
+            trailing,
+            is_destructive,
+            on_click_handler,
+        )
     }
 
     /// A menu row that opens a submenu, marked with a chevron instead of a
     /// keyboard shortcut.
     fn render_submenu_item(
+        hover: &RowHover,
         id_str: &'static str,
         label: &'static str,
         is_destructive: bool,
         on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> impl IntoElement {
-        let trailing =
-            render_icon(Icon::ChevronRight, px(12.0), theme::text_subtle()).into_any_element();
-        Self::render_menu_row(id_str, label, trailing, is_destructive, on_click_handler)
+        let chevron = if hover.hovered == Some(id_str) && !is_destructive {
+            theme::accent_hint()
+        } else {
+            theme::text_subtle()
+        };
+        let trailing = render_icon(Icon::ChevronRight, px(12.0), chevron).into_any_element();
+        Self::render_menu_row(
+            hover,
+            id_str,
+            label,
+            trailing,
+            is_destructive,
+            on_click_handler,
+        )
     }
 
     fn render_menu_row(
+        hover: &RowHover,
         id_str: &'static str,
         label: &'static str,
         trailing: AnyElement,
         is_destructive: bool,
         on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> impl IntoElement {
+        let is_hovered = hover.hovered == Some(id_str);
+        let app = hover.app.clone();
         div()
             .id(id_str)
             .debug_selector(move || id_str.to_string())
             .px_2p5()
-            .py_1p5()
+            .h(px(26.0))
             .rounded_md()
             .cursor_pointer()
+            .text_color(if is_destructive {
+                theme::danger_text()
+            } else if is_hovered {
+                theme::accent_fg()
+            } else {
+                theme::text()
+            })
             .hover(move |s| {
                 if is_destructive {
-                    s.bg(theme::danger_bg()).text_color(theme::danger_text())
+                    s.bg(theme::danger_bg())
                 } else {
-                    s.bg(theme::bg_control_hover()).text_color(theme::text())
+                    s.bg(theme::accent())
                 }
+            })
+            .on_hover(move |entered, _w, cx| {
+                app.update(cx, |this, cx| {
+                    if let Some(menu) = this.context_menu_state.as_mut() {
+                        if *entered {
+                            menu.hovered = Some(id_str);
+                        } else if menu.hovered == Some(id_str) {
+                            menu.hovered = None;
+                        }
+                        cx.notify();
+                    }
+                })
+                .ok();
             })
             .flex()
             .flex_row()
             .justify_between()
             .items_center()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(if is_destructive {
-                        theme::danger_text()
-                    } else {
-                        theme::text()
-                    })
-                    .child(label),
-            )
+            .child(div().text_size(px(13.0)).child(label))
             .child(trailing)
             .on_click(on_click_handler)
     }
