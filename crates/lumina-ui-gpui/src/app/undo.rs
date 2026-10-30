@@ -1,14 +1,16 @@
 //! Undo/redo for catalog mutations.
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
-//! ratings, color labels, favorites, captions, tags, and trash/restore.
+//! ratings, color labels, favorites, captions, tags, trash/restore, and
+//! smart album deletion.
 //! Permanent deletion and global tag rename/merge are intentionally excluded.
 
 use anyhow::Result;
 use gpui::*;
-use lumina_core::{LuminaEngine, MediaId};
+use lumina_core::{LuminaEngine, MediaId, SmartAlbum};
 
 use crate::app::LuminaApp;
+use crate::views::sidebar::AlbumSelection;
 
 const MAX_UNDO: usize = 100;
 
@@ -89,6 +91,10 @@ pub enum UndoAction {
     BatchLocation {
         changes: Vec<BatchLocationChange>,
     },
+    /// A deleted smart album; undo restores it under the same id.
+    SmartAlbumDeleted {
+        album: SmartAlbum,
+    },
 }
 
 #[derive(Default)]
@@ -115,6 +121,7 @@ impl UndoAction {
             UndoAction::BatchDate { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::BatchLocation { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::Tags { ids, .. } => ids.clone(),
+            UndoAction::SmartAlbumDeleted { .. } => Vec::new(),
         }
     }
 
@@ -135,6 +142,7 @@ impl UndoAction {
             },
             UndoAction::BatchDate { .. } => "batch date",
             UndoAction::BatchLocation { .. } => "batch location",
+            UndoAction::SmartAlbumDeleted { .. } => "smart album delete",
         }
     }
 
@@ -226,6 +234,13 @@ impl UndoAction {
                     engine.set_location(*id, *lat, *lon)?;
                 }
                 Ok(())
+            }
+            UndoAction::SmartAlbumDeleted { album } => {
+                if before {
+                    engine.restore_smart_album(album)
+                } else {
+                    engine.delete_smart_album(album.id).map(|_| ())
+                }
             }
         }
     }
@@ -332,7 +347,16 @@ impl LuminaApp {
             action.apply_after(&engine)
         };
         match result {
-            Ok(()) => true,
+            Ok(()) => {
+                // Redoing a smart album delete must not leave the view on it.
+                if let (UndoAction::SmartAlbumDeleted { album }, false) = (action, before) {
+                    if self.selection == AlbumSelection::User(album.id) {
+                        self.selection = AlbumSelection::AllLibrary;
+                        self.clear_selection(cx);
+                    }
+                }
+                true
+            }
             Err(err) => {
                 self.set_error(format!("History action failed: {err}"), cx);
                 false

@@ -332,8 +332,16 @@ impl LuminaApp {
                             // Only trust a frame once the player has actually
                             // moved to the requested time; before that the
                             // output would hand back the pre-seek frame.
-                            let target = self.video.playback_time;
-                            if (player.position() - target).abs() <= SEEK_FRAME_TOLERANCE_SECS {
+                            let position = player.position();
+                            let landed = match self.video.step_from {
+                                Some(from) => position != from,
+                                None => {
+                                    (position - self.video.playback_time).abs()
+                                        <= SEEK_FRAME_TOLERANCE_SECS
+                                }
+                            };
+                            if landed {
+                                self.video.playback_time = position;
                                 frame = player.next_frame();
                             }
                         }

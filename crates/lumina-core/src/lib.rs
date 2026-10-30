@@ -458,6 +458,11 @@ impl LuminaEngine {
             .update_smart_album(id, title, icon_name, match_mode, rules)
     }
 
+    /// Restores a deleted smart album under its original id (undo).
+    pub fn restore_smart_album(&self, album: &SmartAlbum) -> Result<()> {
+        self.catalog.restore_smart_album(album)
+    }
+
     pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
         self.catalog.delete_smart_album(id)
     }

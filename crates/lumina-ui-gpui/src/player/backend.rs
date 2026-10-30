@@ -22,6 +22,13 @@ pub trait VideoPlayerBackend: Send {
     fn pause(&mut self);
     fn is_playing(&self) -> bool;
     fn seek(&mut self, seconds: f64);
+    /// Steps by whole frames of the video's own rate (negative steps back).
+    /// ponytail: the default assumes 30 fps; the macOS player overrides it
+    /// with AVPlayerItem's native frame stepping.
+    fn step_frames(&mut self, frames: i32) {
+        let target = (self.position() + f64::from(frames) / 30.0).max(0.0);
+        self.seek(target);
+    }
     fn position(&self) -> f64;
     fn duration(&self) -> f64;
     fn set_rate(&mut self, rate: f32);

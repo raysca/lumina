@@ -510,7 +510,7 @@ impl LuminaApp {
                         window.paint_quad(
                             fill(
                                 Bounds::from_corners(top_left, bottom_right),
-                                rgba(0x3b82f61f),
+                                theme::selection_wash(),
                             )
                             .border_widths(px(1.0))
                             .border_color(theme::accent()),

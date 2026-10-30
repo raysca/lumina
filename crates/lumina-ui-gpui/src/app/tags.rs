@@ -143,6 +143,16 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Opens the tag field for the selection, docking the inspector only when
+    /// neither the docked nor the floating one is showing.
+    pub fn begin_tagging_selection(&mut self, cx: &mut Context<Self>) {
+        if !self.inspector_open && self.floating_inspector_window.is_none() {
+            self.inspector_open = true;
+            self.save_config();
+        }
+        self.start_tag_input(cx);
+    }
+
     pub fn start_tag_input(&mut self, cx: &mut Context<Self>) {
         self.tag_input_active = true;
         self.tag_input_buffer.clear();

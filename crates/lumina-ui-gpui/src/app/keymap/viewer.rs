@@ -17,11 +17,16 @@ impl LuminaApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        // Fullscreen Toggle: 'f' or Cmd+Ctrl+F
-        if (!cmd_or_ctrl && key.eq_ignore_ascii_case("f"))
-            || (cmd_or_ctrl && keystroke.modifiers.control && key.eq_ignore_ascii_case("f"))
+        // Full screen: ⌃⌘F. F is Favorite, as in the grid.
+        if keystroke.modifiers.platform
+            && keystroke.modifiers.control
+            && key.eq_ignore_ascii_case("f")
         {
             self.toggle_immersive_fullscreen(Some(window), cx);
+            return true;
+        }
+        if !cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
+            self.toggle_favorite_selected(cx);
             return true;
         }
 

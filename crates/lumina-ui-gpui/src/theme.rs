@@ -119,6 +119,12 @@ pub fn scrim() -> Rgba {
     rgba(0x000000cc)
 }
 
+/// Marquee fill: the accent at 12%, so drag-selection stays amber.
+#[inline]
+pub fn selection_wash() -> Rgba {
+    rgba(0xF0B54B1F)
+}
+
 /// Library card surface.
 ///
 /// Cards are transparent by request: thumbnails sit directly on the library

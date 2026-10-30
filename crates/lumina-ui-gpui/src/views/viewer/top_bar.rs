@@ -75,35 +75,11 @@ impl ViewerTopBar {
         let is_inspector_open = this.inspector_open;
 
         let month_str = month_name(item.month);
-        let year_num = if item.year > 0 {
-            item.year
+        let date_prefix = if item.year > 0 {
+            format!("{} {}", month_str, item.year)
         } else {
-            this.active_year.unwrap_or(2022)
+            "Undated".to_string()
         };
-        let date_prefix = format!("{} {}", month_str, year_num);
-
-        let codec_label = if is_video {
-            "H.264"
-        } else {
-            path.extension().and_then(|e| e.to_str()).unwrap_or("HEIC")
-        };
-
-        let fps_label = if is_video { " · 30 fps" } else { "" };
-        let width = if item.width > 0 {
-            item.width
-        } else if is_video {
-            1920
-        } else {
-            4032
-        };
-        let height = if item.height > 0 {
-            item.height
-        } else if is_video {
-            1080
-        } else {
-            3024
-        };
-        let size_str = format_bytes(item.file_size);
         let is_fav = item.is_favorite;
         let rating = this.get_item_rating(item);
 
@@ -172,10 +148,7 @@ impl ViewerTopBar {
                     .min_w(px(0.0))
                     .truncate()
                     .text_color(theme::text_subtle())
-                    .child(format!(
-                        "{} × {} · {}{} · {}",
-                        width, height, codec_label, fps_label, size_str
-                    )),
+                    .child(specs_line(item)),
             );
         }
 
@@ -304,7 +277,7 @@ impl ViewerTopBar {
                         div()
                             .id("viewer-fav-btn")
                             .debug_selector(|| "viewer-fav-btn".to_string())
-                            .tooltip(theme::tooltip_label("Toggle favorite"))
+                            .tooltip(theme::tooltip_label("Favorite (F)"))
                             .px_2()
                             .py_1()
                             .rounded_md()
@@ -480,4 +453,18 @@ impl ViewerTopBar {
                     }),
             )
     }
+}
+
+/// "4032 × 3024 · HEIC · 3.1 MB" from what the catalog actually knows: no
+/// guessed codec, frame rate or dimensions.
+pub(crate) fn specs_line(item: &lumina_core::MediaItem) -> String {
+    let mut parts = Vec::new();
+    if item.width > 0 && item.height > 0 {
+        parts.push(format!("{} × {}", item.width, item.height));
+    }
+    if let Some(ext) = item.path.extension().and_then(|e| e.to_str()) {
+        parts.push(ext.to_uppercase());
+    }
+    parts.push(format_bytes(item.file_size));
+    parts.join(" · ")
 }

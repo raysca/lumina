@@ -275,6 +275,7 @@ impl LuminaApp {
             return;
         }
         self.video.seek_refresh_until = Some(Instant::now() + SEEK_REFRESH_WINDOW);
+        self.video.step_from = None;
         self.ensure_video_ticker();
     }
 
@@ -476,9 +477,24 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Steps whole frames at the video's real frame rate, then shows the
+    /// frame the player landed on.
     pub fn step_video_frame(&mut self, frames: isize, cx: &mut Context<Self>) {
-        let delta = (frames as f64) * (1.0 / 30.0);
-        self.seek_video_relative(delta, cx);
+        // Frame stepping is a paused operation (QuickTime pauses too).
+        if self.video.is_playing {
+            self.toggle_video_play(cx);
+        }
+        let Some(player) = self.video.player.as_mut() else {
+            return;
+        };
+        let from = player.position();
+        player.step_frames(frames as i32);
+        // Stepping is asynchronous in AVFoundation; re-seeking here could undo
+        // it, so poll until the position moves off `from` (see the ticker).
+        self.video.playback_time = player.position();
+        self.arm_seek_refresh();
+        self.video.step_from = Some(from);
+        cx.notify();
     }
 
     #[cfg(test)]

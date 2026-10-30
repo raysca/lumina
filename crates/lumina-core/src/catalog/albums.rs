@@ -80,6 +80,31 @@ impl Catalog {
         Ok(count as usize)
     }
 
+    /// Re-inserts a deleted album with its original id and creation time, so
+    /// undoing a delete brings back the same album (and redo can delete it
+    /// again by id).
+    pub fn restore_smart_album(&self, album: &SmartAlbum) -> Result<()> {
+        let conn = self.conn.lock();
+        let rules_json = serde_json::to_string(&album.rules)?;
+        let match_str = match album.match_mode {
+            MatchMode::All => "all",
+            MatchMode::Any => "any",
+        };
+        conn.execute(
+            "INSERT INTO smart_albums (id, title, icon_name, match_mode, rules_json, created_at_epoch_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+            params![
+                album.id,
+                album.title,
+                album.icon_name,
+                match_str,
+                rules_json,
+                album.created_at_epoch_ms
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Creates and persists a user-defined Smart Album.
     pub fn create_smart_album(
         &self,

@@ -231,6 +231,7 @@ impl LuminaApp {
         self.command_palette_open = true;
         self.command_query.clear();
         self.command_selected = 0;
+        self.command_scroll.scroll_to_item(1);
         cx.notify();
     }
 
@@ -260,6 +261,8 @@ impl LuminaApp {
         let current = self.command_selected.min(count - 1) as isize;
         let next = (current + delta).rem_euclid(count as isize) as usize;
         self.command_selected = next;
+        // Child 0 of the list is the COMMANDS heading.
+        self.command_scroll.scroll_to_item(next + 1);
         cx.notify();
     }
 

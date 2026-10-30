@@ -28,8 +28,6 @@ impl ViewerViewport {
             .map(|i| i.media_type == MediaType::Video)
             .unwrap_or(false);
 
-        let is_immersive = this.is_immersive_fullscreen;
-        let hud_visible = this.immersive_hud_visible;
         let preview_image = this.viewer_image.clone();
         let scale = this.viewer_state.zoom_scale;
         let (pan_x, pan_y) = this.viewer_state.pan_offset;
@@ -75,70 +73,6 @@ impl ViewerViewport {
             // The double-click zoom handler lives on the media element itself
             // (see below), not on this full-bleed viewport: a double-click in
             // the letterbox around the picture must not zoom (BUG 14).
-            // Left Chevron Button
-            .child(if !is_immersive || hud_visible {
-                div()
-                    .id("viewer-prev-btn")
-                    .debug_selector(|| "viewer-prev".to_string())
-                    .tooltip(theme::tooltip_label("Previous item"))
-                    .absolute()
-                    .left_6()
-                    .size(px(40.0))
-                    .rounded_full()
-                    .bg(theme::bg_hud())
-                    .border_1()
-                    .border_color(theme::border())
-                    .hover(|s| s.bg(theme::bg_control_hover()).text_color(theme::accent()))
-                    .flex()
-                    .justify_center()
-                    .items_center()
-                    .cursor_pointer()
-                    .text_xl()
-                    .text_color(theme::text_muted())
-                    .child(render_icon(
-                        Icon::ChevronLeft,
-                        px(20.0),
-                        theme::text_muted(),
-                    ))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.navigate_selection(-1, cx);
-                    }))
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
-            // Right Chevron Button
-            .child(if !is_immersive || hud_visible {
-                div()
-                    .id("viewer-next-btn")
-                    .debug_selector(|| "viewer-next".to_string())
-                    .tooltip(theme::tooltip_label("Next item"))
-                    .absolute()
-                    .right_6()
-                    .size(px(40.0))
-                    .rounded_full()
-                    .bg(theme::bg_hud())
-                    .border_1()
-                    .border_color(theme::border())
-                    .hover(|s| s.bg(theme::bg_control_hover()).text_color(theme::accent()))
-                    .flex()
-                    .justify_center()
-                    .items_center()
-                    .cursor_pointer()
-                    .text_xl()
-                    .text_color(theme::text_muted())
-                    .child(render_icon(
-                        Icon::ChevronRight,
-                        px(20.0),
-                        theme::text_muted(),
-                    ))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.navigate_selection(1, cx);
-                    }))
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
             // Center Media Canvas: Image or Video Viewport
             .child(
                 div()

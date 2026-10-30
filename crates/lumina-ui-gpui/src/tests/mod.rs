@@ -7,6 +7,7 @@ mod overlay_isolation;
 mod palette_and_empty;
 mod pip;
 mod preferences;
+mod regressions;
 mod smart_album_builder;
 mod tags_and_albums;
 mod toasts;

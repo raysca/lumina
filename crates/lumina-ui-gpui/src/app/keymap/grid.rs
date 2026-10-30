@@ -21,7 +21,16 @@ impl LuminaApp {
             return;
         }
 
-        if !cmd_or_ctrl && (key == "backspace" || key == "delete") {
+        // T: tag the selection (the context menu and dock "Tag" shortcut)
+        if !cmd_or_ctrl && key.eq_ignore_ascii_case("t") {
+            if self.selected_item.is_some() {
+                self.begin_tagging_selection(cx);
+            }
+            return;
+        }
+
+        // ⌫ and ⌘⌫ (the menu's shortcut) both delete.
+        if key == "backspace" || key == "delete" {
             if self.selection == AlbumSelection::Trash {
                 self.prompt_delete_selected(cx);
             } else if self.selected_indices.len() > 1 {

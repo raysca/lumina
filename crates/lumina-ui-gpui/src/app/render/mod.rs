@@ -57,12 +57,14 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 21] = [
+        let rows: [(&str, &str); 25] = [
             ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
             ("⌘,", "Preferences"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘R", "Rescan library"),
+            ("⇧⌘R", "Show in Finder"),
+            ("⌥⌘C", "Copy file path"),
             ("⌘+ / ⌘-", "Grid density"),
             ("I", "Toggle inspector"),
             ("Space", "Quick look / open viewer"),
@@ -71,6 +73,8 @@ impl LuminaApp {
             ("Home / End", "First / last item"),
             ("PageUp / PageDown", "Jump four rows"),
             ("F", "Favorite"),
+            ("T", "Tag selection"),
+            ("⌃⌘F", "Full screen viewer"),
             ("⌫", "Move to Trash / restore"),
             ("Z / O", "Toggle 1:1 zoom"),
             ("J / K / L", "Video rewind / play / forward"),
@@ -232,8 +236,9 @@ impl Render for LuminaApp {
             AlbumSelection::Trash => "Recently Deleted".into(),
         };
 
-        let selected_item = self.selected_item.clone();
-        let inspector_open = self.inspector_open && selected_item.is_some();
+        // The inspector stays while Info is on; with no selection it shows an
+        // empty state rather than vanishing under a lit toggle.
+        let inspector_open = self.inspector_open;
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
         div()

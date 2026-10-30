@@ -143,10 +143,14 @@ impl LuminaApp {
     }
 
     pub fn execute_confirmed_deletion(&mut self, cx: &mut Context<Self>) {
+        // Permanent deletion needs the acknowledgement; until then Enter does
+        // nothing and the dialog stays open.
+        if self.delete_confirm_state.as_ref().is_some_and(|st| {
+            st.target == DeletionTarget::PermanentDisk && !st.permanent_acknowledged
+        }) {
+            return;
+        }
         if let Some(st) = self.delete_confirm_state.take() {
-            if st.target == DeletionTarget::PermanentDisk && !st.permanent_acknowledged {
-                return;
-            }
             // Emptying the Trash removes a trashed video playing in PiP.
             let removed_pip: Vec<MediaId> = match st.intent {
                 DeleteIntent::DeleteSelected => st.item_ids.clone(),

@@ -1,0 +1,355 @@
+//! Regressions from the v3 design audit (FIXES.md §0): shortcuts the menus
+//! advertise, chords that were swallowed, and state that vanished.
+
+use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
+
+use crate::app::viewer_actions::REVEALED_PATHS;
+use crate::tests::ui_automation::{
+    app_with_library, click, keystrokes, leak, render_ui, seed_library,
+};
+use crate::views::sidebar::AlbumSelection;
+use lumina_core::DeletionTarget;
+
+#[core::prelude::v1::test]
+fn shift_cmd_r_reveals_the_selection_instead_of_rescanning() {
+    let (dir, engine) = seed_library("reg_reveal", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    REVEALED_PATHS.with(|p| p.borrow_mut().clear());
+    view.update(vcx, |app, _| {
+        app.grid_state.as_mut().unwrap().is_scanning = false
+    });
+
+    keystrokes(vcx, "home shift-secondary-r");
+    let selected = view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().unwrap();
+        assert!(!state.is_scanning, "⇧⌘R must not start a rescan");
+        app.selected_item.clone().unwrap().path
+    });
+    REVEALED_PATHS.with(|p| {
+        assert_eq!(*p.borrow(), [selected], "⇧⌘R reveals the selected file");
+    });
+
+    keystrokes(vcx, "secondary-r");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.as_ref().unwrap().is_scanning,
+            "plain ⌘R still rescans"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn alt_cmd_c_copies_the_selected_file_path() {
+    let (dir, engine) = seed_library("reg_copy", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    keystrokes(vcx, "home alt-secondary-c");
+    let path = view.update(vcx, |app, _| app.selected_item.clone().unwrap().path);
+    let copied = vcx
+        .read_from_clipboard()
+        .and_then(|item| item.text())
+        .expect("⌥⌘C writes the clipboard");
+    assert_eq!(copied, path.to_string_lossy());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn t_opens_the_tag_field_for_the_selection() {
+    let (dir, engine) = seed_library("reg_tag_key", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    keystrokes(vcx, "home t");
+    view.update(vcx, |app, _| {
+        assert!(app.tag_input_active, "T starts tagging the selection");
+        assert!(app.inspector_open, "the inspector docks to show the field");
+    });
+    keystrokes(vcx, "s u n enter");
+    let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
+    assert_eq!(engine.get_tags_for_item(id), ["sun"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
+    let (dir, engine) = seed_library("reg_tag_menu", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    keystrokes(vcx, "home");
+    let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
+    crate::tests::ui_automation::right_click(vcx, leak(format!("media-card-{}", id.0)));
+    click(vcx, "tags-menu-btn");
+    view.update(vcx, |app, _| {
+        assert!(app.tag_input_active, "Tags… starts the tag field");
+        assert!(
+            !app.tag_manager.open,
+            "Tags… no longer opens the Tag Manager"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn cmd_backspace_deletes_like_backspace() {
+    let (dir, engine) = seed_library("reg_cmd_bs", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    keystrokes(vcx, "home");
+    let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
+    keystrokes(vcx, "secondary-backspace");
+    view.update(vcx, |app, cx| {
+        if app.delete_confirm_state.is_some() {
+            app.execute_confirmed_deletion(cx);
+        }
+    });
+    assert!(
+        engine.get_item_by_id(id).unwrap().is_trashed,
+        "⌘⌫ (the menu's shortcut) moves the item to the Trash"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_f_favorites_and_ctrl_cmd_f_goes_full_screen() {
+    let (dir, engine) = seed_library("reg_viewer_f", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    keystrokes(vcx, "home enter");
+    let id = view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer);
+        app.selected_item.clone().unwrap().id
+    });
+    keystrokes(vcx, "f");
+    assert!(
+        engine.get_item_by_id(id).unwrap().is_favorite,
+        "F favorites in the viewer, as in the grid"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.is_immersive_fullscreen,
+            "F no longer toggles full screen"
+        );
+    });
+
+    keystrokes(vcx, "ctrl-cmd-f");
+    view.update(vcx, |app, _| {
+        assert!(app.is_immersive_fullscreen, "⌃⌘F toggles full screen");
+        assert!(
+            !app.search_focused,
+            "⌃⌘F must not be swallowed by ⌘F search"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn enter_without_the_permanent_acknowledgement_keeps_the_dialog_open() {
+    let (dir, engine) = seed_library("reg_perm_ack", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    keystrokes(vcx, "home");
+    let id = view.update(vcx, |app, cx| {
+        let id = app.selected_item.clone().unwrap().id;
+        app.trash_or_restore_selected(cx);
+        app.select_album(AlbumSelection::Trash, cx);
+        id
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        assert_eq!(app.get_active_count(), 1, "the trashed item is listed");
+        app.select_index(0, cx);
+    });
+    keystrokes(vcx, "backspace");
+    view.update(vcx, |app, cx| {
+        assert!(app.delete_confirm_state.is_some(), "⌫ in Trash asks first");
+        app.set_delete_target(DeletionTarget::PermanentDisk, cx);
+    });
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.delete_confirm_state.is_some(),
+            "Enter before the acknowledgement must leave the dialog open"
+        );
+    });
+    assert!(engine.get_item_by_id(id).is_some(), "nothing was deleted");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_next_button_moves_exactly_one_item() {
+    let (dir, engine) = seed_library("reg_viewer_nav", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    keystrokes(vcx, "home enter");
+    click(vcx, "viewer-next");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(1), "one click, one step");
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
+    let (dir, engine) = seed_library("reg_album_undo", 2);
+    let rules = [SmartAlbumRule {
+        field: RuleField::IsFavorite,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Bool(true),
+    }];
+    let album = engine
+        .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    click(vcx, leak(format!("smart-album-delete-{}", album.id)));
+    assert!(engine.list_smart_albums().is_empty(), "× deletes the album");
+    assert!(
+        vcx.debug_bounds("toast-undo").is_some(),
+        "the toast offers Undo"
+    );
+
+    keystrokes(vcx, "secondary-z");
+    let restored = engine.list_smart_albums();
+    assert_eq!(restored.len(), 1, "⌘Z restores the album");
+    assert_eq!(restored[0].id, album.id, "under its original id");
+    assert_eq!(restored[0].title, "Keepers");
+    view.update(vcx, |app, _| assert_eq!(app.user_smart_albums.len(), 1));
+
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::User(album.id), cx)
+    });
+    keystrokes(vcx, "shift-secondary-z");
+    assert!(
+        engine.list_smart_albums().is_empty(),
+        "⇧⌘Z deletes it again"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "redo must not leave the view on the deleted album"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn info_toggle_keeps_its_selector_and_the_inspector_stays_with_no_selection() {
+    let (dir, engine) = seed_library("reg_inspector", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, "inspector-toggle");
+    view.update(vcx, |app, _| assert!(app.inspector_open));
+    assert!(
+        vcx.debug_bounds("inspector-toggle").is_some(),
+        "the lit Info toggle keeps its automation selector"
+    );
+    view.update(vcx, |app, cx| app.clear_selection(cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("inspector-empty").is_some(),
+        "with Info on and nothing selected the inspector shows its empty state"
+    );
+    click(vcx, "inspector-toggle");
+    view.update(vcx, |app, _| {
+        assert!(!app.inspector_open, "and still closes")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn palette_keyboard_selection_stays_in_view() {
+    let (dir, engine) = seed_library("reg_palette_scroll", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    keystrokes(vcx, "secondary-k");
+    let count = view.update(vcx, |app, _| app.filtered_commands().len());
+    assert!(count > 16, "the test needs a list longer than the viewport");
+    for _ in 0..count - 1 {
+        keystrokes(vcx, "down");
+    }
+    let key = view.update(vcx, |app, _| {
+        app.filtered_commands()[app.command_selected].key
+    });
+    let list = vcx.debug_bounds("command-list").expect("palette list");
+    let row = vcx
+        .debug_bounds(leak(format!("command-item-{key}")))
+        .expect("selected row");
+    assert!(
+        row.top() >= list.top() && row.bottom() <= list.bottom(),
+        "the last row ({row:?}) must be scrolled into the list ({list:?})"
+    );
+
+    // Reopening resets the selection to the first row; it must be visible too.
+    keystrokes(vcx, "escape secondary-k");
+    let first = view.update(vcx, |app, _| app.filtered_commands()[0].key);
+    let list = vcx.debug_bounds("command-list").expect("palette list");
+    let row = vcx
+        .debug_bounds(leak(format!("command-item-{first}")))
+        .expect("first row");
+    assert!(
+        row.top() >= list.top(),
+        "after reopening, the selected first row ({row:?}) must be in view ({list:?})"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_specs_show_only_known_facts() {
+    let (dir, engine) = seed_library("reg_specs", 1);
+    let mut item = engine.get_item_slice(0..1).remove(0);
+    item.width = 0;
+    item.height = 0;
+    item.file_size = 2048;
+    let line = crate::views::viewer::top_bar::specs_line(&item);
+    assert_eq!(line, "JPG · 2.0 KB", "no invented dimensions, codec or fps");
+    item.width = 4032;
+    item.height = 3024;
+    assert!(crate::views::viewer::top_bar::specs_line(&item).starts_with("4032 × 3024 · JPG"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_frame_step_accepts_the_frame_it_lands_on() {
+    use crate::app::types::{get_sample_items, UiMessage};
+    let video = get_sample_items()
+        .into_iter()
+        .find(|item| item.media_type == lumina_core::MediaType::Video)
+        .expect("sample video");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
+    view.update(vcx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.duration = 60.0;
+        app.video.is_playing = false;
+        // A step from 5s landed somewhere the app could not predict (the stub
+        // player reports 0s): a fixed seek target would reject that frame.
+        app.video.playback_time = 5.0;
+        app.video.seek_refresh_until =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        app.video.step_from = Some(5.0);
+        app.handle_ui_message(UiMessage::VideoFrameTick, cx);
+        let landed = crate::player::backend::VideoPlayerBackend::position(
+            app.video.player.as_ref().unwrap(),
+        );
+        assert_eq!(
+            app.video.playback_time, landed,
+            "the clock follows the frame the step landed on"
+        );
+        app.stop_video_ticker();
+    });
+}

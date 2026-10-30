@@ -197,8 +197,8 @@ impl LuminaApp {
                     theme::control_on("inspector-toggle-btn")
                 } else {
                     theme::control("inspector-toggle-btn")
-                        .debug_selector(|| "inspector-toggle".to_string())
                 }
+                .debug_selector(|| "inspector-toggle".to_string())
                 .child(crate::icons::render_icon(
                     crate::icons::Icon::Info,
                     px(13.0),

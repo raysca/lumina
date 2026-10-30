@@ -6,6 +6,7 @@ use crate::app::smart_draft::{
     focus_order, operator_label, operators, rules_from_rows, DraftFocus, DraftPopup, DraftRow,
     ValueKind, FIELDS, UNITS,
 };
+use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
@@ -74,8 +75,14 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Deletes a user smart album (metadata only; no media is touched).
+    /// Deletes a user smart album (metadata only; no media is touched). The
+    /// toast offers Undo (⌘Z restores it).
     pub fn delete_smart_album(&mut self, album_id: i64, cx: &mut Context<Self>) {
+        let deleted = self
+            .user_smart_albums
+            .iter()
+            .find(|a| a.id == album_id)
+            .cloned();
         let result = if let Some(ref state) = self.grid_state {
             state.engine.delete_smart_album(album_id)
         } else {
@@ -89,7 +96,12 @@ impl LuminaApp {
                 }
                 self.refresh_album_counts();
                 self.set_last_action("Deleted smart album");
-                self.show_toast("Deleted smart album", cx);
+                if let Some(album) = deleted {
+                    self.push_undo(UndoAction::SmartAlbumDeleted { album });
+                    self.show_undo_toast("Deleted smart album", cx);
+                } else {
+                    self.show_toast("Deleted smart album", cx);
+                }
                 cx.notify();
             }
             Ok(false) => self.set_error("Smart album not found", cx),

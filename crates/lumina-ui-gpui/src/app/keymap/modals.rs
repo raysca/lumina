@@ -23,6 +23,7 @@ impl LuminaApp {
                 "backspace" => {
                     self.command_query.pop();
                     self.command_selected = 0;
+                    self.command_scroll.scroll_to_item(1);
                     cx.notify();
                 }
                 _ => {
@@ -30,6 +31,7 @@ impl LuminaApp {
                     if !cmd_or_ctrl && typed.chars().count() == 1 {
                         self.command_query.push_str(typed);
                         self.command_selected = 0;
+                        self.command_scroll.scroll_to_item(1);
                         cx.notify();
                     }
                 }

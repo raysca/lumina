@@ -619,7 +619,7 @@ impl ViewerTransport {
                                 div()
                                     .id("video-fullscreen-btn")
                                     .debug_selector(|| "video-fullscreen".to_string())
-                                    .tooltip(theme::tooltip_label("Toggle fullscreen"))
+                                    .tooltip(theme::tooltip_label("Full screen (⌃⌘F)"))
                                     .w(px(28.0))
                                     .h(px(26.0))
                                     .bg(theme::bg_control())

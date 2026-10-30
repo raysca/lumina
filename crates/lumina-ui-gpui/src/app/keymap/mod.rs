@@ -16,6 +16,8 @@ impl LuminaApp {
         let keystroke = &event.keystroke;
         let key = keystroke.key.as_str();
         let cmd_or_ctrl = keystroke.modifiers.secondary() || keystroke.modifiers.control;
+        // ⌃⌘ chords (⌃⌘F full screen) must not fall into the ⌘ handlers.
+        let ctrl_cmd = keystroke.modifiers.platform && keystroke.modifiers.control;
 
         // Shield modal dialogs: absorb keystrokes so background shortcuts don't mutate or delete files
         if self.handle_modal_key_down(key, cmd_or_ctrl, keystroke, cx) {
@@ -73,10 +75,27 @@ impl LuminaApp {
             return;
         }
 
-        if cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
+        if cmd_or_ctrl && !ctrl_cmd && key.eq_ignore_ascii_case("f") {
             self.search_focused = true;
             self.search_query.clear();
             cx.notify();
+            return;
+        }
+
+        // ⇧⌘R: Reveal in Finder (the context menu's shortcut)
+        if cmd_or_ctrl && keystroke.modifiers.shift && key.eq_ignore_ascii_case("r") {
+            if let Some(item) = self.selected_item.as_ref() {
+                self.reveal_item_in_finder(&item.path);
+            }
+            return;
+        }
+
+        // ⌥⌘C: Copy File Path
+        if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("c") {
+            if let Some(item) = self.selected_item.as_ref() {
+                let path = item.path.to_string_lossy().to_string();
+                self.copy_to_clipboard(&path, cx);
+            }
             return;
         }
 

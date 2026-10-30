@@ -297,12 +297,12 @@ impl MediaContextMenu {
                     // 8. Tags...
                     .child(Self::render_menu_item(
                         "tags-menu-btn",
-                        "Tags...",
+                        "Tags…",
                         Some("T"),
                         false,
                         cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.close_context_menu(cx);
-                            this.open_tag_manager(cx);
+                            this.begin_tagging_selection(cx);
                         }),
                     ))
                     // 9. Add to Album

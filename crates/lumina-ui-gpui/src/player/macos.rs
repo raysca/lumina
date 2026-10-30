@@ -18,6 +18,7 @@ extern "C" {
     fn lumina_player_pause(player: *mut c_void);
     fn lumina_player_is_playing(player: *mut c_void) -> c_int;
     fn lumina_player_seek(player: *mut c_void, seconds: f64);
+    fn lumina_player_step(player: *mut c_void, frames: i32);
     fn lumina_player_get_position(player: *mut c_void) -> f64;
     fn lumina_player_get_duration(player: *mut c_void) -> f64;
     fn lumina_player_set_rate(player: *mut c_void, rate: f32);
@@ -112,6 +113,10 @@ impl VideoPlayerBackend for AvFoundationPlayer {
 
     fn seek(&mut self, seconds: f64) {
         unsafe { lumina_player_seek(self.handle, seconds) };
+    }
+
+    fn step_frames(&mut self, frames: i32) {
+        unsafe { lumina_player_step(self.handle, frames) };
     }
 
     fn position(&self) -> f64 {

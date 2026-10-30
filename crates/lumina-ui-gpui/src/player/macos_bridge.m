@@ -206,6 +206,12 @@
     [_player seekToTime:t toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
 }
 
+- (void)stepFrames:(NSInteger)frames {
+    if (!_player || !_player.currentItem) return;
+    [_player pause];
+    [_player.currentItem stepByCount:frames];
+}
+
 - (double)currentTime {
     if (!_player) return 0.0;
     CMTime t = [_player currentTime];
@@ -367,6 +373,14 @@ void lumina_player_seek(void* player, double seconds) {
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
         [bridge seekTo:seconds];
+    }
+}
+
+void lumina_player_step(void* player, int frames) {
+    if (!player) return;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        [bridge stepFrames:frames];
     }
 }
 

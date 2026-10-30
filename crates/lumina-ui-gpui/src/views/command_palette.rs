@@ -83,9 +83,11 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                 .child(
                     div()
                         .id("command-list")
+                        .debug_selector(|| "command-list".to_string())
                         .flex_1()
                         .min_h(px(0.0))
                         .overflow_y_scroll()
+                        .track_scroll(&app.command_scroll)
                         .p(px(6.0))
                         .flex()
                         .flex_col()

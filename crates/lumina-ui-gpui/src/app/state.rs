@@ -113,6 +113,10 @@ pub struct VideoPlaybackState {
     /// polls `next_frame` until a frame arrives or this deadline passes.
     /// `None` whenever no refresh is pending.
     pub seek_refresh_until: Option<std::time::Instant>,
+    /// Position a pending frame step started from. A step lands on a time
+    /// the app cannot predict, so the paused refresh accepts the first frame
+    /// whose position differs from this one.
+    pub step_from: Option<f64>,
     pub ticker_active: Option<Arc<AtomicBool>>,
     pub ticker_handle: Option<std::thread::JoinHandle<()>>,
     pub frame_pending: Arc<AtomicBool>,
@@ -370,6 +374,8 @@ pub struct LuminaApp {
     pub command_palette_open: bool,
     pub command_query: String,
     pub command_selected: usize,
+    /// Keeps the keyboard-selected palette row scrolled into view.
+    pub command_scroll: ScrollHandle,
 
     // Phase 16 Hardware-Accelerated Video Player
     pub video: VideoPlaybackState,
@@ -512,6 +518,7 @@ impl LuminaApp {
             command_palette_open: false,
             command_query: String::new(),
             command_selected: 0,
+            command_scroll: ScrollHandle::new(),
             video: VideoPlaybackState {
                 playback_speed: 1.0,
                 is_looping: true,

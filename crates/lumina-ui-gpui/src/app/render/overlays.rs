@@ -86,13 +86,7 @@ impl LuminaApp {
                     dock_button("batch-tags-dock-btn", "Tag", None, theme::text())
                         .tooltip(theme::tooltip_label("Add a tag to every selected item"))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            // Reuse an open (docked or floating) inspector;
-                            // only dock one when neither is showing.
-                            if !this.inspector_open && this.floating_inspector_window.is_none() {
-                                this.inspector_open = true;
-                                this.save_config();
-                            }
-                            this.start_tag_input(cx);
+                            this.begin_tagging_selection(cx);
                         })),
                 )
                 .child(

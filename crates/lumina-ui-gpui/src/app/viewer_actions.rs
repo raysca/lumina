@@ -97,20 +97,23 @@ impl LuminaApp {
     }
 
     pub fn reveal_item_in_finder(&self, path: &Path) {
-        #[cfg(target_os = "macos")]
+        // Tests record the request instead of opening a real Finder window.
+        #[cfg(test)]
+        REVEALED_PATHS.with(|paths| paths.borrow_mut().push(path.to_path_buf()));
+        #[cfg(all(not(test), target_os = "macos"))]
         {
             let _ = std::process::Command::new("open")
                 .arg("-R")
                 .arg(path)
                 .spawn();
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(all(not(test), target_os = "linux"))]
         {
             if let Some(parent) = path.parent() {
                 let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
             }
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(all(not(test), target_os = "windows"))]
         {
             let _ = std::process::Command::new("explorer")
                 .arg(format!("/select,\"{}\"", path.display()))
@@ -444,4 +447,11 @@ impl LuminaApp {
         self.viewer_state.end_drag();
         cx.notify();
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Paths the app asked Finder to reveal on this test thread.
+    pub(crate) static REVEALED_PATHS: std::cell::RefCell<Vec<std::path::PathBuf>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }

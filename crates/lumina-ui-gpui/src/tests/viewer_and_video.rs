@@ -117,12 +117,12 @@ fn test_e2e_fullscreen_viewer_journey() {
     });
     cx.run_until_parked();
 
-    // 2. Press "F" to enter immersive fullscreen
+    // 2. Press ⌃⌘F to enter immersive fullscreen
     cx.update(|window, app_cx| {
         view.update(app_cx, |app, cx| {
             app.handle_key_down(
                 &KeyDownEvent {
-                    keystroke: Keystroke::parse("f").unwrap(),
+                    keystroke: Keystroke::parse("ctrl-cmd-f").unwrap(),
                     is_held: false,
                 },
                 window,
