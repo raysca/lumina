@@ -104,9 +104,9 @@ impl LuminaApp {
                         Some(Icon::Trash),
                         theme::danger_text(),
                     )
-                    .tooltip(theme::tooltip_label("Move to Trash (⌫)"))
+                    .tooltip(theme::tooltip_label("Delete… (⌫)"))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.batch_trash_or_restore(cx);
+                        this.prompt_delete_selected(cx);
                     })),
                 );
         }

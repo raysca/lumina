@@ -470,7 +470,7 @@ impl MediaContextMenu {
                             true,
                             cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
-                                this.batch_trash_or_restore(cx);
+                                this.prompt_delete_selected(cx);
                             }),
                         )
                         .into_any_element()

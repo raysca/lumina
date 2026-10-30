@@ -12,7 +12,11 @@ pub enum TagSortOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteIntent {
     EmptyTrash,
+    /// Delete from the Trash view: "Move to Trash" means the macOS Trash.
     DeleteSelected,
+    /// Delete from the library (v3): "Move to Trash" means Lumina's
+    /// Recently Deleted, which is undoable.
+    LibrarySelection,
 }
 
 #[derive(Debug, Clone)]
@@ -22,6 +26,11 @@ pub struct DeleteConfirmState {
     pub item_ids: Vec<MediaId>,
     pub item_count: usize,
     pub permanent_acknowledged: bool,
+    /// Header summary: "2 photos, 1 video · 41.2 MB" and up to three thumbs.
+    pub photos: usize,
+    pub videos: usize,
+    pub total_bytes: u64,
+    pub preview_ids: Vec<MediaId>,
 }
 
 #[allow(clippy::large_enum_variant)]

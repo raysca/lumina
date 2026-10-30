@@ -1,7 +1,6 @@
 use gpui::*;
 
 use crate::app::LuminaApp;
-use crate::views::sidebar::AlbumSelection;
 
 impl LuminaApp {
     /// Handles grid navigation, zoom, selection, and contextual shortcuts.
@@ -29,15 +28,9 @@ impl LuminaApp {
             return;
         }
 
-        // ⌫ and ⌘⌫ (the menu's shortcut) both delete.
+        // ⌫ and ⌘⌫ (the menu's shortcut) both open the Delete dialog.
         if key == "backspace" || key == "delete" {
-            if self.selection == AlbumSelection::Trash {
-                self.prompt_delete_selected(cx);
-            } else if self.selected_indices.len() > 1 {
-                self.batch_trash_or_restore(cx);
-            } else {
-                self.trash_or_restore_selected(cx);
-            }
+            self.prompt_delete_selected(cx);
             return;
         }
 

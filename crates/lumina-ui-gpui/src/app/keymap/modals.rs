@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::app::LuminaApp;
+use lumina_core::DeletionTarget;
 
 impl LuminaApp {
     /// Handles keystrokes when any modal dialog or inline text field is active.
@@ -61,6 +62,17 @@ impl LuminaApp {
                 self.close_delete_modal(cx);
             } else if key == "enter" || key == "return" {
                 self.execute_confirmed_deletion(cx);
+            } else if key == "up" {
+                self.step_delete_target(-1, cx);
+            } else if key == "down" {
+                self.step_delete_target(1, cx);
+            } else if key == "space"
+                && self
+                    .delete_confirm_state
+                    .as_ref()
+                    .is_some_and(|st| st.target == DeletionTarget::PermanentDisk)
+            {
+                self.toggle_delete_permanent_acknowledged(cx);
             }
             return true;
         }

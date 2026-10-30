@@ -109,7 +109,7 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::AllLibrary, cx)
     });
-    keystrokes(vcx, "home backspace");
+    keystrokes(vcx, "home backspace enter");
     view.update(vcx, |app, _| {
         no_error(app, "moving to Trash");
         assert_eq!(app.get_active_count(), 1);

@@ -265,7 +265,7 @@ fn trashing_the_pip_video_closes_pip() {
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
-    keystrokes(vcx, "backspace");
+    keystrokes(vcx, "backspace enter");
     view.update(vcx, |app, _| {
         assert!(!app.video.in_pip, "trashing the PiP video must close PiP");
         assert!(app.video.player.is_none());

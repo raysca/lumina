@@ -20,6 +20,8 @@ tokens! {
     bg_viewer = 0x141517;
     bg_app = 0x1C1D20;
     bg_pane = 0x202125;
+    /// Confirmation dialogs (Delete).
+    bg_dialog = 0x232428;
     bg_raised = 0x26272B;
     bg_hud = 0x2A2C30;
     bg_control = 0x2C2E32;

@@ -75,7 +75,7 @@ impl LuminaApp {
             ("F", "Favorite"),
             ("T", "Tag selection"),
             ("⌃⌘F", "Full screen viewer"),
-            ("⌫", "Move to Trash / restore"),
+            ("⌫", "Delete…"),
             ("Z / O", "Toggle 1:1 zoom"),
             ("J / K / ←→", "Video back 5s / play / ±5s"),
             ("L", "Loop video"),

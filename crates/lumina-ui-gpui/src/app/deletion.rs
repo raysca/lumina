@@ -1,5 +1,5 @@
 use gpui::*;
-use lumina_core::{DeletionTarget, MediaId, SystemAlbum};
+use lumina_core::{DeletionTarget, MediaId, MediaType, SystemAlbum};
 
 use crate::app::types::{DeleteConfirmState, DeleteIntent};
 use crate::app::undo::UndoAction;
@@ -101,25 +101,57 @@ impl LuminaApp {
             item_ids: Vec::new(),
             item_count: count,
             permanent_acknowledged: false,
+            photos: 0,
+            videos: 0,
+            total_bytes: 0,
+            preview_ids: Vec::new(),
         });
         cx.notify();
     }
 
+    /// Every delete (⌫, menu, dock, inspector) asks first (v3). Move to
+    /// Trash is preselected, so ⌫ then ↵ stays a two-key, undoable delete.
     pub fn prompt_delete_selected(&mut self, cx: &mut Context<Self>) {
         let items = self.get_selected_items();
         if items.is_empty() {
             return;
         }
         let ids: Vec<MediaId> = items.iter().map(|i| i.id).collect();
-        let count = ids.len();
+        let videos = items
+            .iter()
+            .filter(|i| i.media_type == MediaType::Video)
+            .count();
         self.delete_confirm_state = Some(DeleteConfirmState {
-            intent: DeleteIntent::DeleteSelected,
+            intent: if self.selection == AlbumSelection::Trash {
+                DeleteIntent::DeleteSelected
+            } else {
+                DeleteIntent::LibrarySelection
+            },
             target: DeletionTarget::SystemTrash,
+            item_count: ids.len(),
+            preview_ids: ids.iter().take(3).copied().collect(),
             item_ids: ids,
-            item_count: count,
             permanent_acknowledged: false,
+            photos: items.len() - videos,
+            videos,
+            total_bytes: items.iter().map(|i| i.file_size).sum(),
         });
         cx.notify();
+    }
+
+    /// ↑/↓ in the dialog: previous/next option.
+    pub fn step_delete_target(&mut self, delta: isize, cx: &mut Context<Self>) {
+        const ORDER: [DeletionTarget; 3] = [
+            DeletionTarget::SystemTrash,
+            DeletionTarget::CatalogOnly,
+            DeletionTarget::PermanentDisk,
+        ];
+        let Some(current) = self.delete_confirm_state.as_ref().map(|st| st.target) else {
+            return;
+        };
+        let index = ORDER.iter().position(|t| *t == current).unwrap_or(0) as isize;
+        let next = ORDER[(index + delta).clamp(0, ORDER.len() as isize - 1) as usize];
+        self.set_delete_target(next, cx);
     }
 
     pub fn close_delete_modal(&mut self, cx: &mut Context<Self>) {
@@ -150,10 +182,26 @@ impl LuminaApp {
         }) {
             return;
         }
+        // From the library, Move to Trash is the soft, undoable trash.
+        // One item keeps the grid index so ⌫↵ walks forward through the grid.
+        if let Some(st) = self.delete_confirm_state.as_ref().filter(|st| {
+            st.intent == DeleteIntent::LibrarySelection && st.target == DeletionTarget::SystemTrash
+        }) {
+            let single = st.item_count == 1;
+            self.delete_confirm_state = None;
+            if single {
+                self.trash_or_restore_selected(cx);
+            } else {
+                self.batch_trash_or_restore(cx);
+            }
+            return;
+        }
         if let Some(st) = self.delete_confirm_state.take() {
             // Emptying the Trash removes a trashed video playing in PiP.
             let removed_pip: Vec<MediaId> = match st.intent {
-                DeleteIntent::DeleteSelected => st.item_ids.clone(),
+                DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => {
+                    st.item_ids.clone()
+                }
                 DeleteIntent::EmptyTrash => self
                     .video
                     .item
@@ -170,7 +218,7 @@ impl LuminaApp {
             if let Some(ref state) = self.grid_state {
                 let result = match st.intent {
                     DeleteIntent::EmptyTrash => state.engine.empty_trash(st.target).map(|_| ()),
-                    DeleteIntent::DeleteSelected => state
+                    DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => state
                         .engine
                         .permanently_delete_items(&st.item_ids, st.target)
                         .map(|_| ()),
@@ -184,7 +232,10 @@ impl LuminaApp {
             let closed_pip = self.close_pip_for_removed(&removed_pip, cx);
             let mut message = match st.intent {
                 DeleteIntent::EmptyTrash => "Trash emptied".to_string(),
-                DeleteIntent::DeleteSelected => {
+                _ if st.target == DeletionTarget::CatalogOnly => {
+                    format!("Removed {} item(s) from Lumina", st.item_ids.len())
+                }
+                DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => {
                     format!("Permanently deleted {} item(s)", st.item_ids.len())
                 }
             };

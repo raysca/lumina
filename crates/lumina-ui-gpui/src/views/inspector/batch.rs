@@ -5,7 +5,7 @@ use crate::theme;
 use crate::views::inspector::body::{format_bytes, render_meta_row};
 use crate::views::inspector::partial_tags;
 use crate::views::inspector::tabs::tags::render_tags_section;
-use crate::{BatchSelectionSummary, LuminaApp};
+use crate::{AlbumSelection, BatchSelectionSummary, LuminaApp};
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_batch_body(
@@ -410,6 +410,7 @@ pub fn render_batch_body(
                 .child(
                     div()
                         .id("batch-trash-inspect-btn")
+                        .debug_selector(|| "batch-trash-inspect-btn".to_string())
                         .flex_1()
                         .py_2()
                         .bg(theme::bg_control())
@@ -431,7 +432,11 @@ pub fn render_batch_body(
                         .on_click(move |_e, _window, cx| {
                             if let Some(app) = app_trash.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    this.batch_trash_or_restore(cx);
+                                    if this.selection == AlbumSelection::Trash {
+                                        this.batch_trash_or_restore(cx);
+                                    } else {
+                                        this.prompt_delete_selected(cx);
+                                    }
                                 });
                             }
                         }),

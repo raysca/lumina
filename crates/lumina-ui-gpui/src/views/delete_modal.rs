@@ -1,10 +1,35 @@
+use crate::app::types::format_bytes;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::{DeleteIntent, LuminaApp};
 use gpui::*;
 use lumina_core::DeletionTarget;
+use std::sync::Arc;
+
+/// Header thumbnail edge and how far each one overlaps the previous.
+const THUMB: f32 = 52.0;
+const THUMB_STEP: f32 = 18.0;
 
 pub struct DeleteConfirmModal;
+
+fn plural(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// "2 photos, 1 video · 41.2 MB"; empty for Empty Trash (no per-item data).
+fn summary_line(photos: usize, videos: usize, bytes: u64) -> String {
+    let mut kinds = Vec::new();
+    if photos > 0 {
+        kinds.push(plural(photos, "photo", "photos"));
+    }
+    if videos > 0 {
+        kinds.push(plural(videos, "video", "videos"));
+    }
+    if kinds.is_empty() {
+        return String::new();
+    }
+    format!("{} · {}", kinds.join(", "), format_bytes(bytes))
+}
 
 impl DeleteConfirmModal {
     pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
@@ -13,13 +38,189 @@ impl DeleteConfirmModal {
             None => return div().into_any_element(),
         };
 
-        let title = match state.intent {
-            DeleteIntent::EmptyTrash => "Empty Trash",
-            DeleteIntent::DeleteSelected => "Permanently Delete Selected Media",
-        };
-
         let count = state.item_count;
-        let current_target = state.target;
+        let target = state.target;
+        let items = plural(count, "item", "items");
+        let title = match state.intent {
+            DeleteIntent::EmptyTrash => format!("Empty Trash ({items})?"),
+            _ => format!("Delete {items}?"),
+        };
+        let from_library = state.intent == DeleteIntent::LibrarySelection;
+        let trash_description = if from_library {
+            "Keeps them in Recently Deleted. You can restore them at any time."
+        } else {
+            "Moves the original files to the macOS Trash. Recover them in Finder."
+        };
+        let thumbs: Vec<Arc<RenderImage>> = app
+            .grid_state
+            .as_ref()
+            .map(|grid| {
+                let cache = grid.texture_cache.lock();
+                state
+                    .preview_ids
+                    .iter()
+                    .filter_map(|id| cache.peek(id).cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let can_confirm = target != DeletionTarget::PermanentDisk || state.permanent_acknowledged;
+        let confirm_label = match (target, state.intent) {
+            (DeletionTarget::SystemTrash, DeleteIntent::EmptyTrash) => "Empty Trash",
+            (DeletionTarget::SystemTrash, _) => "Move to Trash",
+            (DeletionTarget::CatalogOnly, _) => "Remove from Library",
+            (DeletionTarget::PermanentDisk, _) => "Delete Permanently",
+        };
+        let destructive = target == DeletionTarget::PermanentDisk;
+
+        let header = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_4()
+            .children((!thumbs.is_empty()).then(|| {
+                let n = thumbs.len() as f32;
+                div()
+                    .id("delete-thumbs")
+                    .debug_selector(|| "delete-thumbs".to_string())
+                    .relative()
+                    .flex_none()
+                    .w(px(THUMB + THUMB_STEP * (n - 1.0)))
+                    .h(px(THUMB))
+                    .children(thumbs.into_iter().enumerate().map(|(i, image)| {
+                        div()
+                            .absolute()
+                            .left(px(THUMB_STEP * i as f32))
+                            .size(px(THUMB))
+                            .rounded(px(8.0))
+                            .overflow_hidden()
+                            .border_2()
+                            .border_color(theme::bg_dialog())
+                            .bg(theme::bg_media())
+                            .child(img(image).size_full().object_fit(ObjectFit::Cover))
+                    }))
+            }))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .id("delete-title")
+                            .debug_selector(|| "delete-title".to_string())
+                            .text_base()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(theme::text())
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .id("delete-summary")
+                            .debug_selector(|| "delete-summary".to_string())
+                            .text_xs()
+                            .text_color(theme::text_muted())
+                            .child(summary_line(state.photos, state.videos, state.total_bytes)),
+                    ),
+            );
+
+        let ack = (target == DeletionTarget::PermanentDisk).then(|| {
+            let on = state.permanent_acknowledged;
+            div()
+                .id("delete-permanent-ack-row")
+                .debug_selector(|| "delete-permanent-ack-row".to_string())
+                .cursor_pointer()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2p5()
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.toggle_delete_permanent_acknowledged(cx);
+                }))
+                .child(
+                    div()
+                        .size(px(16.0))
+                        .flex_none()
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(theme::danger())
+                        .bg(if on { theme::danger() } else { theme::bg_app() })
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .children(on.then(|| render_icon(Icon::Check, px(10.0), theme::text()))),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme::danger_text())
+                        .child(format!(
+                        "I understand {} will be deleted from disk and can't be recovered. (Space)",
+                        items
+                    )),
+                )
+        });
+
+        let footer = div()
+            .flex()
+            .flex_row()
+            .justify_end()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .id("cancel-delete-btn")
+                    .debug_selector(|| "cancel-delete-btn".to_string())
+                    .h(px(30.0))
+                    .px_3()
+                    .rounded(px(6.0))
+                    .bg(theme::bg_control())
+                    .hover(|s| s.bg(theme::bg_control_hover()))
+                    .cursor_pointer()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .text_xs()
+                    .text_color(theme::text())
+                    .child("Cancel")
+                    .child(theme::kbd("Esc"))
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.close_delete_modal(cx);
+                    })),
+            )
+            .child(
+                div()
+                    .id("confirm-permanent-delete-btn")
+                    .debug_selector(|| "confirm-delete-btn".to_string())
+                    .h(px(30.0))
+                    .px_4()
+                    .rounded(px(6.0))
+                    .flex()
+                    .items_center()
+                    .text_xs()
+                    .font_weight(FontWeight::BOLD)
+                    .bg(if destructive {
+                        theme::danger()
+                    } else {
+                        theme::accent()
+                    })
+                    .text_color(if destructive {
+                        theme::text()
+                    } else {
+                        theme::accent_fg()
+                    })
+                    // Disabled = the same red button at 40%.
+                    .opacity(if can_confirm { 1.0 } else { 0.4 })
+                    .cursor(if can_confirm {
+                        CursorStyle::PointingHand
+                    } else {
+                        CursorStyle::OperationNotAllowed
+                    })
+                    .child(confirm_label)
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.execute_confirmed_deletion(cx);
+                    })),
+            );
 
         div()
             .id("delete-modal-backdrop")
@@ -29,8 +230,10 @@ impl DeleteConfirmModal {
             .occlude()
             .bg(theme::modal_dim())
             .flex()
+            .flex_col()
             .justify_center()
             .items_center()
+            .gap_3()
             .p_8()
             .on_mouse_down(
                 MouseButton::Left,
@@ -41,290 +244,82 @@ impl DeleteConfirmModal {
             .child(
                 div()
                     .id("delete-confirm-dialog")
+                    .debug_selector(|| "delete-confirm-dialog".to_string())
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                         cx.stop_propagation();
                     })
-                    .w(px(520.0))
-                    .bg(theme::bg_app())
+                    .w(px(480.0))
+                    .p_5()
+                    .bg(theme::bg_dialog())
                     .border_1()
                     .border_color(theme::border_strong())
                     .rounded_xl()
                     .shadow_2xl()
                     .flex()
                     .flex_col()
-                    .overflow_hidden()
-                    // Header Bar
+                    .gap_4()
+                    .child(header)
                     .child(
                         div()
-                            .w_full()
-                            .px_6()
-                            .py_4()
-                            .bg(theme::bg_pane())
-                            .border_b_1()
-                            .border_color(theme::border())
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_3()
-                                    .child(
-                                        div()
-                                            .w(px(32.0))
-                                            .h(px(32.0))
-                                            .rounded_lg()
-                                            .bg(theme::danger_bg())
-                                            .flex()
-                                            .justify_center()
-                                            .items_center()
-                                            .text_base()
-                                            .text_color(theme::danger_text())
-                                            .child(render_icon(
-                                                Icon::TriangleAlert,
-                                                px(16.0),
-                                                theme::danger_text(),
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(theme::text())
-                                            .child(title),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id("close-delete-modal-btn")
-                                    .debug_selector(|| "delete-modal-close".to_string())
-                                    .tooltip(theme::tooltip_label("Cancel"))
-                                    .px_2p5()
-                                    .py_1()
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme::bg_control()))
-                                    .cursor_pointer()
-                                    .text_sm()
-                                    .text_color(theme::text_subtle())
-                                    .child(render_icon(Icon::X, px(14.0), theme::text_subtle()))
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.close_delete_modal(cx);
-                                    })),
-                            ),
-                    )
-                    // Modal Body
-                    .child(
-                        div()
-                            .p_6()
                             .flex()
                             .flex_col()
-                            .gap_4()
-                            // Warning message banner
-                            .child(
-                                div()
-                                    .p_3p5()
-                                    .bg(theme::danger_bg())
-                                    .border_1()
-                                    .border_color(theme::danger_border())
-                                    .rounded_lg()
-                                    .text_xs()
-                                    .text_color(theme::danger_text())
-                                    .child(format!(
-                                        "Are you sure you want to delete {} item{}?",
-                                        count,
-                                        if count == 1 { "" } else { "s" }
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text_muted())
-                                    .child("SELECT ACTION:"),
-                            )
-                            // Option 1: Move to macOS Trash / System Recycle Bin (Default)
+                            .gap_2()
                             .child(render_option_card(
                                 "opt-system-trash",
-                                "Move to Trash (Default)",
-                                "Safely moves original files to macOS ~/.Trash. Can still be recovered via Finder.",
-                                current_target == DeletionTarget::SystemTrash,
+                                "Move to Trash",
+                                trash_description,
+                                true,
+                                target == DeletionTarget::SystemTrash,
                                 false,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_delete_target(DeletionTarget::SystemTrash, cx);
                                 }),
                             ))
-                            // Option 2: Remove from Lumina library only
                             .child(render_option_card(
                                 "opt-catalog-only",
-                                "Remove from Lumina",
-                                "Removes items from catalog index without touching original files on disk.",
-                                current_target == DeletionTarget::CatalogOnly,
+                                "Remove from Lumina only",
+                                "Takes them out of your library. The files stay on disk.",
+                                false,
+                                target == DeletionTarget::CatalogOnly,
                                 false,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_delete_target(DeletionTarget::CatalogOnly, cx);
                                 }),
                             ))
-                            // Option 3: Delete permanently from disk
                             .child(render_option_card(
                                 "opt-disk-permanent",
                                 "Delete permanently",
-                                "Physically unlinks and deletes files from disk immediately. Frees storage space.",
-                                current_target == DeletionTarget::PermanentDisk,
+                                "Erases the files from disk right away. This can't be undone.",
+                                false,
+                                target == DeletionTarget::PermanentDisk,
                                 true,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_delete_target(DeletionTarget::PermanentDisk, cx);
                                 }),
-                            ))
-                            // Acknowledgement checkbox for Permanent Delete
-                            .child(if current_target == DeletionTarget::PermanentDisk {
-                                div()
-                                    .id("delete-permanent-ack-row")
-                                    .px_3()
-                                    .py_2p5()
-                                    .bg(theme::danger_bg())
-                                    .border_1()
-                                    .border_color(theme::danger_border())
-                                    .rounded_lg()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_2p5()
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.toggle_delete_permanent_acknowledged(cx);
-                                    }))
-                                    .child(
-                                        div()
-                                            .w(px(16.0))
-                                            .h(px(16.0))
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(theme::danger())
-                                            .bg(if state.permanent_acknowledged {
-                                                theme::danger()
-                                            } else {
-                                                theme::bg_pane()
-                                            })
-                                            .flex()
-                                            .justify_center()
-                                            .items_center()
-                                            .text_xs()
-                                            .text_color(theme::accent_fg())
-                                            .child(if state.permanent_acknowledged {
-                                                render_icon(
-                                                    Icon::Check,
-                                                    px(10.0),
-                                                    theme::accent_fg(),
-                                                )
-                                                .into_any_element()
-                                            } else {
-                                                Empty.into_any_element()
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(theme::danger_text())
-                                            .child("I understand this permanently removes files and cannot be undone."),
-                                    )
-                                    .into_any_element()
-                            } else {
-                                Empty.into_any_element()
-                            }),
+                            )),
                     )
-                    // Footer Actions
-                    .child({
-                        let can_confirm = current_target != DeletionTarget::PermanentDisk || state.permanent_acknowledged;
-                        let outcome_label = match current_target {
-                            DeletionTarget::SystemTrash => {
-                                match state.intent {
-                                    DeleteIntent::EmptyTrash => "Empty Trash",
-                                    DeleteIntent::DeleteSelected => "Move to Trash",
-                                }
-                            }
-                            DeletionTarget::CatalogOnly => "Remove from Lumina",
-                            DeletionTarget::PermanentDisk => "Delete Permanently",
-                        };
-
-                        div()
-                            .px_6()
-                            .py_4()
-                            .bg(theme::bg_pane())
-                            .border_t_1()
-                            .border_color(theme::border())
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .id("cancel-delete-btn")
-                                    .px_4()
-                                    .py_2()
-                                    .bg(theme::bg_control())
-                                    .hover(|s| s.bg(theme::bg_control_hover()))
-                                    .rounded_lg()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
-                                    .child("Cancel (Esc)")
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.close_delete_modal(cx);
-                                    })),
-                            )
-                            .child(if can_confirm {
-                                let is_destructive = current_target == DeletionTarget::PermanentDisk;
-                                div()
-                                    .id("confirm-permanent-delete-btn")
-                                    .px_5()
-                                    .py_2()
-                                    .bg(if is_destructive { theme::danger() } else { theme::accent() })
-                                    .hover(move |s| {
-                                        if is_destructive {
-                                            s.bg(theme::danger())
-                                        } else {
-                                            s.bg(theme::accent_hover())
-                                        }
-                                    })
-                                    .rounded_lg()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(if is_destructive { theme::text() } else { theme::accent_fg() })
-                                    .child(outcome_label)
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.execute_confirmed_deletion(cx);
-                                    }))
-                                    .into_any_element()
-                            } else {
-                                div()
-                                    .id("confirm-permanent-delete-btn")
-                                    .px_5()
-                                    .py_2()
-                                    .bg(theme::bg_control())
-                                    .rounded_lg()
-                                    .cursor_not_allowed()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text_disabled())
-                                    .child(outcome_label)
-                                    .into_any_element()
-                            })
-                    }),
+                    .children(ack)
+                    .child(footer),
             )
+            .children(from_library.then(|| {
+                div()
+                    .id("delete-hint")
+                    .debug_selector(|| "delete-hint".to_string())
+                    .text_xs()
+                    .text_color(theme::text_subtle())
+                    .child(
+                        "Trashed items stay in Library › Recently Deleted. ↑↓ choose · ↵ confirm",
+                    )
+            }))
             .into_any_element()
     }
 }
 
 fn render_option_card(
     id_name: &'static str,
-    title: &str,
-    description: &str,
+    title: &'static str,
+    description: &'static str,
+    recommended: bool,
     is_selected: bool,
     is_destructive: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -334,27 +329,26 @@ fn render_option_card(
     } else {
         theme::accent()
     };
-    let border_color = if is_selected {
-        active_color
-    } else {
-        theme::border()
-    };
-    let bg_color = if is_selected {
-        if is_destructive {
-            theme::danger_bg()
-        } else {
-            theme::selection_bg()
-        }
-    } else {
-        theme::bg_pane()
-    };
 
     div()
         .id(id_name)
+        .debug_selector(move || id_name.to_string())
         .p_3()
-        .bg(bg_color)
+        .bg(if is_selected {
+            if is_destructive {
+                theme::danger_bg()
+            } else {
+                theme::selection_bg()
+            }
+        } else {
+            theme::bg_raised()
+        })
         .border_1()
-        .border_color(border_color)
+        .border_color(if is_selected {
+            active_color
+        } else {
+            theme::border()
+        })
         .rounded_lg()
         .hover(move |s| s.border_color(active_color))
         .cursor_pointer()
@@ -364,10 +358,9 @@ fn render_option_card(
         .gap_3()
         .on_click(on_click)
         .child(
-            // Radio circle indicator
             div()
-                .w(px(16.0))
-                .h(px(16.0))
+                .size(px(16.0))
+                .flex_none()
                 .rounded_full()
                 .border_2()
                 .border_color(if is_selected {
@@ -378,16 +371,7 @@ fn render_option_card(
                 .flex()
                 .justify_center()
                 .items_center()
-                .child(if is_selected {
-                    div()
-                        .w(px(8.0))
-                        .h(px(8.0))
-                        .rounded_full()
-                        .bg(active_color)
-                        .into_any_element()
-                } else {
-                    Empty.into_any_element()
-                }),
+                .children(is_selected.then(|| div().size(px(8.0)).rounded_full().bg(active_color))),
         )
         .child(
             div()
@@ -397,20 +381,50 @@ fn render_option_card(
                 .gap_0p5()
                 .child(
                     div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(if is_selected {
-                            theme::text()
-                        } else {
-                            theme::text_muted()
-                        })
-                        .child(title.to_string()),
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                // The permanent option's title is always red.
+                                .text_color(if is_destructive {
+                                    theme::label_red()
+                                } else {
+                                    theme::text()
+                                })
+                                .child(title),
+                        )
+                        .children(recommended.then(|| {
+                            div()
+                                .px_1p5()
+                                .rounded(px(4.0))
+                                .bg(theme::selection_bg())
+                                .text_size(px(10.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(theme::accent())
+                                .child("Recommended")
+                        })),
                 )
                 .child(
                     div()
                         .text_xs()
                         .text_color(theme::text_subtle())
-                        .child(description.to_string()),
+                        .child(description),
                 ),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::summary_line;
+
+    #[core::prelude::v1::test]
+    fn summary_counts_kinds_and_size() {
+        assert_eq!(summary_line(2, 1, 0), "2 photos, 1 video · 0 B");
+        assert_eq!(summary_line(1, 0, 0), "1 photo · 0 B");
+        assert_eq!(summary_line(0, 0, 10), "", "Empty Trash has no summary");
+    }
 }
