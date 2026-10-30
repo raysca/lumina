@@ -403,11 +403,11 @@ pub fn validate_external_editor(raw: Option<&str>) -> Option<&str> {
 }
 
 fn default_sidebar_width() -> f32 {
-    230.0
+    220.0
 }
 
 fn default_inspector_width() -> f32 {
-    310.0
+    300.0
 }
 
 fn default_sidebar_visible() -> bool {

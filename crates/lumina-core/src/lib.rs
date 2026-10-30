@@ -136,7 +136,7 @@ impl MediaItem {
     pub fn formatted_timestamp(&self) -> String {
         chrono::DateTime::from_timestamp_millis(self.timestamp_epoch_ms)
             .map(|dt| {
-                dt.format("%e %b %Y, %H:%M:%S")
+                dt.format("%a %-d %b %Y · %H:%M")
                     .to_string()
                     .trim()
                     .to_string()

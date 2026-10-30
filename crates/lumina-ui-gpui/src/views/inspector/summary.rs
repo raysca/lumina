@@ -10,7 +10,6 @@ use crate::app::types::format_duration_badge;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::inspector::body::{display_title, format_bytes, render_meta_row};
-use crate::views::inspector::tabs::tags::render_tags_section;
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
 
@@ -19,7 +18,6 @@ pub fn render_summary_body(
     weak_app: WeakEntity<LuminaApp>,
     item: &MediaItem,
     tags: &[String],
-    library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
     is_trash: bool,
@@ -31,22 +29,16 @@ pub fn render_summary_body(
     } else {
         "—".to_string()
     };
-    let place = match (&item.city, &item.country_code) {
-        (Some(city), Some(cc)) => Some(format!("{city}, {cc}")),
-        (Some(city), None) => Some(city.clone()),
-        _ => None,
-    };
+    let place = place_line(item);
     let app_info = weak_app.clone();
     let app_reveal = weak_app.clone();
     let path = item.path.clone();
 
-    div()
-        .id("inspector-summary")
-        .debug_selector(|| "inspector-summary".to_string())
-        .size_full()
+    let body = div()
+        .id("inspector-summary-scroll")
+        .flex_1()
+        .min_h_0()
         .overflow_y_scroll()
-        .bg(theme::bg_pane())
-        .text_color(theme::text())
         .p_4()
         .flex()
         .flex_col()
@@ -95,14 +87,7 @@ pub fn render_summary_body(
         ))
         .child(section(
             "KEYWORDS",
-            render_tags_section(
-                weak_app.clone(),
-                "ON THIS ITEM",
-                tags,
-                library_tag_counts,
-                tag_input_active,
-                tag_input_buffer,
-            ),
+            render_keywords(weak_app.clone(), tags, tag_input_active, tag_input_buffer),
         ))
         .children(place.map(|place| {
             section(
@@ -110,10 +95,24 @@ pub fn render_summary_body(
                 div().text_xs().text_color(theme::text_muted()).child(place),
             )
         }))
-        .children(is_trash.then(|| render_trash_lifecycle(weak_app.clone())))
-        // Footer: file facts and the way into the full editor.
+        .children(is_trash.then(|| render_trash_lifecycle(weak_app.clone())));
+
+    div()
+        .id("inspector-summary")
+        .debug_selector(|| "inspector-summary".to_string())
+        .size_full()
+        .bg(theme::bg_pane())
+        .text_color(theme::text())
+        .flex()
+        .flex_col()
+        .child(body)
+        // Footer pinned to the bottom: file facts and the way into Get Info.
         .child(
             div()
+                .id("inspector-footer")
+                .debug_selector(|| "inspector-footer".to_string())
+                .flex_none()
+                .p_4()
                 .pt_2p5()
                 .border_t_1()
                 .border_color(theme::border_subtle())
@@ -174,11 +173,14 @@ fn section(title: &'static str, content: impl IntoElement) -> Div {
 /// is omitted entirely when nothing is known.
 fn render_stat_strip(item: &MediaItem) -> AnyElement {
     let cells: Vec<String> = if item.media_type == MediaType::Video {
-        // ponytail: duration only; frame rate is not in the catalog yet.
-        Some(format_duration_badge(item.duration_secs()))
-            .filter(|d| !d.is_empty())
-            .into_iter()
-            .collect()
+        // ponytail: no fps cell; frame rate is not in the catalog yet.
+        [
+            Some(format_duration_badge(item.duration_secs())).filter(|d| !d.is_empty()),
+            (item.width > 0 && item.height > 0).then(|| resolution_label(item.width, item.height)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     } else {
         [
             item.f_number.map(|f| format!("ƒ/{f:.1}")),
@@ -223,7 +225,6 @@ fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
         .flex()
         .flex_row()
         .items_center()
-        .gap_1()
         .children((1u8..=5).map(move |star| {
             let app = weak_app.clone();
             let filled = rating >= star;
@@ -232,12 +233,22 @@ fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
             } else {
                 theme::text_disabled()
             };
+            // 22px targets; clicking the current rating clears it.
             div()
                 .id(ElementId::NamedInteger(
                     "inspector-star".into(),
                     star as u64,
                 ))
                 .debug_selector(move || format!("inspector-star-{star}"))
+                .tooltip(theme::tooltip_label(if star == 1 {
+                    "1 star".to_string()
+                } else {
+                    format!("{star} stars")
+                }))
+                .size(px(22.0))
+                .flex()
+                .items_center()
+                .justify_center()
                 .cursor_pointer()
                 .child(render_icon(
                     if filled { Icon::StarFilled } else { Icon::Star },
@@ -253,42 +264,164 @@ fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
 }
 
 fn render_label_dots(weak_app: WeakEntity<LuminaApp>, color_label: Option<u8>) -> Div {
-    div().flex().flex_row().items_center().gap_1p5().children(
-        [
-            (1u8, theme::label_red()),
-            (2, theme::label_orange()),
-            (3, theme::label_yellow()),
-            (4, theme::label_green()),
-            (5, theme::label_blue()),
-            (6, theme::label_purple()),
-        ]
-        .into_iter()
-        .map(move |(idx, color)| {
+    let current = color_label.unwrap_or(0);
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .children(theme::label_options().into_iter().map(move |label| {
             let app = weak_app.clone();
-            let on = color_label == Some(idx);
-            div()
-                .id(ElementId::NamedInteger(
-                    "inspector-label".into(),
-                    idx as u64,
-                ))
-                .debug_selector(move || format!("inspector-label-{idx}"))
-                .size(px(14.0))
-                .rounded_full()
-                .bg(color)
-                .cursor_pointer()
-                .border_1()
-                .border_color(if on {
-                    theme::text()
-                } else {
-                    theme::border_subtle()
-                })
-                // Clicking the active label again clears it
-                // (`set_color_label_selected` toggles).
-                .on_click(move |_e, _w, cx| {
+            let idx = label.0;
+            // "No label" clears; the active colour toggles off
+            // (`set_color_label_selected`).
+            theme::label_swatch("inspector-label", label, current == idx).on_click(
+                move |_e, _w, cx| {
                     if let Some(app) = app.upgrade() {
                         app.update(cx, |this, cx| this.set_color_label_selected(idx, cx));
                     }
+                },
+            )
+        }))
+}
+
+/// "4K", "1080p" or "1920 × 1080" for the video strip.
+pub(crate) fn resolution_label(width: u32, height: u32) -> String {
+    match width.min(height) {
+        2160 => "4K".to_string(),
+        1440 | 1080 | 720 => format!("{}p", width.min(height)),
+        _ => format!("{width} × {height}"),
+    }
+}
+
+/// "Lisbon, Lisboa, PT": city, region (when it differs) and country code.
+// ponytail: no neighbourhood or country names; the offline geocoder only
+// has city, admin1 and ISO code.
+pub(crate) fn place_line(item: &MediaItem) -> Option<String> {
+    let city = item.city.as_ref()?;
+    let mut parts = vec![city.clone()];
+    if let Some(region) = item.admin1_region.as_ref().filter(|r| *r != city) {
+        parts.push(region.clone());
+    }
+    parts.extend(item.country_code.clone());
+    Some(parts.join(", "))
+}
+
+/// One compact field: plain chips (no "#") with ×, then an inline "add…".
+fn render_keywords(
+    weak_app: WeakEntity<LuminaApp>,
+    tags: &[String],
+    input_active: bool,
+    input_buffer: &str,
+) -> impl IntoElement {
+    let app_add = weak_app.clone();
+    div()
+        .id("inspector-keywords")
+        .debug_selector(|| "inspector-keywords".to_string())
+        .w_full()
+        .min_h(px(30.0))
+        .p(px(4.0))
+        .rounded(px(6.0))
+        .bg(theme::bg_app())
+        .border_1()
+        .border_color(if input_active {
+            theme::accent()
+        } else {
+            theme::border()
+        })
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(px(4.0))
+        .cursor_text()
+        .children(tags.iter().map(|tag| {
+            let app = weak_app.clone();
+            let remove = tag.clone();
+            let selector = format!("keyword-chip-{tag}");
+            div()
+                .debug_selector(move || selector.clone())
+                .h(px(20.0))
+                .pl(px(7.0))
+                .pr(px(3.0))
+                .rounded(px(4.0))
+                .bg(theme::bg_control_hover())
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(3.0))
+                .text_xs()
+                .child({
+                    let app = weak_app.clone();
+                    let query = if tag.contains(' ') {
+                        format!("tag:\"{tag}\"")
+                    } else {
+                        format!("tag:{tag}")
+                    };
+                    let selector = format!("keyword-filter-{tag}");
+                    div()
+                        .id(ElementId::Name(selector.clone().into()))
+                        .debug_selector(move || selector.clone())
+                        .tooltip(theme::tooltip_label("Show items with this keyword"))
+                        .cursor_pointer()
+                        .child(tag.clone())
+                        .on_click(move |_e, _w, cx| {
+                            cx.stop_propagation();
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |this, cx| this.set_search_query(&query, cx));
+                            }
+                        })
                 })
-        }),
-    )
+                .child(
+                    div()
+                        .id(ElementId::Name(format!("keyword-remove-{tag}").into()))
+                        .debug_selector({
+                            let id = format!("keyword-remove-{tag}");
+                            move || id.clone()
+                        })
+                        .tooltip(theme::tooltip_label("Remove keyword"))
+                        .size(px(14.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .child(render_icon(Icon::X, px(9.0), theme::text_muted()))
+                        .on_click(move |_e, _w, cx| {
+                            cx.stop_propagation();
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.batch_remove_tag(remove.clone(), cx)
+                                });
+                            }
+                        }),
+                )
+        }))
+        .child(
+            div()
+                .id("keyword-add")
+                .debug_selector(|| "keyword-add".to_string())
+                .flex_1()
+                .min_w(px(40.0))
+                .px(px(4.0))
+                .text_xs()
+                .text_color(if input_active && !input_buffer.is_empty() {
+                    theme::text()
+                } else {
+                    theme::text_subtle()
+                })
+                .child(match (input_active, input_buffer.is_empty()) {
+                    (true, true) => "|".to_string(),
+                    (true, false) => format!("{input_buffer}|"),
+                    (false, _) => "add…".to_string(),
+                }),
+        )
+        // Clicking anywhere in the field starts typing (Enter adds, Esc stops).
+        .on_click(move |_e, _w, cx| {
+            if let Some(app) = app_add.upgrade() {
+                app.update(cx, |this, cx| {
+                    if !this.tag_input_active {
+                        this.start_tag_input(cx);
+                    }
+                });
+            }
+        })
 }

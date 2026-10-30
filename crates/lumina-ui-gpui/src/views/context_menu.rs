@@ -2,7 +2,6 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::viewer_state::ViewerRotation;
 use crate::{AlbumSelection, LuminaApp};
-use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::MediaItem;
 
@@ -246,55 +245,23 @@ impl MediaContextMenu {
                             .child({
                                 let current_label =
                                     app.item_color_labels.get(&item.id).copied().unwrap_or(0);
-                                // 7 swatches of 14px: a hollow "No label" first,
-                                // then the colours; the chosen one gets a 2px
-                                // ring with a 2px gap.
-                                let labels: [(u8, Option<Rgba>, &'static str); 7] = [
-                                    (0, None, "No label"),
-                                    (1, Some(theme::label_red()), "Red"),
-                                    (2, Some(theme::label_orange()), "Orange"),
-                                    (3, Some(theme::label_yellow()), "Yellow"),
-                                    (4, Some(theme::label_green()), "Green"),
-                                    (5, Some(theme::label_blue()), "Blue"),
-                                    (6, Some(theme::label_purple()), "Purple"),
-                                ];
                                 div()
                                     .flex()
                                     .flex_row()
                                     .items_center()
                                     .gap(px(2.0))
-                                    .children(labels.into_iter().map(|(label_idx, color, name)| {
-                                        let swatch = div().size(px(14.0)).rounded_full();
-                                        let swatch = match color {
-                                            Some(c) => swatch.bg(c),
-                                            None => {
-                                                swatch.border_1().border_color(theme::text_muted())
-                                            }
-                                        };
-                                        div()
-                                            .id(ElementId::NamedInteger(
-                                                "context-label".into(),
-                                                label_idx as u64,
-                                            ))
-                                            .debug_selector(move || {
-                                                format!("context-label-{label_idx}")
-                                            })
-                                            .tooltip(theme::tooltip_label(name))
-                                            .size(px(22.0))
-                                            .rounded_full()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .when(current_label == label_idx, |ring| {
-                                                ring.border_2().border_color(theme::text())
-                                            })
-                                            .child(swatch)
-                                            .on_click(cx.listener(
-                                                move |this, _e: &ClickEvent, _w, cx| {
-                                                    this.set_color_label_selected(label_idx, cx);
-                                                },
-                                            ))
+                                    .children(theme::label_options().into_iter().map(|label| {
+                                        let label_idx = label.0;
+                                        theme::label_swatch(
+                                            "context-label",
+                                            label,
+                                            current_label == label_idx,
+                                        )
+                                        .on_click(
+                                            cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                                this.set_color_label_selected(label_idx, cx);
+                                            }),
+                                        )
                                     }))
                             }),
                     )

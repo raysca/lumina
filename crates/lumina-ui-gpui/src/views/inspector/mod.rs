@@ -60,7 +60,6 @@ impl InspectorView {
                         weak_app,
                         item,
                         &tags,
-                        &library_tag_counts,
                         tag_input_active,
                         &tag_input_buffer,
                         is_trash,

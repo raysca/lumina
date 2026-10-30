@@ -40,6 +40,9 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Palette has no "Go to" group for sidebar destinations; commands only.
 - Viewer pinch-to-zoom: GPUI 0.2.2 delivers no magnify event; the wheel,
   +/−, 0/1/2/4 and Z zoom.
+- Inspector: Modified/Created/Added rows keep the short date format; only
+  the capture time reads "Mon 13 Jun 2022 · 10:03". Overflow scroll and the
+  video strip have no dedicated UI test yet.
 - Get Info: "Show nearby photos" searches the same city (no geo radius
   index); "Created" is the file-system birth time and the EXIF extras are
   read from the file when the window shows it; items catalogued before
@@ -54,6 +57,9 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   and no Add to Album: there are no manual albums to add to.
 - Tag group, colour and keyboard shortcut from the design are not built:
   tags are plain names in the catalog (needs a schema change and a spec).
+- Docked inspector: the video strip has duration and resolution but no fps
+  (not in the catalog), and the place reads "City, Region, CC": the offline
+  geocoder has no neighbourhood and no country names.
 - Tag Manager has no "+ New Tag", "· M unused" count or "unused" row marker:
   a tag exists only while an item carries it, so an empty tag cannot occur
   until tags get their own table. TAGGED ITEMS shows the newest 24 and only

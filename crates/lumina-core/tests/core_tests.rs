@@ -2492,3 +2492,14 @@ fn test_read_media_details_reads_exif_and_tolerates_plain_files() {
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn capture_time_reads_weekday_day_month_year_and_time() {
+    // 2022-06-13 10:03 UTC
+    let item = sample_media_item("/a/b.jpg", MediaType::Image, 1_655_114_580_000, None, None);
+    assert_eq!(
+        item.formatted_timestamp(),
+        "Mon 13 Jun 2022 · 10:03",
+        "inspector capture time reads weekday, day, month, year · time"
+    );
+}

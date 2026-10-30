@@ -376,6 +376,49 @@ pub fn tooltip_label(
     move |_window, cx| cx.new(|_cx| TooltipLabel { text: text.clone() }).into()
 }
 
+/// Colour labels in menu order: a hollow "No label", then the colours.
+pub fn label_options() -> [(u8, Option<Rgba>, &'static str); 7] {
+    [
+        (0, None, "No label"),
+        (1, Some(label_red()), "Red"),
+        (2, Some(label_orange()), "Orange"),
+        (3, Some(label_yellow()), "Yellow"),
+        (4, Some(label_green()), "Green"),
+        (5, Some(label_blue()), "Blue"),
+        (6, Some(label_purple()), "Purple"),
+    ]
+}
+
+/// A 14px label swatch in a 22px hit target; the chosen one gets a 2px ring
+/// with a 2px gap. `prefix` names the selector, e.g. `context-label-3`.
+pub fn label_swatch(
+    prefix: &'static str,
+    (idx, color, name): (u8, Option<Rgba>, &'static str),
+    selected: bool,
+) -> Stateful<Div> {
+    let swatch = div().size(px(14.0)).rounded_full();
+    let swatch = match color {
+        Some(c) => swatch.bg(c),
+        None => swatch.border_1().border_color(text_muted()),
+    };
+    let base = div()
+        .id(ElementId::NamedInteger(prefix.into(), idx as u64))
+        .debug_selector(move || format!("{prefix}-{idx}"))
+        .tooltip(tooltip_label(name))
+        .size(px(22.0))
+        .rounded_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .child(swatch);
+    if selected {
+        base.border_2().border_color(text())
+    } else {
+        base
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
