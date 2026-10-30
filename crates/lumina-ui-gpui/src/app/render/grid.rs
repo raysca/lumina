@@ -1,5 +1,6 @@
 use std::cmp;
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaType, SmartAlbum, SystemAlbum};
 
@@ -8,8 +9,7 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    media_card_tooltip, CARD_INFO_BAND_TOP, CARD_PADDING, CARD_RATING_ROW_HEIGHT, CARD_ROW_GAP,
-    GRID_CARD_GAP, GRID_ROW_PADDING_X,
+    media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, GRID_CARD_GAP, GRID_ROW_PADDING_X,
 };
 use crate::views::sidebar::AlbumSelection;
 
@@ -351,18 +351,46 @@ impl LuminaApp {
                                                         )
                                                         .into_any_element()
                                                 })
-                                                // Favorite Heart Overlay (bottom-left)
-                                                .child(if is_fav {
+                                                // Meta pill (bottom-left): favorite, stars and
+                                                // colour label sit on the photo so the card has
+                                                // no band below it (v3 grid).
+                                                .child(if is_fav || item_rating > 0 || item_color.is_some() {
                                                     div()
+                                                        .debug_selector(move || {
+                                                            format!("media-card-meta-{}", item_id_num)
+                                                        })
                                                         .absolute()
-                                                        .bottom_1p5()
-                                                        .left_1p5()
-                                                        .text_color(rgb(0xffffff))
-                                                        .child(render_icon(
-                                                            Icon::HeartFilled,
-                                                            px(12.0),
-                                                            rgb(0xffffff),
-                                                        ))
+                                                        .bottom_1()
+                                                        .left_1()
+                                                        .h(px(18.0))
+                                                        .px(px(5.0))
+                                                        .rounded(px(3.0))
+                                                        .bg(rgba(0x00000099))
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .gap(px(5.0))
+                                                        .when(is_fav, |d| {
+                                                            d.child(render_icon(
+                                                                Icon::HeartFilled,
+                                                                px(10.0),
+                                                                rgb(0xffffff),
+                                                            ))
+                                                        })
+                                                        .when(item_rating > 0, |d| {
+                                                            d.child(div().flex().flex_row().gap(px(1.0)).children(
+                                                                (0..item_rating).map(|_| {
+                                                                    render_icon(
+                                                                        Icon::StarFilled,
+                                                                        px(9.0),
+                                                                        theme::rating(),
+                                                                    )
+                                                                }),
+                                                            ))
+                                                        })
+                                                        .when_some(item_color, |d, c| {
+                                                            d.child(div().size(px(8.0)).rounded_full().bg(c))
+                                                        })
                                                         .into_any_element()
                                                 } else {
                                                     Empty.into_any_element()
@@ -415,55 +443,6 @@ impl LuminaApp {
                                                 } else {
                                                     Empty.into_any_element()
                                                 }),
-                                        )
-                                        // Rating / colour row below the photo well.
-                                        // The filename lives on the card tooltip now;
-                                        // this band is exactly CARD_INFO_BAND_HEIGHT so
-                                        // `row_height()` and the rendered card agree.
-                                        .child(
-                                            div()
-                                                .debug_selector(move || {
-                                                    format!("media-card-info-{}", item_id_num)
-                                                })
-                                                .pt(px(CARD_INFO_BAND_TOP))
-                                                .flex()
-                                                .flex_col()
-                                                .child(
-                                                    div()
-                                                        .h(px(CARD_RATING_ROW_HEIGHT))
-                                                        .flex()
-                                                        .flex_row()
-                                                        .justify_between()
-                                                        .items_center()
-                                                        .child(if item_rating > 0 {
-                                                            div()
-                                                                .flex()
-                                                                .flex_row()
-                                                                .items_center()
-                                                                .gap(px(1.0))
-                                                                .children((0..item_rating).map(
-                                                                    |_| {
-                                                                        render_icon(
-                                                                            Icon::StarFilled,
-                                                                            px(9.0),
-                                                                            theme::rating(),
-                                                                        )
-                                                                    },
-                                                                ))
-                                                                .into_any_element()
-                                                        } else {
-                                                            Empty.into_any_element()
-                                                        })
-                                                        .child(if let Some(c) = item_color {
-                                                            div()
-                                                                .size(px(6.0))
-                                                                .rounded_full()
-                                                                .bg(c)
-                                                                .into_any_element()
-                                                        } else {
-                                                            Empty.into_any_element()
-                                                        }),
-                                                ),
                                         )
                                         .into_any_element(),
                                 );

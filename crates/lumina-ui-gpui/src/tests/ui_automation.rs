@@ -610,9 +610,15 @@ fn ui_automation_card_texture_replaces_skeleton() {
 #[core::prelude::v1::test]
 fn ui_automation_card_photo_well_is_square_at_all_densities() {
     let (temp_dir, engine) = seed_library("square_well", 8);
-    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let first = engine.get_item_slice(0..1)[0].clone();
+    let first_id = first.id.0;
+    engine.catalog().set_rating(first.id, 3).unwrap();
     let photo = leak(format!("media-card-photo-{}", first_id));
-    let info = leak(format!("media-card-info-{}", first_id));
+    let meta = leak(format!("media-card-meta-{}", first_id));
+    let unrated_meta = leak(format!(
+        "media-card-meta-{}",
+        engine.get_item_slice(1..2)[0].id.0
+    ));
 
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -646,16 +652,19 @@ fn ui_automation_card_photo_well_is_square_at_all_densities() {
             "the rendered well ({height}) must use the derived side ({expected}) at {columns} columns"
         );
 
-        // The filename label is gone: the band under the photo is only the
-        // rating/colour row plus its top padding.
-        let info_bounds = vcx
-            .debug_bounds(info)
-            .expect("every card must paint its rating/colour band");
-        let info_height = f32::from(info_bounds.size.height);
+        // v3 grid: no band under the photo. Rating, favorite and label ride
+        // in a pill on the thumbnail, and only when there is something to show.
+        let meta_bounds = vcx.debug_bounds(meta).unwrap_or_else(|| {
+            panic!("a rated card must paint its meta pill at {columns} columns")
+        });
         assert!(
-            (info_height - crate::views::grid::CARD_INFO_BAND_HEIGHT).abs() <= 1.0,
-            "the info band must be {}px tall, got {info_height}",
-            crate::views::grid::CARD_INFO_BAND_HEIGHT
+            photo_bounds.contains(&meta_bounds.origin)
+                && photo_bounds.contains(&meta_bounds.bottom_right()),
+            "the meta pill must sit inside the photo well at {columns} columns"
+        );
+        assert!(
+            vcx.debug_bounds(unrated_meta).is_none(),
+            "an unmarked card must not paint an empty meta pill"
         );
     }
 

@@ -28,16 +28,6 @@ pub(crate) const CARD_PADDING: f32 = 8.0;
 /// The card's 1px border on each side. Included in the card's fixed height.
 pub(crate) const CARD_BORDER: f32 = 1.0;
 
-/// Top padding above the rating/colour row, in pixels.
-pub(crate) const CARD_INFO_BAND_TOP: f32 = 6.0;
-
-/// Fixed height of the rating/colour row, in pixels.
-pub(crate) const CARD_RATING_ROW_HEIGHT: f32 = 12.0;
-
-/// Height the info band occupies under the photo well. The filename label is
-/// not part of it anymore; the full name lives on the card tooltip.
-pub(crate) const CARD_INFO_BAND_HEIGHT: f32 = CARD_INFO_BAND_TOP + CARD_RATING_ROW_HEIGHT;
-
 /// Empty space below each card inside its uniform-list row, in pixels.
 pub(crate) const CARD_ROW_GAP: f32 = 10.0;
 
@@ -104,11 +94,7 @@ pub(crate) fn grid_metrics(
     let photo_side =
         (card_width - 2.0 * CARD_PADDING - 2.0 * CARD_BORDER).clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
     GridMetrics {
-        row_height: photo_side
-            + 2.0 * CARD_PADDING
-            + 2.0 * CARD_BORDER
-            + CARD_INFO_BAND_HEIGHT
-            + CARD_ROW_GAP,
+        row_height: photo_side + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER + CARD_ROW_GAP,
         photo_side,
     }
 }
@@ -375,8 +361,7 @@ impl GridState {
 mod tests {
     use super::*;
 
-    const CARD_CHROME: f32 =
-        CARD_ROW_GAP + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER + CARD_INFO_BAND_HEIGHT;
+    const CARD_CHROME: f32 = CARD_ROW_GAP + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER;
 
     #[core::prelude::v1::test]
     fn metrics_derive_expected_squares_at_default_window() {
@@ -388,7 +373,7 @@ mod tests {
             four.photo_side
         );
         assert!(
-            (four.row_height - 266.0).abs() < 0.01,
+            (four.row_height - 248.0).abs() < 0.01,
             "got {}",
             four.row_height
         );
