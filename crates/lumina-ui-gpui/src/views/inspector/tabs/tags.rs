@@ -3,15 +3,8 @@ use crate::theme;
 use crate::LuminaApp;
 use gpui::*;
 
-pub const PRESET_TAGS: &[&str] = &[
-    "nature",
-    "travel",
-    "portraits",
-    "family",
-    "vacation",
-    "street",
-    "architecture",
-];
+/// Library tags offered under the input; more would crowd the editor.
+const MAX_SUGGESTIONS: usize = 6;
 
 pub fn render_tags_tab(
     weak_app: WeakEntity<LuminaApp>,
@@ -22,6 +15,7 @@ pub fn render_tags_tab(
 ) -> AnyElement {
     render_tags_section(
         weak_app,
+        "ON THIS ITEM",
         tags,
         library_tag_counts,
         tag_input_active,
@@ -29,51 +23,53 @@ pub fn render_tags_tab(
     )
 }
 
+/// Up to six library tags not already present that start with the typed text
+/// (case-insensitive), most used first.
+pub(crate) fn tag_suggestions<'a>(
+    tags: &[String],
+    library_tag_counts: &'a [(String, usize)],
+    typed: &str,
+) -> Vec<&'a str> {
+    let typed = typed.trim().to_lowercase();
+    library_tag_counts
+        .iter()
+        .map(|(tag, _)| tag.as_str())
+        .filter(|tag| !tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase()))
+        .filter(|tag| tag.to_lowercase().starts_with(&typed))
+        .take(MAX_SUGGESTIONS)
+        .collect()
+}
+
+/// The tag editor (v3): chips on the item, an always-visible ADD field where
+/// Enter adds, dashed suggestion chips, and a link to the Tag Manager.
 pub fn render_tags_section(
     weak_app: WeakEntity<LuminaApp>,
+    heading: &'static str,
     tags: &[String],
     library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
 ) -> AnyElement {
-    let mut suggestions: Vec<&str> = Vec::with_capacity(10);
-    for (t, _) in library_tag_counts {
-        if suggestions.len() >= 10 {
-            break;
-        }
-        if !suggestions.iter().any(|&s| s.eq_ignore_ascii_case(t)) {
-            suggestions.push(t.as_str());
-        }
-    }
-    for &preset in PRESET_TAGS {
-        if suggestions.len() >= 10 {
-            break;
-        }
-        if !suggestions.iter().any(|&s| s.eq_ignore_ascii_case(preset)) {
-            suggestions.push(preset);
-        }
-    }
-
+    let typed = if tag_input_active {
+        tag_input_buffer
+    } else {
+        ""
+    };
+    let suggestions = tag_suggestions(tags, library_tag_counts, typed);
     let app_start_tag = weak_app.clone();
-    let app_commit_tag = weak_app.clone();
-    let app_cancel_tag = weak_app.clone();
+    let app_manager = weak_app.clone();
 
     div()
         .flex()
         .flex_col()
         .gap_2()
-        .p_2p5()
-        .rounded_lg()
-        .bg(theme::bg_pane())
-        .border_1()
-        .border_color(theme::border_subtle())
         .child(
             div()
                 .flex()
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .child(theme::section_label("KEYWORDS & TAGS"))
+                .child(theme::section_label(heading))
                 .child(
                     div()
                         .text_xs()
@@ -81,12 +77,11 @@ pub fn render_tags_section(
                         .child(format!("{} tags", tags.len())),
                 ),
         )
-        // Active Tags List
         .child(if tags.is_empty() {
             div()
                 .text_xs()
                 .text_color(theme::text_subtle())
-                .child("No tags added yet. Type or click below to add.")
+                .child("No tags yet.")
                 .into_any_element()
         } else {
             div()
@@ -108,7 +103,7 @@ pub fn render_tags_section(
                     div()
                         .px_2()
                         .py_0p5()
-                        .rounded_md()
+                        .rounded(px(6.0))
                         .bg(theme::selection_bg())
                         .border_1()
                         .border_color(theme::selection_border())
@@ -119,12 +114,16 @@ pub fn render_tags_section(
                         .child(
                             div()
                                 .id(ElementId::Name(format!("filter-tag-{}", tag_name).into()))
+                                .debug_selector({
+                                    let id = format!("filter-tag-{}", tag_name);
+                                    move || id.clone()
+                                })
+                                .tooltip(theme::tooltip_label("Show items with this tag"))
                                 .cursor_pointer()
                                 .text_xs()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::selection_fg())
-                                .hover(|s| s.text_color(theme::text()))
-                                .child(format!("#{}", tag_name))
+                                .child(tag_name.clone())
                                 .on_click(move |_e, _window, cx| {
                                     if let Some(app) = app_filter.upgrade() {
                                         app.update(cx, |this, cx| {
@@ -136,10 +135,8 @@ pub fn render_tags_section(
                         .child(
                             div()
                                 .id(ElementId::Name(format!("remove-tag-{}", tag_name).into()))
+                                .tooltip(theme::tooltip_label("Remove tag"))
                                 .cursor_pointer()
-                                .text_xs()
-                                .text_color(theme::selection_fg())
-                                .hover(|s| s.text_color(theme::text()))
                                 .child(render_icon(Icon::X, px(10.0), theme::selection_fg()))
                                 .on_click(move |_e, _window, cx| {
                                     if let Some(app) = app_remove.upgrade() {
@@ -152,171 +149,122 @@ pub fn render_tags_section(
                 }))
                 .into_any_element()
         })
-        // Custom Tag Input Row
-        .child(if tag_input_active {
+        .child(theme::section_label("ADD"))
+        // Always visible; clicking focuses it, Enter adds, Esc clears.
+        .child(
+            div()
+                .id("tag-input")
+                .debug_selector(|| "tag-input".to_string())
+                .w_full()
+                .h(px(28.0))
+                .px_2p5()
+                .flex()
+                .items_center()
+                .rounded(px(6.0))
+                .bg(theme::bg_app())
+                .border_1()
+                .border_color(if tag_input_active {
+                    theme::accent()
+                } else {
+                    theme::border()
+                })
+                .cursor_text()
+                .text_xs()
+                .child(if tag_input_active && !tag_input_buffer.is_empty() {
+                    div()
+                        .text_color(theme::text())
+                        .child(format!("{}|", tag_input_buffer))
+                } else {
+                    div()
+                        .text_color(theme::text_subtle())
+                        .child(if tag_input_active {
+                            "Type a tag, Enter to add|"
+                        } else {
+                            "Add a tag…"
+                        })
+                })
+                .on_click(move |_e, _window, cx| {
+                    if !tag_input_active {
+                        if let Some(app) = app_start_tag.upgrade() {
+                            app.update(cx, |this, cx| this.start_tag_input(cx));
+                        }
+                    }
+                }),
+        )
+        .children((!suggestions.is_empty()).then(|| {
             div()
                 .flex()
                 .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
+                .flex_wrap()
+                .gap_1()
+                .children(suggestions.into_iter().map(|suggested| {
+                    let tag_str = suggested.to_string();
+                    let app_suggest = weak_app.clone();
                     div()
-                        .flex_1()
-                        .px_2p5()
-                        .py_1()
-                        .rounded_md()
-                        .bg(theme::bg_viewer())
-                        .border_1()
-                        .border_color(theme::accent())
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .child(if tag_input_buffer.is_empty() {
-                            div()
-                                .text_xs()
-                                .text_color(theme::text_subtle())
-                                .child("Type tag... (Enter to save)")
-                                .into_any_element()
-                        } else {
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme::text())
-                                .child(format!("{}|", tag_input_buffer))
-                                .into_any_element()
-                        }),
-                )
-                .child(
-                    div()
-                        .id("commit-tag-btn")
-                        .px_2p5()
-                        .py_1()
-                        .rounded_md()
-                        .bg(theme::accent())
-                        .hover(|s| s.bg(theme::accent_hover()).text_color(theme::accent_fg()))
-                        .cursor_pointer()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::accent_fg())
-                        .child("Add")
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_commit_tag.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.commit_tag_input(cx);
-                                });
-                            }
-                        }),
-                )
-                .child(
-                    div()
-                        .id("cancel-tag-btn")
+                        .id(ElementId::Name(format!("suggest-tag-{}", suggested).into()))
+                        .debug_selector({
+                            let id = format!("suggest-tag-{}", suggested);
+                            move || id.clone()
+                        })
                         .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .bg(theme::bg_control())
+                        .py_0p5()
+                        .rounded(px(6.0))
+                        .border_1()
+                        .border_dashed()
+                        .border_color(theme::border_strong())
                         .hover(|s| s.bg(theme::bg_control_hover()))
                         .cursor_pointer()
                         .text_xs()
                         .text_color(theme::text_muted())
-                        .child(render_icon(Icon::X, px(11.0), theme::text_muted()))
+                        .child(suggested.to_string())
                         .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_cancel_tag.upgrade() {
+                            if let Some(app) = app_suggest.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    this.cancel_tag_input(cx);
+                                    this.batch_add_tag(tag_str.clone(), cx);
                                 });
                             }
-                        }),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .id("start-add-tag-btn")
-                .px_2p5()
-                .py_1()
-                .rounded_md()
-                .bg(theme::bg_control())
-                .hover(|s| s.bg(theme::bg_control_hover()))
-                .cursor_pointer()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_1p5()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme::accent())
-                        .child("+ Add Tag…"),
-                )
-                .on_click(move |_e, _window, cx| {
-                    if let Some(app) = app_start_tag.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.start_tag_input(cx);
-                        });
-                    }
-                })
-                .into_any_element()
-        })
-        // Quick Suggested Tags
+                        })
+                }))
+        }))
         .child(
             div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_disabled())
-                        .child("Suggestions:"),
-                )
-                .child(div().flex().flex_row().flex_wrap().gap_1().children(
-                    suggestions.into_iter().map(|suggested| {
-                        let is_present = tags.iter().any(|t| t.eq_ignore_ascii_case(suggested));
-                        let tag_str = suggested.to_string();
-                        let app_suggest = weak_app.clone();
-                        div()
-                            .id(ElementId::Name(format!("suggest-tag-{}", suggested).into()))
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded_sm()
-                            .bg(if is_present {
-                                theme::selection_bg()
-                            } else {
-                                theme::bg_control()
-                            })
-                            .hover(|s| s.bg(theme::accent()).text_color(theme::accent_fg()))
-                            .cursor_pointer()
-                            .text_xs()
-                            .text_color(if is_present {
-                                theme::selection_fg()
-                            } else {
-                                theme::text_muted()
-                            })
-                            .child(if is_present {
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(render_icon(Icon::Check, px(9.0), theme::selection_fg()))
-                                    .child(suggested.to_string())
-                                    .into_any_element()
-                            } else {
-                                div().child(format!("+ {}", suggested)).into_any_element()
-                            })
-                            .on_click(move |_e, _window, cx| {
-                                if let Some(app) = app_suggest.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        if is_present {
-                                            this.batch_remove_tag(tag_str.clone(), cx);
-                                        } else {
-                                            this.batch_add_tag(tag_str.clone(), cx);
-                                        }
-                                    });
-                                }
-                            })
-                    }),
-                )),
+                .id("open-tag-manager-link")
+                .debug_selector(|| "open-tag-manager-link".to_string())
+                .cursor_pointer()
+                .text_xs()
+                .text_color(theme::accent())
+                .child("Open Tag Manager…")
+                .on_click(move |_e, _window, cx| {
+                    if let Some(app) = app_manager.upgrade() {
+                        app.update(cx, |this, cx| this.open_tag_manager(cx));
+                    }
+                }),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tag_suggestions;
+
+    #[core::prelude::v1::test]
+    fn suggestions_skip_present_tags_filter_by_prefix_and_cap_at_six() {
+        let library: Vec<(String, usize)> = [
+            "travel", "Trees", "beach", "trains", "tram", "tokyo", "toys", "tea", "tent",
+        ]
+        .iter()
+        .map(|t| (t.to_string(), 1))
+        .collect();
+        let on_item = vec!["TRAVEL".to_string()];
+        assert_eq!(
+            tag_suggestions(&on_item, &library, "tr"),
+            vec!["Trees", "trains", "tram"],
+            "present tags are excluded; matching is a case-insensitive prefix"
+        );
+        assert_eq!(
+            tag_suggestions(&on_item, &library, "").len(),
+            6,
+            "at most six"
+        );
+    }
 }

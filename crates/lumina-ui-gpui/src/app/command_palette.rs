@@ -3,6 +3,8 @@
 use gpui::*;
 use lumina_core::{SortDirection, SortField};
 
+use crate::views::inspector::InspectorTab;
+
 use crate::app::LuminaApp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +36,11 @@ pub enum CommandId {
     PipPlayPause,
     NewSmartAlbum,
     EditSmartAlbum,
+    /// Get Info actions, so they have a keyboard path (§11).
+    AdjustDate,
+    EditLocation,
+    RemoveLocation,
+    OpenTagManager,
 }
 
 pub struct Command {
@@ -255,6 +262,30 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "smart album rules filter change",
         },
+        Command {
+            id: CommandId::AdjustDate,
+            key: "command.adjust_date",
+            shortcut: "",
+            keywords: "date taken time edit change get info",
+        },
+        Command {
+            id: CommandId::EditLocation,
+            key: "command.edit_location",
+            shortcut: "",
+            keywords: "location gps coordinates place edit get info",
+        },
+        Command {
+            id: CommandId::RemoveLocation,
+            key: "command.remove_location",
+            shortcut: "",
+            keywords: "location gps coordinates place clear delete",
+        },
+        Command {
+            id: CommandId::OpenTagManager,
+            key: "command.open_tag_manager",
+            shortcut: "",
+            keywords: "tags keywords manage rename",
+        },
     ]
 }
 
@@ -347,6 +378,22 @@ impl LuminaApp {
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
+            CommandId::AdjustDate => {
+                self.open_get_info_at(InspectorTab::Info, cx);
+                self.start_date_input(cx);
+            }
+            CommandId::EditLocation => {
+                self.open_get_info_at(InspectorTab::Location, cx);
+                self.start_location_input(cx);
+            }
+            CommandId::RemoveLocation if self.selected_indices.len() <= 1 => {
+                self.remove_location_selected(cx)
+            }
+            CommandId::RemoveLocation => self.set_error(
+                "Remove Location works on one item at a time.".to_string(),
+                cx,
+            ),
+            CommandId::OpenTagManager => self.open_tag_manager(cx),
         }
     }
 }

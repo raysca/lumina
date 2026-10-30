@@ -59,6 +59,10 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.toggle_pip" => "Toggle Picture-in-Picture",
         "command.pip_play_pause" => "Play/Pause Picture-in-Picture",
         "command.new_smart_album" => "New Smart Album…",
+        "command.adjust_date" => "Adjust Date Taken…",
+        "command.edit_location" => "Edit Location…",
+        "command.remove_location" => "Remove Location",
+        "command.open_tag_manager" => "Open Tag Manager…",
         "command.edit_smart_album" => "Edit Smart Album…",
         _ => return None,
     })

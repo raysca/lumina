@@ -210,6 +210,8 @@ impl InspectorView {
                         &date_input_buffer,
                         location_input_active,
                         &location_input_buffer,
+                        // Batch body only; Get Info extras are single-item.
+                        None,
                     )),
             )
             .into_any_element()

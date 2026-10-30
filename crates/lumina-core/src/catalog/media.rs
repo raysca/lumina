@@ -24,7 +24,7 @@ impl Catalog {
                     latitude, longitude, altitude,
                     country_code, admin1_region, city,
                     make, model, lens, focal_length, f_number, iso, exposure_time,
-                    is_favorite, is_hidden, is_trashed, title
+                    is_favorite, is_hidden, is_trashed, title, added_epoch_ms
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5,
                     ?6, ?7, ?8, ?9,
@@ -32,8 +32,10 @@ impl Catalog {
                     ?14, ?15, ?16,
                     ?17, ?18, ?19,
                     ?20, ?21, ?22, ?23, ?24, ?25, ?26,
-                    ?27, ?28, ?29, ?30
+                    ?27, ?28, ?29, ?30,
+                    CAST(unixepoch('subsec') * 1000 AS INTEGER)
                 )
+                -- added_epoch_ms is set once, on first insert, never on update.
                 ON CONFLICT(file_path) DO UPDATE SET
                     file_size = excluded.file_size,
                     mtime_epoch_ms = excluded.mtime_epoch_ms,
@@ -254,6 +256,20 @@ impl Catalog {
         Ok(())
     }
 
+    /// When the item first entered the catalog; `None` for rows added before
+    /// schema v9 or unknown ids.
+    pub fn get_added_epoch_ms(&self, id: MediaId) -> Result<Option<i64>> {
+        let conn = self.conn.lock();
+        let added: Option<Option<i64>> = conn
+            .query_row(
+                "SELECT added_epoch_ms FROM media_items WHERE id = ?1;",
+                params![id.0 as i64],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(added.flatten())
+    }
+
     pub fn get_rating(&self, id: MediaId) -> Result<u8> {
         let conn = self.conn.lock();
         let r: Option<i32> = conn
@@ -396,10 +412,26 @@ impl Catalog {
         latitude: Option<f64>,
         longitude: Option<f64>,
     ) -> Result<()> {
+        // The place columns are derived from the coordinates (as at scan
+        // time), so they move with them: re-geocoded on edit, cleared on
+        // removal. The FTS update trigger reindexes them.
+        static GEOCODER: std::sync::OnceLock<crate::OfflineGeocoder> = std::sync::OnceLock::new();
+        let place = latitude.zip(longitude).and_then(|(lat, lon)| {
+            GEOCODER
+                .get_or_init(crate::OfflineGeocoder::new)
+                .reverse_geocode(lat, lon)
+        });
         let conn = self.conn.lock();
         conn.execute(
-            "UPDATE media_items SET latitude = ?1, longitude = ?2 WHERE id = ?3;",
-            params![latitude, longitude, id.0 as i64],
+            "UPDATE media_items SET latitude = ?1, longitude = ?2, city = ?3, admin1_region = ?4, country_code = ?5 WHERE id = ?6;",
+            params![
+                latitude,
+                longitude,
+                place.as_ref().map(|p| &p.city),
+                place.as_ref().map(|p| &p.admin1_region),
+                place.as_ref().map(|p| &p.country_code),
+                id.0 as i64
+            ],
         )?;
         Ok(())
     }

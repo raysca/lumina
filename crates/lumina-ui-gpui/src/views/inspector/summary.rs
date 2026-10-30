@@ -97,6 +97,7 @@ pub fn render_summary_body(
             "KEYWORDS",
             render_tags_section(
                 weak_app.clone(),
+                "ON THIS ITEM",
                 tags,
                 library_tag_counts,
                 tag_input_active,

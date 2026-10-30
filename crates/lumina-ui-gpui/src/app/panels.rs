@@ -47,6 +47,16 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Opens Get Info on `tab` (used by the palette's Get Info actions).
+    pub fn open_get_info_at(
+        &mut self,
+        tab: crate::views::inspector::InspectorTab,
+        cx: &mut Context<Self>,
+    ) {
+        self.undock_inspector(cx);
+        self.set_inspector_tab(tab, cx);
+    }
+
     pub fn redock_inspector(&mut self, cx: &mut Context<Self>) {
         self.floating_inspector_window = None;
         self.inspector_open = true;
@@ -627,6 +637,14 @@ impl LuminaApp {
         self.set_last_action(message);
         self.show_undo_toast(message, cx);
         cx.notify();
+    }
+
+    /// Get Info "Remove location": the same path as submitting an empty
+    /// location, so it is saved, undoable and reports errors.
+    pub fn remove_location_selected(&mut self, cx: &mut Context<Self>) {
+        self.caption.location_input_buffer.clear();
+        self.caption.location_input_active = true;
+        self.commit_location_input(cx);
     }
 
     pub fn cancel_location_input(&mut self, cx: &mut Context<Self>) {

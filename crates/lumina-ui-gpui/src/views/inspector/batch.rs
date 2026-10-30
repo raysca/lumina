@@ -237,6 +237,7 @@ pub fn render_batch_body(
         // from all); tags on only some are listed below it as dashed chips.
         .child(render_tags_section(
             weak_app.clone(),
+            "ON EVERY ITEM",
             &on_all,
             library_tag_counts,
             tag_input_active,

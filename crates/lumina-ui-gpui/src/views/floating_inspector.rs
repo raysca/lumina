@@ -60,10 +60,12 @@ impl Render for FloatingInspectorView {
 
         // This window paints `viewer_image` too; evict retired frames here
         // so playback cannot pile them up while the main window is hidden.
-        let retired = app.update(cx, |app, _| std::mem::take(&mut app.retired_images));
+        let retired = app.update(cx, |app, cx| {
+            app.ensure_info_details(cx);
+            std::mem::take(&mut app.retired_images)
+        });
         crate::app::viewer_actions::evict_retired_images(retired, window, cx);
 
-        let app_clone = self.app.clone();
         let app_redock = self.app.clone();
         let app_read = app.read(cx);
 
@@ -72,6 +74,7 @@ impl Render for FloatingInspectorView {
         let viewer_image = app_read.viewer_image.clone();
         let batch_summary = app_read.batch_summary.clone();
         let selected_item_tags = app_read.selected_item_tags.clone();
+        let info_details = app_read.info_details.clone();
         let selected_tag_counts = app_read.selected_tag_counts.clone();
         let library_tag_counts = app_read.library_tag_counts.clone();
         let tag_input_active = app_read.tag_input_active;
@@ -133,6 +136,8 @@ impl Render for FloatingInspectorView {
             .child(
                 div()
                     .id("floating-inspector-titlebar")
+                    .debug_selector(|| "floating-inspector-titlebar".to_string())
+                    .relative()
                     .w_full()
                     .h(px(38.0))
                     .px_4()
@@ -190,87 +195,53 @@ impl Render for FloatingInspectorView {
                                     .bg(theme::label_green()),
                             ),
                     )
-                    // Center: Window Title
+                    // Center: window title, centred on the bar (v3: 13px medium).
                     .child(
                         div()
-                            .id("floating-inspector-title")
-                            .min_w(px(0.0))
-                            .truncate()
-                            .tooltip(theme::tooltip_label(window_title.clone()))
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(theme::text())
-                            .child(window_title),
-                    )
-                    // Right: Actions (Dock & Close)
-                    .child(
-                        div()
+                            .absolute()
+                            .left(px(120.0))
+                            .right(px(120.0))
                             .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            // Dock button
+                            .justify_center()
                             .child(
                                 div()
-                                    .id("floating-inspector-redock-btn")
-                                    .px_2()
-                                    .py_0p5()
-                                    .bg(theme::bg_raised())
-                                    .hover(|s| s.bg(theme::bg_control_hover()))
-                                    .border_1()
-                                    .border_color(theme::border())
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .text_color(theme::text_muted())
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(render_icon(
-                                        Icon::ArrowDownToLine,
-                                        px(11.0),
-                                        theme::text_muted(),
-                                    ))
-                                    .child("Dock")
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, window, cx| {
-                                            if let Some(app_entity) = app_redock.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.redock_inspector(cx);
-                                                });
-                                            }
-                                            window.remove_window();
-                                        },
-                                    )),
-                            )
-                            // Close button
-                            .child(
-                                div()
-                                    .id("floating-inspector-close-btn")
-                                    .tooltip(theme::tooltip_label("Close inspector"))
-                                    .w(px(20.0))
-                                    .h(px(20.0))
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme::bg_raised()))
-                                    .flex()
-                                    .justify_center()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .text_color(theme::text_subtle())
-                                    .child(render_icon(Icon::X, px(11.0), theme::text_subtle()))
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, window, cx| {
-                                            if let Some(app_entity) = app_clone.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.floating_inspector_closed(cx);
-                                                });
-                                            }
-                                            window.remove_window();
-                                        },
-                                    )),
+                                    .id("floating-inspector-title")
+                                    .debug_selector(|| "floating-inspector-title".to_string())
+                                    .min_w(px(0.0))
+                                    .truncate()
+                                    .tooltip(theme::tooltip_label(window_title.clone()))
+                                    .text_size(px(13.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme::text())
+                                    .child(window_title),
                             ),
+                    )
+                    // Right: icon-only Dock; the traffic lights close the window.
+                    .child(
+                        div()
+                            .id("floating-inspector-redock-btn")
+                            .debug_selector(|| "floating-inspector-redock-btn".to_string())
+                            .tooltip(theme::tooltip_label("Dock into inspector"))
+                            .size(px(24.0))
+                            .rounded(px(6.0))
+                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .cursor_pointer()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(render_icon(
+                                Icon::ArrowDownToLine,
+                                px(14.0),
+                                theme::text_muted(),
+                            ))
+                            .on_click(cx.listener(move |_this, _e: &ClickEvent, window, cx| {
+                                if let Some(app_entity) = app_redock.upgrade() {
+                                    app_entity.update(cx, |app, cx| {
+                                        app.redock_inspector(cx);
+                                    });
+                                }
+                                window.remove_window();
+                            })),
                     ),
             )
             // 2. Revised Inspector Body (fully scrollable, clean layout)
@@ -303,6 +274,7 @@ impl Render for FloatingInspectorView {
                         &date_input_buffer,
                         location_input_active,
                         &location_input_buffer,
+                        info_details.as_ref(),
                     )),
             )
             .into_any_element()

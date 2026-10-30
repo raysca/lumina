@@ -3,6 +3,7 @@ use std::sync::Arc;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
+use crate::app::info_details::InfoDetails;
 pub use crate::app::types::format_bytes;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -110,6 +111,7 @@ pub fn render_inspector_body(
     date_input_buffer: &str,
     location_input_active: bool,
     location_input_buffer: &str,
+    details: Option<&InfoDetails>,
 ) -> AnyElement {
     if selected_count > 1 {
         return render_batch_body(
@@ -149,6 +151,7 @@ pub fn render_inspector_body(
         }
     };
 
+    let details = details.filter(|d| d.is_for(&item));
     render_single_body(
         weak_app,
         item,
@@ -169,6 +172,7 @@ pub fn render_inspector_body(
         date_input_buffer,
         location_input_active,
         location_input_buffer,
+        details,
     )
 }
 
@@ -193,6 +197,7 @@ fn render_single_body(
     date_input_buffer: &str,
     location_input_active: bool,
     location_input_buffer: &str,
+    details: Option<&InfoDetails>,
 ) -> AnyElement {
     let path = item.path.clone();
     let file_name = item.file_name.clone();
@@ -212,6 +217,17 @@ fn render_single_body(
     } else {
         "—".to_string()
     };
+    // Thumbnail keeps the media's aspect inside a 132×99 box.
+    let (thumb_w, thumb_h) = if item.width > 0 && item.height > 0 {
+        let aspect = item.width as f32 / item.height as f32;
+        if aspect >= 132.0 / 99.0 {
+            (132.0, 132.0 / aspect)
+        } else {
+            (99.0 * aspect, 99.0)
+        }
+    } else {
+        (132.0, 99.0)
+    };
     let date_str = item.formatted_timestamp();
     let meta_summary_line = format!("{} · {} · {} · {}", type_label, dim_str, size_str, date_str);
 
@@ -228,7 +244,7 @@ fn render_single_body(
         .bg(theme::bg_pane())
         .text_color(theme::text())
         .overflow_hidden()
-        // 1. Top Hero Media Card (Clean layout matching mockup)
+        // 1. Header: aspect-shaped thumbnail, titles, quick actions (v3).
         .child(
             div()
                 .w_full()
@@ -237,29 +253,32 @@ fn render_single_body(
                 .border_color(theme::border_subtle())
                 .flex()
                 .flex_row()
-                .gap_3p5()
+                .gap_4()
                 .items_start()
-                // Left: 90x90 Thumbnail
                 .child(
                     div()
-                        .w(px(90.0))
-                        .h(px(90.0))
+                        .w(px(132.0))
+                        .h(px(99.0))
                         .flex_shrink_0()
-                        .rounded_lg()
-                        .overflow_hidden()
-                        .border_1()
-                        .border_color(theme::border_subtle())
-                        .bg(theme::bg_app())
-                        .child(if let Some(ref img_render) = preview_image {
-                            img(img_render.clone())
-                                .size_full()
-                                .object_fit(ObjectFit::Cover)
-                                .into_any_element()
-                        } else {
-                            div().size_full().bg(theme::bg_app()).into_any_element()
-                        }),
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .id("info-thumbnail")
+                                .debug_selector(|| "info-thumbnail".to_string())
+                                .w(px(thumb_w))
+                                .h(px(thumb_h))
+                                .rounded(px(6.0))
+                                .overflow_hidden()
+                                .border_1()
+                                .border_color(theme::border_subtle())
+                                .bg(theme::bg_app())
+                                .children(preview_image.clone().map(|img_render| {
+                                    img(img_render).size_full().object_fit(ObjectFit::Cover)
+                                })),
+                        ),
                 )
-                // Right: Titles & Quick Actions
                 .child(
                     div()
                         .flex_1()
@@ -270,7 +289,6 @@ fn render_single_body(
                         .flex()
                         .flex_col()
                         .gap_1()
-                        // Title
                         .child(
                             div()
                                 .w_full()
@@ -279,7 +297,6 @@ fn render_single_body(
                                 .text_color(theme::text())
                                 .child(display_title.clone()),
                         )
-                        // Filename
                         .child(
                             div()
                                 .id("inspector-filename")
@@ -290,14 +307,12 @@ fn render_single_body(
                                 .text_color(theme::text_subtle())
                                 .child(file_name.clone()),
                         )
-                        // Metadata Summary
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(theme::text_muted())
                                 .child(meta_summary_line),
                         )
-                        // Quick Action Pill Buttons
                         .child(
                             div()
                                 .pt_1p5()
@@ -306,109 +321,67 @@ fn render_single_body(
                                 .items_center()
                                 .gap_1p5()
                                 .flex_wrap()
-                                // 1. Favorite
                                 .child(
-                                    div()
-                                        .id("info-quick-fav-btn")
-                                        .px_2p5()
-                                        .py_0p5()
-                                        .rounded_full()
-                                        .bg(theme::bg_raised())
-                                        .hover(|s| s.bg(theme::bg_control_hover()))
-                                        .border_1()
-                                        .border_color(theme::border())
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap_1p5()
-                                        .text_color(if is_fav {
-                                            theme::accent()
+                                    header_button(
+                                        "info-quick-fav-btn",
+                                        if is_fav { "Favorited" } else { "Favorite" },
+                                        Some(if is_fav {
+                                            Icon::HeartFilled
                                         } else {
-                                            theme::text()
-                                        })
-                                        .child(render_icon(
-                                            if is_fav {
-                                                Icon::HeartFilled
-                                            } else {
-                                                Icon::Heart
-                                            },
-                                            px(11.0),
-                                            if is_fav {
-                                                theme::accent()
-                                            } else {
-                                                theme::text()
-                                            },
-                                        ))
-                                        .child("Favorite")
-                                        .on_click(move |_e, _w, cx| {
+                                            Icon::Heart
+                                        }),
+                                        is_fav,
+                                    )
+                                    .tooltip(theme::tooltip_label("Favorite (F)"))
+                                    .on_click(
+                                        move |_e, _w, cx| {
                                             if let Some(app) = app_fav.upgrade() {
                                                 app.update(cx, |this, cx| {
                                                     this.toggle_favorite_selected(cx);
                                                 });
                                             }
-                                        }),
+                                        },
+                                    ),
                                 )
-                                // 2. Reveal in Finder
                                 .child(
-                                    div()
-                                        .id("info-quick-reveal-btn")
-                                        .px_2p5()
-                                        .py_0p5()
-                                        .rounded_full()
-                                        .bg(theme::bg_raised())
-                                        .hover(|s| s.bg(theme::bg_control_hover()))
-                                        .border_1()
-                                        .border_color(theme::border())
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(theme::text())
-                                        .child("Reveal in Finder")
-                                        .on_click(move |_e, _w, cx| {
+                                    header_button(
+                                        "info-quick-reveal-btn",
+                                        "Reveal in Finder",
+                                        None,
+                                        false,
+                                    )
+                                    .tooltip(theme::tooltip_label("Reveal in Finder (⇧⌘R)"))
+                                    .on_click(
+                                        move |_e, _w, cx| {
                                             if let Some(app) = app_reveal.upgrade() {
                                                 app.update(cx, |this, _cx| {
                                                     this.reveal_item_in_finder(&path_for_reveal);
                                                 });
                                             }
-                                        }),
+                                        },
+                                    ),
                                 )
-                                // 3. Copy Path
                                 .child(
-                                    div()
-                                        .id("info-quick-copy-path-btn")
-                                        .px_2p5()
-                                        .py_0p5()
-                                        .rounded_full()
-                                        .bg(theme::bg_raised())
-                                        .hover(|s| s.bg(theme::bg_control_hover()))
-                                        .border_1()
-                                        .border_color(theme::border())
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(theme::text())
-                                        .child("Copy Path")
-                                        .on_click(move |_e, _w, cx| {
+                                    header_button(
+                                        "info-quick-copy-path-btn",
+                                        "Copy Path",
+                                        None,
+                                        false,
+                                    )
+                                    .tooltip(theme::tooltip_label("Copy Path (⌥⌘C)"))
+                                    .on_click(
+                                        move |_e, _w, cx| {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 path_for_copy.display().to_string(),
                                             ));
-                                        }),
+                                        },
+                                    ),
                                 )
-                                // 4. Open in default application
+                                // ponytail: "Open With ▾" needs a native app-list
+                                // bridge (docs/ui_v3_plan.md); this opens the default app.
                                 .child(
-                                    div()
-                                        .id("info-quick-open-with-btn")
-                                        .px_2p5()
-                                        .py_0p5()
-                                        .rounded_full()
-                                        .bg(theme::bg_raised())
-                                        .hover(|s| s.bg(theme::bg_control_hover()))
-                                        .border_1()
-                                        .border_color(theme::border())
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(theme::text())
-                                        .child("Open")
+                                    header_button("info-quick-open-with-btn", "Open", None, false)
+                                        .tooltip(theme::tooltip_label("Open in Default App"))
                                         .on_click(move |_e, _w, cx| {
                                             if let Some(app) = app_open_with.upgrade() {
                                                 app.update(cx, |this, _cx| {
@@ -455,8 +428,9 @@ fn render_single_body(
                         title_input_buffer,
                         date_input_active,
                         date_input_buffer,
+                        details,
                     ),
-                    InspectorTab::Camera => render_camera_tab(&item, type_label),
+                    InspectorTab::Camera => render_camera_tab(&item, details),
                     InspectorTab::Location => render_location_tab(
                         weak_app.clone(),
                         &item,
@@ -473,6 +447,44 @@ fn render_single_body(
                 }),
         )
         .into_any_element()
+}
+
+/// Header action: 6px radius (not a pill); `on` is the amber "Favorited" fill.
+fn header_button(id: &'static str, label: &str, icon: Option<Icon>, on: bool) -> Stateful<Div> {
+    let fg = if on {
+        theme::accent_fg()
+    } else {
+        theme::text()
+    };
+    div()
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .h(px(26.0))
+        .px_2p5()
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(if on { theme::accent() } else { theme::border() })
+        .bg(if on {
+            theme::accent()
+        } else {
+            theme::bg_raised()
+        })
+        .hover(move |s| {
+            if on {
+                s
+            } else {
+                s.bg(theme::bg_control_hover())
+            }
+        })
+        .cursor_pointer()
+        .text_xs()
+        .text_color(fg)
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_1p5()
+        .children(icon.map(|icon| render_icon(icon, px(12.0), fg)))
+        .child(label.to_string())
 }
 
 fn render_tab_bar(weak_app: WeakEntity<LuminaApp>, active_tab: InspectorTab) -> impl IntoElement {
@@ -501,6 +513,7 @@ fn render_tab_bar(weak_app: WeakEntity<LuminaApp>, active_tab: InspectorTab) -> 
                 .id(ElementId::Name(
                     format!("inspector-tab-{}", test_label).into(),
                 ))
+                .debug_selector(move || format!("inspector-tab-{}", test_label))
                 .flex_1()
                 .h_full()
                 .flex()

@@ -1864,11 +1864,26 @@ fn test_edit_timestamp_rebuilds_buckets_and_location() {
     let located = catalog.get_item_by_id(id).unwrap().unwrap();
     assert_eq!(located.latitude, Some(48.8566));
     assert_eq!(located.longitude, Some(2.3522));
+    assert_eq!(
+        located.city.as_deref(),
+        Some("Paris"),
+        "new coordinates must re-derive the place"
+    );
+    assert_eq!(
+        catalog.search_fts("Paris", 10).unwrap().len(),
+        1,
+        "the derived place is searchable"
+    );
 
     catalog.set_location(id, None, None).unwrap();
     let cleared = catalog.get_item_by_id(id).unwrap().unwrap();
     assert_eq!(cleared.latitude, None);
     assert_eq!(cleared.longitude, None);
+    assert_eq!(
+        (cleared.city, cleared.admin1_region, cleared.country_code),
+        (None, None, None),
+        "removing the location must clear the place too"
+    );
 
     drop(catalog);
     let _ = std::fs::remove_dir_all(&tmp_dir);
@@ -2302,4 +2317,163 @@ fn smart_album_builder_rules_match_expected_rows() {
         "date text with an unsupported operator must not compile to a match-all"
     );
     assert!(lumina_core::split_date_range("2024-01-01..nope").is_none());
+}
+
+#[test]
+fn test_added_date_is_stamped_once_and_survives_rescans() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let item = sample_media_item("/photos/added/a.jpg", MediaType::Image, 1000, None, None);
+    let before = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let id = catalog
+        .insert_or_update_batch(std::slice::from_ref(&item))
+        .unwrap()[0]
+        .id;
+    let added = catalog
+        .get_added_epoch_ms(id)
+        .unwrap()
+        .expect("a new row must record when it was added");
+    assert!(
+        (added - before).abs() < 5_000,
+        "added date must be now, got {added} vs {before}"
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let rescanned = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
+    assert_eq!(rescanned, id);
+    assert_eq!(
+        catalog.get_added_epoch_ms(id).unwrap(),
+        Some(added),
+        "a rescan must not move the added date"
+    );
+}
+
+#[test]
+fn test_schema_v9_migration_adds_added_date_column() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_added_migration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+    let id = {
+        let catalog = Catalog::open(&db_path).unwrap();
+        let item = sample_media_item("/photos/old/b.jpg", MediaType::Image, 1000, None, None);
+        catalog.insert_or_update_batch(&[item]).unwrap()[0].id
+    };
+    {
+        // Downgrade to the v8 layout: no added_epoch_ms column.
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE media_items DROP COLUMN added_epoch_ms; PRAGMA user_version = 8;",
+        )
+        .unwrap();
+    }
+    let catalog = Catalog::open(&db_path).expect("a v8 catalog must open and migrate");
+    assert_eq!(
+        catalog.get_added_epoch_ms(id).unwrap(),
+        None,
+        "rows from before v9 have no known added date"
+    );
+    drop(catalog);
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let version: i64 = conn
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, SCHEMA_VERSION);
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_read_media_details_reads_exif_and_tolerates_plain_files() {
+    use exif::experimental::Writer;
+    use exif::{Field, In, Rational, SRational, Tag, Value};
+
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_details_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let fields = [
+        Field {
+            tag: Tag::ExposureBiasValue,
+            ifd_num: In::PRIMARY,
+            value: Value::SRational(vec![SRational { num: -2, denom: 3 }]),
+        },
+        Field {
+            tag: Tag::FocalLengthIn35mmFilm,
+            ifd_num: In::PRIMARY,
+            value: Value::Short(vec![28]),
+        },
+        Field {
+            tag: Tag::WhiteBalance,
+            ifd_num: In::PRIMARY,
+            value: Value::Short(vec![0]),
+        },
+        Field {
+            tag: Tag::Software,
+            ifd_num: In::PRIMARY,
+            value: Value::Ascii(vec![b"Lumina Test 1.0".to_vec()]),
+        },
+        Field {
+            tag: Tag::FNumber,
+            ifd_num: In::PRIMARY,
+            value: Value::Rational(vec![Rational { num: 28, denom: 10 }]),
+        },
+    ];
+    let mut writer = Writer::new();
+    for field in &fields {
+        writer.push_field(field);
+    }
+    let mut tiff = std::io::Cursor::new(Vec::new());
+    writer.write(&mut tiff, false).unwrap();
+    let tiff = tiff.into_inner();
+
+    // Minimal JPEG container: SOI, APP1 "Exif\0\0" + TIFF, EOI.
+    let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+    jpeg.extend_from_slice(&((2 + 6 + tiff.len()) as u16).to_be_bytes());
+    jpeg.extend_from_slice(b"Exif\0\0");
+    jpeg.extend_from_slice(&tiff);
+    jpeg.extend_from_slice(&[0xFF, 0xD9]);
+    let photo = tmp_dir.join("exif.jpg");
+    std::fs::write(&photo, jpeg).unwrap();
+
+    let details = lumina_core::scanner::read_media_details(&photo);
+    let bias = details
+        .exposure_bias_ev
+        .expect("exposure bias must be read");
+    assert!((bias + 2.0 / 3.0).abs() < 1e-6, "got {bias}");
+    assert_eq!(details.focal_length_35mm, Some(28));
+    assert_eq!(details.white_balance.as_deref(), Some("Auto white balance"));
+    assert_eq!(details.software.as_deref(), Some("Lumina Test 1.0"));
+    assert_eq!(details.metering_mode, None, "absent tags stay None");
+    #[cfg(target_os = "macos")]
+    assert!(
+        details.created_epoch_ms.is_some(),
+        "APFS records a birth time for Created"
+    );
+
+    let plain = tmp_dir.join("plain.jpg");
+    std::fs::write(&plain, b"not really a jpeg").unwrap();
+    let details = lumina_core::scanner::read_media_details(&plain);
+    assert_eq!(details.exposure_bias_ev, None);
+    assert_eq!(details.software, None);
+    let missing = lumina_core::scanner::read_media_details(&tmp_dir.join("gone.jpg"));
+    assert_eq!(
+        missing,
+        Default::default(),
+        "a missing file yields no details"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }

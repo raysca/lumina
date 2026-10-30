@@ -58,7 +58,8 @@ impl Catalog {
                 rating INTEGER NOT NULL DEFAULT 0,
                 color_label INTEGER NOT NULL DEFAULT 0,
                 title TEXT,
-                rotation_quarters INTEGER NOT NULL DEFAULT 0
+                rotation_quarters INTEGER NOT NULL DEFAULT 0,
+                added_epoch_ms INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -204,6 +205,21 @@ impl Catalog {
                 "ALTER TABLE media_items ADD COLUMN rotation_quarters INTEGER NOT NULL DEFAULT 0;",
                 [],
             )?;
+        }
+
+        // When the file first entered the catalog (Get Info "Added to Lumina").
+        // Rows from before v9 stay NULL: the real date is unknown.
+        let has_added: bool = conn
+            .prepare(
+                "SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'added_epoch_ms'",
+            )?
+            .exists([])?;
+        if !has_added {
+            conn.execute(
+                "ALTER TABLE media_items ADD COLUMN added_epoch_ms INTEGER;",
+                [],
+            )
+            .context("adding media_items.added_epoch_ms")?;
         }
 
         // Catalogs from the first smart-album engine named the rules column

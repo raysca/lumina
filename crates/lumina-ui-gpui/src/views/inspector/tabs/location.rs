@@ -2,9 +2,11 @@ use gpui::*;
 use lumina_core::MediaItem;
 
 use crate::theme;
-use crate::views::inspector::body::render_meta_row;
+use crate::views::inspector::tabs::info::render_info_label_value_row;
 use crate::LuminaApp;
 
+/// Location tab (v3): Place, Coordinates, Altitude, then Edit / nearby /
+/// Remove. No map: Lumina makes no network calls.
 pub fn render_location_tab(
     weak_app: WeakEntity<LuminaApp>,
     item: &MediaItem,
@@ -12,100 +14,152 @@ pub fn render_location_tab(
     input_buffer: &str,
 ) -> AnyElement {
     let has_coords = item.latitude.is_some() && item.longitude.is_some();
-    let coords_text = if let (Some(lat), Some(lon)) = (item.latitude, item.longitude) {
-        format!("{lat:.5}, {lon:.5}")
-    } else {
-        "Add latitude, longitude".to_string()
-    };
-    let app_location_start = weak_app;
+    let place = [&item.city, &item.admin1_region, &item.country_code]
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let coords = item
+        .latitude
+        .zip(item.longitude)
+        .map(|(lat, lon)| format_coordinates(lat, lon));
+    let altitude = item.altitude.map(|m| format!("{m:.0} m"));
+    // ponytail: "nearby" is the same city via the existing city: search; a
+    // radius search needs a geo index.
+    let nearby_query = item
+        .city
+        .as_ref()
+        .filter(|city| !city.contains('"'))
+        .map(|city| format!("city:\"{city}\""));
+
+    let app_edit = weak_app.clone();
+    let app_nearby = weak_app.clone();
+    let app_remove = weak_app;
 
     div()
+        .w_full()
         .flex()
         .flex_col()
-        .gap_2()
-        .p_3()
-        .rounded_lg()
-        .bg(theme::bg_pane())
-        .border_1()
-        .border_color(theme::border_subtle())
-        .child(theme::section_label("GEOGRAPHY & GPS"))
-        .children(item.city.as_ref().map(|c| render_meta_row("City", c)))
-        .children(
-            item.admin1_region
-                .as_ref()
-                .map(|r| render_meta_row("Region", r)),
+        .gap_3()
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .child(render_info_label_value_row(
+                    "Place",
+                    if place.is_empty() { "—" } else { &place },
+                ))
+                .child(render_info_label_value_row(
+                    "Coordinates",
+                    coords.as_deref().unwrap_or("—"),
+                ))
+                .children(altitude.map(|a| render_info_label_value_row("Altitude", &a))),
         )
-        .children(
-            item.country_code
-                .as_ref()
-                .map(|c| render_meta_row("Country", c)),
-        )
+        .children(input_active.then(|| {
+            div()
+                .id("inspector-location-box")
+                .debug_selector(|| "inspector-location-box".to_string())
+                .w_full()
+                .px_2p5()
+                .py_1p5()
+                .bg(theme::bg_app())
+                .border_1()
+                .border_color(theme::accent())
+                .rounded(px(6.0))
+                .text_xs()
+                .font_family(theme::FONT_MONO)
+                .text_color(theme::text())
+                .child(if input_buffer.is_empty() {
+                    "latitude, longitude (Enter to save, Esc to cancel)|".to_string()
+                } else {
+                    format!("{input_buffer}|")
+                })
+        }))
         .child(
             div()
                 .flex()
-                .flex_col()
-                .gap_1()
+                .flex_row()
+                .flex_wrap()
+                .gap_1p5()
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_subtle())
-                        .child("Coordinates"),
+                    location_button("inspector-location-edit", "Edit location…", false).on_click(
+                        move |_e, _w, cx| {
+                            if let Some(app) = app_edit.upgrade() {
+                                app.update(cx, |this, cx| this.start_location_input(cx));
+                            }
+                        },
+                    ),
                 )
-                .child(
-                    div()
-                        .id("inspector-location-box")
-                        .debug_selector(|| "inspector-location-box".to_string())
-                        .w_full()
-                        .px_2p5()
-                        .py_1p5()
-                        .bg(theme::bg_app())
-                        .border_1()
-                        .border_color(if input_active {
-                            theme::accent()
-                        } else {
-                            theme::border_subtle()
-                        })
-                        .hover(|s| {
-                            if input_active {
-                                s
-                            } else {
-                                s.border_color(theme::border_strong())
-                            }
-                        })
-                        .rounded_md()
-                        .cursor_text()
-                        .text_xs()
-                        .font_family(theme::FONT_MONO)
-                        .text_color(if has_coords || input_active {
-                            theme::text()
-                        } else {
-                            theme::text_subtle()
-                        })
-                        .child(if input_active {
-                            if input_buffer.is_empty() {
-                                "latitude, longitude|".to_string()
-                            } else {
-                                format!("{}|", input_buffer)
-                            }
-                        } else {
-                            coords_text
-                        })
+                .children(nearby_query.map(|query| {
+                    location_button("inspector-location-nearby", "Show nearby photos", false)
                         .on_click(move |_e, _w, cx| {
-                            if !input_active {
-                                if let Some(app) = app_location_start.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.start_location_input(cx);
-                                    });
-                                }
+                            if let Some(app) = app_nearby.upgrade() {
+                                app.update(cx, |this, cx| this.set_search_query(&query, cx));
                             }
-                        }),
-                ),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(theme::text_subtle())
-                .child("Decimal degrees; leave empty to clear the location."),
+                        })
+                }))
+                .children(has_coords.then(|| {
+                    location_button("inspector-location-remove", "Remove location", true).on_click(
+                        move |_e, _w, cx| {
+                            if let Some(app) = app_remove.upgrade() {
+                                app.update(cx, |this, cx| this.remove_location_selected(cx));
+                            }
+                        },
+                    )
+                })),
         )
         .into_any_element()
+}
+
+fn location_button(id: &'static str, label: &'static str, destructive: bool) -> Stateful<Div> {
+    div()
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .h(px(26.0))
+        .px_2p5()
+        .flex()
+        .items_center()
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(theme::border())
+        .bg(theme::bg_raised())
+        .hover(|s| s.bg(theme::bg_control_hover()))
+        .cursor_pointer()
+        .text_xs()
+        .text_color(if destructive {
+            theme::label_red()
+        } else {
+            theme::text()
+        })
+        .child(label)
+}
+
+/// 38.7101° N, 9.1366° W
+pub(crate) fn format_coordinates(lat: f64, lon: f64) -> String {
+    format!(
+        "{:.4}° {}, {:.4}° {}",
+        lat.abs(),
+        if lat < 0.0 { "S" } else { "N" },
+        lon.abs(),
+        if lon < 0.0 { "W" } else { "E" }
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_coordinates;
+
+    #[core::prelude::v1::test]
+    fn coordinates_use_hemispheres() {
+        assert_eq!(
+            format_coordinates(38.71012, -9.13661),
+            "38.7101° N, 9.1366° W"
+        );
+        assert_eq!(
+            format_coordinates(-33.8688, 151.2093),
+            "33.8688° S, 151.2093° E"
+        );
+    }
 }

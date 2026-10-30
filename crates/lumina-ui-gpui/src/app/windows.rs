@@ -8,7 +8,7 @@ pub fn open_floating_inspector_window(
     ui_tx: async_channel::Sender<UiMessage>,
     cx: &mut App,
 ) {
-    let bounds = Bounds::centered(None, size(px(480.0), px(640.0)), cx);
+    let bounds = Bounds::centered(None, size(px(720.0), px(812.0)), cx);
     let weak_app_clone = weak_app.clone();
     let tx_clone = ui_tx.clone();
 

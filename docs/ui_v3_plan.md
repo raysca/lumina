@@ -40,8 +40,12 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Palette has no "Go to" group for sidebar destinations; commands only.
 - Viewer pinch-to-zoom: GPUI 0.2.2 delivers no magnify event; the wheel,
   +/−, 0/1/2/4 and Z zoom.
-- Viewer "Open With ▾" app list is not built (needs a native
-  LSCopyApplicationURLsForURL bridge); the menu has Open in Default App.
+- Get Info: "Show nearby photos" searches the same city (no geo radius
+  index); "Created" is the file-system birth time and the EXIF extras are
+  read from the file when the window shows it; items catalogued before
+  schema v9 show "—" for "Added to Lumina".
+- Viewer and Get Info "Open With ▾" app list is not built (needs a native
+  LSCopyApplicationURLsForURL bridge); both offer Open in Default App.
 - Video scrubber (agreed deviation): no frame strip and a time-only hover
   preview; the AVFoundation bridge cannot decode arbitrary frames on demand.
 - Video zoom has no on-screen control now; Z, scroll and the 0/1/2/4 keys
