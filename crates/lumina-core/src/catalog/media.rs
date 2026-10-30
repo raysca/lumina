@@ -620,6 +620,98 @@ mod tests {
     }
 
     #[test]
+    fn legacy_smart_albums_table_is_migrated_and_keeps_albums() {
+        let (dir, db) = temp_catalog("legacy_smart_albums");
+        drop(Catalog::open(&db).expect("catalog must open"));
+        // The first smart-album engine's layout, as found in real catalogs.
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch(
+                r#"
+                DROP TABLE smart_albums;
+                CREATE TABLE smart_albums (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    icon_name TEXT NOT NULL DEFAULT 'folder-heart',
+                    match_mode TEXT NOT NULL CHECK(match_mode IN ('all', 'any')),
+                    rule_definition_json TEXT NOT NULL,
+                    created_at_epoch_ms INTEGER NOT NULL
+                );
+                INSERT INTO smart_albums (title, match_mode, rule_definition_json, created_at_epoch_ms)
+                VALUES ('Sunsets', 'all', '[{"field":"tag","operator":"equals","value":"sunset"}]', 1);
+                PRAGMA user_version = 7;
+                "#,
+            )
+            .unwrap();
+        }
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen and migrate");
+        assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        let albums = catalog
+            .list_smart_albums()
+            .expect("legacy albums must list");
+        assert_eq!(albums.len(), 1, "the saved album survives the migration");
+        assert_eq!(albums[0].title, "Sunsets");
+        assert_eq!(albums[0].rules.len(), 1);
+        catalog
+            .create_smart_album("New", "folder", crate::MatchMode::Any, &albums[0].rules)
+            .expect("saving must work on a migrated catalog");
+        catalog
+            .update_smart_album(
+                albums[0].id,
+                "Renamed",
+                "folder",
+                crate::MatchMode::All,
+                &[],
+            )
+            .expect("editing must work on a migrated catalog");
+        drop(catalog);
+        Catalog::open(&db).expect("the migration is idempotent");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn legacy_search_triggers_are_dropped_and_their_stale_entries_rebuilt() {
+        let (dir, db) = temp_catalog("legacy_fts");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        let mut item = sample_item(1);
+        item.city = Some("Lisbon".to_string());
+        let id = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
+        drop(catalog);
+        // A legacy trigger and the stale entry it left behind for the row.
+        {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch(&format!(
+                "CREATE TRIGGER trg_media_update AFTER UPDATE ON media_items BEGIN SELECT 1; END;
+                 INSERT INTO media_search_fts(rowid, city) VALUES ({}, 'Oldtown');",
+                id.0
+            ))
+            .unwrap();
+        }
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen and migrate");
+        let triggers: i64 = catalog
+            .conn
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'trg_media_%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(triggers, 0, "legacy search triggers must be dropped");
+        assert!(
+            catalog.search_fts("Oldtown", 10).unwrap().is_empty(),
+            "stale legacy index entries must not match after the upgrade"
+        );
+        assert_eq!(catalog.search_fts("Lisbon", 10).unwrap().len(), 1);
+
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn rotation_migration_is_idempotent_and_roundtrips() {
         let (dir, db) = temp_catalog("rotation_migration");
         let catalog = Catalog::open(&db).expect("catalog must open");

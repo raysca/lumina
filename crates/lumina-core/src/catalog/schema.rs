@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::params;
 
 use super::{Catalog, SCHEMA_VERSION};
@@ -206,6 +206,33 @@ impl Catalog {
             )?;
         }
 
+        // Catalogs from the first smart-album engine named the rules column
+        // `rule_definition_json`; `CREATE TABLE IF NOT EXISTS` never fixed it,
+        // so saving or listing smart albums failed. The JSON format is
+        // unchanged, so a rename keeps every saved album.
+        let has_legacy_rules: bool = conn
+            .prepare(
+                "SELECT 1 FROM pragma_table_info('smart_albums') WHERE name = 'rule_definition_json'",
+            )?
+            .exists([])?;
+        if has_legacy_rules {
+            conn.execute(
+                "ALTER TABLE smart_albums RENAME COLUMN rule_definition_json TO rules_json;",
+                [],
+            )
+            .context("migrating smart_albums.rule_definition_json to rules_json")?;
+        }
+
+        // The same early builds indexed search through trg_media_* triggers.
+        // The media_fts_* triggers above replaced them; the old ones left
+        // stale entries in the contentless index, rebuilt once below.
+        let had_legacy_triggers: bool = conn
+            .prepare(
+                "SELECT 1 FROM sqlite_master WHERE type = 'trigger'
+                 AND name IN ('trg_media_insert', 'trg_media_update', 'trg_media_delete')",
+            )?
+            .exists([])?;
+
         // Check if existing media_search_fts table has the 'tags' column (for migration from older schemas)
         let has_tags_col: bool = conn
             .prepare("SELECT 1 FROM pragma_table_info('media_search_fts') WHERE name = 'tags'")?
@@ -362,6 +389,31 @@ impl Catalog {
                 LEFT JOIN media_captions c ON c.media_id = m.id;
                 "#,
             )?;
+        }
+
+        if had_legacy_triggers {
+            // One transaction: if the rebuild fails, the triggers stay and the
+            // next open retries it instead of leaving search half-empty.
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(
+                r#"
+                DROP TRIGGER IF EXISTS trg_media_insert;
+                DROP TRIGGER IF EXISTS trg_media_update;
+                DROP TRIGGER IF EXISTS trg_media_delete;
+                INSERT INTO media_search_fts(media_search_fts) VALUES('delete-all');
+                INSERT INTO media_search_fts(
+                    rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption
+                )
+                SELECT
+                    m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
+                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''),
+                    COALESCE(c.caption, '')
+                FROM media_items m
+                LEFT JOIN media_captions c ON c.media_id = m.id;
+                "#,
+            )
+            .context("rebuilding the search index after dropping legacy triggers")?;
+            tx.commit()?;
         }
 
         // Stamp the schema version so future migrations can dispatch on it.

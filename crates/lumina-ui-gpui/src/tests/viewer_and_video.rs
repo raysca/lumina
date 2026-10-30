@@ -2042,6 +2042,10 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             cx,
         );
         app.open_library_inner(other_dir.clone(), cx);
+        assert!(
+            other_dir.join("catalog.db").exists(),
+            "tests must keep catalogs in the temp library, never the user's data dir"
+        );
         assert_eq!(
             app.retired_images.len(),
             4,

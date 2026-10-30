@@ -1,6 +1,7 @@
 mod editor_handoff;
 mod inspector;
 mod interaction;
+mod legacy_catalog;
 mod multi_select;
 mod overlay_isolation;
 mod palette_and_empty;

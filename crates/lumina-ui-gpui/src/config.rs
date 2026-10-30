@@ -477,6 +477,9 @@ impl AppConfig {
         Self::default()
     }
 
+    /// Writes the user's real config. Compiled out of tests so no test path
+    /// can overwrite it; tests use `save_to` with a temp path.
+    #[cfg(not(test))]
     pub fn save(&self) -> Result<()> {
         self.save_to(&Self::config_path())
     }

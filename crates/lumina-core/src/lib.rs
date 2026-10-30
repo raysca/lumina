@@ -429,7 +429,10 @@ impl LuminaEngine {
     }
 
     pub fn list_smart_albums(&self) -> Vec<SmartAlbum> {
-        self.catalog.list_smart_albums().unwrap_or_default()
+        self.catalog.list_smart_albums().unwrap_or_else(|err| {
+            log::warn!("listing smart albums failed: {err:#}");
+            Vec::new()
+        })
     }
 
     pub fn create_smart_album(

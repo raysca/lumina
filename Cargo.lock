@@ -3265,6 +3265,7 @@ dependencies = [
  "lumina-core",
  "parking_lot",
  "rfd",
+ "rusqlite",
  "serde",
  "serde_json",
  "smallvec",

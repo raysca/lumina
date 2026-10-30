@@ -415,9 +415,22 @@ impl LuminaApp {
         self.close_pip(cx);
 
         self.config.last_library_path = Some(path.clone());
-        let _ = self.config.save();
+        // Tests must never write the user's real config or catalogs: they keep
+        // the catalog inside the (temporary) library folder instead.
+        #[cfg(not(test))]
+        if let Err(err) = self.config.save() {
+            self.set_error(format!("Could not save settings: {err}"), cx);
+        }
+        #[cfg(not(test))]
+        let opened = LuminaEngine::open(path.clone());
+        #[cfg(test)]
+        let opened = LuminaEngine::open_with_paths(
+            path.clone(),
+            path.join("catalog.db"),
+            Some(path.join("cache")),
+        );
 
-        let (engine, rx) = match LuminaEngine::open(path.clone()) {
+        let (engine, rx) = match opened {
             Ok(res) => res,
             Err(e) => {
                 log::error!("failed to open library at {:?}: {e:?}", path);
