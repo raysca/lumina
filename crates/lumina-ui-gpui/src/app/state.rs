@@ -89,8 +89,6 @@ pub struct VideoPlaybackState {
     pub is_looping: bool,
     pub is_muted: bool,
     pub volume: f32,
-    /// True while the pointer is dragging the transport volume slider.
-    pub adjusting_volume: bool,
     pub speed_menu_open: bool,
     pub hover_time: Option<f64>,
     pub hover_pct: Option<f32>,

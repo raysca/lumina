@@ -362,12 +362,8 @@ fn editor_handoff_viewer_button_reports_unset_and_invalid_editor() {
             "double click must open the viewer"
         );
     });
-    assert!(
-        vcx.debug_bounds("viewer-external-editor-btn").is_some(),
-        "the viewer top bar must expose Edit in External Editor"
-    );
-
-    click(vcx, "viewer-external-editor-btn");
+    right_click(vcx, "viewer-viewport");
+    click(vcx, "edit-external-menu-btn");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.error_message.as_deref(),
@@ -380,7 +376,8 @@ fn editor_handoff_viewer_button_reports_unset_and_invalid_editor() {
     view.update(vcx, |app, _| {
         app.config.external_editor = Some("   ".to_string());
     });
-    click(vcx, "viewer-external-editor-btn");
+    right_click(vcx, "viewer-viewport");
+    click(vcx, "edit-external-menu-btn");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.error_message.as_deref(),

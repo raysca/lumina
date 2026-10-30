@@ -267,10 +267,6 @@ fn test_e2e_fullscreen_viewer_journey() {
         app.toggle_video_loop(cx);
         assert!(app.video.is_looping);
 
-        // Test volume setting
-        app.set_video_volume(0.85, cx);
-        assert_eq!(app.video.volume, 0.85);
-
         // Test speed popover menu & direct speed selection
         app.toggle_video_speed_menu(cx);
         assert!(app.video.speed_menu_open);
@@ -292,105 +288,6 @@ fn test_e2e_fullscreen_viewer_journey() {
         assert!(app.immersive_hud_visible);
     });
     cx.run_until_parked();
-}
-
-#[core::prelude::v1::test]
-fn test_volume_slider_range_and_mute() {
-    let mut cx = gpui::TestAppContext::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-
-    view.update(cx, |app, cx| {
-        // The transport maps the pointer continuously; 0.0 is the mute step.
-        // Mute step (0.0)
-        app.set_video_volume(0.0, cx);
-        assert_eq!(app.video.volume, 0.0);
-
-        // Half volume
-        app.set_video_volume(0.5, cx);
-        assert_eq!(app.video.volume, 0.5);
-
-        // Full volume (1.0)
-        app.set_video_volume(1.0, cx);
-        assert_eq!(app.video.volume, 1.0);
-    });
-}
-
-#[core::prelude::v1::test]
-fn test_volume_slider_pointer_mapping_and_drag() {
-    let (temp_dir, engine) = seed_library("volume_drag", 3);
-    let mut cx = gpui::TestAppContext::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-
-    let video = get_sample_items()
-        .into_iter()
-        .find(|item| item.media_type == lumina_core::MediaType::Video)
-        .expect("the sample set must contain a video");
-    view.update(vcx, |app, cx| {
-        app.selected_item = Some(video);
-        app.selected_index = Some(0);
-        app.selected_indices = [0].into_iter().collect();
-        app.is_fullscreen_viewer = true;
-        app.video.duration = 60.0;
-        app.video.volume = 0.5;
-        cx.notify();
-    });
-    render_ui(vcx);
-
-    let bounds = vcx
-        .debug_bounds("video-volume-slider")
-        .expect("the transport must paint the volume slider");
-    let left: f32 = bounds.origin.x.into();
-    let width: f32 = bounds.size.width.into();
-    let y: f32 = bounds.center().y.into();
-    assert!(
-        width > 40.0,
-        "the volume hit area must be usable: {width}px"
-    );
-    let point_at = |fraction: f32| gpui::point(gpui::px(left + width * fraction), gpui::px(y));
-
-    vcx.simulate_click(point_at(0.75), gpui::Modifiers::default());
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(
-            (app.video.volume - 0.75).abs() < 0.03,
-            "a click at 75% must set ~0.75 volume, got {}",
-            app.video.volume
-        );
-    });
-
-    vcx.simulate_mouse_down(
-        point_at(0.75),
-        gpui::MouseButton::Left,
-        gpui::Modifiers::default(),
-    );
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(app.video.adjusting_volume, "press must arm the volume drag");
-    });
-    vcx.simulate_mouse_move(
-        point_at(0.20),
-        Some(gpui::MouseButton::Left),
-        gpui::Modifiers::default(),
-    );
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(
-            (app.video.volume - 0.20).abs() < 0.03,
-            "dragging to 20% must follow the pointer, got {}",
-            app.video.volume
-        );
-    });
-    vcx.simulate_mouse_up(
-        point_at(0.20),
-        gpui::MouseButton::Left,
-        gpui::Modifiers::default(),
-    );
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(!app.video.adjusting_volume, "release must end the drag");
-    });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -1427,15 +1324,29 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
         "a scanned photo must start unrotated"
     );
 
-    let left = vcx
-        .debug_bounds("quick-edit-rotate-left")
-        .expect("the viewer top bar must paint the Rotate Left control");
-    let right = vcx
-        .debug_bounds("quick-edit-rotate-right")
-        .expect("the viewer top bar must paint the Rotate Right control");
+    // Rotation lives in the viewer's right-click menu (v3 top bar is slim).
+    let rotate = |vcx: &mut gpui::VisualTestContext, selector: &'static str| {
+        let viewport = vcx.debug_bounds("viewer-viewport").expect("viewport");
+        vcx.simulate_event(gpui::MouseDownEvent {
+            position: viewport.center(),
+            modifiers: gpui::Modifiers::default(),
+            button: gpui::MouseButton::Right,
+            click_count: 1,
+            first_mouse: false,
+        });
+        render_viewer_ui(vcx);
+        let control = vcx
+            .debug_bounds(selector)
+            .expect("the viewer right-click menu must offer rotation");
+        vcx.simulate_click(control.center(), gpui::Modifiers::default());
+        render_viewer_ui(vcx);
+    };
+    assert!(
+        vcx.debug_bounds("quick-edit-rotate-left").is_none(),
+        "the v3 viewer top bar has no rotate buttons"
+    );
 
-    vcx.simulate_click(right.center(), gpui::Modifiers::default());
-    render_viewer_ui(vcx);
+    rotate(vcx, "quick-edit-rotate-right");
     view.update(vcx, |app, _| {
         assert_eq!(
             engine
@@ -1459,10 +1370,8 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
         assert_eq!(app.last_action.as_deref(), Some("Rotated right"));
     });
 
-    vcx.simulate_click(right.center(), gpui::Modifiers::default());
-    render_viewer_ui(vcx);
-    vcx.simulate_click(left.center(), gpui::Modifiers::default());
-    render_viewer_ui(vcx);
+    rotate(vcx, "quick-edit-rotate-right");
+    rotate(vcx, "quick-edit-rotate-left");
     view.update(vcx, |app, _| {
         assert_eq!(
             engine
@@ -1760,7 +1669,7 @@ fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
 }
 
 #[core::prelude::v1::test]
-fn scrub_and_volume_drags_keep_tracking_after_leaving_the_control() {
+fn scrub_drag_keeps_tracking_after_leaving_the_control() {
     let (temp_dir, engine) = crate::tests::ui_automation::seed_library("drag_off_control", 2);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
@@ -1807,36 +1716,6 @@ fn scrub_and_volume_drags_keep_tracking_after_leaving_the_control() {
     );
     render_viewer_ui(vcx);
     view.update(vcx, |app, _| assert!(!app.video.is_scrubbing));
-
-    // Volume: press at 25%, then drift 60px above the 24px slider to 90%.
-    let slider = vcx
-        .debug_bounds("video-volume-slider")
-        .expect("volume slider must be painted in the viewer");
-    let (left, width): (f32, f32) = (slider.left().into(), slider.size.width.into());
-    let y: f32 = slider.center().y.into();
-    vcx.simulate_mouse_down(
-        gpui::point(gpui::px(left + width * 0.25), gpui::px(y)),
-        gpui::MouseButton::Left,
-        gpui::Modifiers::default(),
-    );
-    render_viewer_ui(vcx);
-    let off_slider = gpui::point(gpui::px(left + width * 0.9), gpui::px(y - 60.0));
-    vcx.simulate_mouse_move(off_slider, left_button, gpui::Modifiers::default());
-    render_viewer_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(
-            (app.video.volume - 0.9).abs() < 0.05,
-            "a volume drag must follow the pointer off the slider, got {}",
-            app.video.volume
-        );
-    });
-    vcx.simulate_mouse_up(
-        off_slider,
-        gpui::MouseButton::Left,
-        gpui::Modifiers::default(),
-    );
-    render_viewer_ui(vcx);
-    view.update(vcx, |app, _| assert!(!app.video.adjusting_volume));
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

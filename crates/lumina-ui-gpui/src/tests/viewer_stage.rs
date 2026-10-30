@@ -1,6 +1,6 @@
 //! v3 photo viewer: toolbar rating, stage prev/next, floating zoom pill.
 
-use super::ui_automation::{app_with_library, click, render_ui, seed_library};
+use super::ui_automation::{app_with_library, click, render_ui, right_click, seed_library};
 
 #[core::prelude::v1::test]
 fn viewer_stage_rates_navigates_and_steps_zoom() {
@@ -17,11 +17,12 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
     });
     render_ui(vcx);
 
-    click(vcx, "viewer-star-3");
+    right_click(vcx, "viewer-viewport");
+    click(vcx, "context-rating-star-3");
     assert_eq!(
         engine.catalog().get_rating(first.id).unwrap(),
         3,
-        "the toolbar's third star must persist a 3-star rating"
+        "the viewer menu's third star must persist a 3-star rating"
     );
 
     click(vcx, "viewer-next");

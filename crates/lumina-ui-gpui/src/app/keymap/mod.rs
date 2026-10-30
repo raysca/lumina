@@ -24,6 +24,15 @@ impl LuminaApp {
             return;
         }
 
+        // The viewer's right-click menu is modal: Escape closes it and every
+        // other key (⌘A, ⌘Z, ]…) is absorbed so nothing changes what it acts on.
+        if self.is_fullscreen_viewer && self.context_menu_state.is_some() {
+            if key == "escape" {
+                self.close_context_menu(cx);
+            }
+            return;
+        }
+
         // Cmd+[: browsing Back. Secondary modifier only, so the viewer's plain
         // [ / ] previous/next shortcuts keep working.
         if cmd_or_ctrl && key == "[" {

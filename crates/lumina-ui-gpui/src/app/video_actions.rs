@@ -527,19 +527,6 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn set_video_volume(&mut self, volume: f32, cx: &mut Context<Self>) {
-        let v = volume.clamp(0.0, 1.0);
-        self.video.volume = v;
-        if v > 0.0 && self.video.is_muted {
-            self.video.is_muted = false;
-        }
-        if let Some(ref mut player) = self.video.player {
-            player.set_volume(v);
-            player.set_muted(self.video.is_muted);
-        }
-        cx.notify();
-    }
-
     pub fn set_video_speed(&mut self, speed: f32, cx: &mut Context<Self>) {
         self.video.playback_speed = speed;
         self.video.speed_menu_open = false;

@@ -276,6 +276,7 @@ impl LuminaApp {
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;
         self.viewer_shortcuts_open = false;
+        self.context_menu_state = None;
         self.viewer_state.reset();
         if !self.video.in_pip {
             self.stop_video_player();

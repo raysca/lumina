@@ -151,14 +151,14 @@ fn step_button(
 }
 
 /// Round previous/next buttons centred on the stage's left and right edges.
-/// They call the same navigation as the ← → keys.
+/// They call the same navigation as [ and ] (←/→ seek on video).
 pub fn render_nav_buttons(cx: &mut Context<LuminaApp>) -> [AnyElement; 2] {
     [
-        nav_button("viewer-prev", "Previous (←)", Icon::ChevronLeft, -1, cx)
-            .left(px(24.0))
+        nav_button("viewer-prev", "Previous ([)", Icon::ChevronLeft, -1, cx)
+            .left(px(40.0))
             .into_any_element(),
-        nav_button("viewer-next", "Next (→)", Icon::ChevronRight, 1, cx)
-            .right(px(24.0))
+        nav_button("viewer-next", "Next (])", Icon::ChevronRight, 1, cx)
+            .right(px(40.0))
             .into_any_element(),
     ]
 }

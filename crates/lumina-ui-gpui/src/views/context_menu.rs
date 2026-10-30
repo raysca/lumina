@@ -43,6 +43,7 @@ impl MediaContextMenu {
         let is_trash = app.selection == AlbumSelection::Trash;
         let is_fav = item.is_favorite;
         let is_video = item.media_type == lumina_core::MediaType::Video;
+        let in_viewer = app.is_fullscreen_viewer;
         let path = item.path.clone();
 
         let raw_x: f32 = state.position.x.into();
@@ -104,8 +105,8 @@ impl MediaContextMenu {
                     .flex()
                     .flex_col()
                     .gap_0p5()
-                    // 1. Open in Viewer
-                    .child({
+                    // 1. Open in Viewer (not inside the viewer itself)
+                    .children((!in_viewer).then(|| {
                         let item_for_viewer = item.clone();
                         Self::render_menu_item(
                             &hover,
@@ -118,9 +119,9 @@ impl MediaContextMenu {
                                 this.open_viewer(item_for_viewer.clone(), cx);
                             }),
                         )
-                    })
+                    }))
                     // 2. Play Video (if video)
-                    .children(is_video.then(|| {
+                    .children((is_video && !in_viewer).then(|| {
                         let item_for_vid = item.clone();
                         Self::render_menu_item(
                             &hover,

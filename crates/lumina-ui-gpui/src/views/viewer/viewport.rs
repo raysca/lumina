@@ -4,6 +4,7 @@ use lumina_core::MediaType;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::context_menu::ContextMenuState;
 use crate::views::viewer_state::ViewerCanvas;
 
 /// Wheel-to-zoom gain. Pixel deltas become fractional zoom changes instead of
@@ -68,6 +69,27 @@ impl ViewerViewport {
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseUpEvent, _w, cx| {
                     this.end_viewer_drag(cx);
+                }),
+            )
+            // The viewer's right-click menu holds what the slim top bar does
+            // not: Open, Reveal, Edit, Rotate (v3).
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, e: &MouseDownEvent, _w, cx| {
+                    // The menu acts on the shown item only: drop any grid
+                    // multi-selection so Delete/Rate cannot reach hidden items.
+                    // The viewer can be open without a grid index.
+                    if let Some(item) = this.selected_item.clone() {
+                        this.selected_indices.clear();
+                        this.selected_indices.extend(this.selected_index);
+                        this.selection_anchor = this.selected_index;
+                        this.context_menu_state = Some(ContextMenuState {
+                            position: e.position,
+                            item,
+                            hovered: None,
+                        });
+                        cx.notify();
+                    }
                 }),
             )
             // The double-click zoom handler lives on the media element itself

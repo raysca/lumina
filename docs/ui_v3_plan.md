@@ -39,6 +39,8 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   the ⌘K palette has Rate 1–5 Stars and Clear Rating.
 - Palette has no "Go to" group for sidebar destinations; commands only.
 - Viewer zoom navigator (overview of the visible region) is not built.
+- Video scrubber (agreed deviation): no frame strip and a time-only hover
+  preview; the AVFoundation bridge cannot decode arbitrary frames on demand.
 - Video zoom has no on-screen control now; Z, scroll and the 0/1/2/4 keys
   still work.
 - Multi-select dock has no Rate ▾ menu (rating is in the batch inspector)

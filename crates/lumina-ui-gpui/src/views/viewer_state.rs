@@ -13,39 +13,11 @@ pub enum ViewerRotation {
 }
 
 impl ViewerRotation {
-    /// Both controls in top-bar and context-menu order.
-    pub const ALL: [Self; 2] = [Self::Left, Self::Right];
-
     /// Signed quarter-turn delta applied to the stored 0..=3 value.
     pub fn delta(self) -> i32 {
         match self {
             Self::Left => -1,
             Self::Right => 1,
-        }
-    }
-
-    /// Menu and tooltip label.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Left => "Rotate Left",
-            Self::Right => "Rotate Right",
-        }
-    }
-
-    /// Tooltip text; the display-only hint keeps the non-destructive promise
-    /// visible next to the control.
-    pub fn tooltip(self) -> &'static str {
-        match self {
-            Self::Left => "Rotate Left 90° (display only)",
-            Self::Right => "Rotate Right 90° (display only)",
-        }
-    }
-
-    /// Stable automation selector for this control.
-    pub fn debug_selector(self) -> &'static str {
-        match self {
-            Self::Left => "quick-edit-rotate-left",
-            Self::Right => "quick-edit-rotate-right",
         }
     }
 
@@ -672,14 +644,6 @@ mod tests {
         }
         assert_eq!(quarters, 0, "four right turns are the identity");
 
-        assert_eq!(
-            ViewerRotation::ALL
-                .into_iter()
-                .map(ViewerRotation::debug_selector)
-                .collect::<Vec<_>>(),
-            vec!["quick-edit-rotate-left", "quick-edit-rotate-right"],
-            "the automation contract must stay stable"
-        );
         assert_eq!(
             ViewerRotation::Left.delta() + ViewerRotation::Right.delta(),
             0,

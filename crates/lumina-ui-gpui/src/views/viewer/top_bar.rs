@@ -1,64 +1,44 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::{MediaItem, MediaType};
+use lumina_core::MediaItem;
 
 use crate::app::types::{format_bytes, month_name};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::viewer_state::ViewerRotation;
 
 pub struct ViewerTopBar;
 
+/// Transparent 28px icon button with a tooltip.
+fn bar_icon_button(
+    id: &'static str,
+    icon: Icon,
+    tooltip: &'static str,
+    color: Rgba,
+    on: bool,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .tooltip(theme::tooltip_label(tooltip))
+        .size(px(28.0))
+        .rounded_md()
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .when(on, |b| b.bg(theme::selection_bg()))
+        .hover(|s| s.bg(theme::bg_control_hover()))
+        .child(render_icon(icon, px(16.0), color))
+}
+
 /// Window width below which the top bar drops the breadcrumb date and specs
-/// line and switches open/reveal to icon actions so the right cluster cannot
-/// crowd the filename.
+/// line so the filename stays readable.
 const COMPACT_WINDOW_WIDTH: f32 = 1400.0;
 /// Width assumed before window bounds have been observed.
 const DEFAULT_WINDOW_WIDTH: f32 = 1440.0;
 
 impl ViewerTopBar {
-    /// Quick-edit rotate control. It stays visible for video so the no-op is
-    /// discoverable, but the tooltip states that video rotation is unsupported.
-    fn render_rotate_button(
-        direction: ViewerRotation,
-        is_video: bool,
-        cx: &mut Context<LuminaApp>,
-    ) -> Stateful<Div> {
-        let id = direction.debug_selector();
-        let tooltip = if is_video {
-            format!("{} (not supported for video)", direction.label())
-        } else {
-            direction.tooltip().to_string()
-        };
-        div()
-            .id(id)
-            .debug_selector(move || id.to_string())
-            .tooltip(theme::tooltip_label(tooltip))
-            .h(px(22.0))
-            .px(px(2.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(4.0))
-            .bg(theme::bg_control())
-            .border_1()
-            .border_color(theme::border())
-            .hover(|style| style.bg(theme::bg_control_hover()))
-            .cursor_pointer()
-            .text_color(theme::text_muted())
-            .child(render_icon(
-                match direction {
-                    ViewerRotation::Left => Icon::RotateCcw,
-                    ViewerRotation::Right => Icon::RotateCw,
-                },
-                px(13.0),
-                theme::text_muted(),
-            ))
-            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
-                this.rotate_viewer_selected(direction, cx);
-            }))
-    }
-
     pub fn render(
         this: &LuminaApp,
         item: &MediaItem,
@@ -71,7 +51,6 @@ impl ViewerTopBar {
             .unwrap_or(&item.file_name)
             .to_string();
 
-        let is_video = item.media_type == MediaType::Video;
         let is_inspector_open = this.inspector_open;
 
         let month_str = month_name(item.month);
@@ -81,31 +60,14 @@ impl ViewerTopBar {
             "Undated".to_string()
         };
         let is_fav = item.is_favorite;
-        let rating = this.get_item_rating(item);
 
-        // At narrow widths the breadcrumb date, specs line, and long action labels yield
-        // space so the filename stays readable at 1024px.
+        // At narrow widths the breadcrumb date and specs line yield space so the
+        // filename stays readable at 1024px.
         let window_width = this
             .window_bounds
             .map(|(_, _, width, _)| width)
             .unwrap_or(DEFAULT_WINDOW_WIDTH);
         let compact = window_width < COMPACT_WINDOW_WIDTH;
-        let open_label = if is_video {
-            if compact {
-                "Open"
-            } else {
-                "Open in QuickTime"
-            }
-        } else if compact {
-            "Open"
-        } else {
-            "Open in Preview"
-        };
-        let reveal_label = if compact {
-            "Reveal"
-        } else {
-            "Reveal in Finder"
-        };
 
         let mut center_section = div()
             .flex()
@@ -212,9 +174,8 @@ impl ViewerTopBar {
             )
             // Center Section: Breadcrumb, Filename, Specs Line
             .child(center_section)
-            // Right Section: Rating, Quick Edit, Favorite, Info, Open, Reveal.
-            // The gap stays tight so the cluster clears the filename down to the
-            // 1024px minimum width.
+            // Right Section: Favorite and Info only (v3). Open, Reveal, Edit
+            // and Rotate live in the viewer's right-click menu.
             .child(
                 div()
                     .flex()
@@ -222,235 +183,50 @@ impl ViewerTopBar {
                     .items_center()
                     .gap(px(4.0))
                     .flex_shrink_0()
-                    // Rating stars; clicking the current rating clears it
-                    // (`set_rating_selected` toggles).
                     .child(
-                        div()
-                            .id("viewer-rating")
-                            .debug_selector(|| "viewer-rating".to_string())
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .mr(px(4.0))
-                            .children((1u8..=5).map(|star| {
-                                let filled = rating >= star;
-                                let color = if filled {
-                                    theme::rating()
-                                } else {
-                                    theme::text_disabled()
-                                };
-                                div()
-                                    .id(ElementId::NamedInteger("viewer-star".into(), star as u64))
-                                    .debug_selector(move || format!("viewer-star-{star}"))
-                                    .tooltip(theme::tooltip_label(format!(
-                                        "Rate {star} star{}",
-                                        if star > 1 { "s" } else { "" }
-                                    )))
-                                    .px(px(2.0))
-                                    .cursor_pointer()
-                                    .child(render_icon(
-                                        if filled { Icon::StarFilled } else { Icon::Star },
-                                        px(13.0),
-                                        color,
-                                    ))
-                                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                        this.set_rating_selected(star, cx);
-                                    }))
-                            })),
-                    )
-                    // Quick-edit rotation. Non-destructive: the catalog stores the
-                    // quarter turn and the original file is never rewritten.
-                    .child(
-                        div()
-                            .id("viewer-quick-edit")
-                            .debug_selector(|| "viewer-quick-edit".to_string())
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(2.0))
-                            .children(ViewerRotation::ALL.into_iter().map(|direction| {
-                                Self::render_rotate_button(direction, is_video, cx)
-                            })),
-                    )
-                    // Favorite Heart Button
-                    .child(
-                        div()
-                            .id("viewer-fav-btn")
-                            .debug_selector(|| "viewer-fav-btn".to_string())
-                            .tooltip(theme::tooltip_label("Favorite (F)"))
-                            .px_2()
-                            .py_1()
-                            .rounded_md()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .cursor_pointer()
-                            .flex()
-                            .justify_center()
-                            .items_center()
-                            .text_sm()
-                            .text_color(if is_fav {
+                        bar_icon_button(
+                            "viewer-fav-btn",
+                            if is_fav {
+                                Icon::HeartFilled
+                            } else {
+                                Icon::Heart
+                            },
+                            if is_fav {
+                                "Unfavorite (F)"
+                            } else {
+                                "Favorite (F)"
+                            },
+                            if is_fav {
                                 theme::rating()
                             } else {
                                 theme::text_muted()
-                            })
-                            .child(render_icon(
-                                if is_fav {
-                                    Icon::HeartFilled
-                                } else {
-                                    Icon::Heart
-                                },
-                                px(14.0),
-                                if is_fav {
-                                    theme::rating()
-                                } else {
-                                    theme::text_muted()
-                                },
-                            ))
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            },
+                            false,
+                        )
+                        .on_click(cx.listener(
+                            |this, _e: &ClickEvent, _w, cx| {
                                 this.toggle_favorite_selected(cx);
-                            })),
+                            },
+                        )),
                     )
-                    // Info Button (with ⌘I label)
                     .child(
-                        div()
-                            .id("viewer-info-btn")
-                            .debug_selector(|| "viewer-info-btn".to_string())
-                            .px_2p5()
-                            .py_1()
-                            .bg(if is_inspector_open {
-                                theme::selection_bg()
+                        bar_icon_button(
+                            "viewer-info-btn",
+                            Icon::Info,
+                            "Info (I)",
+                            if is_inspector_open {
+                                theme::selection_fg()
                             } else {
-                                theme::bg_control()
-                            })
-                            .border_1()
-                            .border_color(if is_inspector_open {
-                                theme::accent()
-                            } else {
-                                theme::border()
-                            })
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(if is_inspector_open {
-                                        theme::accent()
-                                    } else {
-                                        theme::text()
-                                    })
-                                    .child("Info"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.0))
-                                    .text_color(theme::text_subtle())
-                                    .child("⌘I"),
-                            )
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                theme::text_muted()
+                            },
+                            is_inspector_open,
+                        )
+                        .on_click(cx.listener(
+                            |this, _e: &ClickEvent, _w, cx| {
                                 this.toggle_inspector(cx);
-                            })),
-                    )
-                    // Open in QuickTime / Preview (with O label)
-                    .child({
-                        div()
-                            .id("viewer-quicktime-btn")
-                            .debug_selector(|| "viewer-quicktime-btn".to_string())
-                            .tooltip(theme::tooltip_label(if is_video {
-                                "Open in QuickTime (O)"
-                            } else {
-                                "Open in Preview (O)"
-                            }))
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .border_1()
-                            .border_color(theme::border())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .child(if compact {
-                                render_icon(Icon::ExternalLink, px(13.0), theme::text())
-                                    .into_any_element()
-                            } else {
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
-                                    .child(open_label)
-                                    .into_any_element()
-                            })
-                            .child(if compact {
-                                Empty.into_any_element()
-                            } else {
-                                div()
-                                    .text_size(px(10.0))
-                                    .text_color(theme::text_subtle())
-                                    .child("O")
-                                    .into_any_element()
-                            })
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, _cx| {
-                                this.open_selected_in_default_app();
-                            }))
-                    })
-                    // Edit in External Editor (uses the Preferences app)
-                    .child({
-                        let p_clone = path.clone();
-                        div()
-                            .id("viewer-external-editor-btn")
-                            .debug_selector(|| "viewer-external-editor-btn".to_string())
-                            .tooltip(theme::tooltip_label("Edit in External Editor"))
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .border_1()
-                            .border_color(theme::border())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::text())
-                            // A short label keeps the right cluster narrow; the
-                            // tooltip and context menu carry the full name.
-                            .child("Edit")
-                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                this.open_item_in_external_editor(&p_clone, cx);
-                            }))
-                    })
-                    // Reveal in Finder Button
-                    .child({
-                        let p_clone = path.clone();
-                        div()
-                            .id("viewer-finder-btn")
-                            .debug_selector(|| "viewer-finder-btn".to_string())
-                            .tooltip(theme::tooltip_label("Reveal in Finder"))
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_control())
-                            .border_1()
-                            .border_color(theme::border())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::text())
-                            .child(if compact {
-                                render_icon(Icon::Folder, px(13.0), theme::text())
-                                    .into_any_element()
-                            } else {
-                                reveal_label.into_any_element()
-                            })
-                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, _cx| {
-                                this.reveal_item_in_finder(&p_clone);
-                            }))
-                    }),
+                            },
+                        )),
+                    ),
             )
     }
 }

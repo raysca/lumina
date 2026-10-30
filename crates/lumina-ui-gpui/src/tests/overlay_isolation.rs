@@ -6,7 +6,7 @@
 
 use crate::app::types::get_sample_items;
 use crate::tests::ui_automation::{
-    app_with_library, click, click_point, leak, render_ui, seed_library,
+    app_with_library, click, click_point, leak, render_ui, right_click, seed_library,
 };
 use lumina_core::MediaType;
 
@@ -91,7 +91,8 @@ fn viewer_open_click_does_not_open_tag_manager() {
         );
     });
 
-    click(vcx, "viewer-quicktime-btn");
+    right_click(vcx, "viewer-viewport");
+    click(vcx, "open-with-menu-btn");
     view.update(vcx, |app, _| {
         assert!(
             !app.tag_manager.open,

@@ -80,12 +80,24 @@ impl MediaViewer {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .child(ViewerViewport::render(this, cx))
-                    // v3: prev/next on the stage edges and, for stills, a
-                    // floating zoom pill. There is no filmstrip tray.
-                    .when(show_chrome, |stage| {
-                        stage.children(stage_controls::render_nav_buttons(cx))
-                    })
+                    // The media frame and its prev/next buttons share a box,
+                    // so the buttons centre on the picture, not on the
+                    // picture plus the video transport below it.
+                    .child(
+                        div()
+                            .relative()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .child(ViewerViewport::render(this, cx))
+                            .when(show_chrome, |frame| {
+                                frame.children(stage_controls::render_nav_buttons(cx))
+                            }),
+                    )
                     .when(show_chrome && !is_video, |stage| {
                         stage.child(stage_controls::render_zoom_hud(this, cx))
                     })

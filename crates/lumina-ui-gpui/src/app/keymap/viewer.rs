@@ -116,12 +116,9 @@ impl LuminaApp {
                 self.seek_video_relative(-5.0, cx);
                 return true;
             }
+            // L loops (v3 design); ←/→ and J seek.
             if key.eq_ignore_ascii_case("l") {
-                if keystroke.modifiers.shift {
-                    self.toggle_video_loop(cx);
-                } else {
-                    self.seek_video_relative(5.0, cx);
-                }
+                self.toggle_video_loop(cx);
                 return true;
             }
             if key == "," {
