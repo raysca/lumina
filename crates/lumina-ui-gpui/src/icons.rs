@@ -39,6 +39,7 @@ pub enum Icon {
     Film,
     Sliders,
     Plus,
+    Minus,
     Pencil,
 }
 
@@ -83,6 +84,7 @@ impl Icon {
         Icon::Film,
         Icon::Sliders,
         Icon::Plus,
+        Icon::Minus,
         Icon::Pencil,
     ];
 
@@ -124,6 +126,7 @@ impl Icon {
             Self::Film => "icons/film.svg",
             Self::Sliders => "icons/sliders.svg",
             Self::Plus => "icons/plus.svg",
+            Self::Minus => "icons/minus.svg",
             Self::Pencil => "icons/pencil.svg",
         }
     }

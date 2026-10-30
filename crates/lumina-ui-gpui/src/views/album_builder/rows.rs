@@ -4,6 +4,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::smart_draft::{field_label, operator_label, DraftFocus, DraftRow, ValueKind};
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -108,9 +109,9 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         .into_any_element()
 }
 
-fn square_button(
+pub(super) fn square_button(
     selector: String,
-    glyph: &'static str,
+    icon: Icon,
     tooltip: &'static str,
     focused: bool,
     on_click: impl Fn(&mut LuminaApp, &mut Context<LuminaApp>) + 'static,
@@ -123,7 +124,7 @@ fn square_button(
         .justify_center()
         .border_color(ring(focused))
         .tooltip(theme::tooltip_label(tooltip))
-        .child(glyph)
+        .child(render_icon(icon, px(12.0), theme::text_muted()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
 }
 
@@ -136,7 +137,6 @@ pub(super) fn render_row(
     let focus = app.album_draft.focus;
     let invalid = row.to_rule().is_none();
     let kind = row.kind();
-    let can_remove = app.album_draft.rows.len() > 1;
     let popup_here = app.album_draft.popup.is_some_and(|p| {
         matches!(
             p.target,
@@ -180,6 +180,11 @@ pub(super) fn render_row(
         .flex()
         .flex_col()
         .gap_1()
+        .px(px(8.0))
+        .py(px(6.0))
+        .when(i > 0, |el| {
+            el.border_t_1().border_color(theme::border_subtle())
+        })
         .child(
             div()
                 .debug_selector(move || format!("album-rule-row-{i}"))
@@ -206,7 +211,7 @@ pub(super) fn render_row(
                         DraftFocus::Field(i),
                         cx,
                     )
-                    .w(px(130.0)),
+                    .w(px(180.0)),
                 )
                 .child(
                     picker(
@@ -216,7 +221,7 @@ pub(super) fn render_row(
                         DraftFocus::Operator(i),
                         cx,
                     )
-                    .w(px(140.0)),
+                    .w(px(150.0)),
                 )
                 .child(value)
                 .when(kind == ValueKind::Period, |el| {
@@ -231,19 +236,17 @@ pub(super) fn render_row(
                         .w(px(90.0)),
                     )
                 })
-                .when(can_remove, |el| {
-                    el.child(square_button(
-                        format!("album-rule-remove-{i}"),
-                        "−",
-                        "Remove condition",
-                        focus == DraftFocus::Remove(i),
-                        move |this, cx| this.remove_draft_row(i, cx),
-                        cx,
-                    ))
-                })
+                .child(square_button(
+                    format!("album-rule-remove-{i}"),
+                    Icon::Minus,
+                    "Remove condition",
+                    focus == DraftFocus::Remove(i),
+                    move |this, cx| this.remove_draft_row(i, cx),
+                    cx,
+                ))
                 .child(square_button(
                     format!("album-rule-add-{i}"),
-                    "+",
+                    Icon::Plus,
                     "Add condition",
                     focus == DraftFocus::Add(i),
                     move |this, cx| this.add_draft_row_after(i, cx),

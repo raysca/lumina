@@ -56,7 +56,9 @@ impl LuminaApp {
         draft.editing_album_id = editing;
         draft.album_title = title;
         draft.match_mode = match_mode;
-        draft.rows = if rows.is_empty() {
+        // Only a new album starts with a row; a saved zero-rule album must
+        // reopen empty, or OK would narrow "every item" to favourites.
+        draft.rows = if rows.is_empty() && editing.is_none() {
             vec![DraftRow::new(RuleField::IsFavorite)]
         } else {
             rows
@@ -343,6 +345,7 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// With no rows, `Add(0)` is the empty state's + and inserts at 0.
     pub fn add_draft_row_after(&mut self, index: usize, cx: &mut Context<Self>) {
         let at = (index + 1).min(self.album_draft.rows.len());
         self.album_draft
@@ -354,12 +357,15 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Removes a row; the last remaining row cannot be removed.
+    /// Removes a row. With none left every item matches; focus moves to the
+    /// empty state's Add button.
     pub fn remove_draft_row(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.album_draft.rows.len() > 1 && index < self.album_draft.rows.len() {
+        if index < self.album_draft.rows.len() {
             self.album_draft.rows.remove(index);
-            let row = index.min(self.album_draft.rows.len() - 1);
-            self.album_draft.focus = DraftFocus::Field(row);
+            self.album_draft.focus = match self.album_draft.rows.len() {
+                0 => DraftFocus::Add(0),
+                n => DraftFocus::Field(index.min(n - 1)),
+            };
             self.album_draft.popup = None;
             self.refresh_draft_preview();
             cx.notify();

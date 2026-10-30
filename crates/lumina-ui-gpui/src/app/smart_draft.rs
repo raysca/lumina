@@ -380,10 +380,12 @@ pub fn focus_order(rows: &[DraftRow]) -> Vec<DraftFocus> {
         if row.kind() == ValueKind::Period {
             order.push(DraftFocus::Unit(i));
         }
-        if rows.len() > 1 {
-            order.push(DraftFocus::Remove(i));
-        }
+        order.push(DraftFocus::Remove(i));
         order.push(DraftFocus::Add(i));
+    }
+    // The empty state's "Add Condition" button.
+    if rows.is_empty() {
+        order.push(DraftFocus::Add(0));
     }
     order.extend([DraftFocus::Cancel, DraftFocus::Save]);
     order
@@ -488,7 +490,11 @@ mod tests {
     #[test]
     fn focus_order_skips_controls_a_row_does_not_have() {
         let one = [DraftRow::new(RuleField::Tag)];
-        assert!(!focus_order(&one).contains(&DraftFocus::Remove(0)));
+        assert!(
+            focus_order(&one).contains(&DraftFocus::Remove(0)),
+            "the last row can be removed (v3)"
+        );
+        assert!(focus_order(&[]).contains(&DraftFocus::Add(0)));
         let rows = [
             row(RuleField::Tag, RuleOperator::IsEmpty, ""),
             row(RuleField::Date, RuleOperator::InTheLast, "7"),

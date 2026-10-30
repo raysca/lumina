@@ -167,8 +167,8 @@ fn builder_is_fully_keyboard_driven() {
         );
     });
 
-    // + adds a row and focuses its field; Space on − removes it again.
-    keystrokes(vcx, "tab space");
+    // Past −, + adds a row and focuses its field; Space on − removes it again.
+    keystrokes(vcx, "tab tab space");
     view.update(vcx, |app, _| {
         assert_eq!(app.album_draft.rows.len(), 2);
         assert_eq!(app.album_draft.focus, DraftFocus::Field(1));
@@ -346,6 +346,90 @@ fn focused_text_fields_have_room_for_the_caret() {
         text.size.width,
         field.size.width
     );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn v3_sheet_layout_matches_the_design() {
+    let (dir, engine, ids) = library("sab_v3_layout");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+
+    let card = vcx.debug_bounds("album-builder-card").unwrap();
+    assert_eq!(f32::from(card.size.width), 760.0);
+    assert_eq!(
+        f32::from(vcx.debug_bounds("album-rule-field-0").unwrap().size.width),
+        180.0
+    );
+    assert_eq!(
+        f32::from(vcx.debug_bounds("album-rule-op-0").unwrap().size.width),
+        150.0
+    );
+    let tile = vcx
+        .debug_bounds(leak(format!("album-builder-preview-{}", ids[0].0)))
+        .unwrap();
+    assert_eq!(f32::from(tile.size.width), 72.0, "preview tiles are 72px");
+    for selector in [
+        "album-builder-conditions",
+        "album-builder-preview-help",
+        "album-rule-remove-0",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "{selector} must render"
+        );
+    }
+    let rows = vcx.debug_bounds("album-builder-conditions").unwrap();
+    let field = vcx.debug_bounds("album-rule-field-0").unwrap();
+    assert!(
+        rows.contains(&field.origin),
+        "rows sit inside one container"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn removing_the_last_condition_matches_everything() {
+    let (dir, engine, _ids) = library("sab_v3_empty");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+
+    click(vcx, "album-rule-remove-0");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.rows.is_empty(), "− works on the last row");
+        assert_eq!(app.album_draft.match_count, Some(4), "every item matches");
+        assert_eq!(app.album_draft.focus, DraftFocus::Add(0));
+    });
+    assert!(vcx.debug_bounds("album-builder-empty").is_some());
+
+    // Keyboard: Space on the focused Add brings a condition back.
+    keystrokes(vcx, "space");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows.len(), 1);
+        assert_eq!(app.album_draft.match_count, Some(2));
+    });
+    click(vcx, "album-rule-remove-0");
+    keystrokes(vcx, "secondary-enter");
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1, "a no-condition album saves");
+    assert!(saved[0].rules.is_empty());
+    view.update(vcx, |app, _| assert_eq!(app.get_active_count(), 4));
+
+    // Reopening for edit keeps it empty; OK (e.g. a rename) must not add a rule.
+    view.update(vcx, |app, cx| app.edit_selected_smart_album(cx));
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.rows.is_empty(), "no default row on edit")
+    });
+    keystrokes(vcx, "x secondary-enter");
+    let saved = engine.list_smart_albums();
+    assert!(saved[0].rules.is_empty(), "the edit kept every item");
 
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -8,6 +8,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::smart_draft::{match_label, DraftFocus};
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -46,7 +47,7 @@ impl AlbumBuilderModal {
                     .debug_selector(|| "album-builder-card".to_string())
                     .w(px(760.0))
                     .max_h(px(620.0))
-                    .bg(theme::bg_raised())
+                    .bg(theme::bg_dialog())
                     .border_1()
                     .border_t_0()
                     .border_color(theme::border_strong())
@@ -60,17 +61,32 @@ impl AlbumBuilderModal {
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                         cx.stop_propagation();
                     })
+                    // Amber star and a large borderless title (ring only on focus).
                     .child(
-                        rows::text_field(
-                            "album-builder-title".to_string(),
-                            &draft.album_title,
-                            "Untitled Smart Album",
-                            focus == DraftFocus::Title,
-                            DraftFocus::Title,
-                            cx,
-                        )
-                        .h(px(32.0))
-                        .text_sm(),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .child(render_icon(Icon::Star, px(18.0), theme::accent()))
+                            .child(
+                                rows::text_field(
+                                    "album-builder-title".to_string(),
+                                    &draft.album_title,
+                                    "Untitled Smart Album",
+                                    focus == DraftFocus::Title,
+                                    DraftFocus::Title,
+                                    cx,
+                                )
+                                .flex_1()
+                                .h(px(34.0))
+                                .bg(transparent_black())
+                                .when(focus != DraftFocus::Title, |f| {
+                                    f.border_color(transparent_black())
+                                })
+                                .text_size(px(17.0))
+                                .font_weight(FontWeight::SEMIBOLD),
+                            ),
                     )
                     .child(
                         div()
@@ -94,15 +110,23 @@ impl AlbumBuilderModal {
                             .child("of the following conditions:"),
                     )
                     .when(popup_on_match, |el| el.child(rows::render_popup(app, cx)))
+                    // One bordered dark container; rows draw their dividers.
                     .child(
                         div()
                             .id("album-builder-scroll-content")
+                            .debug_selector(|| "album-builder-conditions".to_string())
                             .flex_1()
                             .w_full()
                             .overflow_y_scroll()
+                            .rounded(px(8.0))
+                            .border_1()
+                            .border_color(theme::border())
+                            .bg(theme::bg_app())
                             .flex()
                             .flex_col()
-                            .gap_2()
+                            .when(draft.rows.is_empty(), |el| {
+                                el.child(render_empty_conditions(focus, cx))
+                            })
                             .children(
                                 draft
                                     .rows
@@ -118,11 +142,34 @@ impl AlbumBuilderModal {
     }
 }
 
+/// "No conditions — every item matches." plus the way back to a condition.
+fn render_empty_conditions(focus: DraftFocus, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    div()
+        .debug_selector(|| "album-builder-empty".to_string())
+        .px(px(12.0))
+        .py(px(10.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .text_sm()
+        .text_color(theme::text_muted())
+        .child("No conditions — every item matches.")
+        .child(rows::square_button(
+            "album-rule-add-empty".to_string(),
+            Icon::Plus,
+            "Add condition",
+            focus == DraftFocus::Add(0),
+            |this, cx| this.add_draft_row_after(0, cx),
+            cx,
+        ))
+}
+
 /// The first matches as thumbnails; tiles decode like grid cards.
 fn render_preview(app: &LuminaApp) -> impl IntoElement {
     let textures = app.grid_state.as_ref().map(|state| &state.texture_cache);
-    div()
-        .h(px(56.0))
+    let tiles = div()
+        .h(px(PREVIEW_TILE))
         .flex()
         .flex_row()
         .gap_1p5()
@@ -134,13 +181,35 @@ fn render_preview(app: &LuminaApp) -> impl IntoElement {
             }
             div()
                 .debug_selector(move || format!("album-builder-preview-{}", id.0))
-                .size(px(56.0))
+                .size(px(PREVIEW_TILE))
                 .rounded(px(4.0))
                 .overflow_hidden()
                 .bg(theme::bg_raised())
                 .children(texture.map(|t| img(t).size_full().object_fit(ObjectFit::Cover)))
-        }))
+        }));
+    div()
+        .flex()
+        .flex_col()
+        .gap_1p5()
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_baseline()
+                .gap_2()
+                .child(theme::section_label("LIVE PREVIEW"))
+                .child(
+                    div()
+                        .debug_selector(|| "album-builder-preview-help".to_string())
+                        .text_xs()
+                        .text_color(theme::text_subtle())
+                        .child("The first matches, updated as you edit."),
+                ),
+        )
+        .child(tiles)
 }
+
+const PREVIEW_TILE: f32 = 72.0;
 
 fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
     let draft = &app.album_draft;
@@ -199,7 +268,9 @@ fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                     theme::control("album-builder-cancel")
                         .debug_selector(|| "album-builder-cancel".to_string())
                         .border_color(ring(draft.focus == DraftFocus::Cancel))
+                        .gap_2()
                         .child("Cancel")
+                        .child(theme::kbd("Esc"))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.close_album_builder(cx);
                         })),
