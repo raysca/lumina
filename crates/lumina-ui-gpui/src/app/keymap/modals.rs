@@ -287,12 +287,40 @@ impl LuminaApp {
                 return true;
             }
 
+            // Esc deselects first, then closes.
             if key == "escape" {
-                if self.tag_manager.merge_source.is_some() {
-                    self.cancel_tag_merge(cx);
-                    return true;
+                if self.tag_manager.selected.is_empty() {
+                    self.close_tag_manager(cx);
+                } else {
+                    self.clear_tag_manager_selection(cx);
                 }
-                self.close_tag_manager(cx);
+                return true;
+            }
+            // Keyboard path for the selection bar: ⌘A check all shown, ⌘M
+            // merge, ⌘⌫ delete checked; Space checks the focused tag (both
+            // only while the filter is empty).
+            if cmd_or_ctrl && key == "a" {
+                self.toggle_all_tag_manager_rows(cx);
+                return true;
+            }
+            if cmd_or_ctrl && key == "m" {
+                self.merge_checked_tags(cx);
+                return true;
+            }
+            // Only with an empty filter (⌘⌫ edits text) and the bar showing.
+            if cmd_or_ctrl
+                && key == "backspace"
+                && self.tag_manager.search.is_empty()
+                && self.tag_manager.selected.len() >= 2
+            {
+                let tags = self.tag_manager.selected.iter().cloned().collect();
+                self.bulk_delete_tags(tags, cx);
+                return true;
+            }
+            if key == "space" && self.tag_manager.search.is_empty() {
+                if let Some(tag) = self.tag_manager.focused.clone() {
+                    self.toggle_tag_manager_selection(tag, cx);
+                }
                 return true;
             }
 

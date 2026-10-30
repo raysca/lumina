@@ -13,8 +13,16 @@ pub fn render_list(
     cx: &mut Context<LuminaApp>,
 ) -> impl IntoElement {
     let selected = &app.tag_manager.selected;
-    let all_checked = !rows.is_empty() && rows.iter().all(|(tag, _)| selected.contains(tag));
-    let merge_source = app.tag_manager.merge_source.clone();
+    let shown_checked = rows
+        .iter()
+        .filter(|(tag, _)| selected.contains(tag))
+        .count();
+    let all_state = match shown_checked {
+        0 => Check::Off,
+        n if n == rows.len() => Check::On,
+        _ => Check::Mixed,
+    };
+    let max_count = rows.iter().map(|(_, n)| *n).max().unwrap_or(0);
 
     div()
         .w(px(440.0))
@@ -36,7 +44,7 @@ pub fn render_list(
                     theme::segmented("tag-sort")
                         .child(sort_item(
                             "tag-sort-az-btn",
-                            "Name",
+                            "A–Z",
                             TagSortOrder::Alphabetical,
                             app,
                             cx,
@@ -50,7 +58,6 @@ pub fn render_list(
                         )),
                 ),
         )
-        .children(merge_source.map(|source| render_merge_banner(&source, cx)))
         // Column header with select-all.
         .child(
             div()
@@ -68,19 +75,19 @@ pub fn render_list(
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::text_subtle())
                 .child(
-                    checkbox("tag-manager-select-all", all_checked)
+                    checkbox("tag-manager-select-all", all_state)
                         .debug_selector(|| "tag-manager-select-all".to_string())
-                        .tooltip(theme::tooltip_label(if all_checked {
-                            "Deselect all"
+                        .tooltip(theme::tooltip_label(if all_state == Check::On {
+                            "Deselect all shown (⌘A)"
                         } else {
-                            "Select all shown"
+                            "Select all shown (⌘A)"
                         }))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.toggle_all_tag_manager_rows(cx);
                         })),
                 )
-                .child(div().flex_1().child("TAG"))
-                .child("ITEMS"),
+                .child(div().flex_1().child("NAME"))
+                .child(div().w(px(USAGE_WIDTH)).child("USAGE")),
         )
         .child(
             div()
@@ -89,7 +96,6 @@ pub fn render_list(
                 .min_h(px(0.0))
                 .overflow_y_scroll()
                 .track_scroll(&app.tag_manager.list_scroll)
-                .p(px(4.0))
                 .when(rows.is_empty(), |list| {
                     list.child(
                         div()
@@ -105,10 +111,11 @@ pub fn render_list(
                 })
                 .children(
                     rows.iter()
-                        .map(|(tag, count)| render_row(app, tag, *count, cx)),
+                        .map(|(tag, count)| render_row(app, tag, *count, max_count, cx)),
                 ),
         )
-        .when(!selected.is_empty(), |col| {
+        // The bar is for acting on several tags; one tag uses the detail.
+        .when(selected.len() >= 2, |col| {
             col.child(render_bulk_bar(app, cx))
         })
 }
@@ -159,30 +166,45 @@ fn sort_item(
         }))
 }
 
-fn render_row(app: &LuminaApp, tag: &str, count: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
+fn render_row(
+    app: &LuminaApp,
+    tag: &str,
+    count: usize,
+    max_count: usize,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
     let focused = app.tag_manager.focused.as_deref() == Some(tag);
     let checked = app.tag_manager.selected.contains(tag);
-    let merge_source = app.tag_manager.merge_source.as_deref();
     let tag_owned = tag.to_string();
-    let (row_tag, check_tag, merge_tag) = (tag_owned.clone(), tag_owned.clone(), tag_owned.clone());
+    let (row_tag, check_tag) = (tag_owned.clone(), tag_owned.clone());
     let row_selector = format!("tag-manager-row-{tag}");
     let check_selector = format!("tag-manager-checkbox-{tag}");
+    let usage_selector = format!("tag-manager-usage-{tag}");
+    let fill_selector = format!("tag-manager-usage-fill-{tag}");
+    let fill = if max_count == 0 {
+        0.0
+    } else {
+        USAGE_BAR * count as f32 / max_count as f32
+    };
 
     theme::row(
         ElementId::Name(format!("modal-tag-row-{tag}").into()),
         focused,
     )
     .debug_selector(move || row_selector.clone())
-    .h(px(32.0))
-    .px(px(8.0))
+    .h(px(36.0))
+    .px(px(12.0))
     .gap(px(10.0))
+    .rounded(px(0.0))
+    .border_b_1()
+    .border_color(theme::border_subtle())
     .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
         this.focus_tag_manager_tag(row_tag.clone(), cx);
     }))
     .child(
         checkbox(
             ElementId::Name(format!("modal-tag-cb-{tag}").into()),
-            checked,
+            if checked { Check::On } else { Check::Off },
         )
         .debug_selector(move || check_selector.clone())
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -199,35 +221,59 @@ fn render_row(app: &LuminaApp, tag: &str, count: usize, cx: &mut Context<LuminaA
             .text_sm()
             .child(tag_owned),
     )
-    .child(match merge_source {
-        Some(source) if source == tag => div()
-            .text_xs()
-            .text_color(theme::accent())
-            .child("merging…")
-            .into_any_element(),
-        Some(_) => theme::control(ElementId::Name(format!("modal-merge-target-{tag}").into()))
-            .h(px(22.0))
-            .child("Merge here")
-            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                cx.stop_propagation();
-                this.commit_tag_merge(merge_tag.clone(), cx);
-            }))
-            .into_any_element(),
-        None => div()
-            .font_family(theme::FONT_MONO)
-            .text_xs()
-            .text_color(if focused {
-                theme::selection_fg()
-            } else {
-                theme::text_subtle()
-            })
-            .child(count.to_string())
-            .into_any_element(),
-    })
+    .child(
+        div()
+            .w(px(USAGE_WIDTH))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .id(ElementId::Name(format!("tag-usage-{tag}").into()))
+                    .debug_selector(move || usage_selector.clone())
+                    .w(px(USAGE_BAR))
+                    .h(px(4.0))
+                    .rounded_full()
+                    .bg(theme::bg_control())
+                    .child(
+                        div()
+                            .id(ElementId::Name(format!("tag-usage-fill-{tag}").into()))
+                            .debug_selector(move || fill_selector.clone())
+                            .w(px(fill))
+                            .h_full()
+                            .rounded_full()
+                            .bg(theme::accent()),
+                    ),
+            )
+            .child(
+                div()
+                    .font_family(theme::FONT_MONO)
+                    .text_xs()
+                    .text_color(if focused {
+                        theme::selection_fg()
+                    } else {
+                        theme::text_subtle()
+                    })
+                    .child(count.to_string()),
+            ),
+    )
     .into_any_element()
 }
 
-fn checkbox(id: impl Into<ElementId>, checked: bool) -> Stateful<Div> {
+/// Usage column: a 110px bar scaled to the most-used shown tag, then the count.
+const USAGE_BAR: f32 = 110.0;
+const USAGE_WIDTH: f32 = 150.0;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Check {
+    Off,
+    On,
+    /// Some of the shown rows are checked ("–").
+    Mixed,
+}
+
+fn checkbox(id: impl Into<ElementId>, state: Check) -> Stateful<Div> {
     div()
         .id(id)
         .size(px(16.0))
@@ -238,52 +284,26 @@ fn checkbox(id: impl Into<ElementId>, checked: bool) -> Stateful<Div> {
         .flex()
         .items_center()
         .justify_center()
-        .map(|b| {
-            if checked {
-                b.bg(theme::accent())
-                    .border_color(theme::accent())
-                    .child(render_icon(Icon::Check, px(11.0), theme::accent_fg()))
-            } else {
-                b.border_color(theme::border_strong())
-            }
+        .map(|b| match state {
+            Check::On => b
+                .bg(theme::accent())
+                .border_color(theme::accent())
+                .child(render_icon(Icon::Check, px(11.0), theme::accent_fg())),
+            Check::Mixed => b
+                .bg(theme::accent())
+                .border_color(theme::accent())
+                .child(div().w(px(8.0)).h(px(2.0)).bg(theme::accent_fg())),
+            Check::Off => b.border_color(theme::border_strong()),
         })
-}
-
-fn render_merge_banner(source: &str, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    div()
-        .mx(px(12.0))
-        .mb(px(10.0))
-        .px(px(10.0))
-        .py(px(6.0))
-        .rounded(px(6.0))
-        .bg(theme::selection_bg())
-        .border_1()
-        .border_color(theme::selection_border())
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .text_xs()
-        .text_color(theme::selection_fg())
-        .child(
-            div()
-                .flex_1()
-                .child(format!("Merging “{source}” — pick the tag to merge into")),
-        )
-        .child(
-            theme::control("cancel-merge-btn")
-                .h(px(22.0))
-                .child("Cancel")
-                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.cancel_tag_merge(cx);
-                })),
-        )
 }
 
 fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
     let selected: Vec<String> = app.tag_manager.selected.iter().cloned().collect();
     let n = selected.len();
+    let target = app.tag_merge_target().unwrap_or_default();
     div()
+        .id("tag-selection-bar")
+        .debug_selector(|| "tag-selection-bar".to_string())
         .h(px(48.0))
         .flex_shrink_0()
         .px(px(12.0))
@@ -292,8 +312,8 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
         .items_center()
         .gap_2()
         .border_t_1()
-        .border_color(theme::border_subtle())
-        .bg(theme::bg_pane())
+        .border_color(theme::border_strong())
+        .bg(theme::bg_hud())
         .child(
             div()
                 .flex_1()
@@ -303,17 +323,44 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
                 .child(format!("{n} selected")),
         )
         .child(
-            theme::control("bulk-delete-tags-btn")
+            theme::control_primary("merge-tags-btn")
+                .debug_selector(|| "merge-tags-btn".to_string())
+                .tooltip(theme::tooltip_label(format!("Merge into “{target}” (⌘M)")))
+                .child("Merge")
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.merge_checked_tags(cx);
+                })),
+        )
+        .child(
+            div()
+                .id("bulk-delete-tags-btn")
                 .debug_selector(|| "bulk-delete-tags-btn".to_string())
-                .text_color(theme::danger_text())
-                .child(format!("Delete {n}"))
+                .tooltip(theme::tooltip_label(format!("Delete {n} tags (⌘⌫)")))
+                .size(px(28.0))
+                .rounded(px(6.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::danger_bg()))
+                .child(render_icon(Icon::Trash, px(14.0), theme::danger_text()))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.bulk_delete_tags(selected.clone(), cx);
                 })),
         )
         .child(
-            theme::control("clear-tag-selection-btn")
-                .child("Deselect All")
+            div()
+                .id("clear-tag-selection-btn")
+                .debug_selector(|| "clear-tag-selection-btn".to_string())
+                .tooltip(theme::tooltip_label("Deselect all (Esc)"))
+                .size(px(28.0))
+                .rounded(px(6.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::bg_control_hover()))
+                .child(render_icon(Icon::X, px(14.0), theme::text_muted()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.clear_tag_manager_selection(cx);
                 })),

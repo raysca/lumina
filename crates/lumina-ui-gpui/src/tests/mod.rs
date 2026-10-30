@@ -13,6 +13,7 @@ mod pip;
 mod preferences;
 mod regressions;
 mod smart_album_builder;
+mod tag_manager;
 mod tags_and_albums;
 mod toasts;
 mod ui_automation;

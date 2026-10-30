@@ -6,6 +6,7 @@ pub mod list;
 
 use gpui::*;
 
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -82,6 +83,7 @@ fn render_header(total: usize, cx: &mut Context<LuminaApp>) -> impl IntoElement 
         .gap_3()
         .border_b_1()
         .border_color(theme::border_subtle())
+        .child(render_icon(Icon::Tag, px(16.0), theme::accent()))
         .child(
             div()
                 .text_base()
@@ -89,8 +91,12 @@ fn render_header(total: usize, cx: &mut Context<LuminaApp>) -> impl IntoElement 
                 .text_color(theme::text())
                 .child("Tag Manager"),
         )
+        // ponytail: no "· M unused" or "+ New Tag": a tag exists only while an
+        // item carries it, so neither can occur until tags get their own table.
         .child(
             div()
+                .id("tag-manager-total")
+                .debug_selector(|| "tag-manager-total".to_string())
                 .text_xs()
                 .text_color(theme::text_subtle())
                 .child(format!("{total} tags")),
@@ -100,7 +106,7 @@ fn render_header(total: usize, cx: &mut Context<LuminaApp>) -> impl IntoElement 
             div()
                 .text_xs()
                 .text_color(theme::text_subtle())
-                .child("↑↓ browse · ↵ rename · Esc close"),
+                .child("↑↓ browse · Space check · ↵ rename · Esc close"),
         )
         .child(
             theme::control_primary("done-tag-manager-btn")

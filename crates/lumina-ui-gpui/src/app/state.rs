@@ -132,7 +132,9 @@ pub struct TagManagerState {
     pub selected: HashSet<String>,
     pub editing: Option<String>,
     pub editing_buffer: String,
-    pub merge_source: Option<String>,
+    /// The focused tag's first items, for the detail grid. Loaded on focus,
+    /// never per frame.
+    pub tagged_items: Vec<lumina_core::MediaId>,
     /// Tag shown in the detail panel. Separate from `selected`, which holds
     /// the checkbox set for bulk actions.
     pub focused: Option<String>,
@@ -150,7 +152,7 @@ impl Default for TagManagerState {
             selected: HashSet::new(),
             editing: None,
             editing_buffer: String::new(),
-            merge_source: None,
+            tagged_items: Vec::new(),
             focused: None,
             list_scroll: gpui::ScrollHandle::new(),
         }

@@ -266,6 +266,7 @@ impl LuminaApp {
             .is_some_and(|focused| focused.eq_ignore_ascii_case(&clean))
         {
             self.tag_manager.focused = None;
+            self.tag_manager.editing = None;
         }
         self.refresh_selected_tags();
         self.refresh_album_counts();
@@ -278,8 +279,8 @@ impl LuminaApp {
         self.tag_manager.search_focused = true;
         self.tag_manager.selected.clear();
         self.tag_manager.editing = None;
-        self.tag_manager.merge_source = None;
         self.tag_manager.focused = None;
+        self.tag_manager.tagged_items.clear();
         self.tag_manager.list_scroll = gpui::ScrollHandle::new();
         cx.notify();
     }
@@ -288,7 +289,6 @@ impl LuminaApp {
         self.tag_manager.open = false;
         self.tag_manager.search_focused = false;
         self.tag_manager.editing = None;
-        self.tag_manager.merge_source = None;
         cx.notify();
     }
 
@@ -311,14 +311,17 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Selects or clears every visible (filtered) tag for bulk actions.
+    /// Selects or clears every visible (filtered) tag for bulk actions;
+    /// checked tags hidden by the filter are left alone.
     pub fn toggle_all_tag_manager_rows(&mut self, cx: &mut Context<Self>) {
         let visible = self.tag_manager_rows();
         if visible
             .iter()
             .all(|(tag, _)| self.tag_manager.selected.contains(tag))
         {
-            self.tag_manager.selected.clear();
+            for (tag, _) in &visible {
+                self.tag_manager.selected.remove(tag);
+            }
         } else {
             self.tag_manager
                 .selected
@@ -329,7 +332,13 @@ impl LuminaApp {
 
     /// Shows `tag` in the tag manager's detail panel.
     pub fn focus_tag_manager_tag(&mut self, tag: String, cx: &mut Context<Self>) {
+        // A rename belongs to the tag it started on; moving away cancels it.
+        if self.tag_manager.focused.as_ref() != Some(&tag) {
+            self.tag_manager.editing = None;
+            self.tag_manager.editing_buffer.clear();
+        }
         self.tag_manager.focused = Some(tag);
+        self.load_tag_manager_items();
         cx.notify();
     }
 
@@ -350,6 +359,7 @@ impl LuminaApp {
             None => 0,
         };
         self.tag_manager.focused = Some(rows[next].0.clone());
+        self.load_tag_manager_items();
         // The list's children are exactly these rows when it is non-empty.
         self.tag_manager.list_scroll.scroll_to_item(next);
         cx.notify();
@@ -419,50 +429,81 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn start_tag_merge(&mut self, source_tag: String, cx: &mut Context<Self>) {
-        self.tag_manager.merge_source = Some(source_tag);
-        cx.notify();
+    /// The most-used checked tag (ties: A–Z): Merge folds the others into it.
+    pub(crate) fn tag_merge_target(&self) -> Option<String> {
+        self.library_tag_counts
+            .iter()
+            .filter(|(tag, _)| self.tag_manager.selected.contains(tag))
+            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
+            .map(|(tag, _)| tag.clone())
     }
 
-    pub fn cancel_tag_merge(&mut self, cx: &mut Context<Self>) {
-        self.tag_manager.merge_source = None;
-        cx.notify();
-    }
-
-    pub fn commit_tag_merge(&mut self, target_tag: String, cx: &mut Context<Self>) {
-        if let Some(source_tag) = self.tag_manager.merge_source.take() {
-            if source_tag.to_lowercase() != target_tag.to_lowercase() {
-                let result = match self.grid_state.as_ref() {
-                    Some(state) => state
-                        .engine
-                        .merge_tags(&source_tag, &target_tag)
-                        .map(|_| ()),
-                    None => Ok(()),
-                };
-                if self
-                    .apply_tag_mutation("Could not merge tags", result, cx)
-                    .is_none()
-                {
-                    return;
-                }
-                if let AlbumSelection::Tag(ref curr) = self.selection {
-                    if curr.to_lowercase() == source_tag.to_lowercase() {
-                        self.selection = AlbumSelection::Tag(target_tag.clone());
-                    }
-                }
-                let old_query = format!("tag:{}", source_tag);
-                let old_query_quoted = format!("tag:\"{}\"", source_tag);
-                if self.search_query == old_query || self.search_query == old_query_quoted {
-                    self.search_query = format!("tag:{}", target_tag);
-                }
-                if self.tag_manager.focused.as_deref() == Some(source_tag.as_str()) {
-                    self.tag_manager.focused = Some(target_tag.clone());
-                }
-                self.refresh_selected_tags();
-                self.refresh_album_counts();
-            }
-            cx.notify();
+    /// Merges every checked tag into [`Self::tag_merge_target`] (v3 Merge).
+    pub fn merge_checked_tags(&mut self, cx: &mut Context<Self>) {
+        if self.tag_manager.selected.len() < 2 {
+            return;
         }
+        let Some(target) = self.tag_merge_target() else {
+            return;
+        };
+        let mut sources: Vec<String> = self
+            .tag_manager
+            .selected
+            .iter()
+            .filter(|tag| **tag != target)
+            .cloned()
+            .collect();
+        sources.sort();
+        let mut merged = 0;
+        for source in &sources {
+            let result = match self.grid_state.as_ref() {
+                Some(state) => state.engine.merge_tags(source, &target).map(|_| ()),
+                None => Ok(()),
+            };
+            // Stop at the first failure; the merges before it are committed
+            // and the counts below reflect them.
+            if self
+                .apply_tag_mutation("Could not merge tags", result, cx)
+                .is_none()
+            {
+                break;
+            }
+            merged += 1;
+            self.tag_manager.selected.remove(source);
+            if self.selection == AlbumSelection::Tag(source.clone()) {
+                self.selection = AlbumSelection::Tag(target.clone());
+            }
+            if self.search_query == format!("tag:{source}")
+                || self.search_query == format!("tag:\"{source}\"")
+            {
+                self.search_query = format!("tag:{target}");
+            }
+        }
+        if merged == sources.len() {
+            self.tag_manager.selected.clear();
+        }
+        self.refresh_selected_tags();
+        self.refresh_album_counts();
+        self.focus_tag_manager_tag(target.clone(), cx);
+        if merged > 0 {
+            self.show_toast(format!("Merged {merged} tag(s) into \"{target}\""), cx);
+        }
+        cx.notify();
+    }
+
+    /// Loads the focused tag's items for the detail grid (6 columns × 4 rows).
+    pub(crate) fn load_tag_manager_items(&mut self) {
+        self.tag_manager.tagged_items = match (self.tag_manager.focused.as_ref(), &self.grid_state)
+        {
+            (Some(tag), Some(state)) => match state.engine.items_with_tag(tag, 24) {
+                Ok(items) => items.into_iter().map(|item| item.id).collect(),
+                Err(err) => {
+                    log::warn!("could not load items for tag {tag:?}: {err:#}");
+                    Vec::new()
+                }
+            },
+            _ => Vec::new(),
+        };
     }
 
     pub fn bulk_delete_tags(&mut self, tags: Vec<String>, cx: &mut Context<Self>) {
@@ -516,6 +557,7 @@ impl LuminaApp {
             .is_some_and(|focused| deleted.iter().any(|tag| tag == &focused.to_lowercase()))
         {
             self.tag_manager.focused = None;
+            self.tag_manager.editing = None;
         }
         self.refresh_selected_tags();
         self.refresh_album_counts();

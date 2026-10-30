@@ -203,10 +203,15 @@ fn test_tag_manager_modal_lifecycle() {
 
     // 4. Merge tags in modal: wilderness into forest
     view.update(cx, |app, cx| {
-        app.start_tag_merge("wilderness".to_string(), cx);
-        assert_eq!(app.tag_manager.merge_source.as_deref(), Some("wilderness"));
-        app.commit_tag_merge("forest".to_string(), cx);
-        assert!(app.tag_manager.merge_source.is_none());
+        app.toggle_tag_manager_selection("wilderness".to_string(), cx);
+        app.toggle_tag_manager_selection("forest".to_string(), cx);
+        assert_eq!(
+            app.tag_merge_target().as_deref(),
+            Some("forest"),
+            "ties merge A–Z"
+        );
+        app.merge_checked_tags(cx);
+        assert!(app.tag_manager.selected.is_empty());
         let tags = app
             .library_tag_counts
             .iter()
@@ -391,8 +396,14 @@ fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
             "the active tag view must follow the rename"
         );
 
-        app.start_tag_merge("trip".to_string(), cx);
-        app.commit_tag_merge("getaway".to_string(), cx);
+        let engine = app.grid_state.as_ref().unwrap().engine.clone();
+        engine
+            .add_tags_batch(&[first_item.id], &["getaway".to_string()])
+            .unwrap();
+        app.refresh_album_counts();
+        app.toggle_tag_manager_selection("trip".to_string(), cx);
+        app.toggle_tag_manager_selection("getaway".to_string(), cx);
+        app.merge_checked_tags(cx);
         assert_eq!(
             app.untagged_count, 1,
             "merging tags must leave the item tagged"
@@ -535,7 +546,7 @@ fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
     });
     render_ui(vcx);
     assert!(
-        vcx.debug_bounds(tag_selector("rename", "alpha")).is_some(),
+        vcx.debug_bounds("tag-manager-rename-field").is_some(),
         "the detail panel must offer Rename for the focused tag"
     );
 
@@ -581,7 +592,7 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
     open_tag_manager(&view, vcx);
 
     click(vcx, tag_selector("row", "alpha"));
-    click(vcx, tag_selector("rename", "alpha"));
+    click(vcx, "tag-manager-rename-field");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.tag_manager.editing.as_deref(),

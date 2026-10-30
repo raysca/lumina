@@ -813,6 +813,11 @@ impl LuminaEngine {
             .unwrap_or_default()
     }
 
+    /// Newest active items carrying `tag`; see [`Catalog::get_items_by_tag`].
+    pub fn items_with_tag(&self, tag: &str, limit: usize) -> Result<Vec<MediaItem>> {
+        self.catalog.get_items_by_tag(tag, limit, 0)
+    }
+
     pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
         self.catalog.rename_tag(old_tag, new_tag)
     }

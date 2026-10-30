@@ -54,6 +54,10 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   and no Add to Album: there are no manual albums to add to.
 - Tag group, colour and keyboard shortcut from the design are not built:
   tags are plain names in the catalog (needs a schema change and a spec).
+- Tag Manager has no "+ New Tag", "· M unused" count or "unused" row marker:
+  a tag exists only while an item carries it, so an empty tag cannot occur
+  until tags get their own table. TAGGED ITEMS shows the newest 24 and only
+  thumbnails the grid has already decoded; the rest are placeholders.
 - Selection outline sits on the square well, not hugging a contain-fit image
   as in the design; GPUI does not expose the decoded image's fitted rect.
 

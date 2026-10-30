@@ -1,9 +1,12 @@
-//! Right column of the tag manager: the focused tag's name, usage and actions.
+//! Right column of the tag manager: the focused tag's name, items and actions.
 
 use gpui::*;
 
 use crate::theme;
 use crate::LuminaApp;
+
+/// TAGGED ITEMS grid columns.
+const GRID_COLUMNS: usize = 6;
 
 pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let panel = div()
@@ -31,75 +34,15 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
         .iter()
         .find(|(t, _)| *t == tag)
         .map_or(0, |(_, n)| *n);
-    let editing = app.tag_manager.editing.as_deref() == Some(tag.as_str());
+    let items_label = format!("{count} item{}", if count == 1 { "" } else { "s" });
 
     panel
-        .child(section(
-            "NAME",
-            if editing {
-                render_rename_field(app, &tag, cx)
-            } else {
-                let rename_tag = tag.clone();
-                let selector = format!("tag-manager-rename-{tag}");
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::text())
-                            .child(tag.clone()),
-                    )
-                    .child(
-                        theme::control(ElementId::Name(format!("modal-rename-btn-{tag}").into()))
-                            .debug_selector(move || selector.clone())
-                            .tooltip(theme::tooltip_label("Rename (↵)"))
-                            .child("Rename")
-                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                this.start_modal_tag_rename(rename_tag.clone(), cx);
-                            })),
-                    )
-                    .into_any_element()
-            },
-        ))
-        .child(section("TAGGED ITEMS", {
-            let show_tag = tag.clone();
-            let selector = format!("tag-manager-show-{tag}");
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .flex_1()
-                        .text_sm()
-                        .text_color(theme::text_muted())
-                        .child(format!("{count} item{}", if count == 1 { "" } else { "s" })),
-                )
-                .child(
-                    theme::control(ElementId::Name(
-                        format!("modal-tag-name-filter-{tag}").into(),
-                    ))
-                    .debug_selector(move || selector.clone())
-                    .child("Show in Library")
-                    .on_click(cx.listener(
-                        move |this, _e: &ClickEvent, _w, cx| {
-                            this.set_search_query(&format!("tag:{show_tag}"), cx);
-                            this.close_tag_manager(cx);
-                        },
-                    )),
-                )
-        }))
+        .child(render_header(&tag, &items_label, cx))
+        .child(section("NAME", render_name_field(app, &tag, cx)))
+        .child(section("TAGGED ITEMS", render_items(app)))
         .child(div().flex_1())
         .child({
-            let (merge_tag, delete_tag) = (tag.clone(), tag.clone());
-            let merge_selector = format!("tag-manager-merge-{tag}");
+            let delete_tag = tag.clone();
             let delete_selector = format!("tag-manager-delete-{tag}");
             div()
                 .pt(px(14.0))
@@ -107,19 +50,8 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                 .border_color(theme::border_subtle())
                 .flex()
                 .flex_row()
-                .gap_2()
-                .child(
-                    theme::control(ElementId::Name(format!("modal-merge-btn-{tag}").into()))
-                        .debug_selector(move || merge_selector.clone())
-                        .tooltip(theme::tooltip_label(
-                            "Move this tag's items onto another tag, then remove it",
-                        ))
-                        .child("Merge into…")
-                        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.start_tag_merge(merge_tag.clone(), cx);
-                        })),
-                )
-                .child(div().flex_1())
+                .items_center()
+                .gap_3()
                 .child(
                     theme::control(ElementId::Name(format!("modal-del-btn-{tag}").into()))
                         .debug_selector(move || delete_selector.clone())
@@ -129,8 +61,71 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                             this.delete_tag_globally(delete_tag.clone(), cx);
                         })),
                 )
+                .child(
+                    div()
+                        .id("tag-manager-delete-note")
+                        .debug_selector(|| "tag-manager-delete-note".to_string())
+                        .text_xs()
+                        .text_color(theme::text_subtle())
+                        .child(format!(
+                            "Removes the tag from {items_label}. The photos stay."
+                        )),
+                )
         })
         .into_any_element()
+}
+
+/// Dot, 24px name, "N items", and Show in Browser on the right.
+fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let show_tag = tag.to_string();
+    let selector = format!("tag-manager-show-{tag}");
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        // ponytail: one accent dot until tags have colours (schema change).
+        .child(
+            div()
+                .size(px(10.0))
+                .flex_none()
+                .rounded_full()
+                .bg(theme::accent()),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w(px(0.0))
+                .child(
+                    div()
+                        .id("tag-manager-detail-name")
+                        .debug_selector(|| "tag-manager-detail-name".to_string())
+                        .truncate()
+                        .text_size(px(24.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme::text())
+                        .child(tag.to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme::text_muted())
+                        .child(items_label.to_string()),
+                ),
+        )
+        .child(
+            theme::control(ElementId::Name(
+                format!("modal-tag-name-filter-{tag}").into(),
+            ))
+            .debug_selector(move || selector.clone())
+            .child("Show in Browser")
+            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                this.set_search_query(&format!("tag:{show_tag}"), cx);
+                this.close_tag_manager(cx);
+            })),
+        )
 }
 
 fn section(title: &'static str, content: impl IntoElement) -> Div {
@@ -142,33 +137,68 @@ fn section(title: &'static str, content: impl IntoElement) -> Div {
         .child(content)
 }
 
-/// Inline rename: the keymap feeds `editing_buffer`; ↵ saves, Esc cancels.
-fn render_rename_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> AnyElement {
+/// Always shown as a field: clicking (or ↵) edits in place, ↵ saves, Esc
+/// cancels. The keymap feeds `editing_buffer`.
+fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let editing = app.tag_manager.editing.as_deref() == Some(tag);
+    let rename_tag = tag.to_string();
+    theme::field("tag-manager-rename-field")
+        .debug_selector(|| "tag-manager-rename-field".to_string())
+        .tooltip(theme::tooltip_label("Rename (↵)"))
+        .cursor_text()
+        .border_color(if editing {
+            theme::accent()
+        } else {
+            theme::border()
+        })
+        .text_color(theme::text())
+        .child(if editing {
+            format!("{}|", app.tag_manager.editing_buffer)
+        } else {
+            tag.to_string()
+        })
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            if this.tag_manager.editing.is_none() {
+                this.start_modal_tag_rename(rename_tag.clone(), cx);
+            }
+        }))
+        .into_any_element()
+}
+
+/// Six-column thumbnails of the newest tagged items, from the grid's cache.
+fn render_items(app: &LuminaApp) -> AnyElement {
+    let ids = &app.tag_manager.tagged_items;
+    if ids.is_empty() {
+        return div()
+            .id("tag-manager-items-empty")
+            .debug_selector(|| "tag-manager-items-empty".to_string())
+            .text_xs()
+            .text_color(theme::text_subtle())
+            .child("No items carry this tag.")
+            .into_any_element();
+    }
+    let thumbs: Vec<Option<std::sync::Arc<RenderImage>>> = match &app.grid_state {
+        Some(grid) => {
+            let cache = grid.texture_cache.lock();
+            ids.iter().map(|id| cache.peek(id).cloned()).collect()
+        }
+        None => vec![None; ids.len()],
+    };
     div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .child(
-            theme::field("tag-manager-rename-field")
-                .debug_selector(|| "tag-manager-rename-field".to_string())
-                .flex_1()
-                .border_color(theme::accent())
-                .child(format!("{}|", app.tag_manager.editing_buffer)),
-        )
-        .child(
-            theme::control_primary(ElementId::Name(format!("modal-save-rename-{tag}").into()))
-                .child("Save")
-                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.commit_modal_tag_rename(cx);
-                })),
-        )
-        .child(
-            theme::control(ElementId::Name(format!("modal-cancel-rename-{tag}").into()))
-                .child("Cancel")
-                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.cancel_modal_tag_rename(cx);
-                })),
-        )
+        .id("tag-manager-items")
+        .debug_selector(|| "tag-manager-items".to_string())
+        .grid()
+        .grid_cols(GRID_COLUMNS as u16)
+        .gap(px(6.0))
+        // ponytail: items the grid has not decoded show as placeholders;
+        // request thumbnails here if that proves too sparse.
+        .children(thumbs.into_iter().map(|thumb| {
+            div()
+                .h(px(64.0))
+                .rounded(px(4.0))
+                .overflow_hidden()
+                .bg(theme::bg_control())
+                .children(thumb.map(|image| img(image).size_full().object_fit(ObjectFit::Cover)))
+        }))
         .into_any_element()
 }
