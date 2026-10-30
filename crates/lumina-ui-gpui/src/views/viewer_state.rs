@@ -94,7 +94,7 @@ pub const ZOOM_MAX_SCALE: f32 = 16.0;
 /// Wheel and +/- keyboard step.
 pub const ZOOM_STEP: f32 = 0.25;
 
-/// Explicit zoom presets surfaced by the viewer HUD and number keys.
+/// Explicit zoom presets on the 0/1/2/4 keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewerZoomPreset {
     /// Fit the media to the viewport (1.0x).
@@ -108,15 +108,12 @@ pub enum ViewerZoomPreset {
 }
 
 impl ViewerZoomPreset {
-    /// Every preset in HUD order.
-    pub const ALL: [Self; 4] = [Self::Fit, Self::Actual, Self::TwoX, Self::FourX];
-
     /// Scale multiple (of Fit) applied by this preset. The non-Fit presets are
-    /// multiples of actual pixels, so they agree with the HUD percentage; until
+    /// multiples of actual pixels, so they agree with the zoom readout; until
     /// the canvas has painted they fall back to multiples of Fit.
     ///
     /// Zoom never goes below Fit, so for media smaller than the canvas 100%
-    /// shows Fit and 200%/400% fall back to 2x/4x of Fit (the HUD readout
+    /// shows Fit and 200%/400% fall back to 2x/4x of Fit (the readout
     /// still shows the true percentage). The viewer decodes stills at most
     /// 2048px, so 100% of a larger photo is an enlarged decode, not a true 1:1.
     pub fn scale(self, canvas: Option<ViewerCanvas>) -> f32 {
@@ -133,36 +130,6 @@ impl ViewerZoomPreset {
             Self::Actual => actual,
             Self::TwoX => of_actual(2.0),
             Self::FourX => of_actual(4.0),
-        }
-    }
-
-    /// Compact HUD label for the preset itself.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Fit => "Fit",
-            Self::Actual => "100%",
-            Self::TwoX => "200%",
-            Self::FourX => "400%",
-        }
-    }
-
-    /// Single-key viewer shortcut for this preset.
-    pub fn shortcut(self) -> &'static str {
-        match self {
-            Self::Fit => "0",
-            Self::Actual => "1",
-            Self::TwoX => "2",
-            Self::FourX => "4",
-        }
-    }
-
-    /// Tooltip text pairing the label with its shortcut.
-    pub fn tooltip(self) -> String {
-        match self {
-            Self::Fit => format!("Fit ({})", self.shortcut()),
-            Self::Actual => format!("Actual pixels ({})", self.shortcut()),
-            Self::TwoX => format!("200% of actual pixels ({})", self.shortcut()),
-            Self::FourX => format!("400% of actual pixels ({})", self.shortcut()),
         }
     }
 }
@@ -275,18 +242,13 @@ impl ViewerState {
         }
     }
 
-    /// Applies an explicit zoom preset (HUD buttons and 1/2/4 shortcuts).
+    /// Applies an explicit zoom preset (the 0/1/2/4 shortcuts).
     /// Fit clears pan through `set_zoom`, matching the existing reset-on-fit rule.
     pub fn apply_preset(&mut self, preset: ViewerZoomPreset) {
         self.set_zoom(preset.scale(self.canvas));
     }
 
-    /// True when the current zoom sits on the given preset.
-    pub fn matches_preset(&self, preset: ViewerZoomPreset) -> bool {
-        (self.zoom_scale - preset.scale(self.canvas)).abs() < 0.005
-    }
-
-    /// HUD label: "Fit" at fit, otherwise the percentage of actual pixels.
+    /// Navigator readout: "Fit" at fit, otherwise the percentage of actual pixels.
     /// Before the canvas has painted, percentages are relative to fit.
     pub fn zoom_label(&self) -> String {
         let scale = if self.zoom_scale.is_finite() {
@@ -348,6 +310,22 @@ impl ViewerState {
         );
         (f32::from(point.x) - center.0).abs() <= half.0
             && (f32::from(point.y) - center.1).abs() <= half.1
+    }
+
+    /// Visible part of the media as `(x, y, w, h)` fractions of the whole
+    /// picture, for the zoom navigator. `None` before the canvas has painted.
+    pub fn visible_region(&self) -> Option<(f32, f32, f32, f32)> {
+        let c = self.canvas?;
+        let axis = |fitted: f32, size: f32, pan: f32| {
+            let shown = fitted * self.zoom_scale;
+            let start = ((shown - size) * 0.5 - pan) / shown;
+            let end = ((shown + size) * 0.5 - pan) / shown;
+            let (start, end) = (start.clamp(0.0, 1.0), end.clamp(0.0, 1.0));
+            (start, end - start)
+        };
+        let (x, w) = axis(c.fitted.0, c.size.0, self.pan_offset.0);
+        let (y, h) = axis(c.fitted.1, c.size.1, self.pan_offset.1);
+        Some((x, y, w, h))
     }
 
     /// Keeps the zoomed media covering the canvas: pan never exceeds half the
@@ -453,8 +431,6 @@ mod tests {
 
         state.apply_preset(ViewerZoomPreset::TwoX);
         assert_eq!(state.zoom_scale, 2.0);
-        assert!(state.matches_preset(ViewerZoomPreset::TwoX));
-        assert!(!state.matches_preset(ViewerZoomPreset::FourX));
 
         state.apply_preset(ViewerZoomPreset::FourX);
         assert_eq!(state.zoom_scale, 4.0);
@@ -577,7 +553,7 @@ mod tests {
         assert_eq!(state.zoom_scale, 1.5);
         assert_ne!(state.pan_offset, (0.0, 0.0), "zooming in must move pan");
 
-        // Zooming out past Fit clamps to 1.0 and recenters, like the HUD reset.
+        // Zooming out past Fit clamps to 1.0 and recenters, like Fit to window.
         state.zoom_at(-10.0, cursor, canvas_center);
         assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
         assert_eq!(state.pan_offset, (0.0, 0.0), "Fit must clear pan");
@@ -652,6 +628,27 @@ mod tests {
     }
 
     #[test]
+    fn test_visible_region_tracks_zoom_and_pan() {
+        let mut state = ViewerState::default();
+        assert_eq!(state.visible_region(), None, "no region before paint");
+        // 3:2 media in 1200x600: fitted 900x600.
+        state.canvas = ViewerCanvas::new((1200.0, 600.0), (600.0, 300.0), 1.5, 3000.0, 2.0);
+        assert_eq!(
+            state.visible_region(),
+            Some((0.0, 0.0, 1.0, 1.0)),
+            "at Fit the whole picture is visible"
+        );
+        state.set_zoom(2.0);
+        let (x, y, w, h) = state.visible_region().unwrap();
+        assert!((x - 1.0 / 6.0).abs() < 1e-4 && (w - 2.0 / 3.0).abs() < 1e-4);
+        assert!((y - 0.25).abs() < 1e-4 && (h - 0.5).abs() < 1e-4);
+        // Panning right (content moves right) reveals the left edge.
+        state.pan_offset = (300.0, 0.0);
+        let (x, _, w, _) = state.visible_region().unwrap();
+        assert!(x.abs() < 1e-4 && (w - 2.0 / 3.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn test_viewer_canvas_contains_media_and_finds_actual_pixels() {
         // 3:2 media in a 1200x600 canvas is height-bound: 900x600.
         let canvas = ViewerCanvas::new((1200.0, 600.0), (600.0, 300.0), 1.5, 3000.0, 2.0)
@@ -676,7 +673,6 @@ mod tests {
             "Z must toggle Fit to actual pixels"
         );
         assert_eq!(state.zoom_label(), "100%");
-        assert!(state.matches_preset(ViewerZoomPreset::Actual));
 
         state.pan_by(10_000.0, 10_000.0);
         // 900pt * 1.667 = 1500pt wide over a 1200pt canvas: 150pt each side.

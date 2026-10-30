@@ -99,7 +99,7 @@ impl MediaViewer {
                             }),
                     )
                     .when(show_chrome && !is_video, |stage| {
-                        stage.child(stage_controls::render_zoom_hud(this, cx))
+                        stage.children(stage_controls::render_zoom_controls(this, cx))
                     })
                     // Video Transport Bar (Scrubber + Dock). While PiP owns the
                     // player the viewer shows the poster and a hand-off pill.

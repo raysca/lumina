@@ -114,6 +114,19 @@ impl ViewerTopBar {
             );
         }
 
+        // "3 of 5" in the current view; hidden when the viewer has no grid index.
+        if let Some(index) = this.selected_index {
+            center_section = center_section.child(
+                div()
+                    .id("viewer-position")
+                    .debug_selector(|| "viewer-position".to_string())
+                    .ml_2()
+                    .flex_shrink_0()
+                    .text_color(theme::text_subtle())
+                    .child(format!("{} of {}", index + 1, this.get_active_count())),
+            );
+        }
+
         div()
             .id("viewer-top-bar")
             .debug_selector(|| "viewer-top-bar".to_string())

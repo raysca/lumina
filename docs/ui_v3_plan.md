@@ -22,7 +22,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 |---|-------|----------|--------|
 | 1 | Grid: meta pill on the photo, no info band | V3Grid | done |
 | 2 | Docked inspector: one-column summary; Get Info… opens the tabbed window | V3Inspector | done |
-| 3 | Photo viewer: floating zoom pill, toolbar rating, stage prev/next, no filmstrip | V3Photo | done |
+| 3 | Photo viewer: Fit button + navigator while zoomed, "N of M", stage prev/next, no filmstrip | V3Photo | done |
 | 4 | Multi-select dock restyle, batch rating and tags up top, partial tags | V3MultiSelect | done |
 | 5 | Tag manager: list + detail panel in the existing floating sheet; ↑↓/↵ keys | V3TagManager | done |
 | 6 | Command palette, empty states, undo toast restyle | V3Palette, V3States | done |
@@ -38,7 +38,10 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Rating has no direct key binding (in the viewer 1/2/4 are zoom presets);
   the ⌘K palette has Rate 1–5 Stars and Clear Rating.
 - Palette has no "Go to" group for sidebar destinations; commands only.
-- Viewer zoom navigator (overview of the visible region) is not built.
+- Viewer pinch-to-zoom: GPUI 0.2.2 delivers no magnify event; the wheel,
+  +/−, 0/1/2/4 and Z zoom.
+- Viewer "Open With ▾" app list is not built (needs a native
+  LSCopyApplicationURLsForURL bridge); the menu has Open in Default App.
 - Video scrubber (agreed deviation): no frame strip and a time-only hover
   preview; the AVFoundation bridge cannot decode arbitrary frames on demand.
 - Video zoom has no on-screen control now; Z, scroll and the 0/1/2/4 keys

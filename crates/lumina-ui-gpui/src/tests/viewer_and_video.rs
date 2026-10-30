@@ -1,4 +1,6 @@
-use crate::tests::ui_automation::{app_with_library, click, render_ui, seed_library};
+use crate::tests::ui_automation::{
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+};
 use crate::*;
 
 #[core::prelude::v1::test]
@@ -651,7 +653,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
 }
 
 #[core::prelude::v1::test]
-fn test_viewer_zoom_hud_floats_below_the_top_bar() {
+fn test_viewer_fit_button_floats_below_the_top_bar() {
     let temp_dir = std::env::temp_dir().join(format!(
         "lumina_viewer_zoom_hud_{}",
         std::time::SystemTime::now()
@@ -692,61 +694,44 @@ fn test_viewer_zoom_hud_floats_below_the_top_bar() {
     // renders with the observed width.
     render_viewer_ui(vcx);
 
-    for selector in [
-        "viewer-top-bar",
-        "viewer-filename",
-        "viewer-zoom-hud",
-        "viewer-zoom-label",
-        "viewer-zoom-fit",
-        "viewer-zoom-2x",
-        "viewer-zoom-4x",
-        "viewer-zoom-reset",
-        "viewer-back",
-    ] {
+    for selector in ["viewer-top-bar", "viewer-filename", "viewer-back"] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
             "{selector} must be painted in the viewer at 1024x768"
         );
     }
+    assert!(
+        vcx.debug_bounds("viewer-zoom-fit").is_none(),
+        "at Fit there is no zoom chrome (v3)"
+    );
+    view.update(vcx, |app, cx| {
+        app.apply_viewer_zoom_preset(crate::views::viewer_state::ViewerZoomPreset::TwoX, cx)
+    });
+    render_viewer_ui(vcx);
 
     let filename = vcx.debug_bounds("viewer-filename").unwrap();
-    let hud = vcx.debug_bounds("viewer-zoom-hud").unwrap();
+    let hud = vcx
+        .debug_bounds("viewer-zoom-fit")
+        .expect("zoomed, the Fit to window button must show");
     let top_bar = vcx.debug_bounds("viewer-top-bar").unwrap();
     assert!(
         filename.size.width > gpui::px(40.0),
-        "filename must retain readable width at 1024x768, got {:?} (hud={hud:?}, top_bar={top_bar:?})",
+        "filename must retain readable width at 1024x768, got {:?}",
         filename.size.width
     );
-    // v3: the zoom pill floats over the stage, below the top bar, so it can
-    // never crowd the filename.
+    assert_eq!(
+        f32::from(hud.size.width),
+        40.0,
+        "Fit is a 40px round button"
+    );
     assert!(
         hud.top() >= top_bar.bottom(),
-        "zoom HUD must float below the top bar at 1024x768: hud={hud:?} top_bar={top_bar:?}"
+        "the Fit button must float below the top bar: hud={hud:?} top_bar={top_bar:?}"
     );
     assert!(
         hud.left() >= top_bar.left() && hud.right() <= top_bar.right(),
-        "zoom HUD must stay inside the window width at 1024x768"
+        "the Fit button must stay inside the window width at 1024x768"
     );
-
-    // HUD controls are wired to the same preset and reset actions as the keys.
-    let zoom_2x = vcx.debug_bounds("viewer-zoom-2x").unwrap().center();
-    vcx.simulate_click(zoom_2x, gpui::Modifiers::default());
-    render_viewer_ui(vcx);
-    view.update(vcx, |app, _cx| {
-        assert_eq!(
-            app.viewer_state.zoom_scale, 2.0,
-            "clicking 2x must apply the preset"
-        );
-    });
-    let zoom_reset = vcx.debug_bounds("viewer-zoom-reset").unwrap().center();
-    vcx.simulate_click(zoom_reset, gpui::Modifiers::default());
-    render_viewer_ui(vcx);
-    view.update(vcx, |app, _cx| {
-        assert_eq!(
-            app.viewer_state.zoom_scale, 1.0,
-            "clicking reset must return to Fit"
-        );
-    });
 
     // Threshold band: at 1400px the specs line and full action labels return.
     // The filename must keep its 70px floor and the HUD must stay clear rather
@@ -763,16 +748,19 @@ fn test_viewer_zoom_hud_floats_below_the_top_bar() {
         "specs line must return at 1400px"
     );
     let filename_wide = vcx.debug_bounds("viewer-filename").unwrap();
-    let hud_wide = vcx.debug_bounds("viewer-zoom-hud").unwrap();
     assert!(
         filename_wide.size.width >= gpui::px(70.0),
         "filename must keep its width floor at 1400px, got {:?}",
         filename_wide.size.width
     );
-    assert!(
-        hud_wide.top() >= vcx.debug_bounds("viewer-top-bar").unwrap().bottom(),
-        "zoom HUD must stay below the top bar at 1400px: hud={hud_wide:?}"
-    );
+
+    click(vcx, "viewer-zoom-fit");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.viewer_state.zoom_scale, 1.0,
+            "Fit to window must return to Fit"
+        );
+    });
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
@@ -1518,13 +1506,56 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
         "test premise: the Fit media must have painted bounds, got {fit:?}"
     );
 
-    click(vcx, "viewer-zoom-2x");
+    assert!(
+        vcx.debug_bounds("viewer-navigator").is_none(),
+        "the navigator only shows while zoomed"
+    );
+    focus_app(vcx, &view);
+    keystrokes(vcx, "2");
     view.update(vcx, |app, _| {
-        assert_eq!(
-            app.viewer_state.zoom_scale, 2.0,
-            "clicking 2x must apply the 2x preset"
-        );
+        assert!(app.viewer_state.zoom_scale > 1.0, "2 must zoom in");
     });
+
+    // Navigator: 180px, top right of the stage, amber rect on the visible part.
+    let nav = vcx
+        .debug_bounds("viewer-navigator")
+        .expect("zoomed, the navigator must show");
+    let stage = vcx.debug_bounds("viewer-viewport").unwrap();
+    assert_eq!(f32::from(nav.size.width), 180.0);
+    assert!(
+        nav.right() <= stage.right() && stage.right() - nav.right() <= gpui::px(20.0),
+        "the navigator sits at the top right: nav={nav:?} stage={stage:?}"
+    );
+    let region = vcx.debug_bounds("viewer-navigator-region").unwrap();
+    let (_, _, w, h) = view.update(vcx, |app, _| app.viewer_state.visible_region().unwrap());
+    assert!(
+        w < 1.0 && h <= 1.0,
+        "zoomed, only part of the picture is visible"
+    );
+    assert!(
+        // Inside the navigator's 1px border.
+        (f32::from(region.size.width) - 178.0 * w).abs() < 1.0,
+        "the amber rect spans the visible fraction: region={region:?} w={w}"
+    );
+    assert!(
+        nav.contains(&region.origin) && region.right() <= nav.right() + gpui::px(0.5),
+        "the region stays inside the navigator"
+    );
+
+    // With the info drawer open the navigator moves left of it.
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+    let nav = vcx.debug_bounds("viewer-navigator").unwrap();
+    let drawer = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("the info drawer must paint");
+    assert!(
+        nav.right() <= drawer.left(),
+        "the navigator must not sit under the info drawer: nav={nav:?} drawer={drawer:?}"
+    );
 
     let zoomed = vcx
         .debug_bounds("viewer-media")

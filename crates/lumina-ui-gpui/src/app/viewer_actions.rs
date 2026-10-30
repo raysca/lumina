@@ -182,7 +182,7 @@ impl LuminaApp {
     /// rail, so the anchor is directionally correct rather than pixel-exact.
     ///
     /// The wheel step, 1.0..5.0 clamp, and Fit-recenters rule all come from
-    /// `ViewerState::zoom_at`, so keyboard/HUD zoom is unchanged.
+    /// `ViewerState::zoom_at`, so keyboard zoom is unchanged.
     ///
     /// When geometry is unusable (zero-sized or non-finite viewport, non-finite
     /// cursor) it falls back to center-anchored zoom rather than inventing an
@@ -353,13 +353,13 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Applies an explicit zoom preset from the HUD or the 1/2/4 keys.
+    /// Applies an explicit zoom preset from the 0/1/2/4 keys.
     pub fn apply_viewer_zoom_preset(&mut self, preset: ViewerZoomPreset, cx: &mut Context<Self>) {
         self.viewer_state.apply_preset(preset);
         cx.notify();
     }
 
-    /// Resets zoom and pan to fit from the HUD reset control.
+    /// Resets zoom and pan to fit (the Fit to window button and 0).
     pub fn reset_viewer_zoom(&mut self, cx: &mut Context<Self>) {
         self.viewer_state.reset();
         cx.notify();

@@ -1,17 +1,22 @@
-//! Controls that float over the viewer stage (v3): the zoom pill at the bottom
-//! and the previous/next buttons on the sides.
+//! Controls that float over the viewer stage (v3): the Fit button and zoom
+//! navigator while zoomed, and the previous/next buttons on the sides.
 
 use gpui::*;
 
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::viewer_state::ViewerZoomPreset;
+use crate::views::viewer_state::ZOOM_MIN_SCALE;
 
-/// Bottom-center zoom pill: − Fit 100% 200% 400% + with the live readout.
-pub fn render_zoom_hud(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
+/// While zoomed (v3): a round "Fit to window" button at the bottom and the
+/// navigator at the top right. At Fit the stage shows no zoom chrome; the
+/// wheel, +/−, 0/1/2/4 and Z zoom.
+pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
     let state = this.viewer_state;
-    div()
+    if state.zoom_scale <= ZOOM_MIN_SCALE {
+        return None;
+    }
+    let fit = div()
         .absolute()
         .bottom(px(24.0))
         .left_0()
@@ -20,134 +25,98 @@ pub fn render_zoom_hud(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElem
         .justify_center()
         .child(
             div()
-                .id("viewer-zoom-hud")
-                .debug_selector(|| "viewer-zoom-hud".to_string())
-                // Clicks on the pill must not start a pan or a double-click zoom.
+                .id("viewer-zoom-fit")
+                .debug_selector(|| "viewer-zoom-fit".to_string())
+                .tooltip(theme::tooltip_label("Fit to window (0)"))
+                // Clicks on the button must not start a pan.
                 .occlude()
-                .p(px(4.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(2.0))
-                .rounded(px(8.0))
+                .size(px(40.0))
+                .rounded_full()
                 .bg(theme::bg_hud())
                 .border_1()
                 .border_color(theme::border_strong())
                 .shadow_lg()
-                .text_xs()
-                .child(step_button(
-                    "viewer-zoom-out",
-                    "Zoom out (−)",
-                    "−",
-                    cx,
-                    |this, cx| this.zoom_out_viewer(cx),
-                ))
-                .children(
-                    ViewerZoomPreset::ALL
-                        .into_iter()
-                        .map(|preset| preset_button(preset, state.matches_preset(preset), cx)),
-                )
-                .child(step_button(
-                    "viewer-zoom-in",
-                    "Zoom in (+)",
-                    "+",
-                    cx,
-                    |this, cx| this.zoom_in_viewer(cx),
-                ))
-                .child(
-                    div()
-                        .id("viewer-zoom-label")
-                        .debug_selector(|| "viewer-zoom-label".to_string())
-                        .tooltip(theme::tooltip_label(
-                            "Zoom as a percentage of actual pixels",
-                        ))
-                        .min_w(px(44.0))
-                        .px(px(6.0))
-                        .text_center()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.0))
-                        .text_color(theme::text_subtle())
-                        .child(state.zoom_label()),
-                )
-                .child(
-                    div()
-                        .id("viewer-zoom-reset")
-                        .debug_selector(|| "viewer-zoom-reset".to_string())
-                        .tooltip(theme::tooltip_label("Reset zoom and pan (0)"))
-                        .size(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(6.0))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme::bg_control_hover()))
-                        .child(render_icon(Icon::RotateCcw, px(12.0), theme::text_muted()))
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.reset_viewer_zoom(cx);
-                        })),
-                ),
-        )
-        .into_any_element()
+                .hover(|s| s.bg(theme::bg_control_hover()))
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(render_icon(Icon::Minimize, px(16.0), theme::text()))
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.reset_viewer_zoom(cx);
+                })),
+        );
+    Some(
+        div()
+            .absolute()
+            .inset_0()
+            .child(fit)
+            .children(render_navigator(this))
+            .into_any_element(),
+    )
 }
 
-fn preset_button(
-    preset: ViewerZoomPreset,
-    active: bool,
-    cx: &mut Context<LuminaApp>,
-) -> Stateful<Div> {
-    let id = match preset {
-        ViewerZoomPreset::Fit => "viewer-zoom-fit",
-        ViewerZoomPreset::Actual => "viewer-zoom-actual",
-        ViewerZoomPreset::TwoX => "viewer-zoom-2x",
-        ViewerZoomPreset::FourX => "viewer-zoom-4x",
-    };
-    let button = div()
-        .id(id)
-        .debug_selector(move || id.to_string())
-        .tooltip(theme::tooltip_label(preset.tooltip()))
-        .h(px(28.0))
-        .px(px(12.0))
-        .flex()
-        .items_center()
-        .rounded(px(6.0))
-        .cursor_pointer()
-        .child(preset.label())
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.apply_viewer_zoom_preset(preset, cx);
-        }));
-    if active {
-        button
-            .bg(theme::selection_bg())
-            .text_color(theme::selection_fg())
+const NAVIGATOR_EDGE: f32 = 180.0;
+
+/// Overview (long edge 180px) of the picture with an amber rect on the visible region.
+fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
+    let (x, y, w, h) = this.viewer_state.visible_region()?;
+    let canvas = this.viewer_state.canvas?;
+    let image = this.viewer_image.clone()?;
+    let aspect = canvas.fitted.0 / canvas.fitted.1;
+    // Long edge 180px; the short edge keeps room for the zoom label.
+    let (width, height) = if aspect >= 1.0 {
+        (NAVIGATOR_EDGE, (NAVIGATOR_EDGE / aspect).max(24.0))
     } else {
-        button
-            .text_color(theme::text_muted())
-            .hover(|s| s.bg(theme::bg_control_hover()).text_color(theme::text()))
-    }
-}
-
-fn step_button(
-    id: &'static str,
-    tooltip: &'static str,
-    glyph: &'static str,
-    cx: &mut Context<LuminaApp>,
-    action: fn(&mut LuminaApp, &mut Context<LuminaApp>),
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .debug_selector(move || id.to_string())
-        .tooltip(theme::tooltip_label(tooltip))
-        .size(px(28.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(6.0))
-        .cursor_pointer()
-        .text_sm()
-        .text_color(theme::text_muted())
-        .hover(|s| s.bg(theme::bg_control_hover()).text_color(theme::text()))
-        .child(glyph)
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| action(this, cx)))
+        ((NAVIGATOR_EDGE * aspect).max(24.0), NAVIGATOR_EDGE)
+    };
+    // Keep clear of the floating info drawer (340px + its 16px inset).
+    let right = if this.inspector_open { 372.0 } else { 16.0 };
+    Some(
+        div()
+            .id("viewer-navigator")
+            .debug_selector(|| "viewer-navigator".to_string())
+            .occlude()
+            .absolute()
+            .top(px(16.0))
+            .right(px(right))
+            .w(px(width))
+            .h(px(height))
+            .rounded(px(6.0))
+            .overflow_hidden()
+            .border_1()
+            .border_color(theme::border_strong())
+            .bg(theme::bg_hud())
+            .shadow_lg()
+            .child(img(image).size_full().object_fit(ObjectFit::Fill))
+            .child(
+                div()
+                    .debug_selector(|| "viewer-navigator-region".to_string())
+                    .absolute()
+                    .left(relative(x))
+                    .top(relative(y))
+                    .w(relative(w))
+                    .h(relative(h))
+                    .border_2()
+                    .border_color(theme::accent()),
+            )
+            .child(
+                div()
+                    .id("viewer-zoom-label")
+                    .debug_selector(|| "viewer-zoom-label".to_string())
+                    .absolute()
+                    .right(px(4.0))
+                    .bottom(px(4.0))
+                    .px(px(4.0))
+                    .rounded(px(3.0))
+                    .bg(theme::scrim())
+                    .font_family(theme::FONT_MONO)
+                    .text_size(px(10.0))
+                    .text_color(theme::text())
+                    .child(this.viewer_state.zoom_label()),
+            )
+            .into_any_element(),
+    )
 }
 
 /// Round previous/next buttons centred on the stage's left and right edges.

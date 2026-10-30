@@ -1,6 +1,8 @@
-//! v3 photo viewer: toolbar rating, stage prev/next, floating zoom pill.
+//! v3 photo viewer: menu rating, stage prev/next, Fit button while zoomed.
 
-use super::ui_automation::{app_with_library, click, render_ui, right_click, seed_library};
+use super::ui_automation::{
+    app_with_library, click, focus_app, keystrokes, render_ui, right_click, seed_library,
+};
 
 #[core::prelude::v1::test]
 fn viewer_stage_rates_navigates_and_steps_zoom() {
@@ -25,6 +27,16 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
         "the viewer menu's third star must persist a 3-star rating"
     );
 
+    let name = vcx
+        .debug_bounds("viewer-filename")
+        .expect("filename renders");
+    let position = vcx
+        .debug_bounds("viewer-position")
+        .expect("the top bar shows the \"N of M\" position counter");
+    assert!(
+        position.left() > name.right(),
+        "the counter follows the meta text"
+    );
     click(vcx, "viewer-next");
     let second = view.update(vcx, |app, _| {
         assert_eq!(app.selected_index, Some(1), "Next must advance to item 2");
@@ -37,13 +49,24 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
         assert_eq!(app.selected_index, Some(0), "Previous must step back");
     });
 
-    click(vcx, "viewer-zoom-in");
+    assert!(
+        vcx.debug_bounds("viewer-zoom-fit").is_none(),
+        "at Fit the stage shows no zoom control (v3)"
+    );
+    focus_app(vcx, &view);
+    keystrokes(vcx, "=");
     let zoomed = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     assert!(zoomed > 1.0, "+ must zoom in from Fit, got {zoomed}");
-    click(vcx, "viewer-zoom-out");
+    click(vcx, "viewer-zoom-fit");
     view.update(vcx, |app, _| {
-        assert!(app.viewer_state.zoom_scale < zoomed, "− must zoom back out");
+        assert_eq!(
+            app.viewer_state.zoom_scale, 1.0,
+            "Fit to window returns to Fit"
+        );
     });
+    // ponytail: no "hidden again" check: GPUI 0.2.2 never clears debug_bounds
+    // between frames, so a vanished selector keeps its last bounds. The
+    // at-Fit absence above covers the same render condition.
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
