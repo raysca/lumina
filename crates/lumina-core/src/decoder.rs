@@ -32,6 +32,7 @@ const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
     command.stdout(Stdio::null()).stderr(Stdio::null());
     let mut child = command.spawn()?;
+    let _reaper = live_children::track(child.id());
     let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait()? {
@@ -44,6 +45,59 @@ fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStat
             None => std::thread::sleep(Duration::from_millis(20)),
         }
     }
+}
+
+/// Kills still-running native tools when the process exits.
+///
+/// The timeout above only fires while the waiting worker is alive. If the
+/// process exits mid-wait (app quit during a scan, a test finishing), the child
+/// is reparented to launchd and qlmanage, which never exits on a file it can't
+/// read, would leak forever. An `atexit` hook kills whatever is still tracked.
+/// SIGKILL of the parent still leaks; macOS has no parent-death signal.
+#[cfg(unix)]
+mod live_children {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, Once};
+
+    static PIDS: Mutex<Option<HashSet<u32>>> = Mutex::new(None);
+    static HOOK: Once = Once::new();
+
+    extern "C" {
+        fn atexit(callback: extern "C" fn()) -> i32;
+        fn kill(pid: i32, signal: i32) -> i32;
+    }
+
+    extern "C" fn kill_tracked() {
+        let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
+        for &pid in pids.iter().flatten() {
+            // SAFETY: plain syscall on a pid we spawned and have not reaped.
+            unsafe { kill(pid as i32, 9) };
+        }
+    }
+
+    pub(super) struct Tracked(u32);
+
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            let mut pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
+            pids.get_or_insert_with(HashSet::new).remove(&self.0);
+        }
+    }
+
+    pub(super) fn track(pid: u32) -> Tracked {
+        // SAFETY: registers a function with no captured state.
+        HOOK.call_once(|| unsafe {
+            atexit(kill_tracked);
+        });
+        let mut pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
+        pids.get_or_insert_with(HashSet::new).insert(pid);
+        Tracked(pid)
+    }
+}
+
+#[cfg(not(unix))]
+mod live_children {
+    pub(super) fn track(_pid: u32) {}
 }
 
 #[derive(Clone)]
@@ -354,6 +408,68 @@ impl DecoderPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: a native tool still running when the process exits must be
+    /// killed, not left orphaned (thousands of hung qlmanage processes once
+    /// exhausted the per-user process limit).
+    #[cfg(unix)]
+    #[test]
+    fn native_tool_dies_when_the_process_exits() {
+        const CHILD_ENV: &str = "LUMINA_NATIVE_TOOL_ORPHAN_PIDFILE";
+        if let Ok(pidfile) = std::env::var(CHILD_ENV) {
+            let script = format!(
+                "echo $$ > '{pidfile}.tmp' && mv '{pidfile}.tmp' '{pidfile}' && exec sleep 30"
+            );
+            std::thread::spawn(move || {
+                let _ = run_with_timeout(
+                    Command::new("sh").args(["-c", &script]),
+                    Duration::from_secs(60),
+                );
+            });
+            while !Path::new(&pidfile).exists() {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            std::process::exit(0);
+        }
+
+        let pidfile = std::env::temp_dir().join(format!(
+            "lumina_orphan_{}_{}.pid",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "decoder::tests::native_tool_dies_when_the_process_exits",
+            ])
+            .env(CHILD_ENV, &pidfile)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("re-run test binary as the exiting parent");
+        assert!(status.success(), "helper process must exit cleanly");
+        let pid = fs::read_to_string(&pidfile).expect("helper wrote the tool pid");
+        let _ = fs::remove_file(&pidfile);
+        let alive = || {
+            Command::new("kill")
+                .args(["-0", pid.trim()])
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while alive() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if alive() {
+            let _ = Command::new("kill").args(["-9", pid.trim()]).status();
+            panic!(
+                "native tool {} outlived the process that spawned it",
+                pid.trim()
+            );
+        }
+    }
 
     #[cfg(unix)]
     #[test]
