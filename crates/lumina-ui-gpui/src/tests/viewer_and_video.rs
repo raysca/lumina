@@ -235,7 +235,7 @@ fn test_e2e_fullscreen_viewer_journey() {
         assert!(app.is_fullscreen_viewer);
 
         // Setup real AvFoundation player backend
-        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
         app.video.duration = 30.0;
 
         // Enter fullscreen via toolbar/method
@@ -440,7 +440,7 @@ fn test_viewer_bottom_filmstrip_selection_transition() {
         assert!(app.is_fullscreen_viewer);
         assert_eq!(app.selected_item.as_ref().unwrap().id, video_item.id);
         // Set active player backend
-        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
         app.video.duration = 30.0;
         assert!(app.video.player.is_some());
     });
@@ -1165,7 +1165,7 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
         // A native player handle exists on macOS even without a loaded movie;
         // the drag path reaches the real seek bridge without requiring decoded
         // frames (the bridge exposes no still for arbitrary scrub positions).
-        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
         app.window_bounds = Some((0.0, 0.0, 1024.0, 768.0));
         cx.notify();
     });
@@ -1323,7 +1323,7 @@ fn test_video_resume_progress_throttle_and_close() {
 
         // Pause commits the live position through the normal save path.
         app.video.playback_time = 20.0;
-        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
         app.video.is_playing = true;
         app.toggle_video_play(cx);
         assert!(!app.video.is_playing);
@@ -1770,7 +1770,7 @@ fn scrub_and_volume_drags_keep_tracking_after_leaving_the_control() {
         app.select_item_at(video.clone(), 1, cx);
         app.open_viewer(video.clone(), cx);
         app.video.duration = 60.0;
-        app.video.player = Some(crate::player::macos::AvFoundationPlayer::new());
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
         cx.notify();
     });
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(768.0)));

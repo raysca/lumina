@@ -16,10 +16,10 @@ fn video_sample() -> MediaItem {
         .expect("the deterministic sample set must contain a video")
 }
 
-/// A player handle exists on macOS without a movie loaded; the bounded refresh
+/// A native player handle exists without a movie loaded; the bounded refresh
 /// only needs the backend object, not a decodable file.
-fn stub_player() -> crate::player::macos::AvFoundationPlayer {
-    crate::player::macos::AvFoundationPlayer::new()
+fn stub_player() -> crate::player::NativeVideoPlayer {
+    crate::player::NativeVideoPlayer::new()
 }
 
 fn open_video_in_plain_app(

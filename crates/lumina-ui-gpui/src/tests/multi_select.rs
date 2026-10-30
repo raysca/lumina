@@ -25,7 +25,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
     // Select both through the real input path: click, then ⌘-click.
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
     view.update(vcx, |app, cx| {
         assert_eq!(
             app.selected_indices.len(),
@@ -82,7 +82,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
 
     // Undo must refresh the batch counts, not just the focused item's tags.
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     assert_eq!(
         street_count(vcx),
         Some(1),
@@ -123,7 +123,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
 
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();
@@ -143,7 +143,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
     );
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     assert!(
         has(a.id),
         "undo must restore the tag on the item that had it"

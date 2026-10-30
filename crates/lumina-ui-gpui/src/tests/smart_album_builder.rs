@@ -34,7 +34,7 @@ fn library(
 
 fn open_sheet(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
     focus_app(vcx, view);
-    keystrokes(vcx, "alt-cmd-n");
+    keystrokes(vcx, "alt-secondary-n");
     view.update(vcx, |app, _| {
         assert!(app.album_draft.modal_open, "⌥⌘N opens the builder");
         assert_eq!(app.album_draft.focus, DraftFocus::Title);
@@ -126,7 +126,7 @@ fn builder_is_fully_keyboard_driven() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // ⌘K → "New Smart Album…"
-    keystrokes(vcx, "cmd-k n e w space s m a r t enter");
+    keystrokes(vcx, "secondary-k n e w space s m a r t enter");
     view.update(vcx, |app, _| assert!(app.album_draft.modal_open));
 
     // Match: Tab, Space opens, Down, Enter picks "any".
@@ -179,7 +179,7 @@ fn builder_is_fully_keyboard_driven() {
     });
 
     // ⌘Enter is OK.
-    keystrokes(vcx, "cmd-enter");
+    keystrokes(vcx, "secondary-enter");
     view.update(vcx, |app, _| {
         assert!(!app.album_draft.modal_open);
         assert_eq!(app.user_smart_albums.len(), 1);
@@ -187,7 +187,7 @@ fn builder_is_fully_keyboard_driven() {
     });
 
     // Esc is Cancel: nothing new is saved.
-    keystrokes(vcx, "alt-cmd-n escape");
+    keystrokes(vcx, "alt-secondary-n escape");
     view.update(vcx, |app, _| {
         assert!(!app.album_draft.modal_open);
         assert_eq!(engine.list_smart_albums().len(), 1);
@@ -203,7 +203,7 @@ fn invalid_typed_value_blocks_enter_and_says_why() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Edit Smart Album… with no smart album shown says why instead of nothing.
-    keystrokes(vcx, "cmd-k e d i t space s m a r t enter");
+    keystrokes(vcx, "secondary-k e d i t space s m a r t enter");
     view.update(vcx, |app, _| {
         assert!(!app.album_draft.modal_open);
         assert!(app.toast.current().is_some(), "the no-op must be explained");
@@ -251,7 +251,7 @@ fn editing_restores_rows_and_updates_the_album() {
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::User(album.id), cx);
     });
-    keystrokes(vcx, "cmd-k e d i t space s m a r t enter");
+    keystrokes(vcx, "secondary-k e d i t space s m a r t enter");
     view.update(vcx, |app, _| {
         assert_eq!(app.album_draft.editing_album_id, Some(album.id));
         assert_eq!(app.album_draft.album_title, "Best");
@@ -311,7 +311,7 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
             "the engine's error is kept for the footer"
         );
     });
-    keystrokes(vcx, "cmd-enter");
+    keystrokes(vcx, "secondary-enter");
     view.update(vcx, |app, _| {
         assert!(
             app.album_draft.modal_open,

@@ -86,14 +86,14 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
     assert_eq!(engine.get_tags_for_item(first.id), ["sun"]);
 
     // New and edited smart albums save (the reported failure).
-    keystrokes(vcx, "alt-cmd-n cmd-enter");
+    keystrokes(vcx, "alt-secondary-n secondary-enter");
     view.update(vcx, |app, cx| {
         no_error(app, "creating a smart album");
         assert_eq!(app.user_smart_albums.len(), 2);
         let old = app.user_smart_albums[0].clone();
         app.open_album_builder_for_edit(old, cx);
     });
-    keystrokes(vcx, "space shift-x cmd-enter");
+    keystrokes(vcx, "space shift-x secondary-enter");
     view.update(vcx, |app, _| no_error(app, "editing a smart album"));
     let titles: Vec<String> = engine
         .list_smart_albums()

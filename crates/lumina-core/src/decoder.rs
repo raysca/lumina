@@ -391,7 +391,7 @@ impl DecoderPipeline {
 
         // Pre-swizzle RGBA8 -> BGRA8 on the background Rayon thread so DiskCache stores
         // native Metal BGRA8Unorm bytes and UI-thread texture upload is zero-copy.
-        for chunk in data.chunks_exact_mut(4) {
+        for chunk in data.as_chunks_mut::<4>().0 {
             chunk.swap(0, 2);
         }
 

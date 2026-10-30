@@ -278,10 +278,10 @@ fn editor_handoff_command_construction_never_uses_a_shell() {
     // Values with spaces stay single arguments; no interpolation happens.
     let spaced = external_editor_command("/Applications/My Editor.app", file)
         .expect("an absolute path with spaces must build a command");
+    // macOS passes the app to `open -a`; elsewhere it is the program itself.
+    let spaced_app = Path::new("/Applications/My Editor.app").as_os_str();
     assert!(
-        spaced
-            .get_args()
-            .any(|arg| arg == Path::new("/Applications/My Editor.app").as_os_str()),
+        spaced.get_program() == spaced_app || spaced.get_args().any(|arg| arg == spaced_app),
         "an application path with spaces must remain one argument"
     );
     assert!(

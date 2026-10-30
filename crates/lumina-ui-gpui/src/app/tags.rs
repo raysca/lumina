@@ -356,7 +356,7 @@ impl LuminaApp {
             .collect();
         match self.tag_manager.sort {
             TagSortOrder::Alphabetical => {
-                rows.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                rows.sort_by_key(|row| row.0.to_lowercase());
             }
             TagSortOrder::CountDesc => {
                 rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));

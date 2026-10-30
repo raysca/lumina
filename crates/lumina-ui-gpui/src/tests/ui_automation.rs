@@ -784,7 +784,7 @@ fn ui_automation_shortcut_cheat_sheet() {
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
-    keystrokes(vcx, "cmd-/");
+    keystrokes(vcx, "secondary-/");
     view.update(vcx, |app, _| assert!(app.shortcuts_overlay_open));
     assert!(vcx.debug_bounds("shortcuts-card").is_some());
 
@@ -795,7 +795,7 @@ fn ui_automation_shortcut_cheat_sheet() {
     click(vcx, "shortcuts-close");
     view.update(vcx, |app, _| assert!(!app.shortcuts_overlay_open));
 
-    keystrokes(vcx, "cmd-/");
+    keystrokes(vcx, "secondary-/");
     click_point(vcx, 4.0, 4.0);
     view.update(vcx, |app, _| assert!(!app.shortcuts_overlay_open));
 
@@ -861,7 +861,7 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
     assert!(sidecar.exists(), "rating should write an XMP sidecar");
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.item_ratings.get(&item.id).copied().unwrap_or(0),
@@ -875,7 +875,7 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
     );
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-shift-z");
+    keystrokes(vcx, "secondary-shift-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.item_ratings.get(&item.id).copied().unwrap_or(0),
@@ -904,14 +904,14 @@ fn ui_automation_undo_tag_and_caption() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert!(
             !app.selected_item_tags.contains(&"travel".to_string()),
             "undo should remove the tag"
         );
     });
-    keystrokes(vcx, "cmd-shift-z");
+    keystrokes(vcx, "secondary-shift-z");
     view.update(vcx, |app, _| {
         assert!(app.selected_item_tags.contains(&"travel".to_string()));
     });
@@ -928,7 +928,7 @@ fn ui_automation_undo_tag_and_caption() {
         );
     });
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert!(!app.item_captions.contains_key(&item.id));
     });
@@ -962,7 +962,7 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
     assert_eq!(written.title.as_deref(), Some("Kyoto Trip"));
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item
@@ -1031,7 +1031,7 @@ fn ui_automation_date_and_location_edit_undo() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item.as_ref().map(|it| it.timestamp_epoch_ms),
@@ -1039,7 +1039,7 @@ fn ui_automation_date_and_location_edit_undo() {
             "undo should restore the original date"
         );
     });
-    keystrokes(vcx, "cmd-shift-z");
+    keystrokes(vcx, "secondary-shift-z");
     view.update(vcx, |app, _| {
         assert_eq!(app.selected_item.as_ref().map(|it| it.year), Some(2020));
     });
@@ -1066,7 +1066,7 @@ fn ui_automation_date_and_location_edit_undo() {
         );
     });
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item.as_ref().and_then(|it| it.latitude),
@@ -1086,7 +1086,7 @@ fn ui_automation_command_palette() {
 
     render_ui(vcx);
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "secondary-k");
     view.update(vcx, |app, _| assert!(app.command_palette_open));
 
     for key in ["p", "r", "e", "f"] {
@@ -1110,7 +1110,7 @@ fn ui_automation_command_palette() {
     view.update(vcx, |app, _| assert!(!app.preferences_open));
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "secondary-k");
     for key in ["a", "b", "o", "u", "t"] {
         keystrokes(vcx, key);
     }
@@ -1125,7 +1125,7 @@ fn ui_automation_command_palette() {
     keystrokes(vcx, "escape");
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "secondary-k");
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| assert!(!app.command_palette_open));
 
@@ -1140,7 +1140,7 @@ fn ui_automation_preferences_modal() {
 
     render_ui(vcx);
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-,");
+    keystrokes(vcx, "secondary-,");
     view.update(vcx, |app, _| {
         assert!(app.preferences_open, "Cmd+, should open preferences");
         assert!(app.preferences_cache_bytes.is_some());
@@ -1164,7 +1164,7 @@ fn ui_automation_preferences_modal() {
     view.update(vcx, |app, _| assert!(!app.preferences_open));
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-,");
+    keystrokes(vcx, "secondary-,");
     view.update(vcx, |app, _| assert!(app.preferences_open));
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
@@ -1372,7 +1372,7 @@ fn ui_automation_navigation_viewer_back_closes() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert!(
             !app.is_fullscreen_viewer,
@@ -1387,8 +1387,8 @@ fn ui_automation_navigation_viewer_back_closes() {
 
     // Close again, then prove the oldest edge cannot trap the user.
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-[");
-    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "secondary-[");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert!(!app.is_fullscreen_viewer);
         assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
@@ -1405,9 +1405,9 @@ fn ui_automation_navigation_edge_no_ops() {
 
     render_ui(vcx);
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "secondary-[");
     // Cmd+] is no longer a navigation shortcut.
-    keystrokes(vcx, "cmd-]");
+    keystrokes(vcx, "secondary-]");
     click(vcx, "nav-back");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
@@ -1426,7 +1426,7 @@ fn ui_automation_navigation_edge_no_ops() {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-[");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
@@ -1435,7 +1435,7 @@ fn ui_automation_navigation_edge_no_ops() {
         );
     });
     // Forward was removed: the shortcut must not move the trail.
-    keystrokes(vcx, "cmd-]");
+    keystrokes(vcx, "secondary-]");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
@@ -2358,7 +2358,7 @@ fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     let restored: Vec<_> = ids
         .iter()
         .map(|id| engine.get_item_by_id(*id).unwrap().title)
@@ -2393,7 +2393,7 @@ fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
         assert_eq!(app.undo.undo_stack.len(), 1);
     });
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.item_captions.get(&first.id).map(String::as_str),
@@ -2535,7 +2535,7 @@ fn ui_automation_batch_date_mixed_apply_validation_and_grouped_undo() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     let restored: Vec<_> = ids
         .iter()
         .map(|id| engine.get_item_by_id(*id).unwrap().timestamp_epoch_ms)
@@ -2682,7 +2682,7 @@ fn ui_automation_batch_location_mixed_apply_validation_and_grouped_undo() {
     });
 
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-z");
+    keystrokes(vcx, "secondary-z");
     let restored: Vec<_> = ids
         .iter()
         .map(|id| {

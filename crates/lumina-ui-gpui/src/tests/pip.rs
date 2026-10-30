@@ -69,6 +69,7 @@ fn card(item: &MediaItem) -> &'static str {
     leak(format!("media-card-{}", item.id.0))
 }
 
+#[cfg(target_os = "macos")]
 fn playing_id(
     view: &gpui::Entity<crate::LuminaApp>,
     vcx: &mut gpui::VisualTestContext,
@@ -87,6 +88,8 @@ fn open_pip_for(
     keystrokes(vcx, "alt-p");
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn viewer_video_moves_into_pip_and_survives_browsing_photos() {
     let lib = pip_library("survive");
@@ -152,6 +155,8 @@ fn viewer_video_moves_into_pip_and_survives_browsing_photos() {
     });
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn opening_another_video_replaces_the_pip_video_without_the_viewer() {
     let lib = pip_library("replace");
@@ -177,6 +182,8 @@ fn opening_another_video_replaces_the_pip_video_without_the_viewer() {
     });
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn expand_returns_the_pip_video_to_the_viewer_at_the_same_position() {
     let lib = pip_library("expand");
@@ -217,6 +224,8 @@ fn expand_returns_the_pip_video_to_the_viewer_at_the_same_position() {
     });
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn toggling_pip_off_stops_playback_and_palette_reaches_it() {
     let lib = pip_library("toggle");
@@ -225,7 +234,7 @@ fn toggling_pip_off_stops_playback_and_palette_reaches_it() {
 
     click(vcx, card(&lib.video_a));
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "secondary-k");
     for key in ["t", "o", "g", "g", "l", "e", "space", "p", "i", "c"] {
         keystrokes(vcx, key);
     }
@@ -358,6 +367,8 @@ fn expand_moves_position_based_selection_to_the_pip_video() {
     });
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn a_late_close_message_from_an_old_pip_window_keeps_the_new_session() {
     let lib = pip_library("stale_close");
@@ -442,6 +453,8 @@ fn the_pip_window_close_button_ends_the_session() {
     });
 }
 
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn the_pip_window_expand_button_returns_the_video_to_the_viewer() {
     let lib = pip_library("window_expand");

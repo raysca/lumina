@@ -10,7 +10,7 @@ fn run_palette_command(
     query: &str,
 ) {
     focus_app(vcx, view);
-    keystrokes(vcx, "cmd-k");
+    keystrokes(vcx, "secondary-k");
     for ch in query.chars() {
         let key = if ch == ' ' {
             "space".to_string()
@@ -131,7 +131,7 @@ fn palette_rating_a_mixed_selection_sets_every_item() {
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     run_palette_command(vcx, &view, "rate 3");
     focus_app(vcx, &view);
-    keystrokes(vcx, "cmd-a");
+    keystrokes(vcx, "secondary-a");
     view.update(vcx, |app, _| assert_eq!(app.selected_indices.len(), 2));
 
     run_palette_command(vcx, &view, "rate 3");

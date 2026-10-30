@@ -11,7 +11,7 @@ pub fn frame_to_gpui_image(frame: DecodedFrame) -> Result<Arc<RenderImage>> {
             let mut data = frame.data;
             // GPUI Metal texture atlas uses BGRA8Unorm pixel format.
             // Convert RGBA8 to BGRA8 by swapping Red (0) and Blue (2) channels.
-            for chunk in data.chunks_exact_mut(4) {
+            for chunk in data.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
             }
             data
