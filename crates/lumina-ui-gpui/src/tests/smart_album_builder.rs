@@ -278,3 +278,46 @@ fn editing_restores_rows_and_updates_the_album() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
+    let (dir, engine, _ids) = library("sab_rejected");
+    // Valid as a row (a well-formed date) but not as a query: the old
+    // builder could save "Date is not <text>", which no longer compiles.
+    let album = engine
+        .create_smart_album(
+            "Legacy",
+            "folder",
+            MatchMode::All,
+            &[SmartAlbumRule {
+                field: RuleField::Date,
+                operator: RuleOperator::NotEquals,
+                value: RuleValue::Text("2024-05-01".into()),
+            }],
+        )
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, cx| {
+        app.open_album_builder_for_edit(album.clone(), cx)
+    });
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        assert!(app.draft_rules().is_some(), "the row itself is well formed");
+        assert_eq!(app.album_draft.match_count, None, "not \"No items match\"");
+        assert!(
+            app.album_draft.problem.is_some(),
+            "the engine's error is kept for the footer"
+        );
+    });
+    keystrokes(vcx, "cmd-enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.modal_open,
+            "OK must not save a rule that cannot run"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

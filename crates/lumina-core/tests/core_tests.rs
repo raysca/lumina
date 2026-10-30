@@ -2143,9 +2143,10 @@ fn smart_album_builder_rules_match_expected_rows() {
         MediaType::Image,
         day("2024-05-01") + 3_600_000,
         Some("Kyoto"),
-        None,
+        Some("ILCE-7M4"),
     );
     kyoto.is_favorite = true;
+    kyoto.make = Some("Sony".to_string());
     let paris = sample_media_item(
         "/p/paris.dng",
         MediaType::Raw,
@@ -2160,6 +2161,10 @@ fn smart_album_builder_rules_match_expected_rows() {
         None,
         None,
     );
+    // The helper makes everything a Sony; only Kyoto has a camera here.
+    let (mut paris, mut clip) = (paris, clip);
+    paris.make = None;
+    clip.make = None;
     catalog
         .insert_or_update_batch(&[kyoto, paris, clip])
         .unwrap();
@@ -2266,6 +2271,35 @@ fn smart_album_builder_rules_match_expected_rows() {
         names(RuleField::Place, RuleOperator::NotContains, text("paris")),
         ["clip.mp4", "kyoto.jpg"],
         "does not contain keeps items with no place"
+    );
+    assert_eq!(
+        names(RuleField::Camera, RuleOperator::Contains, text("sony")),
+        ["kyoto.jpg"],
+        "Camera matches the make even when the model doesn't name it"
+    );
+    assert_eq!(
+        names(RuleField::Camera, RuleOperator::Contains, text("7m4")),
+        ["kyoto.jpg"],
+        "Camera matches the model"
+    );
+    assert_eq!(
+        names(RuleField::Camera, RuleOperator::NotContains, text("sony")),
+        ["clip.mp4", "paris.dng"],
+        "does not contain keeps items with no camera"
+    );
+    let bad_date = lumina_core::SmartAlbum::new(
+        "t".into(),
+        "f".into(),
+        MatchMode::All,
+        vec![SmartAlbumRule {
+            field: RuleField::Date,
+            operator: RuleOperator::NotEquals,
+            value: text("2024-05-01"),
+        }],
+    );
+    assert!(
+        bad_date.build_sql().is_err(),
+        "date text with an unsupported operator must not compile to a match-all"
     );
     assert!(lumina_core::split_date_range("2024-01-01..nope").is_none());
 }

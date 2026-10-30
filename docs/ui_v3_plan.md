@@ -85,12 +85,15 @@ Modelled on Photos' New Smart Album sheet.
 - Conditions: Kind (photo includes RAW / video), Favourite, Date (is, before,
   after, in the range, in the last N days/weeks/months), Tag (picked from the
   library's tags, or contains / empty), Stars (is, at least, at most),
-  Colour label, Camera, Lens, Aperture, ISO, Focal length, Filename, Place
+  Colour label, Camera (make or model), Lens, Aperture, ISO, Focal length,
+  Filename, Place
   (city, region or country code). Fields and values saved by older builds
   (Year, City, Kind RAW / non-RAW photo…) still show, edit and save.
 - Typed dates use `YYYY-MM-DD` and `YYYY-MM-DD to YYYY-MM-DD`, compared
   against the naive capture time, like the timeline. A month is 30 days.
 - OK is disabled and the row is outlined while any value is empty or invalid.
+  A saved rule the engine rejects shows the reason in the footer instead of
+  "No items match", and OK stays disabled.
 - Keyboard: Tab / Shift-Tab move focus; Enter, Space or Down open a popup;
   arrows and Enter pick; Esc closes a popup, then the sheet; Enter in a text
   field or ⌘Enter is OK.

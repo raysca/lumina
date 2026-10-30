@@ -169,6 +169,8 @@ pub struct AlbumDraftState {
     pub match_count: Option<usize>,
     /// The first few matches, shown as thumbnails.
     pub preview: Vec<MediaItem>,
+    /// Why valid-looking rules cannot run (a saved rule the engine rejects).
+    pub problem: Option<String>,
 }
 
 impl Default for AlbumDraftState {
@@ -183,6 +185,7 @@ impl Default for AlbumDraftState {
             popup: None,
             match_count: None,
             preview: Vec::new(),
+            problem: None,
         }
     }
 }

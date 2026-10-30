@@ -106,13 +106,20 @@ impl LuminaApp {
     /// never from render.
     pub fn refresh_draft_preview(&mut self) {
         let draft = &mut self.album_draft;
+        draft.match_count = None;
+        draft.preview.clear();
+        draft.problem = None;
         let (Some(rules), Some(state)) = (rules_from_rows(&draft.rows), self.grid_state.as_ref())
         else {
-            draft.match_count = None;
-            draft.preview.clear();
             return;
         };
         let album = SmartAlbum::new(String::new(), String::new(), draft.match_mode, rules);
+        // The engine's query helpers read errors as "no matches"; compile
+        // first so a rule the engine rejects is reported, not shown as 0.
+        if let Err(err) = album.build_sql() {
+            draft.problem = Some(err.to_string());
+            return;
+        }
         draft.match_count = Some(state.engine.query_smart_album_count(&album));
         draft.preview = state.engine.query_smart_album(&album, PREVIEW_LIMIT, 0);
     }
@@ -352,6 +359,9 @@ impl LuminaApp {
         let Some(rules) = self.draft_rules() else {
             return;
         };
+        if self.album_draft.problem.is_some() {
+            return;
+        }
         let title = match self.album_draft.album_title.trim() {
             "" => "Untitled Smart Album".to_string(),
             title => title.to_string(),

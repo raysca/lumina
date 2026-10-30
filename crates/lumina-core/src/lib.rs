@@ -467,7 +467,10 @@ impl LuminaEngine {
     ) -> Vec<MediaItem> {
         self.catalog
             .query_smart_album(album, limit, offset)
-            .unwrap_or_default()
+            .unwrap_or_else(|err| {
+                log::warn!("smart album {:?} cannot run: {err:#}", album.title);
+                Vec::new()
+            })
     }
 
     pub fn query_smart_album_sorted(
@@ -483,7 +486,12 @@ impl LuminaEngine {
     }
 
     pub fn query_smart_album_count(&self, album: &SmartAlbum) -> usize {
-        self.catalog.query_smart_album_count(album).unwrap_or(0)
+        self.catalog
+            .query_smart_album_count(album)
+            .unwrap_or_else(|err| {
+                log::warn!("smart album {:?} cannot be counted: {err:#}", album.title);
+                0
+            })
     }
 
     pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {

@@ -7,12 +7,11 @@ use crate::app::smart_draft::{field_label, operator_label, DraftFocus, DraftRow,
 use crate::theme;
 use crate::LuminaApp;
 
-/// Border for a control: accent when focused, red when its value is invalid.
-fn ring(focused: bool, invalid: bool) -> Rgba {
+/// Border for a control: accent when focused. Invalid values outline their
+/// whole row instead (see `render_row`).
+fn ring(focused: bool) -> Rgba {
     if focused {
         theme::accent()
-    } else if invalid {
-        theme::danger_border()
     } else {
         theme::border()
     }
@@ -23,7 +22,6 @@ pub(super) fn picker(
     selector: String,
     label: impl Into<SharedString>,
     focused: bool,
-    invalid: bool,
     target: DraftFocus,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
@@ -31,7 +29,7 @@ pub(super) fn picker(
     theme::control(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
         .justify_between()
-        .border_color(ring(focused, invalid))
+        .border_color(ring(focused))
         .child(div().truncate().child(label.into()))
         .child(div().text_color(theme::text_subtle()).child("⌄"))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -45,7 +43,6 @@ pub(super) fn text_field(
     text: &str,
     placeholder: &str,
     focused: bool,
-    invalid: bool,
     target: DraftFocus,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
@@ -60,7 +57,7 @@ pub(super) fn text_field(
     };
     theme::field(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
-        .border_color(ring(focused, invalid))
+        .border_color(ring(focused))
         .child(content.truncate())
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.set_draft_focus(target, cx);
@@ -115,7 +112,7 @@ fn square_button(
         .debug_selector(move || sel.clone())
         .w(px(28.0))
         .justify_center()
-        .border_color(ring(focused, false))
+        .border_color(ring(focused))
         .tooltip(theme::tooltip_label(tooltip))
         .child(glyph)
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
@@ -151,7 +148,6 @@ pub(super) fn render_row(
                 format!("album-rule-value-{i}"),
                 label,
                 focus == DraftFocus::Value(i),
-                invalid,
                 DraftFocus::Value(i),
                 cx,
             )
@@ -163,7 +159,6 @@ pub(super) fn render_row(
             &row.text,
             kind.placeholder(),
             focus == DraftFocus::Value(i),
-            invalid,
             DraftFocus::Value(i),
             cx,
         )
@@ -178,17 +173,27 @@ pub(super) fn render_row(
         .gap_1()
         .child(
             div()
+                .debug_selector(move || format!("album-rule-row-{i}"))
                 .w_full()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_2()
+                // The whole row is outlined while its value is invalid; the
+                // transparent border keeps valid rows the same size.
+                .p(px(3.0))
+                .rounded(px(8.0))
+                .border_1()
+                .border_color(if invalid {
+                    theme::danger_border()
+                } else {
+                    rgba(0x00000000)
+                })
                 .child(
                     picker(
                         format!("album-rule-field-{i}"),
                         field_label(&row.field),
                         focus == DraftFocus::Field(i),
-                        false,
                         DraftFocus::Field(i),
                         cx,
                     )
@@ -199,7 +204,6 @@ pub(super) fn render_row(
                         format!("album-rule-op-{i}"),
                         operator_label(&row.field, &row.operator),
                         focus == DraftFocus::Operator(i),
-                        false,
                         DraftFocus::Operator(i),
                         cx,
                     )
@@ -212,7 +216,6 @@ pub(super) fn render_row(
                             format!("album-rule-unit-{i}"),
                             row.unit.label(),
                             focus == DraftFocus::Unit(i),
-                            false,
                             DraftFocus::Unit(i),
                             cx,
                         )

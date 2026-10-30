@@ -63,7 +63,6 @@ impl AlbumBuilderModal {
                             &draft.album_title,
                             "Untitled Smart Album",
                             focus == DraftFocus::Title,
-                            false,
                             DraftFocus::Title,
                             cx,
                         )
@@ -84,7 +83,6 @@ impl AlbumBuilderModal {
                                     "album-builder-match".to_string(),
                                     match_label(draft.match_mode),
                                     focus == DraftFocus::Match,
-                                    false,
                                     DraftFocus::Match,
                                     cx,
                                 )
@@ -145,6 +143,13 @@ fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
     let draft = &app.album_draft;
     let valid = draft.match_count.is_some();
     let (status, color) = match draft.match_count {
+        None if draft.problem.is_some() => (
+            format!(
+                "These conditions can't run: {}",
+                draft.problem.as_deref().unwrap_or_default()
+            ),
+            theme::danger_text(),
+        ),
         None => (
             "Fix the highlighted conditions".to_string(),
             theme::danger_text(),

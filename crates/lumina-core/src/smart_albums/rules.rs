@@ -33,6 +33,8 @@ pub enum RuleField {
     ColorLabel,
     /// City, region or country code (contains / does not contain).
     Place,
+    /// Camera make or model (contains / does not contain).
+    Camera,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,7 +208,9 @@ fn column_for_field(field: &RuleField) -> &'static str {
         RuleField::DurationMs => "m.duration_ms",
         RuleField::Rating => "m.rating",
         RuleField::ColorLabel => "m.color_label",
-        RuleField::Place => unreachable!("RuleField::Place rules are compiled in compile_rule"),
+        RuleField::Place | RuleField::Camera => {
+            unreachable!("multi-column fields are compiled in compile_rule")
+        }
     }
 }
 
@@ -267,28 +271,32 @@ fn compile_rule(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::V
         };
     }
 
-    if rule.field == RuleField::Place {
+    let columns: &[&str] = match rule.field {
+        RuleField::Place => &["m.city", "m.admin1_region", "m.country_code"],
+        RuleField::Camera => &["m.make", "m.model"],
+        _ => &[],
+    };
+    if !columns.is_empty() {
         let negate = match rule.operator {
             RuleOperator::Contains => false,
             RuleOperator::NotContains => true,
-            _ => return Err(anyhow!("Place supports contains / does not contain")),
+            _ => return Err(anyhow!("this field supports contains / does not contain")),
         };
         let pattern = like_pattern(&rule_value_to_string(&rule.value)?);
-        let any = "(m.city LIKE ? ESCAPE '\\' OR m.admin1_region LIKE ? ESCAPE '\\' \
-                   OR m.country_code LIKE ? ESCAPE '\\')";
+        let any = columns
+            .iter()
+            .map(|col| format!("{col} LIKE ? ESCAPE '\\'"))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        // NULL columns make the OR NULL; COALESCE keeps "does not contain"
+        // true for items with no value at all.
         let clause = if negate {
-            format!("NOT COALESCE({any}, 0)")
+            format!("NOT COALESCE(({any}), 0)")
         } else {
-            any.to_string()
+            format!("({any})")
         };
-        return Ok((
-            clause,
-            vec![
-                pattern.clone().into(),
-                pattern.clone().into(),
-                pattern.into(),
-            ],
-        ));
+        let params = columns.iter().map(|_| pattern.clone().into()).collect();
+        return Ok((clause, params));
     }
 
     // "Photo" is every still: plain images and RAW files.
@@ -416,8 +424,8 @@ pub fn split_date_range(s: &str) -> Option<(i64, i64)> {
 }
 
 /// Date rules with calendar-day text values: "is", "before", "after" and
-/// "in the range" cover whole days. Returns `None` for other date rules
-/// (numeric epoch values, "in the last"), which compile generically.
+/// "in the range" cover whole days. Returns `None` for numeric epoch values
+/// and "in the last", which compile generically; other operators are errors.
 fn compile_calendar_date(
     rule: &SmartAlbumRule,
 ) -> Result<Option<(String, Vec<rusqlite::types::Value>)>> {
@@ -444,7 +452,9 @@ fn compile_calendar_date(
                 vec![start.into(), (end + DAY_MS).into()],
             )
         }
-        _ => return Ok(None),
+        RuleOperator::InTheLast => return Ok(None),
+        // Comparing epoch ms against text would silently match everything.
+        _ => return Err(anyhow!("Date does not support this operator with a date")),
     }))
 }
 
