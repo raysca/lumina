@@ -1,4 +1,6 @@
-use crate::tests::ui_automation::{app_with_library, click, leak, render_ui, seed_library};
+use crate::tests::ui_automation::{
+    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
+};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
 use lumina_core::*;
@@ -597,7 +599,7 @@ fn tag_selector(control: &str, tag: &str) -> &'static str {
 }
 
 #[core::prelude::v1::test]
-fn rendered_row_click_toggles_tag_manager_selection() {
+fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
     let (temp_dir, engine) = tagged_library("tag_row_click", &["alpha", "beta"]);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -605,24 +607,21 @@ fn rendered_row_click_toggles_tag_manager_selection() {
 
     click(vcx, tag_selector("row", "alpha"));
     view.update(vcx, |app, _| {
-        assert!(
-            app.tag_manager.selected.contains("alpha"),
-            "clicking a row surface must select that tag"
-        );
         assert_eq!(
-            app.tag_manager.selected.len(),
-            1,
-            "one row click must toggle exactly one tag"
+            app.tag_manager.focused.as_deref(),
+            Some("alpha"),
+            "clicking a row must show that tag in the detail panel"
         );
-    });
-
-    click(vcx, tag_selector("row", "alpha"));
-    view.update(vcx, |app, _| {
         assert!(
-            !app.tag_manager.selected.contains("alpha"),
-            "clicking the same row again must deselect the tag"
+            app.tag_manager.selected.is_empty(),
+            "a row click must not check the row; the checkbox does that"
         );
     });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(tag_selector("rename", "alpha")).is_some(),
+        "the detail panel must offer Rename for the focused tag"
+    );
 
     let _ = std::fs::remove_dir_all(temp_dir);
 }
@@ -665,6 +664,7 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
+    click(vcx, tag_selector("row", "alpha"));
     click(vcx, tag_selector("rename", "alpha"));
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -682,25 +682,26 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
 }
 
 #[core::prelude::v1::test]
-fn rendered_tag_name_click_filters_and_closes_the_manager() {
+fn rendered_show_in_library_filters_and_closes_the_manager() {
     let (temp_dir, engine) = tagged_library("tag_name_click", &["alpha", "beta"]);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
-    click(vcx, tag_selector("name", "alpha"));
+    click(vcx, tag_selector("row", "alpha"));
+    click(vcx, tag_selector("show", "alpha"));
     view.update(vcx, |app, _| {
         assert_eq!(
             app.search_query, "tag:alpha",
-            "the tag-name click must filter the grid by that tag"
+            "Show in Library must filter the grid by that tag"
         );
         assert!(
             !app.tag_manager.open,
-            "the tag-name click must close the tag manager"
+            "Show in Library must close the tag manager"
         );
         assert!(
             app.tag_manager.selected.is_empty(),
-            "the tag-name click must not also toggle the row selection"
+            "Show in Library must not check the row"
         );
     });
 
@@ -741,6 +742,53 @@ fn rendered_search_box_click_focuses_and_typing_filters() {
             "typing must not drop the filter field focus state"
         );
     });
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn keyboard_browses_tags_and_renames_the_focused_one() {
+    let (temp_dir, engine) = tagged_library("tag_keyboard", &["alpha", "beta"]);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_tag_manager(&view, vcx);
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "down down");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.focused.as_deref(),
+            Some("beta"),
+            "↓ twice from no focus must land on the second tag"
+        );
+    });
+    keystrokes(vcx, "up");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.editing.as_deref(),
+            Some("alpha"),
+            "↵ must rename the focused tag"
+        );
+    });
+    keystrokes(vcx, "backspace backspace backspace backspace backspace");
+    vcx.simulate_input("gamma");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.focused.as_deref(),
+            Some("gamma"),
+            "the detail panel must follow a rename"
+        );
+    });
+    assert!(
+        engine
+            .catalog()
+            .get_all_tags()
+            .unwrap()
+            .contains(&"gamma".to_string()),
+        "the rename must reach the catalog"
+    );
 
     let _ = std::fs::remove_dir_all(temp_dir);
 }

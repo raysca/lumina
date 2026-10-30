@@ -249,6 +249,14 @@ impl LuminaApp {
         self.tag_manager
             .selected
             .retain(|selected| !selected.eq_ignore_ascii_case(&clean));
+        if self
+            .tag_manager
+            .focused
+            .as_ref()
+            .is_some_and(|focused| focused.eq_ignore_ascii_case(&clean))
+        {
+            self.tag_manager.focused = None;
+        }
         self.refresh_selected_tags();
         self.refresh_album_counts();
         cx.notify();
@@ -261,6 +269,7 @@ impl LuminaApp {
         self.tag_manager.selected.clear();
         self.tag_manager.editing = None;
         self.tag_manager.merge_source = None;
+        self.tag_manager.focused = None;
         cx.notify();
     }
 
@@ -291,6 +300,68 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Selects or clears every visible (filtered) tag for bulk actions.
+    pub fn toggle_all_tag_manager_rows(&mut self, cx: &mut Context<Self>) {
+        let visible = self.tag_manager_rows();
+        if visible
+            .iter()
+            .all(|(tag, _)| self.tag_manager.selected.contains(tag))
+        {
+            self.tag_manager.selected.clear();
+        } else {
+            self.tag_manager
+                .selected
+                .extend(visible.into_iter().map(|(tag, _)| tag));
+        }
+        cx.notify();
+    }
+
+    /// Shows `tag` in the tag manager's detail panel.
+    pub fn focus_tag_manager_tag(&mut self, tag: String, cx: &mut Context<Self>) {
+        self.tag_manager.focused = Some(tag);
+        cx.notify();
+    }
+
+    /// Moves the detail focus up or down the visible list (↑/↓).
+    pub fn step_tag_manager_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let rows = self.tag_manager_rows();
+        if rows.is_empty() {
+            return;
+        }
+        let current = self
+            .tag_manager
+            .focused
+            .as_ref()
+            .and_then(|focused| rows.iter().position(|(tag, _)| tag == focused));
+        let next = match current {
+            Some(i) => (i as isize + delta).clamp(0, rows.len() as isize - 1) as usize,
+            None if delta < 0 => rows.len() - 1,
+            None => 0,
+        };
+        self.tag_manager.focused = Some(rows[next].0.clone());
+        cx.notify();
+    }
+
+    /// Library tags after the manager's filter and sort, as painted in its list.
+    pub(crate) fn tag_manager_rows(&self) -> Vec<(String, usize)> {
+        let query = self.tag_manager.search.to_lowercase();
+        let mut rows: Vec<(String, usize)> = self
+            .library_tag_counts
+            .iter()
+            .filter(|(tag, _)| query.is_empty() || tag.to_lowercase().contains(&query))
+            .cloned()
+            .collect();
+        match self.tag_manager.sort {
+            TagSortOrder::Alphabetical => {
+                rows.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+            }
+            TagSortOrder::CountDesc => {
+                rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            }
+        }
+        rows
+    }
+
     pub fn start_modal_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
         self.tag_manager.editing = Some(tag.clone());
         self.tag_manager.editing_buffer = tag;
@@ -317,6 +388,9 @@ impl LuminaApp {
                 let old_query_quoted = format!("tag:\"{}\"", old_tag);
                 if self.search_query == old_query || self.search_query == old_query_quoted {
                     self.search_query = format!("tag:{}", new_tag);
+                }
+                if self.tag_manager.focused.as_deref() == Some(old_tag.as_str()) {
+                    self.tag_manager.focused = Some(new_tag.clone());
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
@@ -367,6 +441,9 @@ impl LuminaApp {
                 let old_query_quoted = format!("tag:\"{}\"", source_tag);
                 if self.search_query == old_query || self.search_query == old_query_quoted {
                     self.search_query = format!("tag:{}", target_tag);
+                }
+                if self.tag_manager.focused.as_deref() == Some(source_tag.as_str()) {
+                    self.tag_manager.focused = Some(target_tag.clone());
                 }
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
@@ -419,6 +496,14 @@ impl LuminaApp {
         self.tag_manager
             .selected
             .retain(|selected| !deleted.iter().any(|tag| tag == &selected.to_lowercase()));
+        if self
+            .tag_manager
+            .focused
+            .as_ref()
+            .is_some_and(|focused| deleted.iter().any(|tag| tag == &focused.to_lowercase()))
+        {
+            self.tag_manager.focused = None;
+        }
         self.refresh_selected_tags();
         self.refresh_album_counts();
         if !failures.is_empty() {

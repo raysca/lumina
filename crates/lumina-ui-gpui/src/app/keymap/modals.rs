@@ -405,6 +405,19 @@ impl LuminaApp {
                 return true;
             }
 
+            // ↑/↓ walk the list into the detail panel; Return renames the
+            // tag shown there.
+            if key == "up" || key == "down" {
+                self.step_tag_manager_focus(if key == "up" { -1 } else { 1 }, cx);
+                return true;
+            }
+            if key == "enter" || key == "return" {
+                if let Some(tag) = self.tag_manager.focused.clone() {
+                    self.start_modal_tag_rename(tag, cx);
+                }
+                return true;
+            }
+
             // When in Tag Manager without active rename, typing filters tags
             if key == "backspace" {
                 self.tag_manager.search.pop();

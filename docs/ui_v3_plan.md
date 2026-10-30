@@ -24,7 +24,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 | 2 | Docked inspector: one-column summary; Get Info… opens the tabbed window | V3Inspector | done |
 | 3 | Photo viewer: floating zoom pill, toolbar rating, stage prev/next, no filmstrip | V3Photo | done |
 | 4 | Multi-select dock restyle, batch rating and tags up top, partial tags | V3MultiSelect | done |
-| 5 | Tag manager as a floating sheet, reusing the album builder overlay | V3TagManager | |
+| 5 | Tag manager: list + detail panel in the existing floating sheet; ↑↓/↵ keys | V3TagManager | done |
 | 6 | Command palette, empty states, undo toast restyle | V3Palette, V3States | |
 | 7 | Preferences restyle | V3Prefs | |
 
@@ -42,5 +42,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   still work.
 - Multi-select dock has no Rate ▾ menu (rating is in the batch inspector)
   and no Add to Album: there are no manual albums to add to.
+- Tag group, colour and keyboard shortcut from the design are not built:
+  tags are plain names in the catalog (needs a schema change and a spec).
 - Selection outline sits on the square well, not hugging a contain-fit image
   as in the design; GPUI does not expose the decoded image's fitted rect.

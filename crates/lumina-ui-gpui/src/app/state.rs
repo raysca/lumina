@@ -123,6 +123,9 @@ pub struct TagManagerState {
     pub editing: Option<String>,
     pub editing_buffer: String,
     pub merge_source: Option<String>,
+    /// Tag shown in the detail panel. Separate from `selected`, which holds
+    /// the checkbox set for bulk actions.
+    pub focused: Option<String>,
 }
 
 impl Default for TagManagerState {
@@ -136,6 +139,7 @@ impl Default for TagManagerState {
             editing: None,
             editing_buffer: String::new(),
             merge_source: None,
+            focused: None,
         }
     }
 }
