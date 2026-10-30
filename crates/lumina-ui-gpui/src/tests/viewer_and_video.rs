@@ -754,7 +754,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
 }
 
 #[core::prelude::v1::test]
-fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
+fn test_viewer_zoom_hud_floats_below_the_top_bar() {
     let temp_dir = std::env::temp_dir().join(format!(
         "lumina_viewer_zoom_hud_{}",
         std::time::SystemTime::now()
@@ -808,7 +808,7 @@ fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
     ] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
-            "{selector} must be painted in the viewer top bar at 1024x768"
+            "{selector} must be painted in the viewer at 1024x768"
         );
     }
 
@@ -820,13 +820,15 @@ fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
         "filename must retain readable width at 1024x768, got {:?} (hud={hud:?}, top_bar={top_bar:?})",
         filename.size.width
     );
+    // v3: the zoom pill floats over the stage, below the top bar, so it can
+    // never crowd the filename.
     assert!(
-        hud.left() >= filename.right(),
-        "zoom HUD must sit clear of the filename at 1024x768: filename={filename:?} hud={hud:?}"
+        hud.top() >= top_bar.bottom(),
+        "zoom HUD must float below the top bar at 1024x768: hud={hud:?} top_bar={top_bar:?}"
     );
     assert!(
-        hud.right() <= top_bar.right(),
-        "zoom HUD must stay inside the top bar at 1024x768"
+        hud.left() >= top_bar.left() && hud.right() <= top_bar.right(),
+        "zoom HUD must stay inside the window width at 1024x768"
     );
 
     // HUD controls are wired to the same preset and reset actions as the keys.
@@ -871,9 +873,8 @@ fn test_viewer_zoom_hud_does_not_overlap_filename_at_1024x768() {
         filename_wide.size.width
     );
     assert!(
-        hud_wide.left() >= filename_wide.right(),
-        "zoom HUD must stay clear of the filename at 1400px: filename={filename_wide:?} hud={hud_wide:?} specs={:?}",
-        vcx.debug_bounds("viewer-specs")
+        hud_wide.top() >= vcx.debug_bounds("viewer-top-bar").unwrap().bottom(),
+        "zoom HUD must stay below the top bar at 1400px: hud={hud_wide:?}"
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);

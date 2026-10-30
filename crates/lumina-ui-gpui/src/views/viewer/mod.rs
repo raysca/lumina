@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::MediaType;
 
@@ -5,14 +6,13 @@ use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
-pub mod filmstrip;
+pub mod stage_controls;
 pub mod top_bar;
 pub mod transport;
 pub mod utils;
 pub mod viewport;
 
 pub use crate::views::viewer_state::ViewerState;
-pub use filmstrip::ViewerFilmstrip;
 pub use top_bar::ViewerTopBar;
 pub use transport::ViewerTransport;
 pub use viewport::ViewerViewport;
@@ -32,6 +32,7 @@ impl MediaViewer {
         let is_inspector_open = this.inspector_open;
         let is_immersive = this.is_immersive_fullscreen;
         let hud_visible = this.immersive_hud_visible;
+        let show_chrome = !is_immersive || hud_visible;
 
         let backdrop = div()
             .id("viewer-backdrop")
@@ -80,6 +81,14 @@ impl MediaViewer {
                     .items_center()
                     .justify_center()
                     .child(ViewerViewport::render(this, cx))
+                    // v3: prev/next on the stage edges and, for stills, a
+                    // floating zoom pill. There is no filmstrip tray.
+                    .when(show_chrome, |stage| {
+                        stage.children(stage_controls::render_nav_buttons(cx))
+                    })
+                    .when(show_chrome && !is_video, |stage| {
+                        stage.child(stage_controls::render_zoom_hud(this, cx))
+                    })
                     // Video Transport Bar (Scrubber + Dock)
                     .child(if is_video && (!is_immersive || hud_visible) {
                         ViewerTransport::render(this, cx).into_any_element()
@@ -87,12 +96,6 @@ impl MediaViewer {
                         Empty.into_any_element()
                     }),
             )
-            // 3. Bottom Tray: Adjacent Album Filmstrip & Keyboard Shortcuts Legend
-            .child(if !is_immersive || hud_visible {
-                ViewerFilmstrip::render(this, item, cx).into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
             // 4. Floating Inspector Drawer (when opened)
             .child(if is_inspector_open && (!is_immersive || hud_visible) {
                 div()
@@ -104,7 +107,7 @@ impl MediaViewer {
                     .absolute()
                     .top(px(60.0))
                     .right_4()
-                    .bottom(px(72.0))
+                    .bottom(px(16.0))
                     .w(px(340.0))
                     .bg(theme::bg_hud())
                     .border_1()

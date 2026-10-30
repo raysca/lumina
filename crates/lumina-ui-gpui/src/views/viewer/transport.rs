@@ -108,8 +108,6 @@ impl ViewerTransport {
         // Honest scrub feedback: the native bridge cannot produce a decoded
         // still for an arbitrary scrub position, so the transport shows a
         // time-only badge next to the playhead instead of a synthetic image.
-        // The bottom thumbnail tray is a separate click-to-select filmstrip,
-        // not a drag scrubber; it intentionally has no time mapping.
         let time_badge = if is_scrubbing {
             scrub_time.map(|time| (progress_pct as f32, time))
         } else {

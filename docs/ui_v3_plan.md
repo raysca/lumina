@@ -22,7 +22,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 |---|-------|----------|--------|
 | 1 | Grid: meta pill on the photo, no info band | V3Grid | done |
 | 2 | Docked inspector: one-column summary; Get Info… opens the tabbed window | V3Inspector | done |
-| 3 | Photo viewer: Fit / 100% / 200% zoom, rating and favorite in the toolbar | V3Photo | |
+| 3 | Photo viewer: floating zoom pill, toolbar rating, stage prev/next, no filmstrip | V3Photo | done |
 | 4 | Multi-select dock and batch inspector, partial tags (needs a core query) | V3MultiSelect | |
 | 5 | Tag manager as a floating sheet, reusing the album builder overlay | V3TagManager | |
 | 6 | Command palette, empty states, undo toast restyle | V3Palette, V3States | |
@@ -35,5 +35,10 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Not yet designed: context menu, scan/import progress, shortcut sheet.
 - Inspector summary has no histogram (no luminance data in the catalog) and
   no map (no network); location shows as text only.
+- Rating has no keyboard shortcut (in the viewer 1/2/4 are zoom presets);
+  needs palette commands or a binding.
+- Viewer zoom navigator (overview of the visible region) is not built.
+- Video zoom has no on-screen control now; Z, scroll and the 0/1/2/4 keys
+  still work.
 - Selection outline sits on the square well, not hugging a contain-fit image
   as in the design; GPUI does not expose the decoded image's fitted rect.

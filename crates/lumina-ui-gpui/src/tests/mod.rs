@@ -7,4 +7,5 @@ mod toasts;
 mod ui_automation;
 mod video_scrub;
 mod viewer_and_video;
+mod viewer_stage;
 mod windows_and_layout;

@@ -295,7 +295,7 @@ and tested.
 ## 8. Browsing, search, and viewer
 
 **Current:** structured query grammar, FTS5 search, timeline buckets, sorting,
-grid density, zoom/pan, filmstrip, keyboard navigation. No saved searches,
+grid density, zoom/pan, viewer previous/next, keyboard navigation. No saved searches,
 search history, quick rating/color filters, compare, slideshow, or map.
 
 **Target:**

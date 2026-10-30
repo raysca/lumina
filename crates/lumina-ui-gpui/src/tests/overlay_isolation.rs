@@ -121,6 +121,9 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
         .expect("the sample set must contain a video");
     let expected_id = video.id.0;
     view.update(vcx, |app, cx| {
+        // Two columns of large cards so one sits under the stage centre
+        // regardless of small viewer layout changes.
+        app.grid_columns = 2;
         app.open_viewer(video, cx);
     });
     render_ui(vcx);

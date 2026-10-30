@@ -22,7 +22,7 @@ core handles cataloguing, decoding, and search.
   albums can be renamed, re-edited and deleted from the sidebar row.
 - **Fast grid & viewer** — virtualized grid, 2–8 column density, sort by date,
   name, size or rating (ascending/descending, persisted), zoom/pan and 1:1 pixel
-  inspection, filmstrip navigation, keyboard-first shortcuts.
+  inspection, previous/next navigation, keyboard-first shortcuts.
 - **Video playback** — native AVFoundation bridge with scrubbing, frame
   stepping, speed, mute, looping, and a floating Picture-in-Picture window.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,

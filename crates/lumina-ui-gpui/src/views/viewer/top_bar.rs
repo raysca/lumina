@@ -5,120 +5,18 @@ use crate::app::types::{format_bytes, month_name};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
+use crate::views::viewer_state::ViewerRotation;
 
 pub struct ViewerTopBar;
 
 /// Window width below which the top bar drops the breadcrumb date and specs
-/// line and switches open/reveal to icon actions so the zoom HUD cannot crowd
-/// the filename.
+/// line and switches open/reveal to icon actions so the right cluster cannot
+/// crowd the filename.
 const COMPACT_WINDOW_WIDTH: f32 = 1400.0;
 /// Width assumed before window bounds have been observed.
 const DEFAULT_WINDOW_WIDTH: f32 = 1440.0;
 
 impl ViewerTopBar {
-    fn render_zoom_button(
-        preset: ViewerZoomPreset,
-        active: bool,
-        cx: &mut Context<LuminaApp>,
-    ) -> Stateful<Div> {
-        let id = match preset {
-            ViewerZoomPreset::Fit => "viewer-zoom-fit",
-            ViewerZoomPreset::Actual => "viewer-zoom-actual",
-            ViewerZoomPreset::TwoX => "viewer-zoom-2x",
-            ViewerZoomPreset::FourX => "viewer-zoom-4x",
-        };
-        let button = div()
-            .id(id)
-            .debug_selector(move || id.to_string())
-            .tooltip(theme::tooltip_label(preset.tooltip()))
-            .h(px(18.0))
-            .px(px(4.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(4.0))
-            .text_size(px(10.0))
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
-                this.apply_viewer_zoom_preset(preset, cx);
-            }))
-            .child(preset.label());
-
-        if active {
-            button
-                .bg(theme::selection_bg())
-                .text_color(theme::selection_fg())
-        } else {
-            button.text_color(theme::text_muted()).hover(|style| {
-                style
-                    .bg(theme::bg_control_hover())
-                    .text_color(theme::text())
-            })
-        }
-    }
-
-    fn render_zoom_reset(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
-        div()
-            .id("viewer-zoom-reset")
-            .debug_selector(|| "viewer-zoom-reset".to_string())
-            .tooltip(theme::tooltip_label("Reset zoom and pan (0)"))
-            .h(px(18.0))
-            .px(px(3.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .text_color(theme::text_muted())
-            .hover(|style| style.bg(theme::bg_control_hover()))
-            .child(render_icon(Icon::RotateCcw, px(11.0), theme::text_muted()))
-            .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                this.reset_viewer_zoom(cx);
-            }))
-    }
-
-    fn render_zoom_hud(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
-        let state = this.viewer_state;
-        let mut hud = div()
-            .id("viewer-zoom-hud")
-            .debug_selector(|| "viewer-zoom-hud".to_string())
-            .h(px(24.0))
-            .px(px(1.0))
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(1.0))
-            .rounded(px(6.0))
-            .bg(theme::bg_control())
-            .border_1()
-            .border_color(theme::border())
-            .child(
-                div()
-                    .id("viewer-zoom-label")
-                    .debug_selector(|| "viewer-zoom-label".to_string())
-                    .tooltip(theme::tooltip_label(
-                        "Zoom as a percentage of actual pixels",
-                    ))
-                    .min_w(px(30.0))
-                    .text_center()
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(11.0))
-                    .text_color(theme::text())
-                    .child(state.zoom_label()),
-            );
-
-        for preset in ViewerZoomPreset::ALL {
-            hud = hud.child(Self::render_zoom_button(
-                preset,
-                state.matches_preset(preset),
-                cx,
-            ));
-        }
-
-        hud.child(Self::render_zoom_reset(cx))
-    }
-
     /// Quick-edit rotate control. It stays visible for video so the no-op is
     /// discoverable, but the tooltip states that video rotation is unsupported.
     fn render_rotate_button(
@@ -207,9 +105,9 @@ impl ViewerTopBar {
         };
         let size_str = format_bytes(item.file_size);
         let is_fav = item.is_favorite;
+        let rating = this.get_item_rating(item);
 
-        // The HUD adds a compact control group to the right cluster. At narrow
-        // widths the breadcrumb date, specs line, and long action labels yield
+        // At narrow widths the breadcrumb date, specs line, and long action labels yield
         // space so the filename stays readable at 1024px.
         let window_width = this
             .window_bounds
@@ -341,9 +239,9 @@ impl ViewerTopBar {
             )
             // Center Section: Breadcrumb, Filename, Specs Line
             .child(center_section)
-            // Right Section: Zoom HUD, Quick Edit, Favorite, Info, Open, Reveal.
-            // The gap tightens slightly so the added quick-edit controls keep the
-            // HUD clear of the filename down to the 1024px minimum width.
+            // Right Section: Rating, Quick Edit, Favorite, Info, Open, Reveal.
+            // The gap stays tight so the cluster clears the filename down to the
+            // 1024px minimum width.
             .child(
                 div()
                     .flex()
@@ -351,8 +249,42 @@ impl ViewerTopBar {
                     .items_center()
                     .gap(px(4.0))
                     .flex_shrink_0()
-                    // Zoom HUD keeps the current zoom and presets discoverable.
-                    .child(Self::render_zoom_hud(this, cx))
+                    // Rating stars; clicking the current rating clears it
+                    // (`set_rating_selected` toggles).
+                    .child(
+                        div()
+                            .id("viewer-rating")
+                            .debug_selector(|| "viewer-rating".to_string())
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .mr(px(4.0))
+                            .children((1u8..=5).map(|star| {
+                                let filled = rating >= star;
+                                let color = if filled {
+                                    theme::rating()
+                                } else {
+                                    theme::text_disabled()
+                                };
+                                div()
+                                    .id(ElementId::NamedInteger("viewer-star".into(), star as u64))
+                                    .debug_selector(move || format!("viewer-star-{star}"))
+                                    .tooltip(theme::tooltip_label(format!(
+                                        "Rate {star} star{}",
+                                        if star > 1 { "s" } else { "" }
+                                    )))
+                                    .px(px(2.0))
+                                    .cursor_pointer()
+                                    .child(render_icon(
+                                        if filled { Icon::StarFilled } else { Icon::Star },
+                                        px(13.0),
+                                        color,
+                                    ))
+                                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                        this.set_rating_selected(star, cx);
+                                    }))
+                            })),
+                    )
                     // Quick-edit rotation. Non-destructive: the catalog stores the
                     // quarter turn and the original file is never rewritten.
                     .child(
@@ -512,9 +444,8 @@ impl ViewerTopBar {
                             .cursor_pointer()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme::text())
-                            // A short label keeps the right cluster narrow enough
-                            // for the zoom HUD to clear the filename at 1400px;
-                            // the tooltip and context menu carry the full name.
+                            // A short label keeps the right cluster narrow; the
+                            // tooltip and context menu carry the full name.
                             .child("Edit")
                             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.open_item_in_external_editor(&p_clone, cx);
