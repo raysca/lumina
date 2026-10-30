@@ -185,6 +185,12 @@ pub enum EngineEvent {
     ScanProgress {
         items_found: usize,
         is_complete: bool,
+        /// Media files under the root, counted before the walk (0 = unknown).
+        total: usize,
+        /// Media-named files that could not be read.
+        skipped: usize,
+        /// The file the scan has most recently reached.
+        current_file: Option<PathBuf>,
     },
     ItemRemoved(MediaId),
     ScanComplete {
@@ -931,14 +937,8 @@ impl LuminaEngine {
                             let _ = event_tx.send(EngineEvent::BatchDiscovered { items: inserted });
                         }
                     }
-                    EngineEvent::ScanProgress {
-                        items_found,
-                        is_complete,
-                    } => {
-                        let _ = event_tx.send(EngineEvent::ScanProgress {
-                            items_found,
-                            is_complete,
-                        });
+                    progress @ EngineEvent::ScanProgress { .. } => {
+                        let _ = event_tx.send(progress);
                     }
                     EngineEvent::ScanComplete { .. } => {
                         break;

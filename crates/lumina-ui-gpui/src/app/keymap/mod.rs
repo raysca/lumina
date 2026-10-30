@@ -24,6 +24,29 @@ impl LuminaApp {
             return;
         }
 
+        // "Building your library": ↵/Esc open the library, ⌘. stops the
+        // scan; nothing else reaches the grid hidden behind it.
+        if self.first_scan.is_some() {
+            if key == "enter" || key == "escape" {
+                self.dismiss_first_scan(cx);
+            } else if cmd_or_ctrl && key == "." {
+                self.stop_first_scan(cx);
+            }
+            return;
+        }
+        // Welcome: ↵ chooses a folder, ⇧↵ uses Pictures (when offered).
+        if self.grid_state.is_none() && key == "enter" {
+            if keystroke.modifiers.shift {
+                if !self.has_desktop_pics {
+                    return;
+                }
+                self.open_pictures_library(cx);
+            } else {
+                self.pick_folder_dialog(cx);
+            }
+            return;
+        }
+
         // The viewer's right-click menu is modal: Escape closes it and every
         // other key (⌘A, ⌘Z, ]…) is absorbed so nothing changes what it acts on.
         if self.is_fullscreen_viewer && self.context_menu_state.is_some() {

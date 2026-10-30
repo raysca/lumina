@@ -310,6 +310,8 @@ pub struct LuminaApp {
     /// thumbnail would stay resident on the GPU.
     pub retired_images: Vec<Arc<RenderImage>>,
     pub has_desktop_pics: bool,
+    /// "Building your library" while an empty catalog is first scanned.
+    pub first_scan: Option<crate::app::first_scan::FirstScanState>,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub focus_handle: FocusHandle,
 
@@ -410,6 +412,8 @@ pub struct LuminaApp {
     /// Reversible catalog edits (ratings, tags, captions, favorites, trash).
     pub undo: crate::app::undo::UndoState,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
+    /// Bumped per opened library; see `UiMessage::LibraryEvent`.
+    pub(crate) library_generation: u64,
 }
 
 impl LuminaApp {
@@ -484,6 +488,7 @@ impl LuminaApp {
             viewer_image: None,
             retired_images: Vec::new(),
             has_desktop_pics,
+            first_scan: None,
             ui_tx,
             focus_handle,
             sidebar_collapsed: !config.sidebar_visible,
@@ -557,6 +562,7 @@ impl LuminaApp {
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),
             event_receiver_thread: None,
+            library_generation: 0,
         };
 
         // If previously selected library exists, open it immediately.

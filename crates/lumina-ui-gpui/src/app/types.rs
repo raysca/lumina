@@ -36,6 +36,12 @@ pub struct DeleteConfirmState {
 #[allow(clippy::large_enum_variant)]
 pub enum UiMessage {
     Engine(EngineEvent),
+    /// An engine event tagged with the library that sent it; events from a
+    /// library that has since been replaced are dropped.
+    LibraryEvent {
+        generation: u64,
+        event: EngineEvent,
+    },
     ThumbnailLoaded {
         id: MediaId,
         frame: DecodedFrame,

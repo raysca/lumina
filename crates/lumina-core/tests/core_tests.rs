@@ -574,12 +574,27 @@ fn test_scanner_on_temp_dir() {
     assert_eq!(count, 2);
 
     let mut batch_count = 0;
+    let mut progress = Vec::new();
     while let Ok(evt) = rx.try_recv() {
-        if let lumina_core::EngineEvent::BatchDiscovered { items } = evt {
-            batch_count += items.len();
+        match evt {
+            lumina_core::EngineEvent::BatchDiscovered { items } => batch_count += items.len(),
+            lumina_core::EngineEvent::ScanProgress {
+                items_found,
+                is_complete,
+                total,
+                skipped,
+                ..
+            } => progress.push((items_found, is_complete, total, skipped)),
+            _ => {}
         }
     }
     assert_eq!(batch_count, 2);
+    assert_eq!(
+        progress.first(),
+        Some(&(0, false, 2, 0)),
+        "the pre-count reports the total before any file is read (the .txt is not media)"
+    );
+    assert_eq!(progress.last(), Some(&(2, true, 2, 0)));
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

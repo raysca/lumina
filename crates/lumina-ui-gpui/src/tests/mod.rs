@@ -21,4 +21,5 @@ mod video_player;
 mod video_scrub;
 mod viewer_and_video;
 mod viewer_stage;
+mod welcome;
 mod windows_and_layout;

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use gpui::*;
 
 use crate::actions::*;
@@ -201,6 +199,10 @@ impl Render for LuminaApp {
             return div()
                 .size_full()
                 .font_family(theme::FONT_SANS)
+                .track_focus(&self.focus_handle)
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    this.handle_key_down(event, window, cx);
+                }))
                 .flex()
                 .flex_col()
                 .relative()
@@ -210,13 +212,27 @@ impl Render for LuminaApp {
                         this.pick_folder_dialog(cx);
                     }),
                     cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                        let pics_dir = dirs::picture_dir()
-                            .or_else(|| dirs::home_dir().map(|h| h.join("Pictures")))
-                            .unwrap_or_else(|| PathBuf::from("."));
-                        this.open_library(pics_dir, cx);
+                        this.open_pictures_library(cx);
                     }),
                     self.has_desktop_pics,
                 ))
+                .child(self.render_toast_overlay(cx))
+                .into_any_element();
+        }
+
+        if let Some(scan) = self.first_scan.clone() {
+            return div()
+                .size_full()
+                .font_family(theme::FONT_SANS)
+                .track_focus(&self.focus_handle)
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    this.handle_key_down(event, window, cx);
+                }))
+                .flex()
+                .flex_col()
+                .relative()
+                .child(self.render_error_banner(cx))
+                .child(crate::views::first_scan::render(self, &scan, cx))
                 .child(self.render_toast_overlay(cx))
                 .into_any_element();
         }

@@ -14,6 +14,8 @@ use crate::geocoder::OfflineGeocoder;
 use crate::{EngineEvent, MediaId, MediaItem, MediaType};
 
 const BATCH_SIZE: usize = 256;
+/// Files between progress events inside a batch.
+const PROGRESS_EVERY: usize = 32;
 
 pub struct Scanner {
     library_root: PathBuf,
@@ -55,19 +57,54 @@ impl Scanner {
         self.scan_and_collect_paths().map(|(count, _)| count)
     }
 
-    pub fn scan_and_collect_paths(&self) -> Result<(usize, HashSet<PathBuf>)> {
-        let mut total_found: usize = 0;
-        let mut seen_paths: HashSet<PathBuf> = HashSet::new();
-        let mut batch: Vec<MediaItem> = Vec::with_capacity(BATCH_SIZE);
-
-        for entry in WalkDir::new(&self.library_root)
+    /// Every non-hidden entry under the root, as both passes walk it.
+    fn walk(&self) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
+        WalkDir::new(&self.library_root)
             .follow_links(false)
             .into_iter()
             .filter_entry(|e| {
                 let name = e.file_name().to_string_lossy();
                 !name.starts_with('.')
             })
-        {
+    }
+
+    /// Counts media files by name only, for "X of Y" progress.
+    // ponytail: a second directory walk (no file reads); drop it if a huge
+    // library shows the pre-count in profiles.
+    fn count_media_files(&self) -> usize {
+        self.walk()
+            .filter_map(|e| e.ok())
+            .take_while(|_| !self.cancel_flag.load(Ordering::Relaxed))
+            .filter(|e| {
+                e.file_type().is_file() && Self::classify_media_extension(e.path()).is_some()
+            })
+            .count()
+    }
+
+    pub fn scan_and_collect_paths(&self) -> Result<(usize, HashSet<PathBuf>)> {
+        let mut total_found: usize = 0;
+        let mut skipped: usize = 0;
+        let mut seen_paths: HashSet<PathBuf> = HashSet::new();
+        let mut batch: Vec<MediaItem> = Vec::with_capacity(BATCH_SIZE);
+        // Only a first scan (no catalog yet) shows "X of Y"; rescans and
+        // launches skip the extra walk.
+        let total = if self.known_signatures.is_empty() {
+            self.count_media_files()
+        } else {
+            0
+        };
+        let progress = |items_found, skipped, is_complete, current_file| {
+            let _ = self.event_tx.send(EngineEvent::ScanProgress {
+                items_found,
+                is_complete,
+                total,
+                skipped,
+                current_file,
+            });
+        };
+        progress(0, 0, false, None);
+
+        for entry in self.walk() {
             if self.cancel_flag.load(Ordering::Relaxed) {
                 break;
             }
@@ -109,7 +146,6 @@ impl Scanner {
                 seen_paths.insert(media_item.path.clone());
                 batch.push(media_item);
                 total_found += 1;
-                let current = total_found;
 
                 if batch.len() >= BATCH_SIZE {
                     let items_to_send =
@@ -117,28 +153,27 @@ impl Scanner {
                     let _ = self.event_tx.send(EngineEvent::BatchDiscovered {
                         items: items_to_send,
                     });
-                    let _ = self.event_tx.send(EngineEvent::ScanProgress {
-                        items_found: current,
-                        is_complete: false,
-                    });
+                    progress(total_found, skipped, false, Some(path.to_path_buf()));
                 }
+            } else {
+                skipped += 1;
+            }
+            // A heartbeat between batches keeps the current file moving.
+            // (An empty batch was just flushed with its own progress event.)
+            if (total_found + skipped).is_multiple_of(PROGRESS_EVERY) && !batch.is_empty() {
+                progress(total_found, skipped, false, Some(path.to_path_buf()));
             }
         }
 
         if !batch.is_empty() {
+            let last = batch.last().map(|item| item.path.clone());
             let _ = self
                 .event_tx
                 .send(EngineEvent::BatchDiscovered { items: batch });
-            let _ = self.event_tx.send(EngineEvent::ScanProgress {
-                items_found: total_found,
-                is_complete: false,
-            });
+            progress(total_found, skipped, false, last);
         }
 
-        let _ = self.event_tx.send(EngineEvent::ScanProgress {
-            items_found: total_found,
-            is_complete: true,
-        });
+        progress(total_found, skipped, true, None);
         let _ = self.event_tx.send(EngineEvent::ScanComplete {
             total_items: total_found,
         });

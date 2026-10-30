@@ -2,6 +2,7 @@ pub mod album_builder;
 pub mod command_palette;
 pub mod context_menu;
 pub mod delete_modal;
+pub mod first_scan;
 pub mod floating_inspector;
 pub mod floating_pip;
 pub mod grid;

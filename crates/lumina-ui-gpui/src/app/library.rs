@@ -189,6 +189,11 @@ pub(crate) fn apply_search_suggestion_text(query: &str, suggestion: &str) -> Str
 impl LuminaApp {
     pub fn handle_ui_message(&mut self, msg: UiMessage, cx: &mut Context<Self>) {
         match msg {
+            UiMessage::LibraryEvent { generation, event } => {
+                if generation == self.library_generation {
+                    self.handle_ui_message(UiMessage::Engine(event), cx);
+                }
+            }
             UiMessage::Engine(evt) => {
                 let mut should_refresh_counts = false;
                 let mut should_clear_selection = false;
@@ -199,7 +204,10 @@ impl LuminaApp {
 
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
-                        EngineEvent::BatchDiscovered { .. } => {
+                        EngineEvent::BatchDiscovered { items } => {
+                            if let Some(scan) = self.first_scan.as_mut() {
+                                scan.add_items(&items);
+                            }
                             let new_total = state.engine.total_count();
                             let structural_change = new_total != state.total_count;
                             state.total_count = new_total;
@@ -217,14 +225,27 @@ impl LuminaApp {
                         EngineEvent::ScanProgress {
                             items_found,
                             is_complete,
+                            total,
+                            skipped,
+                            current_file,
                         } => {
                             state.scan_progress = items_found;
+                            if let Some(scan) = self.first_scan.as_mut() {
+                                scan.total = total;
+                                scan.skipped = skipped;
+                                scan.processed = items_found + skipped;
+                                if current_file.is_some() {
+                                    scan.current_file = current_file;
+                                }
+                            }
                             if is_complete {
                                 state.is_scanning = false;
                             }
                             cx.notify();
                         }
                         EngineEvent::ScanComplete { total_items } => {
+                            // Done: the library opens on its own.
+                            self.first_scan = None;
                             state.total_count = total_items;
                             state.is_scanning = false;
                             should_refresh_counts = true;
@@ -449,6 +470,9 @@ impl LuminaApp {
 
         // Share the config's resume map so playback positions recorded in the
         // grid are what the next config save writes to disk.
+        // An empty catalog gets the "Building your library" screen.
+        self.first_scan =
+            (engine.total_count() == 0).then(crate::app::first_scan::FirstScanState::new);
         let grid_state =
             GridState::with_resume_positions(engine, self.config.resume_positions.clone());
         if let Some(old) = self.grid_state.replace(grid_state) {
@@ -478,12 +502,16 @@ impl LuminaApp {
             let _ = handle.join();
         }
 
+        // The old library's cancelled scan still queues events (a final
+        // ScanComplete); the generation keeps them off the new library.
+        self.library_generation += 1;
+        let generation = self.library_generation;
         let tx = self.ui_tx.clone();
         self.event_receiver_thread = std::thread::Builder::new()
             .name("lumina-event-receiver".to_string())
             .spawn(move || {
                 for event in rx {
-                    let _ = tx.send_blocking(UiMessage::Engine(event));
+                    let _ = tx.send_blocking(UiMessage::LibraryEvent { generation, event });
                 }
             })
             .ok();
