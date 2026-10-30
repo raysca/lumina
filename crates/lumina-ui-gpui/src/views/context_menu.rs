@@ -2,6 +2,7 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::viewer_state::ViewerRotation;
 use crate::{AlbumSelection, LuminaApp};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::MediaItem;
 
@@ -46,7 +47,7 @@ impl MediaContextMenu {
 
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
-        let menu_w = 230.0;
+        let menu_w = 256.0;
         let menu_h = 470.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
@@ -91,12 +92,12 @@ impl MediaContextMenu {
                     .absolute()
                     .left(px(x))
                     .top(px(y))
-                    .w(px(230.0))
+                    .w(px(menu_w))
                     .max_h(px((win_h - 16.0).max(120.0)))
                     .overflow_y_scroll()
                     .bg(theme::bg_hud())
                     .border_1()
-                    .border_color(theme::border())
+                    .border_color(theme::border_strong())
                     .rounded_lg()
                     .shadow_2xl()
                     .p_1()
@@ -125,7 +126,7 @@ impl MediaContextMenu {
                             &hover,
                             "play-video-menu-btn",
                             "Play Video",
-                            None,
+                            Some("↵"),
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
@@ -192,8 +193,8 @@ impl MediaContextMenu {
                             .justify_between()
                             .items_center()
                             .child(div().text_xs().text_color(theme::text()).child("Rating"))
-                            .child(div().flex().flex_row().items_center().gap_1().children(
-                                (1..=5).map(|star_val| {
+                            .child(div().flex().flex_row().items_center().children((1..=5).map(
+                                |star_val| {
                                     let current_rating = app.get_item_rating(&item);
                                     let is_filled = star_val <= current_rating;
                                     div()
@@ -201,13 +202,14 @@ impl MediaContextMenu {
                                             "context-rating-star".into(),
                                             star_val as u64,
                                         ))
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(if is_filled {
-                                            theme::rating()
-                                        } else {
-                                            theme::text_disabled()
+                                        .debug_selector(move || {
+                                            format!("context-rating-star-{star_val}")
                                         })
+                                        .size(px(20.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .cursor_pointer()
                                         .child(render_icon(
                                             if is_filled {
                                                 Icon::StarFilled
@@ -226,8 +228,8 @@ impl MediaContextMenu {
                                                 this.set_rating_selected(star_val, cx);
                                             },
                                         ))
-                                }),
-                            )),
+                                },
+                            ))),
                     )
                     // 7. Interactive Color Label Row
                     .child(
@@ -240,76 +242,60 @@ impl MediaContextMenu {
                             .justify_between()
                             .items_center()
                             .child(div().text_xs().text_color(theme::text()).child("Label"))
-                            .child(
+                            .child({
+                                let current_label =
+                                    app.item_color_labels.get(&item.id).copied().unwrap_or(0);
+                                // 7 swatches of 14px: a hollow "No label" first,
+                                // then the colours; the chosen one gets a 2px
+                                // ring with a 2px gap.
+                                let labels: [(u8, Option<Rgba>, &'static str); 7] = [
+                                    (0, None, "No label"),
+                                    (1, Some(theme::label_red()), "Red"),
+                                    (2, Some(theme::label_orange()), "Orange"),
+                                    (3, Some(theme::label_yellow()), "Yellow"),
+                                    (4, Some(theme::label_green()), "Green"),
+                                    (5, Some(theme::label_blue()), "Blue"),
+                                    (6, Some(theme::label_purple()), "Purple"),
+                                ];
                                 div()
                                     .flex()
                                     .flex_row()
                                     .items_center()
-                                    .gap_1p5()
-                                    .child({
-                                        let current_label = app
-                                            .item_color_labels
-                                            .get(&item.id)
-                                            .copied()
-                                            .unwrap_or(0);
+                                    .gap(px(2.0))
+                                    .children(labels.into_iter().map(|(label_idx, color, name)| {
+                                        let swatch = div().size(px(14.0)).rounded_full();
+                                        let swatch = match color {
+                                            Some(c) => swatch.bg(c),
+                                            None => {
+                                                swatch.border_1().border_color(theme::text_muted())
+                                            }
+                                        };
                                         div()
-                                            .id("context-label-0")
-                                            .cursor_pointer()
-                                            .text_xs()
-                                            .text_color(if current_label == 0 {
-                                                theme::text()
-                                            } else {
-                                                theme::text_disabled()
+                                            .id(ElementId::NamedInteger(
+                                                "context-label".into(),
+                                                label_idx as u64,
+                                            ))
+                                            .debug_selector(move || {
+                                                format!("context-label-{label_idx}")
                                             })
-                                            .child("⊘")
+                                            .tooltip(theme::tooltip_label(name))
+                                            .size(px(22.0))
+                                            .rounded_full()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .cursor_pointer()
+                                            .when(current_label == label_idx, |ring| {
+                                                ring.border_2().border_color(theme::text())
+                                            })
+                                            .child(swatch)
                                             .on_click(cx.listener(
                                                 move |this, _e: &ClickEvent, _w, cx| {
-                                                    this.set_color_label_selected(0, cx);
+                                                    this.set_color_label_selected(label_idx, cx);
                                                 },
                                             ))
-                                    })
-                                    .children(
-                                        [
-                                            (1u8, theme::label_red()),
-                                            (2, theme::label_orange()),
-                                            (3, theme::label_yellow()),
-                                            (4, theme::label_green()),
-                                            (5, theme::label_blue()),
-                                            (6, theme::label_purple()),
-                                        ]
-                                        .into_iter()
-                                        .map(
-                                            |(label_idx, color)| {
-                                                let current_label = app
-                                                    .item_color_labels
-                                                    .get(&item.id)
-                                                    .copied()
-                                                    .unwrap_or(0);
-                                                let is_selected = current_label == label_idx;
-                                                let mut dot = div()
-                                                    .id(ElementId::NamedInteger(
-                                                        "context-label-dot".into(),
-                                                        label_idx as u64,
-                                                    ))
-                                                    .size(px(10.0))
-                                                    .rounded_full()
-                                                    .bg(color)
-                                                    .cursor_pointer();
-                                                if is_selected {
-                                                    dot =
-                                                        dot.border_1().border_color(theme::text());
-                                                }
-                                                dot.on_click(cx.listener(
-                                                    move |this, _e: &ClickEvent, _w, cx| {
-                                                        this.set_color_label_selected(
-                                                            label_idx, cx,
-                                                        );
-                                                    },
-                                                ))
-                                            },
-                                        ),
-                                    ),
-                            ),
+                                    }))
+                            }),
                     )
                     // Divider
                     .child(Self::render_divider())
@@ -325,29 +311,7 @@ impl MediaContextMenu {
                             this.begin_tagging_selection(cx);
                         }),
                     ))
-                    // 9. Add to Album
-                    .child(Self::render_submenu_item(
-                        &hover,
-                        "add-album-menu-btn",
-                        "Add to Album",
-                        false,
-                        cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.close_context_menu(cx);
-                            this.open_album_builder(cx);
-                        }),
-                    ))
-                    // 10. New Album from Selection
-                    .child(Self::render_menu_item(
-                        &hover,
-                        "new-album-sel-menu-btn",
-                        "New Album from Selection",
-                        None,
-                        false,
-                        cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.close_context_menu(cx);
-                            this.open_album_builder(cx);
-                        }),
-                    ))
+                    // No manual albums yet, so no Add to Album rows.
                     // 11. Export...
                     .child(Self::render_menu_item(
                         &hover,
@@ -540,31 +504,6 @@ impl MediaContextMenu {
         } else {
             Empty.into_any_element()
         };
-        Self::render_menu_row(
-            hover,
-            id_str,
-            label,
-            trailing,
-            is_destructive,
-            on_click_handler,
-        )
-    }
-
-    /// A menu row that opens a submenu, marked with a chevron instead of a
-    /// keyboard shortcut.
-    fn render_submenu_item(
-        hover: &RowHover,
-        id_str: &'static str,
-        label: &'static str,
-        is_destructive: bool,
-        on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> impl IntoElement {
-        let chevron = if hover.hovered == Some(id_str) && !is_destructive {
-            theme::accent_hint()
-        } else {
-            theme::text_subtle()
-        };
-        let trailing = render_icon(Icon::ChevronRight, px(12.0), chevron).into_any_element();
         Self::render_menu_row(
             hover,
             id_str,

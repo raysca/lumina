@@ -25,14 +25,11 @@ pub(crate) const GRID_CARD_GAP: f32 = 10.0;
 /// drift from the painted card box.
 pub(crate) const CARD_PADDING: f32 = 8.0;
 
-/// The card's 1px border on each side. Included in the card's fixed height.
-pub(crate) const CARD_BORDER: f32 = 1.0;
-
 /// Empty space below each card inside its uniform-list row, in pixels.
 pub(crate) const CARD_ROW_GAP: f32 = 10.0;
 
 /// Width of the pinned year rail when the timeline has buckets.
-pub(crate) const YEAR_RAIL_WIDTH: f32 = 32.0;
+pub(crate) const YEAR_RAIL_WIDTH: f32 = 44.0;
 
 /// Width of the collapsed sidebar rail (it never fully disappears).
 pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 48.0;
@@ -61,7 +58,7 @@ pub(crate) struct GridMetrics {
 /// Derives the square photo well and row height from the actual card width.
 ///
 /// The center pane loses the sidebar (or its 48px collapsed rail) plus a 4px
-/// resizer, the 32px year rail when it is painted, and the inspector plus its
+/// resizer, the 44px year rail when it is painted, and the inspector plus its
 /// 4px resizer when it is painted. Each row then loses
 /// `2 * GRID_ROW_PADDING_X` and `(columns - 1) * GRID_CARD_GAP` before the
 /// remaining width is split between the columns. The photo well is the card's
@@ -91,10 +88,9 @@ pub(crate) fn grid_metrics(
     let card_width = (grid_width - 2.0 * GRID_ROW_PADDING_X - GRID_CARD_GAP * (columns - 1.0))
         .max(0.0)
         / columns;
-    let photo_side =
-        (card_width - 2.0 * CARD_PADDING - 2.0 * CARD_BORDER).clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
+    let photo_side = (card_width - 2.0 * CARD_PADDING).clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
     GridMetrics {
-        row_height: photo_side + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER + CARD_ROW_GAP,
+        row_height: photo_side + 2.0 * CARD_PADDING + CARD_ROW_GAP,
         photo_side,
     }
 }
@@ -361,33 +357,33 @@ impl GridState {
 mod tests {
     use super::*;
 
-    const CARD_CHROME: f32 = CARD_ROW_GAP + 2.0 * CARD_PADDING + 2.0 * CARD_BORDER;
+    const CARD_CHROME: f32 = CARD_ROW_GAP + 2.0 * CARD_PADDING;
 
     #[core::prelude::v1::test]
     fn metrics_derive_expected_squares_at_default_window() {
-        // 1280px window, expanded sidebar (230 + 4px), year rail (32px), no inspector.
+        // 1280px window, expanded sidebar (230 + 4px), year rail (44px), no inspector.
         let four = grid_metrics(1280.0, 230.0, false, true, None, 4);
         assert!(
-            (four.photo_side - 220.0).abs() < 0.01,
+            (four.photo_side - 219.0).abs() < 0.01,
             "got {}",
             four.photo_side
         );
         assert!(
-            (four.row_height - 248.0).abs() < 0.01,
+            (four.row_height - 245.0).abs() < 0.01,
             "got {}",
             four.row_height
         );
 
         let two = grid_metrics(1280.0, 230.0, false, true, None, 2);
         assert!(
-            (two.photo_side - 468.0).abs() < 0.01,
+            (two.photo_side - 464.0).abs() < 0.01,
             "got {}",
             two.photo_side
         );
 
         let eight = grid_metrics(1280.0, 230.0, false, true, None, 8);
         assert!(
-            (eight.photo_side - 96.0).abs() < 0.01,
+            (eight.photo_side - 96.5).abs() < 0.01,
             "got {}",
             eight.photo_side
         );
@@ -395,10 +391,10 @@ mod tests {
 
     #[core::prelude::v1::test]
     fn metrics_account_for_each_layout_chrome() {
-        // Hidden year rail: the grid gains its 32px.
+        // Hidden year rail: the grid gains its 44px.
         let no_rail = grid_metrics(1280.0, 230.0, false, false, None, 4);
         assert!(
-            (no_rail.photo_side - 228.0).abs() < 0.01,
+            (no_rail.photo_side - 230.0).abs() < 0.01,
             "got {}",
             no_rail.photo_side
         );
@@ -406,7 +402,7 @@ mod tests {
         // Collapsed sidebar is a 48px rail with no resizer.
         let collapsed = grid_metrics(1280.0, 230.0, true, true, None, 4);
         assert!(
-            (collapsed.photo_side - 266.5).abs() < 0.01,
+            (collapsed.photo_side - 265.5).abs() < 0.01,
             "got {}",
             collapsed.photo_side
         );
@@ -414,7 +410,7 @@ mod tests {
         // Open inspector: its width plus the 4px resizer are gone from the grid.
         let with_inspector = grid_metrics(1280.0, 230.0, false, true, Some(310.0), 4);
         assert!(
-            (with_inspector.photo_side - 141.5).abs() < 0.01,
+            (with_inspector.photo_side - 140.5).abs() < 0.01,
             "got {}",
             with_inspector.photo_side
         );

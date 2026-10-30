@@ -5,47 +5,16 @@ use crate::theme;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
-/// Browsing Back toolbar control.
-///
-/// The same `debug_selector` is painted when disabled so automation can find
-/// the control at the edges instead of treating it as missing.
-fn navigation_button(
-    selector: &'static str,
-    icon: crate::icons::Icon,
-    tooltip: &'static str,
-    enabled: bool,
-    cx: &mut Context<LuminaApp>,
-) -> Stateful<Div> {
-    let base = div()
-        .id(selector)
-        .debug_selector(move || selector.to_string())
-        .tooltip(theme::tooltip_label(tooltip))
-        .w(px(28.0))
-        .h(px(28.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(6.0))
-        .border_1()
-        .border_color(theme::border())
-        .bg(theme::bg_control());
-    if enabled {
-        base.text_color(theme::text())
-            .cursor_pointer()
-            .hover(|style| style.bg(theme::bg_control_hover()))
-            .child(crate::icons::render_icon(icon, px(13.0), theme::text()))
-            .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                this.navigate_back(cx);
-            }))
+/// 28×28 icon-only toolbar button; the tooltip names the action.
+fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
+    if on {
+        theme::control_on(id)
     } else {
-        base.text_color(theme::text_disabled())
-            .cursor_not_allowed()
-            .child(crate::icons::render_icon(
-                icon,
-                px(13.0),
-                theme::text_disabled(),
-            ))
+        theme::control(id)
     }
+    .w(px(28.0))
+    .px_0()
+    .justify_center()
 }
 
 impl LuminaApp {
@@ -93,14 +62,7 @@ impl LuminaApp {
                     this.toggle_sidebar(cx);
                 })),
             )
-            // Browsing history: Back only (Forward was removed by design).
-            .child(navigation_button(
-                "nav-back",
-                crate::icons::Icon::ChevronLeft,
-                "Back (⌘[)",
-                self.can_navigate_back(),
-                cx,
-            ))
+            // Back is ⌘[ only; the design has no toolbar button for it.
             // Breadcrumb: Library / year-view
             .child(
                 div()
@@ -167,62 +129,62 @@ impl LuminaApp {
                     )
             }))
             .child(
-                theme::control("sort-toolbar-btn")
+                icon_button("sort-toolbar-btn", false)
                     .debug_selector(|| "sort-menu-button".to_string())
+                    .tooltip(theme::tooltip_label(format!("Sort: {}", self.sort_label())))
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Sliders,
-                        px(13.0),
+                        px(14.0),
                         theme::text_muted(),
                     ))
-                    .child(self.sort_label())
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.toggle_sort_menu(cx);
                     })),
             )
             .child(
-                theme::control("tags-toolbar-btn")
+                icon_button("tags-toolbar-btn", false)
                     .debug_selector(|| "tags-toolbar-btn".to_string())
+                    .tooltip(theme::tooltip_label("Tags"))
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Tag,
-                        px(13.0),
+                        px(14.0),
                         theme::text_muted(),
                     ))
-                    .child("Tags")
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.open_tag_manager(cx);
                     })),
             )
             .child(
-                if self.inspector_open {
-                    theme::control_on("inspector-toggle-btn")
-                } else {
-                    theme::control("inspector-toggle-btn")
-                }
-                .debug_selector(|| "inspector-toggle".to_string())
-                .child(crate::icons::render_icon(
-                    crate::icons::Icon::Info,
-                    px(13.0),
-                    if self.inspector_open {
-                        theme::selection_fg()
-                    } else {
-                        theme::text_muted()
-                    },
-                ))
-                .child("Info")
-                .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                    this.toggle_inspector(cx);
-                })),
+                icon_button("inspector-toggle-btn", self.inspector_open)
+                    .debug_selector(|| "inspector-toggle".to_string())
+                    .tooltip(theme::tooltip_label("Info (I)"))
+                    .child(crate::icons::render_icon(
+                        crate::icons::Icon::Info,
+                        px(14.0),
+                        if self.inspector_open {
+                            theme::selection_fg()
+                        } else {
+                            theme::text_muted()
+                        },
+                    ))
+                    .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                        this.toggle_inspector(cx);
+                    })),
             )
+            // ponytail: the design's primary is Import; Lumina has no import
+            // yet, so the amber slot switches the library folder.
             .child(
                 theme::control_primary("change-folder-btn")
                     .debug_selector(|| "switch-library".to_string())
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .tooltip(theme::tooltip_label("Switch Library…"))
+                    .w(px(28.0))
+                    .px_0()
+                    .justify_center()
                     .child(crate::icons::render_icon(
                         crate::icons::Icon::Folder,
-                        px(13.0),
+                        px(14.0),
                         theme::accent_fg(),
                     ))
-                    .child("Switch Library…")
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.pick_folder_dialog(cx);
                     })),

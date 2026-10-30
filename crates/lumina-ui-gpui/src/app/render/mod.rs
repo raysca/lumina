@@ -322,9 +322,7 @@ impl Render for LuminaApp {
             .child(self.render_error_banner(cx))
             // 1. Top 52px Toolbar
             .child(self.render_toolbar(&view_label, cx))
-            // 2. View bar: fit/square toggle and grid density
-            .child(SearchBarView::render(self, cx))
-            // 3. Workspace Horizontal Split: Sidebar + Resizer + Canvas + Year Rail + Resizer + Inspector
+            // 2. Workspace Horizontal Split: Sidebar + Resizer + Canvas + Year Rail + Resizer + Inspector
             .child(
                 div()
                     .flex_1()
@@ -356,9 +354,28 @@ impl Render for LuminaApp {
                     // Center Canvas: the browser grid is the only non-modal
                     // content. The media viewer is painted as a fullscreen
                     // overlay above it (see render_viewer_modal).
-                    .child(self.render_browser_grid(total_count, cx))
-                    // Pinned Vertical Year Rail
-                    .child(self.render_year_rail(cx))
+                    // The filter and status bars belong to this column, so
+                    // the sidebar and inspector run full height.
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .child(SearchBarView::render(self, cx))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .flex()
+                                    .flex_row()
+                                    .child(self.render_browser_grid(total_count, cx))
+                                    // Pinned Vertical Year Rail
+                                    .child(self.render_year_rail(cx)),
+                            )
+                            .child(self.render_status_bar(total_count)),
+                    )
                     // Inspector Resizer Drag Handle (260–380px)
                     .child(if inspector_open && !is_fullscreen_viewer {
                         div()
@@ -387,8 +404,6 @@ impl Render for LuminaApp {
                         Empty.into_any_element()
                     }),
             )
-            // 4. Bottom 28px Status Bar
-            .child(self.render_status_bar(total_count))
             // 5. Floating Multi-Select Action Dock (Bottom Center)
             .child(self.render_action_dock(is_fullscreen_viewer, cx))
             // 5b. Transient success toast (Bottom Right), below modals

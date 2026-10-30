@@ -105,17 +105,22 @@ impl LuminaApp {
         }
     }
 
+    /// Larger thumbnails: one step up the size slider's 5 levels.
     pub fn zoom_in_grid(&mut self, cx: &mut Context<Self>) {
-        if self.grid_columns > 2 {
-            self.grid_columns -= 1;
-            self.save_config();
-            cx.notify();
-        }
+        self.step_grid_size(1, cx);
     }
 
+    /// Smaller thumbnails: one step down the size slider's 5 levels.
     pub fn zoom_out_grid(&mut self, cx: &mut Context<Self>) {
-        if self.grid_columns < 8 {
-            self.grid_columns += 1;
+        self.step_grid_size(-1, cx);
+    }
+
+    fn step_grid_size(&mut self, step: isize, cx: &mut Context<Self>) {
+        use crate::views::search_bar::{size_level, SIZE_COLUMNS};
+        let level = (size_level(self.grid_columns) as isize + step)
+            .clamp(0, SIZE_COLUMNS.len() as isize - 1) as usize;
+        if self.grid_columns != SIZE_COLUMNS[level] {
+            self.grid_columns = SIZE_COLUMNS[level];
             self.save_config();
             cx.notify();
         }

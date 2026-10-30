@@ -166,38 +166,6 @@ pub(super) fn render_library_section(
         )
 }
 
-pub(super) fn render_events_section(
-    this: &LuminaApp,
-    cx: &mut Context<LuminaApp>,
-) -> impl IntoElement {
-    let years: Vec<(i32, usize)> = if this.grid_state.is_some() {
-        this.timeline_year_buckets.clone()
-    } else {
-        vec![(2026, 2), (2024, 3), (2023, 9), (2022, 5)]
-    };
-
-    div()
-        .flex()
-        .flex_col()
-        .gap_0p5()
-        .child(theme::section_label("EVENTS").px_2().pt(px(16.0)).pb_1())
-        .children(years.into_iter().map(|(year, count)| {
-            let is_active = this.active_year == Some(year);
-            render_nav_item(
-                &year.to_string(),
-                count,
-                is_active,
-                cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    if this.active_year == Some(year) {
-                        this.set_active_year(None, cx);
-                    } else {
-                        this.set_active_year(Some(year), cx);
-                    }
-                }),
-            )
-        }))
-}
-
 fn render_user_smart_album_row(
     _this: &LuminaApp,
     album: &SmartAlbum,
@@ -209,6 +177,7 @@ fn render_user_smart_album_row(
     let edit_album = album.clone();
     div()
         .id(("smart-album-row", album_id as u64))
+        .group("smart-album-row")
         .debug_selector(move || format!("smart-album-row-{album_id}"))
         .flex()
         .flex_row()
@@ -256,13 +225,18 @@ fn render_user_smart_album_row(
             div()
                 .id(("smart-album-edit", album_id as u64))
                 .debug_selector(move || format!("smart-album-edit-{album_id}"))
+                // Row actions appear on hover only (v3 sidebar).
+                .opacity(0.0)
+                .group_hover("smart-album-row", |s| s.opacity(1.0))
                 .px_1()
                 .rounded_sm()
                 .cursor_pointer()
-                .text_xs()
-                .text_color(theme::text_subtle())
-                .hover(|s| s.text_color(theme::accent()))
-                .child("✎")
+                .tooltip(theme::tooltip_label("Edit rules"))
+                .child(crate::icons::render_icon(
+                    crate::icons::Icon::Pencil,
+                    px(11.0),
+                    theme::text_subtle(),
+                ))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
                     this.open_album_builder_for_edit(edit_album.clone(), cx);
@@ -272,13 +246,18 @@ fn render_user_smart_album_row(
             div()
                 .id(("smart-album-delete", album_id as u64))
                 .debug_selector(move || format!("smart-album-delete-{album_id}"))
+                // Row actions appear on hover only (v3 sidebar).
+                .opacity(0.0)
+                .group_hover("smart-album-row", |s| s.opacity(1.0))
                 .px_1()
                 .rounded_sm()
                 .cursor_pointer()
-                .text_xs()
-                .text_color(theme::text_subtle())
-                .hover(|s| s.text_color(theme::danger_text()))
-                .child("×")
+                .tooltip(theme::tooltip_label("Delete smart album"))
+                .child(crate::icons::render_icon(
+                    crate::icons::Icon::X,
+                    px(11.0),
+                    theme::text_subtle(),
+                ))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
                     this.delete_smart_album(album_id, cx);
@@ -321,9 +300,12 @@ pub(super) fn render_smart_albums_section(
                         .justify_center()
                         .items_center()
                         .cursor_pointer()
-                        .text_sm()
-                        .text_color(theme::text_subtle())
-                        .child("+")
+                        .tooltip(theme::tooltip_label("New smart album (⌥⌘N)"))
+                        .child(crate::icons::render_icon(
+                            crate::icons::Icon::Plus,
+                            px(12.0),
+                            theme::text_subtle(),
+                        ))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.open_album_builder(cx);
                         })),
@@ -354,6 +336,19 @@ pub(super) fn render_smart_albums_section(
                 })
                 .collect::<Vec<_>>()
         })
+        // Untagged is a built-in smart album (v3 sidebar).
+        .child(render_nav_item(
+            "Untagged",
+            this.untagged_count,
+            this.selection == AlbumSelection::Untagged,
+            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                if this.selection == AlbumSelection::Untagged {
+                    this.select_album(AlbumSelection::AllLibrary, cx);
+                } else {
+                    this.select_album(AlbumSelection::Untagged, cx);
+                }
+            }),
+        ))
 }
 
 pub(super) fn render_tags_section(
@@ -400,18 +395,6 @@ pub(super) fn render_tags_section(
                         })),
                 ),
         )
-        .child(render_nav_item(
-            "Untagged",
-            this.untagged_count,
-            this.selection == AlbumSelection::Untagged,
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                if this.selection == AlbumSelection::Untagged {
-                    this.select_album(AlbumSelection::AllLibrary, cx);
-                } else {
-                    this.select_album(AlbumSelection::Untagged, cx);
-                }
-            }),
-        ))
         .children(
             tags.iter()
                 .map(|(tag_name, count)| {

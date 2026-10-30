@@ -38,6 +38,8 @@ pub enum Icon {
     Folder,
     Film,
     Sliders,
+    Plus,
+    Pencil,
 }
 
 impl Icon {
@@ -80,6 +82,8 @@ impl Icon {
         Icon::Folder,
         Icon::Film,
         Icon::Sliders,
+        Icon::Plus,
+        Icon::Pencil,
     ];
 
     pub fn path(self) -> &'static str {
@@ -119,6 +123,8 @@ impl Icon {
             Self::Folder => "icons/folder.svg",
             Self::Film => "icons/film.svg",
             Self::Sliders => "icons/sliders.svg",
+            Self::Plus => "icons/plus.svg",
+            Self::Pencil => "icons/pencil.svg",
         }
     }
 }

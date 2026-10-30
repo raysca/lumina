@@ -83,10 +83,6 @@ impl NavigationHistory {
         }
     }
 
-    pub(crate) fn can_go_back(&self) -> bool {
-        !self.restoring && self.cursor > 0
-    }
-
     pub(crate) fn is_restoring(&self) -> bool {
         self.restoring
     }
@@ -214,12 +210,6 @@ impl LuminaApp {
     /// jumps, not user navigation, so they never create a Back entry.
     pub(crate) fn reset_navigation_history(&mut self) {
         self.navigation_history = NavigationHistory::new(self.navigation_snapshot());
-    }
-
-    pub fn can_navigate_back(&self) -> bool {
-        let current = self.navigation_snapshot();
-        self.navigation_history.can_go_back()
-            || self.navigation_history.has_pending_destination(&current)
     }
 
     pub fn navigate_back(&mut self, cx: &mut Context<Self>) {

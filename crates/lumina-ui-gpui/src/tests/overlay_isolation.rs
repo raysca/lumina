@@ -52,18 +52,15 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
 
-    let info = vcx
-        .debug_bounds("viewer-info-btn")
-        .expect("the viewer must paint its Info button");
-    let sort = vcx
-        .debug_bounds("sort-menu-button")
-        .expect("the toolbar must paint its sort button");
-    let overlap = info.intersect(&sort);
-    assert!(
-        f32::from(overlap.size.width) > 0.0 && f32::from(overlap.size.height) > 0.0,
-        "test premise: viewer Info must sit over toolbar Sort; info={info:?} sort={sort:?}"
-    );
-
+    // The toolbar is icon-only now and no longer sits under viewer Info, so
+    // click the toolbar's Sort position itself: the viewer must swallow it.
+    click(vcx, "sort-menu-button");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.sort_menu_open,
+            "a click over the hidden toolbar must not reach Sort"
+        );
+    });
     click(vcx, "viewer-info-btn");
     view.update(vcx, |app, _| {
         assert!(
@@ -86,17 +83,13 @@ fn viewer_open_click_does_not_open_tag_manager() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
 
-    let open = vcx
-        .debug_bounds("viewer-quicktime-btn")
-        .expect("the viewer must paint its Open button");
-    let tags = vcx
-        .debug_bounds("tags-toolbar-btn")
-        .expect("the toolbar must paint its Tags button");
-    let overlap = open.intersect(&tags);
-    assert!(
-        f32::from(overlap.size.width) > 0.0 && f32::from(overlap.size.height) > 0.0,
-        "test premise: viewer Open must sit over toolbar Tags; open={open:?} tags={tags:?}"
-    );
+    click(vcx, "tags-toolbar-btn");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.tag_manager.open,
+            "a click over the hidden toolbar must not reach Tags"
+        );
+    });
 
     click(vcx, "viewer-quicktime-btn");
     view.update(vcx, |app, _| {

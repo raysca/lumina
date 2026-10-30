@@ -25,6 +25,8 @@ pub enum CommandId {
     ToggleFit,
     ZoomInGrid,
     ZoomOutGrid,
+    /// Filter-bar chip (dims non-matching items).
+    Filter(crate::views::search_bar::GridFilter),
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
     ToggleFavorite,
@@ -156,6 +158,36 @@ pub fn commands() -> &'static [Command] {
             key: "command.zoom_out",
             shortcut: "⌘-",
             keywords: "columns density smaller",
+        },
+        Command {
+            id: CommandId::Filter(crate::views::search_bar::GridFilter::All),
+            key: "command.filter_all",
+            shortcut: "",
+            keywords: "filter show everything clear",
+        },
+        Command {
+            id: CommandId::Filter(crate::views::search_bar::GridFilter::Favorites),
+            key: "command.filter_favorites",
+            shortcut: "",
+            keywords: "filter hearts loved",
+        },
+        Command {
+            id: CommandId::Filter(crate::views::search_bar::GridFilter::Videos),
+            key: "command.filter_videos",
+            shortcut: "",
+            keywords: "filter movies clips",
+        },
+        Command {
+            id: CommandId::Filter(crate::views::search_bar::GridFilter::ThreeStars),
+            key: "command.filter_three_stars",
+            shortcut: "",
+            keywords: "filter rating 3 stars best",
+        },
+        Command {
+            id: CommandId::Filter(crate::views::search_bar::GridFilter::Labeled),
+            key: "command.filter_labeled",
+            shortcut: "",
+            keywords: "filter colour color label",
         },
         Command {
             id: CommandId::Rate(1),
@@ -302,6 +334,10 @@ impl LuminaApp {
             }
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
+            CommandId::Filter(filter) => {
+                self.grid_filter = filter;
+                cx.notify();
+            }
             CommandId::Rate(rating) => self.set_rating_selected(rating, cx),
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)

@@ -12,13 +12,16 @@ impl LuminaApp {
         let years: Vec<i32> = self.timeline_year_buckets.iter().map(|(y, _)| *y).collect();
 
         div()
-            .w(px(32.0))
+            .w(px(crate::views::grid::YEAR_RAIL_WIDTH))
             .h_full()
+            .flex_shrink_0()
+            .border_l_1()
+            .border_color(rgb(0x222326))
             .flex()
             .flex_col()
             .items_center()
             .pt_3()
-            .gap_2()
+            .gap(px(18.0))
             .children(years.into_iter().map(|year| {
                 let short_year = format!("'{:02}", year.rem_euclid(100));
                 let is_active = self.active_year == Some(year);
@@ -36,7 +39,8 @@ impl LuminaApp {
                         rgba(0x00000000)
                     })
                     .cursor_pointer()
-                    .text_xs()
+                    .text_size(px(10.0))
+                    .font_family(theme::FONT_MONO)
                     .font_weight(if is_active {
                         FontWeight::BOLD
                     } else {

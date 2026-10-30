@@ -336,6 +336,12 @@ pub struct LuminaApp {
     pub is_immersive_fullscreen: bool,
     pub immersive_hud_visible: bool,
     pub card_fit_mode: bool,
+    /// Filter-bar chip; non-matching cards dim instead of hiding.
+    pub grid_filter: crate::views::search_bar::GridFilter,
+    /// Painted x of the thumbnail size slider, for pointer-to-level math.
+    pub size_slider_left: f32,
+    /// A press started on the size slider; only then do moves resize.
+    pub size_slider_dragging: bool,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
     /// Most recent action feedback shown in the status bar.
@@ -497,6 +503,9 @@ impl LuminaApp {
             is_immersive_fullscreen: false,
             immersive_hud_visible: true,
             card_fit_mode: config.card_fit_mode,
+            grid_filter: Default::default(),
+            size_slider_left: 0.0,
+            size_slider_dragging: false,
             error_message: None,
             last_action: None,
             toast: crate::views::toast::ToastState::default(),
@@ -661,8 +670,7 @@ impl LuminaApp {
             .window_bounds
             .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width);
         let inspector_width =
-            (self.inspector_open && self.selected_item.is_some() && !self.is_fullscreen_viewer)
-                .then_some(self.inspector_width);
+            (self.inspector_open && !self.is_fullscreen_viewer).then_some(self.inspector_width);
         grid_metrics(
             window_width,
             self.sidebar_width,

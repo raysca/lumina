@@ -176,13 +176,13 @@ fn ui_automation_renders_all_core_controls() {
     assert!(vcx.debug_bounds("app-root").is_some());
     let selectors = [
         "sidebar-toggle",
-        "nav-back",
         "search-input",
         "switch-library",
         "inspector-toggle",
         "breadcrumb-library",
         "fit-mode-fit",
-        "grid-zoom-in",
+        "thumb-size-slider",
+        "filter-chip-all",
         "open-tag-manager",
         "new-smart-album",
     ];
@@ -212,10 +212,18 @@ fn ui_automation_toolbar_buttons_by_mouse() {
     click(vcx, "fit-mode-fit");
     view.update(vcx, |app, _| assert!(app.card_fit_mode));
 
-    let before = view.update(vcx, |app, _| app.grid_columns);
-    click(vcx, "grid-zoom-in");
-    let after = view.update(vcx, |app, _| app.grid_columns);
-    assert_ne!(before, after, "grid zoom button must change column count");
+    // The size slider: the right end is the largest thumbnails (2 columns),
+    // the left end the smallest (8).
+    let slider = vcx.debug_bounds("thumb-size-slider").expect("size slider");
+    let mid_y = f32::from(slider.center().y);
+    click_point(vcx, f32::from(slider.right()) - 1.0, mid_y);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.grid_columns, 2, "right end = largest")
+    });
+    click_point(vcx, f32::from(slider.left()) + 1.0, mid_y);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.grid_columns, 8, "left end = smallest")
+    });
 
     click(vcx, "inspector-toggle");
     view.update(vcx, |app, _| assert!(app.inspector_open));
@@ -532,9 +540,16 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
     let selected_h = f32::from(selected_bounds.size.height);
     let photo_w = f32::from(photo_bounds.size.width);
     let photo_h = f32::from(photo_bounds.size.height);
+    // v3: a 2px ring with a 2px gap outside the well, so 4px on each side.
     assert!(
-        (selected_w - photo_w).abs() <= 1.0 && (selected_h - photo_h).abs() <= 1.0,
-        "the highlight must trace the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
+        (selected_w - photo_w - 8.0).abs() <= 1.0 && (selected_h - photo_h - 8.0).abs() <= 1.0,
+        "the ring must sit 4px outside the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
+    );
+    assert!(
+        (f32::from(photo_bounds.left()) - f32::from(selected_bounds.left()) - 4.0).abs() <= 1.0
+            && (f32::from(photo_bounds.top()) - f32::from(selected_bounds.top()) - 4.0).abs()
+                <= 1.0,
+        "the ring must be centred on the well: photo={photo_bounds:?} selected={selected_bounds:?}"
     );
     assert!(
         (selected_w - selected_h).abs() <= 2.0,
@@ -1306,7 +1321,7 @@ fn ui_automation_navigation_album_back() {
         );
     });
 
-    click(vcx, "nav-back");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
@@ -1316,7 +1331,7 @@ fn ui_automation_navigation_album_back() {
     });
 
     // Edge: nothing precedes the oldest entry, so Back is a disabled no-op.
-    click(vcx, "nav-back");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
@@ -1340,7 +1355,7 @@ fn ui_automation_navigation_search_back() {
         assert_eq!(app.search_query, "is:video");
     });
 
-    click(vcx, "nav-back");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert!(
             app.search_query.is_empty(),
@@ -1408,7 +1423,7 @@ fn ui_automation_navigation_edge_no_ops() {
     keystrokes(vcx, "secondary-[");
     // Cmd+] is no longer a navigation shortcut.
     keystrokes(vcx, "secondary-]");
-    click(vcx, "nav-back");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
         assert!(app.search_query.is_empty());
@@ -1421,7 +1436,7 @@ fn ui_automation_navigation_edge_no_ops() {
     });
     render_ui(vcx);
 
-    click(vcx, "nav-back");
+    keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });

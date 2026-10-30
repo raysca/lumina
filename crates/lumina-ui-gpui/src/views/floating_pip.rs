@@ -28,9 +28,23 @@ pub struct FloatingPipPlayerView {
     pub app: WeakEntity<LuminaApp>,
     /// This window's id, sent on close so the app can ignore a stale window.
     pub window_id: WindowId,
-    pub is_hovered: bool,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub _subscription: Option<Subscription>,
+}
+
+/// 20px icon-only PiP control; the tooltip names it.
+fn pip_icon_button(id: &'static str, icon: Icon, tooltip: &'static str) -> Stateful<Div> {
+    div()
+        .id(id)
+        .tooltip(theme::tooltip_label(tooltip))
+        .size(px(20.0))
+        .rounded_md()
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::bg_control_hover()))
+        .child(render_icon(icon, px(12.0), theme::text()))
 }
 
 impl FloatingPipPlayerView {
@@ -48,7 +62,6 @@ impl FloatingPipPlayerView {
         Self {
             app,
             window_id: window.window_handle().window_id(),
-            is_hovered: false,
             ui_tx,
             _subscription,
         }
@@ -96,7 +109,6 @@ impl Render for FloatingPipPlayerView {
             .map(|item| item.file_name.clone())
             .unwrap_or_default();
         let is_playing = app_read.video.is_playing;
-        let is_muted = app_read.video.is_muted;
         let current_time = app_read.video.playback_time;
         let duration = app_read.video.duration;
         let time_progress = scrub_progress_fraction(current_time, duration);
@@ -110,10 +122,8 @@ impl Render for FloatingPipPlayerView {
         );
 
         let app_toggle_play = self.app.clone();
-        let app_toggle_mute = self.app.clone();
         let app_return_viewer = self.app.clone();
         let app_close = self.app.clone();
-        let is_hovered = self.is_hovered;
 
         div()
             .id("floating-pip-container")
@@ -121,12 +131,6 @@ impl Render for FloatingPipPlayerView {
             .bg(theme::bg_media())
             .relative()
             .overflow_hidden()
-            .on_hover(cx.listener(|this, hovered: &bool, _w, cx| {
-                if this.is_hovered != *hovered {
-                    this.is_hovered = *hovered;
-                    cx.notify();
-                }
-            }))
             // Video Frame Surface (Draggable by window)
             .child(
                 div()
@@ -155,8 +159,8 @@ impl Render for FloatingPipPlayerView {
                             .into_any_element()
                     }),
             )
-            // Hover Overlay: Top Control Bar (Window Drag, Return to Fullscreen, Close)
-            .child(if is_hovered {
+            // Title bar (always visible): mono filename, Expand, Close.
+            .child(
                 div()
                     .absolute()
                     // Presses on the controls must not reach the video surface,
@@ -165,123 +169,92 @@ impl Render for FloatingPipPlayerView {
                     .top_0()
                     .left_0()
                     .right_0()
-                    .p_2()
+                    .h(px(26.0))
+                    .px_2()
                     .bg(theme::scrim())
-                    .border_b_1()
-                    .border_color(theme::border_subtle())
                     .flex()
                     .flex_row()
-                    .justify_between()
                     .items_center()
+                    .gap_1()
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(theme::accent())
-                                    .child(render_icon(Icon::Pip, px(12.0), theme::accent())),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text())
-                                    .max_w(px(260.0))
-                                    .truncate()
-                                    .child(title),
-                            ),
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(11.0))
+                            .font_family(theme::FONT_MONO)
+                            .text_color(theme::text_muted())
+                            .child(title),
                     )
                     .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            // Return to Main Viewer Button
-                            .child(
-                                div()
-                                    .id("pip-return-to-viewer-btn")
-                                    .debug_selector(|| "pip-expand".to_string())
-                                    .tooltip(theme::tooltip_label("Expand to main viewer"))
-                                    .px_2()
-                                    .py_0p5()
-                                    .bg(theme::bg_control())
-                                    .hover(|s| s.bg(theme::accent()).text_color(theme::accent_fg()))
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_1p5()
-                                    .text_xs()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
-                                    .child(render_icon(Icon::ExternalLink, px(12.0), theme::text()))
-                                    .child("Expand")
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, window, cx| {
-                                            if let Some(app_entity) = app_return_viewer.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.expand_pip_to_viewer(cx);
-                                                });
-                                            }
-                                            window.remove_window();
-                                        },
-                                    )),
-                            )
-                            // Close PiP Button
-                            .child(
-                                div()
-                                    .id("pip-close-btn")
-                                    .debug_selector(|| "pip-close".to_string())
-                                    .tooltip(theme::tooltip_label("Close PiP"))
-                                    .w(px(20.0))
-                                    .h(px(20.0))
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme::danger()))
-                                    .flex()
-                                    .justify_center()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .text_color(theme::text())
-                                    .child(render_icon(Icon::X, px(11.0), theme::text()))
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, window, cx| {
-                                            if let Some(app_entity) = app_close.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.close_pip(cx);
-                                                });
-                                            }
-                                            window.remove_window();
-                                        },
-                                    )),
-                            ),
+                        pip_icon_button(
+                            "pip-return-to-viewer-btn",
+                            Icon::Maximize,
+                            "Expand to viewer",
+                        )
+                        .debug_selector(|| "pip-expand".to_string())
+                        .on_click(cx.listener(
+                            move |_this, _e: &ClickEvent, window, cx| {
+                                if let Some(app_entity) = app_return_viewer.upgrade() {
+                                    app_entity.update(cx, |app, cx| {
+                                        app.expand_pip_to_viewer(cx);
+                                    });
+                                }
+                                window.remove_window();
+                            },
+                        )),
                     )
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
-            // Hover Overlay: Bottom Playback Controls
-            .child(if is_hovered {
+                    .child(
+                        pip_icon_button("pip-close-btn", Icon::X, "Close")
+                            .debug_selector(|| "pip-close".to_string())
+                            .on_click(cx.listener(move |_this, _e: &ClickEvent, window, cx| {
+                                if let Some(app_entity) = app_close.upgrade() {
+                                    app_entity.update(cx, |app, cx| {
+                                        app.close_pip(cx);
+                                    });
+                                }
+                                window.remove_window();
+                            })),
+                    ),
+            )
+            // Control pill (always visible), inset 8px: play, track, time.
+            .child(
                 div()
                     .absolute()
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
-                    .bottom_0()
-                    .left_0()
-                    .right_0()
-                    .p_2()
+                    .bottom(px(8.0))
+                    .left(px(8.0))
+                    .right(px(8.0))
+                    .h(px(28.0))
+                    .px_1()
+                    .rounded_full()
                     .bg(theme::scrim())
-                    .border_t_1()
-                    .border_color(theme::border_subtle())
                     .flex()
-                    .flex_col()
-                    .gap_1p5()
-                    // Mini scrubber track (interactive click-to-seek + relative width)
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        pip_icon_button(
+                            "pip-play-pause-btn",
+                            if is_playing { Icon::Pause } else { Icon::Play },
+                            if is_playing {
+                                "Pause (Space)"
+                            } else {
+                                "Play (Space)"
+                            },
+                        )
+                        .debug_selector(|| "pip-play-pause".to_string())
+                        .on_click(cx.listener(
+                            move |_this, _e: &ClickEvent, _w, cx| {
+                                if let Some(app_entity) = app_toggle_play.upgrade() {
+                                    app_entity.update(cx, |app, cx| {
+                                        app.toggle_video_play(cx);
+                                    });
+                                }
+                            },
+                        )),
+                    )
+                    // 3px track with a click-to-seek hit row over it.
                     .child({
                         let mut hit_row = div().absolute().inset_0().flex().flex_row();
                         for i in 0..PIP_SCRUB_SEGMENTS {
@@ -303,141 +276,40 @@ impl Render for FloatingPipPlayerView {
                                     )),
                             );
                         }
-
                         div()
                             .id("pip-scrub-track")
-                            .w_full()
-                            .h(px(6.0))
-                            .bg(theme::bg_control_hover())
-                            .rounded_full()
-                            .cursor_pointer()
+                            .debug_selector(|| "pip-scrub-track".to_string())
+                            .flex_1()
+                            .h(px(14.0))
                             .relative()
-                            .overflow_hidden()
+                            .flex()
+                            .items_center()
+                            .cursor_pointer()
                             .child(
                                 div()
-                                    .h_full()
-                                    .w(relative(time_progress as f32))
-                                    .bg(theme::accent())
-                                    .rounded_full(),
+                                    .w_full()
+                                    .h(px(3.0))
+                                    .rounded_full()
+                                    .bg(theme::bg_control_hover())
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .w(relative(time_progress))
+                                            .rounded_full()
+                                            .bg(theme::accent()),
+                                    ),
                             )
                             .child(hit_row)
                     })
-                    // Bottom actions row: Play/Pause, Time, Mute
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_2()
-                                    // Play / Pause Button
-                                    .child(
-                                        div()
-                                            .id("pip-play-pause-btn")
-                                            .debug_selector(|| "pip-play-pause".to_string())
-                                            .tooltip(theme::tooltip_label("Play/Pause"))
-                                            .px_2()
-                                            .py_0p5()
-                                            .bg(if is_playing {
-                                                theme::accent()
-                                            } else {
-                                                theme::bg_control()
-                                            })
-                                            .hover(|s| {
-                                                s.bg(theme::accent()).text_color(theme::accent_fg())
-                                            })
-                                            .rounded_md()
-                                            .cursor_pointer()
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap_1p5()
-                                            .text_xs()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(theme::text())
-                                            .child(render_icon(
-                                                if is_playing { Icon::Pause } else { Icon::Play },
-                                                px(11.0),
-                                                theme::text(),
-                                            ))
-                                            .child(if is_playing { "Pause" } else { "Play" })
-                                            .on_click(cx.listener(
-                                                move |_this, _e: &ClickEvent, _w, cx| {
-                                                    if let Some(app_entity) =
-                                                        app_toggle_play.upgrade()
-                                                    {
-                                                        app_entity.update(cx, |app, cx| {
-                                                            app.toggle_video_play(cx);
-                                                        });
-                                                    }
-                                                },
-                                            )),
-                                    )
-                                    // Time Indicator
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme::text_muted())
-                                            .child(time_display),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_2()
-                                    // Mute Button
-                                    .child(
-                                        div()
-                                            .id("pip-mute-btn")
-                                            .debug_selector(|| "pip-mute".to_string())
-                                            .tooltip(theme::tooltip_label("Mute"))
-                                            .px_2()
-                                            .py_0p5()
-                                            .bg(if is_muted {
-                                                theme::danger_bg()
-                                            } else {
-                                                theme::bg_control()
-                                            })
-                                            .hover(|s| s.bg(theme::bg_control_hover()))
-                                            .rounded_md()
-                                            .cursor_pointer()
-                                            .text_xs()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(theme::text())
-                                            .child(render_icon(
-                                                if is_muted {
-                                                    Icon::VolumeX
-                                                } else {
-                                                    Icon::Volume
-                                                },
-                                                px(12.0),
-                                                theme::text(),
-                                            ))
-                                            .on_click(cx.listener(
-                                                move |_this, _e: &ClickEvent, _w, cx| {
-                                                    if let Some(app_entity) =
-                                                        app_toggle_mute.upgrade()
-                                                    {
-                                                        app_entity.update(cx, |app, cx| {
-                                                            app.toggle_video_mute(cx);
-                                                        });
-                                                    }
-                                                },
-                                            )),
-                                    ),
-                            ),
-                    )
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
+                            .pr_2()
+                            .text_size(px(10.0))
+                            .font_family(theme::FONT_MONO)
+                            .text_color(theme::text_muted())
+                            .child(time_display),
+                    ),
+            )
             .into_any_element()
     }
 }

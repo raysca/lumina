@@ -16,7 +16,7 @@ pub(crate) fn format_status_right(
     if let Some(action) = last_action {
         return action.to_string();
     }
-    "⌘R rescan · Right-click for actions".to_string()
+    "Right-click any item for actions".to_string()
 }
 
 impl LuminaApp {
@@ -37,6 +37,7 @@ impl LuminaApp {
             .unwrap_or((false, 0));
 
         div()
+            .debug_selector(|| "status-bar".to_string())
             .h(px(28.0))
             .w_full()
             .bg(theme::bg_app())
@@ -99,7 +100,7 @@ mod tests {
     fn falls_back_to_shortcut_hint() {
         assert_eq!(
             format_status_right(false, 0, None),
-            "⌘R rescan · Right-click for actions"
+            "Right-click any item for actions"
         );
     }
 }

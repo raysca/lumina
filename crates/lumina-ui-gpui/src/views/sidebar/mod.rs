@@ -86,15 +86,17 @@ impl SidebarView {
         }
 
         div()
+            .debug_selector(|| "sidebar".to_string())
             .w(px(this.sidebar_width))
             .h_full()
-            .bg(theme::bg_app())
+            .bg(theme::bg_pane())
             .border_r_1()
-            .border_color(theme::border())
+            .border_color(theme::border_subtle())
             .flex()
             .flex_col()
             .justify_between()
-            .p_3()
+            .py(px(4.0))
+            .px(px(8.0))
             .text_color(theme::text())
             .child(
                 div()
@@ -105,7 +107,6 @@ impl SidebarView {
                     .gap_0()
                     .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
-                    .child(sections::render_events_section(this, cx))
                     .child(sections::render_smart_albums_section(this, cx))
                     .child(sections::render_tags_section(this, cx)),
             )

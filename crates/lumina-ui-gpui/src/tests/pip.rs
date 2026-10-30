@@ -431,16 +431,11 @@ fn the_pip_window_close_button_ends_the_session() {
         .update(vcx, |app, _| app.floating_pip_window)
         .expect("the PiP window must open");
     let mut pip = gpui::VisualTestContext::from_window(handle, &vcx.cx);
-    // The controls appear on hover.
-    pip.simulate_mouse_move(
-        gpui::point(gpui::px(240.0), gpui::px(135.0)),
-        None,
-        gpui::Modifiers::default(),
-    );
+    // The chrome is always visible: no hover first.
     pip.run_until_parked();
     let close = pip
         .debug_bounds("pip-close")
-        .expect("hovering PiP must show its close button");
+        .expect("PiP always shows its close button");
     pip.simulate_click(close.center(), gpui::Modifiers::default());
     pip.run_until_parked();
     view.update(vcx, |app, _| {
@@ -467,15 +462,10 @@ fn the_pip_window_expand_button_returns_the_video_to_the_viewer() {
         .update(vcx, |app, _| app.floating_pip_window)
         .expect("the PiP window must open");
     let mut pip = gpui::VisualTestContext::from_window(handle, &vcx.cx);
-    pip.simulate_mouse_move(
-        gpui::point(gpui::px(240.0), gpui::px(135.0)),
-        None,
-        gpui::Modifiers::default(),
-    );
     pip.run_until_parked();
     let expand = pip
         .debug_bounds("pip-expand")
-        .expect("hovering PiP must show Expand");
+        .expect("PiP always shows Expand");
     pip.simulate_click(expand.center(), gpui::Modifiers::default());
     pip.run_until_parked();
     view.update(vcx, |app, _| {

@@ -148,6 +148,12 @@ impl LuminaApp {
                                 let item_rating = this.get_item_rating(item);
                                 let item_color = this.get_item_color_label(item);
                                 let is_video = item.media_type == MediaType::Video;
+                                let dimmed = !this.grid_filter.matches(
+                                    is_fav,
+                                    is_video,
+                                    item_rating,
+                                    item_color.is_some(),
+                                );
 
                                 let texture = if let Some(ref state) = this.grid_state {
                                     let mut cache = state.texture_cache.lock();
@@ -190,6 +196,7 @@ impl LuminaApp {
                                         .flex_1()
                                         .h(px(row_h - CARD_ROW_GAP))
                                         .p(px(CARD_PADDING))
+                                        .relative()
                                         // No card surface and no border: the thumbnail sits
                                         // directly on the library background (FIXES.md).
                                         // Selection is the only chrome, drawn as a full-card
@@ -293,6 +300,22 @@ impl LuminaApp {
                                                 // the thumbnail is missing; a decoded image
                                                 // has no background around it.
                                                 .bg(photo_background)
+                                                // Filter chips dim, never hide.
+                                                // (The marker child carries the automation
+                                                // selector; the well already has one.)
+                                                .when(dimmed, |well| {
+                                                    well.opacity(0.22).child(
+                                                        div()
+                                                            .debug_selector(move || {
+                                                                format!(
+                                                                    "media-card-dimmed-{}",
+                                                                    item_id_num
+                                                                )
+                                                            })
+                                                            .absolute()
+                                                            .inset_0(),
+                                                    )
+                                                })
                                                 // Square well and square highlight: no
                                                 // corner radius on the thumbnail (FIXES.md).
                                                 .overflow_hidden()
@@ -402,13 +425,13 @@ impl LuminaApp {
                                                 .child(if is_video && !dur_text.is_empty() {
                                                     div()
                                                         .absolute()
-                                                        .bottom_1p5()
-                                                        .right_1p5()
-                                                        .px_1()
-                                                        .py_0p5()
-                                                        .rounded_sm()
-                                                        .bg(rgba(0x000000d0))
-                                                        .text_xs()
+                                                        .bottom_1()
+                                                        .right_1()
+                                                        .h(px(18.0))
+                                                        .px(px(5.0))
+                                                        .rounded(px(3.0))
+                                                        .bg(rgba(0x00000099))
+                                                        .text_size(px(10.0))
                                                         .font_family(theme::FONT_MONO)
                                                         .flex()
                                                         .flex_row()
@@ -425,28 +448,30 @@ impl LuminaApp {
                                                 } else {
                                                     Empty.into_any_element()
                                                 })
-                                                // Selection highlight: the accent outline
-                                                // only. There is no check badge (FIXES.md);
-                                                // the card border already carries the state.
-                                                .child(if is_selected {
-                                                    div()
-                                                        .debug_selector(move || {
-                                                            format!(
-                                                                "media-card-selected-{}",
-                                                                item_id_num
-                                                            )
-                                                        })
-                                                        .absolute()
-                                                        .inset_0()
-                                                        // Square like the thumbnail; no rounded
-                                                        // highlight (FIXES.md).
-                                                        .border_2()
-                                                        .border_color(theme::accent())
-                                                        .into_any_element()
-                                                } else {
-                                                    Empty.into_any_element()
-                                                }),
                                         )
+                                        // Selection: a 2px amber ring with a 2px gap
+                                        // outside the square well (v3 grid). It sits
+                                        // on the card because the well clips.
+                                        .when(is_selected, |card| {
+                                            card.child(
+                                                div()
+                                                    .debug_selector(move || {
+                                                        format!(
+                                                            "media-card-selected-{}",
+                                                            item_id_num
+                                                        )
+                                                    })
+                                                    .absolute()
+                                                    .top(px(CARD_PADDING - 4.0))
+                                                    // left/right trace the well's real
+                                                    // width even when photo_side clamps.
+                                                    .left(px(CARD_PADDING - 4.0))
+                                                    .right(px(CARD_PADDING - 4.0))
+                                                    .h(px(photo_side + 8.0))
+                                                    .border_2()
+                                                    .border_color(theme::accent()),
+                                            )
+                                        })
                                         .into_any_element(),
                                 );
                             }
