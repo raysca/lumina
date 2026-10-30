@@ -1,5 +1,6 @@
 pub mod batch;
 pub mod body;
+pub mod summary;
 pub mod tabs;
 
 pub use body::{format_bytes, render_inspector_body, InspectorTab};
@@ -43,6 +44,30 @@ impl InspectorView {
         let date_input_buffer = this.caption.date_input_buffer.clone();
         let location_input_active = this.caption.location_input_active;
         let location_input_buffer = this.caption.location_input_buffer.clone();
+
+        // v3: a single item gets the one-column summary with no header strip;
+        // Info / ⌘I closes it and Get Info… opens the full tabbed window.
+        if selected_count <= 1 {
+            if let Some(item) = selected_item.as_ref() {
+                return div()
+                    .w(px(this.inspector_width))
+                    .h_full()
+                    .border_l_1()
+                    .border_color(theme::border_subtle())
+                    .child(summary::render_summary_body(
+                        weak_app,
+                        item,
+                        &tags,
+                        &library_tag_counts,
+                        tag_input_active,
+                        &tag_input_buffer,
+                        is_trash,
+                        rating,
+                        color_label,
+                    ))
+                    .into_any_element();
+            }
+        }
 
         div()
             .w(px(this.inspector_width))

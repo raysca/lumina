@@ -66,6 +66,25 @@ pub fn render_meta_row(label: &str, value: &str) -> impl IntoElement {
         )
 }
 
+/// Inspector heading: the user title, then the place, then the filename stem.
+pub(crate) fn display_title(item: &MediaItem) -> String {
+    if let Some(ref title) = item.title {
+        title.clone()
+    } else if let Some(ref city) = item.city {
+        if let Some(ref country) = item.country_code {
+            format!("{}, {}", city, country)
+        } else {
+            city.clone()
+        }
+    } else {
+        std::path::Path::new(&item.file_name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&item.file_name)
+            .to_string()
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn render_inspector_body(
     weak_app: WeakEntity<LuminaApp>,
@@ -184,22 +203,7 @@ fn render_single_body(
         MediaType::Video => "Video",
     };
 
-    // Prefer the user title, then location, then filename stem.
-    let display_title = if let Some(ref title) = item.title {
-        title.clone()
-    } else if let Some(ref city) = item.city {
-        if let Some(ref country) = item.country_code {
-            format!("{}, {}", city, country)
-        } else {
-            city.clone()
-        }
-    } else {
-        std::path::Path::new(&item.file_name)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(&item.file_name)
-            .to_string()
-    };
+    let display_title = display_title(&item);
 
     let dim_str = if item.width > 0 && item.height > 0 {
         format!("{} × {}", item.width, item.height)

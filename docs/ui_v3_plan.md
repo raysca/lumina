@@ -21,7 +21,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 | # | Slice | Artboard | Status |
 |---|-------|----------|--------|
 | 1 | Grid: meta pill on the photo, no info band | V3Grid | done |
-| 2 | Docked inspector toggled by Info / ⌘I, follows the clicked card | V3Inspector | |
+| 2 | Docked inspector: one-column summary; Get Info… opens the tabbed window | V3Inspector | done |
 | 3 | Photo viewer: Fit / 100% / 200% zoom, rating and favorite in the toolbar | V3Photo | |
 | 4 | Multi-select dock and batch inspector, partial tags (needs a core query) | V3MultiSelect | |
 | 5 | Tag manager as a floating sheet, reusing the album builder overlay | V3TagManager | |
@@ -33,5 +33,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Window drag with the transparent titlebar is unverified.
 - `make bundle` fails at the icon step unless the generate-icon feature is on.
 - Not yet designed: context menu, scan/import progress, shortcut sheet.
+- Inspector summary has no histogram (no luminance data in the catalog) and
+  no map (no network); location shows as text only.
 - Selection outline sits on the square well, not hugging a contain-fit image
   as in the design; GPUI does not expose the decoded image's fitted rect.

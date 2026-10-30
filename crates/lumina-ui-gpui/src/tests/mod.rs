@@ -1,4 +1,5 @@
 mod editor_handoff;
+mod inspector;
 mod interaction;
 mod overlay_isolation;
 mod tags_and_albums;
