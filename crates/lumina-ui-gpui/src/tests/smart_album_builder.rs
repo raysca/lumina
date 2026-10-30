@@ -321,3 +321,31 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn focused_text_fields_have_room_for_the_caret() {
+    let (dir, engine, _ids) = library("sab_caret");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    keystrokes(vcx, "b e a c h");
+
+    // The text box must span the field, not just its own text: GPUI's
+    // ellipsis measures per character and dropped the trailing "|" caret
+    // when the box was only as wide as the shaped text.
+    let field = vcx
+        .debug_bounds("album-builder-title")
+        .expect("title field");
+    let text = vcx
+        .debug_bounds("album-builder-title-text")
+        .expect("title text");
+    let spare = field.size.width - text.size.width;
+    assert!(
+        spare < gpui::px(24.0),
+        "title text box is {:?} wide in a {:?} field; it must fill the field",
+        text.size.width,
+        field.size.width
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

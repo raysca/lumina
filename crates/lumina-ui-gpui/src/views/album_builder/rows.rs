@@ -17,6 +17,14 @@ fn ring(focused: bool) -> Rgba {
     }
 }
 
+/// Text that fills its control and is cut with "…" only when it overflows.
+/// GPUI truncates by summing per-character widths, which can exceed the
+/// shaped width a content-sized box gets; without filling the control the
+/// last character (the "|" caret, or a label's last letter) was dropped.
+fn fill_and_truncate(text: Div) -> Div {
+    text.flex_1().min_w_0().truncate()
+}
+
 /// A popup button showing its current value.
 pub(super) fn picker(
     selector: String,
@@ -30,7 +38,7 @@ pub(super) fn picker(
         .debug_selector(move || sel.clone())
         .justify_between()
         .border_color(ring(focused))
-        .child(div().truncate().child(label.into()))
+        .child(fill_and_truncate(div()).child(label.into()))
         .child(div().text_color(theme::text_subtle()).child("⌄"))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.toggle_draft_popup(target, cx);
@@ -47,6 +55,7 @@ pub(super) fn text_field(
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     let sel = selector.clone();
+    let text_sel = format!("{selector}-text");
     let content = match (text.is_empty(), focused) {
         (true, false) => div()
             .text_color(theme::text_subtle())
@@ -58,7 +67,7 @@ pub(super) fn text_field(
     theme::field(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
         .border_color(ring(focused))
-        .child(content.truncate())
+        .child(fill_and_truncate(content).debug_selector(move || text_sel.clone()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.set_draft_focus(target, cx);
         }))
