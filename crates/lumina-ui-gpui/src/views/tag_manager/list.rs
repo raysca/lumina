@@ -243,7 +243,7 @@ fn render_row(
                             .w(px(fill))
                             .h_full()
                             .rounded_full()
-                            .bg(theme::accent()),
+                            .bg(theme::text_muted()),
                     ),
             )
             .child(

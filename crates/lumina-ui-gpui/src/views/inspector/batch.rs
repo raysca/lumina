@@ -464,10 +464,12 @@ fn render_batch_metadata_row(
                         .px_1p5()
                         .py_0p5()
                         .rounded_full()
-                        .bg(theme::accent())
+                        .border_1()
+                        .border_color(theme::border_strong())
+                        .bg(theme::bg_control())
                         .text_xs()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(theme::accent_fg())
+                        .text_color(theme::text_muted())
                         .child("Mixed")
                         .into_any_element()
                 } else {
@@ -479,7 +481,7 @@ fn render_batch_metadata_row(
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .text_color(if mixed && !editing {
-                    theme::accent()
+                    theme::text_muted()
                 } else {
                     theme::text()
                 })

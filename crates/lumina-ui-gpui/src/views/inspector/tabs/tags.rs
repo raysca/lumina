@@ -232,7 +232,8 @@ pub fn render_tags_section(
                 .debug_selector(|| "open-tag-manager-link".to_string())
                 .cursor_pointer()
                 .text_xs()
-                .text_color(theme::accent())
+                .text_color(theme::text_muted())
+                .hover(|s| s.text_color(theme::text()))
                 .child("Open Tag Manager…")
                 .on_click(move |_e, _window, cx| {
                     if let Some(app) = app_manager.upgrade() {

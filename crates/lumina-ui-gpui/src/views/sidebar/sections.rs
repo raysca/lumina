@@ -366,8 +366,8 @@ pub(super) fn render_tags_section(
                         .debug_selector(|| "open-tag-manager".to_string())
                         .cursor_pointer()
                         .text_xs()
-                        .text_color(theme::accent())
-                        .hover(|s| s.text_color(theme::accent_hover()))
+                        .text_color(theme::text_muted())
+                        .hover(|s| s.text_color(theme::text()))
                         .child("Manage…")
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.open_tag_manager(cx);

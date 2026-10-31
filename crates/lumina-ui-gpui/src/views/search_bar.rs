@@ -336,7 +336,7 @@ fn render_size_slider(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Int
                 .left(px(thumb_left))
                 .size(px(THUMB))
                 .rounded_full()
-                .bg(theme::accent()),
+                .bg(theme::text()),
         )
         .child(
             canvas(

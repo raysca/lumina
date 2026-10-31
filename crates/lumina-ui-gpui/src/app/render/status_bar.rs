@@ -67,7 +67,7 @@ impl LuminaApp {
                 div()
                     .text_xs()
                     .text_color(if is_scanning {
-                        theme::accent()
+                        theme::text()
                     } else {
                         theme::text_subtle()
                     })
