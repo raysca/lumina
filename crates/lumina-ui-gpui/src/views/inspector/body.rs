@@ -7,12 +7,11 @@ use crate::app::info_details::InfoDetails;
 pub use crate::app::types::format_bytes;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::inspector::batch::render_batch_body;
 use crate::views::inspector::tabs::camera::render_camera_tab;
 use crate::views::inspector::tabs::info::render_info_tab;
 use crate::views::inspector::tabs::location::render_location_tab;
 use crate::views::inspector::tabs::tags::render_tags_tab;
-use crate::{BatchSelectionSummary, LuminaApp};
+use crate::LuminaApp;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum InspectorTab {
@@ -90,18 +89,14 @@ pub(crate) fn display_title(item: &MediaItem) -> String {
 pub fn render_inspector_body(
     weak_app: WeakEntity<LuminaApp>,
     selected_item: Option<MediaItem>,
-    selected_count: usize,
-    batch_summary: &BatchSelectionSummary,
     preview_image: Option<Arc<RenderImage>>,
     tags: &[String],
-    tag_counts: &[(String, usize)],
     library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
     is_trash: bool,
     tab: InspectorTab,
     rating: u8,
-    color_label: Option<u8>,
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
@@ -113,29 +108,6 @@ pub fn render_inspector_body(
     location_input_buffer: &str,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
-    if selected_count > 1 {
-        return render_batch_body(
-            weak_app,
-            batch_summary,
-            tags,
-            tag_counts,
-            library_tag_counts,
-            tag_input_active,
-            tag_input_buffer,
-            is_trash,
-            rating,
-            color_label,
-            caption_input_active,
-            caption_input_buffer,
-            title_input_active,
-            title_input_buffer,
-            date_input_active,
-            date_input_buffer,
-            location_input_active,
-            location_input_buffer,
-        );
-    }
-
     let item = match selected_item {
         Some(it) => it,
         None => {

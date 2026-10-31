@@ -241,26 +241,3 @@ fn trash_view_keeps_the_macos_trash_meaning() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
-
-#[core::prelude::v1::test]
-fn batch_inspector_trash_button_opens_the_dialog() {
-    let (dir, engine) = seed_library("del_inspector", 3);
-    let mut cx = gpui::TestAppContext::single();
-    let (view, vcx) = app_with_library(&mut cx, engine.clone());
-    keystrokes(vcx, "home secondary-a");
-    view.update(vcx, |app, cx| {
-        app.inspector_open = true;
-        cx.notify();
-    });
-    render_ui(vcx);
-    click(vcx, "batch-trash-inspect-btn");
-    view.update(vcx, |app, _| {
-        let st = app
-            .delete_confirm_state
-            .as_ref()
-            .expect("inspector Trash asks");
-        assert_eq!(st.item_count, 3);
-    });
-
-    let _ = std::fs::remove_dir_all(&dir);
-}

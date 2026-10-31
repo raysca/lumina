@@ -3,6 +3,32 @@
 use super::ui_automation::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
+use crate::views::inspector::batch::common_rating;
+
+/// Click the first item, ⌘-click the second, dock the inspector at 1440×900.
+fn select_two<'a>(
+    prefix: &str,
+    cx: &'a mut gpui::TestAppContext,
+) -> (
+    std::path::PathBuf,
+    std::sync::Arc<lumina_core::LuminaEngine>,
+    [lumina_core::MediaItem; 2],
+    gpui::Entity<crate::LuminaApp>,
+    &'a mut gpui::VisualTestContext,
+) {
+    let (dir, engine) = seed_library(prefix, 3);
+    let items = engine.get_item_slice(0..2);
+    let (a, b) = (items[0].clone(), items[1].clone());
+    let (view, vcx) = app_with_library(cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    click(vcx, leak(format!("media-card-{}", a.id.0)));
+    let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
+    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
+    click(vcx, "inspector-toggle");
+    render_ui(vcx);
+    (dir, engine, [a, b], view, vcx)
+}
 
 #[core::prelude::v1::test]
 fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
@@ -154,4 +180,125 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, engine, [a, b], view, vcx) = select_two("batch_v3_panel", &mut cx);
+
+    for selector in [
+        "batch-stack",
+        "batch-count",
+        "batch-mix",
+        "batch-size-range",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "the batch header shows {selector}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("close-batch-inspector-btn").is_none(),
+        "v3 batch panel has no header strip"
+    );
+    let panel = vcx.debug_bounds("inspector-batch").expect("batch panel");
+    let hint = vcx.debug_bounds("inspector-batch-hint").unwrap();
+    assert_eq!(
+        hint.bottom(),
+        panel.bottom(),
+        "the selection hint is pinned to the panel bottom"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.batch_summary.ids, vec![a.id, b.id]);
+        assert_eq!(common_rating(app), Some(0), "both start unrated");
+    });
+
+    // Stars set every item; the shared value reads back.
+    click(vcx, "inspector-star-4");
+    let catalog = engine.catalog();
+    for id in [a.id, b.id] {
+        assert_eq!(catalog.get_rating(id).unwrap(), 4, "a star click sets all");
+    }
+    view.update(vcx, |app, cx| {
+        assert_eq!(common_rating(app), Some(4));
+        // One item diverging makes the rating mixed.
+        app.set_item_rating(a.id, 2, cx);
+        assert_eq!(common_rating(app), None, "disagreeing ratings read mixed");
+    });
+
+    // "Add a tag to all N…" then the solid chip's × removes it from all.
+    click(vcx, "batch-tag-add");
+    keystrokes(vcx, "s e a enter");
+    for id in [a.id, b.id] {
+        assert_eq!(
+            catalog.get_tags_for_item(id).unwrap(),
+            vec!["sea".to_string()]
+        );
+    }
+    render_ui(vcx);
+    click(vcx, "batch-tag-remove-sea");
+    for id in [a.id, b.id] {
+        assert!(
+            catalog.get_tags_for_item(id).unwrap().is_empty(),
+            "× on an all-items chip removes it from every item"
+        );
+    }
+    view.update(vcx, |app, _| assert!(app.error_message.is_none()));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
+    let (dir, engine) = seed_library("batch_v3_dock", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    click(vcx, leak(format!("media-card-{}", item.id.0)));
+    click(vcx, "inspector-toggle");
+    render_ui(vcx);
+
+    let dock = vcx
+        .debug_bounds("multi-select-action-dock")
+        .expect("one selected item shows the dock");
+    let grid = vcx.debug_bounds("media-grid-surface").unwrap();
+    let status = vcx.debug_bounds("status-bar").unwrap();
+    let inspector = vcx.debug_bounds("inspector-footer").unwrap();
+    let gap = f32::from(status.top() - dock.bottom());
+    assert!(
+        (gap - 20.0).abs() < 1.0,
+        "dock sits 20px above the status bar, got {gap}"
+    );
+    assert!(
+        dock.left() > grid.left() && dock.right() < inspector.left(),
+        "dock stays within the grid column: {dock:?} grid {grid:?}"
+    );
+    let off_centre = f32::from(dock.center().x - grid.center().x).abs();
+    assert!(
+        off_centre < 2.0,
+        "dock is centred over the grid column, off by {off_centre}"
+    );
+    assert!(
+        vcx.debug_bounds("batch-tags-dock-key").is_some(),
+        "Tag shows its T key"
+    );
+
+    // Favorite with one item writes that item's flag.
+    click(vcx, "batch-fav-dock-btn");
+    assert!(
+        engine.get_item_by_id(item.id).unwrap().is_favorite,
+        "the dock's Favorite favorites a single selected item"
+    );
+
+    // T is the keyboard path for the dock's Tag.
+    focus_app(vcx, &view);
+    keystrokes(vcx, "t");
+    view.update(vcx, |app, _| {
+        assert!(app.tag_input_active, "T starts tagging the selection")
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

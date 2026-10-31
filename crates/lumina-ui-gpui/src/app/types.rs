@@ -68,7 +68,12 @@ pub struct BatchSelectionSummary {
     pub photos_count: usize,
     pub videos_count: usize,
     pub raw_count: usize,
-    pub fav_count: usize,
+    /// Selection ids in grid order; the batch inspector reads ratings and
+    /// the thumbnail stack from these instead of re-querying each frame.
+    pub ids: Vec<MediaId>,
+    /// Capture-time range of the selection.
+    pub oldest_ms: i64,
+    pub newest_ms: i64,
 }
 
 /// Test helper: a solid vertical gradient image.

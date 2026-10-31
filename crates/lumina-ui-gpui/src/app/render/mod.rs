@@ -383,13 +383,16 @@ impl Render for LuminaApp {
                             .child(SearchBarView::render(self, cx))
                             .child(
                                 div()
+                                    .relative()
                                     .flex_1()
                                     .min_h_0()
                                     .flex()
                                     .flex_row()
                                     .child(self.render_browser_grid(total_count, cx))
                                     // Pinned Vertical Year Rail
-                                    .child(self.render_year_rail(cx)),
+                                    .child(self.render_year_rail(cx))
+                                    // Selection dock, over the grid column only
+                                    .child(self.render_action_dock(is_fullscreen_viewer, cx)),
                             )
                             .child(self.render_status_bar(total_count)),
                     )
@@ -421,8 +424,6 @@ impl Render for LuminaApp {
                         Empty.into_any_element()
                     }),
             )
-            // 5. Floating Multi-Select Action Dock (Bottom Center)
-            .child(self.render_action_dock(is_fullscreen_viewer, cx))
             // 5b. Transient success toast (Bottom Right), below modals
             .child(self.render_toast_overlay(cx))
             // 6. Fullscreen Detail Viewer Modal

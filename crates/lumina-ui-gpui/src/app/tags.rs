@@ -170,12 +170,6 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn cancel_tag_input(&mut self, cx: &mut Context<Self>) {
-        self.tag_input_active = false;
-        self.tag_input_buffer.clear();
-        cx.notify();
-    }
-
     pub fn start_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
         self.editing_tag = Some(tag.clone());
         self.editing_tag_buffer = tag;

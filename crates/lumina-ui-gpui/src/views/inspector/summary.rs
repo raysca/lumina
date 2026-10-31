@@ -220,7 +220,7 @@ fn render_stat_strip(item: &MediaItem) -> AnyElement {
         .into_any_element()
 }
 
-fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
+pub(super) fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
     div()
         .flex()
         .flex_row()

@@ -13,13 +13,15 @@ use crate::views::tag_manager::TagManagerModal;
 use crate::views::viewer::MediaViewer;
 
 impl LuminaApp {
-    /// Floating Multi-Select Action Dock (Bottom Center)
+    /// Selection dock: centred over the grid column, 20px above its bottom
+    /// (so it never covers the status bar), for any selection.
     pub(crate) fn render_action_dock(
         &self,
         is_fullscreen_viewer: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        if self.selected_indices.len() <= 1 || is_fullscreen_viewer {
+        let nothing = self.selected_item.is_none() && self.selected_indices.is_empty();
+        if nothing || is_fullscreen_viewer {
             return Empty.into_any_element();
         }
         let in_trash = self.selection == AlbumSelection::Trash;
@@ -78,12 +80,18 @@ impl LuminaApp {
                 .child(
                     dock_button("batch-fav-dock-btn", "Favorite", None, theme::text()).on_click(
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.batch_toggle_favorite(cx);
+                            if this.selected_indices.len() > 1 {
+                                this.batch_toggle_favorite(cx);
+                            } else {
+                                this.toggle_favorite_selected(cx);
+                            }
                         }),
                     ),
                 )
                 .child(
                     dock_button("batch-tags-dock-btn", "Tag", None, theme::text())
+                        .gap(px(6.0))
+                        .child(theme::kbd("T").debug_selector(|| "batch-tags-dock-key".to_string()))
                         .tooltip(theme::tooltip_label("Tag selection (T)"))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.begin_tagging_selection(cx);
@@ -116,6 +124,10 @@ impl LuminaApp {
             .bottom(px(20.0))
             .left_0()
             .right_0()
+            // Centre on the grid, not the grid plus the year rail.
+            .when(!self.timeline_year_buckets.is_empty(), |d| {
+                d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
+            })
             .flex()
             .justify_center()
             .child(

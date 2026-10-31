@@ -70,12 +70,13 @@ impl Render for FloatingInspectorView {
         let app_read = app.read(cx);
 
         let selected_indices_len = app_read.selected_indices.len();
+        // A multi-selection gets the same v3 batch panel as the docked one.
+        let batch = (selected_indices_len > 1)
+            .then(|| crate::views::inspector::batch::render_batch(app_read, self.app.clone()));
         let selected_item = app_read.selected_item.clone();
         let viewer_image = app_read.viewer_image.clone();
-        let batch_summary = app_read.batch_summary.clone();
         let selected_item_tags = app_read.selected_item_tags.clone();
         let info_details = app_read.info_details.clone();
-        let selected_tag_counts = app_read.selected_tag_counts.clone();
         let library_tag_counts = app_read.library_tag_counts.clone();
         let tag_input_active = app_read.tag_input_active;
         let tag_input_buffer = app_read.tag_input_buffer.clone();
@@ -85,9 +86,6 @@ impl Render for FloatingInspectorView {
             .as_ref()
             .map(|it| app_read.get_item_rating(it))
             .unwrap_or(0);
-        let color_label = selected_item
-            .as_ref()
-            .and_then(|it| app_read.item_color_labels.get(&it.id).copied());
         let caption = selected_item
             .as_ref()
             .and_then(|it| app_read.item_captions.get(&it.id).cloned());
@@ -250,32 +248,30 @@ impl Render for FloatingInspectorView {
                     .flex_1()
                     .w_full()
                     .overflow_hidden()
-                    .child(render_inspector_body(
-                        self.app.clone(),
-                        selected_item,
-                        selected_indices_len,
-                        &batch_summary,
-                        viewer_image,
-                        &selected_item_tags,
-                        &selected_tag_counts,
-                        &library_tag_counts,
-                        tag_input_active,
-                        &tag_input_buffer,
-                        is_trash,
-                        tab,
-                        rating,
-                        color_label,
-                        caption.as_deref(),
-                        caption_input_active,
-                        &caption_input_buffer,
-                        title_input_active,
-                        &title_input_buffer,
-                        date_input_active,
-                        &date_input_buffer,
-                        location_input_active,
-                        &location_input_buffer,
-                        info_details.as_ref(),
-                    )),
+                    .child(batch.unwrap_or_else(|| {
+                        render_inspector_body(
+                            self.app.clone(),
+                            selected_item,
+                            viewer_image,
+                            &selected_item_tags,
+                            &library_tag_counts,
+                            tag_input_active,
+                            &tag_input_buffer,
+                            is_trash,
+                            tab,
+                            rating,
+                            caption.as_deref(),
+                            caption_input_active,
+                            &caption_input_buffer,
+                            title_input_active,
+                            &title_input_buffer,
+                            date_input_active,
+                            &date_input_buffer,
+                            location_input_active,
+                            &location_input_buffer,
+                            info_details.as_ref(),
+                        )
+                    })),
             )
             .into_any_element()
     }

@@ -43,6 +43,9 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Inspector: Modified/Created/Added rows keep the short date format; only
   the capture time reads "Mon 13 Jun 2022 · 10:03". Overflow scroll and the
   video strip have no dedicated UI test yet.
+- Batch inspector keeps an EDIT ALL group (title, caption, date, location)
+  because it is the only batch path for those fields; colour labels for a
+  selection live in the context menu, Favorite/Delete in the dock.
 - Get Info: "Show nearby photos" searches the same city (no geo radius
   index); "Created" is the file-system birth time and the EXIF extras are
   read from the file when the window shows it; items catalogued before

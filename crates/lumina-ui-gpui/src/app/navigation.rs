@@ -1368,7 +1368,9 @@ impl LuminaApp {
                     } else {
                         0
                     },
-                    fav_count: if it.is_favorite { 1 } else { 0 },
+                    ids: vec![it.id],
+                    oldest_ms: it.timestamp_epoch_ms,
+                    newest_ms: it.timestamp_epoch_ms,
                 };
             } else {
                 self.batch_summary = BatchSelectionSummary::default();
@@ -1392,7 +1394,6 @@ impl LuminaApp {
             .iter()
             .filter(|i| i.media_type == MediaType::Raw)
             .count();
-        let fav_count = items.iter().filter(|i| i.is_favorite).count();
 
         self.batch_summary = BatchSelectionSummary {
             count,
@@ -1400,7 +1401,17 @@ impl LuminaApp {
             photos_count,
             videos_count,
             raw_count,
-            fav_count,
+            ids: items.iter().map(|i| i.id).collect(),
+            oldest_ms: items
+                .iter()
+                .map(|i| i.timestamp_epoch_ms)
+                .min()
+                .unwrap_or(0),
+            newest_ms: items
+                .iter()
+                .map(|i| i.timestamp_epoch_ms)
+                .max()
+                .unwrap_or(0),
         };
         self.refresh_batch_metadata(&items);
     }

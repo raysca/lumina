@@ -1,469 +1,388 @@
+//! v3 batch inspector: a flat panel for a multi-selection.
+
 use gpui::*;
 
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::inspector::body::{format_bytes, render_meta_row};
-use crate::views::inspector::partial_tags;
-use crate::views::inspector::tabs::tags::render_tags_section;
-use crate::{AlbumSelection, BatchSelectionSummary, LuminaApp};
+use crate::views::inspector::body::format_bytes;
+use crate::views::inspector::summary::render_stars;
+use crate::LuminaApp;
 
-#[allow(clippy::too_many_arguments)]
-pub fn render_batch_body(
-    weak_app: WeakEntity<LuminaApp>,
-    summary: &BatchSelectionSummary,
-    tags: &[String],
-    tag_counts: &[(String, usize)],
-    library_tag_counts: &[(String, usize)],
-    tag_input_active: bool,
-    tag_input_buffer: &str,
-    is_trash: bool,
-    rating: u8,
-    color_label: Option<u8>,
-    caption_input_active: bool,
-    caption_input_buffer: &str,
-    title_input_active: bool,
-    title_input_buffer: &str,
-    date_input_active: bool,
-    date_input_buffer: &str,
-    location_input_active: bool,
-    location_input_buffer: &str,
-) -> AnyElement {
+const STACK_TILE: f32 = 44.0;
+const STACK_STEP: f32 = 10.0;
+
+/// Header, rating, tags, edit-all rows and a pinned selection hint. Takes no
+/// `Context` so the docked panel and the inspector window share it.
+pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElement {
+    let summary = &app.batch_summary;
     let count = summary.count;
-    let total_bytes = summary.total_bytes;
-    let photos_count = summary.photos_count;
-    let videos_count = summary.videos_count;
-    let raw_count = summary.raw_count;
-    let fav_count = summary.fav_count;
-    // Without counts (not yet refreshed) every known tag is treated as on all.
-    let (on_all, partial): (Vec<String>, Vec<(String, usize)>) = if tag_counts.is_empty() {
-        (tags.to_vec(), Vec::new())
-    } else {
-        let (all, some): (Vec<_>, Vec<_>) =
-            tag_counts.iter().cloned().partition(|(_, n)| *n >= count);
-        (all.into_iter().map(|(tag, _)| tag).collect(), some)
-    };
-
-    let app_restore = weak_app.clone();
-    let app_delete = weak_app.clone();
-    let app_fav = weak_app.clone();
-    let app_trash = weak_app.clone();
-
+    let caption = &app.caption;
     div()
-        .id("inspector-batch-scroll-body")
+        .id("inspector-batch")
+        .debug_selector(|| "inspector-batch".to_string())
         .size_full()
-        .overflow_y_scroll()
-        .p_3()
+        .bg(theme::bg_pane())
+        .text_color(theme::text())
         .flex()
         .flex_col()
-        .gap_3()
-        // Multi-Item Hero Card
         .child(
             div()
-                .w_full()
-                .p_3()
-                .rounded_lg()
-                .bg(theme::bg_pane())
-                .border_1()
-                .border_color(theme::border_subtle())
+                .id("inspector-batch-scroll-body")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .p(px(16.0))
                 .flex()
                 .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text())
-                        .child(format!("{} Media Items Selected", count)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_family(theme::FONT_MONO)
-                        .text_color(theme::text_muted())
-                        .child(format!("Total Size: {}", format_bytes(total_bytes))),
-                ),
-        )
-        // Batch Rating & Color Labels
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .p_2p5()
-                .rounded_lg()
-                .bg(theme::bg_pane())
-                .border_1()
-                .border_color(theme::border_subtle())
-                .child(
+                .gap(px(18.0))
+                .child(render_header(app))
+                .child(section(
+                    "RATING",
+                    render_rating(app, weak_app.clone()),
+                ))
+                .child(section("TAGS", render_tags(app, weak_app.clone())))
+                // Mixed-value-aware editing; applying a row writes one grouped
+                // undo entry for the whole selection.
+                .child(section(
+                    "EDIT ALL",
                     div()
                         .flex()
-                        .flex_row()
-                        .justify_between()
-                        .items_center()
-                        .child(theme::section_label("BATCH RATING"))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(2.0))
-                                .children((1..=5).map(|star_val| {
-                                    let app_star = weak_app.clone();
-                                    let is_filled = star_val <= rating;
-                                    div()
-                                        .id(ElementId::NamedInteger(
-                                            "batch-star".into(),
-                                            star_val as u64,
-                                        ))
-                                        .cursor_pointer()
-                                        .px(px(2.0))
-                                        .py(px(1.0))
-                                        .text_sm()
-                                        .text_color(if is_filled {
-                                            theme::rating()
-                                        } else {
-                                            theme::text_disabled()
-                                        })
-                                        .hover(|s| s.text_color(theme::rating()))
-                                        .child(render_icon(
-                                            if is_filled {
-                                                Icon::StarFilled
-                                            } else {
-                                                Icon::Star
-                                            },
-                                            px(14.0),
-                                            if is_filled {
-                                                theme::rating()
-                                            } else {
-                                                theme::text_disabled()
-                                            },
-                                        ))
-                                        .on_click(move |_e, _window, cx| {
-                                            if let Some(app) = app_star.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.set_rating_selected(star_val, cx);
-                                                });
-                                            }
-                                        })
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .items_center()
-                        .pt_1()
-                        .border_t_1()
-                        .border_color(theme::border_subtle())
-                        .child(theme::section_label("COLOR LABEL"))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
-                                .child({
-                                    let app_clear = weak_app.clone();
-                                    div()
-                                        .id("batch-label-0")
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(theme::text_disabled())
-                                        .hover(|s| s.text_color(theme::text()))
-                                        .child("⊘")
-                                        .on_click(move |_e, _window, cx| {
-                                            if let Some(app) = app_clear.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.set_color_label_selected(0, cx);
-                                                });
-                                            }
-                                        })
-                                })
-                                .children(
-                                    [
-                                        (1u8, theme::label_red()),
-                                        (2, theme::label_orange()),
-                                        (3, theme::label_yellow()),
-                                        (4, theme::label_green()),
-                                        (5, theme::label_blue()),
-                                        (6, theme::label_purple()),
-                                    ]
-                                    .into_iter()
-                                    .map(|(idx, color)| {
-                                        let app_dot = weak_app.clone();
-                                        let is_selected = color_label == Some(idx);
-                                        div()
-                                            .id(ElementId::NamedInteger(
-                                                "batch-label-dot".into(),
-                                                idx as u64,
-                                            ))
-                                            .size(px(12.0))
-                                            .rounded_full()
-                                            .bg(color)
-                                            .cursor_pointer()
-                                            .border_1()
-                                            .border_color(if is_selected {
-                                                theme::text()
-                                            } else {
-                                                theme::border_subtle()
-                                            })
-                                            .flex()
-                                            .justify_center()
-                                            .items_center()
-                                            .child(if is_selected {
-                                                div()
-                                                    .size(px(4.0))
-                                                    .rounded_full()
-                                                    .bg(theme::text())
-                                                    .into_any_element()
-                                            } else {
-                                                Empty.into_any_element()
-                                            })
-                                            .on_click(move |_e, _window, cx| {
-                                                if let Some(app) = app_dot.upgrade() {
-                                                    app.update(cx, |this, cx| {
-                                                        this.set_color_label_selected(idx, cx);
-                                                    });
-                                                }
-                                            })
-                                    }),
-                                ),
-                        ),
-                ),
-        )
-        // Keywords: tags on every selected item use the normal editor (× removes
-        // from all); tags on only some are listed below it as dashed chips.
-        .child(render_tags_section(
-            weak_app.clone(),
-            "ON EVERY ITEM",
-            &on_all,
-            library_tag_counts,
-            tag_input_active,
-            tag_input_buffer,
-        ))
-        .children(
-            (!partial.is_empty())
-                .then(|| partial_tags::render_partial_tags(weak_app.clone(), &partial, count)),
-        )
-        // Mixed-value-aware metadata editing. Applying either field writes one
-        // grouped undo entry for the whole selection.
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .p_2p5()
-                .rounded_lg()
-                .bg(theme::bg_pane())
-                .border_1()
-                .border_color(theme::border_subtle())
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .items_center()
-                        .child(theme::section_label("BATCH METADATA"))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme::text_disabled())
-                                .child(format!("Applies to all {} · one undo step", count)),
-                        ),
-                )
-                .child(render_batch_metadata_row(
-                    BatchMetadataRow::Title,
-                    "TITLE",
-                    "batch-title-input",
-                    title_input_buffer,
-                    title_input_active,
-                    weak_app.clone(),
-                ))
-                .child(render_batch_metadata_row(
-                    BatchMetadataRow::Caption,
-                    "CAPTION",
-                    "batch-caption-input",
-                    caption_input_buffer,
-                    caption_input_active,
-                    weak_app.clone(),
-                ))
-                .child(render_batch_metadata_row(
-                    BatchMetadataRow::Date,
-                    "DATE",
-                    "batch-date-input",
-                    date_input_buffer,
-                    date_input_active,
-                    weak_app.clone(),
-                ))
-                .child(render_batch_metadata_row(
-                    BatchMetadataRow::Location,
-                    "LOCATION",
-                    "batch-location-input",
-                    location_input_buffer,
-                    location_input_active,
-                    weak_app.clone(),
+                        .flex_col()
+                        .gap_1p5()
+                        .child(render_batch_metadata_row(
+                            BatchMetadataRow::Title,
+                            "TITLE",
+                            "batch-title-input",
+                            &caption.title_input_buffer,
+                            caption.title_input_active,
+                            weak_app.clone(),
+                        ))
+                        .child(render_batch_metadata_row(
+                            BatchMetadataRow::Caption,
+                            "CAPTION",
+                            "batch-caption-input",
+                            &caption.input_buffer,
+                            caption.input_active,
+                            weak_app.clone(),
+                        ))
+                        .child(render_batch_metadata_row(
+                            BatchMetadataRow::Date,
+                            "DATE",
+                            "batch-date-input",
+                            &caption.date_input_buffer,
+                            caption.date_input_active,
+                            weak_app.clone(),
+                        ))
+                        .child(render_batch_metadata_row(
+                            BatchMetadataRow::Location,
+                            "LOCATION",
+                            "batch-location-input",
+                            &caption.location_input_buffer,
+                            caption.location_input_active,
+                            weak_app,
+                        )),
                 )),
         )
-        // Batch Actions Box
-        .child(if is_trash {
-            div()
-                .flex()
-                .flex_row()
-                .gap_2()
-                .child(
-                    div()
-                        .id("batch-restore-inspect-btn")
-                        .flex_1()
-                        .py_2()
-                        .bg(theme::selection_bg())
-                        .hover(|s| s.bg(theme::selection_bg_hover()))
-                        .rounded_md()
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_center()
-                        .gap_1p5()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme::accent())
-                        .child(render_icon(Icon::Undo2, px(12.0), theme::accent()))
-                        .child("Restore")
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_restore.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.restore_selected_trash(cx);
-                                });
-                            }
-                        }),
-                )
-                .child(
-                    div()
-                        .id("batch-delete-inspect-btn")
-                        .flex_1()
-                        .py_2()
-                        .bg(theme::danger_bg())
-                        .hover(|s| s.bg(theme::danger_bg_hover()))
-                        .rounded_md()
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_center()
-                        .gap_1p5()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text())
-                        .child(render_icon(Icon::X, px(12.0), theme::text()))
-                        .child("Delete Now")
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_delete.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.prompt_delete_selected(cx);
-                                });
-                            }
-                        }),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .flex()
-                .flex_row()
-                .gap_2()
-                .child(
-                    div()
-                        .id("batch-fav-inspect-btn")
-                        .flex_1()
-                        .py_2()
-                        .bg(theme::bg_control())
-                        .hover(|s| s.bg(theme::bg_control_hover()))
-                        .rounded_md()
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_center()
-                        .gap_1p5()
-                        .text_xs()
-                        .text_color(theme::rating())
-                        .child(render_icon(Icon::HeartFilled, px(12.0), theme::rating()))
-                        .child(format!("Fav ({})", fav_count))
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_fav.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.batch_toggle_favorite(cx);
-                                });
-                            }
-                        }),
-                )
-                .child(
-                    div()
-                        .id("batch-trash-inspect-btn")
-                        .debug_selector(|| "batch-trash-inspect-btn".to_string())
-                        .flex_1()
-                        .py_2()
-                        .bg(theme::bg_control())
-                        .hover(|s| s.bg(theme::danger_bg()))
-                        .rounded_md()
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_center()
-                        .gap_1p5()
-                        .text_xs()
-                        .text_color(theme::danger_text())
-                        .child(render_icon(Icon::Trash, px(12.0), theme::danger_text()))
-                        .child("Trash")
-                        .on_click(move |_e, _window, cx| {
-                            if let Some(app) = app_trash.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    if this.selection == AlbumSelection::Trash {
-                                        this.batch_trash_or_restore(cx);
-                                    } else {
-                                        this.prompt_delete_selected(cx);
-                                    }
-                                });
-                            }
-                        }),
-                )
-                .into_any_element()
-        })
-        // Aggregated Composition Section
         .child(
             div()
-                .flex()
-                .flex_col()
-                .gap_1p5()
-                .p_2p5()
-                .rounded_lg()
-                .bg(theme::bg_pane())
-                .border_1()
+                .id("inspector-batch-hint")
+                .debug_selector(|| "inspector-batch-hint".to_string())
+                .flex_none()
+                .px(px(16.0))
+                .py(px(10.0))
+                .border_t_1()
                 .border_color(theme::border_subtle())
-                .child(theme::section_label("SELECTION BREAKDOWN"))
-                .child(render_meta_row("Photos", &photos_count.to_string()))
-                .child(render_meta_row("Videos", &videos_count.to_string()))
-                .child(render_meta_row("RAW Media", &raw_count.to_string()))
-                .child(render_meta_row(
-                    "Favorited",
-                    &format!("{}/{}", fav_count, count),
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .child(format!(
+                    "{count} selected · ⌘-click to add or remove · ⇧-click for a range · ⌘A selects all"
                 )),
         )
         .into_any_element()
+}
+
+fn section(title: &'static str, content: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(theme::section_label(title))
+        .child(content)
+}
+
+/// Three stacked thumbnails, "N items", the mix, and "size · date range".
+fn render_header(app: &LuminaApp) -> Div {
+    let summary = &app.batch_summary;
+    let stack: Vec<_> = summary.ids.iter().take(3).copied().collect();
+    let thumbs: Vec<Option<std::sync::Arc<RenderImage>>> = match &app.grid_state {
+        Some(grid) => {
+            let cache = grid.texture_cache.lock();
+            stack.iter().map(|id| cache.peek(id).cloned()).collect()
+        }
+        None => vec![None; stack.len()],
+    };
+    for (id, thumb) in stack.iter().zip(&thumbs) {
+        if thumb.is_none() {
+            app.queue_thumbnail_request(*id);
+        }
+    }
+    let photos = summary.photos_count + summary.raw_count;
+    let videos = summary.videos_count;
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mix = match (photos, videos) {
+        (_, 0) => plural(photos, "photo", "photos"),
+        (0, _) => plural(videos, "video", "videos"),
+        _ => format!(
+            "{}, {}",
+            plural(photos, "photo", "photos"),
+            plural(videos, "video", "videos")
+        ),
+    };
+    let width = STACK_TILE + STACK_STEP * thumbs.len().saturating_sub(1) as f32;
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .child(
+            div()
+                .id("batch-stack")
+                .debug_selector(|| "batch-stack".to_string())
+                .relative()
+                .flex_none()
+                .w(px(width))
+                .h(px(STACK_TILE))
+                .children(thumbs.into_iter().enumerate().map(|(i, thumb)| {
+                    div()
+                        .absolute()
+                        .left(px(STACK_STEP * i as f32))
+                        .top_0()
+                        .size(px(STACK_TILE))
+                        .rounded(px(6.0))
+                        .overflow_hidden()
+                        .border_2()
+                        .border_color(theme::bg_pane())
+                        .bg(theme::bg_raised())
+                        .children(
+                            thumb.map(|image| img(image).size_full().object_fit(ObjectFit::Cover)),
+                        )
+                })),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .min_w_0()
+                .child(
+                    div()
+                        .id("batch-count")
+                        .debug_selector(|| "batch-count".to_string())
+                        .text_base()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(plural(summary.count, "item", "items")),
+                )
+                .child(
+                    div()
+                        .id("batch-mix")
+                        .debug_selector(|| "batch-mix".to_string())
+                        .text_xs()
+                        .text_color(theme::text_muted())
+                        .child(mix),
+                )
+                .child(
+                    div()
+                        .id("batch-size-range")
+                        .debug_selector(|| "batch-size-range".to_string())
+                        .text_xs()
+                        .text_color(theme::text_subtle())
+                        .child(format!(
+                            "{} · {}",
+                            format_bytes(summary.total_bytes),
+                            date_range(summary.oldest_ms, summary.newest_ms)
+                        )),
+                ),
+        )
+}
+
+/// The shared rating, or None when the selection disagrees.
+pub(crate) fn common_rating(app: &LuminaApp) -> Option<u8> {
+    // ponytail: one map lookup per selected id each frame; cache in the
+    // summary if huge ⌘A selections make this show up in profiles.
+    let mut ratings = app
+        .batch_summary
+        .ids
+        .iter()
+        .map(|id| app.item_ratings.get(id).copied().unwrap_or(0));
+    let first = ratings.next()?;
+    ratings.all(|r| r == first).then_some(first)
+}
+
+fn render_rating(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
+    let common = common_rating(app);
+    let note = match common {
+        Some(0) => "unrated".to_string(),
+        Some(1) => "1 star on all".to_string(),
+        Some(n) => format!("{n} stars on all"),
+        None => "mixed".to_string(),
+    };
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(render_stars(weak_app, common.unwrap_or(0)))
+        .child(
+            div()
+                .id("batch-rating-note")
+                .debug_selector(|| "batch-rating-note".to_string())
+                .text_xs()
+                .text_color(theme::text_muted())
+                .child(note),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme::text_disabled())
+                .child("· click sets all"),
+        )
+}
+
+/// One chip list sorted by count: solid chips are on every item, dashed
+/// "n/N" chips on some (click applies to all); × removes from all.
+fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
+    let total = app.batch_summary.count;
+    let mut counts = app.selected_tag_counts.clone();
+    counts.sort_by(|(a, an), (b, bn)| bn.cmp(an).then_with(|| a.cmp(b)));
+    let input_active = app.tag_input_active;
+    let buffer = app.tag_input_buffer.clone();
+    let app_add = weak_app.clone();
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div().flex().flex_row().flex_wrap().gap_1p5().children(
+                counts
+                    .into_iter()
+                    .map(|(tag, n)| tag_chip(weak_app.clone(), tag, n, total)),
+            ),
+        )
+        .child(
+            theme::field("batch-tag-add")
+                .debug_selector(|| "batch-tag-add".to_string())
+                .cursor_text()
+                .border_color(if input_active {
+                    theme::accent()
+                } else {
+                    theme::border()
+                })
+                .text_color(if input_active && !buffer.is_empty() {
+                    theme::text()
+                } else {
+                    theme::text_subtle()
+                })
+                .child(match (input_active, buffer.is_empty()) {
+                    (true, true) => "|".to_string(),
+                    (true, false) => format!("{buffer}|"),
+                    (false, _) => format!("Add a tag to all {total}… (T)"),
+                })
+                .on_click(move |_e, _w, cx| {
+                    if let Some(app) = app_add.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if !this.tag_input_active {
+                                this.start_tag_input(cx);
+                            }
+                        });
+                    }
+                }),
+        )
+}
+
+fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize) -> Stateful<Div> {
+    let on_all = n >= total;
+    // Dashed chips keep the `batch-partial-tag-*` automation names.
+    let kind = if on_all { "tag" } else { "partial-tag" };
+    let selector = format!("batch-{kind}-{tag}");
+    let remove_selector = format!("batch-{kind}-remove-{tag}");
+    let (add_app, add_tag) = (weak_app.clone(), tag.clone());
+    let remove_tag = tag.clone();
+    let chip = div()
+        .id(ElementId::Name(selector.clone().into()))
+        .debug_selector(move || selector.clone())
+        .h(px(24.0))
+        .px(px(9.0))
+        .rounded_full()
+        .border_1()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .text_xs();
+    let chip = if on_all {
+        chip.bg(theme::bg_control())
+            .border_color(theme::border())
+            .text_color(theme::text())
+            .child(tag.clone())
+    } else {
+        chip.border_dashed()
+            .border_color(theme::text_disabled())
+            .text_color(theme::text_muted())
+            .cursor_pointer()
+            .hover(|s| s.bg(theme::bg_control_hover()))
+            .tooltip(theme::tooltip_label(format!(
+                "On {n} of {total} · add to all"
+            )))
+            .child(tag.clone())
+            .child(
+                div()
+                    .font_family(theme::FONT_MONO)
+                    .text_size(px(10.0))
+                    .text_color(theme::text_subtle())
+                    .child(format!("{n}/{total}")),
+            )
+            .on_click(move |_e, _w, cx| {
+                if let Some(app) = add_app.upgrade() {
+                    app.update(cx, |this, cx| this.batch_add_tag(add_tag.clone(), cx));
+                }
+            })
+    };
+    chip.child(
+        div()
+            .id(ElementId::Name(remove_selector.clone().into()))
+            .debug_selector(move || remove_selector.clone())
+            .tooltip(theme::tooltip_label("Remove from all"))
+            .cursor_pointer()
+            .rounded_full()
+            .hover(|s| s.bg(theme::border_strong()))
+            .child(render_icon(Icon::X, px(10.0), theme::text_subtle()))
+            .on_click(move |_e, _w, cx| {
+                // A dashed chip would otherwise add the tag.
+                cx.stop_propagation();
+                if let Some(app) = weak_app.upgrade() {
+                    app.update(cx, |this, cx| this.batch_remove_tag(remove_tag.clone(), cx));
+                }
+            }),
+    )
+}
+
+/// "13 Jun 2022", "3 Mar – 13 Jun 2022" or "3 Mar 2021 – 13 Jun 2022" (UTC,
+/// like the single-item capture time).
+pub(crate) fn date_range(oldest_ms: i64, newest_ms: i64) -> String {
+    use chrono::Datelike;
+    let (Some(a), Some(b)) = (
+        chrono::DateTime::from_timestamp_millis(oldest_ms),
+        chrono::DateTime::from_timestamp_millis(newest_ms),
+    ) else {
+        return String::new();
+    };
+    if a.date_naive() == b.date_naive() {
+        b.format("%-d %b %Y").to_string()
+    } else if a.year() == b.year() {
+        format!("{} – {}", a.format("%-d %b"), b.format("%-d %b %Y"))
+    } else {
+        format!("{} – {}", a.format("%-d %b %Y"), b.format("%-d %b %Y"))
+    }
 }
 
 /// Which batch metadata field a row edits.
@@ -579,4 +498,19 @@ fn render_batch_metadata_row(
             }
         })
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::date_range;
+
+    #[core::prelude::v1::test]
+    fn date_range_collapses_shared_day_and_year() {
+        let day = 1_655_114_580_000; // 13 Jun 2022
+        assert_eq!(date_range(day, day), "13 Jun 2022");
+        let march = 1_646_300_000_000; // 3 Mar 2022
+        assert_eq!(date_range(march, day), "3 Mar – 13 Jun 2022");
+        let prior = 1_614_764_000_000; // 3 Mar 2021
+        assert_eq!(date_range(prior, day), "3 Mar 2021 – 13 Jun 2022");
+    }
 }
