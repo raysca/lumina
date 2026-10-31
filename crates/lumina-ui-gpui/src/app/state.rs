@@ -397,6 +397,8 @@ pub struct LuminaApp {
     pub command_selected: usize,
     /// Keeps the keyboard-selected palette row scrolled into view.
     pub command_scroll: ScrollHandle,
+    /// Lets the shortcut sheet scroll from the keyboard.
+    pub shortcuts_scroll: ScrollHandle,
 
     // Phase 16 Hardware-Accelerated Video Player
     pub video: VideoPlaybackState,
@@ -562,6 +564,7 @@ impl LuminaApp {
             text_marked: None,
             command_selected: 0,
             command_scroll: ScrollHandle::new(),
+            shortcuts_scroll: ScrollHandle::new(),
             video: VideoPlaybackState {
                 playback_speed: 1.0,
                 is_looping: true,

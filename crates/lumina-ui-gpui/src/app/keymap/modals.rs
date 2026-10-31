@@ -3,6 +3,10 @@ use gpui::*;
 use crate::app::LuminaApp;
 use lumina_core::DeletionTarget;
 
+/// Shortcut sheet scroll steps: one row, and most of the 560px card.
+const SHEET_LINE: f32 = 32.0;
+const SHEET_PAGE: f32 = 480.0;
+
 impl LuminaApp {
     /// Handles keystrokes when any modal dialog or inline text field is active.
     /// Absorbs keystrokes so background shortcuts don't mutate or delete files.
@@ -34,8 +38,15 @@ impl LuminaApp {
 
         // 0. Keyboard shortcut cheat sheet
         if self.shortcuts_overlay_open {
-            if key == "escape" || key == "/" {
-                self.close_shortcuts_overlay(cx);
+            match key {
+                "escape" | "/" => self.close_shortcuts_overlay(cx),
+                "up" => self.scroll_shortcuts(-SHEET_LINE, cx),
+                "down" => self.scroll_shortcuts(SHEET_LINE, cx),
+                "pageup" => self.scroll_shortcuts(-SHEET_PAGE, cx),
+                "pagedown" | "space" => self.scroll_shortcuts(SHEET_PAGE, cx),
+                "home" => self.scroll_shortcuts(f32::NEG_INFINITY, cx),
+                "end" => self.scroll_shortcuts(f32::INFINITY, cx),
+                _ => {}
             }
             return true;
         }

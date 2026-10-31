@@ -11,7 +11,8 @@ Lumina is designed to be usable without a mouse:
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
-- **Shortcut sheet** (`⌘/`) lists navigation, editing, viewer and video keys.
+- **Shortcut sheet** (`⌘/`) lists general, browsing, viewer and video keys;
+  `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` and `Space` scroll it.
 - **Native menu bar** exposes File, View and Help commands; macOS treats these
   as accessible menu items for VoiceOver.
 - Arrow/Home/End/Page navigation, `⌘F` search focus, `⌘Z`/`⇧⌘Z` undo/redo,

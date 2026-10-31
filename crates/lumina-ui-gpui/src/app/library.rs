@@ -838,6 +838,18 @@ impl LuminaApp {
 
     pub fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
         self.shortcuts_overlay_open = !self.shortcuts_overlay_open;
+        self.shortcuts_scroll.set_offset(Point::default());
+        cx.notify();
+    }
+
+    /// Scrolls the shortcut sheet by `dy` pixels (positive is down), clamped
+    /// to its content.
+    pub fn scroll_shortcuts(&mut self, dy: f32, cx: &mut Context<Self>) {
+        let handle = &self.shortcuts_scroll;
+        let max = handle.max_offset().height;
+        let mut offset = handle.offset();
+        offset.y = (offset.y - px(dy)).clamp(-max, px(0.0));
+        handle.set_offset(offset);
         cx.notify();
     }
 

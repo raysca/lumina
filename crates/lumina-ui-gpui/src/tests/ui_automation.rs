@@ -820,6 +820,49 @@ fn ui_automation_shortcut_cheat_sheet() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
+/// The sheet is taller than its card, so its lower rows must be reachable
+/// without a mouse (AGENTS.md section 11).
+#[core::prelude::v1::test]
+fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
+    let (temp_dir, engine) = seed_library("shortcuts_scroll", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "secondary-/");
+    render_ui(vcx);
+    let offset = |vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| {
+            let max = app.shortcuts_scroll.max_offset().height;
+            assert!(max > px(0.0), "the sheet overflows its card, so it scrolls");
+            (app.shortcuts_scroll.offset().y, max)
+        })
+    };
+    assert_eq!(offset(vcx).0, px(0.0), "the sheet opens at the top");
+
+    keystrokes(vcx, "down");
+    let (y, _) = offset(vcx);
+    assert!(y < px(0.0), "Down scrolls the sheet");
+    keystrokes(vcx, "end");
+    let (y, max) = offset(vcx);
+    assert_eq!(y, -max, "End reaches the last row");
+    keystrokes(vcx, "pageup");
+    assert!(offset(vcx).0 > -max, "PageUp scrolls back up");
+    keystrokes(vcx, "home");
+    assert_eq!(offset(vcx).0, px(0.0), "Home returns to the top");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.shortcuts_overlay_open,
+            "scroll keys keep the sheet open"
+        );
+        assert_eq!(app.selected_indices.len(), 0, "and never move the grid");
+    });
+
+    keystrokes(vcx, "end");
+    keystrokes(vcx, "escape");
+    keystrokes(vcx, "secondary-/");
+    assert_eq!(offset(vcx).0, px(0.0), "reopening starts at the top again");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
 #[core::prelude::v1::test]
 fn ui_automation_export_writes_originals_and_sidecars() {
     let (temp_dir, engine) = seed_library("export", 3);

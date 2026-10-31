@@ -103,37 +103,68 @@ impl LuminaApp {
     }
 }
 
-/// The shortcut sheet's rows: keys, then what they do. Keep in step with
-/// `app/keymap`.
-const SHORTCUT_ROWS: [(&str, &str); 28] = [
-    ("⌘K", "Command palette"),
-    ("⌘F", "Focus search"),
-    ("⌘O", "Open library…"),
-    ("⌘,", "Preferences"),
-    ("⌘Z / ⇧⌘Z", "Undo / redo"),
-    ("⌘R", "Rescan library"),
-    ("⇧⌘R", "Show in Finder"),
-    ("⌥⌘C", "Copy file path"),
-    ("⌘+ / ⌘-", "Grid density"),
-    ("I", "Toggle inspector"),
-    ("Space", "Quick look / open viewer"),
-    ("Enter", "Open selected item"),
-    ("← ↑ → ↓", "Navigate items"),
-    ("Home / End", "First / last item"),
-    ("PageUp / PageDown", "Jump four rows"),
-    ("F", "Favorite"),
-    ("T", "Tag selection"),
-    ("⌃⌘F", "Full screen viewer"),
-    ("⌫", "Delete…"),
-    ("Z", "Toggle 1:1 zoom"),
-    ("O", "Open in default app"),
-    ("J / K / ←→", "Video back 5s / play / ±5s"),
-    ("L", "Loop video"),
-    ("M", "Mute audio"),
-    ("⌥P", "Picture-in-Picture on / off"),
-    ("⌥⌘N", "New smart album"),
-    ("Esc", "Close / go back"),
-    ("⌘/", "Toggle this help"),
+/// The shortcut sheet: titled sections of (keys, what they do). Keep in
+/// step with `app/keymap`.
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
+    (
+        "GENERAL",
+        &[
+            ("⌘K", "Command palette"),
+            ("⌘F", "Focus search"),
+            ("⌘O", "Open library…"),
+            ("⌘,", "Preferences"),
+            ("⌘R", "Rescan library"),
+            ("⌘Z / ⇧⌘Z", "Undo / redo"),
+            ("⌘[", "Back"),
+            ("⌥⌘N", "New smart album"),
+            ("I", "Toggle inspector"),
+            ("F", "Favorite"),
+            ("⇧⌘R", "Show in Finder"),
+            ("⌥⌘C", "Copy file path"),
+            ("Esc", "Close / go back"),
+            ("⌘/", "Toggle this help"),
+        ],
+    ),
+    (
+        "BROWSING",
+        &[
+            ("← ↑ → ↓", "Move selection"),
+            ("⇧ + arrows", "Extend selection"),
+            ("⌘A", "Select all"),
+            ("Home / End", "First / last item"),
+            ("PageUp / PageDown", "Jump four rows"),
+            ("⌘+ / ⌘-", "Grid density"),
+            ("Space / Enter", "Open in viewer"),
+            ("T", "Tag selection"),
+            ("⌫", "Delete…"),
+        ],
+    ),
+    (
+        "VIEWER",
+        &[
+            ("[ / ]", "Previous / next"),
+            ("← / →", "Previous / next photo"),
+            ("Enter / Esc", "Close viewer"),
+            ("⌃⌘F", "Full screen"),
+            ("H", "Hide / show controls"),
+            ("+ / -", "Zoom in / out"),
+            ("0 / 1 / 2 / 4", "Fit / 100% / 200% / 400%"),
+            ("Z", "Toggle 1:1 zoom"),
+            ("O", "Open in default app"),
+        ],
+    ),
+    (
+        "VIDEO",
+        &[
+            ("Space / K", "Play / pause"),
+            ("J / ←", "Back 5 s"),
+            ("→", "Forward 5 s"),
+            (", / .", "Previous / next frame"),
+            ("L", "Loop"),
+            ("M", "Mute"),
+            ("⌥P", "Picture-in-Picture on / off"),
+        ],
+    ),
 ];
 
 impl LuminaApp {
@@ -165,6 +196,7 @@ impl LuminaApp {
                     .w(px(520.0))
                     .max_h(px(560.0))
                     .overflow_y_scroll()
+                    .track_scroll(&self.shortcuts_scroll)
                     .bg(theme::bg_pane())
                     .border_1()
                     .border_color(theme::border())
@@ -202,21 +234,33 @@ impl LuminaApp {
                                     })),
                             ),
                     )
-                    .children(SHORTCUT_ROWS.into_iter().map(|(keys, description)| {
+                    .children(SHORTCUT_SECTIONS.into_iter().map(|(title, rows)| {
                         div()
+                            .pt_2()
                             .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .py_1()
-                            .child(div().text_xs().text_color(theme::text()).child(description))
-                            .child(
+                            .flex_col()
+                            .child(theme::section_label(title))
+                            .children(rows.iter().map(|&(keys, description)| {
                                 div()
-                                    .text_xs()
-                                    .font_family(theme::FONT_MONO)
-                                    .text_color(theme::text_muted())
-                                    .child(keys),
-                            )
+                                    .flex()
+                                    .flex_row()
+                                    .justify_between()
+                                    .items_center()
+                                    .py_1()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme::text())
+                                            .child(description),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_family(theme::FONT_MONO)
+                                            .text_color(theme::text_muted())
+                                            .child(keys),
+                                    )
+                            }))
                     })),
             )
             .into_any_element()
@@ -547,18 +591,45 @@ impl Render for LuminaApp {
 
 #[cfg(test)]
 mod tests {
-    use super::SHORTCUT_ROWS;
+    use super::SHORTCUT_SECTIONS;
+
+    fn says(keys: &str) -> Option<&'static str> {
+        SHORTCUT_SECTIONS
+            .iter()
+            .flat_map(|(_, rows)| rows.iter())
+            .find(|(k, _)| *k == keys)
+            .map(|r| r.1)
+    }
 
     /// Regression: the sheet listed "Z / O" for 1:1 zoom, but O opens the
     /// file in its default app (`app/keymap/viewer.rs`).
     #[core::prelude::v1::test]
     fn the_sheet_says_what_z_and_o_do() {
-        let says = |keys: &str| SHORTCUT_ROWS.iter().find(|(k, _)| *k == keys).map(|r| r.1);
         assert_eq!(says("Z"), Some("Toggle 1:1 zoom"), "Z toggles 1:1 zoom");
         assert_eq!(
             says("O"),
             Some("Open in default app"),
             "O opens the default app, it does not zoom"
         );
+    }
+
+    /// The sheet described Quick Look (there is none), and ← / → as
+    /// previous/next even on videos, where they seek.
+    #[core::prelude::v1::test]
+    fn the_sheet_describes_space_and_arrows_as_they_work() {
+        assert_eq!(says("Space / Enter"), Some("Open in viewer"));
+        assert_eq!(
+            says("← / →"),
+            Some("Previous / next photo"),
+            "on a video ← / → seek instead"
+        );
+        for (_, rows) in SHORTCUT_SECTIONS {
+            for (keys, what) in rows {
+                assert!(
+                    !what.contains("Quick look"),
+                    "{keys}: there is no Quick Look"
+                );
+            }
+        }
     }
 }
