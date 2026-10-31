@@ -110,9 +110,7 @@ impl ViewerViewport {
                 }),
             )
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _w, cx| {
-                if this.is_immersive_fullscreen && !this.immersive_hud_visible {
-                    this.immersive_hud_visible = true;
-                }
+                this.wake_immersive_hud(cx);
                 if this.viewer_state.is_dragging {
                     let x: f32 = e.position.x.into();
                     let y: f32 = e.position.y.into();

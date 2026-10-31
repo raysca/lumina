@@ -142,6 +142,7 @@ impl ViewerTransport {
         div()
             .id("video-transport")
             .debug_selector(|| "video-transport".to_string())
+            .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
             .w_full()
             // As wide as the video frame, but never too narrow for the three
             // control zones (portrait and tiny frames).

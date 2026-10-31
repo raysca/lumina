@@ -8,6 +8,18 @@ use crate::app::LuminaApp;
 use crate::config::validate_external_editor;
 use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
 
+/// Immersive mode hides the HUD after this long without pointer or key
+/// activity (v3 polish: immersive only; the windowed viewer keeps it).
+pub(crate) const HUD_IDLE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Auto-hide state for the immersive HUD.
+#[derive(Default)]
+pub(crate) struct HudIdle {
+    /// Pending hide; replacing or dropping it cancels the hide.
+    task: Option<Task<()>>,
+    pointer_on_hud: bool,
+}
+
 /// Banner shown when Edit in External Editor has no configured application.
 pub(crate) const EXTERNAL_EDITOR_UNSET_MESSAGE: &str =
     "No external editor configured. Choose an external editor in Preferences.";
@@ -275,6 +287,7 @@ impl LuminaApp {
         self.is_fullscreen_viewer = false;
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;
+        self.hud_idle = Default::default();
         self.viewer_shortcuts_open = false;
         self.context_menu_state = None;
         self.viewer_state.reset();
@@ -291,7 +304,7 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) {
         self.is_immersive_fullscreen = true;
-        self.immersive_hud_visible = true;
+        self.wake_immersive_hud(cx);
         if let Some(w) = window {
             if !w.is_fullscreen() {
                 w.toggle_fullscreen();
@@ -307,6 +320,9 @@ impl LuminaApp {
     ) {
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;
+        // Drop only the pending hide: the windowed top bar stays mounted, so
+        // its hover state (and `pointer_on_hud`) is still current.
+        self.hud_idle.task = None;
         if let Some(w) = window {
             if w.is_fullscreen() {
                 w.toggle_fullscreen();
@@ -328,8 +344,60 @@ impl LuminaApp {
     }
 
     pub fn toggle_immersive_hud(&mut self, cx: &mut Context<Self>) {
-        self.immersive_hud_visible = !self.immersive_hud_visible;
-        cx.notify();
+        if self.immersive_hud_visible {
+            self.immersive_hud_visible = false;
+            self.hud_idle = Default::default();
+            cx.notify();
+        } else {
+            self.wake_immersive_hud(cx);
+        }
+    }
+
+    /// Pointer movement or a key in immersive mode: show the HUD and hide it
+    /// again after `HUD_IDLE` without activity. Each wake replaces the timer
+    /// task, which cancels the previous one.
+    pub(crate) fn wake_immersive_hud(&mut self, cx: &mut Context<Self>) {
+        if !self.is_immersive_fullscreen {
+            return;
+        }
+        if !self.immersive_hud_visible {
+            self.immersive_hud_visible = true;
+            cx.notify();
+        }
+        self.hud_idle.task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(HUD_IDLE).await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.is_immersive_fullscreen {
+                    return;
+                }
+                if this.hud_must_stay() {
+                    // Check again later: a menu closed by key or a drag that
+                    // ends without a move sends no wake of its own.
+                    this.wake_immersive_hud(cx);
+                } else {
+                    this.immersive_hud_visible = false;
+                    cx.notify();
+                }
+            });
+        }));
+    }
+
+    /// The HUD never hides under the pointer, over an open menu (context or
+    /// speed) or help sheet, mid-scrub or mid-pan (hiding the transport would drop the
+    /// release), or while a field takes typing.
+    fn hud_must_stay(&self) -> bool {
+        self.hud_idle.pointer_on_hud
+            || self.context_menu_state.is_some()
+            || self.video.speed_menu_open
+            || self.video.is_scrubbing
+            || self.viewer_state.is_dragging
+            || self.viewer_shortcuts_open
+            || self.text_target().is_some()
+    }
+
+    /// Hover tracking for the HUD's top bar and video transport.
+    pub(crate) fn set_pointer_on_hud(&mut self, on: bool) {
+        self.hud_idle.pointer_on_hud = on;
     }
 
     #[cfg(test)]

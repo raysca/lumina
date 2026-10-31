@@ -3,6 +3,7 @@ mod delete_dialog;
 mod design_system;
 mod editor_handoff;
 mod get_info;
+mod immersive_hud;
 mod inspector;
 mod interaction;
 mod legacy_catalog;

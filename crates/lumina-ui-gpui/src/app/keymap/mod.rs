@@ -66,6 +66,12 @@ impl LuminaApp {
             return;
         }
 
+        // Any key that reaches the viewer brings the immersive HUD back
+        // (I, ⌘K, arrows…), except H, which toggles it.
+        if self.is_fullscreen_viewer && !key.eq_ignore_ascii_case("h") {
+            self.wake_immersive_hud(cx);
+        }
+
         // Esc dismisses the error banner before it reaches the grid or viewer.
         if key == "escape" && self.error_message.is_some() {
             self.dismiss_error(cx);

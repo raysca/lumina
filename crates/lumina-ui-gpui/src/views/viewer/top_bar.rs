@@ -130,6 +130,7 @@ impl ViewerTopBar {
         div()
             .id("viewer-top-bar")
             .debug_selector(|| "viewer-top-bar".to_string())
+            .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
             .w_full()
             .h(px(52.0))
             .px_4()

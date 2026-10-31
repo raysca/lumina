@@ -55,10 +55,7 @@ impl MediaViewer {
 
         backdrop
             .on_mouse_move(cx.listener(|this, _e: &MouseMoveEvent, _w, cx| {
-                if this.is_immersive_fullscreen && !this.immersive_hud_visible {
-                    this.immersive_hud_visible = true;
-                    cx.notify();
-                }
+                this.wake_immersive_hud(cx);
             }))
             .on_mouse_up(
                 MouseButton::Left,
