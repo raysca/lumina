@@ -93,6 +93,12 @@ mod live_children {
         pids.get_or_insert_with(HashSet::new).insert(pid);
         Tracked(pid)
     }
+
+    #[cfg(test)]
+    pub(super) fn is_tracked(pid: u32) -> bool {
+        let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
+        pids.as_ref().is_some_and(|pids| pids.contains(&pid))
+    }
 }
 
 #[cfg(not(unix))]
@@ -427,6 +433,20 @@ mod tests {
                 );
             });
             while !Path::new(&pidfile).exists() {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            // The shell can write its pid before spawn() returns and the pid is
+            // tracked; exiting in that gap would test nothing.
+            let pid: u32 = fs::read_to_string(&pidfile)
+                .expect("tool wrote its pid")
+                .trim()
+                .parse()
+                .expect("pid is a number");
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !live_children::is_tracked(pid) {
+                if Instant::now() >= deadline {
+                    std::process::exit(2);
+                }
                 std::thread::sleep(Duration::from_millis(10));
             }
             std::process::exit(0);
