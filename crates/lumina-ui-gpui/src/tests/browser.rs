@@ -247,6 +247,13 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
             "a library-wide count would lie about search results"
         );
         app.search_query.clear();
+        app.selection = crate::views::sidebar::AlbumSelection::Untagged;
+        assert_eq!(
+            app.month_header_count(),
+            None,
+            "a library-wide count would lie about an album"
+        );
+        app.selection = crate::views::sidebar::AlbumSelection::AllLibrary;
         app.set_sort_field(lumina_core::SortField::FileName, cx);
         // debug_bounds keeps stale entries, so ask the renderer directly.
         assert!(
