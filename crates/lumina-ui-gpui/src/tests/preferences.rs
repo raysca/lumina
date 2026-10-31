@@ -168,3 +168,19 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     let _ = std::fs::remove_dir_all(&temp_dir);
     let _ = std::fs::remove_dir_all(&other_dir);
 }
+
+#[core::prelude::v1::test]
+fn library_folder_reads_from_home() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
+    let home = dirs::home_dir().expect("tests run with a home directory");
+    view.update(vcx, |app, _| {
+        app.grid_state = None;
+        app.config.last_library_path = Some(home.join("Pictures").join("Lumina"));
+        assert_eq!(
+            app.library_path_label(),
+            "~/Pictures/Lumina",
+            "the Library folder row shortens the home directory to ~"
+        );
+    });
+}

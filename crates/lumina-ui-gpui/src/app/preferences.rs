@@ -200,12 +200,12 @@ impl LuminaApp {
     pub fn library_path_label(&self) -> String {
         self.grid_state
             .as_ref()
-            .map(|state| state.engine.library_root().display().to_string())
+            .map(|state| crate::views::preferences::tilde(state.engine.library_root()))
             .or_else(|| {
                 self.config
                     .last_library_path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
+                    .as_deref()
+                    .map(crate::views::preferences::tilde)
             })
             .unwrap_or_else(|| "No library open".to_string())
     }

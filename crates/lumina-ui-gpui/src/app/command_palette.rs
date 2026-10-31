@@ -408,6 +408,18 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Commands that would do nothing right now stay out of the list.
+    fn command_applies(&self, id: CommandId) -> bool {
+        match id {
+            CommandId::RetryError => self.error_retry.is_some(),
+            CommandId::EmptyTrash | CommandId::RestoreAll => self
+                .system_album_counts
+                .get(&lumina_core::SystemAlbum::RecentlyDeleted)
+                .is_some_and(|&n| n > 0),
+            _ => true,
+        }
+    }
+
     /// COMMANDS (at most eight) then GO TO, filtered by the query.
     pub fn palette_rows(&self) -> Vec<PaletteRow> {
         let words: Vec<String> = self
@@ -418,7 +430,7 @@ impl LuminaApp {
             .collect();
         let mut rows: Vec<PaletteRow> = commands()
             .iter()
-            .filter(|c| matches(&words, &c.title(), c.keywords))
+            .filter(|c| self.command_applies(c.id) && matches(&words, &c.title(), c.keywords))
             .take(MAX_COMMANDS)
             .map(|c| PaletteRow {
                 target: PaletteTarget::Command(c.id),

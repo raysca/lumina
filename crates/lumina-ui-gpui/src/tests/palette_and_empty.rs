@@ -308,3 +308,47 @@ fn palette_go_to_opens_views_tags_and_years() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn palette_hides_trash_and_retry_commands_that_cannot_act() {
+    let (dir, engine) = seed_library("palette_applies", 2);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    // Narrow the list so the three commands are not cut by MAX_COMMANDS.
+    let shown =
+        |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext, q: &str| {
+            view.update(vcx, |app, _| {
+                app.command_query = q.into();
+                let n = app.palette_rows().iter().filter(|r| !r.is_go_to()).count();
+                app.command_query.clear();
+                n
+            })
+        };
+    assert_eq!(
+        shown(&view, vcx, "empty trash"),
+        0,
+        "no trash, no Empty Trash…"
+    );
+    assert_eq!(
+        shown(&view, vcx, "restore all"),
+        0,
+        "no trash, no Restore All"
+    );
+    assert_eq!(shown(&view, vcx, "retry"), 0, "no failure, no Retry");
+
+    engine.set_trashed(item.id, true).unwrap();
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        app.set_error_with_retry("Couldn't clear cache: test", |_, _| {}, cx);
+    });
+    assert_eq!(shown(&view, vcx, "empty trash"), 1, "trash has items");
+    assert_eq!(shown(&view, vcx, "restore all"), 1, "trash has items");
+    assert_eq!(
+        shown(&view, vcx, "retry"),
+        1,
+        "a retryable failure is showing"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
