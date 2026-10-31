@@ -210,11 +210,13 @@ fn prev_next_sit_40px_inside_the_frame_and_centred_on_it() {
     let mut cx = gpui::TestAppContext::single();
     let (_dir, _view, vcx) = open_video(&mut cx);
 
+    // V3Video: 40px from the window edges, centred on the (narrower) frame.
     let frame = bounds(vcx, "viewer-viewport");
     let prev = bounds(vcx, "viewer-prev");
     let next = bounds(vcx, "viewer-next");
-    assert_eq!(f32::from(prev.left() - frame.left()), 40.0);
-    assert_eq!(f32::from(frame.right() - next.right()), 40.0);
+    let window_w = vcx.update(|window, _| window.viewport_size().width);
+    assert_eq!(f32::from(prev.left()), 40.0);
+    assert_eq!(f32::from(window_w - next.right()), 40.0);
     for b in [prev, next] {
         assert!(
             (center_y(b) - center_y(frame)).abs() < 1.0,
@@ -304,4 +306,137 @@ fn open_info_drawer_never_covers_the_transport() {
         transport.right() <= drawer.left(),
         "the info drawer must sit beside the transport: {transport:?} drawer={drawer:?}"
     );
+}
+
+#[core::prelude::v1::test]
+fn video_frame_is_1040_wide_with_the_transport_right_below() {
+    let mut cx = gpui::TestAppContext::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+
+    // V3Video: a 1040x585 frame, then the transport card 12px below it.
+    let media = bounds(vcx, "viewer-media");
+    let transport = bounds(vcx, "video-transport");
+    let (w, h) = size(media);
+    assert!(
+        (w - 1040.0).abs() < 1.0 && (h - 585.0).abs() < 1.5,
+        "a 16:9 video fills a 1040x585 frame: {media:?}"
+    );
+    let gap = f32::from(transport.top() - media.bottom());
+    assert!(
+        (8.0..=16.0).contains(&gap),
+        "the transport sits right below the video, got a {gap}px gap"
+    );
+    assert!(
+        (f32::from(transport.left() - media.left())).abs() < 1.0
+            && (size(transport).0 - w).abs() < 1.0,
+        "the transport is exactly as wide as the video: {transport:?} {media:?}"
+    );
+}
+
+/// Shows the video with a decoded frame of `w`x`h` in a `win_w`x`win_h` window.
+fn framed_video(
+    cx: &mut gpui::TestAppContext,
+    (w, h): (u32, u32),
+    (win_w, win_h): (f32, f32),
+) -> (Fixture, &mut VisualTestContext) {
+    let (fixture, view, vcx) = open_video(cx);
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            w,
+            h,
+        ));
+        app.window_bounds = Some((0.0, 0.0, win_w, win_h));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(win_w), gpui::px(win_h)));
+    render_ui(vcx);
+    render_ui(vcx);
+    (fixture, vcx)
+}
+
+#[core::prelude::v1::test]
+fn portrait_and_short_window_videos_keep_frame_and_transport_on_screen() {
+    for (frame, window) in [
+        ((1080, 1920), (1440.0, 900.0)),
+        ((1920, 1080), (1440.0, 640.0)),
+    ] {
+        let mut cx = gpui::TestAppContext::single();
+        let (_fixture, vcx) = framed_video(&mut cx, frame, window);
+        let media = bounds(vcx, "viewer-media");
+        let transport = bounds(vcx, "video-transport");
+        assert!(
+            media.top() >= gpui::px(52.0) && f32::from(transport.bottom()) <= window.1,
+            "{frame:?} in {window:?}: the frame and the whole transport stay on screen: \
+             media={media:?} transport={transport:?}"
+        );
+        let (w, h) = size(media);
+        assert!(
+            ((w / h) - frame.0 as f32 / frame.1 as f32).abs() < 0.02,
+            "{frame:?}: the frame keeps the video's shape, got {w}x{h}"
+        );
+    }
+}
+
+#[core::prelude::v1::test]
+fn transport_matches_a_frame_narrowed_by_the_info_drawer() {
+    let mut cx = gpui::TestAppContext::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    let media = bounds(vcx, "viewer-media");
+    let transport = bounds(vcx, "video-transport");
+    assert!(
+        size(media).0 < 1040.0 && (size(transport).0 - size(media).0).abs() < 1.0,
+        "with Info open the transport narrows with the frame: {media:?} {transport:?}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn a_catalog_refresh_keeps_the_players_video_dimensions() {
+    let mut cx = gpui::TestAppContext::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, _| {
+        let mut played = app.selected_item.clone().expect("the video is shown");
+        played.width = 1920;
+        played.height = 1080;
+        app.video.item = Some(played.clone());
+        // A date/location edit or undo reloads the row, which has no size.
+        let mut fresh = played;
+        fresh.width = 0;
+        fresh.height = 0;
+        app.set_selected_from_catalog(fresh);
+        let shown = app.selected_item.as_ref().unwrap();
+        assert_eq!(
+            (shown.width, shown.height),
+            (1920, 1080),
+            "the inspector must not fall back to Dimensions — after a reload"
+        );
+    });
 }

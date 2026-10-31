@@ -542,7 +542,7 @@ impl LuminaApp {
             .as_ref()
             .and_then(|state| state.engine.get_item_by_id(item.id))
         {
-            self.selected_item = Some(updated);
+            self.set_selected_from_catalog(updated);
         }
         self.refresh_album_counts();
         self.set_last_action("Date updated");
@@ -627,7 +627,7 @@ impl LuminaApp {
             .as_ref()
             .and_then(|state| state.engine.get_item_by_id(item.id))
         {
-            self.selected_item = Some(updated);
+            self.set_selected_from_catalog(updated);
         }
         let message = if lat.is_some() {
             "Location updated"

@@ -98,7 +98,12 @@ impl MediaViewer {
                     .child(
                         div()
                             .relative()
-                            .flex_1()
+                            // A framed video takes its own height so the
+                            // transport follows it; photos fill the stage.
+                            .map(|frame| match viewport::video_frame_size(this) {
+                                Some(_) => frame.flex_none(),
+                                None => frame.flex_1(),
+                            })
                             .min_h_0()
                             .w_full()
                             .flex()

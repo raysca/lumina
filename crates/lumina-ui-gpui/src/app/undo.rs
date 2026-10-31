@@ -374,7 +374,7 @@ impl LuminaApp {
                 .as_ref()
                 .and_then(|item| state.engine.get_item_by_id(item.id));
             if let Some(item) = updated_selected {
-                self.selected_item = Some(item);
+                self.set_selected_from_catalog(item);
             }
         }
         // Covers both a single item and a multi-selection (per-tag counts).

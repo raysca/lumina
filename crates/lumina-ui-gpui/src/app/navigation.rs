@@ -910,7 +910,7 @@ impl LuminaApp {
                 .as_ref()
                 .and_then(|state| state.engine.get_item_by_id(id))
             {
-                self.selected_item = Some(updated);
+                self.set_selected_from_catalog(updated);
             }
         }
     }

@@ -80,6 +80,9 @@ fn transport_button(
         ))
 }
 
+/// Narrowest transport card that still fits its three control zones.
+const TRANSPORT_MIN_WIDTH: f32 = 560.0;
+
 pub struct ViewerTransport;
 
 impl ViewerTransport {
@@ -140,7 +143,13 @@ impl ViewerTransport {
             .id("video-transport")
             .debug_selector(|| "video-transport".to_string())
             .w_full()
-            .max_w(px(1040.0))
+            // As wide as the video frame, but never too narrow for the three
+            // control zones (portrait and tiny frames).
+            .max_w(px(super::viewport::video_frame_size(this)
+                .map_or(super::viewport::VIDEO_FRAME_MAX_WIDTH, |(w, _)| {
+                    w.max(TRANSPORT_MIN_WIDTH)
+                })))
+            .mt(px(12.0))
             .mb_4()
             .p_3()
             .bg(theme::bg_app())

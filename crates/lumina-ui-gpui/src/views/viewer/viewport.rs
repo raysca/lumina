@@ -20,6 +20,49 @@ fn scroll_zoom_delta(raw_delta: f32, scale: f32) -> f32 {
     scale * ((raw_delta * SCROLL_ZOOM_SENSITIVITY).clamp(-0.6, 0.6).exp() - 1.0)
 }
 
+/// V3Video frame width; the transport card shares it.
+pub(super) const VIDEO_FRAME_MAX_WIDTH: f32 = 1040.0;
+
+/// V3Video: the video frame contain-fitted to at most 1040 wide and to the
+/// stage left after the top bar, the info drawer and the transport, so the
+/// transport sits right below the picture and always stays on screen.
+/// `None` for photos and immersive fullscreen, which fill the stage.
+pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
+    const TOP_BAR: f32 = 52.0;
+    // ponytail: measured transport card (106) + its 12px top and 16px bottom
+    // margins; update if the card grows.
+    const TRANSPORT_BLOCK: f32 = 134.0;
+    // Room for the 40px prev/next buttons 40px from each edge.
+    const NAV_ROOM: f32 = 160.0;
+    let is_video = this
+        .selected_item
+        .as_ref()
+        .is_some_and(|i| i.media_type == MediaType::Video);
+    if !is_video || this.is_immersive_fullscreen {
+        return None;
+    }
+    let aspect = this
+        .viewer_image
+        .as_ref()
+        .map(|image| {
+            let size = image.size(0);
+            size.width.0 as f32 / size.height.0.max(1) as f32
+        })
+        .unwrap_or(16.0 / 9.0);
+    let (_, _, win_w, win_h) = this.window_bounds.unwrap_or((0.0, 0.0, 1280.0, 840.0));
+    let drawer = if this.inspector_open {
+        super::DRAWER_WIDTH + super::DRAWER_INSET * 2.0
+    } else {
+        0.0
+    };
+    let max_w = VIDEO_FRAME_MAX_WIDTH
+        .min(win_w - drawer - NAV_ROOM)
+        .max(1.0);
+    let max_h = (win_h - TOP_BAR - TRANSPORT_BLOCK).max(1.0);
+    let w = max_w.min(max_h * aspect);
+    Some((w, w / aspect))
+}
+
 pub struct ViewerViewport;
 
 impl ViewerViewport {
@@ -40,13 +83,14 @@ impl ViewerViewport {
         // ponytail: the inset stays while zoomed, so zoom geometry keeps one
         // canvas size; cost: zoomed photos are clipped to it, not full-bleed.
         let inset = !is_video && !this.is_immersive_fullscreen;
-
-        div()
+        let viewport = match video_frame_size(this) {
+            Some((w, h)) => div().flex_none().w(px(w)).h(px(h)),
+            None => div().flex_1().w_full(),
+        };
+        viewport
             .id("viewer-viewport")
             .debug_selector(|| "viewer-viewport".to_string())
             .relative()
-            .flex_1()
-            .w_full()
             .overflow_hidden()
             .when(inset, |d| d.px(px(88.0)).py(px(44.0)))
             .flex()
@@ -194,8 +238,6 @@ impl ViewerViewport {
                         div()
                             .w_full()
                             .h_full()
-                            .max_w(px(1060.0))
-                            .max_h(px(596.0))
                             .rounded_lg()
                             .overflow_hidden()
                             .bg(theme::bg_media())

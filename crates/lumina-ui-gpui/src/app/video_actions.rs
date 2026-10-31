@@ -180,6 +180,15 @@ impl LuminaApp {
             player.set_muted(self.video.is_muted);
             player.set_rate(self.video.playback_speed);
             self.video.duration = meta.duration_secs;
+            // The scanner reads no video dimensions; show what the player knows.
+            // ponytail: session only, persist once the scanner probes videos.
+            for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
+                .into_iter()
+                .flatten()
+                .filter(|shown| shown.id == item.id)
+            {
+                fill_missing_dimensions(shown, meta.width, meta.height);
+            }
             let saved = media_id.and_then(|id| {
                 self.grid_state
                     .as_ref()
@@ -559,5 +568,57 @@ impl LuminaApp {
             self.video.hover_time = None;
         }
         cx.notify();
+    }
+}
+
+impl LuminaApp {
+    /// Replaces the shown item with a fresh catalog copy, keeping the size the
+    /// player reported for an open video (the catalog has none for videos).
+    pub(crate) fn set_selected_from_catalog(&mut self, mut item: MediaItem) {
+        if let Some(playing) = self.video.item.as_ref().filter(|v| v.id == item.id) {
+            fill_missing_dimensions(&mut item, playing.width, playing.height);
+        }
+        self.selected_item = Some(item);
+    }
+}
+
+/// Takes the player's frame size when the catalog has none.
+fn fill_missing_dimensions(item: &mut MediaItem, width: u32, height: u32) {
+    if (item.width == 0 || item.height == 0) && width > 0 && height > 0 {
+        item.width = width;
+        item.height = height;
+    }
+}
+
+#[cfg(test)]
+mod dimension_tests {
+    use super::fill_missing_dimensions;
+
+    #[core::prelude::v1::test]
+    fn player_dimensions_fill_only_missing_ones() {
+        let mut item = crate::app::types::get_sample_items()
+            .into_iter()
+            .find(|i| i.media_type == lumina_core::MediaType::Video)
+            .expect("the sample set has a video");
+        item.width = 0;
+        item.height = 0;
+        fill_missing_dimensions(&mut item, 0, 0);
+        assert_eq!(
+            (item.width, item.height),
+            (0, 0),
+            "no size from the player keeps —"
+        );
+        fill_missing_dimensions(&mut item, 1920, 1080);
+        assert_eq!(
+            (item.width, item.height),
+            (1920, 1080),
+            "missing dims are filled"
+        );
+        fill_missing_dimensions(&mut item, 640, 480);
+        assert_eq!(
+            (item.width, item.height),
+            (1920, 1080),
+            "catalog dims are never overwritten"
+        );
     }
 }
