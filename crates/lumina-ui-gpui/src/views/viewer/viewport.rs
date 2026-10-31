@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::MediaType;
 
@@ -34,6 +35,11 @@ impl ViewerViewport {
         let (pan_x, pan_y) = this.viewer_state.pan_offset;
         let is_zoomed = scale > 1.0;
         let is_dragging = this.viewer_state.is_dragging;
+        // A fixed margin clear of the 40px prev/next buttons: 1264x760 at
+        // 1440x900 like V3Photo, growing with larger windows (no size cap).
+        // ponytail: the inset stays while zoomed, so zoom geometry keeps one
+        // canvas size; cost: zoomed photos are clipped to it, not full-bleed.
+        let inset = !is_video && !this.is_immersive_fullscreen;
 
         div()
             .id("viewer-viewport")
@@ -42,6 +48,7 @@ impl ViewerViewport {
             .flex_1()
             .w_full()
             .overflow_hidden()
+            .when(inset, |d| d.px(px(88.0)).py(px(44.0)))
             .flex()
             .flex_col()
             .items_center()

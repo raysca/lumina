@@ -285,3 +285,23 @@ fn viewer_menu_owns_the_keyboard_and_acts_on_the_shown_item_only() {
         );
     });
 }
+
+#[core::prelude::v1::test]
+fn open_info_drawer_never_covers_the_transport() {
+    let mut cx = gpui::TestAppContext::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    let drawer = bounds(vcx, "viewer-info-drawer");
+    let transport = bounds(vcx, "video-transport");
+    assert!(
+        transport.right() <= drawer.left(),
+        "the info drawer must sit beside the transport: {transport:?} drawer={drawer:?}"
+    );
+}

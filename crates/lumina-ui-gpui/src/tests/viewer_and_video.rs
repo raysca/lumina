@@ -1542,6 +1542,18 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
         "the region stays inside the navigator"
     );
 
+    let zoomed = vcx
+        .debug_bounds("viewer-media")
+        .expect("the 2x viewer must paint the media element");
+    assert!(
+        f32::from(zoomed.size.width) > f32::from(fit.size.width) * 1.5,
+        "2x must enlarge the painted media width, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
+    );
+    assert!(
+        f32::from(zoomed.size.height) > f32::from(fit.size.height) * 1.5,
+        "2x must enlarge the painted media height, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
+    );
+
     // With the info drawer open the navigator moves left of it.
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
@@ -1555,18 +1567,6 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
     assert!(
         nav.right() <= drawer.left(),
         "the navigator must not sit under the info drawer: nav={nav:?} drawer={drawer:?}"
-    );
-
-    let zoomed = vcx
-        .debug_bounds("viewer-media")
-        .expect("the 2x viewer must paint the media element");
-    assert!(
-        f32::from(zoomed.size.width) > f32::from(fit.size.width) * 1.5,
-        "2x must enlarge the painted media width, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
-    );
-    assert!(
-        f32::from(zoomed.size.height) > f32::from(fit.size.height) * 1.5,
-        "2x must enlarge the painted media height, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -1962,4 +1962,69 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             "opening another library must queue the old library's thumbnails for GPU eviction"
         );
     });
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_fits_a_photo_inside_the_stage_margins() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_fit_tall", 1440.0, 900.0);
+    // V3Photo fits into at most 1200x760 of the 1440x848 stage, clear of the
+    // prev/next buttons, instead of running edge to edge.
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1600,
+            1600,
+        ));
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let viewport = vcx.debug_bounds("viewer-viewport").unwrap();
+    let media = vcx.debug_bounds("viewer-media").unwrap();
+    assert!(
+        media.top() - viewport.top() >= gpui::px(40.0)
+            && viewport.bottom() - media.bottom() >= gpui::px(40.0)
+            && media.left() - viewport.left() >= gpui::px(80.0),
+        "Fit must leave the design's stage margins: viewport={viewport:?} media={media:?}"
+    );
+    let (fit_w, fit_h) = view.update(vcx, |app, _| {
+        app.viewer_state
+            .canvas
+            .expect("canvas geometry is captured")
+            .fitted
+    });
+    assert!(
+        (fit_w - fit_h).abs() < 1.0 && fit_h <= 761.0,
+        "a square photo fits as a square at most 760 tall: {fit_w}x{fit_h}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_drawer_clear", 1440.0, 900.0);
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let drawer = vcx.debug_bounds("viewer-info-drawer").unwrap();
+    for selector in ["viewer-media", "viewer-next", "viewer-viewport"] {
+        let b = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} renders"));
+        assert!(
+            b.right() <= drawer.left(),
+            "the info drawer must sit beside {selector}, not over it: {b:?} drawer={drawer:?}"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

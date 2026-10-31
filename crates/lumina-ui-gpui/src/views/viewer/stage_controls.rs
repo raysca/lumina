@@ -70,8 +70,12 @@ fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
     } else {
         ((NAVIGATOR_EDGE * aspect).max(24.0), NAVIGATOR_EDGE)
     };
-    // Keep clear of the floating info drawer (340px + its 16px inset).
-    let right = if this.inspector_open { 372.0 } else { 16.0 };
+    // Keep clear of the floating info drawer.
+    let right = if this.inspector_open {
+        super::DRAWER_WIDTH + super::DRAWER_INSET * 2.0
+    } else {
+        super::DRAWER_INSET
+    };
     Some(
         div()
             .id("viewer-navigator")

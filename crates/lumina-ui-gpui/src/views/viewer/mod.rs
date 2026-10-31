@@ -17,6 +17,10 @@ pub use top_bar::ViewerTopBar;
 pub use transport::ViewerTransport;
 pub use viewport::ViewerViewport;
 
+/// Floating info drawer width and its gap to the window edge.
+pub(super) const DRAWER_WIDTH: f32 = 340.0;
+pub(super) const DRAWER_INSET: f32 = 16.0;
+
 pub struct MediaViewer;
 
 impl MediaViewer {
@@ -33,6 +37,7 @@ impl MediaViewer {
         let is_immersive = this.is_immersive_fullscreen;
         let hud_visible = this.immersive_hud_visible;
         let show_chrome = !is_immersive || hud_visible;
+        let show_drawer = is_inspector_open && show_chrome;
 
         let backdrop = div()
             .id("viewer-backdrop")
@@ -76,6 +81,13 @@ impl MediaViewer {
                     .flex_1()
                     .w_full()
                     .overflow_hidden()
+                    // The info drawer floats at the right; reserve its width
+                    // so it never covers the media, next button or transport.
+                    // Not in immersive mode: the drawer hides with the HUD
+                    // there, and the photo must not resize each time.
+                    .when(is_inspector_open && !is_immersive, |stage| {
+                        stage.pr(px(DRAWER_WIDTH + DRAWER_INSET * 2.0))
+                    })
                     .flex()
                     .flex_col()
                     .items_center()
@@ -112,7 +124,7 @@ impl MediaViewer {
                     }),
             )
             // 4. Floating Inspector Drawer (when opened)
-            .child(if is_inspector_open && (!is_immersive || hud_visible) {
+            .child(if show_drawer {
                 div()
                     .id("viewer-info-drawer")
                     .debug_selector(|| "viewer-info-drawer".to_string())
@@ -121,9 +133,9 @@ impl MediaViewer {
                     .occlude()
                     .absolute()
                     .top(px(60.0))
-                    .right_4()
-                    .bottom(px(16.0))
-                    .w(px(340.0))
+                    .right(px(DRAWER_INSET))
+                    .bottom(px(DRAWER_INSET))
+                    .w(px(DRAWER_WIDTH))
                     .bg(theme::bg_hud())
                     .border_1()
                     .border_color(theme::border_strong())
