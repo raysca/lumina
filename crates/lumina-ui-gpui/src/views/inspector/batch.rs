@@ -231,7 +231,12 @@ fn render_rating(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
         .flex_row()
         .items_center()
         .gap_2()
-        .child(render_stars(weak_app, common.unwrap_or(0)))
+        .child(render_stars(
+            weak_app,
+            common.unwrap_or(0),
+            app.mark_pop
+                .star(app.selected_item.as_ref().map(|item| item.id)),
+        ))
         .child(
             div()
                 .id("batch-rating-note")

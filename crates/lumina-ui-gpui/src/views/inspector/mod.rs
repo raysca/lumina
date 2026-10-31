@@ -48,6 +48,7 @@ impl InspectorView {
                 &this.tag_input_buffer,
                 this.selection == AlbumSelection::Trash,
                 this.get_item_rating(item),
+                this.mark_pop.star(Some(item.id)),
                 this.item_color_labels.get(&item.id).copied(),
             ))
             .into_any_element()

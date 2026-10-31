@@ -370,6 +370,8 @@ impl LuminaApp {
             }
         }
         set_or_clear(&mut self.item_ratings, &writes);
+        let shown = self.selected_item.as_ref().map(|item| item.id);
+        self.mark_pop.rated(shown, rating);
         let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
         self.push_undo(UndoAction::Rating { changes });
         self.sync_metadata_sidecars(&changed, cx);
@@ -455,6 +457,7 @@ impl LuminaApp {
                 if let Some(ref mut current) = self.selected_item {
                     current.is_favorite = new_fav;
                 }
+                self.mark_pop.favorited(Some(item.id));
                 self.push_undo(UndoAction::Favorite {
                     changes: vec![(item.id, item.is_favorite, new_fav)],
                 });

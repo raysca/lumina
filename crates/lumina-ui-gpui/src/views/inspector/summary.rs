@@ -22,6 +22,7 @@ pub fn render_summary_body(
     tag_input_buffer: &str,
     is_trash: bool,
     rating: u8,
+    star_pop: Option<(u8, ElementId)>,
     color_label: Option<u8>,
 ) -> AnyElement {
     let dims = if item.width > 0 && item.height > 0 {
@@ -81,7 +82,7 @@ pub fn render_summary_body(
                 .flex()
                 .flex_row()
                 .items_center()
-                .child(render_stars(weak_app.clone(), rating))
+                .child(render_stars(weak_app.clone(), rating, star_pop))
                 .child(div().flex_1())
                 .child(render_label_dots(weak_app.clone(), color_label)),
         ))
@@ -220,7 +221,12 @@ fn render_stat_strip(item: &MediaItem) -> AnyElement {
         .into_any_element()
 }
 
-pub(super) fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
+/// `pop` is the star just set and its pop id (`motion::MarkPop`).
+pub(super) fn render_stars(
+    weak_app: WeakEntity<LuminaApp>,
+    rating: u8,
+    pop: Option<(u8, ElementId)>,
+) -> Div {
     div()
         .flex()
         .flex_row()
@@ -250,10 +256,13 @@ pub(super) fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .child(render_icon(
-                    if filled { Icon::StarFilled } else { Icon::Star },
-                    px(14.0),
-                    color,
+                .child(crate::motion::pop(
+                    render_icon(
+                        if filled { Icon::StarFilled } else { Icon::Star },
+                        px(14.0),
+                        color,
+                    ),
+                    pop.clone().filter(|(s, _)| *s == star).map(|(_, id)| id),
                 ))
                 .on_click(move |_e, _w, cx| {
                     if let Some(app) = app.upgrade() {

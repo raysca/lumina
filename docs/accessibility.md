@@ -17,6 +17,14 @@ Lumina is designed to be usable without a mouse:
 - Arrow/Home/End/Page navigation, `⌘F` search focus, `⌘Z`/`⇧⌘Z` undo/redo,
   tooltips on icon-only controls, and visible focus/selection styling.
 
+## Motion
+
+Menus, dialogs, toasts, new thumbnails and the viewer HUD fade in briefly
+(at most 220 ms); closing is instant. With **Reduce Motion** on (System
+Settings › Accessibility › Display) the fades stay but the toast no longer
+rises and stars and hearts no longer pop. Lumina reads the setting at
+launch, so relaunch after changing it.
+
 ## Screen readers
 
 GPUI 0.2.2 does not expose an NSAccessibility element tree, so VoiceOver

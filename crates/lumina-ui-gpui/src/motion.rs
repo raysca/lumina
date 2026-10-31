@@ -1,0 +1,239 @@
+//! Entrance motion (v3.1 motion sheet): one easing, nothing over 220 ms.
+//! GPUI 0.2.2 has no exit or layout animation, so only entrances animate;
+//! closing is instant. Reduce Motion keeps fades and drops movement and
+//! scale.
+
+use std::time::{Duration, Instant};
+
+use gpui::*;
+
+/// Menus, dialogs, sheets and the palette.
+pub const OVERLAY_IN: Duration = Duration::from_millis(160);
+/// A toast rises 8px while it fades in.
+pub const TOAST_IN: Duration = Duration::from_millis(180);
+/// A freshly decoded grid thumbnail; cached ones appear at once.
+pub const THUMB_IN: Duration = Duration::from_millis(120);
+/// The immersive viewer HUD coming back.
+pub const HUD_IN: Duration = Duration::from_millis(120);
+/// The star or heart the user just set.
+pub const POP: Duration = Duration::from_millis(140);
+
+fn entrance(duration: Duration) -> Animation {
+    Animation::new(duration).with_easing(ease_out_quint())
+}
+
+/// The system's Reduce Motion setting, read once.
+pub fn reduce_motion() -> bool {
+    #[cfg(test)]
+    {
+        REDUCE_MOTION.with(|on| on.get())
+    }
+    #[cfg(not(test))]
+    {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(system_reduce_motion)
+    }
+}
+
+#[cfg(all(not(test), target_os = "macos"))]
+fn system_reduce_motion() -> bool {
+    extern "C" {
+        fn lumina_reduce_motion() -> std::os::raw::c_int;
+    }
+    // SAFETY: takes no arguments and only reads an NSWorkspace property.
+    unsafe { lumina_reduce_motion() != 0 }
+}
+
+#[cfg(all(not(test), not(target_os = "macos")))]
+fn system_reduce_motion() -> bool {
+    false
+}
+
+#[cfg(test)]
+thread_local! {
+    /// On by default in tests: the toast rise is wall-clock timed and moves
+    /// layout, and tests measure resting positions. Motion tests turn it off.
+    pub(crate) static REDUCE_MOTION: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Fades `el` in when it first renders under `id`. A fade is not motion, so
+/// it plays under Reduce Motion too.
+pub fn fade_in<E: IntoElement + Styled + 'static>(
+    el: E,
+    id: impl Into<ElementId>,
+    duration: Duration,
+) -> AnimationElement<E> {
+    el.with_animation(id, entrance(duration), |el, t| el.opacity(t))
+}
+
+/// A full-window overlay (menu, dialog, sheet, palette) that fades in each
+/// time it opens. The wrapper fills the window and has no hitbox, so it
+/// changes neither layout nor clicks.
+pub fn overlay_in(open: bool, el: impl IntoElement, id: &'static str) -> AnyElement {
+    if !open {
+        return el.into_any_element();
+    }
+    fade_in(div().absolute().inset_0().child(el), id, OVERLAY_IN).into_any_element()
+}
+
+/// Fades `el` in while it rises 8px into place; only fades under Reduce
+/// Motion. `el` must not set its own `top`.
+pub fn rise_in<E: IntoElement + Styled + 'static>(
+    el: E,
+    id: impl Into<ElementId>,
+    duration: Duration,
+) -> AnimationElement<E> {
+    let rise = rise_px();
+    el.with_animation(id, entrance(duration), move |el, t| {
+        el.opacity(t).relative().top(px(rise * (1.0 - t)))
+    })
+}
+
+/// How far a toast rises: none under Reduce Motion.
+fn rise_px() -> f32 {
+    if reduce_motion() {
+        0.0
+    } else {
+        8.0
+    }
+}
+
+/// Scale through a pop: 1 → 1.18 → 1 over `t` in 0..=1.
+fn pop_scale(t: f32) -> f32 {
+    1.0 + 0.18 * (1.0 - (2.0 * t - 1.0).abs())
+}
+
+/// The star or heart the user just set, so only that mark pops. Each set
+/// bumps `generation`, which gives the pop a fresh id and replays it. The pop
+/// is only offered for `POP * 2` after the set, so coming back to the item
+/// later does not replay it.
+#[derive(Default)]
+pub struct MarkPop {
+    item: Option<lumina_core::MediaId>,
+    star: u8,
+    favorite: bool,
+    generation: u64,
+    at: Option<Instant>,
+}
+
+impl MarkPop {
+    pub fn rated(&mut self, item: Option<lumina_core::MediaId>, star: u8) {
+        *self = Self {
+            item,
+            star,
+            favorite: false,
+            generation: self.generation + 1,
+            at: Some(Instant::now()),
+        };
+    }
+
+    pub fn favorited(&mut self, item: Option<lumina_core::MediaId>) {
+        *self = Self {
+            item,
+            star: 0,
+            favorite: true,
+            generation: self.generation + 1,
+            at: Some(Instant::now()),
+        };
+    }
+
+    /// True for a just-set mark on `item`.
+    fn live(&self, item: Option<lumina_core::MediaId>) -> bool {
+        self.item == item && self.at.is_some_and(|at| at.elapsed() < POP * 2)
+    }
+
+    /// The star just set on `item` and its pop id.
+    pub fn star(&self, item: Option<lumina_core::MediaId>) -> Option<(u8, ElementId)> {
+        (self.star > 0 && self.live(item)).then(|| {
+            (
+                self.star,
+                ElementId::NamedInteger("star-pop".into(), self.generation),
+            )
+        })
+    }
+
+    /// The pop id for the heart on `item`, if it was just toggled.
+    pub fn heart(&self, item: Option<lumina_core::MediaId>) -> Option<ElementId> {
+        (self.favorite && self.live(item))
+            .then(|| ElementId::NamedInteger("heart-pop".into(), self.generation))
+    }
+}
+
+/// The pop to play, if any: none under Reduce Motion.
+fn pop_id(id: Option<ElementId>) -> Option<ElementId> {
+    id.filter(|_| !reduce_motion())
+}
+
+/// Pops an icon once when `id` is set (see `MarkPop`). Static under Reduce
+/// Motion.
+pub fn pop(icon: Svg, id: Option<ElementId>) -> AnyElement {
+    let Some(id) = pop_id(id) else {
+        return icon.into_any_element();
+    };
+    icon.with_animation(id, entrance(POP), |icon, t| {
+        let k = pop_scale(t);
+        icon.with_transformation(Transformation::scale(size(k, k)))
+    })
+    .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[core::prelude::v1::test]
+    fn a_pop_grows_then_settles_back() {
+        assert_eq!(pop_scale(0.0), 1.0, "starts at rest");
+        assert!((pop_scale(0.5) - 1.18).abs() < 1e-6, "peaks at 1.18");
+        assert_eq!(pop_scale(1.0), 1.0, "ends at rest, so it never sticks");
+    }
+
+    #[core::prelude::v1::test]
+    fn only_the_mark_just_set_pops_and_each_set_replays_it() {
+        use lumina_core::MediaId;
+        let (a, b) = (Some(MediaId(1)), Some(MediaId(2)));
+        let mut pop = MarkPop::default();
+        assert!(pop.star(a).is_none(), "nothing pops before a rating is set");
+
+        pop.rated(a, 3);
+        let (star, first) = pop.star(a).expect("the star just set pops");
+        assert_eq!(star, 3, "only the touched star");
+        assert!(pop.star(b).is_none(), "another item's stars stay still");
+        assert!(pop.heart(a).is_none(), "a rating does not pop the heart");
+
+        pop.rated(a, 3);
+        let (_, again) = pop.star(a).unwrap();
+        assert_ne!(first, again, "setting it again replays the pop");
+
+        pop.favorited(a);
+        assert!(pop.heart(a).is_some(), "the heart pops when toggled");
+        assert!(pop.star(a).is_none(), "and the stars do not");
+
+        pop.at = pop.at.map(|at| at - POP * 2);
+        assert!(
+            pop.heart(a).is_none(),
+            "coming back to the item later does not replay the pop"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn reduce_motion_keeps_fades_but_drops_rise_and_pop() {
+        let id = || Some(ElementId::Name("star".into()));
+        REDUCE_MOTION.with(|on| on.set(false));
+        assert_eq!(rise_px(), 8.0);
+        assert!(pop_id(id()).is_some());
+        REDUCE_MOTION.with(|on| on.set(true));
+        assert_eq!(rise_px(), 0.0, "a toast only fades under Reduce Motion");
+        assert!(
+            pop_id(id()).is_none(),
+            "marks do not pop under Reduce Motion"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn nothing_runs_longer_than_220ms() {
+        for d in [OVERLAY_IN, TOAST_IN, THUMB_IN, HUD_IN, POP] {
+            assert!(d <= Duration::from_millis(220), "{d:?} is over budget");
+        }
+    }
+}

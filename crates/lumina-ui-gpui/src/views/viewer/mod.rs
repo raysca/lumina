@@ -68,6 +68,14 @@ impl MediaViewer {
             // 1. Top Bar
             .child(if is_immersive && !hud_visible {
                 Empty.into_any_element()
+            } else if is_immersive {
+                // The HUD fades back in after an idle hide.
+                crate::motion::fade_in(
+                    div().w_full().child(ViewerTopBar::render(this, item, cx)),
+                    "viewer-hud-top-in",
+                    crate::motion::HUD_IN,
+                )
+                .into_any_element()
             } else {
                 ViewerTopBar::render(this, item, cx).into_any_element()
             })
@@ -119,6 +127,18 @@ impl MediaViewer {
                     // player the viewer shows the poster and a hand-off pill.
                     .child(if is_video && show_chrome && this.video.in_pip {
                         stage_controls::render_pip_handoff(this, item, cx).into_any_element()
+                    } else if is_video && show_chrome && is_immersive {
+                        crate::motion::fade_in(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .child(ViewerTransport::render(this, cx)),
+                            "viewer-hud-transport-in",
+                            crate::motion::HUD_IN,
+                        )
+                        .into_any_element()
                     } else if is_video && show_chrome {
                         ViewerTransport::render(this, cx).into_any_element()
                     } else {

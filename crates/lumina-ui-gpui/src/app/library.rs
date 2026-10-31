@@ -309,6 +309,7 @@ impl LuminaApp {
                     // `push` hands back the LRU entry it evicts (or the entry it
                     // replaces); its texture must be freed too.
                     let evicted = state.texture_cache.lock().push(id, gpui_img);
+                    state.mark_fresh_thumb(id);
                     if let Some((_, old)) = evicted {
                         self.retire_image(old);
                     }

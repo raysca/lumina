@@ -1832,7 +1832,7 @@ fn pip_window_evicts_retired_frames_while_the_main_window_is_not_drawing() {
     });
 }
 
-fn tiny_decoded_frame(id: lumina_core::MediaId) -> lumina_core::DecodedFrame {
+pub(super) fn tiny_decoded_frame(id: lumina_core::MediaId) -> lumina_core::DecodedFrame {
     lumina_core::DecodedFrame {
         id,
         width: 2,

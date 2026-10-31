@@ -17,6 +17,11 @@ fn bar_icon_button(
     color: Rgba,
     on: bool,
 ) -> Stateful<Div> {
+    bar_button(id, tooltip, on).child(render_icon(icon, px(16.0), color))
+}
+
+/// `bar_icon_button` without its icon, for an icon that animates.
+fn bar_button(id: &'static str, tooltip: &'static str, on: bool) -> Stateful<Div> {
     div()
         .id(id)
         .debug_selector(move || id.to_string())
@@ -29,7 +34,6 @@ fn bar_icon_button(
         .cursor_pointer()
         .when(on, |b| b.bg(theme::selection_bg()))
         .hover(|s| s.bg(theme::bg_control_hover()))
-        .child(render_icon(icon, px(16.0), color))
 }
 
 /// Window width below which the top bar drops the breadcrumb date and specs
@@ -198,25 +202,31 @@ impl ViewerTopBar {
                     .gap(px(4.0))
                     .flex_shrink_0()
                     .child(
-                        bar_icon_button(
+                        bar_button(
                             "viewer-fav-btn",
-                            if is_fav {
-                                Icon::HeartFilled
-                            } else {
-                                Icon::Heart
-                            },
                             if is_fav {
                                 "Unfavorite (F)"
                             } else {
                                 "Favorite (F)"
                             },
-                            if is_fav {
-                                theme::rating()
-                            } else {
-                                theme::text_muted()
-                            },
                             false,
                         )
+                        .child(crate::motion::pop(
+                            render_icon(
+                                if is_fav {
+                                    Icon::HeartFilled
+                                } else {
+                                    Icon::Heart
+                                },
+                                px(16.0),
+                                if is_fav {
+                                    theme::rating()
+                                } else {
+                                    theme::text_muted()
+                                },
+                            ),
+                            this.mark_pop.heart(Some(item.id)),
+                        ))
                         .on_click(cx.listener(
                             |this, _e: &ClickEvent, _w, cx| {
                                 this.toggle_favorite_selected(cx);

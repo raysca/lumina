@@ -196,6 +196,7 @@ impl MediaContextMenu {
                             .child(div().flex().flex_row().items_center().children((1..=5).map(
                                 |star_val| {
                                     let current_rating = app.get_item_rating(&item);
+                                    let star_pop = app.mark_pop.star(Some(item.id));
                                     let is_filled = star_val <= current_rating;
                                     div()
                                         .id(ElementId::NamedInteger(
@@ -210,18 +211,24 @@ impl MediaContextMenu {
                                         .items_center()
                                         .justify_center()
                                         .cursor_pointer()
-                                        .child(render_icon(
-                                            if is_filled {
-                                                Icon::StarFilled
-                                            } else {
-                                                Icon::Star
-                                            },
-                                            px(12.0),
-                                            if is_filled {
-                                                theme::rating()
-                                            } else {
-                                                theme::rating_unset()
-                                            },
+                                        .child(crate::motion::pop(
+                                            render_icon(
+                                                if is_filled {
+                                                    Icon::StarFilled
+                                                } else {
+                                                    Icon::Star
+                                                },
+                                                px(12.0),
+                                                if is_filled {
+                                                    theme::rating()
+                                                } else {
+                                                    theme::rating_unset()
+                                                },
+                                            ),
+                                            star_pop
+                                                .clone()
+                                                .filter(|(s, _)| *s == star_val)
+                                                .map(|(_, id)| id),
                                         ))
                                         .on_click(cx.listener(
                                             move |this, _e: &ClickEvent, _w, cx| {

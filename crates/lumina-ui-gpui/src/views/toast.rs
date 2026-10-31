@@ -254,7 +254,12 @@ impl LuminaApp {
             })
             .flex()
             .justify_center()
-            .child(toast)
+            // A replacing toast keeps this element, so it swaps text in place.
+            .child(crate::motion::rise_in(
+                toast,
+                "toast-in",
+                crate::motion::TOAST_IN,
+            ))
             .into_any_element()
     }
 }

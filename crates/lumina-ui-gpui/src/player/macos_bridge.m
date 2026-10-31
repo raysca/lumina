@@ -478,3 +478,10 @@ void lumina_player_free_frame(uint8_t* data) {
     }
 }
 
+
+// Read once at startup by motion::reduce_motion().
+int lumina_reduce_motion(void) {
+    @autoreleasepool {
+        return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion] ? 1 : 0;
+    }
+}

@@ -4,6 +4,7 @@ use crate::actions::*;
 
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
+use crate::motion;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
@@ -489,24 +490,52 @@ impl Render for LuminaApp {
             // 6. Fullscreen Detail Viewer Modal
             .child(self.render_viewer_modal(cx))
             // 7. Visual Smart Album Builder Modal
-            .child(self.render_album_builder_modal(cx))
+            .child(motion::overlay_in(
+                self.album_draft.modal_open,
+                self.render_album_builder_modal(cx),
+                "album-builder-in",
+            ))
             // 8. Delete / Empty Trash Confirmation Modal
-            .child(self.render_delete_confirm_modal(cx))
+            .child(motion::overlay_in(
+                self.delete_confirm_state.is_some(),
+                self.render_delete_confirm_modal(cx),
+                "delete-confirm-in",
+            ))
             // 9. Media Card Context Menu Overlay
-            .child(self.render_context_menu_overlay(window, cx))
+            .child(motion::overlay_in(
+                self.context_menu_state.is_some(),
+                self.render_context_menu_overlay(window, cx),
+                "context-menu-in",
+            ))
             // 9b. Sort popover
-            .child(crate::views::sort_menu::render_sort_menu_overlay(self, cx))
+            .child(motion::overlay_in(
+                self.sort_menu_open,
+                crate::views::sort_menu::render_sort_menu_overlay(self, cx),
+                "sort-menu-in",
+            ))
             // 10. Tag Manager Modal Overlay
-            .child(self.render_tag_manager_modal(cx))
+            .child(motion::overlay_in(
+                self.tag_manager.open,
+                self.render_tag_manager_modal(cx),
+                "tag-manager-in",
+            ))
             // 11. Keyboard Shortcuts Cheat Sheet
-            .child(self.render_shortcuts_overlay(cx))
+            .child(motion::overlay_in(
+                self.shortcuts_overlay_open,
+                self.render_shortcuts_overlay(cx),
+                "shortcuts-in",
+            ))
             // 12. Preferences / About
-            .child(crate::views::preferences::render_preferences_modal(
-                self, cx,
+            .child(motion::overlay_in(
+                self.preferences_open,
+                crate::views::preferences::render_preferences_modal(self, cx),
+                "preferences-in",
             ))
             // 13. Command palette (topmost)
-            .child(crate::views::command_palette::render_command_palette(
-                self, cx,
+            .child(motion::overlay_in(
+                self.command_palette_open,
+                crate::views::command_palette::render_command_palette(self, cx),
+                "command-palette-in",
             ))
             .into_any_element()
     }

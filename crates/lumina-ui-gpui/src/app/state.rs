@@ -340,6 +340,7 @@ pub struct LuminaApp {
     pub is_immersive_fullscreen: bool,
     pub immersive_hud_visible: bool,
     pub(crate) hud_idle: crate::app::viewer_actions::HudIdle,
+    pub(crate) mark_pop: crate::motion::MarkPop,
     pub card_fit_mode: bool,
     /// Filter-bar chip; non-matching cards dim instead of hiding.
     pub grid_filter: crate::views::search_bar::GridFilter,
@@ -530,6 +531,7 @@ impl LuminaApp {
             is_immersive_fullscreen: false,
             immersive_hud_visible: true,
             hud_idle: Default::default(),
+            mark_pop: Default::default(),
             card_fit_mode: config.card_fit_mode,
             grid_filter: Default::default(),
             size_slider_left: 0.0,

@@ -10,6 +10,7 @@ mod icons;
 mod instance_lock;
 mod logging;
 mod menus;
+mod motion;
 mod player;
 mod theme;
 mod views;

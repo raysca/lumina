@@ -4,9 +4,10 @@ use gpui::*;
 use lru::LruCache;
 use lumina_core::{LuminaEngine, MediaId};
 use parking_lot::Mutex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Horizontal padding inside a grid row, in pixels.
 ///
@@ -319,12 +320,30 @@ pub struct GridState {
     pub scan_progress: usize,
     pub texture_cache: Arc<Mutex<LruCache<MediaId, Arc<RenderImage>>>>,
     pub in_flight: Arc<Mutex<HashSet<MediaId>>>,
+    /// When each thumbnail finished decoding, so only fresh ones fade in;
+    /// a card scrolled back into view shows its cached image at once.
+    pub fresh_thumbs: Arc<Mutex<HashMap<MediaId, Instant>>>,
     pub scroll_handle: UniformListScrollHandle,
     /// Per-video resume positions for the open library.
     pub video_resume: VideoResumeState,
 }
 
 impl GridState {
+    /// Notes a thumbnail that just arrived and forgets ones long settled.
+    pub fn mark_fresh_thumb(&self, id: MediaId) {
+        let mut fresh = self.fresh_thumbs.lock();
+        fresh.retain(|_, at| at.elapsed() < crate::motion::THUMB_IN * 4);
+        fresh.insert(id, Instant::now());
+    }
+
+    /// True while `id`'s thumbnail is still within its fade-in.
+    pub fn thumb_is_fresh(&self, id: MediaId) -> bool {
+        self.fresh_thumbs
+            .lock()
+            .get(&id)
+            .is_some_and(|at| at.elapsed() < crate::motion::THUMB_IN * 2)
+    }
+
     pub fn new(engine: Arc<LuminaEngine>) -> Self {
         let total_count = engine.total_count();
         let cache_capacity = NonZeroUsize::new(800).unwrap();
@@ -336,6 +355,7 @@ impl GridState {
             scan_progress: 0,
             texture_cache: Arc::new(Mutex::new(LruCache::new(cache_capacity))),
             in_flight: Arc::new(Mutex::new(HashSet::new())),
+            fresh_thumbs: Arc::new(Mutex::new(HashMap::new())),
             scroll_handle: UniformListScrollHandle::new(),
             video_resume: VideoResumeState::default(),
         }

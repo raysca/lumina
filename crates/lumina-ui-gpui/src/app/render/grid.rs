@@ -196,6 +196,11 @@ impl LuminaApp {
                                 let fit_mode = this.card_fit_mode;
                                 let in_trash = this.selection == AlbumSelection::Trash;
                                 let has_texture = texture.is_some();
+                                let fresh_thumb = has_texture
+                                    && this
+                                        .grid_state
+                                        .as_ref()
+                                        .is_some_and(|s| s.thumb_is_fresh(item.id));
                                 let photo_background: Background = if has_texture {
                                     theme::card_surface().into()
                                 } else {
@@ -352,7 +357,7 @@ impl LuminaApp {
                                                 .overflow_hidden()
                                                 .relative()
                                                 .child(if let Some(render_img) = texture {
-                                                    div()
+                                                    let thumb = div()
                                                         .debug_selector(move || {
                                                             format!(
                                                                 "media-card-thumb-{}",
@@ -368,8 +373,22 @@ impl LuminaApp {
                                                                     ObjectFit::Cover
                                                                 },
                                                             ),
+                                                        );
+                                                    // A just-decoded image fades in
+                                                    // over the skeleton.
+                                                    if fresh_thumb {
+                                                        crate::motion::fade_in(
+                                                            thumb,
+                                                            ElementId::NamedInteger(
+                                                                "thumb-in".into(),
+                                                                item_id_num as u64,
+                                                            ),
+                                                            crate::motion::THUMB_IN,
                                                         )
                                                         .into_any_element()
+                                                    } else {
+                                                        thumb.into_any_element()
+                                                    }
                                                 } else {
                                                     // Static skeleton placeholder. The seed
                                                     // fixtures decode to no texture, so this is
