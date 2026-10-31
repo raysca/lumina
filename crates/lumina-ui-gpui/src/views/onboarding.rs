@@ -128,7 +128,7 @@ fn feature(icon: Icon, title: &'static str, body: &'static str) -> impl IntoElem
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(icon, px(15.0), theme::accent())),
+                .child(render_icon(icon, px(15.0), theme::text_muted())),
         )
         .child(
             div()

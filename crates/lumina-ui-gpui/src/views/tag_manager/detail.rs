@@ -84,13 +84,13 @@ fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> i
         .flex_row()
         .items_center()
         .gap_3()
-        // ponytail: one accent dot until tags have colours (schema change).
+        // ponytail: one neutral dot until tags have colours (schema change).
         .child(
             div()
                 .size(px(10.0))
                 .flex_none()
                 .rounded_full()
-                .bg(theme::accent()),
+                .bg(theme::text_muted()),
         )
         .child(
             div()

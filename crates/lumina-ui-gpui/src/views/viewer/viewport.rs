@@ -308,7 +308,7 @@ impl ViewerViewport {
                                 .bg(theme::scrim())
                                 .border_1()
                                 .border_color(theme::border_strong())
-                                .hover(|s| s.bg(theme::bg_hud()).border_color(theme::accent()))
+                                .hover(|s| s.bg(theme::bg_hud()).border_color(theme::text_muted()))
                                 .flex()
                                 .justify_center()
                                 .items_center()

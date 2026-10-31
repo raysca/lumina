@@ -86,7 +86,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                     div()
                                         .h_full()
                                         .rounded_full()
-                                        .bg(theme::accent())
+                                        .bg(theme::text_muted())
                                         .w(relative(fraction)),
                                 ),
                         )
@@ -230,7 +230,7 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
         .text_sm()
         .text_color(color)
         .child(if done {
-            render_icon(Icon::Check, px(13.0), theme::accent()).into_any_element()
+            render_icon(Icon::Check, px(13.0), theme::text_muted()).into_any_element()
         } else {
             div()
                 .size(px(8.0))
@@ -238,7 +238,7 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
                 .rounded_full()
                 .map(|d| {
                     if active {
-                        d.bg(theme::accent())
+                        d.bg(theme::text())
                     } else {
                         d.border_1().border_color(theme::border_strong())
                     }

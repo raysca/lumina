@@ -222,7 +222,7 @@ impl ViewerTransport {
                             .rounded(theme::RADIUS_MD)
                             .border_1()
                             .border_color(if is_scrubbing {
-                                theme::accent()
+                                theme::text_muted()
                             } else {
                                 theme::border()
                             })

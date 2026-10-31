@@ -210,7 +210,7 @@ impl LuminaApp {
                                 div()
                                     .text_xs()
                                     .font_family(theme::FONT_MONO)
-                                    .text_color(theme::accent())
+                                    .text_color(theme::text_muted())
                                     .child(keys),
                             )
                     })),
@@ -417,7 +417,7 @@ impl Render for LuminaApp {
                             .w(px(4.0))
                             .h_full()
                             .cursor_col_resize()
-                            .hover(|s| s.bg(theme::accent()))
+                            .hover(|s| s.bg(theme::border_strong()))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -466,7 +466,7 @@ impl Render for LuminaApp {
                             .w(px(4.0))
                             .h_full()
                             .cursor_col_resize()
-                            .hover(|s| s.bg(theme::accent()))
+                            .hover(|s| s.bg(theme::border_strong()))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
