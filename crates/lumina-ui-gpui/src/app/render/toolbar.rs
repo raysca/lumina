@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
@@ -24,6 +25,15 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let view_label = view_label.to_string();
+        // Only Recently Deleted shows a count and its bulk actions.
+        let trash_count = if self.selection == AlbumSelection::Trash {
+            self.system_album_counts
+                .get(&lumina_core::SystemAlbum::RecentlyDeleted)
+                .copied()
+                .unwrap_or(0)
+        } else {
+            0
+        };
         div()
             .w_full()
             .h(px(52.0))
@@ -100,18 +110,31 @@ impl LuminaApp {
                             } else {
                                 view_label
                             }),
-                    ),
+                    )
+                    .when(trash_count > 0, |row| {
+                        row.child(
+                            div()
+                                .debug_selector(|| "trash-item-count".to_string())
+                                .text_color(theme::text_subtle())
+                                .child(if trash_count == 1 {
+                                    "1 item".to_string()
+                                } else {
+                                    format!("{trash_count} items")
+                                }),
+                        )
+                    }),
             )
             .child(div().flex_1())
             .child(SearchBarView::render_field(self, cx))
             // Trash bulk actions
-            .children((self.selection == AlbumSelection::Trash).then(|| {
+            .children((trash_count > 0).then(|| {
                 div()
                     .flex()
                     .flex_row()
                     .gap_2()
                     .child(
                         theme::control("header-restore-all-btn")
+                            .debug_selector(|| "header-restore-all-btn".to_string())
                             .child("Restore All")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.restore_all_trash(cx);
@@ -119,10 +142,11 @@ impl LuminaApp {
                     )
                     .child(
                         theme::control("header-empty-trash-btn")
+                            .debug_selector(|| "header-empty-trash-btn".to_string())
                             .bg(theme::danger_bg())
                             .border_color(theme::danger_border())
                             .text_color(theme::danger_text())
-                            .child("Empty Trash")
+                            .child("Empty Trash…")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.prompt_empty_trash(cx);
                             })),
@@ -189,5 +213,31 @@ impl LuminaApp {
                         this.pick_folder_dialog(cx);
                     })),
             )
+    }
+}
+
+impl LuminaApp {
+    /// "Items stay here until…" above a non-empty Recently Deleted.
+    pub(crate) fn render_trash_note(&self) -> Option<Div> {
+        let count = self
+            .system_album_counts
+            .get(&lumina_core::SystemAlbum::RecentlyDeleted)
+            .copied()
+            .unwrap_or(0);
+        (self.selection == AlbumSelection::Trash && count > 0).then(|| {
+            div()
+                .debug_selector(|| "trash-note".to_string())
+                .flex_shrink_0()
+                .px_4()
+                .py(px(6.0))
+                .border_b_1()
+                .border_color(theme::border_subtle())
+                .text_xs()
+                .text_color(theme::text_subtle())
+                .child(
+                    "Items stay here until you empty the trash. \
+                     Restore puts them back in the library.",
+                )
+        })
     }
 }

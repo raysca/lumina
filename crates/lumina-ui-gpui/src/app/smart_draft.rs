@@ -398,9 +398,55 @@ pub fn match_label(mode: MatchMode) -> &'static str {
     }
 }
 
+/// One line for an album's rules: "Kind is Video and Stars is greater than 3".
+pub fn rule_summary(mode: MatchMode, rules: &[SmartAlbumRule]) -> String {
+    if rules.is_empty() {
+        return "No conditions yet".to_string();
+    }
+    let joiner = match mode {
+        MatchMode::All => " and ",
+        MatchMode::Any => " or ",
+    };
+    rules
+        .iter()
+        .map(|rule| {
+            let row = DraftRow::from_rule(rule);
+            let mut text = format!(
+                "{} {}",
+                field_label(&row.field),
+                operator_label(&row.field, &row.operator)
+            );
+            let value = row.display_value();
+            if !value.is_empty() {
+                text.push(' ');
+                text.push_str(&value);
+            }
+            if row.operator == RuleOperator::InTheLast {
+                text.push(' ');
+                text.push_str(row.unit.label());
+            }
+            text
+        })
+        .collect::<Vec<_>>()
+        .join(joiner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rule_summary_reads_as_one_sentence() {
+        let video = row(RuleField::MediaType, RuleOperator::Equals, "video")
+            .to_rule()
+            .unwrap();
+        let stars = row(RuleField::Rating, RuleOperator::GreaterThan, "3")
+            .to_rule()
+            .unwrap();
+        let summary = rule_summary(MatchMode::Any, &[video, stars]);
+        assert_eq!(summary, "Kind is Video or Stars is greater than ★★★");
+        assert_eq!(rule_summary(MatchMode::All, &[]), "No conditions yet");
+    }
 
     fn row(field: RuleField, op: RuleOperator, text: &str) -> DraftRow {
         let mut row = DraftRow::new(field);

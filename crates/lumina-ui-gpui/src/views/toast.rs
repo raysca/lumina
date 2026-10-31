@@ -1,4 +1,4 @@
-//! Compact bottom-right toast for transient success feedback.
+//! Compact toast for transient success feedback, bottom centre over the grid.
 //!
 //! Toasts are deliberately separate from the top error banner: recoverable
 //! failures keep using [`LuminaApp::set_error`], while successful actions get a
@@ -8,6 +8,7 @@
 
 use std::time::Duration;
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
@@ -15,7 +16,8 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 
 /// How long a toast stays on screen before dismissing itself.
-pub const TOAST_DURATION: Duration = Duration::from_secs(4);
+/// Hovering holds it open; it closes on the first tick after the pointer leaves.
+pub const TOAST_DURATION: Duration = Duration::from_secs(8);
 
 /// The single visible toast.
 #[derive(Debug, Clone)]
@@ -24,6 +26,8 @@ pub struct Toast {
     pub message: String,
     /// True when pressing Undo should run [`LuminaApp::undo_last`].
     pub undo_available: bool,
+    /// The pointer is over the toast, so its timer waits.
+    pub hovered: bool,
     /// Generation id that pairs this toast with its auto-dismiss timer.
     id: u64,
 }
@@ -50,9 +54,13 @@ impl ToastState {
     fn show(&mut self, message: String, undo_available: bool) -> u64 {
         self.next_id = self.next_id.wrapping_add(1);
         let id = self.next_id;
+        // A toast replacing one under a resting pointer gets no new hover
+        // event (same element id), so it inherits the hover state.
+        let hovered = self.current.as_ref().is_some_and(|toast| toast.hovered);
         self.current = Some(Toast {
             message,
             undo_available,
+            hovered,
             id,
         });
         id
@@ -63,16 +71,31 @@ impl ToastState {
         self.current.take().is_some()
     }
 
-    /// Clears the toast only when it is still `id`, so a replaced toast's timer
-    /// cannot dismiss its successor. Returns true when the toast was cleared.
-    fn dismiss_if_current(&mut self, id: u64) -> bool {
-        if self.current.as_ref().map(|toast| toast.id) == Some(id) {
-            self.current = None;
-            true
-        } else {
-            false
+    /// Marks the visible toast hovered or not.
+    pub fn set_hovered(&mut self, hovered: bool) {
+        if let Some(toast) = self.current.as_mut() {
+            toast.hovered = hovered;
         }
     }
+
+    /// Timer tick for toast `id`: clears it unless it was replaced (Done) or
+    /// is hovered (Wait, so the timer runs another round).
+    fn tick(&mut self, id: u64) -> Tick {
+        match self.current.as_ref() {
+            Some(toast) if toast.id == id && toast.hovered => Tick::Wait,
+            Some(toast) if toast.id == id => {
+                self.current = None;
+                Tick::Dismissed
+            }
+            _ => Tick::Done,
+        }
+    }
+}
+
+enum Tick {
+    Wait,
+    Dismissed,
+    Done,
 }
 
 impl LuminaApp {
@@ -107,19 +130,25 @@ impl LuminaApp {
         // Auto-dismiss on the foreground task so no work blocks the UI thread.
         // The timer only clears the toast it was armed for: replacing a toast
         // leaves a stale task that becomes a no-op when it fires.
-        cx.spawn(async move |this, async_cx| {
+        cx.spawn(async move |this, async_cx| loop {
             async_cx.background_executor().timer(TOAST_DURATION).await;
-            let _ = this.update(async_cx, |this, cx| {
-                if this.toast.dismiss_if_current(id) {
+            let tick = this.update(async_cx, |this, cx| {
+                let tick = this.toast.tick(id);
+                if matches!(tick, Tick::Dismissed) {
                     cx.notify();
                 }
+                tick
             });
+            if !matches!(tick, Ok(Tick::Wait)) {
+                break;
+            }
         })
         .detach();
         cx.notify();
     }
 
-    /// Bottom-right toast overlay, painted above the grid and below modals.
+    /// Toast centred over the grid column, 20px above the status bar, or
+    /// stacked above the selection dock when that is showing.
     pub fn render_toast_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
         if !self.toast.is_visible() {
             return Empty.into_any_element();
@@ -162,14 +191,16 @@ impl LuminaApp {
             Empty.into_any_element()
         };
 
-        div()
+        let dock_showing = (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            && !self.is_fullscreen_viewer;
+        let toast = div()
             .id("toast")
             .debug_selector(|| "toast".to_string())
-            .absolute()
-            .right(px(16.0))
-            .bottom(px(36.0))
-            .w(px(320.0))
+            .w(px(360.0))
             .occlude()
+            .on_hover(cx.listener(|this, hovered: &bool, _w, _cx| {
+                this.toast.set_hovered(*hovered);
+            }))
             .flex()
             .flex_row()
             .items_center()
@@ -196,7 +227,12 @@ impl LuminaApp {
                 div()
                     .id("toast-dismiss")
                     .debug_selector(|| "toast-dismiss".to_string())
-                    .size(px(16.0))
+                    .size(px(26.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .border_1()
+                    .border_color(theme::border_strong())
+                    .hover(|s| s.bg(theme::bg_control_hover()))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -206,7 +242,19 @@ impl LuminaApp {
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.dismiss_toast(cx);
                     })),
-            )
+            );
+        // ponytail: 48px = dock height (40) + 8px gap; derive it if the dock grows.
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(if dock_showing { 20.0 + 48.0 } else { 20.0 }))
+            .when(!self.timeline_year_buckets.is_empty(), |d| {
+                d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
+            })
+            .flex()
+            .justify_center()
+            .child(toast)
             .into_any_element()
     }
 }

@@ -366,7 +366,7 @@ fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
 }
 
 /// Shortens a path under the home directory to `~/…` for display.
-fn tilde(path: &std::path::Path) -> String {
+pub(crate) fn tilde(path: &std::path::Path) -> String {
     match dirs::home_dir().and_then(|home| path.strip_prefix(home).ok().map(|p| p.to_owned())) {
         Some(rest) => format!("~/{}", rest.display()),
         None => path.display().to_string(),

@@ -9,6 +9,8 @@ Lumina is designed to be usable without a mouse:
   and inspector toggles, grid zoom and more. Its GO TO group reaches every
   sidebar destination (views, years, tags, smart albums). Type to filter (each
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
+- **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
+  ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
 - **Shortcut sheet** (`⌘/`) lists navigation, editing, viewer and video keys.
 - **Native menu bar** exposes File, View and Help commands; macOS treats these
   as accessible menu items for VoiceOver.

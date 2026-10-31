@@ -17,29 +17,80 @@ mod status_bar;
 mod toolbar;
 
 impl LuminaApp {
-    /// Dismissible banner for recoverable, user-facing failures.
+    /// Banner for recoverable failures: alert icon, title and description,
+    /// optional Retry, and a bordered dismiss button.
     fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(message) = self.error_message.clone() else {
             return Empty.into_any_element();
         };
+        let (title, detail) = match message.split_once(": ") {
+            Some((title, detail)) => (title.to_string(), Some(detail.to_string())),
+            None => (message, None),
+        };
         div()
             .id("app-error-banner")
+            .debug_selector(|| "error-banner".to_string())
             .w_full()
-            .px_3()
-            .py_1p5()
+            .px_4()
+            .py_2()
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
+            .gap_3()
             .bg(theme::danger_bg())
-            .text_xs()
-            .text_color(theme::text())
-            .child(message)
+            .border_b_1()
+            .border_color(theme::danger_border())
+            .child(render_icon(
+                Icon::TriangleAlert,
+                px(16.0),
+                theme::danger_text(),
+            ))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .debug_selector(|| "error-banner-title".to_string())
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::text())
+                            .child(title),
+                    )
+                    .children(detail.map(|detail| {
+                        div()
+                            .debug_selector(|| "error-banner-detail".to_string())
+                            .text_xs()
+                            .text_color(theme::text_muted())
+                            .child(detail)
+                    })),
+            )
+            .children(self.error_retry.is_some().then(|| {
+                theme::control("app-error-banner-retry")
+                    .debug_selector(|| "error-banner-retry".to_string())
+                    .tooltip(theme::tooltip_label("Retry (⌘K Retry Failed Action)"))
+                    .child("Retry")
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.retry_error(cx);
+                    }))
+            }))
             .child(
                 div()
                     .id("app-error-banner-dismiss")
                     .debug_selector(|| "error-banner-dismiss".to_string())
+                    .size(px(26.0))
+                    .flex_none()
+                    .rounded(px(6.0))
+                    .border_1()
+                    .border_color(theme::danger_border())
+                    .hover(|s| s.bg(theme::danger_bg_hover()))
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .cursor_pointer()
+                    .tooltip(theme::tooltip_label("Dismiss"))
                     .child(render_icon(Icon::X, px(12.0), theme::text()))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.dismiss_error(cx);
@@ -381,6 +432,7 @@ impl Render for LuminaApp {
                             .flex()
                             .flex_col()
                             .child(SearchBarView::render(self, cx))
+                            .children(self.render_trash_note())
                             .child(
                                 div()
                                     .relative()
@@ -391,8 +443,9 @@ impl Render for LuminaApp {
                                     .child(self.render_browser_grid(total_count, cx))
                                     // Pinned Vertical Year Rail
                                     .child(self.render_year_rail(cx))
-                                    // Selection dock, over the grid column only
-                                    .child(self.render_action_dock(is_fullscreen_viewer, cx)),
+                                    // Selection dock and toast, over the grid column only
+                                    .child(self.render_action_dock(is_fullscreen_viewer, cx))
+                                    .child(self.render_toast_overlay(cx)),
                             )
                             .child(self.render_status_bar(total_count)),
                     )
@@ -424,8 +477,6 @@ impl Render for LuminaApp {
                         Empty.into_any_element()
                     }),
             )
-            // 5b. Transient success toast (Bottom Right), below modals
-            .child(self.render_toast_overlay(cx))
             // 6. Fullscreen Detail Viewer Modal
             .child(self.render_viewer_modal(cx))
             // 7. Visual Smart Album Builder Modal

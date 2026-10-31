@@ -17,7 +17,6 @@ use crate::views::sidebar::AlbumSelection;
 /// can render every state without duplicating click wiring.
 #[derive(Clone)]
 enum EmptyAction {
-    ClearSearch,
     ShowAll,
     EditSmartAlbum(SmartAlbum),
     OpenLibrary,
@@ -25,6 +24,17 @@ enum EmptyAction {
     Rescan,
     /// Drops one search term (as `tokenize_query` splits them) from the query.
     RemoveSearchTerm(usize),
+}
+
+/// What an empty view says and offers.
+struct EmptyCopy {
+    icon: Icon,
+    title: String,
+    body: String,
+    /// Library folder, shown on its own mono line.
+    path: Option<String>,
+    primary: Option<(String, EmptyAction)>,
+    secondary: Option<(String, EmptyAction)>,
 }
 
 impl LuminaApp {
@@ -172,6 +182,7 @@ impl LuminaApp {
                                 let item_for_context = item.clone();
                                 let dur_text = format_duration_badge(item.duration_secs());
                                 let fit_mode = this.card_fit_mode;
+                                let in_trash = this.selection == AlbumSelection::Trash;
                                 let has_texture = texture.is_some();
                                 let photo_background: Background = if has_texture {
                                     theme::card_surface().into()
@@ -300,6 +311,10 @@ impl LuminaApp {
                                                 // the thumbnail is missing; a decoded image
                                                 // has no background around it.
                                                 .bg(photo_background)
+                                                // Recently Deleted reads as set aside.
+                                                .when(in_trash && !dimmed, |well| {
+                                                    well.opacity(0.6)
+                                                })
                                                 // Filter chips dim, never hide.
                                                 // (The marker child carries the automation
                                                 // selector; the well already has one.)
@@ -559,115 +574,136 @@ impl LuminaApp {
         };
 
         let search_terms = lumina_core::search::tokenize_query(&self.search_query);
-        let (icon, title, body, primary, secondary) = if !self.search_query.is_empty() {
-            (
+        let show_all = || Some(("Show all photos".to_string(), EmptyAction::ShowAll));
+        let copy = |icon, title: String, body: String| EmptyCopy {
+            icon,
+            title,
+            body,
+            path: None,
+            primary: None,
+            secondary: None,
+        };
+        // Whitespace-only queries tokenize to nothing; treat them as no search.
+        let EmptyCopy {
+            icon,
+            title,
+            body,
+            path,
+            primary,
+            secondary,
+        } = if !search_terms.is_empty() {
+            // The chips are the only actions: removing one widens the search.
+            copy(
                 Icon::Search,
-                "No matches".to_string(),
-                if search_terms.len() > 1 {
-                    "Remove a filter to widen the search:".to_string()
-                } else {
-                    format!(
-                        "Nothing matches “{}”. Try a broader search or clear it.",
-                        self.search_query
-                    )
-                },
-                ("Clear search".to_string(), EmptyAction::ClearSearch),
-                Some(("Show all photos".to_string(), EmptyAction::ShowAll)),
+                "No matches for these filters".into(),
+                "Remove a filter to widen the search:".into(),
             )
         } else {
             match &self.selection {
-                AlbumSelection::Trash => (
+                AlbumSelection::Trash => copy(
                     Icon::Trash,
-                    "Trash is empty".to_string(),
-                    "Deleted items stay here until you permanently remove them.".to_string(),
-                    ("Show all photos".to_string(), EmptyAction::ShowAll),
-                    None,
+                    "Recently Deleted is empty".into(),
+                    "Items you delete stay here until you empty the trash or restore them.".into(),
                 ),
-                AlbumSelection::System(SystemAlbum::Favorites) => (
-                    Icon::Heart,
-                    "No favorites yet".to_string(),
-                    "Press F on any photo or video to add it here.".to_string(),
-                    ("Show all photos".to_string(), EmptyAction::ShowAll),
-                    None,
-                ),
-                AlbumSelection::User(_) => match user_album {
-                    Some(album) => (
-                        Icon::Sliders,
-                        "Nothing matches this smart album".to_string(),
-                        "Adjust its rules or show everything in the library.".to_string(),
-                        ("Edit rules".to_string(), EmptyAction::EditSmartAlbum(album)),
-                        Some(("Show all photos".to_string(), EmptyAction::ShowAll)),
-                    ),
-                    None => (
-                        Icon::Sliders,
-                        "Nothing matches this view".to_string(),
-                        "The smart album may have been removed. Show everything instead."
-                            .to_string(),
-                        ("Show all photos".to_string(), EmptyAction::ShowAll),
-                        None,
-                    ),
+                AlbumSelection::System(SystemAlbum::Favorites) => EmptyCopy {
+                    primary: show_all(),
+                    ..copy(
+                        Icon::Heart,
+                        "No favorites yet".into(),
+                        "Press F on any photo or video to add it here.".into(),
+                    )
                 },
-                AlbumSelection::Tag(tag) => (
-                    Icon::Tag,
-                    "No items found".to_string(),
-                    format!("Nothing is tagged #{tag} yet. Try another tag or show everything."),
-                    ("Show all photos".to_string(), EmptyAction::ShowAll),
-                    Some(("Manage tags".to_string(), EmptyAction::ManageTags)),
-                ),
+                AlbumSelection::User(_) => match user_album {
+                    Some(album) => EmptyCopy {
+                        primary: Some((
+                            "Edit Rules…".into(),
+                            EmptyAction::EditSmartAlbum(album.clone()),
+                        )),
+                        ..copy(
+                            Icon::Sliders,
+                            format!("Nothing matches \u{201c}{}\u{201d} yet", album.title),
+                            crate::app::smart_draft::rule_summary(album.match_mode, &album.rules),
+                        )
+                    },
+                    None => EmptyCopy {
+                        primary: show_all(),
+                        ..copy(
+                            Icon::Sliders,
+                            "Nothing matches this view".into(),
+                            "The smart album may have been removed. Show everything instead."
+                                .into(),
+                        )
+                    },
+                },
+                AlbumSelection::Tag(tag) => EmptyCopy {
+                    primary: show_all(),
+                    secondary: Some(("Manage tags".into(), EmptyAction::ManageTags)),
+                    ..copy(
+                        Icon::Tag,
+                        "No items found".into(),
+                        format!(
+                            "Nothing is tagged #{tag} yet. Try another tag or show everything."
+                        ),
+                    )
+                },
                 _ => {
                     let root = self
                         .grid_state
                         .as_ref()
-                        .map(|state| state.engine.library_root().display().to_string());
+                        .map(|state| crate::views::preferences::tilde(state.engine.library_root()));
                     let scanning = self.grid_state.as_ref().is_some_and(|s| s.is_scanning);
+                    let choose = Some(("Choose Another Folder…".into(), EmptyAction::OpenLibrary));
                     if let (0, Some(root), true) = (self.total_library_count, &root, scanning) {
-                        (
-                            Icon::Folder,
-                            format!("Scanning {root}…"),
-                            "Photos and videos appear here as they are found.".to_string(),
-                            (
-                                "Choose Another Folder…".to_string(),
-                                EmptyAction::OpenLibrary,
-                            ),
-                            None,
-                        )
+                        EmptyCopy {
+                            path: Some(root.clone()),
+                            primary: choose,
+                            ..copy(
+                                Icon::Folder,
+                                "Scanning…".into(),
+                                "Photos and videos appear here as they are found.".into(),
+                            )
+                        }
                     } else if let (0, Some(root)) = (self.total_library_count, root) {
-                        (
-                            Icon::Folder,
-                            format!("No photos or videos in {root}"),
-                            "Lumina looks for JPEG, HEIC, PNG, TIFF, WebP, RAW and video files, \
-                             including in subfolders."
-                                .to_string(),
-                            (
-                                "Choose Another Folder…".to_string(),
-                                EmptyAction::OpenLibrary,
-                            ),
-                            Some(("Rescan".to_string(), EmptyAction::Rescan)),
-                        )
+                        EmptyCopy {
+                            path: Some(root),
+                            primary: choose,
+                            secondary: Some(("Rescan".into(), EmptyAction::Rescan)),
+                            ..copy(
+                                Icon::Folder,
+                                "No photos or videos found".into(),
+                                "Lumina looks for JPEG, HEIC, PNG, TIFF, WebP, RAW and video \
+                                 files, including in subfolders."
+                                    .into(),
+                            )
+                        }
                     } else if self.total_library_count == 0 {
-                        (
-                            Icon::Folder,
-                            "Your library is empty".to_string(),
-                            "Open a folder to start building your local photo and video library."
-                                .to_string(),
-                            ("Open Library…".to_string(), EmptyAction::OpenLibrary),
-                            None,
-                        )
+                        EmptyCopy {
+                            primary: Some(("Open Library…".into(), EmptyAction::OpenLibrary)),
+                            ..copy(
+                                Icon::Folder,
+                                "Your library is empty".into(),
+                                "Open a folder to start building your local photo and video \
+                                 library."
+                                    .into(),
+                            )
+                        }
                     } else {
-                        (
-                            Icon::Image,
-                            "No media in this view".to_string(),
-                            "Try another view or show everything in the library.".to_string(),
-                            ("Show all photos".to_string(), EmptyAction::ShowAll),
-                            None,
-                        )
+                        EmptyCopy {
+                            primary: show_all(),
+                            ..copy(
+                                Icon::Image,
+                                "No media in this view".into(),
+                                "Try another view or show everything in the library.".into(),
+                            )
+                        }
                     }
                 }
             }
         };
 
-        let primary_button =
-            self.empty_action_button("empty-primary", primary.0, primary.1, true, cx);
+        let primary_button = primary.map(|(label, action)| {
+            self.empty_action_button("empty-primary", label, action, true, cx)
+        });
         let secondary_button = secondary.map(|(label, action)| {
             self.empty_action_button("empty-secondary", label, action, false, cx)
         });
@@ -718,8 +754,18 @@ impl LuminaApp {
                             .text_center()
                             .child(body),
                     )
+                    .children(path.map(|path| {
+                        div()
+                            .debug_selector(|| "empty-library-path".to_string())
+                            .max_w_full()
+                            .truncate()
+                            .font_family(theme::FONT_MONO)
+                            .text_xs()
+                            .text_color(theme::text_subtle())
+                            .child(path)
+                    }))
                     // Each search term is a chip; removing one widens the search.
-                    .when(search_terms.len() > 1, |col| {
+                    .when(!search_terms.is_empty(), |col| {
                         col.child(
                             div()
                                 .flex()
@@ -770,7 +816,7 @@ impl LuminaApp {
                             .flex()
                             .flex_row()
                             .gap_2()
-                            .child(primary_button)
+                            .children(primary_button)
                             .children(secondary_button),
                     ),
             )
@@ -802,7 +848,6 @@ impl LuminaApp {
 
     fn perform_empty_action(&mut self, action: EmptyAction, cx: &mut Context<Self>) {
         match action {
-            EmptyAction::ClearSearch => self.clear_search(cx),
             EmptyAction::ShowAll => self.select_album(AlbumSelection::AllLibrary, cx),
             EmptyAction::EditSmartAlbum(album) => self.open_album_builder_for_edit(album, cx),
             EmptyAction::OpenLibrary => self.pick_folder_dialog(cx),

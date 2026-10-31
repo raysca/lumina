@@ -111,59 +111,6 @@ pub(super) fn render_library_section(
                 this.select_album(AlbumSelection::Trash, cx);
             }),
         ))
-        .child(
-            if this.selection == AlbumSelection::Trash && trash_count > 0 {
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap_1p5()
-                    .px_1()
-                    .pt_1()
-                    .child(
-                        div()
-                            .id("sidebar-empty-trash-btn")
-                            .flex_1()
-                            .py_1()
-                            .rounded_md()
-                            .bg(theme::danger_bg())
-                            .hover(|s| s.bg(theme::danger_bg_hover()))
-                            .cursor_pointer()
-                            .flex()
-                            .justify_center()
-                            .items_center()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(theme::text())
-                            .child("Empty Trash")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.prompt_empty_trash(cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .id("sidebar-restore-all-btn")
-                            .flex_1()
-                            .py_1()
-                            .rounded_md()
-                            .bg(theme::selection_bg())
-                            .hover(|s| s.bg(theme::selection_bg_hover()))
-                            .cursor_pointer()
-                            .flex()
-                            .justify_center()
-                            .items_center()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::accent())
-                            .child("Restore All")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.restore_all_trash(cx);
-                            })),
-                    )
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            },
-        )
 }
 
 fn render_user_smart_album_row(

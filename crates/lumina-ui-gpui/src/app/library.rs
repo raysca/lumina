@@ -186,6 +186,9 @@ pub(crate) fn apply_search_suggestion_text(query: &str, suggestion: &str) -> Str
     parts.join(" ")
 }
 
+/// The action an error banner's Retry re-runs.
+pub type ErrorRetry = fn(&mut LuminaApp, &mut Context<LuminaApp>);
+
 impl LuminaApp {
     pub fn handle_ui_message(&mut self, msg: UiMessage, cx: &mut Context<Self>) {
         match msg {
@@ -417,14 +420,37 @@ impl LuminaApp {
         }
     }
 
-    /// Shows a dismissible error banner; used for recoverable user-facing failures.
+    /// Shows the error banner for a recoverable failure. "Title: detail"
+    /// splits into a title line and a description.
     pub fn set_error(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
         self.error_message = Some(message.into());
+        self.error_retry = None;
         cx.notify();
+    }
+
+    /// Like [`Self::set_error`], with a Retry button (and ⌘K "Retry Failed
+    /// Action") that runs `retry`.
+    pub fn set_error_with_retry(
+        &mut self,
+        message: impl Into<String>,
+        retry: ErrorRetry,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_error(message, cx);
+        self.error_retry = Some(retry);
+    }
+
+    /// Clears the banner and runs its retry, if it has one.
+    pub fn retry_error(&mut self, cx: &mut Context<Self>) {
+        if let Some(retry) = self.error_retry.take() {
+            self.dismiss_error(cx);
+            retry(self, cx);
+        }
     }
 
     pub fn dismiss_error(&mut self, cx: &mut Context<Self>) {
         self.error_message = None;
+        self.error_retry = None;
         cx.notify();
     }
 

@@ -56,6 +56,12 @@ impl LuminaApp {
             return;
         }
 
+        // Esc dismisses the error banner before it reaches the grid or viewer.
+        if key == "escape" && self.error_message.is_some() {
+            self.dismiss_error(cx);
+            return;
+        }
+
         // Cmd+[: browsing Back. Secondary modifier only, so the viewer's plain
         // [ / ] previous/next shortcuts keep working.
         if cmd_or_ctrl && key == "[" {

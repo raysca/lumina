@@ -348,6 +348,8 @@ pub struct LuminaApp {
     pub size_slider_dragging: bool,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
+    /// What the banner's Retry runs; None hides Retry.
+    pub error_retry: Option<crate::app::library::ErrorRetry>,
     /// Most recent action feedback shown in the status bar.
     pub last_action: Option<String>,
     /// Transient success/info toast shown bottom-right (errors stay in the banner).
@@ -519,6 +521,7 @@ impl LuminaApp {
             size_slider_left: 0.0,
             size_slider_dragging: false,
             error_message: None,
+            error_retry: None,
             last_action: None,
             toast: crate::views::toast::ToastState::default(),
             shortcuts_overlay_open: false,

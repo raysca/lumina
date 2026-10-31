@@ -250,8 +250,21 @@ impl LuminaApp {
     }
 
     pub fn restore_all_trash(&mut self, cx: &mut Context<Self>) {
-        if let Some(ref state) = self.grid_state {
-            let _ = state.engine.restore_all_trash();
+        let Some(result) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.engine.restore_all_trash())
+        else {
+            return;
+        };
+        match result {
+            Ok(n) => self.show_toast(format!("Restored {n} item(s)"), cx),
+            // Restoring everything is idempotent, so Retry is safe here.
+            Err(err) => self.set_error_with_retry(
+                format!("Could not restore items: {err}"),
+                Self::restore_all_trash,
+                cx,
+            ),
         }
         self.refresh_album_counts();
         self.clear_selection(cx);
@@ -271,6 +284,7 @@ impl LuminaApp {
             Ok(())
         };
         if let Err(err) = result {
+            // No Retry: it would act on whatever is selected by then.
             self.set_error(format!("Could not restore items: {err}"), cx);
             return;
         }
