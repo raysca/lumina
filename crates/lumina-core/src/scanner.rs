@@ -351,6 +351,9 @@ impl Scanner {
         } else {
             None
         };
+        if media_type == MediaType::Video && (width == 0 || height == 0) {
+            (width, height) = extract_video_size(path).unwrap_or((0, 0));
+        }
 
         Some(MediaItem {
             id: MediaId(0), // Assigned upon DB insert
@@ -582,30 +585,72 @@ fn parse_mvhd_duration(data: &[u8]) -> Option<(u64, f64)> {
     None
 }
 
+/// Displayed size of the first visual track, from its `tkhd` box. Audio
+/// tracks have a zero size and are skipped. A 90°/270° matrix (portrait phone
+/// video stored landscape) swaps width and height.
+fn parse_tkhd_size(data: &[u8]) -> Option<(u32, u32)> {
+    let be32 = |at: usize| -> Option<u32> {
+        Some(u32::from_be_bytes(data.get(at..at + 4)?.try_into().ok()?))
+    };
+    let mut from = 0;
+    while let Some(found) = data[from..].windows(4).position(|w| w == b"tkhd") {
+        let pos = from + found;
+        from = pos + 4;
+        // A real box header carries the fixed tkhd size; random video bytes
+        // that happen to spell "tkhd" do not.
+        if !matches!(pos.checked_sub(4).and_then(be32), Some(92 | 104)) {
+            continue;
+        }
+        // version + flags, then times/ids (20 bytes in v0, 32 in v1), then
+        // 16 reserved/layer/volume bytes and the 36-byte matrix.
+        let matrix = pos
+            + 4
+            + 4
+            + if data.get(pos + 4) == Some(&1) {
+                32
+            } else {
+                20
+            }
+            + 16;
+        let (a, b) = (be32(matrix)? as i32, be32(matrix + 4)? as i32);
+        let (w, h) = (be32(matrix + 36)? >> 16, be32(matrix + 40)? >> 16);
+        if w > 0 && h > 0 {
+            return Some(if a == 0 && b != 0 { (h, w) } else { (w, h) });
+        }
+    }
+    None
+}
+
+/// Runs `parse` over the head of a movie file, then over its tail, where
+/// non-faststart MP4/MOV files keep the `moov` atom.
+fn scan_movie_header<T>(path: &Path, parse: impl Fn(&[u8]) -> Option<T>) -> Option<T> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut head = vec![0u8; 128 * 1024]; // 128 KiB head check
+    if let Ok(n) = file.read(&mut head) {
+        if let Some(res) = parse(&head[..n]) {
+            return Some(res);
+        }
+    }
+    let file_len = file.metadata().ok()?.len();
+    if file_len > 128 * 1024 {
+        file.seek(SeekFrom::Start(file_len.saturating_sub(256 * 1024)))
+            .ok()?;
+        let mut tail = Vec::with_capacity(256 * 1024);
+        file.read_to_end(&mut tail).ok()?;
+        return parse(&tail);
+    }
+    None
+}
+
+/// Displayed `(width, height)` of an MP4/MOV video, read from its headers.
+pub fn extract_video_size(path: &Path) -> Option<(u32, u32)> {
+    scan_movie_header(path, parse_tkhd_size)
+}
+
 pub fn extract_video_duration(path: &Path) -> Option<(u64, f64)> {
-    if let Ok(mut file) = std::fs::File::open(path) {
-        use std::io::{Read, Seek, SeekFrom};
-        let mut head = vec![0u8; 128 * 1024]; // 128 KiB head check
-        if let Ok(n) = file.read(&mut head) {
-            if let Some(res) = parse_mvhd_duration(&head[..n]) {
-                return Some(res);
-            }
-        }
-        // Non-faststart MP4/MOV files place the moov/mvhd atom at the tail of the file
-        if let Ok(meta) = file.metadata() {
-            let file_len = meta.len();
-            if file_len > 128 * 1024 {
-                let tail_offset = file_len.saturating_sub(256 * 1024);
-                if file.seek(SeekFrom::Start(tail_offset)).is_ok() {
-                    let mut tail = Vec::with_capacity(256 * 1024);
-                    if file.read_to_end(&mut tail).is_ok() {
-                        if let Some(res) = parse_mvhd_duration(&tail) {
-                            return Some(res);
-                        }
-                    }
-                }
-            }
-        }
+    if let Some(res) = scan_movie_header(path, parse_mvhd_duration) {
+        return Some(res);
     }
 
     if let Ok(out) = std::process::Command::new("mdls")

@@ -180,8 +180,8 @@ impl LuminaApp {
             player.set_muted(self.video.is_muted);
             player.set_rate(self.video.playback_speed);
             self.video.duration = meta.duration_secs;
-            // The scanner reads no video dimensions; show what the player knows.
-            // ponytail: session only, persist once the scanner probes videos.
+            // The scanner reads MP4/MOV sizes only; for other containers show
+            // what the player knows. ponytail: session only.
             for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
                 .into_iter()
                 .flatten()

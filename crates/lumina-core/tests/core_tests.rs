@@ -2503,3 +2503,130 @@ fn capture_time_reads_weekday_day_month_year_and_time() {
         "inspector capture time reads weekday, day, month, year · time"
     );
 }
+
+/// A minimal `tkhd` box (version 0) with the given matrix `a`/`b` and size.
+fn tkhd_box(a: i32, b: i32, width: u32, height: u32) -> Vec<u8> {
+    let mut boxed = Vec::new();
+    boxed.extend_from_slice(&92u32.to_be_bytes());
+    boxed.extend_from_slice(b"tkhd");
+    boxed.extend_from_slice(&[0; 4]); // version 0 + flags
+    boxed.extend_from_slice(&[0; 20]); // times, track id, reserved, duration
+    boxed.extend_from_slice(&[0; 16]); // reserved, layer, group, volume
+    let mut matrix = [0i32; 9];
+    (matrix[0], matrix[1]) = (a, b);
+    for v in matrix {
+        boxed.extend_from_slice(&v.to_be_bytes());
+    }
+    boxed.extend_from_slice(&(width << 16).to_be_bytes());
+    boxed.extend_from_slice(&(height << 16).to_be_bytes());
+    boxed
+}
+
+#[test]
+fn video_size_comes_from_the_first_visual_track_and_honours_rotation() {
+    let dir = std::env::temp_dir().join(format!(
+        "lumina_test_vsize_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, tracks: &[Vec<u8>]| {
+        let path = dir.join(name);
+        std::fs::write(&path, tracks.concat()).unwrap();
+        path
+    };
+    const ONE: i32 = 0x0001_0000;
+    // An audio track (0×0) first, then the 1920×1080 picture.
+    let landscape = write(
+        "landscape.mp4",
+        &[tkhd_box(ONE, 0, 0, 0), tkhd_box(ONE, 0, 1920, 1080)],
+    );
+    // A phone portrait clip: stored 1920×1080, rotated 90°.
+    let portrait = write("portrait.mp4", &[tkhd_box(0, ONE, 1920, 1080)]);
+    let audio_only = write("audio.m4v", &[tkhd_box(ONE, 0, 0, 0)]);
+
+    assert_eq!(
+        lumina_core::extract_video_size(&landscape),
+        Some((1920, 1080)),
+        "audio tracks have no size; the picture track gives it"
+    );
+    assert_eq!(
+        lumina_core::extract_video_size(&portrait),
+        Some((1080, 1920)),
+        "a 90° matrix must swap width and height"
+    );
+    assert_eq!(lumina_core::extract_video_size(&audio_only), None);
+
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lumina-ui-gpui/tests/fixtures/clip.mp4");
+    assert_eq!(
+        lumina_core::extract_video_size(&fixture),
+        Some((64, 48)),
+        "a real encoder's MP4 must parse too"
+    );
+    let (tx, _rx) = crossbeam_channel::unbounded();
+    let scanned = Scanner::new(dir.clone(), tx)
+        .inspect_media_file(&fixture)
+        .expect("the scanner inspects the clip");
+    assert_eq!(
+        (scanned.width, scanned.height),
+        (64, 48),
+        "a scanned video is catalogued with its size"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn video_size_backfill_sets_only_the_size_of_sizeless_videos() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let video = sample_media_item("/v/old.mp4", MediaType::Video, 1789430400000, None, None);
+    let photo = sample_media_item("/p/a.jpg", MediaType::Image, 1789430400000, None, None);
+    let mkv = sample_media_item("/v/clip.mkv", MediaType::Video, 1789430400000, None, None);
+    let (video, photo) = (
+        MediaItem {
+            width: 0,
+            height: 0,
+            ..video
+        },
+        MediaItem {
+            width: 0,
+            height: 0,
+            ..photo
+        },
+    );
+    let mkv = MediaItem {
+        width: 0,
+        height: 0,
+        ..mkv
+    };
+    let stored = catalog
+        .insert_or_update_batch(&[video, photo, mkv])
+        .unwrap();
+    let (vid, pid) = (stored[0].id, stored[1].id);
+    let edited = 1600000000000;
+    catalog.set_timestamp(vid, edited).unwrap();
+
+    let filled = catalog.fill_video_sizes(|_| Some((1920, 1080))).unwrap();
+    assert_eq!(
+        filled, 1,
+        "only the MP4 is measured: photos and MKVs have no tkhd to read"
+    );
+    let v = catalog.get_item_by_id(vid).unwrap().unwrap();
+    assert_eq!((v.width, v.height), (1920, 1080));
+    assert_eq!(
+        v.timestamp_epoch_ms, edited,
+        "the backfill must not overwrite an edited date"
+    );
+    let p = catalog.get_item_by_id(pid).unwrap().unwrap();
+    assert_eq!((p.width, p.height), (0, 0), "photos are never touched");
+
+    assert_eq!(
+        catalog
+            .fill_video_sizes(|_| panic!("sized videos are not re-measured"))
+            .unwrap(),
+        0
+    );
+}

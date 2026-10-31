@@ -24,7 +24,7 @@ pub use cache::DiskCache;
 pub use catalog::{Catalog, DeletionTarget, SCHEMA_VERSION};
 pub use decoder::DecoderPipeline;
 pub use geocoder::{GeoLocation, OfflineGeocoder};
-pub use scanner::{extract_video_duration, Scanner};
+pub use scanner::{extract_video_duration, extract_video_size, Scanner};
 pub use search::StructuredQuery;
 pub use smart_albums::{
     parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum,
@@ -958,6 +958,11 @@ impl LuminaEngine {
                     for id in removed_ids {
                         let _ = self.event_tx.send(EngineEvent::ItemRemoved(id));
                     }
+                }
+                // Videos catalogued before the scanner read their size are
+                // unchanged on disk, so the incremental scan skips them.
+                if let Err(e) = self.catalog.fill_video_sizes(extract_video_size) {
+                    log::warn!("video size backfill failed: {e:#}");
                 }
             }
             // Automatically recompute timeline buckets upon scan completion

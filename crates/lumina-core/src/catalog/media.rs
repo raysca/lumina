@@ -156,6 +156,46 @@ impl Catalog {
         Ok(map)
     }
 
+    /// Fills `width`/`height` of videos stored without a size, touching no
+    /// other column (a full re-insert would overwrite edited dates and
+    /// places). Files are measured with the catalog lock released.
+    /// Only MP4/MOV/M4V files carry the headers `measure` reads.
+    /// ponytail: one whose `moov` lies outside the scanned head/tail windows is
+    /// re-read on every scan; walk the box tree if that shows up in profiles.
+    pub fn fill_video_sizes(
+        &self,
+        measure: impl Fn(&std::path::Path) -> Option<(u32, u32)>,
+    ) -> Result<usize> {
+        let sizeless: Vec<(i64, String)> = {
+            let conn = self.conn.lock();
+            let mut stmt = conn.prepare(
+                "SELECT id, file_path FROM media_items
+                 WHERE media_type = 'video' AND (width = 0 OR height = 0)
+                   AND (lower(file_path) LIKE '%.mp4' OR lower(file_path) LIKE '%.mov'
+                        OR lower(file_path) LIKE '%.m4v');",
+            )?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        let sizes: Vec<(i64, (u32, u32))> = sizeless
+            .into_iter()
+            .filter_map(|(id, path)| Some((id, measure(std::path::Path::new(&path))?)))
+            .collect();
+        if sizes.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        for (id, (w, h)) in &sizes {
+            tx.execute(
+                "UPDATE media_items SET width = ?1, height = ?2 WHERE id = ?3;",
+                params![w, h, id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(sizes.len())
+    }
+
     pub fn total_count(&self) -> Result<usize> {
         let conn = self.conn.lock();
         let count: i64 = conn.query_row(
