@@ -59,7 +59,9 @@ impl Catalog {
                 color_label INTEGER NOT NULL DEFAULT 0,
                 title TEXT,
                 rotation_quarters INTEGER NOT NULL DEFAULT 0,
-                added_epoch_ms INTEGER
+                added_epoch_ms INTEGER,
+                date_edited INTEGER NOT NULL DEFAULT 0,
+                place_edited INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -220,6 +222,23 @@ impl Catalog {
                 [],
             )
             .context("adding media_items.added_epoch_ms")?;
+        }
+
+        // v10: user-edited date/place flags, so a re-read of a changed file
+        // keeps the edit. Edits made before v10 are unflagged: unknowable.
+        for column in ["date_edited", "place_edited"] {
+            let exists: bool = conn
+                .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = ?1")?
+                .exists([column])?;
+            if !exists {
+                conn.execute(
+                    &format!(
+                        "ALTER TABLE media_items ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0;"
+                    ),
+                    [],
+                )
+                .with_context(|| format!("adding media_items.{column}"))?;
+            }
         }
 
         // Catalogs from the first smart-album engine named the rules column

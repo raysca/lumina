@@ -8,6 +8,13 @@ use super::Catalog;
 use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
 
 impl Catalog {
+    /// Upserts scanned items by path; scans and the watcher both land here.
+    /// A date or place the user edited (`date_edited` / `place_edited`) is
+    /// kept over the file's. Returned items carry the scanned metadata plus
+    /// the row's id, favorite/hidden/trashed and title; read the row for
+    /// edited values.
+    /// ponytail: undoing an edit keeps its flag, so that item then ignores
+    /// a later in-file date change; clear the flag on undo if that matters.
     pub fn insert_or_update_batch(&self, items: &[MediaItem]) -> Result<Vec<MediaItem>> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -36,22 +43,23 @@ impl Catalog {
                     CAST(unixepoch('subsec') * 1000 AS INTEGER)
                 )
                 -- added_epoch_ms is set once, on first insert, never on update.
+                -- A date or place the user edited outlives the file's own.
                 ON CONFLICT(file_path) DO UPDATE SET
                     file_size = excluded.file_size,
                     mtime_epoch_ms = excluded.mtime_epoch_ms,
                     width = excluded.width,
                     height = excluded.height,
                     duration_ms = excluded.duration_ms,
-                    timestamp_epoch_ms = excluded.timestamp_epoch_ms,
-                    year = excluded.year,
-                    month = excluded.month,
-                    day = excluded.day,
-                    latitude = excluded.latitude,
-                    longitude = excluded.longitude,
+                    timestamp_epoch_ms = CASE WHEN date_edited THEN timestamp_epoch_ms ELSE excluded.timestamp_epoch_ms END,
+                    year = CASE WHEN date_edited THEN year ELSE excluded.year END,
+                    month = CASE WHEN date_edited THEN month ELSE excluded.month END,
+                    day = CASE WHEN date_edited THEN day ELSE excluded.day END,
+                    latitude = CASE WHEN place_edited THEN latitude ELSE excluded.latitude END,
+                    longitude = CASE WHEN place_edited THEN longitude ELSE excluded.longitude END,
                     altitude = excluded.altitude,
-                    country_code = excluded.country_code,
-                    admin1_region = excluded.admin1_region,
-                    city = excluded.city,
+                    country_code = CASE WHEN place_edited THEN country_code ELSE excluded.country_code END,
+                    admin1_region = CASE WHEN place_edited THEN admin1_region ELSE excluded.admin1_region END,
+                    city = CASE WHEN place_edited THEN city ELSE excluded.city END,
                     make = excluded.make,
                     model = excluded.model,
                     lens = excluded.lens,
@@ -432,7 +440,8 @@ impl Catalog {
             let conn = self.conn.lock();
             conn.execute(
                 "UPDATE media_items
-                 SET timestamp_epoch_ms = ?1, year = ?2, month = ?3, day = ?4
+                 SET timestamp_epoch_ms = ?1, year = ?2, month = ?3, day = ?4,
+                     date_edited = 1
                  WHERE id = ?5;",
                 params![
                     epoch_ms,
@@ -463,7 +472,7 @@ impl Catalog {
         });
         let conn = self.conn.lock();
         conn.execute(
-            "UPDATE media_items SET latitude = ?1, longitude = ?2, city = ?3, admin1_region = ?4, country_code = ?5 WHERE id = ?6;",
+            "UPDATE media_items SET latitude = ?1, longitude = ?2, city = ?3, admin1_region = ?4, country_code = ?5, place_edited = 1 WHERE id = ?6;",
             params![
                 latitude,
                 longitude,

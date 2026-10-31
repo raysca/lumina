@@ -2806,3 +2806,129 @@ fn a_label_alone_gets_a_sidecar_and_a_labelless_sidecar_keeps_the_label() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn a_changed_file_keeps_its_edited_date_and_place() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let edited = sample_media_item("/photos/edited.jpg", MediaType::Image, 1_000, None, None);
+    let untouched = sample_media_item("/photos/untouched.jpg", MediaType::Image, 1_000, None, None);
+    let unplaced = sample_media_item("/photos/unplaced.jpg", MediaType::Image, 1_000, None, None);
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&[edited.clone(), untouched.clone(), unplaced.clone()])
+        .unwrap()
+        .iter()
+        .map(|item| item.id)
+        .collect();
+    let edited_ms = 1_600_000_000_000;
+    catalog.set_timestamp(ids[0], edited_ms).unwrap();
+    catalog
+        .set_location(ids[0], Some(35.68), Some(139.69))
+        .unwrap();
+    catalog.set_location(ids[2], None, None).unwrap();
+    let edited_row = catalog.get_item_by_id(ids[0]).unwrap().unwrap();
+    assert!(
+        edited_row.city.is_some(),
+        "the edit geocodes to a named place"
+    );
+
+    // The file changes on disk (e.g. edited in another app); the watcher
+    // re-reads it with the file's own date and coordinates.
+    let rescan = |mut item: MediaItem| {
+        item.mtime_epoch_ms += 1;
+        item.timestamp_epoch_ms = 2_000;
+        item.latitude = Some(48.85);
+        item.longitude = Some(2.35);
+        item.altitude = Some(35.0);
+        item
+    };
+    catalog
+        .insert_or_update_batch(&[rescan(edited), rescan(untouched), rescan(unplaced)])
+        .unwrap();
+
+    let kept = catalog.get_item_by_id(ids[0]).unwrap().unwrap();
+    assert_eq!(
+        kept.timestamp_epoch_ms, edited_ms,
+        "an edited date survives a re-read"
+    );
+    assert_eq!(
+        (kept.year, kept.month, kept.day),
+        (edited_row.year, edited_row.month, edited_row.day),
+        "the derived date parts stay with the edit"
+    );
+    assert_eq!((kept.latitude, kept.longitude), (Some(35.68), Some(139.69)));
+    assert_eq!(
+        kept.city, edited_row.city,
+        "the edited place keeps its name"
+    );
+    assert_eq!(
+        kept.altitude,
+        Some(35.0),
+        "altitude is never edited, so it follows the file"
+    );
+    let unplaced = catalog.get_item_by_id(ids[2]).unwrap().unwrap();
+    assert_eq!(
+        (unplaced.latitude, unplaced.city),
+        (None, None),
+        "a removed place stays removed when the file has GPS"
+    );
+
+    let fresh = catalog.get_item_by_id(ids[1]).unwrap().unwrap();
+    assert_eq!(
+        fresh.timestamp_epoch_ms, 2_000,
+        "unedited items follow the file"
+    );
+    assert_eq!((fresh.latitude, fresh.longitude), (Some(48.85), Some(2.35)));
+}
+
+#[test]
+fn a_v9_catalog_migrates_and_protects_later_edits() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_edited_migration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+    let item = sample_media_item("/photos/old/c.jpg", MediaType::Image, 1_000, None, None);
+    let id = {
+        let catalog = Catalog::open(&db_path).unwrap();
+        catalog
+            .insert_or_update_batch(std::slice::from_ref(&item))
+            .unwrap()[0]
+            .id
+    };
+    {
+        // Downgrade to the v9 layout: no edited flags.
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE media_items DROP COLUMN date_edited;
+             ALTER TABLE media_items DROP COLUMN place_edited;
+             PRAGMA user_version = 9;",
+        )
+        .unwrap();
+    }
+    let catalog = Catalog::open(&db_path).expect("a v9 catalog must open and migrate");
+    catalog.set_timestamp(id, 1_600_000_000_000).unwrap();
+    let mut changed = item;
+    changed.timestamp_epoch_ms = 2_000;
+    catalog.insert_or_update_batch(&[changed]).unwrap();
+    assert_eq!(
+        catalog
+            .get_item_by_id(id)
+            .unwrap()
+            .unwrap()
+            .timestamp_epoch_ms,
+        1_600_000_000_000,
+        "a migrated catalog protects edits made after the upgrade"
+    );
+    drop(catalog);
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let version: i64 = conn
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, SCHEMA_VERSION);
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
