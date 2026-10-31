@@ -103,41 +103,45 @@ impl LuminaApp {
     }
 }
 
+/// The shortcut sheet's rows: keys, then what they do. Keep in step with
+/// `app/keymap`.
+const SHORTCUT_ROWS: [(&str, &str); 28] = [
+    ("⌘K", "Command palette"),
+    ("⌘F", "Focus search"),
+    ("⌘O", "Open library…"),
+    ("⌘,", "Preferences"),
+    ("⌘Z / ⇧⌘Z", "Undo / redo"),
+    ("⌘R", "Rescan library"),
+    ("⇧⌘R", "Show in Finder"),
+    ("⌥⌘C", "Copy file path"),
+    ("⌘+ / ⌘-", "Grid density"),
+    ("I", "Toggle inspector"),
+    ("Space", "Quick look / open viewer"),
+    ("Enter", "Open selected item"),
+    ("← ↑ → ↓", "Navigate items"),
+    ("Home / End", "First / last item"),
+    ("PageUp / PageDown", "Jump four rows"),
+    ("F", "Favorite"),
+    ("T", "Tag selection"),
+    ("⌃⌘F", "Full screen viewer"),
+    ("⌫", "Delete…"),
+    ("Z", "Toggle 1:1 zoom"),
+    ("O", "Open in default app"),
+    ("J / K / ←→", "Video back 5s / play / ±5s"),
+    ("L", "Loop video"),
+    ("M", "Mute audio"),
+    ("⌥P", "Picture-in-Picture on / off"),
+    ("⌥⌘N", "New smart album"),
+    ("Esc", "Close / go back"),
+    ("⌘/", "Toggle this help"),
+];
+
 impl LuminaApp {
     /// Keyboard shortcut cheat sheet (Cmd+/), also serving as keyboard discoverability.
     fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 27] = [
-            ("⌘K", "Command palette"),
-            ("⌘F", "Focus search"),
-            ("⌘O", "Open library…"),
-            ("⌘,", "Preferences"),
-            ("⌘Z / ⇧⌘Z", "Undo / redo"),
-            ("⌘R", "Rescan library"),
-            ("⇧⌘R", "Show in Finder"),
-            ("⌥⌘C", "Copy file path"),
-            ("⌘+ / ⌘-", "Grid density"),
-            ("I", "Toggle inspector"),
-            ("Space", "Quick look / open viewer"),
-            ("Enter", "Open selected item"),
-            ("← ↑ → ↓", "Navigate items"),
-            ("Home / End", "First / last item"),
-            ("PageUp / PageDown", "Jump four rows"),
-            ("F", "Favorite"),
-            ("T", "Tag selection"),
-            ("⌃⌘F", "Full screen viewer"),
-            ("⌫", "Delete…"),
-            ("Z / O", "Toggle 1:1 zoom"),
-            ("J / K / ←→", "Video back 5s / play / ±5s"),
-            ("L", "Loop video"),
-            ("M", "Mute audio"),
-            ("⌥P", "Picture-in-Picture on / off"),
-            ("⌥⌘N", "New smart album"),
-            ("Esc", "Close / go back"),
-            ("⌘/", "Toggle this help"),
-        ];
         div()
             .id("shortcuts-overlay")
             .debug_selector(|| "shortcuts-overlay".to_string())
@@ -198,7 +202,7 @@ impl LuminaApp {
                                     })),
                             ),
                     )
-                    .children(rows.into_iter().map(|(keys, description)| {
+                    .children(SHORTCUT_ROWS.into_iter().map(|(keys, description)| {
                         div()
                             .flex()
                             .flex_row()
@@ -538,5 +542,23 @@ impl Render for LuminaApp {
                 "command-palette-in",
             ))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SHORTCUT_ROWS;
+
+    /// Regression: the sheet listed "Z / O" for 1:1 zoom, but O opens the
+    /// file in its default app (`app/keymap/viewer.rs`).
+    #[core::prelude::v1::test]
+    fn the_sheet_says_what_z_and_o_do() {
+        let says = |keys: &str| SHORTCUT_ROWS.iter().find(|(k, _)| *k == keys).map(|r| r.1);
+        assert_eq!(says("Z"), Some("Toggle 1:1 zoom"), "Z toggles 1:1 zoom");
+        assert_eq!(
+            says("O"),
+            Some("Open in default app"),
+            "O opens the default app, it does not zoom"
+        );
     }
 }
