@@ -370,7 +370,7 @@ fn framed_video(
 }
 
 #[core::prelude::v1::test]
-fn portrait_and_short_window_videos_keep_frame_and_transport_on_screen() {
+fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
     for (frame, window) in [
         ((1080, 1920), (1440.0, 900.0)),
         ((1920, 1080), (1440.0, 640.0)),
@@ -380,9 +380,11 @@ fn portrait_and_short_window_videos_keep_frame_and_transport_on_screen() {
         let media = bounds(vcx, "viewer-media");
         let transport = bounds(vcx, "video-transport");
         assert!(
-            media.top() >= gpui::px(52.0) && f32::from(transport.bottom()) <= window.1,
-            "{frame:?} in {window:?}: the frame and the whole transport stay on screen: \
-             media={media:?} transport={transport:?}"
+            (f32::from(media.top()) - (52.0 + 12.0)).abs() < 0.5
+                && (f32::from(transport.top() - media.bottom()) - 12.0).abs() < 0.5
+                && f32::from(transport.bottom()) <= window.1,
+            "{frame:?} in {window:?}: the frame keeps a 12px gap under the top bar and \
+             the whole transport stays on screen: media={media:?} transport={transport:?}"
         );
         let (w, h) = size(media);
         assert!(

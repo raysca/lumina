@@ -32,6 +32,9 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     // ponytail: measured transport card (106) + its 12px top and 16px bottom
     // margins; update if the card grows.
     const TRANSPORT_BLOCK: f32 = 134.0;
+    // The stage centres frame + transport, so a height-limited frame gets
+    // 12px above it (the same as frame to transport) and 12px of slack below.
+    const TOP_GAP: f32 = 24.0;
     // Room for the 40px prev/next buttons 40px from each edge.
     const NAV_ROOM: f32 = 160.0;
     let is_video = this
@@ -58,7 +61,7 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     let max_w = VIDEO_FRAME_MAX_WIDTH
         .min(win_w - drawer - NAV_ROOM)
         .max(1.0);
-    let max_h = (win_h - TOP_BAR - TRANSPORT_BLOCK).max(1.0);
+    let max_h = (win_h - TOP_BAR - TOP_GAP - TRANSPORT_BLOCK).max(1.0);
     let w = max_w.min(max_h * aspect);
     Some((w, w / aspect))
 }
