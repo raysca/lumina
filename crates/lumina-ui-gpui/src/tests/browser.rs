@@ -264,3 +264,42 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_wide_thumbnail_never_widens_its_card() {
+    let (dir, engine) = seed_library("br_wide_thumb", 4);
+    let items = engine.get_item_slice(0..4);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let column = vcx
+        .debug_bounds(leak(format!("media-card-photo-{}", items[1].id.0)))
+        .expect("the photo well renders")
+        .size
+        .width;
+
+    // A panorama, far wider than its square well. Each mode
+    // uses a fresh item: debug_bounds keeps an element's first-frame entry, so
+    // only a thumbnail painted for the first time shows the new layout.
+    let wide = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(2000, 200),
+    )]));
+    for (fit, item) in [(true, &items[0]), (false, &items[2])] {
+        view.update(vcx, |app, cx| {
+            app.card_fit_mode = fit;
+            let state = app.grid_state.as_ref().expect("grid state");
+            state.texture_cache.lock().put(item.id, wide.clone());
+            cx.notify();
+        });
+        render_ui(vcx);
+        let thumb = vcx
+            .debug_bounds(leak(format!("media-card-thumb-{}", item.id.0)))
+            .expect("the cached thumbnail paints");
+        assert!(
+            (thumb.size.width - column).abs() < gpui::px(1.0),
+            "fit={fit}: a wide thumbnail must stay in its column ({column:?}), got {thumb:?}"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

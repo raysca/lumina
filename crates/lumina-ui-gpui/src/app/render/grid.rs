@@ -217,6 +217,10 @@ impl LuminaApp {
                                             format!("media-card-{}", item_id_num)
                                         })
                                         .flex_1()
+                                        // An img's min-content width is its height
+                                        // times its aspect; without this a landscape
+                                        // thumbnail widens its column.
+                                        .min_w_0()
                                         .h(px(row_h - CARD_ROW_GAP))
                                         .p(px(CARD_PADDING))
                                         .relative()
