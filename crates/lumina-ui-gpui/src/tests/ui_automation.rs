@@ -998,6 +998,7 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
             title: Some("Imported title".to_string()),
             caption: Some("Imported caption".to_string()),
             rating: 5,
+            color_label: 0,
             tags: vec!["imported".to_string()],
         },
     )

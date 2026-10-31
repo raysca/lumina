@@ -1936,6 +1936,7 @@ fn test_import_sidecars_applies_title_caption_rating_and_tags() {
             title: Some("Imported title".to_string()),
             caption: Some("Imported caption".to_string()),
             rating: 5,
+            color_label: 4,
             tags: vec!["imported".to_string()],
         },
     )
@@ -1948,6 +1949,11 @@ fn test_import_sidecars_applies_title_caption_rating_and_tags() {
     let updated = engine.catalog().get_item_by_id(item.id).unwrap().unwrap();
     assert_eq!(updated.title.as_deref(), Some("Imported title"));
     assert_eq!(engine.catalog().get_rating(item.id).unwrap(), 5);
+    assert_eq!(
+        engine.get_color_labels_map().get(&item.id),
+        Some(&4),
+        "a sidecar's color label is imported"
+    );
     assert_eq!(
         engine
             .catalog()
@@ -2006,6 +2012,7 @@ fn test_export_items_copies_files_and_writes_xmp_sidecars() {
         .catalog()
         .add_tags_batch(&[rated.id], &["travel".to_string()])
         .unwrap();
+    engine.catalog().set_color_label(rated.id, 5).unwrap();
 
     let ids: Vec<MediaId> = items.iter().map(|item| item.id).collect();
     let destination = tmp_dir.join("exported");
@@ -2026,6 +2033,7 @@ fn test_export_items_copies_files_and_writes_xmp_sidecars() {
     assert_eq!(metadata.rating, 4);
     assert_eq!(metadata.caption.as_deref(), Some("Golden hour in Kyoto"));
     assert_eq!(metadata.tags, vec!["travel".to_string()]);
+    assert_eq!(metadata.color_label, 5, "the color label is exported");
 
     // Re-exporting must not overwrite the first copy.
     let second = engine.export_items(&[rated.id], &destination).unwrap();
@@ -2761,6 +2769,38 @@ fn a_rescan_stops_when_the_catalog_file_list_cannot_be_read() {
     assert!(
         errors.iter().any(|m| m.starts_with("Library scan failed:")),
         "an unknown catalog must stop the scan, not re-insert every file: {errors:?}"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn a_label_alone_gets_a_sidecar_and_a_labelless_sidecar_keeps_the_label() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("label_sidecar");
+    let item = engine.get_item_slice(0..1).remove(0);
+    engine.set_color_label(item.id, 2).unwrap();
+    assert_eq!(
+        engine.write_metadata_sidecars(&[item.id]).unwrap(),
+        1,
+        "a color label alone is worth a sidecar"
+    );
+    assert_eq!(read_sidecar(&item.path).unwrap().unwrap().color_label, 2);
+
+    // A sidecar written before labels were exported has no xmp:Label.
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            rating: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(
+        engine.get_color_labels_map().get(&item.id),
+        Some(&2),
+        "a sidecar without a label must not clear the catalog's label"
     );
 
     drop(engine);

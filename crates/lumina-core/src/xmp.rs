@@ -1,9 +1,9 @@
 //! XMP sidecar persistence for catalog metadata.
 //!
-//! Ratings, captions and tags live in SQLite, but that data is trapped in
+//! Ratings, color labels, captions and tags live in SQLite, but that data is trapped in
 //! Lumina unless it is also written next to the media. We emit a small RDF/XML
 //! sidecar (photo.jpg.xmp) compatible with Adobe conventions for
-//! xmp:Rating, dc:description and dc:subject, and can read it back.
+//! xmp:Rating, xmp:Label, dc:description and dc:subject, and can read it back.
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -14,14 +14,20 @@ pub struct SidecarMetadata {
     pub title: Option<String>,
     pub caption: Option<String>,
     pub rating: u8,
+    /// 0 = none, 1..=6 = [`LABEL_NAMES`] (the catalog's `color_label`).
+    pub color_label: u8,
     pub tags: Vec<String>,
 }
+
+/// xmp:Label values for color labels 1..=6, the names Lightroom and Bridge use.
+pub const LABEL_NAMES: [&str; 6] = ["Red", "Orange", "Yellow", "Green", "Blue", "Purple"];
 
 impl SidecarMetadata {
     pub fn is_empty(&self) -> bool {
         self.title.as_deref().unwrap_or("").trim().is_empty()
             && self.caption.as_deref().unwrap_or("").trim().is_empty()
             && self.rating == 0
+            && self.color_label == 0
             && self.tags.is_empty()
     }
 }
@@ -76,9 +82,14 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
         _ => String::new(),
     };
 
+    let label = match metadata.color_label {
+        n @ 1..=6 => format!("    xmp:Label=\"{}\"\n", LABEL_NAMES[n as usize - 1]),
+        _ => String::new(),
+    };
+
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n  >\n{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
-        metadata.rating, title, subject, description
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n{}  >\n{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        metadata.rating, label, title, subject, description
     )
 }
 
@@ -114,6 +125,15 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .unwrap_or(0)
         .min(5);
 
+    // Unknown names (a custom Lightroom label set) read as no label.
+    let color_label = between(xml, "xmp:Label=\"", "\"")
+        .and_then(|name| {
+            LABEL_NAMES
+                .iter()
+                .position(|known| known.eq_ignore_ascii_case(name.trim()))
+        })
+        .map_or(0, |index| index as u8 + 1);
+
     let title = between(xml, "<dc:title>", "</dc:title>")
         .and_then(|section| extract_li_values(section).into_iter().next())
         .filter(|value| !value.trim().is_empty());
@@ -130,6 +150,7 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         title,
         caption,
         rating,
+        color_label,
         tags,
     }
 }
@@ -183,10 +204,12 @@ mod tests {
             title: Some("A & B <title>".to_string()),
             caption: Some("Golden hour & <Kyoto>".to_string()),
             rating: 4,
+            color_label: 2,
             tags: vec!["travel".to_string(), "japan & kyoto".to_string()],
         };
         let xml = render_xmp(&metadata);
         assert!(xml.contains("xmp:Rating=\"4\""));
+        assert!(xml.contains("xmp:Label=\"Orange\""));
         assert!(xml.contains("travel"));
         assert_eq!(parse_xmp(&xml), metadata);
     }
@@ -199,6 +222,7 @@ mod tests {
             title: Some("A title".to_string()),
             caption: Some("A caption".to_string()),
             rating: 3,
+            color_label: 0,
             tags: vec!["one".to_string(), "two".to_string()],
         };
         let sidecar = write_sidecar(&media, &metadata)
@@ -214,6 +238,18 @@ mod tests {
         assert!(!sidecar.exists());
 
         let _ = fs::remove_file(&media);
+    }
+
+    #[test]
+    fn a_label_alone_writes_a_sidecar_and_unknown_names_read_as_none() {
+        let label_only = SidecarMetadata {
+            color_label: 6,
+            ..Default::default()
+        };
+        assert!(!label_only.is_empty(), "a color label alone is metadata");
+        assert_eq!(parse_xmp(&render_xmp(&label_only)), label_only);
+        assert_eq!(parse_xmp(r#"<x xmp:Label="green"/>"#).color_label, 4);
+        assert_eq!(parse_xmp(r#"<x xmp:Label="To Print"/>"#).color_label, 0);
     }
 
     #[test]

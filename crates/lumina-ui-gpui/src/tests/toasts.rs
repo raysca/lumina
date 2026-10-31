@@ -413,6 +413,7 @@ fn toast_export_and_import_success_are_hooked() {
             title: Some("Imported title".to_string()),
             caption: None,
             rating: 4,
+            color_label: 0,
             tags: vec!["imported".to_string()],
         },
     )

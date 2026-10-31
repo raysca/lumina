@@ -40,6 +40,13 @@ fn docked_inspector_summary_rates_labels_and_opens_get_info() {
         Some(2),
         "clicking a label dot must persist that color label"
     );
+    assert_eq!(
+        lumina_core::read_sidecar(&item.path)
+            .unwrap()
+            .map(|xmp| xmp.color_label),
+        Some(2),
+        "a label change must reach the XMP sidecar like a rating does"
+    );
 
     click(vcx, "inspector-get-info");
     view.update(vcx, |app, _| {

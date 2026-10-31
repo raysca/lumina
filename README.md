@@ -34,8 +34,9 @@ core handles cataloguing, decoding, and search.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
 - **Metadata portability** — exporting a selection copies the originals and
-  writes Adobe-compatible XMP sidecars (`xmp:Rating`, `dc:subject`,
-  `dc:description`) so ratings, tags, and captions survive outside the catalog;
+  writes Adobe-compatible XMP sidecars (`xmp:Rating`, `xmp:Label`, `dc:subject`,
+  `dc:description`) so ratings, color labels, tags, and captions survive outside
+  the catalog (Lightroom has no Orange label and shows it as a custom one);
   the same sidecars can be generated in place via `write_metadata_sidecars`.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
@@ -44,7 +45,8 @@ core handles cataloguing, decoding, and search.
 - **Editable metadata & XMP import** — click the title, date-taken or coordinate
   row in the inspector to edit it (SQLite, undoable; titles also go to
   `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
-  card context menu applies sidecar titles, ratings, captions and tags.
+  card context menu applies sidecar titles, ratings, color labels, captions and
+  tags (a sidecar without a label leaves the catalog's label alone).
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

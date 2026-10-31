@@ -386,7 +386,7 @@ impl LuminaApp {
         if ids.is_empty() {
             return;
         }
-        let mut changed = 0usize;
+        let mut changed = Vec::new();
         for id in &ids {
             let current = self.item_color_labels.get(id).copied().unwrap_or(0);
             let new_l = if current == label { 0 } else { label };
@@ -395,10 +395,12 @@ impl LuminaApp {
             }
             self.set_item_color_label(*id, new_l, cx);
             if self.item_color_labels.get(id).copied().unwrap_or(0) == new_l {
-                changed += 1;
+                changed.push(*id);
             }
         }
-        if changed == 0 {
+        // One sidecar pass for the batch: each pass reads library-wide maps.
+        self.sync_metadata_sidecars(&changed);
+        if changed.is_empty() {
             cx.notify();
             return;
         }
@@ -409,7 +411,7 @@ impl LuminaApp {
             if cleared {
                 "Color label removed".to_string()
             } else {
-                format!("Color label updated for {} item(s)", changed)
+                format!("Color label updated for {} item(s)", changed.len())
             },
             cx,
         );

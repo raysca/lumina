@@ -636,6 +636,10 @@ impl LuminaEngine {
             .catalog
             .get_ratings_map()
             .context("could not read ratings")?;
+        let labels = self
+            .catalog
+            .get_color_labels_map()
+            .context("could not read color labels")?;
         let mut report = ExportReport::default();
 
         for id in ids {
@@ -658,7 +662,7 @@ impl LuminaEngine {
             }
             report.exported += 1;
 
-            match self.sidecar_metadata_for(*id, &captions, &ratings) {
+            match self.sidecar_metadata_for(*id, &captions, &ratings, &labels) {
                 Ok(metadata) => match xmp::write_sidecar(&destination_path, &metadata) {
                     Ok(Some(_)) => report.sidecars += 1,
                     Ok(None) => {}
@@ -685,12 +689,16 @@ impl LuminaEngine {
             .catalog
             .get_ratings_map()
             .context("could not read ratings")?;
+        let labels = self
+            .catalog
+            .get_color_labels_map()
+            .context("could not read color labels")?;
         let mut written = 0;
         for id in ids {
             let Some(item) = self.catalog.get_item_by_id(*id)? else {
                 continue;
             };
-            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings)?;
+            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels)?;
             if xmp::write_sidecar(&item.path, &metadata)?.is_some() {
                 written += 1;
             }
@@ -699,7 +707,8 @@ impl LuminaEngine {
     }
 
     /// Imports XMP sidecars for the given items. Only values present in the
-    /// sidecar are applied (ratings always, title/caption when set, tags merged),
+    /// sidecar are applied (ratings always, title/caption/color label when set,
+    /// tags merged),
     /// so importing never clears metadata that the sidecar does not mention.
     pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
         let captions = self
@@ -710,6 +719,10 @@ impl LuminaEngine {
             .catalog
             .get_ratings_map()
             .context("could not read ratings")?;
+        let labels = self
+            .catalog
+            .get_color_labels_map()
+            .context("could not read color labels")?;
         let mut report = ImportReport::default();
 
         for id in ids {
@@ -729,6 +742,13 @@ impl LuminaEngine {
                     let current_rating = ratings.get(id).copied().unwrap_or(0);
                     if metadata.rating != current_rating {
                         self.catalog.set_rating(*id, metadata.rating)?;
+                        changed = true;
+                    }
+                    // Sidecars from before labels were written carry none; that
+                    // must not clear a label set in Lumina.
+                    let current_label = labels.get(id).copied().unwrap_or(0);
+                    if metadata.color_label != 0 && metadata.color_label != current_label {
+                        self.catalog.set_color_label(*id, metadata.color_label)?;
                         changed = true;
                     }
                     if metadata.caption.is_some() && metadata.caption != captions.get(id).cloned() {
@@ -758,6 +778,7 @@ impl LuminaEngine {
         id: MediaId,
         captions: &HashMap<MediaId, String>,
         ratings: &HashMap<MediaId, u8>,
+        labels: &HashMap<MediaId, u8>,
     ) -> Result<SidecarMetadata> {
         let tags = self.catalog.get_tags_for_item(id)?;
         let title = self.catalog.get_item_by_id(id)?.and_then(|item| item.title);
@@ -765,6 +786,7 @@ impl LuminaEngine {
             title,
             caption: captions.get(&id).cloned(),
             rating: ratings.get(&id).copied().unwrap_or(0),
+            color_label: labels.get(&id).copied().unwrap_or(0),
             tags,
         })
     }
