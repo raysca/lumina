@@ -57,7 +57,7 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
                 .w_full()
                 .flex()
                 .flex_row()
-                .rounded(px(6.0))
+                .rounded(theme::RADIUS_MD)
                 .border_1()
                 .border_color(theme::border_subtle())
                 .bg(theme::bg_app())

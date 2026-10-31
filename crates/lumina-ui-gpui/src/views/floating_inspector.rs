@@ -217,7 +217,7 @@ impl Render for FloatingInspectorView {
                                     .min_w(px(0.0))
                                     .truncate()
                                     .tooltip(theme::tooltip_label(window_title.clone()))
-                                    .text_size(px(13.0))
+                                    .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme::text())
                                     .child(window_title),
@@ -230,7 +230,7 @@ impl Render for FloatingInspectorView {
                             .debug_selector(|| "floating-inspector-redock-btn".to_string())
                             .tooltip(theme::tooltip_label("Dock into inspector"))
                             .size(px(24.0))
-                            .rounded(px(6.0))
+                            .rounded(theme::RADIUS_MD)
                             .hover(|s| s.bg(theme::bg_control_hover()))
                             .cursor_pointer()
                             .flex()

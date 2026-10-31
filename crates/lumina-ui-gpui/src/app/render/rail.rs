@@ -32,7 +32,7 @@ impl LuminaApp {
                     ))
                     .px_1p5()
                     .py_0p5()
-                    .rounded_sm()
+                    .rounded(theme::RADIUS_SM)
                     .bg(if is_active {
                         theme::accent()
                     } else {

@@ -38,7 +38,7 @@ fn pip_icon_button(id: &'static str, icon: Icon, tooltip: &'static str) -> State
         .id(id)
         .tooltip(theme::tooltip_label(tooltip))
         .size(px(20.0))
-        .rounded_md()
+        .rounded(theme::RADIUS_MD)
         .flex()
         .items_center()
         .justify_center()

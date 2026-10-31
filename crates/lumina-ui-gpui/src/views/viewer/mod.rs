@@ -141,7 +141,7 @@ impl MediaViewer {
                     .bg(theme::bg_hud())
                     .border_1()
                     .border_color(theme::border_strong())
-                    .rounded_xl()
+                    .rounded(theme::RADIUS_LG)
                     .shadow_2xl()
                     .overflow_hidden()
                     .child(InspectorView::render(this, cx))

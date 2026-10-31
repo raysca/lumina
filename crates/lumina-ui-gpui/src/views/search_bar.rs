@@ -27,7 +27,7 @@ impl SearchBarView {
             .flex_row()
             .items_center()
             .gap_2()
-            .rounded(px(6.0))
+            .rounded(theme::RADIUS_MD)
             .border_1()
             .border_color(if focused {
                 theme::focus_ring()
@@ -38,7 +38,7 @@ impl SearchBarView {
             })
             .bg(theme::bg_viewer())
             .cursor_text()
-            .text_xs()
+            .text_size(theme::TEXT_BODY)
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.search_focused = true;
                 this.reset_search_suggestions();
@@ -134,7 +134,7 @@ impl SearchBarView {
             .bg(theme::bg_pane())
             .border_1()
             .border_color(theme::border())
-            .rounded(px(6.0))
+            .rounded(theme::RADIUS_LG)
             .shadow_2xl()
             .occlude()
             .flex()
@@ -155,7 +155,7 @@ impl SearchBarView {
                     .flex()
                     .flex_row()
                     .items_center()
-                    .rounded(px(4.0))
+                    .rounded(theme::RADIUS_SM)
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_xs()

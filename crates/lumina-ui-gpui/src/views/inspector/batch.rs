@@ -159,7 +159,7 @@ fn render_header(app: &LuminaApp) -> Div {
                         .left(px(STACK_STEP * i as f32))
                         .top_0()
                         .size(px(STACK_TILE))
-                        .rounded(px(6.0))
+                        .rounded(theme::RADIUS_MD)
                         .overflow_hidden()
                         .border_2()
                         .border_color(theme::bg_pane())
@@ -425,7 +425,7 @@ fn render_batch_metadata_row(
         .debug_selector(move || selector.to_string())
         .w_full()
         .p_2()
-        .rounded_md()
+        .rounded(theme::RADIUS_MD)
         .bg(if editing {
             theme::bg_control()
         } else {

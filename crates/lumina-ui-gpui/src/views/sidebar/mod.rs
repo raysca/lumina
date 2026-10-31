@@ -64,7 +64,7 @@ impl SidebarView {
                         .debug_selector(|| "expand-sidebar".to_string())
                         .w(px(32.0))
                         .h(px(32.0))
-                        .rounded_md()
+                        .rounded(theme::RADIUS_MD)
                         .bg(theme::bg_raised())
                         .hover(|s| s.bg(theme::bg_control()))
                         .flex()

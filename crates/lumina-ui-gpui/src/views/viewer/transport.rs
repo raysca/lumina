@@ -66,7 +66,7 @@ fn transport_button(
         .debug_selector(move || id.to_string())
         .tooltip(theme::tooltip_label(tooltip))
         .size(px(32.0))
-        .rounded_md()
+        .rounded(theme::RADIUS_MD)
         .flex()
         .items_center()
         .justify_center()
@@ -156,7 +156,7 @@ impl ViewerTransport {
             .bg(theme::bg_app())
             .border_1()
             .border_color(theme::border())
-            .rounded(px(10.0))
+            .rounded(theme::RADIUS_LG)
             .relative()
             .flex()
             .flex_col()
@@ -175,7 +175,7 @@ impl ViewerTransport {
                     .bg(theme::bg_hud())
                     .border_1()
                     .border_color(theme::border_strong())
-                    .rounded_sm()
+                    .rounded(theme::RADIUS_SM)
                     .shadow_lg()
                     .text_xs()
                     .font_family(theme::FONT_MONO)
@@ -219,7 +219,7 @@ impl ViewerTransport {
                             .debug_selector(|| "video-scrubber".to_string())
                             .flex_1()
                             .h(px(24.0))
-                            .rounded_md()
+                            .rounded(theme::RADIUS_MD)
                             .border_1()
                             .border_color(if is_scrubbing {
                                 theme::accent()
@@ -273,7 +273,12 @@ impl ViewerTransport {
                                     this.set_video_hover_scrub(None, cx);
                                 }
                             }))
-                            .child(div().size_full().rounded_md().bg(theme::bg_control()))
+                            .child(
+                                div()
+                                    .size_full()
+                                    .rounded(theme::RADIUS_MD)
+                                    .bg(theme::bg_control()),
+                            )
                             // Played portion: a 22% amber tint up to the playhead.
                             .child(
                                 div()
@@ -380,7 +385,7 @@ impl ViewerTransport {
                                     .tooltip(theme::tooltip_label("Playback speed"))
                                     .h(px(32.0))
                                     .px_2()
-                                    .rounded_md()
+                                    .rounded(theme::RADIUS_MD)
                                     .flex()
                                     .items_center()
                                     .when(this.video.speed_menu_open, |b| {
@@ -561,7 +566,7 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
         .bg(theme::bg_hud())
         .border_1()
         .border_color(theme::border_strong())
-        .rounded_lg()
+        .rounded(theme::RADIUS_LG)
         .shadow_2xl()
         .py_1()
         .flex()

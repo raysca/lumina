@@ -145,7 +145,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                     .children(thumbs.into_iter().map(|thumb| {
                                         div()
                                             .size(px(JUST_ADDED_TILE))
-                                            .rounded(px(4.0))
+                                            .rounded(theme::RADIUS_SM)
                                             .overflow_hidden()
                                             .bg(theme::bg_raised())
                                             .children(thumb.map(|image| {
@@ -195,7 +195,7 @@ fn stat(id: &'static str, label: &'static str, value: usize) -> impl IntoElement
         .debug_selector(move || id.to_string())
         .flex_1()
         .p(px(10.0))
-        .rounded(px(8.0))
+        .rounded(theme::RADIUS_LG)
         .bg(theme::bg_pane())
         .border_1()
         .border_color(theme::border_subtle())

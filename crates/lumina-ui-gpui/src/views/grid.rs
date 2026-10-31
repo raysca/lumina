@@ -116,7 +116,7 @@ impl Render for MediaCardTooltip {
             .bg(theme::bg_hud())
             .border_1()
             .border_color(theme::border())
-            .rounded_md()
+            .rounded(theme::RADIUS_MD)
             .text_xs()
             .text_color(theme::text())
             .child(self.name.clone())

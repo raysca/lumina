@@ -57,7 +57,7 @@ pub(super) fn render_library_section(
                         .debug_selector(|| "switch-library".to_string())
                         .w(px(20.0))
                         .h(px(20.0))
-                        .rounded_sm()
+                        .rounded(theme::RADIUS_SM)
                         .hover(|s| s.bg(theme::bg_control()))
                         .flex()
                         .justify_center()
@@ -164,7 +164,7 @@ fn render_user_smart_album_row(
         .gap_1()
         .px_2()
         .h(px(26.0))
-        .rounded_md()
+        .rounded(theme::RADIUS_MD)
         .cursor_pointer()
         .bg(if is_active {
             theme::selection_bg()
@@ -181,7 +181,7 @@ fn render_user_smart_album_row(
         .child(
             div()
                 .flex_1()
-                .text_size(px(13.0))
+                .text_size(theme::TEXT_BODY)
                 .text_color(if is_active {
                     theme::selection_fg()
                 } else {
@@ -208,7 +208,7 @@ fn render_user_smart_album_row(
                 .opacity(0.0)
                 .group_hover("smart-album-row", |s| s.opacity(1.0))
                 .px_1()
-                .rounded_sm()
+                .rounded(theme::RADIUS_SM)
                 .cursor_pointer()
                 .tooltip(theme::tooltip_label("Edit rules"))
                 .child(crate::icons::render_icon(
@@ -229,7 +229,7 @@ fn render_user_smart_album_row(
                 .opacity(0.0)
                 .group_hover("smart-album-row", |s| s.opacity(1.0))
                 .px_1()
-                .rounded_sm()
+                .rounded(theme::RADIUS_SM)
                 .cursor_pointer()
                 .tooltip(theme::tooltip_label("Delete smart album"))
                 .child(crate::icons::render_icon(
@@ -273,7 +273,7 @@ pub(super) fn render_smart_albums_section(
                         .debug_selector(|| "new-smart-album".to_string())
                         .w(px(20.0))
                         .h(px(20.0))
-                        .rounded_sm()
+                        .rounded(theme::RADIUS_SM)
                         .hover(|s| s.bg(theme::bg_control()).text_color(theme::text()))
                         .flex()
                         .justify_center()
@@ -388,7 +388,7 @@ pub(super) fn render_tags_section(
                         div()
                             .px_2()
                             .py_1()
-                            .rounded_md()
+                            .rounded(theme::RADIUS_MD)
                             .bg(theme::bg_pane())
                             .border_1()
                             .border_color(theme::focus_ring())
@@ -398,7 +398,7 @@ pub(super) fn render_tags_section(
                             .justify_between()
                             .child(
                                 div()
-                                    .text_xs()
+                                    .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme::text())
                                     .child(format!("{}|", this.editing_tag_buffer)),
@@ -415,7 +415,7 @@ pub(super) fn render_tags_section(
                                             ))
                                             .px_1p5()
                                             .py_0p5()
-                                            .rounded_sm()
+                                            .rounded(theme::RADIUS_SM)
                                             .bg(theme::accent())
                                             .hover(|s| {
                                                 s.bg(theme::accent_hover())
@@ -443,7 +443,7 @@ pub(super) fn render_tags_section(
                                             ))
                                             .px_1p5()
                                             .py_0p5()
-                                            .rounded_sm()
+                                            .rounded(theme::RADIUS_SM)
                                             .bg(theme::bg_control())
                                             .hover(|s| s.bg(theme::bg_control_hover()))
                                             .cursor_pointer()
@@ -471,7 +471,7 @@ pub(super) fn render_tags_section(
                             ))
                             .px_2()
                             .h(px(26.0))
-                            .rounded_md()
+                            .rounded(theme::RADIUS_MD)
                             .bg(if is_active {
                                 theme::selection_bg()
                             } else {
@@ -505,7 +505,7 @@ pub(super) fn render_tags_section(
                                     .child(div().size(px(7.0)).rounded_full().bg(dot_color))
                                     .child(
                                         div()
-                                            .text_size(px(13.0))
+                                            .text_size(theme::TEXT_BODY)
                                             .font_weight(if is_active {
                                                 FontWeight::MEDIUM
                                             } else {
@@ -578,7 +578,7 @@ fn render_nav_item(
         .debug_selector(move || format!("sidebar-nav-{debug_label}"))
         .px_2()
         .h(px(26.0))
-        .rounded_md()
+        .rounded(theme::RADIUS_MD)
         .bg(bg_color)
         .hover(move |s| {
             if is_active {
@@ -595,7 +595,7 @@ fn render_nav_item(
         .on_click(on_click)
         .child(
             div()
-                .text_size(px(13.0))
+                .text_size(theme::TEXT_BODY)
                 .font_weight(if is_active {
                     FontWeight::MEDIUM
                 } else {

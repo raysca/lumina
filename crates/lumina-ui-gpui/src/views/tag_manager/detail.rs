@@ -195,7 +195,7 @@ fn render_items(app: &LuminaApp) -> AnyElement {
         .children(thumbs.into_iter().map(|thumb| {
             div()
                 .h(px(64.0))
-                .rounded(px(4.0))
+                .rounded(theme::RADIUS_SM)
                 .overflow_hidden()
                 .bg(theme::bg_control())
                 .children(thumb.map(|image| img(image).size_full().object_fit(ObjectFit::Cover)))

@@ -196,7 +196,7 @@ pub(super) fn render_row(
                 // The whole row is outlined while its value is invalid; the
                 // transparent border keeps valid rows the same size.
                 .p(px(3.0))
-                .rounded(px(8.0))
+                .rounded(theme::RADIUS_LG)
                 .border_1()
                 .border_color(if invalid {
                     theme::danger_border()

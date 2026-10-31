@@ -4,9 +4,21 @@
 //! shadows only on floating panels, amber is the single accent and always means selection.
 #![allow(dead_code)]
 use gpui::{
-    div, prelude::*, px, rgb, rgba, AnyView, App, Context, Div, ElementId, Render, Rgba,
+    div, prelude::*, px, rgb, rgba, AnyView, App, Context, Div, ElementId, Pixels, Render, Rgba,
     SharedString, Stateful, Window,
 };
+
+/// Body text: sidebar rows, fields and menus (v3.1 type scale).
+pub const TEXT_BODY: Pixels = px(13.0);
+
+// Corner radii (v3.1). Grid thumbnails stay square; icon tiles keep their
+// own shape.
+/// Chips, badges, swatches, and rows nested in an 8px menu.
+pub const RADIUS_SM: Pixels = px(4.0);
+/// Buttons, fields, rows and segmented controls.
+pub const RADIUS_MD: Pixels = px(6.0);
+/// Floating surfaces: menus, popovers, toasts, dialogs, the palette.
+pub const RADIUS_LG: Pixels = px(8.0);
 
 macro_rules! tokens {
     ($($(#[$m:meta])* $name:ident = $hex:literal;)*) => {
@@ -94,7 +106,7 @@ fn control_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap_1p5()
-        .rounded(px(6.0))
+        .rounded(RADIUS_MD)
         .border_1()
         .cursor_pointer()
         .text_xs()
@@ -187,11 +199,11 @@ pub fn field(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex()
         .flex_row()
         .items_center()
-        .rounded(px(6.0))
+        .rounded(RADIUS_MD)
         .border_1()
         .border_color(border())
         .bg(bg_control())
-        .text_xs()
+        .text_size(TEXT_BODY)
         .text_color(text())
         .cursor_text()
 }
@@ -203,7 +215,7 @@ pub fn menu(id: impl Into<ElementId>) -> Stateful<Div> {
         .bg(bg_hud())
         .border_1()
         .border_color(border())
-        .rounded(px(8.0))
+        .rounded(RADIUS_LG)
         .shadow_lg()
         .p(px(4.0))
         .flex()
@@ -221,8 +233,8 @@ pub fn menu_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .justify_between()
-        .rounded(px(4.0))
-        .text_size(px(13.0))
+        .rounded(RADIUS_SM)
+        .text_size(TEXT_BODY)
         .cursor_pointer();
 
     // The highlighted row is amber with dark text. Mouse hover can only
@@ -244,8 +256,8 @@ pub fn row(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap_2()
-        .rounded(px(4.0))
-        .text_size(px(13.0))
+        .rounded(RADIUS_MD)
+        .text_size(TEXT_BODY)
         .cursor_pointer();
 
     if active {
@@ -263,7 +275,7 @@ pub fn badge(label: impl Into<SharedString>) -> Div {
     div()
         .px(px(5.0))
         .py(px(1.5))
-        .rounded(px(4.0))
+        .rounded(RADIUS_SM)
         .bg(scrim())
         .border_1()
         .border_color(border_subtle())
@@ -285,7 +297,7 @@ pub fn hud_panel(id: impl Into<ElementId>) -> Stateful<Div> {
         .bg(bg_hud())
         .border_1()
         .border_color(border())
-        .rounded(px(8.0))
+        .rounded(RADIUS_LG)
         .shadow_md()
 }
 
@@ -294,7 +306,7 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
     div()
         .px(px(4.0))
         .py(px(1.0))
-        .rounded(px(3.0))
+        .rounded(RADIUS_SM)
         .bg(bg_control())
         .border_1()
         .border_color(border())
@@ -314,7 +326,7 @@ pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex_row()
         .items_center()
         .gap(px(2.0))
-        .rounded(px(6.0))
+        .rounded(RADIUS_MD)
         .bg(bg_control())
         .border_1()
         .border_color(border())
@@ -331,7 +343,7 @@ pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
         .items_center()
         .justify_center()
         .gap_1()
-        .rounded(px(4.0))
+        .rounded(RADIUS_SM)
         .text_xs()
         .cursor_pointer();
 
@@ -359,7 +371,7 @@ impl Render for TooltipLabel {
             .bg(bg_hud())
             .border_1()
             .border_color(border())
-            .rounded_md()
+            .rounded(RADIUS_MD)
             .text_xs()
             .text_color(text())
             .child(self.text.clone())

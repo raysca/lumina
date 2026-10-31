@@ -87,9 +87,9 @@ pub fn render_info_tab(
                                 s.border_color(theme::border_strong())
                             }
                         })
-                        .rounded_md()
+                        .rounded(theme::RADIUS_MD)
                         .cursor_text()
-                        .text_xs()
+                        .text_size(theme::TEXT_BODY)
                         .text_color(theme::text())
                         .child(if title_input_active {
                             if title_input_buffer.is_empty() {
@@ -133,9 +133,9 @@ pub fn render_info_tab(
                                 s.border_color(theme::border_strong())
                             }
                         })
-                        .rounded_md()
+                        .rounded(theme::RADIUS_MD)
                         .cursor_text()
-                        .text_xs()
+                        .text_size(theme::TEXT_BODY)
                         .text_color(if caption_input_active || caption.is_some() {
                             theme::text()
                         } else {
@@ -175,8 +175,8 @@ pub fn render_info_tab(
                             .bg(theme::bg_app())
                             .border_1()
                             .border_color(theme::focus_ring())
-                            .rounded(px(6.0))
-                            .text_xs()
+                            .rounded(theme::RADIUS_MD)
+                            .text_size(theme::TEXT_BODY)
                             .text_color(theme::text())
                             .child(if date_input_buffer.is_empty() {
                                 "YYYY-MM-DD HH:MM:SS|".to_string()
@@ -205,7 +205,7 @@ pub fn render_info_tab(
                                     .px_2()
                                     .flex()
                                     .items_center()
-                                    .rounded(px(6.0))
+                                    .rounded(theme::RADIUS_MD)
                                     .border_1()
                                     .border_color(theme::border())
                                     .bg(theme::bg_raised())
