@@ -220,7 +220,7 @@ impl MediaContextMenu {
                                             if is_filled {
                                                 theme::rating()
                                             } else {
-                                                theme::text_disabled()
+                                                theme::rating_unset()
                                             },
                                         ))
                                         .on_click(cx.listener(

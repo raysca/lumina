@@ -462,7 +462,7 @@ impl LuminaApp {
                                                         .px(px(5.0))
                                                         .rounded(px(3.0))
                                                         .bg(rgba(0x00000099))
-                                                        .text_size(px(10.0))
+                                                        .text_size(px(11.0))
                                                         .font_family(theme::FONT_MONO)
                                                         .flex()
                                                         .flex_row()

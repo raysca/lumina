@@ -402,7 +402,7 @@ fn render_option_card(
                                 .px_1p5()
                                 .rounded(px(4.0))
                                 .bg(theme::selection_bg())
-                                .text_size(px(10.0))
+                                .text_size(px(11.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::accent())
                                 .child("Recommended")

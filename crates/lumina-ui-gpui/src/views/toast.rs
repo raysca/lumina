@@ -179,7 +179,7 @@ impl LuminaApp {
                 .child(
                     div()
                         .font_family(theme::FONT_MONO)
-                        .text_size(px(10.0))
+                        .text_size(px(11.0))
                         .text_color(theme::text_muted())
                         .child("⌘Z"),
                 )

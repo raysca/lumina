@@ -35,7 +35,7 @@ tokens! {
     // Text.
     text = 0xE7E6E3;
     text_muted = 0xA0A2A7;
-    text_subtle = 0x74767C;
+    text_subtle = 0x909298;
     text_disabled = 0x5A5D63;
     /// Idle list/sidebar row text.
     text_row = 0xC9CACD;
@@ -60,6 +60,8 @@ tokens! {
 
     // Metadata marks — identical everywhere they appear.
     rating = 0xF0B54B;
+    /// Empty star outlines: dimmer than text, still 3:1 on every surface.
+    rating_unset = 0x77797F;
     flag = 0xF28C38;
     label_red = 0xE5484D;
     label_orange = 0xF28C38;
@@ -260,21 +262,6 @@ pub fn badge(label: impl Into<SharedString>) -> Div {
         .child(label.into())
 }
 
-/// Rating stars (1 to 5) rendered with filled/empty states.
-pub fn stars(rating_val: u8) -> Div {
-    let r = rating_val.min(5);
-    let mut row = div().flex().flex_row().items_center().gap(px(1.0));
-    for i in 1..=5 {
-        let (icon, color) = if i <= r {
-            (crate::icons::Icon::StarFilled, rating())
-        } else {
-            (crate::icons::Icon::Star, text_disabled())
-        };
-        row = row.child(crate::icons::render_icon(icon, px(12.0), color));
-    }
-    row
-}
-
 /// 8px circular color label dot.
 pub fn label_dot(color: Rgba) -> Div {
     div().size(px(8.0)).rounded_full().bg(color)
@@ -450,9 +437,25 @@ mod tests {
 
     #[test]
     fn text_pairs_meet_aa() {
-        for bg in [bg_viewer(), bg_app(), bg_pane(), bg_control()] {
+        for bg in [
+            bg_viewer(),
+            bg_app(),
+            bg_pane(),
+            bg_dialog(),
+            bg_raised(),
+            bg_hud(),
+            bg_control(),
+        ] {
             assert!(contrast(text(), bg) >= 4.5);
             assert!(contrast(text_muted(), bg) >= 4.5);
+            assert!(
+                contrast(text_subtle(), bg) >= 4.0,
+                "hints and counts stay readable on every surface"
+            );
+            assert!(
+                contrast(rating_unset(), bg) >= 3.0,
+                "unset stars are a control and need 3:1 (WCAG 1.4.11)"
+            );
         }
         assert!(contrast(accent_fg(), accent()) >= 4.5);
         assert!(contrast(selection_fg(), selection_bg()) >= 4.5);

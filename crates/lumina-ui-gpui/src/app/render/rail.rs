@@ -39,7 +39,7 @@ impl LuminaApp {
                         rgba(0x00000000)
                     })
                     .cursor_pointer()
-                    .text_size(px(10.0))
+                    .text_size(px(11.0))
                     .font_family(theme::FONT_MONO)
                     .font_weight(if is_active {
                         FontWeight::BOLD

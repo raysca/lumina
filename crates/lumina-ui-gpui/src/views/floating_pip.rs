@@ -304,7 +304,7 @@ impl Render for FloatingPipPlayerView {
                     .child(
                         div()
                             .pr_2()
-                            .text_size(px(10.0))
+                            .text_size(px(11.0))
                             .font_family(theme::FONT_MONO)
                             .text_color(theme::text_muted())
                             .child(time_display),

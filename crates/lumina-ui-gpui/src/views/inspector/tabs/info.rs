@@ -242,12 +242,6 @@ pub fn render_info_tab(
                                     star as u64,
                                 ))
                                 .cursor_pointer()
-                                .text_xs()
-                                .text_color(if is_filled {
-                                    theme::rating()
-                                } else {
-                                    theme::text_disabled()
-                                })
                                 .child(render_icon(
                                     if is_filled {
                                         Icon::StarFilled
@@ -258,7 +252,7 @@ pub fn render_info_tab(
                                     if is_filled {
                                         theme::rating()
                                     } else {
-                                        theme::text_disabled()
+                                        theme::rating_unset()
                                     },
                                 ))
                                 .on_click(move |_e, _w, cx| {

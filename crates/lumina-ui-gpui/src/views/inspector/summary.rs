@@ -231,7 +231,7 @@ pub(super) fn render_stars(weak_app: WeakEntity<LuminaApp>, rating: u8) -> Div {
             let color = if filled {
                 theme::rating()
             } else {
-                theme::text_disabled()
+                theme::rating_unset()
             };
             // 22px targets; clicking the current rating clears it.
             div()

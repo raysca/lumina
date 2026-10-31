@@ -115,7 +115,7 @@ fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
                     .rounded(px(3.0))
                     .bg(theme::scrim())
                     .font_family(theme::FONT_MONO)
-                    .text_size(px(10.0))
+                    .text_size(px(11.0))
                     .text_color(theme::text())
                     .child(this.viewer_state.zoom_label()),
             )
