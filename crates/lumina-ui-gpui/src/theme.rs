@@ -109,6 +109,15 @@ pub fn control(id: impl Into<ElementId>) -> Stateful<Div> {
         .text_color(text())
 }
 
+/// Borderless toolbar control: no fill until hover (v3 chrome). The 1px
+/// border is transparent so it sizes like `control_on`.
+pub fn control_ghost(id: impl Into<ElementId>) -> Stateful<Div> {
+    control_base(id)
+        .border_color(rgba(0x00000000))
+        .hover(|s| s.bg(bg_control_hover()))
+        .text_color(text_row())
+}
+
 /// `control` in the "on" state (a toggle that is active).
 pub fn control_on(id: impl Into<ElementId>) -> Stateful<Div> {
     control_base(id)

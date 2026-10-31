@@ -179,7 +179,7 @@ fn ui_automation_renders_all_core_controls() {
         "search-input",
         "switch-library",
         "inspector-toggle",
-        "breadcrumb-library",
+        "toolbar-title",
         "fit-mode-fit",
         "thumb-size-slider",
         "filter-chip-all",

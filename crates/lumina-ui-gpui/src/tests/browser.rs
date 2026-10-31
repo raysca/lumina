@@ -24,8 +24,35 @@ fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
         vcx.debug_bounds("nav-back").is_none(),
         "the design has no Back button"
     );
+    let title = vcx.debug_bounds("toolbar-title").expect("toolbar-title");
+    assert!(
+        f32::from(title.size.height) >= 24.0,
+        "the page title is 15px (v3), not 12px breadcrumb text: {title:?}"
+    );
     let search = vcx.debug_bounds("search-input").expect("search");
     assert_eq!(f32::from(search.size.width), 300.0, "search is 300px");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_long_title_truncates_and_keeps_the_toolbar_buttons_on_screen() {
+    let (dir, engine) = seed_library("br_long_title", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selection = crate::views::sidebar::AlbumSelection::Tag("a".repeat(300));
+        cx.notify();
+    });
+    render_ui(vcx);
+    let root = vcx.debug_bounds("app-root").expect("app-root");
+    let info = vcx
+        .debug_bounds("inspector-toggle")
+        .expect("inspector-toggle");
+    assert!(
+        info.right() <= root.right(),
+        "a long album or tag name must truncate, not push Info off the bar: {info:?} vs {root:?}"
+    );
+    assert_eq!(f32::from(info.size.width), 28.0, "buttons never shrink");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
