@@ -27,15 +27,7 @@ impl LuminaApp {
                     self.command_scroll.scroll_to_item(1);
                     cx.notify();
                 }
-                _ => {
-                    let typed = if key == "space" { " " } else { key };
-                    if !cmd_or_ctrl && typed.chars().count() == 1 {
-                        self.command_query.push_str(typed);
-                        self.command_selected = 0;
-                        self.command_scroll.scroll_to_item(1);
-                        cx.notify();
-                    }
-                }
+                _ => {}
             }
             return true;
         }
@@ -108,19 +100,6 @@ impl LuminaApp {
                 cx.notify();
                 return true;
             }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.tag_input_buffer.push(' ');
-                    cx.notify();
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.tag_input_buffer.push_str(key);
-                    cx.notify();
-                    return true;
-                }
-            }
             return true;
         }
 
@@ -139,19 +118,6 @@ impl LuminaApp {
                 cx.notify();
                 return true;
             }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.caption.title_input_buffer.push(' ');
-                    cx.notify();
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.caption.title_input_buffer.push_str(key);
-                    cx.notify();
-                    return true;
-                }
-            }
             return true;
         }
 
@@ -167,11 +133,6 @@ impl LuminaApp {
             }
             if key == "backspace" {
                 self.caption.date_input_buffer.pop();
-                cx.notify();
-                return true;
-            }
-            if !cmd_or_ctrl && key.chars().count() == 1 {
-                self.caption.date_input_buffer.push_str(key);
                 cx.notify();
                 return true;
             }
@@ -193,11 +154,6 @@ impl LuminaApp {
                 cx.notify();
                 return true;
             }
-            if !cmd_or_ctrl && key.chars().count() == 1 {
-                self.caption.location_input_buffer.push_str(key);
-                cx.notify();
-                return true;
-            }
             return true;
         }
 
@@ -215,19 +171,6 @@ impl LuminaApp {
                 self.caption.input_buffer.pop();
                 cx.notify();
                 return true;
-            }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.caption.input_buffer.push(' ');
-                    cx.notify();
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.caption.input_buffer.push_str(key);
-                    cx.notify();
-                    return true;
-                }
             }
             return true;
         }
@@ -247,19 +190,6 @@ impl LuminaApp {
                 cx.notify();
                 return true;
             }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.editing_tag_buffer.push(' ');
-                    cx.notify();
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.editing_tag_buffer.push_str(key);
-                    cx.notify();
-                    return true;
-                }
-            }
             return true;
         }
 
@@ -278,19 +208,6 @@ impl LuminaApp {
                     self.tag_manager.editing_buffer.pop();
                     cx.notify();
                     return true;
-                }
-                if !cmd_or_ctrl {
-                    if key == "space" {
-                        self.tag_manager.editing_buffer.push(' ');
-                        cx.notify();
-                        return true;
-                    } else if key.chars().count() == 1
-                        && !key.chars().next().is_some_and(|c| c.is_control())
-                    {
-                        self.tag_manager.editing_buffer.push_str(key);
-                        cx.notify();
-                        return true;
-                    }
                 }
                 return true;
             }
@@ -326,6 +243,8 @@ impl LuminaApp {
                 return true;
             }
             if key == "space" && self.tag_manager.search.is_empty() {
+                // Not a filter character: keep it from the input handler.
+                cx.stop_propagation();
                 if let Some(tag) = self.tag_manager.focused.clone() {
                     self.toggle_tag_manager_selection(tag, cx);
                 }
@@ -350,19 +269,6 @@ impl LuminaApp {
                 self.tag_manager.search.pop();
                 cx.notify();
                 return true;
-            }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.tag_manager.search.push(' ');
-                    cx.notify();
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.tag_manager.search.push_str(key);
-                    cx.notify();
-                    return true;
-                }
             }
             return true;
         }
@@ -409,21 +315,6 @@ impl LuminaApp {
                 self.reset_search_suggestions();
                 self.clear_selection(cx);
                 return true;
-            }
-            if !cmd_or_ctrl {
-                if key == "space" {
-                    self.search_query.push(' ');
-                    self.reset_search_suggestions();
-                    self.clear_selection(cx);
-                    return true;
-                } else if key.chars().count() == 1
-                    && !key.chars().next().is_some_and(|c| c.is_control())
-                {
-                    self.search_query.push_str(key);
-                    self.reset_search_suggestions();
-                    self.clear_selection(cx);
-                    return true;
-                }
             }
             return true;
         }
@@ -490,16 +381,7 @@ impl LuminaApp {
             if enter {
                 self.save_draft_smart_album(cx);
             } else if key == "backspace" {
-                self.edit_draft_text(None, cx);
-            } else if !cmd_or_ctrl {
-                // key_char carries Shift (capitals, punctuation); key does not.
-                let typed = keystroke.key_char.as_deref().unwrap_or(match key {
-                    "space" => " ",
-                    k => k,
-                });
-                if typed.chars().count() == 1 && !typed.chars().any(char::is_control) {
-                    self.edit_draft_text(Some(typed), cx);
-                }
+                self.backspace_draft_text(cx);
             }
         } else if enter || key == "space" {
             self.activate_draft_focus(cx);

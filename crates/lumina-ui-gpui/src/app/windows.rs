@@ -25,7 +25,7 @@ pub fn open_floating_inspector_window(
             }),
             ..Default::default()
         },
-        |_, cx| cx.new(|cx| FloatingInspectorView::new(weak_app_clone, tx_clone, cx)),
+        |window, cx| cx.new(|cx| FloatingInspectorView::new(weak_app_clone, tx_clone, window, cx)),
     ) {
         Ok(handle) => {
             if let Some(app) = weak_app.upgrade() {

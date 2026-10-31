@@ -17,9 +17,13 @@ impl FloatingInspectorView {
     pub fn new(
         app: WeakEntity<LuminaApp>,
         ui_tx: async_channel::Sender<UiMessage>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
+        // Keys and typed text reach the app through this handle, even when the
+        // window becomes key without a click (⌘`).
+        window.focus(&focus_handle);
         let _subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _entity, cx| {
                 cx.notify();
@@ -117,6 +121,11 @@ impl Render for FloatingInspectorView {
         div()
             .id("floating-inspector-root")
             .track_focus(&self.focus_handle)
+            .children(crate::app::text_input::text_input_handler(
+                app.read(cx).text_target().is_some(),
+                &app,
+                &self.focus_handle,
+            ))
             .on_key_down(cx.listener(move |_this, event: &KeyDownEvent, window, cx| {
                 if let Some(app) = app_key_event.upgrade() {
                     app.update(cx, |this, cx| {

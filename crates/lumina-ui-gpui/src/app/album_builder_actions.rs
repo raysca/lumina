@@ -321,9 +321,9 @@ impl LuminaApp {
         }
     }
 
-    /// Edits the focused text field: `Some(text)` appends, `None` deletes one
-    /// character.
-    pub fn edit_draft_text(&mut self, text: Option<&str>, cx: &mut Context<Self>) {
+    /// Deletes the last character of the focused text field. Typing arrives
+    /// through the input handler (app/text_input.rs).
+    pub fn backspace_draft_text(&mut self, cx: &mut Context<Self>) {
         let focus = self.album_draft.focus;
         let target = match focus {
             DraftFocus::Title => &mut self.album_draft.album_title,
@@ -333,12 +333,7 @@ impl LuminaApp {
             },
             _ => return,
         };
-        match text {
-            Some(text) => target.push_str(text),
-            None => {
-                target.pop();
-            }
-        }
+        target.pop();
         if focus != DraftFocus::Title {
             self.refresh_draft_preview();
         }

@@ -16,6 +16,7 @@ mod smart_album_builder;
 mod states;
 mod tag_manager;
 mod tags_and_albums;
+mod text_input;
 mod toasts;
 mod ui_automation;
 mod video_player;

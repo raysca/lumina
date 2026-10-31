@@ -26,8 +26,8 @@ fn get_info<'a>(
             app.ui_tx.clone()
         })
     });
-    let (inspector, icx) =
-        cx.add_window_view(|_window, cx| FloatingInspectorView::new(view.downgrade(), tx, cx));
+    let (inspector, icx) = cx
+        .add_window_view(|window, cx| FloatingInspectorView::new(view.downgrade(), tx, window, cx));
     icx.update(|window, cx| {
         let handle = inspector.read(cx).focus_handle.clone();
         window.focus(&handle);

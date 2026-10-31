@@ -72,7 +72,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |_, cx| cx.new(LuminaApp::new),
+                |window, cx| cx.new(|cx| LuminaApp::new_in_window(window, cx)),
             ) {
                 log::error!("failed to open main window: {e:?}");
             }

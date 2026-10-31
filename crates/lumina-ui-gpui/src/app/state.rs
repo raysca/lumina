@@ -389,6 +389,9 @@ pub struct LuminaApp {
     pub last_scan_at: Option<std::time::Instant>,
     pub command_palette_open: bool,
     pub command_query: String,
+    /// IME composition range (UTF-16) and the field it belongs to; see
+    /// app/text_input.rs.
+    pub text_marked: Option<crate::app::text_input::MarkedText>,
     pub command_selected: usize,
     /// Keeps the keyboard-selected palette row scrolled into view.
     pub command_scroll: ScrollHandle,
@@ -424,6 +427,14 @@ pub struct LuminaApp {
 }
 
 impl LuminaApp {
+    /// The app as a window's root view, with keyboard focus on it so key
+    /// events and the text input handler (app/text_input.rs) reach it.
+    pub fn new_in_window(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let app = Self::new(cx);
+        window.focus(&app.focus_handle);
+        app
+    }
+
     pub fn new(cx: &mut Context<Self>) -> Self {
         #[cfg(test)]
         let mut config = AppConfig::default();
@@ -544,6 +555,7 @@ impl LuminaApp {
             last_scan_at: None,
             command_palette_open: false,
             command_query: String::new(),
+            text_marked: None,
             command_selected: 0,
             command_scroll: ScrollHandle::new(),
             video: VideoPlaybackState {

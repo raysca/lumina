@@ -14,6 +14,7 @@ pub mod smart_draft;
 pub mod sort;
 pub mod state;
 pub mod tags;
+pub mod text_input;
 pub mod types;
 pub mod undo;
 pub mod video_actions;
