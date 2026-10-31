@@ -388,3 +388,42 @@ fn test_error_banner_lifecycle() {
 
     cx.run_until_parked();
 }
+
+#[core::prelude::v1::test]
+fn frameless_windows_get_their_own_window_controls() {
+    use crate::app::render::FORCE_CLIENT_DECORATIONS;
+    use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            FORCE_CLIENT_DECORATIONS.with(|force| force.set(false));
+        }
+    }
+    let _reset = Reset;
+
+    let (temp_dir, engine) = seed_library("window_controls", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    assert!(
+        vcx.debug_bounds("toolbar-drag-area").is_some(),
+        "the toolbar keeps an empty area to drag the window by"
+    );
+    for control in ["window-minimize", "window-maximize", "window-close"] {
+        assert!(
+            vcx.debug_bounds(control).is_none(),
+            "{control} must not draw over a window the platform decorates"
+        );
+    }
+
+    FORCE_CLIENT_DECORATIONS.with(|force| force.set(true));
+    view.update(vcx, |_, cx| cx.notify());
+    render_ui(vcx);
+    for control in ["window-minimize", "window-maximize", "window-close"] {
+        assert!(
+            vcx.debug_bounds(control).is_some(),
+            "a client-decorated window must show {control}, or it cannot be managed"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

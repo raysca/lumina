@@ -30,13 +30,72 @@ fn toolbar_icon(icon: crate::icons::Icon, on: bool) -> AnyElement {
     crate::icons::render_icon(icon, px(16.0), color).into_any_element()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The test platform always reports server decorations; tests set this to
+    /// render the controls a frameless Linux window needs.
+    pub(crate) static FORCE_CLIENT_DECORATIONS: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// Whether the app must draw its own window controls. Wayland compositors
+/// without server-side decorations (GNOME) leave the window frameless; macOS
+/// and decorating window managers report `Server`.
+fn draws_own_window_controls(window: &Window) -> bool {
+    #[cfg(test)]
+    if FORCE_CLIENT_DECORATIONS.with(|force| force.get()) {
+        return true;
+    }
+    matches!(window.window_decorations(), Decorations::Client { .. })
+}
+
+fn window_button(id: &'static str, icon: crate::icons::Icon, label: &'static str) -> Stateful<Div> {
+    icon_button(id, false)
+        .debug_selector(move || id.to_string())
+        .tooltip(theme::tooltip_label(label))
+        .child(toolbar_icon(icon, false))
+}
+
+/// Minimize, maximize and close for a client-decorated window.
+fn window_controls(window: &Window) -> Div {
+    let supported = window.window_controls();
+    div()
+        .ml_2()
+        .flex()
+        .flex_row()
+        .gap_1()
+        .when(supported.minimize, |row| {
+            row.child(
+                window_button("window-minimize", crate::icons::Icon::Minus, "Minimize")
+                    .on_click(|_, window, _| window.minimize_window()),
+            )
+        })
+        .when(supported.maximize, |row| {
+            let label = if window.is_maximized() {
+                "Restore"
+            } else {
+                "Maximize"
+            };
+            row.child(
+                window_button("window-maximize", crate::icons::Icon::Maximize, label)
+                    .on_click(|_, window, _| window.zoom_window()),
+            )
+        })
+        .child(
+            window_button("window-close", crate::icons::Icon::X, "Close")
+                .on_click(|_, window, _| window.remove_window()),
+        )
+}
+
 impl LuminaApp {
     pub(crate) fn render_toolbar(
         &self,
         view_label: &str,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let view_label = view_label.to_string();
+        let own_controls = draws_own_window_controls(window);
         // Only Recently Deleted shows a count and its bulk actions.
         let trash_count = if self.selection == AlbumSelection::Trash {
             self.system_album_counts
@@ -50,7 +109,12 @@ impl LuminaApp {
             .w_full()
             .h(px(52.0))
             .flex_shrink_0()
-            .pl(px(84.0))
+            // macOS draws the traffic lights over this inset.
+            .pl(px(if cfg!(target_os = "macos") {
+                84.0
+            } else {
+                12.0
+            }))
             .pr_3()
             .bg(theme::bg_app())
             .border_b_1()
@@ -113,7 +177,23 @@ impl LuminaApp {
                         )
                     }),
             )
-            .child(div().flex_1())
+            // Empty toolbar space moves a frameless window; double-click maximizes.
+            .child(
+                div()
+                    .id("toolbar-drag-area")
+                    .debug_selector(|| "toolbar-drag-area".to_string())
+                    .flex_1()
+                    .h_full()
+                    .when(own_controls, |area| {
+                        area.on_mouse_down(MouseButton::Left, |event, window, _| {
+                            if event.click_count >= 2 {
+                                window.zoom_window();
+                            } else {
+                                window.start_window_move();
+                            }
+                        })
+                    }),
+            )
             .child(SearchBarView::render_field(self, cx))
             // Trash bulk actions
             .children((trash_count > 0).then(|| {
@@ -168,6 +248,7 @@ impl LuminaApp {
                         this.toggle_inspector(cx);
                     })),
             )
+            .when(own_controls, |bar| bar.child(window_controls(window)))
     }
 }
 

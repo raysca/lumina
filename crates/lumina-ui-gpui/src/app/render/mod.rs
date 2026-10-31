@@ -15,6 +15,8 @@ mod overlays;
 mod rail;
 mod status_bar;
 mod toolbar;
+#[cfg(test)]
+pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 
 impl LuminaApp {
     /// Banner for recoverable failures: alert icon, title and description,
@@ -396,7 +398,7 @@ impl Render for LuminaApp {
             // 0. Recoverable error banner (if any)
             .child(self.render_error_banner(cx))
             // 1. Top 52px Toolbar
-            .child(self.render_toolbar(&view_label, cx))
+            .child(self.render_toolbar(&view_label, window, cx))
             // 2. Workspace Horizontal Split: Sidebar + Resizer + Canvas + Year Rail + Resizer + Inspector
             .child(
                 div()
