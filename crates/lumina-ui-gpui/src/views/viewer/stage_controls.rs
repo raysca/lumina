@@ -86,7 +86,6 @@ fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
             .right(px(right))
             .w(px(width))
             .h(px(height))
-            .rounded(theme::RADIUS_MD)
             .overflow_hidden()
             .border_1()
             .border_color(theme::border_strong())

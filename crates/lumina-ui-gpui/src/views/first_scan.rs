@@ -145,7 +145,6 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                     .children(thumbs.into_iter().map(|thumb| {
                                         div()
                                             .size(px(JUST_ADDED_TILE))
-                                            .rounded(theme::RADIUS_SM)
                                             .overflow_hidden()
                                             .bg(theme::bg_raised())
                                             .children(thumb.map(|image| {

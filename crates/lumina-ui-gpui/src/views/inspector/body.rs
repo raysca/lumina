@@ -241,7 +241,6 @@ fn render_single_body(
                                 .debug_selector(|| "info-thumbnail".to_string())
                                 .w(px(thumb_w))
                                 .h(px(thumb_h))
-                                .rounded(theme::RADIUS_MD)
                                 .overflow_hidden()
                                 .border_1()
                                 .border_color(theme::border_subtle())

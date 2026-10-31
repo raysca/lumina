@@ -91,7 +91,6 @@ impl DeleteConfirmModal {
                             .absolute()
                             .left(px(THUMB_STEP * i as f32))
                             .size(px(THUMB))
-                            .rounded(theme::RADIUS_LG)
                             .overflow_hidden()
                             .border_2()
                             .border_color(theme::bg_dialog())

@@ -11,8 +11,8 @@ use gpui::{
 /// Body text: sidebar rows, fields and menus (v3.1 type scale).
 pub const TEXT_BODY: Pixels = px(13.0);
 
-// Corner radii (v3.1). Grid thumbnails stay square; icon tiles keep their
-// own shape.
+// Corner radii (v3.1). Photo thumbnails stay square wherever they appear;
+// icon tiles keep their own shape.
 /// Chips, badges, swatches, and rows nested in an 8px menu.
 pub const RADIUS_SM: Pixels = px(4.0);
 /// Buttons, fields, rows and segmented controls.

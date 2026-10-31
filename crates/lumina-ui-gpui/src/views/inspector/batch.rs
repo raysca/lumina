@@ -159,7 +159,6 @@ fn render_header(app: &LuminaApp) -> Div {
                         .left(px(STACK_STEP * i as f32))
                         .top_0()
                         .size(px(STACK_TILE))
-                        .rounded(theme::RADIUS_MD)
                         .overflow_hidden()
                         .border_2()
                         .border_color(theme::bg_pane())

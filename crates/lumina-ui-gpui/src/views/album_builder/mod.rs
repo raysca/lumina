@@ -182,7 +182,6 @@ fn render_preview(app: &LuminaApp) -> impl IntoElement {
             div()
                 .debug_selector(move || format!("album-builder-preview-{}", id.0))
                 .size(px(PREVIEW_TILE))
-                .rounded(theme::RADIUS_SM)
                 .overflow_hidden()
                 .bg(theme::bg_raised())
                 .children(texture.map(|t| img(t).size_full().object_fit(ObjectFit::Cover)))
