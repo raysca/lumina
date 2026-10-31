@@ -12,12 +12,7 @@ fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
     let mut cx = gpui::TestAppContext::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
-    for selector in [
-        "sort-menu-button",
-        "tags-toolbar-btn",
-        "inspector-toggle",
-        "switch-library",
-    ] {
+    for selector in ["sort-menu-button", "tags-toolbar-btn", "inspector-toggle"] {
         let b = vcx.debug_bounds(selector).expect(selector);
         assert_eq!(
             (f32::from(b.size.width), f32::from(b.size.height)),
@@ -31,6 +26,33 @@ fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
     );
     let search = vcx.debug_bounds("search-input").expect("search");
     assert_eq!(f32::from(search.size.width), 300.0, "search is 300px");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
+    use crate::app::library::FOLDER_PICKS;
+    let picks = || FOLDER_PICKS.with(|n| n.get());
+    let (dir, engine) = seed_library("br_open_library", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+
+    let button = vcx.debug_bounds("switch-library").expect("switch-library");
+    let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
+    assert!(
+        sidebar.contains(&button.center()),
+        "Open Library sits in the sidebar, not the toolbar (amber is for selection): {button:?}"
+    );
+    let before = picks();
+    click(vcx, "switch-library");
+    assert_eq!(picks(), before + 1, "the sidebar button opens the picker");
+    keystrokes(vcx, "secondary-o");
+    assert_eq!(
+        picks(),
+        before + 2,
+        "⌘O opens the picker, as the palette advertises"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

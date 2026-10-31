@@ -106,9 +106,10 @@ impl LuminaApp {
         if !self.shortcuts_overlay_open {
             return Empty.into_any_element();
         }
-        let rows: [(&str, &str); 26] = [
+        let rows: [(&str, &str); 27] = [
             ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
+            ("⌘O", "Open library…"),
             ("⌘,", "Preferences"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘R", "Rescan library"),

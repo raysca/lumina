@@ -41,7 +41,39 @@ pub(super) fn render_library_section(
         .flex()
         .flex_col()
         .gap_0p5()
-        .child(theme::section_label("LIBRARY").px_2().pt(px(16.0)).pb_1())
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .justify_between()
+                .items_center()
+                .px_2()
+                .pt(px(16.0))
+                .pb_1()
+                .child(theme::section_label("LIBRARY"))
+                .child(
+                    div()
+                        .id("change-folder-btn")
+                        .debug_selector(|| "switch-library".to_string())
+                        .w(px(20.0))
+                        .h(px(20.0))
+                        .rounded_sm()
+                        .hover(|s| s.bg(theme::bg_control()))
+                        .flex()
+                        .justify_center()
+                        .items_center()
+                        .cursor_pointer()
+                        .tooltip(theme::tooltip_label("Open Library… (⌘O)"))
+                        .child(crate::icons::render_icon(
+                            crate::icons::Icon::Folder,
+                            px(12.0),
+                            theme::text_subtle(),
+                        ))
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.pick_folder_dialog(cx);
+                        })),
+                ),
+        )
         .child(render_nav_item(
             "All Photos & Videos",
             if this.grid_state.is_some() {

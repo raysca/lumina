@@ -107,6 +107,12 @@ impl LuminaApp {
             return;
         }
 
+        // ⌘O: Open Library… (also File menu and the sidebar LIBRARY header)
+        if cmd_or_ctrl && !keystroke.modifiers.shift && key.eq_ignore_ascii_case("o") {
+            self.pick_folder_dialog(cx);
+            return;
+        }
+
         // Cmd+,: preferences
         if cmd_or_ctrl && key == "," {
             self.open_preferences(cx);

@@ -195,24 +195,6 @@ impl LuminaApp {
                         this.toggle_inspector(cx);
                     })),
             )
-            // ponytail: the design's primary is Import; Lumina has no import
-            // yet, so the amber slot switches the library folder.
-            .child(
-                theme::control_primary("change-folder-btn")
-                    .debug_selector(|| "switch-library".to_string())
-                    .tooltip(theme::tooltip_label("Switch Library…"))
-                    .w(px(28.0))
-                    .px_0()
-                    .justify_center()
-                    .child(crate::icons::render_icon(
-                        crate::icons::Icon::Folder,
-                        px(14.0),
-                        theme::accent_fg(),
-                    ))
-                    .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                        this.pick_folder_dialog(cx);
-                    })),
-            )
     }
 }
 

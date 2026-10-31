@@ -50,6 +50,8 @@ pub enum UiMessage {
         id: MediaId,
         frame: DecodedFrame,
     },
+    // Only the real folder dialog sends this; tests count the request instead.
+    #[cfg_attr(test, allow(dead_code))]
     FolderPicked(PathBuf),
     ExportFolderPicked(PathBuf),
     VideoFrameTick,

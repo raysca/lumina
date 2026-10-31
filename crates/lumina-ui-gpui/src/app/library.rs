@@ -564,6 +564,13 @@ impl LuminaApp {
             .or_else(|| self.config.last_library_path.clone());
 
         let tx = self.ui_tx.clone();
+        // Tests count the request instead of opening a real dialog.
+        #[cfg(test)]
+        {
+            let _ = (current_dir, tx, cx);
+            FOLDER_PICKS.with(|n| n.set(n.get() + 1));
+        }
+        #[cfg(not(test))]
         cx.spawn(async move |_this, _cx| {
             let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose Photos Library Folder");
             if let Some(ref dir) = current_dir {
@@ -1379,4 +1386,10 @@ mod search_suggestion_tests {
             "a trailing space starts a new token"
         );
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Folder pickers the app asked to open on this test thread.
+    pub(crate) static FOLDER_PICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
