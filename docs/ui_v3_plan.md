@@ -45,6 +45,9 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Batch inspector keeps an EDIT ALL group (title, caption, date, location)
   because it is the only batch path for those fields; colour labels for a
   selection live in the context menu, Favorite/Delete in the dock.
+- Preferences: the editor note names the real menu item, "Edit in External
+  Editor", not the mock's "Open With"; "last scan" is per session (not
+  persisted across launches).
 - Get Info: "Show nearby photos" searches the same city (no geo radius
   index); "Created" is the file-system birth time and the EXIF extras are
   read from the file when the window shows it; items catalogued before

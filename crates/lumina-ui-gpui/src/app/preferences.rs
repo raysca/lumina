@@ -16,30 +16,75 @@ pub enum PreferencesTab {
 
 /// Thumbnail cache directory used by Lumina.
 pub fn thumbnail_cache_dir() -> PathBuf {
+    // Tests click Clear Cache; they must never touch the real cache.
+    if cfg!(test) {
+        return std::env::temp_dir().join(format!("lumina-test-thumbs-{}", std::process::id()));
+    }
     dirs::cache_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("lumina")
         .join("thumbnails")
 }
 
-fn directory_size(path: &Path) -> u64 {
+/// Thumbnail cache footprint shown on the Storage tab.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CacheUsage {
+    pub bytes: u64,
+    pub files: usize,
+}
+
+fn directory_usage(path: &Path) -> CacheUsage {
+    let mut usage = CacheUsage::default();
     let Ok(entries) = std::fs::read_dir(path) else {
-        return 0;
+        return usage;
     };
-    entries
-        .filter_map(Result::ok)
-        .map(|entry| {
-            let path = entry.path();
-            match entry.metadata() {
-                Ok(metadata) if metadata.is_file() => metadata.len(),
-                Ok(metadata) if metadata.is_dir() => directory_size(&path),
-                _ => 0,
+    for entry in entries.filter_map(Result::ok) {
+        match entry.metadata() {
+            Ok(metadata) if metadata.is_file() => {
+                usage.bytes += metadata.len();
+                usage.files += 1;
             }
-        })
-        .sum()
+            Ok(metadata) if metadata.is_dir() => {
+                let inner = directory_usage(&entry.path());
+                usage.bytes += inner.bytes;
+                usage.files += inner.files;
+            }
+            _ => {}
+        }
+    }
+    usage
+}
+
+/// "just now", "2 min ago", "3 h ago", "2 d ago".
+pub fn ago(elapsed: std::time::Duration) -> String {
+    match elapsed.as_secs() {
+        s if s < 60 => "just now".to_string(),
+        s if s < 3600 => format!("{} min ago", s / 60),
+        s if s < 86_400 => format!("{} h ago", s / 3600),
+        s => format!("{} d ago", s / 86_400),
+    }
+}
+
+/// LICENSE / THIRD_PARTY_NOTICES.md: the bundle's Resources, else the repo
+/// root (dev builds).
+pub fn bundled_doc(name: &str) -> Option<PathBuf> {
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.parent()?.join("Resources").join(name)));
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(name);
+    bundled
+        .into_iter()
+        .chain([repo])
+        .find(|path| path.is_file())
 }
 
 fn reveal(path: &Path) {
+    // Tests click these buttons; never open Finder from a test.
+    if cfg!(test) {
+        return;
+    }
     if let Err(err) = std::process::Command::new("open").arg(path).spawn() {
         log::warn!("could not open {path:?}: {err:?}");
     }
@@ -49,6 +94,7 @@ impl LuminaApp {
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
         self.preferences_open = true;
         self.preferences_tab = PreferencesTab::General;
+        self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
         cx.notify();
     }
@@ -56,6 +102,7 @@ impl LuminaApp {
     pub fn open_about(&mut self, cx: &mut Context<Self>) {
         self.preferences_open = true;
         self.preferences_tab = PreferencesTab::About;
+        self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
         cx.notify();
     }
@@ -74,7 +121,7 @@ impl LuminaApp {
     }
 
     pub fn refresh_cache_usage(&mut self) {
-        self.preferences_cache_bytes = Some(directory_size(&thumbnail_cache_dir()));
+        self.preferences_cache = Some(directory_usage(&thumbnail_cache_dir()));
     }
 
     pub fn clear_thumbnail_cache(&mut self, cx: &mut Context<Self>) {
@@ -91,9 +138,13 @@ impl LuminaApp {
         match result {
             Ok(()) => {
                 self.refresh_cache_usage();
+                self.preferences_cache_cleared = true;
                 self.set_last_action("Thumbnail cache cleared");
             }
-            Err(err) => self.set_error(format!("Could not clear thumbnail cache: {err}"), cx),
+            Err(err) => {
+                self.preferences_cache_cleared = false;
+                self.set_error(format!("Could not clear thumbnail cache: {err}"), cx)
+            }
         }
         cx.notify();
     }
@@ -133,9 +184,11 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn reveal_library(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.grid_state.as_ref() {
-            reveal(state.engine.library_root());
+    /// About → MIT License / Acknowledgements.
+    pub fn open_bundled_doc(&mut self, name: &str, cx: &mut Context<Self>) {
+        match bundled_doc(name) {
+            Some(path) => reveal(&path),
+            None => self.set_error(format!("{name} is missing from this build."), cx),
         }
         cx.notify();
     }
@@ -206,5 +259,19 @@ impl LuminaApp {
             })
             .detach();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[core::prelude::v1::test]
+    fn ago_reads_minutes_hours_and_days() {
+        use std::time::Duration;
+        assert_eq!(ago(Duration::from_secs(5)), "just now");
+        assert_eq!(ago(Duration::from_secs(125)), "2 min ago");
+        assert_eq!(ago(Duration::from_secs(3 * 3600 + 5)), "3 h ago");
+        assert_eq!(ago(Duration::from_secs(2 * 86_400)), "2 d ago");
     }
 }

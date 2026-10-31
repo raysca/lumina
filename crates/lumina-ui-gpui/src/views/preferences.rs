@@ -2,7 +2,7 @@
 
 use gpui::*;
 
-use crate::app::preferences::{thumbnail_cache_dir, PreferencesTab};
+use crate::app::preferences::{ago, thumbnail_cache_dir, PreferencesTab};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -20,20 +20,20 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .gap_1()
         .pt(px(6.0))
         .pb(px(10.0))
-        .bg(theme::bg_pane())
+        .bg(theme::bg_raised())
         .border_b_1()
         .border_color(theme::border_subtle());
     for (candidate, label, icon, selector) in [
         (
             PreferencesTab::General,
             "General",
-            Icon::Sliders,
+            Icon::Settings,
             "preferences-tab-general",
         ),
         (
             PreferencesTab::Storage,
             "Storage",
-            Icon::Folder,
+            Icon::Database,
             "preferences-tab-storage",
         ),
         (
@@ -67,7 +67,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .bg(if selected {
                     theme::selection_bg()
                 } else {
-                    theme::bg_pane()
+                    theme::bg_raised()
                 })
                 .hover(|s| s.bg(theme::bg_control_hover()))
                 .child(render_icon(icon, px(20.0), fg))
@@ -81,7 +81,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
     let content = match tab {
         PreferencesTab::General => render_general(app, cx),
         PreferencesTab::Storage => render_storage(app, cx),
-        PreferencesTab::About => render_about(),
+        PreferencesTab::About => render_about(cx),
     };
     let window_h = app.window_bounds.map_or(900.0, |(_, _, _, h)| h);
 
@@ -126,7 +126,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                         .flex()
                         .flex_row()
                         .items_center()
-                        .bg(theme::bg_pane())
+                        .bg(theme::bg_raised())
                         .child(div().size(px(20.0)))
                         .child(
                             div()
@@ -178,27 +178,26 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
 }
 
 fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let mut indexed = app.total_library_count.to_string();
+    // ponytail: session-only; persist the scan time if users want it across launches.
+    if let Some(elapsed) = app.last_scan_at.map(|at| at.elapsed()) {
+        indexed.push_str(&format!(" · last scan {}", ago(elapsed)));
+    }
+    let editor_set = app.config.validated_external_editor().is_some();
     div()
         .flex()
         .flex_col()
         .child(section_title("LIBRARY", false))
         .child(group([
-            row("Library folder", value(&app.library_path_label(), true))
-                .child(button(
-                    cx,
-                    "preferences-reveal-library",
-                    "Reveal",
-                    |this, cx| this.reveal_library(cx),
-                ))
-                .child(button(
-                    cx,
-                    "preferences-change-library",
-                    "Change…",
-                    |this, cx| this.pick_folder_dialog(cx),
-                )),
+            row("Library folder", value(&app.library_path_label(), true)).child(button(
+                cx,
+                "preferences-change-library",
+                "Change…",
+                |this, cx| this.pick_folder_dialog(cx),
+            )),
             row(
                 "Items indexed",
-                value(&app.total_library_count.to_string(), false),
+                value(&indexed, false).debug_selector(|| "preferences-indexed".to_string()),
             )
             .child(button(
                 cx,
@@ -211,6 +210,11 @@ fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .child(group([row(
             "Editor",
             value(&app.external_editor_label(), false)
+                .text_color(if editor_set {
+                    theme::text()
+                } else {
+                    theme::text_subtle()
+                })
                 .debug_selector(|| "preferences-external-editor".to_string()),
         )
         .child(button(
@@ -220,14 +224,20 @@ fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             |this, cx| this.choose_external_editor(cx),
         ))]))
         .child(note(
-            "Used by Edit in External Editor. Lumina never changes your original files; \
-             edits happen in the app you choose.",
+            "Used by 'Edit in External Editor'. Lumina never changes your original \
+             files; edits happen in the app you choose.",
         ))
         .into_any_element()
 }
 
 fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let size = app.preferences_cache_bytes.unwrap_or(0);
+    let usage = app.preferences_cache.unwrap_or_default();
+    let size = format!(
+        "{} · {} thumbnail{}",
+        format_bytes(usage.bytes),
+        usage.files,
+        if usage.files == 1 { "" } else { "s" }
+    );
     div()
         .flex()
         .flex_col()
@@ -239,7 +249,23 @@ fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 "Reveal Cache",
                 |this, cx| this.reveal_cache_directory(cx),
             )),
-            row("Size on disk", value(&format_bytes(size), false)).child(button(
+            row(
+                "Size on disk",
+                value(&size, false).debug_selector(|| "preferences-cache-size".to_string()),
+            )
+            .children(app.preferences_cache_cleared.then(|| {
+                div()
+                    .debug_selector(|| "preferences-cache-cleared".to_string())
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme::success_text())
+                    .child(render_icon(Icon::Check, px(12.0), theme::success_text()))
+                    .child("Cleared")
+            }))
+            .child(button(
                 cx,
                 "preferences-clear-cache",
                 "Clear Cache",
@@ -274,7 +300,7 @@ fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .into_any_element()
 }
 
-fn render_about() -> AnyElement {
+fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
     div()
         .pt(px(30.0))
         .flex()
@@ -317,6 +343,25 @@ fn render_about() -> AnyElement {
                      no telemetry. Your files stay where they are.",
                 ),
         )
+        .child(
+            div()
+                .pt(px(6.0))
+                .flex()
+                .flex_row()
+                .gap_2()
+                .child(button(
+                    cx,
+                    "preferences-license",
+                    "MIT License",
+                    |this, cx| this.open_bundled_doc("LICENSE", cx),
+                ))
+                .child(button(
+                    cx,
+                    "preferences-acknowledgements",
+                    "Acknowledgements",
+                    |this, cx| this.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
+                )),
+        )
         .into_any_element()
 }
 
@@ -342,7 +387,7 @@ fn group(rows: impl IntoIterator<Item = Div>) -> Div {
         .rounded(px(8.0))
         .border_1()
         .border_color(theme::border_subtle())
-        .bg(theme::bg_pane())
+        .bg(theme::bg_app())
         .children(rows.into_iter().enumerate().map(|(i, row)| {
             if i == 0 {
                 row

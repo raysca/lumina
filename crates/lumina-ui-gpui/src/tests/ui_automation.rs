@@ -1158,7 +1158,7 @@ fn ui_automation_preferences_modal() {
     keystrokes(vcx, "secondary-,");
     view.update(vcx, |app, _| {
         assert!(app.preferences_open, "Cmd+, should open preferences");
-        assert!(app.preferences_cache_bytes.is_some());
+        assert!(app.preferences_cache.is_some());
     });
 
     click(vcx, "preferences-tab-storage");

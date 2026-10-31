@@ -18,6 +18,8 @@ pub enum CommandId {
     Rescan,
     Preferences,
     About,
+    ShowLicense,
+    ShowAcknowledgements,
     Shortcuts,
     ToggleSidebar,
     ToggleInspector,
@@ -68,7 +70,7 @@ impl Command {
             Preferences | SortDate | SortName | SortSize | SortRating | SortAsc | SortDesc => {
                 Icon::Sliders
             }
-            About | ToggleInspector => Icon::Info,
+            About | ToggleInspector | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
             ExportSelection => Icon::ExternalLink,
@@ -147,6 +149,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.about",
             shortcut: "",
             keywords: "version info",
+        },
+        Command {
+            id: CommandId::ShowLicense,
+            key: "command.show_license",
+            shortcut: "",
+            keywords: "license mit legal about",
+        },
+        Command {
+            id: CommandId::ShowAcknowledgements,
+            key: "command.show_acknowledgements",
+            shortcut: "",
+            keywords: "acknowledgements credits third party notices licenses about",
         },
         Command {
             id: CommandId::Shortcuts,
@@ -517,6 +531,8 @@ impl LuminaApp {
             CommandId::Rescan => self.rescan_library(cx),
             CommandId::Preferences => self.open_preferences(cx),
             CommandId::About => self.open_about(cx),
+            CommandId::ShowLicense => self.open_bundled_doc("LICENSE", cx),
+            CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),
             CommandId::ToggleSidebar => self.toggle_sidebar(cx),
             CommandId::ToggleInspector => self.toggle_inspector(cx),

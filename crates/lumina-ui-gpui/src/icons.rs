@@ -41,6 +41,8 @@ pub enum Icon {
     Plus,
     Minus,
     Pencil,
+    Settings,
+    Database,
 }
 
 impl Icon {
@@ -86,6 +88,8 @@ impl Icon {
         Icon::Plus,
         Icon::Minus,
         Icon::Pencil,
+        Icon::Settings,
+        Icon::Database,
     ];
 
     pub fn path(self) -> &'static str {
@@ -128,6 +132,8 @@ impl Icon {
             Self::Plus => "icons/plus.svg",
             Self::Minus => "icons/minus.svg",
             Self::Pencil => "icons/pencil.svg",
+            Self::Settings => "icons/settings.svg",
+            Self::Database => "icons/database.svg",
         }
     }
 }

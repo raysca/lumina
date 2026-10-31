@@ -380,7 +380,11 @@ pub struct LuminaApp {
     pub sort_menu_open: bool,
     pub preferences_open: bool,
     pub preferences_tab: crate::app::preferences::PreferencesTab,
-    pub preferences_cache_bytes: Option<u64>,
+    pub preferences_cache: Option<crate::app::preferences::CacheUsage>,
+    /// Inline "Cleared" after Clear Cache; reset when Preferences reopens.
+    pub preferences_cache_cleared: bool,
+    /// When the last scan finished in this session (not persisted).
+    pub last_scan_at: Option<std::time::Instant>,
     pub command_palette_open: bool,
     pub command_query: String,
     pub command_selected: usize,
@@ -531,7 +535,9 @@ impl LuminaApp {
             sort_menu_open: false,
             preferences_open: false,
             preferences_tab: crate::app::preferences::PreferencesTab::General,
-            preferences_cache_bytes: None,
+            preferences_cache: None,
+            preferences_cache_cleared: false,
+            last_scan_at: None,
             command_palette_open: false,
             command_query: String::new(),
             command_selected: 0,

@@ -30,6 +30,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.rescan" => "Rescan Library",
         "command.preferences" => "Preferences…",
         "command.about" => "About Lumina",
+        "command.show_license" => "Show MIT License",
+        "command.show_acknowledgements" => "Show Acknowledgements",
         "command.shortcuts" => "Keyboard Shortcuts",
         "command.toggle_sidebar" => "Toggle Sidebar",
         "command.toggle_inspector" => "Toggle Inspector",

@@ -52,6 +52,8 @@ cp "$BUILT_BIN" "$APP_BIN"
 chmod +x "$APP_BIN"
 cp resources/Info.plist "$BUNDLE_DIR/Contents/Info.plist"
 cp resources/Lumina.icns "$BUNDLE_DIR/Contents/Resources/Lumina.icns"
+# About → MIT License / Acknowledgements open these.
+install -m 644 LICENSE THIRD_PARTY_NOTICES.md "$BUNDLE_DIR/Contents/Resources/"
 
 if [[ "$SIGN_IDENTITY" != "-" ]]; then
     echo "Signing with identity: $SIGN_IDENTITY"
