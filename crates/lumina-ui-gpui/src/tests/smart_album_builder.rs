@@ -49,7 +49,7 @@ fn builder_creates_album_from_clicks_and_shows_a_live_preview() {
     open_sheet(vcx, &view);
 
     view.update(vcx, |app, _| {
-        assert_eq!(app.album_draft.match_count, Some(2), "Favourite is Yes");
+        assert_eq!(app.album_draft.match_count, Some(2), "Favorite is Yes");
         let preview: Vec<MediaId> = app.album_draft.preview.iter().map(|i| i.id).collect();
         assert_eq!(preview.len(), 2, "the preview shows the real matches");
         assert!(preview.contains(&ids[0]) && preview.contains(&ids[1]));

@@ -129,8 +129,8 @@ fn general_tab_shows_dates_and_adjusts_date_taken() {
         );
     }
     assert!(
-        icx.debug_bounds("info-row-colour-profile").is_none(),
-        "no colour profile row without one in the file (no guessing)"
+        icx.debug_bounds("info-row-color-profile").is_none(),
+        "no color profile row without one in the file (no guessing)"
     );
 
     click(icx, "inspector-date-adjust");

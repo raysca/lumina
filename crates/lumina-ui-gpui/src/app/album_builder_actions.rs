@@ -14,7 +14,7 @@ use crate::views::sidebar::AlbumSelection;
 const PREVIEW_LIMIT: usize = 8;
 
 impl LuminaApp {
-    /// New Smart Album… (⌥⌘N): an empty sheet with one "Favourite is Yes" row.
+    /// New Smart Album… (⌥⌘N): an empty sheet with one "Favorite is Yes" row.
     pub fn open_album_builder(&mut self, cx: &mut Context<Self>) {
         self.open_draft(None, String::new(), MatchMode::All, &[], cx);
     }

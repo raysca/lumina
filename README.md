@@ -19,8 +19,8 @@ core handles cataloguing, decoding, and search.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a bundled GeoNames dataset.
 - **Smart albums** — 9 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
-  match all/any of conditions on kind, favourite, date (including "in the
-  last N days/weeks/months"), tag, stars, colour label, camera, lens,
+  match all/any of conditions on kind, favorite, date (including "in the
+  last N days/weeks/months"), tag, stars, color label, camera, lens,
   aperture, ISO, focal length, filename and place, with a live count and
   preview. Albums can be re-edited (⌘K "Edit Smart Album…") and deleted from
   the sidebar row.

@@ -39,7 +39,7 @@ tokens! {
     text_disabled = 0x5A5D63;
     /// Idle list/sidebar row text.
     text_row = 0xC9CACD;
-    /// Section labels (LIBRARY, KEYWORDS, ...).
+    /// Section labels (LIBRARY, TAGS, ...).
     text_label = 0x8E9096;
 
     // Accent: primary actions, links, focus.
@@ -136,7 +136,7 @@ pub fn modal_dim() -> Rgba {
     rgba(0x00000066)
 }
 
-/// Section label (LIBRARY, KEYWORDS, ...): 11px semibold #8E9096. Callers
+/// Section label (LIBRARY, TAGS, ...): 11px semibold #8E9096. Callers
 /// add spacing; sidebar and inspector sections sit 16px below the previous.
 pub fn section_label(text: impl Into<SharedString>) -> Div {
     div()
@@ -376,7 +376,7 @@ pub fn tooltip_label(
     move |_window, cx| cx.new(|_cx| TooltipLabel { text: text.clone() }).into()
 }
 
-/// Colour labels in menu order: a hollow "No label", then the colours.
+/// Color labels in menu order: a hollow "No label", then the colors.
 pub fn label_options() -> [(u8, Option<Rgba>, &'static str); 7] {
     [
         (0, None, "No label"),

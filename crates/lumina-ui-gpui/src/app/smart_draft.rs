@@ -119,11 +119,11 @@ impl PeriodUnit {
 pub fn field_label(field: &RuleField) -> &'static str {
     match field {
         RuleField::MediaType => "Kind",
-        RuleField::IsFavorite => "Favourite",
+        RuleField::IsFavorite => "Favorite",
         RuleField::Date => "Date",
         RuleField::Tag => "Tag",
         RuleField::Rating => "Stars",
-        RuleField::ColorLabel => "Colour label",
+        RuleField::ColorLabel => "Color label",
         RuleField::Camera => "Camera",
         RuleField::CameraModel => "Camera model",
         RuleField::Lens => "Lens",

@@ -86,8 +86,8 @@ pub fn render_summary_body(
                 .child(render_label_dots(weak_app.clone(), color_label)),
         ))
         .child(section(
-            "KEYWORDS",
-            render_keywords(weak_app.clone(), tags, tag_input_active, tag_input_buffer),
+            "TAGS",
+            render_tags(weak_app.clone(), tags, tag_input_active, tag_input_buffer),
         ))
         .children(place.map(|place| {
             section(
@@ -307,7 +307,7 @@ pub(crate) fn place_line(item: &MediaItem) -> Option<String> {
 }
 
 /// One compact field: plain chips (no "#") with ×, then an inline "add…".
-fn render_keywords(
+fn render_tags(
     weak_app: WeakEntity<LuminaApp>,
     tags: &[String],
     input_active: bool,
@@ -315,8 +315,8 @@ fn render_keywords(
 ) -> impl IntoElement {
     let app_add = weak_app.clone();
     div()
-        .id("inspector-keywords")
-        .debug_selector(|| "inspector-keywords".to_string())
+        .id("inspector-tags")
+        .debug_selector(|| "inspector-tags".to_string())
         .w_full()
         .min_h(px(30.0))
         .p(px(4.0))
@@ -337,7 +337,7 @@ fn render_keywords(
         .children(tags.iter().map(|tag| {
             let app = weak_app.clone();
             let remove = tag.clone();
-            let selector = format!("keyword-chip-{tag}");
+            let selector = format!("tag-chip-{tag}");
             div()
                 .debug_selector(move || selector.clone())
                 .h(px(20.0))
@@ -357,11 +357,11 @@ fn render_keywords(
                     } else {
                         format!("tag:{tag}")
                     };
-                    let selector = format!("keyword-filter-{tag}");
+                    let selector = format!("tag-filter-{tag}");
                     div()
                         .id(ElementId::Name(selector.clone().into()))
                         .debug_selector(move || selector.clone())
-                        .tooltip(theme::tooltip_label("Show items with this keyword"))
+                        .tooltip(theme::tooltip_label("Show items with this tag"))
                         .cursor_pointer()
                         .child(tag.clone())
                         .on_click(move |_e, _w, cx| {
@@ -373,12 +373,12 @@ fn render_keywords(
                 })
                 .child(
                     div()
-                        .id(ElementId::Name(format!("keyword-remove-{tag}").into()))
+                        .id(ElementId::Name(format!("tag-remove-{tag}").into()))
                         .debug_selector({
-                            let id = format!("keyword-remove-{tag}");
+                            let id = format!("tag-remove-{tag}");
                             move || id.clone()
                         })
-                        .tooltip(theme::tooltip_label("Remove keyword"))
+                        .tooltip(theme::tooltip_label("Remove tag"))
                         .size(px(14.0))
                         .flex()
                         .items_center()
@@ -397,8 +397,8 @@ fn render_keywords(
         }))
         .child(
             div()
-                .id("keyword-add")
-                .debug_selector(|| "keyword-add".to_string())
+                .id("tag-add")
+                .debug_selector(|| "tag-add".to_string())
                 .flex_1()
                 .min_w(px(40.0))
                 .px(px(4.0))

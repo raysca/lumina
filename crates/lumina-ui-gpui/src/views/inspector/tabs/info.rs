@@ -279,7 +279,7 @@ pub fn render_info_tab(
                 .children(
                     color_profile
                         .as_deref()
-                        .map(|profile| render_info_label_value_row("Colour profile", profile)),
+                        .map(|profile| render_info_label_value_row("Color profile", profile)),
                 )
                 .child(render_info_label_value_row(
                     "Created",

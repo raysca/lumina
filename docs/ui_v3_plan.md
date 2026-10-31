@@ -109,10 +109,10 @@ Modelled on Photos' New Smart Album sheet.
   condition, a strip of the first 8 matching thumbnails and "N items match"
   beside Cancel / OK. Count and preview re-query when a rule changes, never
   on render.
-- Conditions: Kind (photo includes RAW / video), Favourite, Date (is, before,
+- Conditions: Kind (photo includes RAW / video), Favorite, Date (is, before,
   after, in the range, in the last N days/weeks/months), Tag (picked from the
   library's tags, or contains / empty), Stars (is, at least, at most),
-  Colour label, Camera (make or model), Lens, Aperture, ISO, Focal length,
+  Color label, Camera (make or model), Lens, Aperture, ISO, Focal length,
   Filename, Place
   (city, region or country code). Fields and values saved by older builds
   (Year, City, Kind RAW / non-RAW photo…) still show, edit and save.

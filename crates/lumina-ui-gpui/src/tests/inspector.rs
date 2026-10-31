@@ -38,7 +38,7 @@ fn docked_inspector_summary_rates_labels_and_opens_get_info() {
     assert_eq!(
         labels.get(&item.id).copied(),
         Some(2),
-        "clicking a label dot must persist that colour label"
+        "clicking a label dot must persist that color label"
     );
 
     click(vcx, "inspector-get-info");
@@ -75,50 +75,50 @@ fn docked<'a>(
 }
 
 #[core::prelude::v1::test]
-fn keywords_field_adds_and_removes_plain_chips() {
+fn tags_field_adds_and_removes_plain_chips() {
     let mut cx = gpui::TestAppContext::single();
-    let (dir, engine, item, view, vcx) = docked("inspector_keywords", &mut cx);
+    let (dir, engine, item, view, vcx) = docked("inspector_tags", &mut cx);
 
-    click(vcx, "keyword-add");
+    click(vcx, "tag-add");
     super::ui_automation::keystrokes(vcx, "b e a c h enter");
     assert_eq!(engine.get_tags_for_item(item.id), vec!["beach".to_string()]);
     render_ui(vcx);
     let chip = vcx
-        .debug_bounds("keyword-chip-beach")
+        .debug_bounds("tag-chip-beach")
         .expect("the chip renders");
-    let field = vcx.debug_bounds("inspector-keywords").unwrap();
+    let field = vcx.debug_bounds("inspector-tags").unwrap();
     assert!(
         field.contains(&chip.origin),
         "chips sit inside the one field"
     );
     assert_eq!(f32::from(chip.size.height), 20.0);
 
-    click(vcx, "keyword-remove-beach");
+    click(vcx, "tag-remove-beach");
     assert!(
         engine.get_tags_for_item(item.id).is_empty(),
-        "× removes the keyword"
+        "× removes the tag"
     );
     view.update(vcx, |app, _| assert!(app.error_message.is_none()));
 
-    // Keyboard: ⌫ in the empty field removes the last keyword.
+    // Keyboard: ⌫ in the empty field removes the last tag.
     for word in ["s u n enter", "s e a enter", "backspace"] {
-        click(vcx, "keyword-add");
+        click(vcx, "tag-add");
         super::ui_automation::keystrokes(vcx, word);
     }
     let left = engine.get_tags_for_item(item.id);
-    assert_eq!(left.len(), 1, "⌫ removes exactly one keyword: {left:?}");
+    assert_eq!(left.len(), 1, "⌫ removes exactly one tag: {left:?}");
     view.update(vcx, |app, _| {
         assert!(app.tag_input_active, "the field stays open after ⌫");
         assert!(app.delete_confirm_state.is_none(), "⌫ never reaches delete");
     });
 
     render_ui(vcx);
-    click(vcx, leak(format!("keyword-filter-{}", left[0])));
+    click(vcx, leak(format!("tag-filter-{}", left[0])));
     view.update(vcx, |app, _| {
         assert_eq!(
             app.search_query,
             format!("tag:{}", left[0]),
-            "a chip's text filters by its keyword"
+            "a chip's text filters by its tag"
         );
     });
 
@@ -154,7 +154,7 @@ fn footer_is_pinned_and_rating_targets_are_22px() {
     assert_eq!(
         labels.get(&item.id).copied().unwrap_or(0),
         0,
-        "No label clears the colour"
+        "No label clears the color"
     );
     view.update(vcx, |app, _| assert!(app.error_message.is_none()));
 

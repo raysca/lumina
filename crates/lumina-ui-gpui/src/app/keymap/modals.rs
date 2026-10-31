@@ -97,7 +97,7 @@ impl LuminaApp {
             }
             if key == "backspace" {
                 // Token-field behaviour: ⌫ in an empty field removes the
-                // single item's last keyword (the keyboard path for ×).
+                // single item's last tag (the keyboard path for ×).
                 if self.tag_input_buffer.is_empty() && self.selected_indices.len() <= 1 {
                     if let Some(last) = self.selected_item_tags.last().cloned() {
                         self.batch_remove_tag(last, cx);
