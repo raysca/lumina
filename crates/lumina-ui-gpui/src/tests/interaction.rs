@@ -183,3 +183,27 @@ fn test_keyboard_selection_reveals_grid_row() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn engine_errors_show_in_the_error_banner() {
+    let (temp_dir, engine) = scanned_engine("engine_error");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    view.update(cx, |app, cx| {
+        app.grid_state = Some(crate::views::grid::GridState::new(engine.clone()));
+        app.handle_ui_message(
+            UiMessage::Engine(EngineEvent::Error(
+                "Could not read the catalog: disk I/O error".to_string(),
+            )),
+            cx,
+        );
+        assert_eq!(
+            app.error_message.as_deref(),
+            Some("Could not read the catalog: disk I/O error"),
+            "a catalog failure must reach the banner, not leave a silent empty grid"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

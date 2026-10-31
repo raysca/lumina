@@ -9,7 +9,7 @@ pub mod sort;
 pub mod watcher;
 pub mod xmp;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -196,6 +196,8 @@ pub enum EngineEvent {
     ScanComplete {
         total_items: usize,
     },
+    /// A catalog or scan failure for the error banner, as "Title: detail".
+    Error(String),
 }
 
 /// Result of exporting media + metadata.
@@ -224,6 +226,7 @@ pub struct LuminaEngine {
     decoder: DecoderPipeline,
     event_tx: Sender<EngineEvent>,
     active_scan_cancel: Arc<Mutex<Arc<AtomicBool>>>,
+    read_error_reported: Arc<AtomicBool>,
     _watcher: Option<LibraryWatcher>,
 }
 
@@ -310,6 +313,7 @@ impl LuminaEngine {
             decoder,
             event_tx: event_tx.clone(),
             active_scan_cancel,
+            read_error_reported: Arc::new(AtomicBool::new(false)),
             _watcher: watcher,
         });
 
@@ -332,8 +336,31 @@ impl LuminaEngine {
         &self.catalog
     }
 
+    /// Unwraps a catalog read for the display queries. A failure is logged
+    /// and the first one per library raises [`EngineEvent::Error`], so a
+    /// broken catalog shows a banner instead of an empty library.
+    /// ponytail: one banner per engine; later failures only log, since
+    /// re-raising on every frame would loop the renderer.
+    fn read<T: Default>(&self, what: &str, result: Result<T>) -> T {
+        result.unwrap_or_else(|err| {
+            log::error!("catalog read failed ({what}): {err:#}");
+            if !self.read_error_reported.swap(true, Ordering::Relaxed) {
+                let _ = self.event_tx.send(EngineEvent::Error(format!(
+                    "Could not read the catalog: {err:#}"
+                )));
+            }
+            T::default()
+        })
+    }
+
+    /// Lets the next failed catalog read raise a banner again; called when
+    /// the user dismisses one, which cannot loop the renderer.
+    pub fn rearm_read_errors(&self) {
+        self.read_error_reported.store(false, Ordering::Relaxed);
+    }
+
     pub fn total_count(&self) -> usize {
-        self.catalog.total_count().unwrap_or(0)
+        self.read("total count", self.catalog.total_count())
     }
 
     pub fn get_item_slice(&self, range: Range<usize>) -> Vec<MediaItem> {
@@ -342,9 +369,7 @@ impl LuminaEngine {
         if limit == 0 {
             return Vec::new();
         }
-        self.catalog
-            .get_item_slice(offset, limit)
-            .unwrap_or_default()
+        self.read("get item slice", self.catalog.get_item_slice(offset, limit))
     }
 
     pub fn get_item_slice_sorted(
@@ -353,19 +378,21 @@ impl LuminaEngine {
         limit: usize,
         sort: SortSpec,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .get_item_slice_sorted(offset, limit, sort)
-            .unwrap_or_default()
+        self.read(
+            "get item slice sorted",
+            self.catalog.get_item_slice_sorted(offset, limit, sort),
+        )
     }
 
     pub fn get_item_by_id(&self, id: MediaId) -> Option<MediaItem> {
-        self.catalog.get_item_by_id(id).unwrap_or(None)
+        self.read("get item by id", self.catalog.get_item_by_id(id))
     }
 
     pub fn get_timeline_buckets(&self, bucket_type: &str) -> Vec<TimelineBucket> {
-        self.catalog
-            .get_timeline_buckets(bucket_type)
-            .unwrap_or_default()
+        self.read(
+            "get timeline buckets",
+            self.catalog.get_timeline_buckets(bucket_type),
+        )
     }
 
     pub fn search_structured(
@@ -374,13 +401,17 @@ impl LuminaEngine {
         limit: usize,
         offset: usize,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .search_structured(query, limit, offset)
-            .unwrap_or_default()
+        self.read(
+            "search structured",
+            self.catalog.search_structured(query, limit, offset),
+        )
     }
 
     pub fn search_structured_count(&self, query: &StructuredQuery) -> usize {
-        self.catalog.search_structured_count(query).unwrap_or(0)
+        self.read(
+            "search structured count",
+            self.catalog.search_structured_count(query),
+        )
     }
 
     pub fn search_query(&self, input: &str, limit: usize, offset: usize) -> Vec<MediaItem> {
@@ -396,9 +427,11 @@ impl LuminaEngine {
     ) -> Vec<MediaItem> {
         let trimmed = input.trim();
         let q = StructuredQuery::parse(trimmed);
-        self.catalog
-            .search_structured_sorted(&q, limit, offset, sort)
-            .unwrap_or_default()
+        self.read(
+            "search structured sorted",
+            self.catalog
+                .search_structured_sorted(&q, limit, offset, sort),
+        )
     }
 
     pub fn search_query_count(&self, input: &str) -> usize {
@@ -413,9 +446,10 @@ impl LuminaEngine {
         limit: usize,
         offset: usize,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .query_system_album(album, limit, offset)
-            .unwrap_or_default()
+        self.read(
+            "query system album",
+            self.catalog.query_system_album(album, limit, offset),
+        )
     }
 
     pub fn query_system_album_sorted(
@@ -425,13 +459,18 @@ impl LuminaEngine {
         offset: usize,
         sort: SortSpec,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .query_system_album_sorted(album, limit, offset, sort)
-            .unwrap_or_default()
+        self.read(
+            "query system album sorted",
+            self.catalog
+                .query_system_album_sorted(album, limit, offset, sort),
+        )
     }
 
     pub fn query_system_album_count(&self, album: SystemAlbum) -> usize {
-        self.catalog.query_system_album_count(album).unwrap_or(0)
+        self.read(
+            "query system album count",
+            self.catalog.query_system_album_count(album),
+        )
     }
 
     pub fn list_smart_albums(&self) -> Vec<SmartAlbum> {
@@ -494,9 +533,11 @@ impl LuminaEngine {
         offset: usize,
         sort: SortSpec,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .query_smart_album_sorted(album, limit, offset, sort)
-            .unwrap_or_default()
+        self.read(
+            "query smart album sorted",
+            self.catalog
+                .query_smart_album_sorted(album, limit, offset, sort),
+        )
     }
 
     pub fn query_smart_album_count(&self, album: &SmartAlbum) -> usize {
@@ -521,7 +562,7 @@ impl LuminaEngine {
     }
 
     pub fn get_ratings_map(&self) -> std::collections::HashMap<MediaId, u8> {
-        self.catalog.get_ratings_map().unwrap_or_default()
+        self.read("get ratings map", self.catalog.get_ratings_map())
     }
 
     pub fn set_color_label(&self, id: MediaId, label: u8) -> Result<()> {
@@ -575,7 +616,7 @@ impl LuminaEngine {
     }
 
     pub fn get_color_labels_map(&self) -> std::collections::HashMap<MediaId, u8> {
-        self.catalog.get_color_labels_map().unwrap_or_default()
+        self.read("get color labels map", self.catalog.get_color_labels_map())
     }
 
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {
@@ -587,8 +628,14 @@ impl LuminaEngine {
     /// overwritten; collisions get a numbered suffix.
     pub fn export_items(&self, ids: &[MediaId], destination: &Path) -> Result<ExportReport> {
         fs::create_dir_all(destination)?;
-        let captions = self.catalog.get_captions_map().unwrap_or_default();
-        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let captions = self
+            .catalog
+            .get_captions_map()
+            .context("could not read captions")?;
+        let ratings = self
+            .catalog
+            .get_ratings_map()
+            .context("could not read ratings")?;
         let mut report = ExportReport::default();
 
         for id in ids {
@@ -630,8 +677,14 @@ impl LuminaEngine {
 
     /// Writes/updates XMP sidecars next to the original files (metadata-only export).
     pub fn write_metadata_sidecars(&self, ids: &[MediaId]) -> Result<usize> {
-        let captions = self.catalog.get_captions_map().unwrap_or_default();
-        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let captions = self
+            .catalog
+            .get_captions_map()
+            .context("could not read captions")?;
+        let ratings = self
+            .catalog
+            .get_ratings_map()
+            .context("could not read ratings")?;
         let mut written = 0;
         for id in ids {
             let Some(item) = self.catalog.get_item_by_id(*id)? else {
@@ -649,8 +702,14 @@ impl LuminaEngine {
     /// sidecar are applied (ratings always, title/caption when set, tags merged),
     /// so importing never clears metadata that the sidecar does not mention.
     pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
-        let captions = self.catalog.get_captions_map().unwrap_or_default();
-        let ratings = self.catalog.get_ratings_map().unwrap_or_default();
+        let captions = self
+            .catalog
+            .get_captions_map()
+            .context("could not read captions")?;
+        let ratings = self
+            .catalog
+            .get_ratings_map()
+            .context("could not read ratings")?;
         let mut report = ImportReport::default();
 
         for id in ids {
@@ -711,7 +770,7 @@ impl LuminaEngine {
     }
 
     pub fn get_captions_map(&self) -> std::collections::HashMap<MediaId, String> {
-        self.catalog.get_captions_map().unwrap_or_default()
+        self.read("get captions map", self.catalog.get_captions_map())
     }
 
     pub fn set_trashed(&self, id: MediaId, is_trashed: bool) -> Result<()> {
@@ -756,7 +815,7 @@ impl LuminaEngine {
         let trashed_items = self
             .catalog
             .query_system_album(SystemAlbum::RecentlyDeleted, 100_000, 0)
-            .unwrap_or_default();
+            .context("could not list the trash")?;
 
         let removed_ids = self.catalog.empty_trash(target)?;
         let count = removed_ids.len();
@@ -785,7 +844,7 @@ impl LuminaEngine {
     }
 
     pub fn get_tags_for_item(&self, id: MediaId) -> Vec<String> {
-        self.catalog.get_tags_for_item(id).unwrap_or_default()
+        self.read("get tags for item", self.catalog.get_tags_for_item(id))
     }
 
     /// Per-tag count across `ids`; see [`Catalog::tag_counts_for_items`].
@@ -799,12 +858,12 @@ impl LuminaEngine {
     }
 
     pub fn query_tag_counts(&self) -> Vec<(String, usize)> {
-        self.catalog.query_tag_counts().unwrap_or_default()
+        self.read("query tag counts", self.catalog.query_tag_counts())
     }
 
     /// Counts active media items that carry no tags at all.
     pub fn query_untagged_count(&self) -> usize {
-        self.catalog.query_untagged_count().unwrap_or(0)
+        self.read("query untagged count", self.catalog.query_untagged_count())
     }
 
     /// Lists a page of active untagged media using the requested ordering.
@@ -814,9 +873,10 @@ impl LuminaEngine {
         offset: usize,
         sort: SortSpec,
     ) -> Vec<MediaItem> {
-        self.catalog
-            .query_untagged_sorted(limit, offset, sort)
-            .unwrap_or_default()
+        self.read(
+            "query untagged sorted",
+            self.catalog.query_untagged_sorted(limit, offset, sort),
+        )
     }
 
     /// Newest active items carrying `tag`; see [`Catalog::get_items_by_tag`].
@@ -910,17 +970,38 @@ impl LuminaEngine {
         }
         let engine = self.clone();
         let cancel_flag = new_flag;
-        std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name("lumina-rescan".to_string())
             .spawn(move || {
                 engine.run_scan(cancel_flag);
-            })
-            .ok();
+            });
+        if let Err(err) = spawned {
+            log::error!("could not start the rescan thread: {err}");
+            let _ = self.event_tx.send(EngineEvent::Error(format!(
+                "Could not start the rescan: {err}"
+            )));
+        }
     }
 
     fn run_scan(&self, cancel_flag: Arc<AtomicBool>) {
         let (batch_tx, batch_rx) = unbounded();
-        let known_signatures = self.catalog.get_file_signatures().unwrap_or_default();
+        // An empty map would re-insert every file and overwrite edited dates
+        // and places, so a failed read stops the scan instead.
+        let known_signatures = match self.catalog.get_file_signatures() {
+            Ok(signatures) => signatures,
+            Err(err) => {
+                log::error!("scan aborted, catalog file list unreadable: {err:#}");
+                let _ = self
+                    .event_tx
+                    .send(EngineEvent::Error(format!("Library scan failed: {err:#}")));
+                // Not self.total_count(): its own banner would replace this one.
+                let total_items = self.catalog.total_count().unwrap_or(0);
+                let _ = self
+                    .event_tx
+                    .send(EngineEvent::ScanComplete { total_items });
+                return;
+            }
+        };
         let scanner =
             Scanner::new_with_cancel(self.library_root.clone(), batch_tx, cancel_flag.clone())
                 .with_known_signatures(known_signatures);
@@ -930,11 +1011,24 @@ impl LuminaEngine {
 
         // Ingestion worker thread to consume discovered items and commit into SQLite in batches
         let ingest_handle = std::thread::spawn(move || {
+            let mut save_failure_reported = false;
             for event in batch_rx {
                 match event {
                     EngineEvent::BatchDiscovered { items } => {
-                        if let Ok(inserted) = catalog.insert_or_update_batch(&items) {
-                            let _ = event_tx.send(EngineEvent::BatchDiscovered { items: inserted });
+                        match catalog.insert_or_update_batch(&items) {
+                            Ok(inserted) => {
+                                let _ =
+                                    event_tx.send(EngineEvent::BatchDiscovered { items: inserted });
+                            }
+                            Err(err) => {
+                                log::error!("saving {} scanned items failed: {err:#}", items.len());
+                                if !save_failure_reported {
+                                    save_failure_reported = true;
+                                    let _ = event_tx.send(EngineEvent::Error(format!(
+                                        "Could not save scanned items: {err:#}"
+                                    )));
+                                }
+                            }
                         }
                     }
                     progress @ EngineEvent::ScanProgress { .. } => {
@@ -954,10 +1048,13 @@ impl LuminaEngine {
         if let Ok((total_items, all_scanned_paths)) = scan_res {
             if !cancel_flag.load(Ordering::Relaxed) {
                 // Reconcile deleted files on disk: remove catalog entries that no longer exist
-                if let Ok(removed_ids) = self.catalog.remove_items_not_in(&all_scanned_paths) {
-                    for id in removed_ids {
-                        let _ = self.event_tx.send(EngineEvent::ItemRemoved(id));
+                match self.catalog.remove_items_not_in(&all_scanned_paths) {
+                    Ok(removed_ids) => {
+                        for id in removed_ids {
+                            let _ = self.event_tx.send(EngineEvent::ItemRemoved(id));
+                        }
                     }
+                    Err(e) => log::warn!("removing deleted files from the catalog failed: {e:#}"),
                 }
                 // Videos catalogued before the scanner read their size are
                 // unchanged on disk, so the incremental scan skips them.
@@ -966,7 +1063,9 @@ impl LuminaEngine {
                 }
             }
             // Automatically recompute timeline buckets upon scan completion
-            let _ = self.catalog.compute_timeline_buckets();
+            if let Err(e) = self.catalog.compute_timeline_buckets() {
+                log::warn!("timeline bucket refresh failed: {e:#}");
+            }
             let _ = self
                 .event_tx
                 .send(EngineEvent::ScanComplete { total_items });

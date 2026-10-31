@@ -204,6 +204,7 @@ impl LuminaApp {
                 let had_multi_selection = !self.selected_indices.is_empty();
                 let selected_item_id = self.selected_item.as_ref().map(|item| item.id);
                 let mut removed_textures = Vec::new();
+                let mut error = None;
 
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
@@ -278,9 +279,13 @@ impl LuminaApp {
                             }
                             cx.notify();
                         }
+                        EngineEvent::Error(message) => error = Some(message),
                     }
                 }
 
+                if let Some(message) = error {
+                    self.set_error(message, cx);
+                }
                 for image in removed_textures {
                     self.retire_image(image);
                 }
@@ -449,6 +454,9 @@ impl LuminaApp {
     }
 
     pub fn dismiss_error(&mut self, cx: &mut Context<Self>) {
+        if let Some(state) = &self.grid_state {
+            state.engine.rearm_read_errors();
+        }
         self.error_message = None;
         self.error_retry = None;
         cx.notify();
@@ -626,7 +634,7 @@ impl LuminaApp {
                     );
                 }
             }
-            Err(err) => self.set_error(format!("Export failed: {err}"), cx),
+            Err(err) => self.set_error(format!("Export failed: {err:#}"), cx),
         }
     }
 
@@ -676,7 +684,7 @@ impl LuminaApp {
                     );
                 }
             }
-            Err(err) => self.set_error(format!("XMP import failed: {err}"), cx),
+            Err(err) => self.set_error(format!("XMP import failed: {err:#}"), cx),
         }
     }
 

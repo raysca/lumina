@@ -224,7 +224,7 @@ impl LuminaApp {
                         .map(|_| ()),
                 };
                 if let Err(err) = result {
-                    self.set_error(format!("Could not delete: {err}"), cx);
+                    self.set_error(format!("Could not delete: {err:#}"), cx);
                     self.refresh_album_counts();
                     return;
                 }

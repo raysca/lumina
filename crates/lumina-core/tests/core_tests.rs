@@ -2630,3 +2630,139 @@ fn video_size_backfill_sets_only_the_size_of_sizeless_videos() {
         0
     );
 }
+
+/// A one-photo library, scanned, with its catalog path for breaking it.
+fn scanned_library(
+    prefix: &str,
+) -> (
+    PathBuf,
+    PathBuf,
+    std::sync::Arc<LuminaEngine>,
+    crossbeam_channel::Receiver<EngineEvent>,
+) {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_{prefix}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let media_dir = tmp_dir.join("library");
+    std::fs::create_dir_all(&media_dir).unwrap();
+    std::fs::write(media_dir.join("one.jpg"), b"test-jpeg-content").unwrap();
+    let db_path = tmp_dir.join("catalog.db");
+    let (engine, rx) =
+        LuminaEngine::open_with_paths(media_dir, db_path.clone(), Some(tmp_dir.join("cache")))
+            .unwrap();
+    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
+        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
+    assert!(scanned, "the initial scan must finish");
+    (tmp_dir, db_path, engine, rx)
+}
+
+/// A second connection to break the catalog; waits out a watcher write.
+fn raw_catalog(db_path: &std::path::Path) -> rusqlite::Connection {
+    let conn = rusqlite::Connection::open(db_path).unwrap();
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    conn
+}
+
+fn error_events(rx: &crossbeam_channel::Receiver<EngineEvent>) -> Vec<String> {
+    rx.try_iter()
+        .filter_map(|event| match event {
+            EngineEvent::Error(message) => Some(message),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_broken_catalog_raises_one_error_instead_of_a_silent_empty_library() {
+    let (tmp_dir, db_path, engine, rx) = scanned_library("broken_read");
+    assert_eq!(engine.total_count(), 1);
+    error_events(&rx);
+
+    raw_catalog(&db_path)
+        .execute_batch("ALTER TABLE media_items RENAME TO media_items_gone;")
+        .unwrap();
+    assert!(engine.get_item_slice(0..10).is_empty());
+    assert_eq!(engine.total_count(), 0);
+
+    let errors = error_events(&rx);
+    assert_eq!(
+        errors.len(),
+        1,
+        "a failed read must raise exactly one banner, not one per query: {errors:?}"
+    );
+    assert!(
+        errors[0].starts_with("Could not read the catalog:"),
+        "{errors:?}"
+    );
+
+    engine.rearm_read_errors();
+    engine.total_count();
+    assert_eq!(
+        error_events(&rx).len(),
+        1,
+        "after the banner is dismissed, a later failure must raise it again"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn sidecars_are_not_rewritten_when_captions_cannot_be_read() {
+    let (tmp_dir, db_path, engine, _rx) = scanned_library("broken_sidecar");
+    let item = engine.get_item_slice(0..1).remove(0);
+    engine.catalog().set_rating(item.id, 3).unwrap();
+    engine.catalog().set_caption(item.id, "keep me").unwrap();
+    assert_eq!(engine.write_metadata_sidecars(&[item.id]).unwrap(), 1);
+
+    raw_catalog(&db_path)
+        .execute_batch("DROP TABLE media_captions;")
+        .unwrap();
+    assert!(
+        engine.write_metadata_sidecars(&[item.id]).is_err(),
+        "an unreadable caption table must fail the write, not write no caption"
+    );
+    assert!(engine
+        .export_items(&[item.id], &tmp_dir.join("exported"))
+        .is_err());
+    let kept = read_sidecar(&item.path).unwrap().unwrap();
+    assert_eq!(
+        kept.caption.as_deref(),
+        Some("keep me"),
+        "the existing sidecar keeps its caption"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn a_rescan_stops_when_the_catalog_file_list_cannot_be_read() {
+    let (tmp_dir, db_path, engine, rx) = scanned_library("broken_scan");
+    error_events(&rx);
+    raw_catalog(&db_path)
+        .execute_batch("ALTER TABLE media_items RENAME TO media_items_gone;")
+        .unwrap();
+
+    engine.rescan();
+    let mut errors = Vec::new();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        match event {
+            EngineEvent::Error(message) => errors.push(message),
+            EngineEvent::ScanComplete { .. } => break,
+            _ => {}
+        }
+    }
+    assert!(
+        errors.iter().any(|m| m.starts_with("Library scan failed:")),
+        "an unknown catalog must stop the scan, not re-insert every file: {errors:?}"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
