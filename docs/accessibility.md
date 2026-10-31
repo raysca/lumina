@@ -6,8 +6,9 @@ Lumina is designed to be usable without a mouse:
 
 - **Command palette** (`⌘K`) searches and runs every major command: open
   library, rescan, preferences, layouts, sorting, export, XMP import, sidebar
-  and inspector toggles, grid zoom and more. Type to filter, `↑`/`↓` to move,
-  `↵` to run, `Esc` to close.
+  and inspector toggles, grid zoom and more. Its GO TO group reaches every
+  sidebar destination (views, years, tags, smart albums). Type to filter (each
+  word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
 - **Shortcut sheet** (`⌘/`) lists navigation, editing, viewer and video keys.
 - **Native menu bar** exposes File, View and Help commands; macOS treats these
   as accessible menu items for VoiceOver.

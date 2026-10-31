@@ -3,6 +3,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
+use crate::app::command_palette::PaletteRow;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -11,8 +12,27 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
     if !app.command_palette_open {
         return Empty.into_any_element();
     }
-    let commands = app.filtered_commands();
-    let selected = app.command_selected.min(commands.len().saturating_sub(1));
+    let rows = app.palette_rows();
+    let selected = app.command_selected.min(rows.len().saturating_sub(1));
+    let result_count = rows.len();
+    // Each group opens with its heading (the scroll math in
+    // move_command_selection counts these).
+    let mut list: Vec<AnyElement> = Vec::new();
+    let mut group = None;
+    for (index, row) in rows.into_iter().enumerate() {
+        let go_to = row.is_go_to();
+        if group != Some(go_to) {
+            group = Some(go_to);
+            list.push(
+                theme::section_label(if go_to { "GO TO" } else { "COMMANDS" })
+                    .px(px(12.0))
+                    .pt(px(6.0))
+                    .pb(px(4.0))
+                    .into_any_element(),
+            );
+        }
+        list.push(render_row(index, index == selected, row, cx));
+    }
     let query = app.command_query.clone();
 
     div()
@@ -73,7 +93,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                     theme::text()
                                 })
                                 .child(if query.is_empty() {
-                                    "Type a command…|".to_string()
+                                    "Type a command, album, tag or year…|".to_string()
                                 } else {
                                     format!("{}|", query)
                                 }),
@@ -91,85 +111,109 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .p(px(6.0))
                         .flex()
                         .flex_col()
-                        .child(
-                            theme::section_label("COMMANDS")
-                                .px(px(12.0))
-                                .pt(px(6.0))
-                                .pb(px(4.0)),
-                        )
-                        .children(commands.is_empty().then(|| {
+                        .children(list.is_empty().then(|| {
                             div()
                                 .px_3()
                                 .py_4()
                                 .text_xs()
                                 .text_color(theme::text_subtle())
-                                .child("No matching commands")
+                                .child("No matches")
                         }))
-                        .children(commands.iter().enumerate().map(|(index, command)| {
-                            let is_selected = index == selected;
-                            let id = command.id;
-                            let debug_key = command.key;
-                            div()
-                                .id(("command-row", index as u64))
-                                .debug_selector(move || format!("command-item-{debug_key}"))
-                                .h(px(34.0))
-                                .px(px(12.0))
-                                .rounded(px(6.0))
-                                .cursor_pointer()
-                                .flex()
-                                .flex_row()
-                                .justify_between()
-                                .items_center()
-                                .gap_3()
-                                .map(|row| {
-                                    // The active row is the ↵ target, so it
-                                    // gets the full accent fill.
-                                    if is_selected {
-                                        row.bg(theme::accent())
-                                    } else {
-                                        row.hover(|s| s.bg(theme::bg_control_hover()))
-                                    }
-                                })
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if is_selected {
-                                            theme::accent_fg()
-                                        } else {
-                                            theme::text()
-                                        })
-                                        .child(command.title()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_family(theme::FONT_MONO)
-                                        .text_color(if is_selected {
-                                            theme::accent_fg()
-                                        } else {
-                                            theme::text_subtle()
-                                        })
-                                        .child(command.shortcut),
-                                )
-                                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                    this.execute_command(id, cx);
-                                }))
-                        })),
+                        .children(list),
                 )
                 .child(
                     div()
+                        .id("command-footer")
+                        .debug_selector(|| "command-footer".to_string())
                         .h(px(32.0))
                         .flex_shrink_0()
                         .px(px(18.0))
                         .flex()
+                        .flex_row()
                         .items_center()
+                        .gap_2()
                         .border_t_1()
                         .border_color(theme::border_subtle())
                         .bg(theme::bg_pane())
                         .text_xs()
                         .text_color(theme::text_subtle())
-                        .child("↑ ↓ navigate · ↵ run · Esc close"),
+                        .child(theme::kbd("↑"))
+                        .child(theme::kbd("↓"))
+                        .child("move")
+                        .child(theme::kbd("↵").ml_2())
+                        .child("run")
+                        .child(div().flex_1())
+                        .child(
+                            div()
+                                .id("command-result-count")
+                                .debug_selector(|| "command-result-count".to_string())
+                                .child(if result_count == 1 {
+                                    "1 result".to_string()
+                                } else {
+                                    format!("{result_count} results")
+                                }),
+                        ),
                 ),
         )
+        .into_any_element()
+}
+
+/// 34px row: 16px icon, title, shortcut; the active row is the ↵ target.
+fn render_row(
+    index: usize,
+    is_selected: bool,
+    row: PaletteRow,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
+    let fg = if is_selected {
+        theme::accent_fg()
+    } else {
+        theme::text()
+    };
+    let selector = row.selector;
+    let target = row.target;
+    div()
+        .id(("command-row", index as u64))
+        .debug_selector(move || selector.clone())
+        .h(px(34.0))
+        .flex_shrink_0()
+        .px(px(12.0))
+        .rounded(px(6.0))
+        .cursor_pointer()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .map(|r| {
+            if is_selected {
+                r.bg(theme::accent())
+            } else {
+                r.hover(|s| s.bg(theme::bg_control_hover()))
+            }
+        })
+        .child(render_icon(
+            row.icon,
+            px(16.0),
+            if is_selected {
+                theme::accent_fg()
+            } else {
+                theme::text_muted()
+            },
+        ))
+        .child(div().flex_1().text_sm().text_color(fg).child(row.title))
+        .child(
+            div()
+                .text_xs()
+                .font_family(theme::FONT_MONO)
+                .text_color(if is_selected {
+                    theme::accent_fg()
+                } else {
+                    theme::text_subtle()
+                })
+                .child(row.shortcut),
+        )
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            this.run_palette_target(target.clone(), cx);
+        }))
         .into_any_element()
 }

@@ -3,9 +3,14 @@
 use gpui::*;
 use lumina_core::{SortDirection, SortField};
 
+use crate::icons::Icon;
 use crate::views::inspector::InspectorTab;
+use crate::views::sidebar::AlbumSelection;
 
 use crate::app::LuminaApp;
+
+/// Commands shown at once; typing reaches the rest.
+pub const MAX_COMMANDS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandId {
@@ -54,6 +59,67 @@ impl Command {
     pub fn title(&self) -> String {
         crate::i18n::t(self.key)
     }
+
+    pub fn icon(&self) -> Icon {
+        use CommandId::*;
+        match self.id {
+            OpenLibrary => Icon::Folder,
+            Rescan => Icon::RotateCw,
+            Preferences | SortDate | SortName | SortSize | SortRating | SortAsc | SortDesc => {
+                Icon::Sliders
+            }
+            About | ToggleInspector => Icon::Info,
+            Shortcuts => Icon::Zap,
+            ToggleSidebar => Icon::PanelLeft,
+            ExportSelection => Icon::ExternalLink,
+            ImportXmp => Icon::ArrowDownToLine,
+            ToggleFit => Icon::Maximize,
+            ZoomInGrid => Icon::Plus,
+            ZoomOutGrid => Icon::Minus,
+            Filter(_) => Icon::Search,
+            Rate(0) => Icon::Star,
+            Rate(_) => Icon::StarFilled,
+            ToggleFavorite => Icon::Heart,
+            TogglePip => Icon::Pip,
+            PipPlayPause => Icon::Play,
+            NewSmartAlbum => Icon::Sparkles,
+            EditSmartAlbum | AdjustDate | EditLocation => Icon::Pencil,
+            RemoveLocation => Icon::X,
+            OpenTagManager => Icon::Tag,
+        }
+    }
+}
+
+/// What a palette row does when run.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PaletteTarget {
+    Command(CommandId),
+    Go(AlbumSelection),
+    Year(i32),
+}
+
+/// One rendered palette row: a command, or a GO TO destination.
+#[derive(Debug, Clone)]
+pub struct PaletteRow {
+    pub target: PaletteTarget,
+    pub title: String,
+    pub shortcut: &'static str,
+    pub icon: Icon,
+    /// Stable `debug_selector`.
+    pub selector: String,
+}
+
+impl PaletteRow {
+    pub fn is_go_to(&self) -> bool {
+        !matches!(self.target, PaletteTarget::Command(_))
+    }
+}
+
+/// Every typed word must appear in the title or keywords ("name sort" finds
+/// Sort by Name).
+fn matches(words: &[String], title: &str, keywords: &str) -> bool {
+    let haystack = format!("{} {keywords}", title.to_lowercase());
+    words.iter().all(|word| haystack.contains(word.as_str()))
 }
 
 pub fn commands() -> &'static [Command] {
@@ -304,38 +370,142 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn filtered_commands(&self) -> Vec<&'static Command> {
-        let query = self.command_query.trim().to_lowercase();
-        commands()
+    /// COMMANDS (at most eight) then GO TO, filtered by the query.
+    pub fn palette_rows(&self) -> Vec<PaletteRow> {
+        let words: Vec<String> = self
+            .command_query
+            .to_lowercase()
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
+        let mut rows: Vec<PaletteRow> = commands()
             .iter()
-            .filter(|command| {
-                query.is_empty()
-                    || command.title().to_lowercase().contains(&query)
-                    || command.keywords.contains(&query)
+            .filter(|c| matches(&words, &c.title(), c.keywords))
+            .take(MAX_COMMANDS)
+            .map(|c| PaletteRow {
+                target: PaletteTarget::Command(c.id),
+                title: c.title(),
+                shortcut: c.shortcut,
+                icon: c.icon(),
+                selector: format!("command-item-{}", c.key),
             })
-            .collect()
+            .collect();
+
+        let go = |selection: AlbumSelection, title: String, icon: Icon, slug: String| PaletteRow {
+            target: PaletteTarget::Go(selection),
+            title,
+            shortcut: "",
+            icon,
+            selector: format!("palette-go-{slug}"),
+        };
+        let mut go_to = vec![
+            go(
+                AlbumSelection::AllLibrary,
+                "All Photos".into(),
+                Icon::Image,
+                "all".into(),
+            ),
+            go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Favorites),
+                "Favorites".into(),
+                Icon::Heart,
+                "favorites".into(),
+            ),
+            go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Videos),
+                "Videos".into(),
+                Icon::Film,
+                "videos".into(),
+            ),
+            go(
+                AlbumSelection::Trash,
+                "Recently Deleted".into(),
+                Icon::Trash,
+                "trash".into(),
+            ),
+            go(
+                AlbumSelection::Untagged,
+                "Untagged".into(),
+                Icon::Tag,
+                "untagged".into(),
+            ),
+        ];
+        go_to.extend(
+            self.timeline_year_buckets
+                .iter()
+                .map(|(year, _)| PaletteRow {
+                    target: PaletteTarget::Year(*year),
+                    title: year.to_string(),
+                    shortcut: "",
+                    icon: Icon::Image,
+                    selector: format!("palette-go-year-{year}"),
+                }),
+        );
+        go_to.extend(self.library_tag_counts.iter().map(|(tag, _)| {
+            go(
+                AlbumSelection::Tag(tag.clone()),
+                format!("#{tag}"),
+                Icon::Tag,
+                format!("tag-{tag}"),
+            )
+        }));
+        go_to.extend(self.user_smart_albums.iter().map(|album| {
+            go(
+                AlbumSelection::User(album.id),
+                album.title.clone(),
+                Icon::Sparkles,
+                format!("album-{}", album.id),
+            )
+        }));
+        rows.extend(
+            go_to
+                .into_iter()
+                .filter(|row| matches(&words, &row.title, "go to album")),
+        );
+        rows
     }
 
+    /// Arrow keys clamp at the ends rather than wrapping.
     pub fn move_command_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let count = self.filtered_commands().len();
-        if count == 0 {
+        let rows = self.palette_rows();
+        if rows.is_empty() {
             return;
         }
-        let current = self.command_selected.min(count - 1) as isize;
-        let next = (current + delta).rem_euclid(count as isize) as usize;
+        let current = self.command_selected.min(rows.len() - 1) as isize;
+        let next = (current + delta).clamp(0, rows.len() as isize - 1) as usize;
         self.command_selected = next;
-        // Child 0 of the list is the COMMANDS heading.
-        self.command_scroll.scroll_to_item(next + 1);
+        // Group headings are list children too: one before the first row,
+        // one more before GO TO when commands precede it.
+        let headings = 1 + usize::from(rows[next].is_go_to() && !rows[0].is_go_to());
+        self.command_scroll.scroll_to_item(next + headings);
         cx.notify();
     }
 
     pub fn execute_selected_command(&mut self, cx: &mut Context<Self>) {
-        let commands = self.filtered_commands();
-        if let Some(command) = commands
-            .get(self.command_selected.min(commands.len().saturating_sub(1)))
-            .copied()
-        {
-            self.execute_command(command.id, cx);
+        let rows = self.palette_rows();
+        if let Some(row) = rows.get(self.command_selected.min(rows.len().saturating_sub(1))) {
+            self.run_palette_target(row.target.clone(), cx);
+        }
+    }
+
+    pub fn run_palette_target(&mut self, target: PaletteTarget, cx: &mut Context<Self>) {
+        match target {
+            PaletteTarget::Command(id) => self.execute_command(id, cx),
+            PaletteTarget::Go(selection) => {
+                self.close_command_palette(cx);
+                self.select_album(selection, cx);
+            }
+            PaletteTarget::Year(year) => {
+                self.close_command_palette(cx);
+                // One history entry: Back returns to where the jump started.
+                let departing = self.navigation_snapshot();
+                self.selection = AlbumSelection::AllLibrary;
+                self.active_year = Some(year);
+                self.search_query.clear();
+                self.search_focused = false;
+                self.clear_selection(cx);
+                self.record_navigation_change(departing);
+            }
         }
     }
 

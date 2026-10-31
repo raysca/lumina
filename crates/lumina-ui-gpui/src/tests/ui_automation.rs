@@ -1110,9 +1110,9 @@ fn ui_automation_command_palette() {
     view.update(vcx, |app, _| {
         assert_eq!(app.command_query, "pref");
         let titles: Vec<String> = app
-            .filtered_commands()
+            .palette_rows()
             .into_iter()
-            .map(|command| command.title())
+            .map(|row| row.title)
             .collect();
         assert_eq!(titles.first().map(String::as_str), Some("Preferences…"));
     });

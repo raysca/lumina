@@ -192,3 +192,119 @@ fn empty_library_while_scanning_says_so_without_rescan() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn palette_matches_each_word_caps_commands_and_clamps() {
+    use crate::app::command_palette::MAX_COMMANDS;
+    let (dir, engine) = seed_library("palette_v3_words", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k");
+
+    view.update(vcx, |app, _| {
+        let rows = app.palette_rows();
+        let commands = rows.iter().filter(|r| !r.is_go_to()).count();
+        assert_eq!(commands, MAX_COMMANDS, "commands are capped at eight");
+        assert!(
+            rows.iter().any(|r| r.is_go_to()),
+            "GO TO follows the commands"
+        );
+    });
+    for selector in ["palette-go-all", "command-footer", "command-result-count"] {
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector} renders");
+    }
+
+    // ↑ at the top and ↓ past the end clamp instead of wrapping.
+    keystrokes(vcx, "up");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.command_selected, 0, "↑ clamps at the top")
+    });
+    let last = view.update(vcx, |app, _| app.palette_rows().len() - 1);
+    for _ in 0..last + 3 {
+        keystrokes(vcx, "down");
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.command_selected, last, "↓ clamps at the end")
+    });
+
+    // "name sort" matches word by word, in any order.
+    keystrokes(vcx, "escape secondary-k n a m e space s o r t");
+    view.update(vcx, |app, _| {
+        let titles: Vec<String> = app.palette_rows().into_iter().map(|r| r.title).collect();
+        assert_eq!(
+            titles,
+            vec!["Sort by Name".to_string()],
+            "each word must match"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn palette_go_to_opens_views_tags_and_years() {
+    use crate::views::sidebar::AlbumSelection;
+    let (dir, engine) = seed_library("palette_v3_goto", 2);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine
+        .catalog()
+        .add_tags_batch(&[item.id], &["trip".to_string()])
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "secondary-k t r i p enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open);
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Tag("trip".into()),
+            "#tag opens the tag"
+        );
+    });
+
+    keystrokes(vcx, "secondary-k d e l e t e d");
+    render_ui(vcx);
+    click(vcx, "palette-go-trash");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Trash,
+            "Recently Deleted opens Trash"
+        )
+    });
+
+    let year = view.update(vcx, |app, _| {
+        app.timeline_year_buckets.first().map(|(y, _)| *y)
+    });
+    let year = year.expect("the seeded library has a year");
+    keystrokes(vcx, "secondary-k");
+    keystrokes(
+        vcx,
+        &year
+            .to_string()
+            .chars()
+            .map(String::from)
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+        assert_eq!(app.active_year, Some(year), "a year row jumps to that year");
+    });
+    view.update(vcx, |app, cx| app.navigate_back(cx));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Trash,
+            "one Back undoes the whole year jump"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -274,18 +274,16 @@ fn palette_keyboard_selection_stays_in_view() {
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "secondary-k");
-    let count = view.update(vcx, |app, _| app.filtered_commands().len());
-    assert!(count > 16, "the test needs a list longer than the viewport");
+    let count = view.update(vcx, |app, _| app.palette_rows().len());
+    assert!(count > 12, "the test needs a list longer than the viewport");
     for _ in 0..count - 1 {
         keystrokes(vcx, "down");
     }
     let key = view.update(vcx, |app, _| {
-        app.filtered_commands()[app.command_selected].key
+        app.palette_rows()[app.command_selected].selector.clone()
     });
     let list = vcx.debug_bounds("command-list").expect("palette list");
-    let row = vcx
-        .debug_bounds(leak(format!("command-item-{key}")))
-        .expect("selected row");
+    let row = vcx.debug_bounds(leak(key)).expect("selected row");
     assert!(
         row.top() >= list.top() && row.bottom() <= list.bottom(),
         "the last row ({row:?}) must be scrolled into the list ({list:?})"
@@ -293,11 +291,9 @@ fn palette_keyboard_selection_stays_in_view() {
 
     // Reopening resets the selection to the first row; it must be visible too.
     keystrokes(vcx, "escape secondary-k");
-    let first = view.update(vcx, |app, _| app.filtered_commands()[0].key);
+    let first = view.update(vcx, |app, _| app.palette_rows()[0].selector.clone());
     let list = vcx.debug_bounds("command-list").expect("palette list");
-    let row = vcx
-        .debug_bounds(leak(format!("command-item-{first}")))
-        .expect("first row");
+    let row = vcx.debug_bounds(leak(first)).expect("first row");
     assert!(
         row.top() >= list.top(),
         "after reopening, the selected first row ({row:?}) must be in view ({list:?})"
