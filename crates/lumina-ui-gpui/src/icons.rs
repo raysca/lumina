@@ -98,16 +98,16 @@ impl Icon {
             Self::HeartFilled => "icons/heart-filled.svg",
             Self::Star => "icons/star.svg",
             Self::StarFilled => "icons/star-filled.svg",
-            Self::Trash => "icons/trash.svg",
+            Self::Trash => "icons/trash-2.svg",
             Self::X => "icons/x.svg",
             Self::Play => "icons/play.svg",
             Self::Pause => "icons/pause.svg",
-            Self::StepForward => "icons/step-forward.svg",
-            Self::StepBack => "icons/step-back.svg",
-            Self::Pip => "icons/pip.svg",
-            Self::Maximize => "icons/maximize.svg",
-            Self::Minimize => "icons/minimize.svg",
-            Self::Volume => "icons/volume.svg",
+            Self::StepForward => "icons/skip-forward.svg",
+            Self::StepBack => "icons/skip-back.svg",
+            Self::Pip => "icons/picture-in-picture-2.svg",
+            Self::Maximize => "icons/maximize-2.svg",
+            Self::Minimize => "icons/minimize-2.svg",
+            Self::Volume => "icons/volume-2.svg",
             Self::VolumeX => "icons/volume-x.svg",
             Self::Image => "icons/image.svg",
             Self::ExternalLink => "icons/external-link.svg",
@@ -128,7 +128,7 @@ impl Icon {
             Self::Zap => "icons/zap.svg",
             Self::Folder => "icons/folder.svg",
             Self::Film => "icons/film.svg",
-            Self::Sliders => "icons/sliders.svg",
+            Self::Sliders => "icons/sliders-vertical.svg",
             Self::Plus => "icons/plus.svg",
             Self::Minus => "icons/minus.svg",
             Self::Pencil => "icons/pencil.svg",
@@ -158,11 +158,21 @@ mod tests {
             let Some(bytes) = loaded else {
                 panic!("no asset registered for {:?} at {}", icon, icon.path());
             };
+            let svg = std::str::from_utf8(&bytes).expect("icons are UTF-8 SVG");
             assert!(
-                !bytes.is_empty(),
-                "empty asset for {:?} at {}",
-                icon,
-                icon.path()
+                svg.contains("<svg") && !svg.contains("currentColor"),
+                "{:?} must be an SVG with black paint for GPUI alpha masking",
+                icon
+            );
+        }
+        use Icon::*;
+        for icon in [HeartFilled, StarFilled, Play, Pause, StepBack, StepForward] {
+            let bytes = assets.load(icon.path()).unwrap().unwrap();
+            let svg = std::str::from_utf8(&bytes).unwrap();
+            let root = &svg[svg.find("<svg").unwrap()..];
+            assert!(
+                root[..root.find('>').unwrap()].contains("fill=\"black\""),
+                "{icon:?} must render solid"
             );
         }
     }
