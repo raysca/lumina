@@ -296,11 +296,33 @@ impl Catalog {
     }
 
     pub fn set_rating(&self, id: MediaId, rating: u8) -> Result<()> {
-        let conn = self.conn.lock();
-        conn.execute(
+        self.set_ratings(&[(id, rating)])
+    }
+
+    /// Sets each item's rating (clamped to 0..=5) in one transaction.
+    pub fn set_ratings(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.update_each(
             "UPDATE media_items SET rating = ?1 WHERE id = ?2;",
-            params![rating.min(5) as i32, id.0 as i64],
-        )?;
+            changes.iter().map(|&(id, rating)| (id, rating.min(5))),
+        )
+    }
+
+    /// Runs `sql` (value ?1, id ?2) for every row in one transaction, so a
+    /// batch edit is all-or-nothing and commits once.
+    fn update_each<T: rusqlite::ToSql>(
+        &self,
+        sql: &str,
+        rows: impl IntoIterator<Item = (MediaId, T)>,
+    ) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(sql)?;
+            for (id, value) in rows {
+                stmt.execute(params![value, id.0 as i64])?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -348,12 +370,15 @@ impl Catalog {
     }
 
     pub fn set_color_label(&self, id: MediaId, label: u8) -> Result<()> {
-        let conn = self.conn.lock();
-        conn.execute(
+        self.set_color_labels(&[(id, label)])
+    }
+
+    /// Sets each item's color label (clamped to 0..=6) in one transaction.
+    pub fn set_color_labels(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.update_each(
             "UPDATE media_items SET color_label = ?1 WHERE id = ?2;",
-            params![label.min(6) as i32, id.0 as i64],
-        )?;
-        Ok(())
+            changes.iter().map(|&(id, label)| (id, label.min(6))),
+        )
     }
 
     pub fn get_color_labels_map(&self) -> Result<HashMap<MediaId, u8>> {
@@ -411,48 +436,54 @@ impl Catalog {
     }
 
     pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
-        let conn = self.conn.lock();
-        let trimmed = title.map(str::trim).filter(|value| !value.is_empty());
-        match trimmed {
-            Some(value) => {
-                conn.execute(
-                    "UPDATE media_items SET title = ?1 WHERE id = ?2;",
-                    params![value, id.0 as i64],
-                )?;
-            }
-            None => {
-                conn.execute(
-                    "UPDATE media_items SET title = NULL WHERE id = ?1;",
-                    params![id.0 as i64],
-                )?;
-            }
-        }
-        Ok(())
+        self.set_titles(&[(id, title)])
+    }
+
+    /// Sets each item's title in one transaction; blank clears it.
+    pub fn set_titles(&self, changes: &[(MediaId, Option<&str>)]) -> Result<()> {
+        self.update_each(
+            "UPDATE media_items SET title = ?1 WHERE id = ?2;",
+            changes
+                .iter()
+                .map(|&(id, title)| (id, title.map(str::trim).filter(|value| !value.is_empty()))),
+        )
     }
 
     /// Updates the capture timestamp and derived year/month/day, then rebuilds
     /// timeline buckets so year/month scrubbing reflects the edit immediately.
     pub fn set_timestamp(&self, id: MediaId, epoch_ms: i64) -> Result<()> {
-        let Some(datetime) = chrono::DateTime::from_timestamp_millis(epoch_ms) else {
-            anyhow::bail!("invalid timestamp: {epoch_ms}");
-        };
+        self.set_timestamps(&[(id, epoch_ms)])
+    }
+
+    /// [`Self::set_timestamp`] for many items: the dates and one bucket
+    /// rebuild commit together (a rebuild per item made large batches take
+    /// minutes, and a failed rebuild must not leave the dates half-applied).
+    pub fn set_timestamps(&self, changes: &[(MediaId, i64)]) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
         {
-            let conn = self.conn.lock();
-            conn.execute(
+            let mut stmt = tx.prepare_cached(
                 "UPDATE media_items
                  SET timestamp_epoch_ms = ?1, year = ?2, month = ?3, day = ?4,
                      date_edited = 1
                  WHERE id = ?5;",
-                params![
+            )?;
+            for &(id, epoch_ms) in changes {
+                let Some(datetime) = chrono::DateTime::from_timestamp_millis(epoch_ms) else {
+                    anyhow::bail!("invalid timestamp: {epoch_ms}");
+                };
+                stmt.execute(params![
                     epoch_ms,
                     datetime.year(),
                     datetime.month(),
                     datetime.day(),
                     id.0 as i64
-                ],
-            )?;
+                ])?;
+            }
         }
-        self.compute_timeline_buckets()
+        Self::rebuild_timeline_buckets(&tx)?;
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn set_location(
@@ -461,32 +492,63 @@ impl Catalog {
         latitude: Option<f64>,
         longitude: Option<f64>,
     ) -> Result<()> {
+        self.set_locations(&[(id, (latitude, longitude))])
+    }
+
+    /// Sets each item's (latitude, longitude) in one transaction.
+    pub fn set_locations(&self, changes: &[(MediaId, crate::Coordinates)]) -> Result<()> {
         // The place columns are derived from the coordinates (as at scan
         // time), so they move with them: re-geocoded on edit, cleared on
-        // removal. The FTS update trigger reindexes them.
+        // removal. The FTS update trigger reindexes them. Geocoding runs
+        // before the catalog lock is taken.
         static GEOCODER: std::sync::OnceLock<crate::OfflineGeocoder> = std::sync::OnceLock::new();
-        let place = latitude.zip(longitude).and_then(|(lat, lon)| {
-            GEOCODER
-                .get_or_init(crate::OfflineGeocoder::new)
-                .reverse_geocode(lat, lon)
-        });
-        let conn = self.conn.lock();
-        conn.execute(
-            "UPDATE media_items SET latitude = ?1, longitude = ?2, city = ?3, admin1_region = ?4, country_code = ?5, place_edited = 1 WHERE id = ?6;",
-            params![
-                latitude,
-                longitude,
-                place.as_ref().map(|p| &p.city),
-                place.as_ref().map(|p| &p.admin1_region),
-                place.as_ref().map(|p| &p.country_code),
-                id.0 as i64
-            ],
-        )?;
+        let places: Vec<_> = changes
+            .iter()
+            .map(|(_, (lat, lon))| {
+                lat.zip(*lon).and_then(|(lat, lon)| {
+                    GEOCODER
+                        .get_or_init(crate::OfflineGeocoder::new)
+                        .reverse_geocode(lat, lon)
+                })
+            })
+            .collect();
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "UPDATE media_items SET latitude = ?1, longitude = ?2, city = ?3, admin1_region = ?4, country_code = ?5, place_edited = 1 WHERE id = ?6;",
+            )?;
+            for ((id, (latitude, longitude)), place) in changes.iter().zip(&places) {
+                stmt.execute(params![
+                    latitude,
+                    longitude,
+                    place.as_ref().map(|p| &p.city),
+                    place.as_ref().map(|p| &p.admin1_region),
+                    place.as_ref().map(|p| &p.country_code),
+                    id.0 as i64
+                ])?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {
-        let conn = self.conn.lock();
+        self.set_captions(&[(id, caption)])
+    }
+
+    /// Sets each item's caption in one transaction; blank removes it.
+    pub fn set_captions(&self, changes: &[(MediaId, &str)]) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        for &(id, caption) in changes {
+            Self::write_caption(&tx, id, caption)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn write_caption(conn: &rusqlite::Connection, id: MediaId, caption: &str) -> Result<()> {
         let media_id = id.0 as i64;
         let trimmed = caption.trim();
 
@@ -512,7 +574,7 @@ impl Catalog {
             )?;
         }
 
-        Self::refresh_fts_caption_row(&conn, media_id, previous_caption.as_deref())?;
+        Self::refresh_fts_caption_row(conn, media_id, previous_caption.as_deref())?;
         Ok(())
     }
 

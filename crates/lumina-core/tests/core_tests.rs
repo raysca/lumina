@@ -2932,3 +2932,176 @@ fn a_v9_catalog_migrates_and_protects_later_edits() {
     drop(conn);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn a_batch_edit_is_all_or_nothing() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let items = [
+        sample_media_item("/photos/a.jpg", MediaType::Image, 1_000, None, None),
+        sample_media_item("/photos/b.jpg", MediaType::Image, 1_000, None, None),
+    ];
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .unwrap()
+        .iter()
+        .map(|item| item.id)
+        .collect();
+
+    assert!(
+        catalog
+            .set_timestamps(&[(ids[0], 1_600_000_000_000), (ids[1], i64::MAX)])
+            .is_err(),
+        "an invalid date fails the batch"
+    );
+    assert_eq!(
+        catalog
+            .get_item_by_id(ids[0])
+            .unwrap()
+            .unwrap()
+            .timestamp_epoch_ms,
+        1_000,
+        "a failed batch leaves earlier items untouched"
+    );
+
+    catalog.set_ratings(&[(ids[0], 9), (ids[1], 2)]).unwrap();
+    catalog
+        .set_color_labels(&[(ids[0], 9), (ids[1], 0)])
+        .unwrap();
+    catalog
+        .set_titles(&[(ids[0], Some("  Kyoto ")), (ids[1], Some("   "))])
+        .unwrap();
+    catalog
+        .set_captions(&[(ids[0], "Golden hour"), (ids[1], "")])
+        .unwrap();
+    let ratings = catalog.get_ratings_map().unwrap();
+    assert_eq!(
+        (ratings[&ids[0]], ratings[&ids[1]]),
+        (5, 2),
+        "ratings clamp to 5"
+    );
+    assert_eq!(
+        catalog.get_color_labels_map().unwrap()[&ids[0]],
+        6,
+        "labels clamp to 6"
+    );
+    let a = catalog.get_item_by_id(ids[0]).unwrap().unwrap();
+    let b = catalog.get_item_by_id(ids[1]).unwrap().unwrap();
+    assert_eq!(
+        (a.title.as_deref(), b.title),
+        (Some("Kyoto"), None),
+        "titles trim; blank clears"
+    );
+    let captions = catalog.get_captions_map().unwrap();
+    assert_eq!(
+        captions.get(&ids[0]).map(String::as_str),
+        Some("Golden hour")
+    );
+    assert!(
+        !captions.contains_key(&ids[1]),
+        "a blank caption is removed"
+    );
+    assert_eq!(
+        catalog
+            .search_structured_count(&StructuredQuery::parse("golden"))
+            .unwrap(),
+        1,
+        "batch captions stay searchable"
+    );
+}
+
+#[test]
+fn a_batch_that_fails_partway_changes_nothing() {
+    let (tmp_dir, db_path, engine, rx) = scanned_library("batch_abort");
+    std::fs::write(
+        tmp_dir.join("library").join("two.jpg"),
+        b"test-jpeg-content",
+    )
+    .unwrap();
+    engine.rescan();
+    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
+        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
+    assert!(scanned && engine.total_count() == 2, "both photos indexed");
+    let ids: Vec<MediaId> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
+    let first = engine.get_item_by_id(ids[0]).unwrap();
+    engine.set_caption(ids[0], "old caption").unwrap();
+
+    // Any write that reaches the second item aborts its statement.
+    raw_catalog(&db_path)
+        .execute_batch(&format!(
+            "CREATE TRIGGER fail_second BEFORE UPDATE ON media_items WHEN new.id = {0}
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;
+             CREATE TRIGGER fail_second_caption BEFORE INSERT ON media_captions WHEN new.media_id = {0}
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+            ids[1].0
+        ))
+        .unwrap();
+
+    assert!(engine.set_ratings(&[(ids[0], 4), (ids[1], 4)]).is_err());
+    assert!(engine
+        .set_color_labels(&[(ids[0], 2), (ids[1], 2)])
+        .is_err());
+    assert!(engine
+        .set_titles(&[(ids[0], Some("new")), (ids[1], Some("new"))])
+        .is_err());
+    assert!(engine
+        .set_timestamps(&[(ids[0], 1_600_000_000_000), (ids[1], 1_600_000_000_000)])
+        .is_err());
+    let place = (Some(35.68), Some(139.69));
+    assert!(engine
+        .set_locations(&[(ids[0], place), (ids[1], place)])
+        .is_err());
+    assert!(engine
+        .set_captions(&[(ids[0], "new caption"), (ids[1], "new caption")])
+        .is_err());
+
+    let after = engine.get_item_by_id(ids[0]).unwrap();
+    assert_eq!(
+        engine.get_ratings_map().get(&ids[0]),
+        None,
+        "rating rolled back"
+    );
+    assert_eq!(
+        engine.get_color_labels_map().get(&ids[0]),
+        None,
+        "label rolled back"
+    );
+    assert_eq!(after.title, first.title, "title rolled back");
+    assert_eq!(
+        after.timestamp_epoch_ms, first.timestamp_epoch_ms,
+        "date rolled back"
+    );
+    assert_eq!(
+        (after.latitude, after.city),
+        (first.latitude, first.city),
+        "place rolled back"
+    );
+    assert_eq!(
+        engine.get_captions_map().get(&ids[0]).map(String::as_str),
+        Some("old caption"),
+        "caption rolled back"
+    );
+    assert_eq!(
+        engine.search_query_count("old"),
+        1,
+        "the search index still holds the old caption"
+    );
+
+    // A failed timeline rebuild rolls the dates back with it.
+    raw_catalog(&db_path)
+        .execute_batch(
+            "CREATE TRIGGER fail_buckets BEFORE INSERT ON timeline_buckets
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        )
+        .unwrap();
+    assert!(engine
+        .set_timestamps(&[(ids[0], 1_600_000_000_000)])
+        .is_err());
+    assert_eq!(
+        engine.get_item_by_id(ids[0]).unwrap().timestamp_epoch_ms,
+        first.timestamp_epoch_ms,
+        "dates and their buckets commit together"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}

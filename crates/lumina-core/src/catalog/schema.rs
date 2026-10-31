@@ -471,7 +471,14 @@ impl Catalog {
         conn: &mut rusqlite::Connection,
     ) -> Result<()> {
         let tx = conn.transaction()?;
+        Self::rebuild_timeline_buckets(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
 
+    /// Rewrites every timeline bucket on `conn`; callers own the transaction,
+    /// so an edit and its buckets can commit together.
+    pub(crate) fn rebuild_timeline_buckets(tx: &rusqlite::Connection) -> Result<()> {
         tx.execute("DELETE FROM timeline_buckets;", [])?;
 
         // Year buckets
@@ -528,7 +535,6 @@ impl Catalog {
             [],
         )?;
 
-        tx.commit()?;
         Ok(())
     }
 

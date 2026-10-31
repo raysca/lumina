@@ -874,8 +874,10 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
 
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
-        app.set_item_rating(item.id, 4, cx);
+        app.set_rating_selected(4, cx);
     });
+    // Sidecars are written on the background executor.
+    vcx.run_until_parked();
     assert!(sidecar.exists(), "rating should write an XMP sidecar");
 
     focus_app(vcx, &view);
@@ -976,6 +978,7 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
             Some("Kyoto Trip")
         );
     });
+    vcx.run_until_parked();
     let written = lumina_core::read_sidecar(&item.path).unwrap().unwrap();
     assert_eq!(written.title.as_deref(), Some("Kyoto Trip"));
 

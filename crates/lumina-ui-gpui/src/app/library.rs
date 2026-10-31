@@ -845,17 +845,24 @@ impl LuminaApp {
         self.last_action = Some(message.into());
     }
 
-    /// Keeps XMP sidecars current after metadata edits. Failures are logged but
-    /// do not roll back the SQLite write.
-    pub fn sync_metadata_sidecars(&self, ids: &[lumina_core::MediaId]) {
+    /// Keeps XMP sidecars current after metadata edits, off the UI thread:
+    /// a large batch writes thousands of files. Failures are logged but do
+    /// not roll back the SQLite write.
+    pub fn sync_metadata_sidecars(&self, ids: &[lumina_core::MediaId], cx: &mut Context<Self>) {
         if ids.is_empty() {
             return;
         }
-        if let Some(state) = self.grid_state.as_ref() {
-            if let Err(err) = state.engine.write_metadata_sidecars(ids) {
-                log::warn!("could not update XMP sidecars: {err:?}");
-            }
-        }
+        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
+            return;
+        };
+        let ids = ids.to_vec();
+        cx.background_executor()
+            .spawn(async move {
+                if let Err(err) = engine.write_metadata_sidecars(&ids) {
+                    log::warn!("could not update XMP sidecars: {err:?}");
+                }
+            })
+            .detach();
     }
 
     /// Drops keyboard focus from the toolbar search field.

@@ -37,6 +37,9 @@ pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
 
+/// (latitude, longitude) for a location edit; `None` clears it.
+pub type Coordinates = (Option<f64>, Option<f64>);
+
 /// Viewer rotation is stored as clockwise quarter turns in 0..=3.
 pub const QUARTER_TURNS: u8 = 4;
 
@@ -227,6 +230,9 @@ pub struct LuminaEngine {
     event_tx: Sender<EngineEvent>,
     active_scan_cancel: Arc<Mutex<Arc<AtomicBool>>>,
     read_error_reported: Arc<AtomicBool>,
+    /// Serializes sidecar passes. Each pass reads the catalog inside it, so
+    /// the last pass to run writes the newest values even when passes race.
+    sidecar_writes: Arc<Mutex<()>>,
     _watcher: Option<LibraryWatcher>,
 }
 
@@ -314,6 +320,7 @@ impl LuminaEngine {
             event_tx: event_tx.clone(),
             active_scan_cancel,
             read_error_reported: Arc::new(AtomicBool::new(false)),
+            sidecar_writes: Arc::new(Mutex::new(())),
             _watcher: watcher,
         });
 
@@ -561,12 +568,21 @@ impl LuminaEngine {
         self.catalog.set_rating(id, rating)
     }
 
+    /// Batch edits: each `set_*s` writes every change in one transaction.
+    pub fn set_ratings(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.catalog.set_ratings(changes)
+    }
+
     pub fn get_ratings_map(&self) -> std::collections::HashMap<MediaId, u8> {
         self.read("get ratings map", self.catalog.get_ratings_map())
     }
 
     pub fn set_color_label(&self, id: MediaId, label: u8) -> Result<()> {
         self.catalog.set_color_label(id, label)
+    }
+
+    pub fn set_color_labels(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.catalog.set_color_labels(changes)
     }
 
     /// Sets the persisted clockwise quarter-turn rotation for every id.
@@ -602,8 +618,16 @@ impl LuminaEngine {
         self.catalog.set_title(id, title)
     }
 
+    pub fn set_titles(&self, changes: &[(MediaId, Option<&str>)]) -> Result<()> {
+        self.catalog.set_titles(changes)
+    }
+
     pub fn set_timestamp(&self, id: MediaId, epoch_ms: i64) -> Result<()> {
         self.catalog.set_timestamp(id, epoch_ms)
+    }
+
+    pub fn set_timestamps(&self, changes: &[(MediaId, i64)]) -> Result<()> {
+        self.catalog.set_timestamps(changes)
     }
 
     pub fn set_location(
@@ -615,12 +639,20 @@ impl LuminaEngine {
         self.catalog.set_location(id, latitude, longitude)
     }
 
+    pub fn set_locations(&self, changes: &[(MediaId, Coordinates)]) -> Result<()> {
+        self.catalog.set_locations(changes)
+    }
+
     pub fn get_color_labels_map(&self) -> std::collections::HashMap<MediaId, u8> {
         self.read("get color labels map", self.catalog.get_color_labels_map())
     }
 
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {
         self.catalog.set_caption(id, caption)
+    }
+
+    pub fn set_captions(&self, changes: &[(MediaId, &str)]) -> Result<()> {
+        self.catalog.set_captions(changes)
     }
 
     /// Copies the given items into destination, writing an XMP sidecar for each
@@ -679,8 +711,10 @@ impl LuminaEngine {
         Ok(report)
     }
 
-    /// Writes/updates XMP sidecars next to the original files (metadata-only export).
+    /// Writes/updates XMP sidecars next to the original files (metadata-only
+    /// export). Safe to call from any thread; passes run one at a time.
     pub fn write_metadata_sidecars(&self, ids: &[MediaId]) -> Result<usize> {
+        let _pass = self.sidecar_writes.lock();
         let captions = self
             .catalog
             .get_captions_map()

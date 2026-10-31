@@ -6,11 +6,12 @@ use std::collections::{BTreeSet, VecDeque};
 use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::{BatchSelectionSummary, UiMessage};
-use crate::app::undo::{AppliedLocationChange, BatchField, BatchLocationChange, UndoAction};
+use crate::app::undo::{BatchField, BatchLocationChange, UndoAction};
 use crate::app::viewer_actions::VIEWER_IMAGE_SIZE;
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
+use lumina_core::Coordinates;
 
 /// Longest browsing trail kept for Back. Older destinations fall off
 /// the front so the stack stays bounded no matter how long a session runs.
@@ -341,6 +342,7 @@ impl LuminaApp {
         if ids.is_empty() {
             return;
         }
+        let rating = rating.min(5);
         // Re-applying a rating every item already has clears it; otherwise the
         // whole selection gets that rating (a mixed selection never toggles).
         let new_r = if ids
@@ -351,59 +353,69 @@ impl LuminaApp {
         } else {
             rating
         };
-        let mut changed = 0usize;
-        for id in &ids {
-            let current = self.item_ratings.get(id).copied().unwrap_or(0);
-            if current == new_r {
-                continue;
-            }
-            self.set_item_rating(*id, new_r, cx);
-            // A failed write reverts the optimistic map entry, so only count
-            // changes that actually stuck before confirming them.
-            if self.item_ratings.get(id).copied().unwrap_or(0) == new_r {
-                changed += 1;
-            }
-        }
-        if changed == 0 {
+        let changes: Vec<(MediaId, u8, u8)> = ids
+            .iter()
+            .map(|id| (*id, self.item_ratings.get(id).copied().unwrap_or(0), new_r))
+            .filter(|(_, before, after)| before != after)
+            .collect();
+        if changes.is_empty() {
             cx.notify();
             return;
         }
-        let cleared = ids
-            .iter()
-            .all(|id| self.item_ratings.get(id).copied().unwrap_or(0) == 0);
+        let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        if let Some(state) = self.grid_state.as_ref() {
+            if let Err(err) = state.engine.set_ratings(&writes) {
+                self.set_error(format!("Could not save rating: {err:#}"), cx);
+                return;
+            }
+        }
+        set_or_clear(&mut self.item_ratings, &writes);
+        let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
+        self.push_undo(UndoAction::Rating { changes });
+        self.sync_metadata_sidecars(&changed, cx);
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Rating);
         self.show_undo_toast(
-            if cleared {
+            if new_r == 0 {
                 "Rating cleared".to_string()
             } else {
-                format!("Rated {} item(s)", changed)
+                format!("Rated {} item(s)", changed.len())
             },
             cx,
         );
     }
 
+    /// Gives each selected item `label`, or clears it on items that already
+    /// have it: one write, one undo entry and one sidecar pass per batch.
     pub fn set_color_label_selected(&mut self, label: u8, cx: &mut Context<Self>) {
         let ids = self.get_selected_ids();
         if ids.is_empty() {
             return;
         }
-        let mut changed = Vec::new();
-        for id in &ids {
-            let current = self.item_color_labels.get(id).copied().unwrap_or(0);
-            let new_l = if current == label { 0 } else { label };
-            if current == new_l {
-                continue;
-            }
-            self.set_item_color_label(*id, new_l, cx);
-            if self.item_color_labels.get(id).copied().unwrap_or(0) == new_l {
-                changed.push(*id);
-            }
-        }
-        // One sidecar pass for the batch: each pass reads library-wide maps.
-        self.sync_metadata_sidecars(&changed);
-        if changed.is_empty() {
+        let label = label.min(6);
+        let changes: Vec<(MediaId, u8, u8)> = ids
+            .iter()
+            .map(|id| {
+                let current = self.item_color_labels.get(id).copied().unwrap_or(0);
+                (*id, current, if current == label { 0 } else { label })
+            })
+            .filter(|(_, before, after)| before != after)
+            .collect();
+        if changes.is_empty() {
             cx.notify();
             return;
         }
+        let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        if let Some(state) = self.grid_state.as_ref() {
+            if let Err(err) = state.engine.set_color_labels(&writes) {
+                self.set_error(format!("Could not save color label: {err:#}"), cx);
+                return;
+            }
+        }
+        set_or_clear(&mut self.item_color_labels, &writes);
+        let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
+        self.push_undo(UndoAction::ColorLabel { changes });
+        self.sync_metadata_sidecars(&changed, cx);
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::ColorLabel);
         let cleared = ids
             .iter()
             .all(|id| self.item_color_labels.get(id).copied().unwrap_or(0) == 0);
@@ -415,6 +427,17 @@ impl LuminaApp {
             },
             cx,
         );
+    }
+
+    /// Smart albums filtering on `field` change membership when it changes.
+    fn refresh_counts_if_rules_use(&mut self, field: lumina_core::RuleField) {
+        if self
+            .user_smart_albums
+            .iter()
+            .any(|a| a.rules.iter().any(|r| r.field == field))
+        {
+            self.refresh_album_counts();
+        }
     }
 
     pub fn toggle_favorite_selected(&mut self, cx: &mut Context<Self>) {
@@ -919,8 +942,7 @@ impl LuminaApp {
 
     /// Applies one title to every selected item as a single undo step.
     ///
-    /// All-or-nothing from the UI's point of view: when a write fails, titles
-    /// already written by this call are restored before the error is reported.
+    /// All-or-nothing: the catalog writes every title in one transaction.
     pub fn apply_batch_title(&mut self, value: Option<String>, cx: &mut Context<Self>) {
         let items = self.get_selected_items();
         if items.is_empty() {
@@ -937,37 +959,23 @@ impl LuminaApp {
             return;
         }
 
-        let mut applied: Vec<(MediaId, Option<String>)> = Vec::with_capacity(changes.len());
-        let mut failure = None;
-        for (id, before, after) in &changes {
-            let result = match self.grid_state.as_ref() {
-                Some(state) => state.engine.set_title(*id, after.as_deref()),
-                None => Ok(()),
-            };
-            match result {
-                Ok(()) => applied.push((*id, before.clone())),
-                Err(err) => {
-                    failure = Some(err.to_string());
-                    break;
-                }
-            }
-        }
-        if let Some(err) = failure {
-            let rollback = self.revert_batch_titles(&applied);
-            self.refresh_selected_item_from_engine();
+        let writes: Vec<(MediaId, Option<&str>)> = changes
+            .iter()
+            .map(|(id, _, after)| (*id, after.as_deref()))
+            .collect();
+        if let Some(Err(err)) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.engine.set_titles(&writes))
+        {
             self.update_batch_summary();
-            let detail = match rollback {
-                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
-                None => err,
-            };
             self.set_error(
                 format!(
-                    "Could not apply title to {} item(s): {detail}",
+                    "Could not apply title to {} item(s): {err:#}",
                     changes.len()
                 ),
                 cx,
             );
-            cx.notify();
             return;
         }
 
@@ -977,7 +985,7 @@ impl LuminaApp {
             field: BatchField::Title,
             changes,
         });
-        self.sync_metadata_sidecars(&ids);
+        self.sync_metadata_sidecars(&ids, cx);
         self.update_batch_summary();
         let message = if value.is_some() {
             format!("Title applied to {} item(s)", ids.len())
@@ -988,36 +996,10 @@ impl LuminaApp {
         self.show_undo_toast(message, cx);
     }
 
-    fn revert_batch_titles(&self, applied: &[(MediaId, Option<String>)]) -> Option<String> {
-        let mut rollback_error = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before) in applied.iter().rev() {
-                if let Err(err) = state.engine.set_title(*id, before.as_deref()) {
-                    rollback_error = Some(err.to_string());
-                }
-            }
-        }
-        rollback_error
-    }
-
-    fn revert_batch_captions(&self, applied: &[(MediaId, Option<String>)]) -> Option<String> {
-        let mut rollback_error = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before) in applied.iter().rev() {
-                if let Err(err) = state
-                    .engine
-                    .set_caption(*id, before.as_deref().unwrap_or(""))
-                {
-                    rollback_error = Some(err.to_string());
-                }
-            }
-        }
-        rollback_error
-    }
-
     /// Applies one caption to every selected item as a single undo step.
     ///
-    /// The optimistic caption map is reverted in full when any write fails.
+    /// All-or-nothing: the catalog writes every caption in one transaction,
+    /// and the caption map only changes once it has.
     pub fn apply_batch_caption(&mut self, value: Option<String>, cx: &mut Context<Self>) {
         let items = self.get_selected_items();
         if items.is_empty() {
@@ -1043,6 +1025,25 @@ impl LuminaApp {
             return;
         }
 
+        let writes: Vec<(MediaId, &str)> = changes
+            .iter()
+            .map(|(id, _, after)| (*id, after.as_deref().unwrap_or("")))
+            .collect();
+        if let Some(Err(err)) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.engine.set_captions(&writes))
+        {
+            self.update_batch_summary();
+            self.set_error(
+                format!(
+                    "Could not apply caption to {} item(s): {err:#}",
+                    changes.len()
+                ),
+                cx,
+            );
+            return;
+        }
         for (id, _, after) in &changes {
             match after {
                 Some(caption) => {
@@ -1053,58 +1054,13 @@ impl LuminaApp {
                 }
             }
         }
-        let mut applied: Vec<(MediaId, Option<String>)> = Vec::with_capacity(changes.len());
-        let mut failure = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before, after) in &changes {
-                match state
-                    .engine
-                    .set_caption(*id, after.as_deref().unwrap_or(""))
-                {
-                    Ok(()) => applied.push((*id, before.clone())),
-                    Err(err) => {
-                        failure = Some(err.to_string());
-                        break;
-                    }
-                }
-            }
-        }
-        if let Some(err) = failure {
-            let rollback = self.revert_batch_captions(&applied);
-            // Restore every optimistic entry, including items whose write was
-            // never attempted, so the cache can never lead the catalog.
-            for (id, before, _) in &changes {
-                match before {
-                    Some(caption) => {
-                        self.item_captions.insert(*id, caption.clone());
-                    }
-                    None => {
-                        self.item_captions.remove(id);
-                    }
-                }
-            }
-            self.update_batch_summary();
-            let detail = match rollback {
-                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
-                None => err,
-            };
-            self.set_error(
-                format!(
-                    "Could not apply caption to {} item(s): {detail}",
-                    changes.len()
-                ),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
 
         let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
         self.push_undo(UndoAction::BatchMetadata {
             field: BatchField::Caption,
             changes,
         });
-        self.sync_metadata_sidecars(&ids);
+        self.sync_metadata_sidecars(&ids, cx);
         self.update_batch_summary();
         let message = if value.is_some() {
             format!("Caption applied to {} item(s)", ids.len())
@@ -1119,8 +1075,8 @@ impl LuminaApp {
     ///
     /// Accepts the same syntax as the single-item editor. A date without a time
     /// keeps each item's existing time of day, mirroring the single-item path.
-    /// Items already at the target timestamp are left out of the undo entry, and
-    /// a failed write rolls back every timestamp this call already changed.
+    /// Items already at the target timestamp are left out of the undo entry;
+    /// the catalog writes the rest in one transaction.
     pub fn apply_batch_date(&mut self, value: &str, cx: &mut Context<Self>) {
         let items = self.get_selected_items();
         if items.is_empty() {
@@ -1154,36 +1110,17 @@ impl LuminaApp {
             return;
         }
 
-        let mut applied: Vec<(MediaId, i64)> = Vec::with_capacity(changes.len());
-        let mut failure = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before, after) in &changes {
-                match state.engine.set_timestamp(*id, *after) {
-                    Ok(()) => applied.push((*id, *before)),
-                    Err(err) => {
-                        failure = Some(err.to_string());
-                        break;
-                    }
-                }
-            }
-        }
-        if let Some(err) = failure {
-            let rollback = self.revert_batch_dates(&applied);
-            self.refresh_selected_item_from_engine();
-            self.refresh_album_counts();
+        let writes: Vec<(MediaId, i64)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        if let Some(Err(err)) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.engine.set_timestamps(&writes))
+        {
             self.update_batch_summary();
-            let detail = match rollback {
-                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
-                None => err,
-            };
             self.set_error(
-                format!(
-                    "Could not apply date to {} item(s): {detail}",
-                    changes.len()
-                ),
+                format!("Could not apply date to {} item(s): {err:#}", changes.len()),
                 cx,
             );
-            cx.notify();
             return;
         }
 
@@ -1197,23 +1134,11 @@ impl LuminaApp {
         self.show_undo_toast(message, cx);
     }
 
-    fn revert_batch_dates(&self, applied: &[(MediaId, i64)]) -> Option<String> {
-        let mut rollback_error = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before) in applied.iter().rev() {
-                if let Err(err) = state.engine.set_timestamp(*id, *before) {
-                    rollback_error = Some(err.to_string());
-                }
-            }
-        }
-        rollback_error
-    }
-
     /// Applies one location to every selected item as a single undo step.
     ///
     /// The draft uses the single-item coordinate syntax (`latitude, longitude`;
-    /// an empty draft clears the location). A failed write restores the
-    /// coordinates already changed by this call before reporting the error.
+    /// an empty draft clears the location). The catalog writes every item in
+    /// one transaction.
     pub fn apply_batch_location(&mut self, value: &str, cx: &mut Context<Self>) {
         let items = self.get_selected_items();
         if items.is_empty() {
@@ -1243,35 +1168,21 @@ impl LuminaApp {
             return;
         }
 
-        let mut applied: Vec<AppliedLocationChange> = Vec::with_capacity(changes.len());
-        let mut failure = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before, after) in &changes {
-                match state.engine.set_location(*id, after.0, after.1) {
-                    Ok(()) => applied.push((*id, *before)),
-                    Err(err) => {
-                        failure = Some(err.to_string());
-                        break;
-                    }
-                }
-            }
-        }
-        if let Some(err) = failure {
-            let rollback = self.revert_batch_locations(&applied);
-            self.refresh_selected_item_from_engine();
+        let writes: Vec<(MediaId, Coordinates)> =
+            changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        if let Some(Err(err)) = self
+            .grid_state
+            .as_ref()
+            .map(|state| state.engine.set_locations(&writes))
+        {
             self.update_batch_summary();
-            let detail = match rollback {
-                Some(rollback) => format!("{err} (rollback also failed: {rollback})"),
-                None => err,
-            };
             self.set_error(
                 format!(
-                    "Could not apply location to {} item(s): {detail}",
+                    "Could not apply location to {} item(s): {err:#}",
                     changes.len()
                 ),
                 cx,
             );
-            cx.notify();
             return;
         }
 
@@ -1286,18 +1197,6 @@ impl LuminaApp {
         };
         self.set_last_action(message.clone());
         self.show_undo_toast(message, cx);
-    }
-
-    fn revert_batch_locations(&self, applied: &[AppliedLocationChange]) -> Option<String> {
-        let mut rollback_error = None;
-        if let Some(state) = self.grid_state.as_ref() {
-            for (id, before) in applied.iter().rev() {
-                if let Err(err) = state.engine.set_location(*id, before.0, before.1) {
-                    rollback_error = Some(err.to_string());
-                }
-            }
-        }
-        rollback_error
     }
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
@@ -1536,89 +1435,6 @@ impl LuminaApp {
         }
     }
 
-    pub fn set_item_rating(&mut self, id: MediaId, rating: u8, cx: &mut Context<Self>) {
-        let before = self.item_ratings.get(&id).copied().unwrap_or(0);
-        let clamped = rating.min(5);
-        if before == clamped {
-            cx.notify();
-            return;
-        }
-        if clamped == 0 {
-            self.item_ratings.remove(&id);
-        } else {
-            self.item_ratings.insert(id, clamped);
-        }
-        let result = if let Some(ref state) = self.grid_state {
-            state.engine.set_rating(id, clamped)
-        } else {
-            Ok(())
-        };
-        if let Err(err) = result {
-            if before == 0 {
-                self.item_ratings.remove(&id);
-            } else {
-                self.item_ratings.insert(id, before);
-            }
-            self.set_error(format!("Could not save rating: {err}"), cx);
-            return;
-        }
-        self.push_undo(UndoAction::Rating {
-            id,
-            before,
-            after: clamped,
-        });
-        self.sync_metadata_sidecars(&[id]);
-        if self.user_smart_albums.iter().any(|a| {
-            a.rules
-                .iter()
-                .any(|r| r.field == lumina_core::RuleField::Rating)
-        }) {
-            self.refresh_album_counts();
-        }
-        cx.notify();
-    }
-
-    pub fn set_item_color_label(&mut self, id: MediaId, label: u8, cx: &mut Context<Self>) {
-        let before = self.item_color_labels.get(&id).copied().unwrap_or(0);
-        let clamped = label.min(6);
-        if before == clamped {
-            cx.notify();
-            return;
-        }
-        if clamped == 0 {
-            self.item_color_labels.remove(&id);
-        } else {
-            self.item_color_labels.insert(id, clamped);
-        }
-        let result = if let Some(ref state) = self.grid_state {
-            state.engine.set_color_label(id, clamped)
-        } else {
-            Ok(())
-        };
-        if let Err(err) = result {
-            if before == 0 {
-                self.item_color_labels.remove(&id);
-            } else {
-                self.item_color_labels.insert(id, before);
-            }
-            self.set_error(format!("Could not save color label: {err}"), cx);
-            return;
-        }
-        self.push_undo(UndoAction::ColorLabel {
-            id,
-            before,
-            after: clamped,
-        });
-        if self.user_smart_albums.iter().any(|a| {
-            a.rules
-                .iter()
-                .any(|r| r.field == lumina_core::RuleField::ColorLabel)
-        }) {
-            self.refresh_album_counts();
-        }
-        cx.notify();
-    }
-
     pub fn get_item_rating(&self, item: &MediaItem) -> u8 {
         self.item_ratings.get(&item.id).copied().unwrap_or(0)
     }
@@ -1716,4 +1532,15 @@ fn format_batch_timestamp(epoch_ms: i64) -> String {
     chrono::DateTime::from_timestamp_millis(epoch_ms)
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
         .unwrap_or_default()
+}
+
+/// Applies (id, value) writes to a 0-means-unset map.
+fn set_or_clear(map: &mut std::collections::HashMap<MediaId, u8>, writes: &[(MediaId, u8)]) {
+    for &(id, value) in writes {
+        if value == 0 {
+            map.remove(&id);
+        } else {
+            map.insert(id, value);
+        }
+    }
 }

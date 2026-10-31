@@ -313,7 +313,7 @@ impl LuminaApp {
                 before,
                 after,
             });
-            self.sync_metadata_sidecars(&[item.id]);
+            self.sync_metadata_sidecars(&[item.id], cx);
             let message = if trimmed.is_empty() {
                 "Caption removed"
             } else {
@@ -457,7 +457,7 @@ impl LuminaApp {
             before,
             after,
         });
-        self.sync_metadata_sidecars(&[item.id]);
+        self.sync_metadata_sidecars(&[item.id], cx);
         let message = if trimmed.is_empty() {
             "Title removed"
         } else {

@@ -220,10 +220,10 @@ fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
     for id in [a.id, b.id] {
         assert_eq!(catalog.get_rating(id).unwrap(), 4, "a star click sets all");
     }
-    view.update(vcx, |app, cx| {
+    view.update(vcx, |app, _| {
         assert_eq!(common_rating(app), Some(4));
         // One item diverging makes the rating mixed.
-        app.set_item_rating(a.id, 2, cx);
+        app.item_ratings.insert(a.id, 2);
         assert_eq!(common_rating(app), None, "disagreeing ratings read mixed");
     });
 
@@ -301,4 +301,84 @@ fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
     });
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_batch_rating_or_label_is_one_undo_step() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, engine, [a, b], view, vcx) = select_two("multi_undo_step", &mut cx);
+    let catalog = engine.catalog();
+
+    click(vcx, "inspector-star-4");
+    for id in [a.id, b.id] {
+        assert_eq!(catalog.get_rating(id).unwrap(), 4, "a star click rates all");
+    }
+    view.update(vcx, |app, cx| app.set_color_label_selected(3, cx));
+    let labels = catalog.get_color_labels_map().unwrap();
+    assert_eq!((labels.get(&a.id), labels.get(&b.id)), (Some(&3), Some(&3)));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            2,
+            "rating and labelling a selection is one undo entry each"
+        )
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    let labels = catalog.get_color_labels_map().unwrap();
+    assert!(
+        !labels.contains_key(&a.id) && !labels.contains_key(&b.id),
+        "one ⌘Z restores the label on every item"
+    );
+    keystrokes(vcx, "secondary-z");
+    for id in [a.id, b.id] {
+        assert_eq!(
+            catalog.get_rating(id).unwrap(),
+            0,
+            "one ⌘Z restores the rating on every item"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn a_failed_batch_rating_changes_nothing_and_says_so() {
+    let mut cx = gpui::TestAppContext::single();
+    let (temp_dir, engine, [a, b], view, vcx) = select_two("multi_failed_rating", &mut cx);
+    rusqlite::Connection::open(temp_dir.join("catalog.db"))
+        .unwrap()
+        .execute_batch(&format!(
+            "CREATE TRIGGER fail_second BEFORE UPDATE ON media_items WHEN new.id = {}
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+            b.id.0
+        ))
+        .unwrap();
+
+    click(vcx, "inspector-star-4");
+    assert_eq!(
+        engine.catalog().get_rating(a.id).unwrap(),
+        0,
+        "the batch rolls back the item before the failure"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.item_ratings.is_empty(),
+            "the rating map never leads the catalog"
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a failed edit is not undoable"
+        );
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not save rating")),
+            "the failure reaches the banner: {:?}",
+            app.error_message
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

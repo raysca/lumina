@@ -14,12 +14,9 @@ use crate::views::sidebar::AlbumSelection;
 
 const MAX_UNDO: usize = 100;
 
-/// Latitude/longitude pair used by grouped location edits.
-pub type Coordinates = (Option<f64>, Option<f64>);
+use lumina_core::Coordinates;
 /// One (id, before, after) row in a grouped batch location edit.
 pub type BatchLocationChange = (MediaId, Coordinates, Coordinates);
-/// One (id, before) row used while rolling back a failed batch location edit.
-pub type AppliedLocationChange = (MediaId, Coordinates);
 
 /// Metadata field a grouped batch edit covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,20 +27,12 @@ pub enum BatchField {
 
 #[derive(Debug, Clone)]
 pub enum UndoAction {
-    Rating {
-        id: MediaId,
-        before: u8,
-        after: u8,
-    },
-    ColorLabel {
-        id: MediaId,
-        before: u8,
-        after: u8,
-    },
+    /// (id, before, after); one entry covers a whole batch.
+    Rating { changes: Vec<(MediaId, u8, u8)> },
+    /// (id, before, after); one entry covers a whole batch.
+    ColorLabel { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after)
-    Favorite {
-        changes: Vec<(MediaId, bool, bool)>,
-    },
+    Favorite { changes: Vec<(MediaId, bool, bool)> },
     Caption {
         id: MediaId,
         before: Option<String>,
@@ -71,9 +60,7 @@ pub enum UndoAction {
         added: bool,
     },
     /// (id, before, after)
-    Trashed {
-        changes: Vec<(MediaId, bool, bool)>,
-    },
+    Trashed { changes: Vec<(MediaId, bool, bool)> },
     /// One grouped undo entry for a batch title/caption edit: a single undo
     /// restores every touched item.
     BatchMetadata {
@@ -83,18 +70,12 @@ pub enum UndoAction {
     },
     /// One grouped undo entry for a batch date edit.
     /// (id, before_epoch_ms, after_epoch_ms)
-    BatchDate {
-        changes: Vec<(MediaId, i64, i64)>,
-    },
+    BatchDate { changes: Vec<(MediaId, i64, i64)> },
     /// One grouped undo entry for a batch location edit.
     /// (id, before, after)
-    BatchLocation {
-        changes: Vec<BatchLocationChange>,
-    },
+    BatchLocation { changes: Vec<BatchLocationChange> },
     /// A deleted smart album; undo restores it under the same id.
-    SmartAlbumDeleted {
-        album: SmartAlbum,
-    },
+    SmartAlbumDeleted { album: SmartAlbum },
 }
 
 #[derive(Default)]
@@ -107,7 +88,9 @@ impl UndoAction {
     /// IDs whose XMP sidecar should be refreshed after applying this action.
     pub fn affected_ids(&self) -> Vec<MediaId> {
         match self {
-            UndoAction::Rating { id, .. } | UndoAction::ColorLabel { id, .. } => vec![*id],
+            UndoAction::Rating { changes } | UndoAction::ColorLabel { changes } => {
+                changes.iter().map(|(id, _, _)| *id).collect()
+            }
             UndoAction::Caption { id, .. }
             | UndoAction::Title { id, .. }
             | UndoAction::Date { id, .. }
@@ -156,16 +139,8 @@ impl UndoAction {
 
     fn apply(&self, engine: &LuminaEngine, before: bool) -> Result<()> {
         match self {
-            UndoAction::Rating {
-                id,
-                before: b,
-                after: a,
-            } => engine.set_rating(*id, if before { *b } else { *a }),
-            UndoAction::ColorLabel {
-                id,
-                before: b,
-                after: a,
-            } => engine.set_color_label(*id, if before { *b } else { *a }),
+            UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
+            UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
             UndoAction::Favorite { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_favorite(ids, value)
             }),
@@ -211,30 +186,22 @@ impl UndoAction {
                 engine.batch_set_trashed(ids, value)
             }),
             UndoAction::BatchMetadata { field, changes } => {
-                for (id, b, a) in changes {
-                    let value = if before { b } else { a };
-                    match field {
-                        BatchField::Title => engine.set_title(*id, value.as_deref())?,
-                        BatchField::Caption => {
-                            engine.set_caption(*id, value.as_deref().unwrap_or(""))?
-                        }
-                    }
+                let values: Vec<(MediaId, Option<&str>)> = changes
+                    .iter()
+                    .map(|(id, b, a)| (*id, if before { b } else { a }.as_deref()))
+                    .collect();
+                match field {
+                    BatchField::Title => engine.set_titles(&values),
+                    BatchField::Caption => engine.set_captions(
+                        &values
+                            .iter()
+                            .map(|&(id, caption)| (id, caption.unwrap_or("")))
+                            .collect::<Vec<_>>(),
+                    ),
                 }
-                Ok(())
             }
-            UndoAction::BatchDate { changes } => {
-                for (id, b, a) in changes {
-                    engine.set_timestamp(*id, if before { *b } else { *a })?;
-                }
-                Ok(())
-            }
-            UndoAction::BatchLocation { changes } => {
-                for (id, b, a) in changes {
-                    let (lat, lon) = if before { b } else { a };
-                    engine.set_location(*id, *lat, *lon)?;
-                }
-                Ok(())
-            }
+            UndoAction::BatchDate { changes } => engine.set_timestamps(&pick(changes, before)),
+            UndoAction::BatchLocation { changes } => engine.set_locations(&pick(changes, before)),
             UndoAction::SmartAlbumDeleted { album } => {
                 if before {
                     engine.restore_smart_album(album)
@@ -244,6 +211,14 @@ impl UndoAction {
             }
         }
     }
+}
+
+/// The `before` or `after` side of (id, before, after) rows.
+fn pick<T: Copy>(changes: &[(MediaId, T, T)], before: bool) -> Vec<(MediaId, T)> {
+    changes
+        .iter()
+        .map(|&(id, b, a)| (id, if before { b } else { a }))
+        .collect()
 }
 
 fn set_bool_changes(
@@ -290,7 +265,7 @@ impl LuminaApp {
             let affected = action.affected_ids();
             self.undo.redo_stack.push(action);
             self.refresh_after_history(cx);
-            self.sync_metadata_sidecars(&affected);
+            self.sync_metadata_sidecars(&affected, cx);
             self.set_last_action(format!("Undid {label}"));
             self.announce_history(format!("Undid {label}"), false, cx);
         } else {
@@ -310,7 +285,7 @@ impl LuminaApp {
             let affected = action.affected_ids();
             self.undo.undo_stack.push(action);
             self.refresh_after_history(cx);
-            self.sync_metadata_sidecars(&affected);
+            self.sync_metadata_sidecars(&affected, cx);
             self.set_last_action(format!("Redid {label}"));
             // Redo pushes the action back onto the undo stack, so the toast can
             // offer Undo to reverse it again.

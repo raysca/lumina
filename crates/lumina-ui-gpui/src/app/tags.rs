@@ -89,7 +89,7 @@ impl LuminaApp {
             tag: clean.clone(),
             added: true,
         });
-        self.sync_metadata_sidecars(&ids);
+        self.sync_metadata_sidecars(&ids, cx);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         self.show_undo_toast(format!("Added tag \"{}\"", clean), cx);
@@ -134,7 +134,7 @@ impl LuminaApp {
             tag: clean.clone(),
             added: false,
         });
-        self.sync_metadata_sidecars(&ids);
+        self.sync_metadata_sidecars(&ids, cx);
         let message = format!("Removed tag \"{}\"", clean);
         self.set_last_action(message.clone());
         self.refresh_selected_tags();
