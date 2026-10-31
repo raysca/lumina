@@ -66,7 +66,7 @@ impl LuminaApp {
 
         // Open in Default App (QuickTime / Preview)
         if !cmd_or_ctrl && key.eq_ignore_ascii_case("o") {
-            self.open_selected_in_default_app();
+            self.open_selected_in_default_app(cx);
             return true;
         }
 

@@ -465,3 +465,44 @@ fn editor_handoff_preferences_shows_current_editor_and_choice() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// A default-app launch that fails after spawning (no app for the file)
+/// or cannot spawn at all reaches the banner.
+#[cfg(unix)]
+#[core::prelude::v1::test]
+fn default_app_launch_failures_carry_a_reason() {
+    use crate::app::viewer_actions::{default_app_result, DEFAULT_APP_FAILED_MESSAGE};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::{ExitStatus, Output};
+
+    let output = |code: i32, stderr: &str| {
+        Ok(Output {
+            status: ExitStatus::from_raw(code << 8),
+            stdout: Vec::new(),
+            stderr: stderr.as_bytes().to_vec(),
+        })
+    };
+    assert_eq!(
+        default_app_result(output(0, "")),
+        Ok(()),
+        "success is quiet"
+    );
+    for stderr in [
+        "No application knows how to open file:///x.heic (-10814)\n",
+        "",
+    ] {
+        assert_eq!(
+            default_app_result(output(1, stderr)),
+            Err(DEFAULT_APP_FAILED_MESSAGE.into()),
+            "a failed launch shows a plain message; the raw reason goes to the log"
+        );
+    }
+    let spawn = default_app_result(Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "launcher missing",
+    )));
+    assert_eq!(
+        spawn,
+        Err("Could not open in the default app: launcher missing".into())
+    );
+}

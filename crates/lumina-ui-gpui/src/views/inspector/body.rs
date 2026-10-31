@@ -355,8 +355,8 @@ fn render_single_body(
                                         .tooltip(theme::tooltip_label("Open in Default App"))
                                         .on_click(move |_e, _w, cx| {
                                             if let Some(app) = app_open_with.upgrade() {
-                                                app.update(cx, |this, _cx| {
-                                                    this.open_selected_in_default_app();
+                                                app.update(cx, |this, cx| {
+                                                    this.open_selected_in_default_app(cx);
                                                 });
                                             }
                                         }),

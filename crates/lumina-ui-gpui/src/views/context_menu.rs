@@ -354,7 +354,7 @@ impl MediaContextMenu {
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
-                                this.open_item_in_default_app(&path_for_open);
+                                this.open_item_in_default_app(&path_for_open, cx);
                             }),
                         )
                     })
