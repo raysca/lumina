@@ -147,7 +147,7 @@ fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) ->
         .tooltip(theme::tooltip_label("Rename (↵)"))
         .cursor_text()
         .border_color(if editing {
-            theme::accent()
+            theme::focus_ring()
         } else {
             theme::border()
         })

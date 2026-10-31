@@ -76,7 +76,7 @@ pub fn render_info_tab(
                         .bg(theme::bg_app())
                         .border_1()
                         .border_color(if title_input_active {
-                            theme::accent()
+                            theme::focus_ring()
                         } else {
                             theme::border_subtle()
                         })
@@ -122,7 +122,7 @@ pub fn render_info_tab(
                         .bg(theme::bg_app())
                         .border_1()
                         .border_color(if caption_input_active {
-                            theme::accent()
+                            theme::focus_ring()
                         } else {
                             theme::border_subtle()
                         })
@@ -174,7 +174,7 @@ pub fn render_info_tab(
                             .py_1p5()
                             .bg(theme::bg_app())
                             .border_1()
-                            .border_color(theme::accent())
+                            .border_color(theme::focus_ring())
                             .rounded(px(6.0))
                             .text_xs()
                             .text_color(theme::text())

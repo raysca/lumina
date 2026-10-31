@@ -273,7 +273,7 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                 .debug_selector(|| "batch-tag-add".to_string())
                 .cursor_text()
                 .border_color(if input_active {
-                    theme::accent()
+                    theme::focus_ring()
                 } else {
                     theme::border()
                 })
@@ -433,7 +433,7 @@ fn render_batch_metadata_row(
         })
         .border_1()
         .border_color(if editing {
-            theme::accent()
+            theme::focus_ring()
         } else {
             theme::border_subtle()
         })
@@ -474,7 +474,7 @@ fn render_batch_metadata_row(
             div()
                 .text_xs()
                 .font_family(theme::FONT_MONO)
-                .text_color(if editing || mixed {
+                .text_color(if mixed && !editing {
                     theme::accent()
                 } else {
                     theme::text()

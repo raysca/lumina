@@ -66,7 +66,7 @@ pub fn render_location_tab(
                 .py_1p5()
                 .bg(theme::bg_app())
                 .border_1()
-                .border_color(theme::accent())
+                .border_color(theme::focus_ring())
                 .rounded(px(6.0))
                 .text_xs()
                 .font_family(theme::FONT_MONO)

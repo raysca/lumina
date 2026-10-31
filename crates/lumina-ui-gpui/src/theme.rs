@@ -31,6 +31,8 @@ tokens! {
     border_subtle = 0x2E3034;
     border = 0x36383D;
     border_strong = 0x44464C;
+    /// Keyboard focus on fields and controls. Neutral: amber means selection.
+    focus_ring = 0xAAAAA8;
 
     // Text.
     text = 0xE7E6E3;
@@ -42,7 +44,7 @@ tokens! {
     /// Section labels (LIBRARY, TAGS, ...).
     text_label = 0x8E9096;
 
-    // Accent: primary actions, links, focus.
+    // Accent: selection and primary actions (focus is `focus_ring`).
     accent = 0xF0B54B;
     accent_hover = 0xF4C46A;
     /// Text/icons drawn on an `accent` fill.
@@ -58,7 +60,7 @@ tokens! {
     /// Shortcut hints on an `accent` fill (a hovered menu row).
     accent_hint = 0x5A4214;
 
-    // Metadata marks — identical everywhere they appear.
+    // Metadata marks. Grid cards draw them white on a scrim over the photo.
     rating = 0xF0B54B;
     /// Empty star outlines: dimmer than text, still 3:1 on every surface.
     rating_unset = 0x77797F;
@@ -433,6 +435,28 @@ mod tests {
             0.0,
             "grid cards must not paint a surface behind thumbnails"
         );
+    }
+
+    #[test]
+    fn focus_ring_is_neutral_and_visible() {
+        let f = focus_ring();
+        assert!(
+            (f.r - f.b).abs() < 0.02 && (f.g - f.b).abs() < 0.02,
+            "focus is grey, not amber: amber is reserved for selection"
+        );
+        for bg in [
+            bg_viewer(),
+            bg_app(),
+            bg_pane(),
+            bg_dialog(),
+            bg_raised(),
+            bg_control(),
+        ] {
+            assert!(
+                contrast(f, bg) >= 3.0,
+                "the focus border needs 3:1 against the field (WCAG 1.4.11)"
+            );
+        }
     }
 
     #[test]

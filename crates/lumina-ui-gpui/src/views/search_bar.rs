@@ -29,8 +29,10 @@ impl SearchBarView {
             .gap_2()
             .rounded(px(6.0))
             .border_1()
-            .border_color(if focused || active {
-                theme::accent()
+            .border_color(if focused {
+                theme::focus_ring()
+            } else if active {
+                theme::border_strong()
             } else {
                 theme::border()
             })

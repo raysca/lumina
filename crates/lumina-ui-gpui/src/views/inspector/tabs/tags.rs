@@ -164,7 +164,7 @@ pub fn render_tags_section(
                 .bg(theme::bg_app())
                 .border_1()
                 .border_color(if tag_input_active {
-                    theme::accent()
+                    theme::focus_ring()
                 } else {
                     theme::border()
                 })

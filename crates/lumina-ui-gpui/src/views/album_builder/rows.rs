@@ -8,11 +8,11 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
-/// Border for a control: accent when focused. Invalid values outline their
+/// Border for a control: the neutral focus ring when focused. Invalid values outline their
 /// whole row instead (see `render_row`).
 fn ring(focused: bool) -> Rgba {
     if focused {
-        theme::accent()
+        theme::focus_ring()
     } else {
         theme::border()
     }

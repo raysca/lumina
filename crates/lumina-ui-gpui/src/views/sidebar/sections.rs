@@ -391,7 +391,7 @@ pub(super) fn render_tags_section(
                             .rounded_md()
                             .bg(theme::bg_pane())
                             .border_1()
-                            .border_color(theme::accent())
+                            .border_color(theme::focus_ring())
                             .flex()
                             .flex_row()
                             .items_center()

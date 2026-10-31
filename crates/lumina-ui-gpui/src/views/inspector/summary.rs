@@ -324,7 +324,7 @@ fn render_tags(
         .bg(theme::bg_app())
         .border_1()
         .border_color(if input_active {
-            theme::accent()
+            theme::focus_ring()
         } else {
             theme::border()
         })

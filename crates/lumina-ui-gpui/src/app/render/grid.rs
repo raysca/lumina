@@ -440,7 +440,7 @@ impl LuminaApp {
                                                                     render_icon(
                                                                         Icon::StarFilled,
                                                                         px(9.0),
-                                                                        theme::rating(),
+                                                                        rgb(0xffffff),
                                                                     )
                                                                 }),
                                                             ))
