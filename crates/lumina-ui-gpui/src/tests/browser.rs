@@ -203,3 +203,57 @@ fn size_slider_follows_a_layout_change_and_keys_step_its_levels() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
+    let (dir, engine) = seed_library("br_month_band", 4);
+    let items = engine.get_item_slice(0..4);
+    let first = items[0].clone();
+    let in_month = items
+        .iter()
+        .filter(|i| (i.year, i.month) == (first.year, first.month))
+        .count();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| app.refresh_album_counts());
+    render_ui(vcx);
+    render_ui(vcx);
+
+    let band = vcx
+        .debug_bounds("grid-month-header")
+        .expect("a date-sorted grid shows the month band");
+    let card = vcx
+        .debug_bounds(leak(format!("media-card-{}", first.id.0)))
+        .expect("the first card renders");
+    assert!(
+        card.top() >= band.bottom(),
+        "the band sits above the cards, never over them: band={band:?} card={card:?}"
+    );
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.month_header.top,
+            Some((first.year, first.month)),
+            "the band names the top row's month"
+        );
+        assert_eq!(
+            app.month_header_count(),
+            Some(in_month),
+            "All Library counts the top month's items"
+        );
+        app.search_query = "beach".into();
+        assert_eq!(
+            app.month_header_count(),
+            None,
+            "a library-wide count would lie about search results"
+        );
+        app.search_query.clear();
+        app.set_sort_field(lumina_core::SortField::FileName, cx);
+        // debug_bounds keeps stale entries, so ask the renderer directly.
+        assert!(
+            app.render_month_header().is_none(),
+            "months mean nothing in a name-sorted grid"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

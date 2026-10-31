@@ -110,6 +110,11 @@ impl LuminaApp {
                     }
                 },
             ))
+            .flex()
+            .flex_col()
+            // ponytail: the band shows the month recorded by the previous
+            // frame's processor; the notify below settles it one frame later.
+            .children(self.render_month_header())
             .child(
                 uniform_list(
                     "media-grid",
@@ -131,6 +136,13 @@ impl LuminaApp {
                             } else {
                                 this.get_active_slice(visible_start..visible_end)
                             };
+                        // The month band reads the top row from this fetch, so
+                        // it costs no extra query.
+                        let top = visible_items.first().map(|i| (i.year, i.month));
+                        if this.month_header.top != top {
+                            this.month_header.top = top;
+                            cx.notify();
+                        }
 
                         for row_ix in range {
                             let start = row_ix * cols;
@@ -513,7 +525,8 @@ impl LuminaApp {
                     }),
                 )
                 .track_scroll(scroll_handle)
-                .h_full(),
+                .flex_1()
+                .min_h_0(),
             )
             // Marquee rectangle, painted in window coordinates so it follows the
             // pointer regardless of which card is hovered. Card selection
@@ -521,6 +534,59 @@ impl LuminaApp {
             // this is an additive visual on top.
             .child(self.render_grid_drag_rect())
             .into_any_element()
+    }
+
+    /// V3Grid section header, as a band pinned above the date-sorted grid
+    /// showing the top row's month. ponytail: one sticky band, not a header
+    /// per month (that needs a variable-height list).
+    pub(crate) fn render_month_header(&self) -> Option<AnyElement> {
+        if self.sort.field != lumina_core::SortField::DateTaken {
+            return None;
+        }
+        let (year, month) = self.month_header.top?;
+        let count = self.month_header_count();
+        Some(
+            div()
+                .id("grid-month-header")
+                .debug_selector(|| "grid-month-header".to_string())
+                .flex_none()
+                .h(px(36.0))
+                .px(px(GRID_ROW_PADDING_X + 4.0))
+                .flex()
+                .flex_row()
+                .items_baseline()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(15.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme::text())
+                        .child(month_title(year, month)),
+                )
+                .children(count.map(|n| {
+                    div()
+                        .text_xs()
+                        .text_color(theme::text_subtle())
+                        .child(if n == 1 {
+                            "1 item".to_string()
+                        } else {
+                            format!("{n} items")
+                        })
+                }))
+                .into_any_element(),
+        )
+    }
+
+    /// Item count for the band's month. Month counts cover the whole library,
+    /// so only the unfiltered view shows one.
+    pub(crate) fn month_header_count(&self) -> Option<usize> {
+        if self.selection != AlbumSelection::AllLibrary || !self.search_query.is_empty() {
+            return None;
+        }
+        self.month_header
+            .counts
+            .get(&self.month_header.top?)
+            .copied()
     }
 
     /// Paints the drag selection rectangle while a moved gesture is live.
@@ -862,5 +928,23 @@ impl LuminaApp {
                 self.set_search_query(&query, cx);
             }
         }
+    }
+}
+
+/// "June 2022"; items without a date (year 0) read "Undated".
+fn month_title(year: i32, month: u32) -> String {
+    if year > 0 {
+        format!("{} {year}", crate::app::types::month_name(month))
+    } else {
+        "Undated".to_string()
+    }
+}
+
+#[cfg(test)]
+mod month_title_tests {
+    #[core::prelude::v1::test]
+    fn month_title_names_the_month_or_says_undated() {
+        assert_eq!(super::month_title(2022, 6), "June 2022");
+        assert_eq!(super::month_title(0, 0), "Undated");
     }
 }

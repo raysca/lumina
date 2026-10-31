@@ -411,6 +411,7 @@ pub struct LuminaApp {
     pub context_menu_state: Option<ContextMenuState>,
     pub tag_manager: TagManagerState,
     pub timeline_year_buckets: Vec<(i32, usize)>,
+    pub month_header: MonthHeader,
     pub item_ratings: HashMap<MediaId, u8>,
     pub item_color_labels: HashMap<MediaId, u8>,
     pub item_captions: HashMap<MediaId, String>,
@@ -565,6 +566,7 @@ impl LuminaApp {
             context_menu_state: None,
             tag_manager: TagManagerState::default(),
             timeline_year_buckets: Vec::new(),
+            month_header: MonthHeader::default(),
             item_ratings: HashMap::new(),
             item_color_labels: HashMap::new(),
             item_captions: HashMap::new(),
@@ -801,4 +803,13 @@ mod session_save_tests {
             "session saves should settle within 500ms"
         );
     }
+}
+
+/// Sticky month band over the date-sorted grid: the month of the top visible
+/// row, plus library-wide month counts for its "N items".
+#[derive(Default)]
+pub struct MonthHeader {
+    /// (year, month) of the first visible item, recorded while rows render.
+    pub top: Option<(i32, u32)>,
+    pub counts: HashMap<(i32, u32), usize>,
 }

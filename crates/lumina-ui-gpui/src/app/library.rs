@@ -1068,6 +1068,14 @@ impl LuminaApp {
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();
             self.item_captions = engine.get_captions_map();
+            self.month_header.counts = engine
+                .get_timeline_buckets("month")
+                .into_iter()
+                .filter_map(|b| {
+                    let (year, month) = b.bucket_key.split_once('-')?;
+                    Some(((year.parse().ok()?, month.parse().ok()?), b.item_count))
+                })
+                .collect();
             let buckets = engine.get_timeline_buckets("year");
             self.timeline_year_buckets = buckets
                 .into_iter()
