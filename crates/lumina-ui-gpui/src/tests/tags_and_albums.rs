@@ -758,3 +758,68 @@ fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn a_long_name_keeps_the_sidebar_rename_buttons_in_the_row() {
+    let (dir, engine) = seed_library("rename_overflow", 2);
+    let id = engine.get_item_slice(0..1)[0].id;
+    engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        app.start_tag_rename("trip".to_string(), cx);
+        app.editing_tag_buffer = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
+        cx.notify();
+    });
+    render_ui(vcx);
+    let row = vcx
+        .debug_bounds("sidebar-tag-rename")
+        .expect("the rename row renders");
+    let buttons = vcx
+        .debug_bounds("sidebar-tag-rename-buttons")
+        .expect("the rename buttons render");
+    assert!(
+        buttons.right() <= row.right() && buttons.left() >= row.left(),
+        "a long name must not push Save/Cancel out of the row: row {row:?}, buttons {buttons:?}"
+    );
+    assert!(
+        buttons.size.width > gpui::px(20.0),
+        "the buttons keep their width: {buttons:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
+    let (dir, engine) = seed_library("sidebar_long_names", 2);
+    let long = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
+    let id = engine.get_item_slice(0..1)[0].id;
+    engine.add_tags_batch(&[id], std::slice::from_ref(&long)).unwrap();
+    let album = engine
+        .create_smart_album(&long, "folder", MatchMode::All, &[])
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        cx.notify();
+    });
+    render_ui(vcx);
+    let sidebar = vcx.debug_bounds("sidebar").expect("the sidebar renders");
+    let tag_row = vcx
+        .debug_bounds(leak(format!("sidebar-tag-filter-{long}")))
+        .expect("the long tag renders");
+    assert!(
+        tag_row.right() <= sidebar.right(),
+        "a long tag name truncates instead of pushing its count out: sidebar {sidebar:?}, tag {tag_row:?}"
+    );
+    let delete = vcx
+        .debug_bounds(leak(format!("smart-album-delete-{}", album.id)))
+        .expect("the album's delete control renders");
+    assert!(
+        delete.right() <= sidebar.right(),
+        "a long album name truncates instead of pushing its controls out: sidebar {sidebar:?}, delete {delete:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

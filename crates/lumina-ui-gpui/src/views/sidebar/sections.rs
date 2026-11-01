@@ -181,6 +181,8 @@ fn render_user_smart_album_row(
         .child(
             div()
                 .flex_1()
+                .min_w_0()
+                .truncate()
                 .text_size(theme::TEXT_BODY)
                 .text_color(if is_active {
                     theme::selection_fg()
@@ -386,6 +388,7 @@ pub(super) fn render_tags_section(
 
                     if is_editing {
                         div()
+                            .debug_selector(|| "sidebar-tag-rename".to_string())
                             .px_2()
                             .py_1()
                             .rounded(theme::RADIUS_MD)
@@ -396,15 +399,28 @@ pub(super) fn render_tags_section(
                             .flex_row()
                             .items_center()
                             .justify_between()
+                            // A long name shrinks and clips on the left, so the
+                            // caret at its end and the buttons stay in view.
                             .child(
                                 div()
-                                    .text_size(theme::TEXT_BODY)
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
-                                    .child(format!("{}|", this.editing_tag_buffer)),
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .flex()
+                                    .justify_end()
+                                    .child(
+                                        div()
+                                            .flex_none()
+                                            .whitespace_nowrap()
+                                            .text_size(theme::TEXT_BODY)
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(theme::text())
+                                            .child(format!("{}|", this.editing_tag_buffer)),
+                                    ),
                             )
                             .child(
                                 div()
+                                    .debug_selector(|| "sidebar-tag-rename-buttons".to_string())
+                                    .flex_none()
                                     .flex()
                                     .flex_row()
                                     .gap_1()
@@ -497,14 +513,19 @@ pub(super) fn render_tags_section(
                                         format!("sidebar-tag-filter-{}", tag_for_debug)
                                     })
                                     .flex_1()
+                                    .min_w_0()
                                     .cursor_pointer()
                                     .flex()
                                     .flex_row()
                                     .items_center()
                                     .gap_2()
-                                    .child(div().size(px(7.0)).rounded_full().bg(dot_color))
+                                    .child(
+                                        div().flex_none().size(px(7.0)).rounded_full().bg(dot_color),
+                                    )
                                     .child(
                                         div()
+                                            .min_w_0()
+                                            .truncate()
                                             .text_size(theme::TEXT_BODY)
                                             .font_weight(if is_active {
                                                 FontWeight::MEDIUM
