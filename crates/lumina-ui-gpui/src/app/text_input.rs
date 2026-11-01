@@ -10,6 +10,7 @@
 use std::ops::Range;
 
 use gpui::*;
+use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
 
 use crate::app::smart_draft::DraftFocus;
 use crate::app::LuminaApp;
@@ -124,6 +125,17 @@ impl LuminaApp {
         })
     }
 
+    /// Longest text `target` takes: names (tags, smart album titles) are
+    /// short, everything else gets the catalog's text cap.
+    fn text_limit(&self, target: TextTarget) -> usize {
+        use TextTarget::*;
+        match target {
+            Tag | TagRename | TagManagerRename => MAX_NAME_CHARS,
+            AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
+            _ => MAX_TEXT_CHARS,
+        }
+    }
+
     /// Side effects the keymap used to run after each typed character.
     fn text_edited(&mut self, target: TextTarget, cx: &mut Context<Self>) {
         match target {
@@ -166,8 +178,9 @@ impl LuminaApp {
             .is_some_and(|text| !text.is_empty() && !text.chars().any(char::is_control))
     }
 
-    /// ⌘V into the active field. Fields are one line, so line breaks and
-    /// tabs become spaces. Returns false when no field is active.
+    /// ⌘V into the active field. Fields are one line, so line breaks, tabs
+    /// and other characters the catalog never keeps become spaces. Returns
+    /// false when no field is active.
     pub(crate) fn paste_into_text_field(&mut self, cx: &mut Context<Self>) -> bool {
         if self.text_target().is_none() {
             return false;
@@ -179,7 +192,7 @@ impl LuminaApp {
         let line: String = text
             .trim_matches(['\n', '\r'])
             .chars()
-            .map(|c| if c.is_control() { ' ' } else { c })
+            .map(|c| if is_disallowed(c) { ' ' } else { c })
             .collect();
         self.replace_text(None, &line, false, cx);
         true
@@ -197,8 +210,10 @@ impl LuminaApp {
         };
         self.drop_stale_text_mark();
         let marked = self.text_marked.take().map(|mark| mark.range);
-        // Enter and Tab also arrive here as "\n" / "\t" after the keymap ran.
-        let text: String = text.chars().filter(|c| !c.is_control()).collect();
+        // Enter and Tab also arrive here as "\n" / "\t" after the keymap ran;
+        // the same characters `clean_text` drops never enter a field.
+        let text: String = text.chars().filter(|&c| !is_disallowed(c)).collect();
+        let limit = self.text_limit(target);
         let Some(buffer) = self.text_buffer(target) else {
             return;
         };
@@ -206,6 +221,10 @@ impl LuminaApp {
         let range = range_utf16.or(marked).unwrap_or(end..end);
         let start = byte_offset(buffer, range.start);
         let stop = byte_offset(buffer, range.end).max(start);
+        // Typing stops at the field's limit, so it shows what will be saved.
+        let room =
+            limit.saturating_sub(buffer.chars().count() - buffer[start..stop].chars().count());
+        let text: String = text.chars().take(room).collect();
         if start == stop && text.is_empty() {
             return;
         }

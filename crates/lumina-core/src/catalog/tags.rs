@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Transaction};
 
 use super::Catalog;
+use crate::text::{clean_text, MAX_NAME_CHARS};
 use crate::{MediaId, MediaItem, SortSpec};
 
 impl Catalog {
@@ -51,7 +52,8 @@ impl Catalog {
         Ok(())
     }
 
-    /// Attaches one or more normalized tags to a batch of media items.
+    /// Attaches one or more normalized tags to a batch of media items. Tags
+    /// are cleaned to one line of at most [`MAX_NAME_CHARS`] and lowercased.
     pub fn add_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {
         if ids.is_empty() || tags.is_empty() {
             return Ok(());
@@ -59,7 +61,7 @@ impl Catalog {
 
         let normalized_tags: Vec<String> = tags
             .iter()
-            .map(|t| t.trim().to_lowercase())
+            .map(|t| clean_text(t, MAX_NAME_CHARS).to_lowercase())
             .filter(|t| !t.is_empty())
             .collect();
 
@@ -236,10 +238,12 @@ impl Catalog {
         Ok(counts)
     }
 
-    /// Globally renames a tag across all media items (handles collision by merging).
+    /// Globally renames a tag across all media items (handles collision by
+    /// merging). The new name is cleaned like [`Self::add_tags_batch`]; the
+    /// old one is only trimmed, so a tag stored before cleaning still matches.
     pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
         let old_clean = old_tag.trim().to_lowercase();
-        let new_clean = new_tag.trim().to_lowercase();
+        let new_clean = clean_text(new_tag, MAX_NAME_CHARS).to_lowercase();
         if old_clean.is_empty() || new_clean.is_empty() || old_clean == new_clean {
             return Ok(0);
         }
@@ -493,6 +497,92 @@ mod untagged_media_tests {
             is_hidden: hidden,
             is_trashed: trashed,
         }
+    }
+
+    #[test]
+    fn every_text_write_stores_one_clean_line() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let id = catalog
+            .insert_or_update_batch(&[media_item("/lib/a.jpg", 1_000, false, false)])
+            .expect("insert media")[0]
+            .id;
+        let dirty = "  a\u{202E}b\n\u{FFFF} c  ";
+
+        catalog.set_title(id, Some(dirty)).expect("set title");
+        let item = catalog.get_item_by_id(id).expect("read").expect("item");
+        assert_eq!(item.title.as_deref(), Some("a b c"), "title is cleaned");
+
+        catalog.set_caption(id, dirty).expect("set caption");
+        let captions = catalog.get_captions_map().expect("captions");
+        assert_eq!(
+            captions[&id], "a b\nc",
+            "caption is cleaned, keeping its line break"
+        );
+
+        catalog
+            .add_tags_batch(&[id], &[dirty.to_string(), "x".repeat(150)])
+            .expect("add tags");
+        let mut tags = catalog.get_tags_for_item(id).expect("tags");
+        tags.sort();
+        assert_eq!(
+            tags,
+            vec!["a b c".to_string(), "x".repeat(crate::text::MAX_NAME_CHARS)],
+            "tags are cleaned and capped"
+        );
+
+        catalog
+            .rename_tag("a b c", "Trip\u{2028}2026")
+            .expect("rename");
+        assert!(
+            catalog
+                .get_tags_for_item(id)
+                .expect("tags")
+                .contains(&"trip 2026".to_string()),
+            "a renamed tag is cleaned"
+        );
+
+        let album = catalog
+            .create_smart_album(dirty, "folder", crate::MatchMode::All, &[])
+            .expect("create album");
+        assert_eq!(album.title, "a b c", "smart album title is cleaned");
+        let stored = catalog
+            .get_smart_album(album.id)
+            .expect("read album")
+            .expect("album");
+        assert_eq!(stored.title, "a b c", "the stored album title is cleaned");
+        catalog
+            .update_smart_album(
+                album.id,
+                "Edited\t\u{FEFF}",
+                "folder",
+                crate::MatchMode::All,
+                &[],
+            )
+            .expect("update album");
+        let stored = catalog
+            .get_smart_album(album.id)
+            .expect("read")
+            .expect("album");
+        assert_eq!(stored.title, "Edited", "an edited album title is cleaned");
+
+        catalog
+            .set_titles(&[(id, Some("batch\u{2028}title "))])
+            .expect("batch titles");
+        let item = catalog.get_item_by_id(id).expect("read").expect("item");
+        assert_eq!(
+            item.title.as_deref(),
+            Some("batch title"),
+            "batch titles are cleaned"
+        );
+
+        catalog
+            .set_captions(&[(id, "Para\u{202E} one\n\nPara two\n")])
+            .expect("batch captions");
+        assert_eq!(
+            catalog.get_captions_map().expect("captions")[&id],
+            "Para one\n\nPara two",
+            "captions keep their paragraphs but lose disguising characters"
+        );
     }
 
     #[test]

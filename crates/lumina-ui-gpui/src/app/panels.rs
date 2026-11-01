@@ -1,4 +1,5 @@
 use gpui::*;
+use lumina_core::text::{clean_caption, clean_text, MAX_TEXT_CHARS};
 use lumina_core::MediaItem;
 
 use crate::app::types::UiMessage;
@@ -278,8 +279,13 @@ impl LuminaApp {
         let caption = std::mem::take(&mut self.caption.input_buffer);
         self.caption.input_active = false;
         if let Some(item) = self.selected_item.clone() {
-            let trimmed = caption.trim().to_string();
-            let before = self.item_captions.get(&item.id).cloned();
+            let trimmed = clean_caption(&caption, MAX_TEXT_CHARS);
+            // Cleaned like the stored value, so undo shows what it restores.
+            let before = self
+                .item_captions
+                .get(&item.id)
+                .map(|caption| clean_caption(caption, MAX_TEXT_CHARS))
+                .filter(|caption| !caption.is_empty());
             let after = if trimmed.is_empty() {
                 None
             } else {
@@ -363,7 +369,7 @@ impl LuminaApp {
             cx.notify();
             return;
         }
-        let trimmed = buffer.trim().to_string();
+        let trimmed = clean_caption(&buffer, MAX_TEXT_CHARS);
         let after = if trimmed.is_empty() {
             None
         } else {
@@ -387,7 +393,7 @@ impl LuminaApp {
             cx.notify();
             return;
         }
-        let trimmed = buffer.trim().to_string();
+        let trimmed = clean_text(&buffer, MAX_TEXT_CHARS);
         let after = if trimmed.is_empty() {
             None
         } else {
@@ -429,13 +435,18 @@ impl LuminaApp {
             cx.notify();
             return;
         };
-        let trimmed = value.trim();
+        let trimmed = clean_text(&value, MAX_TEXT_CHARS);
         let after = if trimmed.is_empty() {
             None
         } else {
-            Some(trimmed.to_string())
+            Some(trimmed)
         };
-        let before = item.title.clone();
+        // Cleaned like the stored value, so undo shows what it restores.
+        let before = item
+            .title
+            .as_deref()
+            .map(|title| clean_text(title, MAX_TEXT_CHARS))
+            .filter(|title| !title.is_empty());
         if before == after {
             cx.notify();
             return;
@@ -452,13 +463,14 @@ impl LuminaApp {
         if let Some(ref mut current) = self.selected_item {
             current.title = after.clone();
         }
+        let removed = after.is_none();
         self.push_undo(crate::app::undo::UndoAction::Title {
             id: item.id,
             before,
             after,
         });
         self.sync_metadata_sidecars(&[item.id], cx);
-        let message = if trimmed.is_empty() {
+        let message = if removed {
             "Title removed"
         } else {
             "Title saved"

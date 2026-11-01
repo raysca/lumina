@@ -1,4 +1,5 @@
 use gpui::*;
+use lumina_core::text::{clean_text, MAX_NAME_CHARS};
 
 use crate::app::types::TagSortOrder;
 use crate::app::LuminaApp;
@@ -52,7 +53,7 @@ impl LuminaApp {
     }
 
     pub fn batch_add_tag(&mut self, tag: String, cx: &mut Context<Self>) {
-        let clean = tag.trim().to_lowercase();
+        let clean = clean_text(&tag, MAX_NAME_CHARS).to_lowercase();
         if clean.is_empty() {
             return;
         }
@@ -179,8 +180,9 @@ impl LuminaApp {
     pub fn commit_tag_rename(&mut self, cx: &mut Context<Self>) {
         if let Some(old_tag) = self.editing_tag.take() {
             let new_tag = std::mem::take(&mut self.editing_tag_buffer);
-            let clean_new = new_tag.trim().to_lowercase();
-            if !clean_new.is_empty() && clean_new != old_tag {
+            let clean_new = clean_text(&new_tag, MAX_NAME_CHARS).to_lowercase();
+            // An untouched buffer never renames, even if cleaning would change it.
+            if !clean_new.is_empty() && new_tag != old_tag && clean_new != old_tag {
                 let result = if let Some(ref state) = self.grid_state {
                     state.engine.rename_tag(&old_tag, &clean_new).map(|_| ())
                 } else {
@@ -387,9 +389,10 @@ impl LuminaApp {
 
     pub fn commit_modal_tag_rename(&mut self, cx: &mut Context<Self>) {
         if let Some(old_tag) = self.tag_manager.editing.take() {
-            let new_tag = self.tag_manager.editing_buffer.trim().to_lowercase();
-            self.tag_manager.editing_buffer.clear();
-            if !new_tag.is_empty() && new_tag != old_tag.to_lowercase() {
+            let buffer = std::mem::take(&mut self.tag_manager.editing_buffer);
+            let new_tag = clean_text(&buffer, MAX_NAME_CHARS).to_lowercase();
+            // An untouched buffer never renames, even if cleaning would change it.
+            if !new_tag.is_empty() && buffer != old_tag && new_tag != old_tag.to_lowercase() {
                 let result = if let Some(ref state) = self.grid_state {
                     state.engine.rename_tag(&old_tag, &new_tag).map(|_| ())
                 } else {

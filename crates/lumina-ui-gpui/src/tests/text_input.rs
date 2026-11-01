@@ -204,3 +204,85 @@ fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_tag_field_drops_disguising_characters_and_stops_at_the_name_cap() {
+    let (dir, engine) = seed_library("text_clean", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    keystrokes(vcx, "home");
+    view.update(vcx, |app, cx| app.start_tag_input(cx));
+    render_ui(vcx);
+    vcx.write_to_clipboard(ClipboardItem::new_string("gpj.\u{202E}exe".to_string()));
+    keystrokes(vcx, "secondary-v");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_input_buffer, "gpj. exe",
+            "a pasted bidi override becomes a space"
+        );
+        app.tag_input_buffer.clear();
+    });
+    vcx.simulate_input(&"x".repeat(lumina_core::text::MAX_NAME_CHARS + 20));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_input_buffer.chars().count(),
+            lumina_core::text::MAX_NAME_CHARS,
+            "typing stops at the longest tag the catalog keeps"
+        );
+    });
+    keystrokes(vcx, "enter");
+
+    let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
+    assert_eq!(
+        engine.get_tags_for_item(id),
+        vec!["x".repeat(lumina_core::text::MAX_NAME_CHARS)],
+        "the saved tag matches what the field showed"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn confirming_an_untouched_legacy_tag_rename_keeps_it() {
+    let (dir, engine) = seed_library("text_legacy_tag", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    // A tag saved before input was cleaned: longer than the name cap.
+    let legacy = "y".repeat(lumina_core::text::MAX_NAME_CHARS + 50);
+    // Written the way the catalog writes tags, keeping the FTS row in step.
+    let fts_row = "rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags";
+    let fts_values =
+        "m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, \
+        m.model, m.lens, CAST(m.year AS TEXT), \
+        COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '') \
+        FROM media_items m WHERE m.id = 1";
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).unwrap();
+    conn.execute_batch(&format!(
+        "INSERT INTO media_search_fts(media_search_fts, {fts_row}) SELECT 'delete', {fts_values};"
+    ))
+    .unwrap();
+    conn.execute(
+        "INSERT INTO media_tags (media_id, tag) VALUES (1, ?1)",
+        [&legacy],
+    )
+    .unwrap();
+    conn.execute_batch(&format!(
+        "INSERT INTO media_search_fts({fts_row}) SELECT {fts_values};"
+    ))
+    .unwrap();
+    drop(conn);
+
+    view.update(vcx, |app, cx| {
+        app.start_tag_rename(legacy.clone(), cx);
+        app.commit_tag_rename(cx);
+        app.start_modal_tag_rename(legacy.clone(), cx);
+        app.commit_modal_tag_rename(cx);
+    });
+
+    assert_eq!(
+        engine.query_tag_counts(),
+        vec![(legacy, 1)],
+        "confirming a rename without editing must not shorten an existing tag"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

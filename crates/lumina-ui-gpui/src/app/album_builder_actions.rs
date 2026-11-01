@@ -1,4 +1,5 @@
 use gpui::*;
+use lumina_core::text::{clean_text, MAX_NAME_CHARS};
 use lumina_core::{MatchMode, RuleField, SmartAlbum, SmartAlbumRule};
 
 use crate::app::smart_draft::field_label;
@@ -375,7 +376,7 @@ impl LuminaApp {
         if self.album_draft.problem.is_some() {
             return;
         }
-        let title = match self.album_draft.album_title.trim() {
+        let title = match clean_text(&self.album_draft.album_title, MAX_NAME_CHARS).as_str() {
             "" => "Untitled Smart Album".to_string(),
             title => title.to_string(),
         };

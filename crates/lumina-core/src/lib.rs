@@ -6,6 +6,7 @@ pub mod scanner;
 pub mod search;
 pub mod smart_albums;
 pub mod sort;
+pub mod text;
 pub mod watcher;
 pub mod xmp;
 
@@ -769,7 +770,14 @@ impl LuminaEngine {
                     report.imported += 1;
                     let mut changed = false;
 
-                    if metadata.title.is_some() && metadata.title != item.title {
+                    // Compare as stored, so a sidecar with untidy text is not
+                    // rewritten (and counted as updated) on every import.
+                    let title = metadata
+                        .title
+                        .as_deref()
+                        .map(|title| text::clean_text(title, text::MAX_TEXT_CHARS))
+                        .filter(|title| !title.is_empty());
+                    if metadata.title.is_some() && title != item.title {
                         self.catalog.set_title(*id, metadata.title.as_deref())?;
                         changed = true;
                     }
@@ -785,7 +793,12 @@ impl LuminaEngine {
                         self.catalog.set_color_label(*id, metadata.color_label)?;
                         changed = true;
                     }
-                    if metadata.caption.is_some() && metadata.caption != captions.get(id).cloned() {
+                    let caption = metadata
+                        .caption
+                        .as_deref()
+                        .map(|caption| text::clean_caption(caption, text::MAX_TEXT_CHARS))
+                        .filter(|caption| !caption.is_empty());
+                    if metadata.caption.is_some() && caption != captions.get(id).cloned() {
                         self.catalog
                             .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
                         changed = true;

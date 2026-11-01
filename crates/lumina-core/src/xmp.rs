@@ -39,8 +39,13 @@ pub fn sidecar_path(media_path: &Path) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// Also drops characters XML cannot hold, so a value stored before input
+/// was cleaned still writes a readable sidecar.
 fn escape_xml(value: &str) -> String {
     value
+        .chars()
+        .filter(|&c| !crate::text::is_disallowed(c) || matches!(c, '\t' | '\n' | '\r'))
+        .collect::<String>()
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -212,6 +217,26 @@ mod tests {
         assert!(xml.contains("xmp:Label=\"Orange\""));
         assert!(xml.contains("travel"));
         assert_eq!(parse_xmp(&xml), metadata);
+    }
+
+    #[test]
+    fn a_sidecar_never_carries_characters_xml_cannot_hold() {
+        let metadata = SidecarMetadata {
+            title: Some("A\u{FFFF}B\u{1}".to_string()),
+            caption: Some("Line one\nLine two".to_string()),
+            tags: vec!["x\u{0}y".to_string()],
+            ..Default::default()
+        };
+        let xml = render_xmp(&metadata);
+        assert!(
+            !xml.chars()
+                .any(|c| c == '\u{FFFF}' || c == '\u{1}' || c == '\u{0}'),
+            "values stored before input was cleaned must still write valid XML"
+        );
+        assert!(
+            xml.contains("Line one\nLine two"),
+            "caption paragraphs survive"
+        );
     }
 
     #[test]

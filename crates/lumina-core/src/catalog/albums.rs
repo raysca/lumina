@@ -5,6 +5,7 @@ use rusqlite::{params, OptionalExtension};
 use super::Catalog;
 use crate::search::StructuredQuery;
 use crate::smart_albums::{MatchMode, SmartAlbum, SmartAlbumRule, SystemAlbum};
+use crate::text::{clean_text, MAX_NAME_CHARS};
 use crate::{MediaItem, SortSpec};
 
 impl Catalog {
@@ -113,6 +114,7 @@ impl Catalog {
         match_mode: MatchMode,
         rules: &[SmartAlbumRule],
     ) -> Result<SmartAlbum> {
+        let title = clean_text(title, MAX_NAME_CHARS);
         let conn = self.conn.lock();
         let rules_json = serde_json::to_string(rules)?;
         let match_str = match match_mode {
@@ -232,6 +234,7 @@ impl Catalog {
         match_mode: MatchMode,
         rules: &[SmartAlbumRule],
     ) -> Result<bool> {
+        let title = clean_text(title, MAX_NAME_CHARS);
         let conn = self.conn.lock();
         let rules_json = serde_json::to_string(rules)?;
         let match_str = match match_mode {

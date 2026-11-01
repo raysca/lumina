@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::Catalog;
+use crate::text::{clean_caption, clean_text, MAX_TEXT_CHARS};
 use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
 
 impl Catalog {
@@ -439,13 +440,15 @@ impl Catalog {
         self.set_titles(&[(id, title)])
     }
 
-    /// Sets each item's title in one transaction; blank clears it.
+    /// Sets each item's title in one transaction; blank clears it. Titles
+    /// are cleaned to one line (see [`crate::text::clean_text`]).
     pub fn set_titles(&self, changes: &[(MediaId, Option<&str>)]) -> Result<()> {
         self.update_each(
             "UPDATE media_items SET title = ?1 WHERE id = ?2;",
-            changes
-                .iter()
-                .map(|&(id, title)| (id, title.map(str::trim).filter(|value| !value.is_empty()))),
+            changes.iter().map(|&(id, title)| {
+                let title = title.map(|value| clean_text(value, MAX_TEXT_CHARS));
+                (id, title.filter(|value| !value.is_empty()))
+            }),
         )
     }
 
@@ -538,6 +541,7 @@ impl Catalog {
     }
 
     /// Sets each item's caption in one transaction; blank removes it.
+    /// Captions are cleaned, keeping line breaks (see [`crate::text::clean_caption`]).
     pub fn set_captions(&self, changes: &[(MediaId, &str)]) -> Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -550,7 +554,8 @@ impl Catalog {
 
     fn write_caption(conn: &rusqlite::Connection, id: MediaId, caption: &str) -> Result<()> {
         let media_id = id.0 as i64;
-        let trimmed = caption.trim();
+        let cleaned = clean_caption(caption, MAX_TEXT_CHARS);
+        let trimmed = cleaned.as_str();
 
         // The caption currently reflected by the FTS index is needed to remove
         // the contentless FTS5 row before it is rewritten.
