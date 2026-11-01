@@ -62,7 +62,10 @@ pub(crate) fn external_editor_command(editor: &str, file: &Path) -> Option<Comma
     {
         // `open -a` takes an app path or name ("Preview", "TextEdit.app");
         // a bundle id ("com.apple.TextEdit") needs `-b`.
-        let is_bundle_id = !app.starts_with('/') && !app.ends_with(".app") && app.contains('.');
+        let is_app_bundle = Path::new(app)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("app"));
+        let is_bundle_id = !app.starts_with('/') && !is_app_bundle && app.contains('.');
         let flag = if is_bundle_id { "-b" } else { "-a" };
         let mut command = Command::new("open");
         command.arg(flag).arg(app).arg(file);

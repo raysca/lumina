@@ -311,6 +311,11 @@ fn editor_handoff_command_construction_never_uses_a_shell() {
             "an app bundle name goes to open -a"
         );
         assert_eq!(
+            flag("TextEdit.APP").as_deref(),
+            Some(std::ffi::OsStr::new("-a")),
+            "an app bundle name goes to open -a whatever the extension's case"
+        );
+        assert_eq!(
             flag("com.apple.TextEdit").as_deref(),
             Some(std::ffi::OsStr::new("-b")),
             "a bundle id goes to open -b"
