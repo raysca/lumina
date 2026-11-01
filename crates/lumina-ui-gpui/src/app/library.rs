@@ -696,134 +696,62 @@ impl LuminaApp {
         }
     }
 
-    pub fn get_active_count(&self) -> usize {
-        let state = match self.grid_state.as_ref() {
-            Some(s) => s,
-            None => return 0,
-        };
-
+    /// The view's count from the sidebar's cached counts, without querying.
+    pub(crate) fn cached_active_count(&self) -> Option<usize> {
         if !self.search_query.is_empty() {
-            return state.engine.search_query_count(&self.search_query);
+            return None;
         }
-
         if let Some(year) = self.active_year {
-            if let Some((_, count)) = self.timeline_year_buckets.iter().find(|(y, _)| *y == year) {
-                return *count;
-            }
-            return state.engine.search_query_count(&format!("year:{}", year));
+            return self
+                .timeline_year_buckets
+                .iter()
+                .find(|(y, _)| *y == year)
+                .map(|(_, count)| *count);
         }
-
-        match self.selection {
+        match &self.selection {
             AlbumSelection::AllLibrary => {
-                if self.total_library_count > 0 {
-                    self.total_library_count
-                } else {
-                    state.engine.total_count()
-                }
+                (self.total_library_count > 0).then_some(self.total_library_count)
             }
-            AlbumSelection::System(album) => self
-                .system_album_counts
-                .get(&album)
-                .copied()
-                .unwrap_or_else(|| state.engine.query_system_album_count(album)),
-            AlbumSelection::User(id) => {
-                if let Some(&count) = self.user_album_counts.get(&id) {
-                    count
-                } else if let Some(album) = self.user_smart_albums.iter().find(|a| a.id == id) {
-                    state.engine.query_smart_album_count(album)
-                } else {
-                    0
-                }
-            }
+            AlbumSelection::System(album) => self.system_album_counts.get(album).copied(),
+            AlbumSelection::User(id) => self.user_album_counts.get(id).copied(),
             AlbumSelection::Trash => self
                 .system_album_counts
                 .get(&SystemAlbum::RecentlyDeleted)
-                .copied()
-                .unwrap_or_else(|| {
-                    state
-                        .engine
-                        .query_system_album_count(SystemAlbum::RecentlyDeleted)
-                }),
-            AlbumSelection::Tag(ref tag) => {
-                if let Some((_, count)) = self.library_tag_counts.iter().find(|(t, _)| t == tag) {
-                    return *count;
-                }
-                let query = if tag.contains(' ') {
-                    format!("tag:\"{}\"", tag)
-                } else {
-                    format!("tag:{}", tag)
-                };
-                state.engine.search_query_count(&query)
-            }
-            // Cached by refresh_album_counts; querying per frame would run SQL
-            // on every render even when the count is stable.
-            AlbumSelection::Untagged => self.untagged_count,
+                .copied(),
+            AlbumSelection::Tag(tag) => self
+                .library_tag_counts
+                .iter()
+                .find(|(t, _)| t == tag)
+                .map(|(_, count)| *count),
+            // Cached by refresh_album_counts.
+            AlbumSelection::Untagged => Some(self.untagged_count),
         }
     }
 
-    pub fn get_active_slice(&self, range: std::ops::Range<usize>) -> Vec<MediaItem> {
-        let state = match self.grid_state.as_ref() {
-            Some(s) => s,
-            None => return Vec::new(),
+    /// The view's count for an action: cached counts first, then the active
+    /// view cache, and only then a query. Rendering uses
+    /// [`Self::displayed_count`], which never queries.
+    pub fn get_active_count(&self) -> usize {
+        let Some(state) = self.grid_state.as_ref() else {
+            return 0;
         };
+        self.cached_active_count()
+            .or_else(|| self.fresh_view_count())
+            .unwrap_or_else(|| self.view_query().count(&state.engine))
+    }
 
-        let offset = range.start;
-        let limit = range.end.saturating_sub(range.start);
-        if limit == 0 {
+    /// The view's items at `range` for an action: from the active view cache
+    /// when it is current, else a query. Rendering uses
+    /// [`Self::displayed_rows`], which never queries.
+    pub fn get_active_slice(&self, range: std::ops::Range<usize>) -> Vec<MediaItem> {
+        let Some(state) = self.grid_state.as_ref() else {
+            return Vec::new();
+        };
+        if range.is_empty() {
             return Vec::new();
         }
-
-        if !self.search_query.is_empty() {
-            return state
-                .engine
-                .search_query_sorted(&self.search_query, limit, offset, self.sort);
-        }
-
-        if let Some(year) = self.active_year {
-            return state.engine.search_query_sorted(
-                &format!("year:{}", year),
-                limit,
-                offset,
-                self.sort,
-            );
-        }
-
-        match self.selection {
-            AlbumSelection::AllLibrary => {
-                state.engine.get_item_slice_sorted(offset, limit, self.sort)
-            }
-            AlbumSelection::System(album) => state
-                .engine
-                .query_system_album_sorted(album, limit, offset, self.sort),
-            AlbumSelection::User(id) => {
-                if let Some(album) = self.user_smart_albums.iter().find(|a| a.id == id) {
-                    state
-                        .engine
-                        .query_smart_album_sorted(album, limit, offset, self.sort)
-                } else {
-                    Vec::new()
-                }
-            }
-            AlbumSelection::Trash => state.engine.query_system_album_sorted(
-                SystemAlbum::RecentlyDeleted,
-                limit,
-                offset,
-                self.sort,
-            ),
-            AlbumSelection::Tag(ref tag) => {
-                let query = if tag.contains(' ') {
-                    format!("tag:\"{}\"", tag)
-                } else {
-                    format!("tag:{}", tag)
-                };
-                state
-                    .engine
-                    .search_query_sorted(&query, limit, offset, self.sort)
-            }
-            AlbumSelection::Untagged => {
-                state.engine.query_untagged_sorted(limit, offset, self.sort)
-            }
-        }
+        self.fresh_view_rows(&range)
+            .unwrap_or_else(|| self.view_query().slice(&state.engine, range))
     }
 
     pub fn select_album(&mut self, selection: AlbumSelection, cx: &mut Context<Self>) {

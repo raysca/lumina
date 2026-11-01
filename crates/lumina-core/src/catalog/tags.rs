@@ -500,6 +500,47 @@ mod untagged_media_tests {
     }
 
     #[test]
+    fn the_revision_moves_on_writes_and_not_on_reads() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let id = catalog
+            .insert_or_update_batch(&[media_item("/lib/a.jpg", 1_000, false, false)])
+            .expect("insert media")[0]
+            .id;
+        let before = catalog.revision();
+        catalog.get_tags_for_item(id).expect("read tags");
+        catalog.get_item_by_id(id).expect("read item");
+        assert_eq!(catalog.revision(), before, "reads leave the revision alone");
+        catalog
+            .add_tags_batch(&[id], &["trip".to_string()])
+            .expect("add tag");
+        let after_tag = catalog.revision();
+        assert_ne!(after_tag, before, "a tag write moves the revision");
+        catalog.set_title(id, Some("Lisbon")).expect("set title");
+        assert_ne!(catalog.revision(), after_tag, "a title write moves it too");
+        assert_eq!(
+            catalog.revision_written_here(),
+            catalog.revision(),
+            "this thread's own write is recorded as its own"
+        );
+
+        let mine = catalog.revision_written_here();
+        let other = catalog.clone();
+        std::thread::spawn(move || other.set_title(id, Some("Porto")).expect("set title"))
+            .join()
+            .expect("writer thread");
+        assert_ne!(
+            catalog.revision(),
+            mine,
+            "another thread's write moves the revision"
+        );
+        assert_eq!(
+            catalog.revision_written_here(),
+            mine,
+            "but is not recorded as this thread's write"
+        );
+    }
+
+    #[test]
     fn every_text_write_stores_one_clean_line() {
         let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
         let id = catalog

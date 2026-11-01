@@ -367,6 +367,22 @@ impl LuminaEngine {
         self.read_error_reported.store(false, Ordering::Relaxed);
     }
 
+    /// Moves whenever the catalog changes; see [`Catalog::revision`].
+    pub fn data_revision(&self) -> u64 {
+        self.catalog.revision()
+    }
+
+    /// See [`Catalog::revision_written_here`].
+    pub fn revision_written_here(&self) -> u64 {
+        self.catalog.revision_written_here()
+    }
+
+    /// Runs `f` while the catalog lock is held; see [`Catalog::with_lock_held`].
+    #[cfg(feature = "test-support")]
+    pub fn with_catalog_locked(&self, f: impl FnOnce()) {
+        self.catalog.with_lock_held(f);
+    }
+
     pub fn total_count(&self) -> usize {
         self.read("total count", self.catalog.total_count())
     }

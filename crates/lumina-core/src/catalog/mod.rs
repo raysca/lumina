@@ -5,10 +5,12 @@ mod tags;
 mod trash;
 
 use anyhow::{bail, Result};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::fs;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::{MediaId, MediaItem, MediaType};
@@ -25,9 +27,77 @@ pub enum DeletionTarget {
     PermanentDisk,
 }
 
+/// The catalog connection plus a revision that moves whenever a write lands,
+/// readable without taking the lock (the UI checks it every frame).
+pub(crate) struct Db {
+    conn: Mutex<Connection>,
+    revision: AtomicU64,
+}
+
+impl Db {
+    fn new(conn: Connection) -> Self {
+        Self {
+            conn: Mutex::new(conn),
+            revision: AtomicU64::new(0),
+        }
+    }
+
+    pub(crate) fn lock(&self) -> DbGuard<'_> {
+        DbGuard {
+            conn: self.conn.lock(),
+            revision: &self.revision,
+        }
+    }
+}
+
+/// Locked connection. On release it records SQLite's running count of changed
+/// rows, so every write path bumps the revision without opting in.
+pub(crate) struct DbGuard<'a> {
+    conn: MutexGuard<'a, Connection>,
+    revision: &'a AtomicU64,
+}
+
+impl Deref for DbGuard<'_> {
+    type Target = Connection;
+    fn deref(&self) -> &Connection {
+        &self.conn
+    }
+}
+
+impl DerefMut for DbGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Connection {
+        &mut self.conn
+    }
+}
+
+thread_local! {
+    /// Revision after the latest write made from this thread.
+    static WRITTEN_HERE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+impl Drop for DbGuard<'_> {
+    fn drop(&mut self) {
+        // ponytail: one trivial query per unlock (~µs); a write hook would
+        // need unsafe FFI.
+        let changes = self
+            .conn
+            .prepare_cached("SELECT total_changes()")
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get::<_, i64>(0)));
+        match changes {
+            Ok(changes) => {
+                let changes = changes as u64;
+                if self.revision.swap(changes, Ordering::AcqRel) != changes {
+                    WRITTEN_HERE.with(|written| written.set(changes));
+                }
+            }
+            Err(err) => log::warn!("catalog revision unavailable: {err}"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Catalog {
-    pub(crate) conn: Arc<Mutex<Connection>>,
+    pub(crate) conn: Arc<Db>,
     db_path: Option<PathBuf>,
 }
 
@@ -39,7 +109,7 @@ impl Catalog {
         }
         let conn = Connection::open(db_path)?;
         let catalog = Self {
-            conn: Arc::new(Mutex::new(conn)),
+            conn: Arc::new(Db::new(conn)),
             db_path: Some(db_path.to_path_buf()),
         };
         catalog.init_schema()?;
@@ -49,11 +119,31 @@ impl Catalog {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         let catalog = Self {
-            conn: Arc::new(Mutex::new(conn)),
+            conn: Arc::new(Db::new(conn)),
             db_path: None,
         };
         catalog.init_schema()?;
         Ok(catalog)
+    }
+
+    /// Moves whenever a write lands; equal values mean nothing changed in
+    /// between. Never takes the catalog lock.
+    pub fn revision(&self) -> u64 {
+        self.conn.revision.load(Ordering::Acquire)
+    }
+
+    /// [`Self::revision`] after the latest write made from the calling thread
+    /// (0 if none), so a thread can tell its own writes from others'.
+    pub fn revision_written_here(&self) -> u64 {
+        WRITTEN_HERE.with(|written| written.get())
+    }
+
+    /// Holds the catalog lock while `f` runs, to test that callers never wait
+    /// on it.
+    #[cfg(feature = "test-support")]
+    pub fn with_lock_held(&self, f: impl FnOnce()) {
+        let _guard = self.conn.lock();
+        f();
     }
 
     /// Reads an application config key-value pair from SQLite.

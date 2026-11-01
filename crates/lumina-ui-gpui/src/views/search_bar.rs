@@ -70,7 +70,7 @@ impl SearchBarView {
                     .child(
                         div()
                             .text_color(theme::text_muted())
-                            .child(format!("{}", this.get_active_count())),
+                            .child(format!("{}", this.displayed_count())),
                     )
                     .child(
                         div()

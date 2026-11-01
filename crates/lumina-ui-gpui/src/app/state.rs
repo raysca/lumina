@@ -428,6 +428,10 @@ pub struct LuminaApp {
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
     /// Bumped per opened library; see `UiMessage::LibraryEvent`.
     pub(crate) library_generation: u64,
+    /// The grid's count and rows, fetched off the UI thread.
+    pub(crate) active_view: crate::app::active_view::ActiveView,
+    /// Latest selected-item tag load; older results are dropped.
+    pub(crate) selected_tags_request: u64,
 }
 
 impl LuminaApp {
@@ -593,6 +597,8 @@ impl LuminaApp {
             undo: crate::app::undo::UndoState::default(),
             event_receiver_thread: None,
             library_generation: 0,
+            active_view: Default::default(),
+            selected_tags_request: 0,
         };
 
         // If previously selected library exists, open it immediately.
@@ -752,7 +758,7 @@ impl LuminaApp {
             let cols = self.grid_columns.clamp(2, 8);
             let start = range.start * cols;
             let end = range.end * cols;
-            let items = self.get_active_slice(start..end);
+            let items = self.displayed_rows(start..end);
             if let Some(ref state) = self.grid_state {
                 for item in items {
                     let is_cached = state.texture_cache.lock().contains(&item.id);

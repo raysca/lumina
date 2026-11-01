@@ -26,3 +26,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 trash = "5.2"
+
+[features]
+# Hooks for dependents' tests (see `Catalog::with_lock_held`).
+test-support = []

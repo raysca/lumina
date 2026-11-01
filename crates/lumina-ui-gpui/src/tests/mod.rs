@@ -21,6 +21,7 @@ mod tags_and_albums;
 mod text_input;
 mod toasts;
 mod ui_automation;
+mod ui_thread;
 mod video_player;
 mod video_scrub;
 mod viewer_and_video;

@@ -46,6 +46,10 @@ impl LuminaApp {
         let effective_count = total_count;
 
         if effective_count == 0 {
+            // Not "No results" before the first fetch for this view lands.
+            if self.view_loading() {
+                return div().flex_1().into_any_element();
+            }
             return self.render_empty_state(cx);
         }
 
@@ -134,7 +138,8 @@ impl LuminaApp {
                             if visible_start >= visible_end || this.grid_state.is_none() {
                                 Vec::new()
                             } else {
-                                this.get_active_slice(visible_start..visible_end)
+                                this.want_view_rows(visible_start..visible_end, cx);
+                                this.displayed_rows(visible_start..visible_end)
                             };
                         // The month band reads the top row from this fetch, so
                         // it costs no extra query.

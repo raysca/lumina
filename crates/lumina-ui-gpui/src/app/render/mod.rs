@@ -342,7 +342,8 @@ impl Render for LuminaApp {
                 .into_any_element();
         }
 
-        let total_count = self.get_active_count();
+        self.refresh_active_view(cx);
+        let total_count = self.displayed_count();
 
         let view_label: String = match &self.selection {
             AlbumSelection::AllLibrary => "All Photos & Videos".into(),

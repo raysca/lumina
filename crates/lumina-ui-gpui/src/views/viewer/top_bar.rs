@@ -127,7 +127,7 @@ impl ViewerTopBar {
                     .ml_2()
                     .flex_shrink_0()
                     .text_color(theme::text_subtle())
-                    .child(format!("{} of {}", index + 1, this.get_active_count())),
+                    .child(format!("{} of {}", index + 1, this.displayed_count())),
             );
         }
 

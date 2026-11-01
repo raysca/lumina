@@ -476,7 +476,7 @@ impl LuminaApp {
     }
 
     pub fn select_index(&mut self, index: usize, cx: &mut Context<Self>) {
-        let total_count = self.get_active_count();
+        let total_count = self.navigation_count();
         if total_count == 0 {
             self.clear_selection(cx);
             return;
@@ -488,10 +488,12 @@ impl LuminaApp {
         self.selection_anchor = Some(clamped);
         self.selected_index = Some(clamped);
 
-        let slice = self.get_active_slice(clamped..clamped + 1);
-        if let Some(item) = slice.into_iter().next() {
+        if let Some(item) = self.navigation_item(clamped) {
             self.select_item_internal(item, cx);
         }
+        // Fetch ahead so the next steps (in the viewer, where the grid does not
+        // render) read their items from the cache.
+        self.want_view_rows(clamped.saturating_sub(16)..clamped + 16, cx);
         self.reveal_grid_selection();
         // Persist the new selection on a short timer, not on every arrow key.
         self.schedule_session_save(cx);
@@ -509,7 +511,7 @@ impl LuminaApp {
     }
 
     pub fn navigate_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let total_count = self.get_active_count();
+        let total_count = self.navigation_count();
         if total_count == 0 {
             return;
         }
@@ -527,7 +529,7 @@ impl LuminaApp {
     /// Extends the current selection by a keyboard delta while keeping the
     /// original anchor fixed. Shift+arrow should grow a range, not move it.
     pub fn extend_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let total_count = self.get_active_count();
+        let total_count = self.navigation_count();
         if total_count == 0 {
             return;
         }
@@ -542,7 +544,7 @@ impl LuminaApp {
 
     /// Selects the contiguous range from the anchor to `index`, inclusive.
     pub fn extend_selection_to(&mut self, index: usize, cx: &mut Context<Self>) {
-        let total_count = self.get_active_count();
+        let total_count = self.navigation_count();
         if total_count == 0 {
             return;
         }
@@ -561,7 +563,7 @@ impl LuminaApp {
         self.selected_indices.extend(start..=end);
         self.selected_index = Some(target);
 
-        if let Some(item) = self.get_active_slice(target..target + 1).into_iter().next() {
+        if let Some(item) = self.navigation_item(target) {
             self.select_item_internal(item, cx);
         }
         self.refresh_selected_tags();
@@ -603,9 +605,8 @@ impl LuminaApp {
         if cached.is_some() {
             self.set_viewer_image(cached);
         }
+        self.load_selected_item_tags(item.id, cx);
         if let Some(ref state) = self.grid_state {
-            self.selected_item_tags = state.engine.get_tags_for_item(item.id);
-
             let tx = self.ui_tx.clone();
             state
                 .engine
@@ -1321,7 +1322,11 @@ impl LuminaApp {
     }
 
     pub fn get_selected_items(&self) -> Vec<MediaItem> {
-        if self.selected_indices.is_empty() {
+        // One selected index is the selected item: no lookup (and no wait on
+        // the catalog for every arrow press).
+        let single = self.selected_indices.len() == 1
+            && self.selected_indices.iter().next() == self.selected_index.as_ref();
+        if self.selected_indices.is_empty() || single {
             if let Some(ref it) = self.selected_item {
                 return vec![it.clone()];
             }
@@ -1352,7 +1357,7 @@ impl LuminaApp {
         }
 
         for range in ranges {
-            let slice = self.get_active_slice(range);
+            let slice = self.navigation_rows(range);
             items.extend(slice);
         }
         if items.is_empty() {
@@ -1376,7 +1381,43 @@ impl LuminaApp {
             .unwrap_or_default()
     }
 
+    /// Loads the selected item's tags off the UI thread, so stepping through
+    /// photos never waits on the catalog. A newer load or a synchronous
+    /// [`Self::refresh_selected_tags`] wins over a late result.
+    fn load_selected_item_tags(&mut self, id: lumina_core::MediaId, cx: &mut Context<Self>) {
+        self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
+        let request = self.selected_tags_request;
+        self.selected_item_tags.clear();
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
+            return;
+        };
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.get_tags_for_item(id) });
+        cx.spawn(async move |this, cx| {
+            let tags = task.await;
+            let _ = this.update(cx, |app, cx| {
+                app.apply_selected_item_tags(request, tags, cx)
+            });
+        })
+        .detach();
+    }
+
+    /// Lands a tag load unless a newer load or refresh has started since.
+    pub(crate) fn apply_selected_item_tags(
+        &mut self,
+        request: u64,
+        tags: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_tags_request == request {
+            self.selected_item_tags = tags;
+            cx.notify();
+        }
+    }
+
     pub fn refresh_selected_tags(&mut self) {
+        self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
         if let Some(ref state) = self.grid_state {
             let ids = self.get_selected_ids();
             self.selected_tag_counts = Vec::new();
