@@ -795,7 +795,9 @@ fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
     let (dir, engine) = seed_library("sidebar_long_names", 2);
     let long = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
     let id = engine.get_item_slice(0..1)[0].id;
-    engine.add_tags_batch(&[id], std::slice::from_ref(&long)).unwrap();
+    engine
+        .add_tags_batch(&[id], std::slice::from_ref(&long))
+        .unwrap();
     let album = engine
         .create_smart_album(&long, "folder", MatchMode::All, &[])
         .unwrap();
