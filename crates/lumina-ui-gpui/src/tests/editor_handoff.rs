@@ -466,12 +466,16 @@ fn editor_handoff_preferences_shows_current_editor_and_choice() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
-/// A default-app launch that fails after spawning (no app for the file)
-/// or cannot spawn at all reaches the banner.
+/// A launch that fails after spawning (no app for the file, a deleted
+/// editor) or cannot spawn at all reaches the banner. Shared by Open in
+/// Default App, Edit in External Editor and Reveal in Finder.
 #[cfg(unix)]
 #[core::prelude::v1::test]
-fn default_app_launch_failures_carry_a_reason() {
-    use crate::app::viewer_actions::{default_app_result, DEFAULT_APP_FAILED_MESSAGE};
+fn launch_failures_reach_the_banner() {
+    use crate::app::viewer_actions::{
+        launch_result, DEFAULT_APP_FAILED_MESSAGE, EXTERNAL_EDITOR_FAILED_MESSAGE,
+        REVEAL_FAILED_MESSAGE,
+    };
     use std::os::unix::process::ExitStatusExt;
     use std::process::{ExitStatus, Output};
 
@@ -483,7 +487,7 @@ fn default_app_launch_failures_carry_a_reason() {
         })
     };
     assert_eq!(
-        default_app_result(output(0, "")),
+        launch_result(output(0, ""), DEFAULT_APP_FAILED_MESSAGE),
         Ok(()),
         "success is quiet"
     );
@@ -492,17 +496,36 @@ fn default_app_launch_failures_carry_a_reason() {
         "",
     ] {
         assert_eq!(
-            default_app_result(output(1, stderr)),
+            launch_result(output(1, stderr), DEFAULT_APP_FAILED_MESSAGE),
             Err(DEFAULT_APP_FAILED_MESSAGE.into()),
             "a failed launch shows a plain message; the raw reason goes to the log"
         );
     }
-    let spawn = default_app_result(Err(std::io::Error::new(
-        std::io::ErrorKind::NotFound,
-        "launcher missing",
-    )));
+    assert_eq!(
+        launch_result(
+            output(1, "Unable to find application named 'Gone'\n"),
+            EXTERNAL_EDITOR_FAILED_MESSAGE
+        ),
+        Err(EXTERNAL_EDITOR_FAILED_MESSAGE.into()),
+        "a deleted editor app is reported"
+    );
+    assert_eq!(
+        launch_result(output(1, ""), REVEAL_FAILED_MESSAGE),
+        Err(REVEAL_FAILED_MESSAGE.into()),
+        "a failed Finder reveal is reported"
+    );
+    let spawn = launch_result(
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "launcher missing",
+        )),
+        DEFAULT_APP_FAILED_MESSAGE,
+    );
     assert_eq!(
         spawn,
-        Err("Could not open in the default app: launcher missing".into())
+        Err(format!(
+            "{DEFAULT_APP_FAILED_MESSAGE} Reason: launcher missing."
+        )),
+        "a launcher that cannot start says why"
     );
 }

@@ -27,9 +27,15 @@ pub(crate) const EXTERNAL_EDITOR_UNSET_MESSAGE: &str =
 pub(crate) const EXTERNAL_EDITOR_INVALID_MESSAGE: &str =
     "The external editor setting is invalid. Choose an external editor in Preferences.";
 /// Banner shown when the media file has gone away since it was selected
-/// (external editor and Open in Default App).
+/// (external editor, Open in Default App and Reveal in Finder).
 pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
     "The file is no longer available; nothing was launched.";
+/// Banner shown when the configured editor could not open the file, for
+/// example because the app was deleted.
+pub(crate) const EXTERNAL_EDITOR_FAILED_MESSAGE: &str =
+    "The external editor could not open this file. Choose an external editor in Preferences.";
+/// Banner shown when Finder could not reveal the file.
+pub(crate) const REVEAL_FAILED_MESSAGE: &str = "Could not show this file in Finder.";
 
 /// Decode size requested for the full-viewer still, matching the selection path
 /// in `select_item_internal`; the grid requests 320 and the viewer 2048.
@@ -109,28 +115,19 @@ impl LuminaApp {
         }
     }
 
-    pub fn reveal_item_in_finder(&self, path: &Path) {
-        // Tests record the request instead of opening a real Finder window.
-        #[cfg(test)]
-        REVEALED_PATHS.with(|paths| paths.borrow_mut().push(path.to_path_buf()));
-        #[cfg(all(not(test), target_os = "macos"))]
-        {
-            let _ = std::process::Command::new("open")
-                .arg("-R")
-                .arg(path)
-                .spawn();
-        }
-        #[cfg(all(not(test), target_os = "linux"))]
-        {
-            if let Some(parent) = path.parent() {
-                let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+    /// Shows `path` in Finder. A missing file, or a launcher that cannot
+    /// start or fails, shows in the error banner.
+    pub fn reveal_item_in_finder(&mut self, path: &Path, cx: &mut Context<Self>) {
+        if path.as_os_str().is_empty() || !path.exists() {
+            self.set_error(EXTERNAL_EDITOR_FILE_MISSING_MESSAGE, cx);
+        } else {
+            // Tests record the request instead of opening a real Finder window.
+            #[cfg(test)]
+            REVEALED_PATHS.with(|paths| paths.borrow_mut().push(path.to_path_buf()));
+            #[cfg(not(test))]
+            if let Some(command) = reveal_command(path) {
+                Self::launch_reporting(command, REVEAL_FAILED_MESSAGE, cx);
             }
-        }
-        #[cfg(all(not(test), target_os = "windows"))]
-        {
-            let _ = std::process::Command::new("explorer")
-                .arg(format!("/select,\"{}\"", path.display()))
-                .spawn();
         }
     }
 
@@ -144,21 +141,7 @@ impl LuminaApp {
             // UI tests drive the viewer buttons through synthetic clicks;
             // never launch a real Preview/QuickTime process from the harness.
             #[cfg(not(test))]
-            {
-                // `open` reports "no app for this file" through its exit
-                // status, after spawning succeeds, so wait off the UI thread.
-                // ponytail: no timeout; `open` returns once the app is asked.
-                let mut command = default_app_command(path);
-                let launch = cx
-                    .background_executor()
-                    .spawn(async move { command.output() });
-                cx.spawn(async move |this, cx| {
-                    if let Err(message) = default_app_result(launch.await) {
-                        let _ = this.update(cx, |this, cx| this.set_error(message, cx));
-                    }
-                })
-                .detach();
-            }
+            Self::launch_reporting(default_app_command(path), DEFAULT_APP_FAILED_MESSAGE, cx);
         }
     }
 
@@ -256,13 +239,34 @@ impl LuminaApp {
             self.set_error(EXTERNAL_EDITOR_FILE_MISSING_MESSAGE, cx);
             return;
         }
-        let Some(mut command) = external_editor_command(&editor, path) else {
+        let Some(command) = external_editor_command(&editor, path) else {
             self.set_error(EXTERNAL_EDITOR_INVALID_MESSAGE, cx);
             return;
         };
-        if let Err(err) = command.spawn() {
-            self.set_error(format!("Could not open in external editor: {err}"), cx);
-        }
+        // Tests never launch a real editor.
+        #[cfg(test)]
+        drop(command);
+        #[cfg(not(test))]
+        Self::launch_reporting(command, EXTERNAL_EDITOR_FAILED_MESSAGE, cx);
+    }
+
+    /// Runs a launcher (`open`, `open -a`, `open -R`) off the UI thread. If
+    /// it cannot start or exits non-zero, logs why and shows `failed` in the
+    /// error banner. On macOS `open` returns as soon as LaunchServices has
+    /// the request, so this does not wait for the app.
+    /// ponytail: no timeout; on Linux/Windows the editor runs directly and
+    /// this waits for it to quit. Spawn without waiting there when those ship.
+    #[cfg(not(test))]
+    fn launch_reporting(mut command: Command, failed: &'static str, cx: &mut Context<Self>) {
+        let launch = cx
+            .background_executor()
+            .spawn(async move { command.output() });
+        cx.spawn(async move |this, cx| {
+            if let Err(message) = launch_result(launch.await, failed) {
+                let _ = this.update(cx, |this, cx| this.set_error(message, cx));
+            }
+        })
+        .detach();
     }
 
     pub fn open_viewer(&mut self, item: MediaItem, cx: &mut Context<Self>) {
@@ -542,22 +546,53 @@ fn default_app_command(path: &Path) -> Command {
 pub(crate) const DEFAULT_APP_FAILED_MESSAGE: &str =
     "No app could open this file. Choose one with Open With in Finder.";
 
-/// The banner message for a finished default-app launch, if it failed. The
-/// launcher's own stderr (a file:// URL and a LaunchServices code on macOS)
-/// goes to the log, not the banner.
-pub(crate) fn default_app_result(
+/// The banner message for a finished launch, if it failed: `failed`, plus
+/// the error when the launcher could not start. The launcher's own stderr
+/// (a file:// URL and a LaunchServices code on macOS) goes to the log, not
+/// the banner.
+pub(crate) fn launch_result(
     output: std::io::Result<std::process::Output>,
+    failed: &str,
 ) -> Result<(), String> {
-    let output = output.map_err(|err| format!("Could not open in the default app: {err}"))?;
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => {
+            log::warn!("launcher could not start: {err}");
+            return Err(format!("{failed} Reason: {err}."));
+        }
+    };
     if output.status.success() {
         return Ok(());
     }
     log::warn!(
-        "default app launch failed ({}): {}",
+        "launch failed ({}): {}",
         output.status,
         String::from_utf8_lossy(&output.stderr).trim()
     );
-    Err(DEFAULT_APP_FAILED_MESSAGE.to_string())
+    Err(failed.to_string())
+}
+
+/// The platform's "show in the file manager" launcher for `path`.
+#[cfg(not(test))]
+fn reveal_command(path: &Path) -> Option<Command> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open");
+        command.arg("-R").arg(path);
+        Some(command)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut command = Command::new("xdg-open");
+        command.arg(path.parent()?);
+        Some(command)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = Command::new("explorer");
+        command.arg(format!("/select,\"{}\"", path.display()));
+        Some(command)
+    }
 }
 
 #[cfg(test)]

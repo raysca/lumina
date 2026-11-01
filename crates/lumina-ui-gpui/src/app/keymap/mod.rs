@@ -144,8 +144,8 @@ impl LuminaApp {
 
         // ⇧⌘R: Reveal in Finder (the context menu's shortcut)
         if cmd_or_ctrl && keystroke.modifiers.shift && key.eq_ignore_ascii_case("r") {
-            if let Some(item) = self.selected_item.as_ref() {
-                self.reveal_item_in_finder(&item.path);
+            if let Some(path) = self.selected_item.as_ref().map(|item| item.path.clone()) {
+                self.reveal_item_in_finder(&path, cx);
             }
             return;
         }

@@ -339,7 +339,7 @@ impl MediaContextMenu {
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
-                                this.reveal_item_in_finder(&path_for_reveal);
+                                this.reveal_item_in_finder(&path_for_reveal, cx);
                             }),
                         )
                     })

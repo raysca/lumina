@@ -349,3 +349,27 @@ fn a_frame_step_accepts_the_frame_it_lands_on() {
         app.stop_video_ticker();
     });
 }
+
+/// Regression: Reveal in Finder on a file that has gone away did nothing at
+/// all; it now says so in the error banner and launches nothing.
+#[core::prelude::v1::test]
+fn reveal_in_finder_reports_a_missing_file() {
+    let (dir, engine) = seed_library("reg_reveal_missing", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    REVEALED_PATHS.with(|p| p.borrow_mut().clear());
+    keystrokes(vcx, "home");
+    let path = view.update(vcx, |app, _| app.selected_item.clone().unwrap().path);
+    std::fs::remove_file(&path).unwrap();
+
+    keystrokes(vcx, "shift-secondary-r");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.error_message.as_deref(),
+            Some(crate::app::viewer_actions::EXTERNAL_EDITOR_FILE_MISSING_MESSAGE),
+            "a vanished file must be reported, not silently ignored"
+        );
+    });
+    REVEALED_PATHS.with(|p| assert!(p.borrow().is_empty(), "nothing is launched"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

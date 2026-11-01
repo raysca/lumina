@@ -149,8 +149,8 @@ pub fn render_summary_body(
                                 .child("Reveal")
                                 .on_click(move |_e, _w, cx| {
                                     if let Some(app) = app_reveal.upgrade() {
-                                        app.update(cx, |this, _cx| {
-                                            this.reveal_item_in_finder(&path)
+                                        app.update(cx, |this, cx| {
+                                            this.reveal_item_in_finder(&path, cx)
                                         });
                                     }
                                 }),
