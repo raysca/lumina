@@ -241,7 +241,7 @@ fn render_user_smart_album_row(
                 ))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
-                    this.delete_smart_album(album_id, cx);
+                    this.prompt_delete_smart_album(album_id, cx);
                 })),
         )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

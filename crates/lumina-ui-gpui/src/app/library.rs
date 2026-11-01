@@ -527,6 +527,8 @@ impl LuminaApp {
         self.batch_summary = Default::default();
         self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
+        // Album ids restart with each library.
+        self.album_draft.confirm_delete = None;
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;

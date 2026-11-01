@@ -47,6 +47,7 @@ pub enum CommandId {
     PipPlayPause,
     NewSmartAlbum,
     EditSmartAlbum,
+    DeleteSmartAlbum,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
     EditLocation,
@@ -90,7 +91,7 @@ impl Command {
             PipPlayPause => Icon::Play,
             NewSmartAlbum => Icon::Sparkles,
             EditSmartAlbum | AdjustDate | EditLocation => Icon::Pencil,
-            RemoveLocation => Icon::X,
+            RemoveLocation | DeleteSmartAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             RetryError => Icon::RotateCw,
@@ -374,6 +375,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "smart album rules filter change",
         },
         Command {
+            id: CommandId::DeleteSmartAlbum,
+            key: "command.delete_smart_album",
+            shortcut: "",
+            keywords: "smart album remove delete",
+        },
+        Command {
             id: CommandId::AdjustDate,
             key: "command.adjust_date",
             shortcut: "",
@@ -611,6 +618,7 @@ impl LuminaApp {
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
+            CommandId::DeleteSmartAlbum => self.delete_selected_smart_album(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);
                 self.start_date_input(cx);

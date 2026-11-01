@@ -70,6 +70,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.remove_location" => "Remove Location",
         "command.open_tag_manager" => "Open Tag Manager…",
         "command.edit_smart_album" => "Edit Smart Album…",
+        "command.delete_smart_album" => "Delete Smart Album…",
         _ => return None,
     })
 }

@@ -551,6 +551,12 @@ impl Render for LuminaApp {
                 self.render_delete_confirm_modal(cx),
                 "delete-confirm-in",
             ))
+            // 8b. Smart album delete confirmation
+            .child(motion::overlay_in(
+                self.album_draft.confirm_delete.is_some(),
+                crate::views::smart_album_delete::render(self, cx),
+                "smart-album-delete-in",
+            ))
             // 9. Media Card Context Menu Overlay
             .child(motion::overlay_in(
                 self.context_menu_state.is_some(),

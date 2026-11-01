@@ -71,6 +71,7 @@ impl LuminaApp {
         if self.shortcuts_overlay_open
             || self.preferences_open
             || self.delete_confirm_state.is_some()
+            || self.album_draft.confirm_delete.is_some()
         {
             return None;
         }

@@ -5,7 +5,7 @@ use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule}
 
 use crate::app::viewer_actions::REVEALED_PATHS;
 use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, seed_library,
+    app_with_library, click, click_point, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
 use lumina_core::DeletionTarget;
@@ -211,7 +211,11 @@ fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     click(vcx, leak(format!("smart-album-delete-{}", album.id)));
-    assert!(engine.list_smart_albums().is_empty(), "× deletes the album");
+    click(vcx, "smart-album-delete-confirm");
+    assert!(
+        engine.list_smart_albums().is_empty(),
+        "confirming deletes the album"
+    );
     assert!(
         vcx.debug_bounds("toast-undo").is_some(),
         "the toast offers Undo"
@@ -372,4 +376,135 @@ fn reveal_in_finder_reports_a_missing_file() {
     });
     REVEALED_PATHS.with(|p| assert!(p.borrow().is_empty(), "nothing is launched"));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn deleting_a_smart_album_asks_first() {
+    let (dir, engine) = seed_library("reg_album_confirm", 3);
+    let rules = [SmartAlbumRule {
+        field: RuleField::IsFavorite,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Bool(true),
+    }];
+    let album = engine
+        .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let delete = leak(format!("smart-album-delete-{}", album.id));
+    let items = engine.total_count();
+
+    click(vcx, delete);
+    assert_eq!(engine.list_smart_albums().len(), 1, "× only asks");
+    assert!(
+        vcx.debug_bounds("smart-album-delete-dialog").is_some(),
+        "× opens the confirmation"
+    );
+    // Background shortcuts must not reach the grid while it is open.
+    view.update(vcx, |app, cx| app.select_index(0, cx));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "backspace");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.delete_confirm_state.is_none(),
+            "the dialog absorbs ⌫, so no media delete starts behind it"
+        )
+    });
+    keystrokes(vcx, "escape");
+    assert_eq!(engine.list_smart_albums().len(), 1, "Escape keeps it");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.confirm_delete.is_none(),
+            "the dialog closed"
+        )
+    });
+
+    click(vcx, delete);
+    click(vcx, "smart-album-delete-cancel");
+    assert_eq!(engine.list_smart_albums().len(), 1, "Cancel keeps it");
+
+    click(vcx, delete);
+    click_point(vcx, 4.0, 4.0);
+    assert_eq!(
+        engine.list_smart_albums().len(),
+        1,
+        "a click outside keeps it"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.confirm_delete.is_none(),
+            "the dialog closed"
+        )
+    });
+
+    // A text field left active behind the dialog gets no typing.
+    view.update(vcx, |app, cx| app.start_tag_input(cx));
+    click(vcx, delete);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "x");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tag_input_buffer.is_empty(),
+            "typing goes nowhere while the dialog is open"
+        )
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, cx| {
+        app.tag_input_active = false;
+        cx.notify();
+    });
+
+    // The palette reaches the same confirmation for the open album.
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::User(album.id), cx);
+        app.execute_command(crate::app::command_palette::CommandId::DeleteSmartAlbum, cx);
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.confirm_delete, Some(album.id))
+    });
+    keystrokes(vcx, "escape");
+
+    click(vcx, delete);
+    keystrokes(vcx, "enter");
+    assert!(engine.list_smart_albums().is_empty(), "↵ deletes it");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.confirm_delete.is_none(),
+            "the dialog closed"
+        )
+    });
+    assert_eq!(
+        engine.total_count(),
+        items,
+        "no photo or video goes with it"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn opening_another_library_drops_a_pending_smart_album_delete() {
+    let (dir, engine) = seed_library("reg_album_confirm_switch", 2);
+    let (other, _other_engine) = seed_library("reg_album_confirm_other", 2);
+    let rules = [SmartAlbumRule {
+        field: RuleField::IsFavorite,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Bool(true),
+    }];
+    let album = engine
+        .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
+        .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, leak(format!("smart-album-delete-{}", album.id)));
+    view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.confirm_delete.is_none(),
+            "ids restart per library, so the question cannot carry over"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&other);
 }

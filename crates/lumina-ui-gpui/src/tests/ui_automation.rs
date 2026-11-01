@@ -1347,6 +1347,7 @@ fn ui_automation_smart_album_edit_and_delete() {
 
     render_ui(vcx);
     click(vcx, leak(format!("smart-album-delete-{}", album.id)));
+    click(vcx, "smart-album-delete-confirm");
     view.update(vcx, |app, _| {
         assert!(
             app.user_smart_albums.is_empty(),

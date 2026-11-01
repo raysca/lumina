@@ -175,6 +175,8 @@ pub struct AlbumDraftState {
     pub preview: Vec<MediaItem>,
     /// Why valid-looking rules cannot run (a saved rule the engine rejects).
     pub problem: Option<String>,
+    /// The smart album whose delete confirmation is open.
+    pub confirm_delete: Option<i64>,
 }
 
 impl Default for AlbumDraftState {
@@ -190,6 +192,7 @@ impl Default for AlbumDraftState {
             match_count: None,
             preview: Vec::new(),
             problem: None,
+            confirm_delete: None,
         }
     }
 }

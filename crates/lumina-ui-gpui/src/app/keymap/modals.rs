@@ -80,6 +80,16 @@ impl LuminaApp {
             return true;
         }
 
+        // 1b. Smart album delete confirmation
+        if self.album_draft.confirm_delete.is_some() {
+            match key {
+                "escape" => self.cancel_delete_smart_album(cx),
+                "enter" | "return" => self.confirm_delete_smart_album(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 2. Smart album builder sheet
         if self.album_draft.modal_open {
             self.handle_album_builder_key(key, cmd_or_ctrl, keystroke, cx);

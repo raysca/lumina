@@ -43,6 +43,15 @@ impl LuminaApp {
         }
     }
 
+    /// The keyboard path to the sidebar ×: asks before deleting the open
+    /// smart album.
+    pub fn delete_selected_smart_album(&mut self, cx: &mut Context<Self>) {
+        match self.selection {
+            AlbumSelection::User(id) => self.prompt_delete_smart_album(id, cx),
+            _ => self.show_toast("Open a smart album to delete it", cx),
+        }
+    }
+
     fn open_draft(
         &mut self,
         editing: Option<i64>,
@@ -76,6 +85,24 @@ impl LuminaApp {
         self.album_draft.popup = None;
         self.album_draft.preview.clear();
         cx.notify();
+    }
+
+    /// Asks before deleting a smart album; see [`Self::confirm_delete_smart_album`].
+    pub fn prompt_delete_smart_album(&mut self, album_id: i64, cx: &mut Context<Self>) {
+        self.album_draft.confirm_delete = Some(album_id);
+        cx.notify();
+    }
+
+    pub fn cancel_delete_smart_album(&mut self, cx: &mut Context<Self>) {
+        self.album_draft.confirm_delete = None;
+        cx.notify();
+    }
+
+    /// Deletes the album the open confirmation asks about.
+    pub fn confirm_delete_smart_album(&mut self, cx: &mut Context<Self>) {
+        if let Some(album_id) = self.album_draft.confirm_delete.take() {
+            self.delete_smart_album(album_id, cx);
+        }
     }
 
     /// Deletes a user smart album (metadata only; no media is touched). The

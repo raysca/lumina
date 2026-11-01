@@ -11,6 +11,7 @@ pub mod onboarding;
 pub mod preferences;
 pub mod search_bar;
 pub mod sidebar;
+pub mod smart_album_delete;
 pub mod sort_menu;
 pub mod tag_manager;
 pub mod toast;
