@@ -2,8 +2,8 @@ use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
 use crate::app::info_details::InfoDetails;
-use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::inspector::summary::render_stars;
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
 
@@ -16,6 +16,7 @@ pub fn render_info_tab(
     size_str: &str,
     is_trash: bool,
     rating: u8,
+    star_pop: Option<(u8, ElementId)>,
     display_title: &str,
     caption: Option<&str>,
     caption_input_active: bool,
@@ -228,41 +229,7 @@ pub fn render_info_tab(
                 // Rating (interactive gold star icons)
                 .child(render_info_field_row(
                     "Rating",
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_1()
-                        .children((1u8..=5).map(|star| {
-                            let app_star = weak_app.clone();
-                            let is_filled = rating >= star;
-                            div()
-                                .id(ElementId::NamedInteger(
-                                    "inspector-star".into(),
-                                    star as u64,
-                                ))
-                                .cursor_pointer()
-                                .child(render_icon(
-                                    if is_filled {
-                                        Icon::StarFilled
-                                    } else {
-                                        Icon::Star
-                                    },
-                                    px(12.0),
-                                    if is_filled {
-                                        theme::rating()
-                                    } else {
-                                        theme::rating_unset()
-                                    },
-                                ))
-                                .on_click(move |_e, _w, cx| {
-                                    if let Some(app) = app_star.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.set_rating_selected(star, cx);
-                                        });
-                                    }
-                                })
-                        })),
+                    render_stars(weak_app.clone(), rating, star_pop),
                 ))
                 // Kind
                 .child(render_info_label_value_row("Kind", &kind_str))

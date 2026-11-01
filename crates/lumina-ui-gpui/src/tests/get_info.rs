@@ -1,7 +1,7 @@
 //! v3 Get Info window (FIXES §5): title bar, header, General, Camera,
 //! Location and Tags tabs, driven in a real floating-inspector window.
 
-use crate::tests::ui_automation::{click, keystrokes, render_ui, seed_library};
+use crate::tests::ui_automation::{click, keystrokes, leak, render_ui, seed_library};
 use crate::views::floating_inspector::FloatingInspectorView;
 use crate::LuminaApp;
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -359,4 +359,43 @@ fn cached_details_never_cross_libraries() {
         !details.is_for(&same_id_other_library),
         "ids restart per catalog: the path must match too"
     );
+}
+
+#[core::prelude::v1::test]
+fn get_info_stars_match_the_inspector_and_pop() {
+    crate::motion::REDUCE_MOTION.with(|on| on.set(false));
+    let mut cx = TestAppContext::single();
+    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_stars");
+
+    for star in 1..=5u8 {
+        let b = bounds(icx, leak(format!("inspector-star-{star}")));
+        assert_eq!(
+            (f32::from(b.size.width), f32::from(b.size.height)),
+            (22.0, 22.0),
+            "Get Info star {star} is the inspector's 22px star"
+        );
+    }
+
+    let id = view.update(icx, |app, _| app.selected_item.as_ref().unwrap().id);
+    click(icx, "inspector-star-4");
+    // Mid-pop the star and the Favorite button still lay out.
+    render_ui(icx);
+    assert!(icx.debug_bounds("inspector-star-4").is_some());
+    view.update(icx, |app, _| {
+        assert_eq!(
+            app.mark_pop.star(Some(id)).map(|(star, _)| star),
+            Some(4),
+            "the clicked star pops"
+        );
+        let engine = &app.grid_state.as_ref().unwrap().engine;
+        assert_eq!(engine.get_ratings_map().get(&id).copied(), Some(4));
+    });
+
+    // ponytail: GPUI exposes no transform to assert on, so the heart's pop
+    // is checked by eye; this only proves the button still lays out mid-pop.
+    click(icx, "info-quick-fav-btn");
+    render_ui(icx);
+    assert!(icx.debug_bounds("info-quick-fav-btn").is_some());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

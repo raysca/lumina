@@ -90,6 +90,7 @@ impl Render for FloatingInspectorView {
             .as_ref()
             .map(|it| app_read.get_item_rating(it))
             .unwrap_or(0);
+        let mark_pop = app_read.mark_pop.clone();
         let caption = selected_item
             .as_ref()
             .and_then(|it| app_read.item_captions.get(&it.id).cloned());
@@ -269,6 +270,7 @@ impl Render for FloatingInspectorView {
                             is_trash,
                             tab,
                             rating,
+                            &mark_pop,
                             caption.as_deref(),
                             caption_input_active,
                             &caption_input_buffer,

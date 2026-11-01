@@ -107,7 +107,7 @@ fn pop_scale(t: f32) -> f32 {
 /// bumps `generation`, which gives the pop a fresh id and replays it. The pop
 /// is only offered for `POP * 2` after the set, so coming back to the item
 /// later does not replay it.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MarkPop {
     item: Option<lumina_core::MediaId>,
     star: u8,

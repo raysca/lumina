@@ -6,6 +6,7 @@ use lumina_core::{MediaItem, MediaType};
 use crate::app::info_details::InfoDetails;
 pub use crate::app::types::format_bytes;
 use crate::icons::{render_icon, Icon};
+use crate::motion::MarkPop;
 use crate::theme;
 use crate::views::inspector::tabs::camera::render_camera_tab;
 use crate::views::inspector::tabs::info::render_info_tab;
@@ -97,6 +98,7 @@ pub fn render_inspector_body(
     is_trash: bool,
     tab: InspectorTab,
     rating: u8,
+    mark_pop: &MarkPop,
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
@@ -135,6 +137,7 @@ pub fn render_inspector_body(
         is_trash,
         tab,
         rating,
+        mark_pop,
         caption,
         caption_input_active,
         caption_input_buffer,
@@ -160,6 +163,7 @@ fn render_single_body(
     is_trash: bool,
     tab: InspectorTab,
     rating: u8,
+    mark_pop: &MarkPop,
     caption: Option<&str>,
     caption_input_active: bool,
     caption_input_buffer: &str,
@@ -302,6 +306,7 @@ fn render_single_body(
                                             Icon::Heart
                                         }),
                                         is_fav,
+                                        mark_pop.heart(Some(item.id)),
                                     )
                                     .tooltip(theme::tooltip_label("Favorite (F)"))
                                     .on_click(
@@ -320,6 +325,7 @@ fn render_single_body(
                                         "Reveal in Finder",
                                         None,
                                         false,
+                                        None,
                                     )
                                     .tooltip(theme::tooltip_label("Reveal in Finder (⇧⌘R)"))
                                     .on_click(
@@ -341,6 +347,7 @@ fn render_single_body(
                                         "Copy Path",
                                         None,
                                         false,
+                                        None,
                                     )
                                     .tooltip(theme::tooltip_label("Copy Path (⌥⌘C)"))
                                     .on_click(
@@ -354,15 +361,23 @@ fn render_single_body(
                                 // ponytail: "Open With ▾" needs a native app-list
                                 // bridge (docs/ui_v3_plan.md); this opens the default app.
                                 .child(
-                                    header_button("info-quick-open-with-btn", "Open", None, false)
-                                        .tooltip(theme::tooltip_label("Open in Default App"))
-                                        .on_click(move |_e, _w, cx| {
+                                    header_button(
+                                        "info-quick-open-with-btn",
+                                        "Open",
+                                        None,
+                                        false,
+                                        None,
+                                    )
+                                    .tooltip(theme::tooltip_label("Open in Default App"))
+                                    .on_click(
+                                        move |_e, _w, cx| {
                                             if let Some(app) = app_open_with.upgrade() {
                                                 app.update(cx, |this, cx| {
                                                     this.open_selected_in_default_app(cx);
                                                 });
                                             }
-                                        }),
+                                        },
+                                    ),
                                 ),
                         ),
                 ),
@@ -394,6 +409,7 @@ fn render_single_body(
                         &size_str,
                         is_trash,
                         rating,
+                        mark_pop.star(Some(item.id)),
                         &display_title,
                         caption,
                         caption_input_active,
@@ -424,7 +440,14 @@ fn render_single_body(
 }
 
 /// Header action: 6px radius (not a pill); `on` is the amber "Favorited" fill.
-fn header_button(id: &'static str, label: &str, icon: Option<Icon>, on: bool) -> Stateful<Div> {
+/// `pop` replays the icon's pop (`motion::MarkPop`).
+fn header_button(
+    id: &'static str,
+    label: &str,
+    icon: Option<Icon>,
+    on: bool,
+    pop: Option<ElementId>,
+) -> Stateful<Div> {
     let fg = if on {
         theme::accent_fg()
     } else {
@@ -457,7 +480,7 @@ fn header_button(id: &'static str, label: &str, icon: Option<Icon>, on: bool) ->
         .flex_row()
         .items_center()
         .gap_1p5()
-        .children(icon.map(|icon| render_icon(icon, px(12.0), fg)))
+        .children(icon.map(|icon| crate::motion::pop(render_icon(icon, px(12.0), fg), pop)))
         .child(label.to_string())
 }
 
