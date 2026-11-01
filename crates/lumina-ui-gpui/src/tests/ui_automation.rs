@@ -2862,6 +2862,20 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
         vcx.debug_bounds("batch-location-input-mixed").is_some(),
         "differing locations must show the Mixed marker"
     );
+    for row in [
+        "batch-title-input-value",
+        "batch-date-input-value",
+        "batch-location-input-value",
+    ] {
+        assert!(
+            vcx.debug_bounds(row).is_none(),
+            "{row}: a mixed row says Mixed once, in its marker, not again as its value"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("batch-caption-input-value").is_some(),
+        "a shared value still shows in its row"
+    );
 
     focus_app(vcx, &view);
     click(vcx, "batch-title-input");
@@ -2875,6 +2889,11 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
             "mixed draft starts empty"
         );
     });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("batch-title-input-value").is_some(),
+        "editing a mixed row shows its draft"
+    );
     type_text(vcx, "shared");
     keystrokes(vcx, "enter");
 

@@ -1,5 +1,6 @@
 //! v3 batch inspector: a flat panel for a multi-selection.
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::icons::{render_icon, Icon};
@@ -476,17 +477,17 @@ fn render_batch_metadata_row(
                     Empty.into_any_element()
                 }),
         )
-        .child(
-            div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
-                .text_color(if mixed && !editing {
-                    theme::text_muted()
-                } else {
-                    theme::text()
-                })
-                .child(display),
-        )
+        // The marker already says Mixed; repeating it as the value is noise.
+        .when(!mixed, |row| {
+            row.child(
+                div()
+                    .debug_selector(move || format!("{selector}-value"))
+                    .text_xs()
+                    .font_family(theme::FONT_MONO)
+                    .text_color(theme::text())
+                    .child(display),
+            )
+        })
         .child(
             div()
                 .text_xs()
