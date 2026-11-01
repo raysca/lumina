@@ -118,6 +118,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("⌘[", "Back"),
             ("⌥⌘N", "New smart album"),
             ("I", "Toggle inspector"),
+            ("⌘I", "Get Info window"),
             ("F", "Favorite"),
             ("⇧⌘R", "Show in Finder"),
             ("⌥⌘C", "Copy file path"),

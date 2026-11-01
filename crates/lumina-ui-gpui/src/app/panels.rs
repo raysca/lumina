@@ -48,7 +48,16 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Opens Get Info on `tab` (used by the palette's Get Info actions).
+    /// ⌘I: the Get Info window on its Info tab. Like Finder, nothing
+    /// happens with nothing selected.
+    pub fn get_info(&mut self, cx: &mut Context<Self>) {
+        if self.selected_item.is_some() {
+            self.open_get_info_at(crate::views::inspector::InspectorTab::Info, cx);
+        }
+    }
+
+    /// Opens the Get Info window on `tab` (⌘I, the context menu and the
+    /// palette's Get Info actions).
     pub fn open_get_info_at(
         &mut self,
         tab: crate::views::inspector::InspectorTab,

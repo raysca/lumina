@@ -159,8 +159,7 @@ impl MediaContextMenu {
                         false,
                         cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.close_context_menu(cx);
-                            this.inspector_open = true;
-                            cx.notify();
+                            this.open_get_info_at(crate::views::inspector::InspectorTab::Info, cx);
                         }),
                     ))
                     // Divider

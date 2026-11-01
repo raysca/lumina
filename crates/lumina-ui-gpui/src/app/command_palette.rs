@@ -26,6 +26,7 @@ pub enum CommandId {
     Shortcuts,
     ToggleSidebar,
     ToggleInspector,
+    GetInfo,
     ExportSelection,
     ImportXmp,
     SortDate,
@@ -73,7 +74,7 @@ impl Command {
             Preferences | SortDate | SortName | SortSize | SortRating | SortAsc | SortDesc => {
                 Icon::Sliders
             }
-            About | ToggleInspector | ShowLicense | ShowAcknowledgements => Icon::Info,
+            About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
             ExportSelection => Icon::ExternalLink,
@@ -203,6 +204,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.toggle_inspector",
             shortcut: "I",
             keywords: "panel info hide show",
+        },
+        Command {
+            id: CommandId::GetInfo,
+            key: "command.get_info",
+            shortcut: "⌘I",
+            keywords: "info window details metadata",
         },
         Command {
             id: CommandId::ExportSelection,
@@ -575,6 +582,7 @@ impl LuminaApp {
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),
             CommandId::ToggleSidebar => self.toggle_sidebar(cx),
             CommandId::ToggleInspector => self.toggle_inspector(cx),
+            CommandId::GetInfo => self.get_info(cx),
             CommandId::ExportSelection => self.export_pick_folder(cx),
             CommandId::ImportXmp => self.import_sidecars_selected(cx),
             CommandId::SortDate => self.set_sort_field(SortField::DateTaken, cx),

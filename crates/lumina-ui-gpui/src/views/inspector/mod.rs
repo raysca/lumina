@@ -22,7 +22,7 @@ impl InspectorView {
             .border_color(theme::border_subtle());
 
         // v3: a single item gets the one-column summary with no header strip;
-        // Info / ⌘I closes it and Get Info… opens the full tabbed window.
+        // Info / I closes it; ⌘I or Get Info… opens the full tabbed window.
         if this.selected_indices.len() > 1 {
             return panel
                 .child(batch::render_batch(this, weak_app))

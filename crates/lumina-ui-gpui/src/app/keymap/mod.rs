@@ -171,9 +171,13 @@ impl LuminaApp {
             return;
         }
 
-        // Inspector Toggle
+        // ⌘I opens the Get Info window, as in Finder; I toggles the inspector.
         if key.eq_ignore_ascii_case("i") {
-            self.toggle_inspector(cx);
+            if cmd_or_ctrl {
+                self.get_info(cx);
+            } else {
+                self.toggle_inspector(cx);
+            }
             return;
         }
 

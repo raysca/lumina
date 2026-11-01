@@ -38,6 +38,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.shortcuts" => "Keyboard Shortcuts",
         "command.toggle_sidebar" => "Toggle Sidebar",
         "command.toggle_inspector" => "Toggle Inspector",
+        "command.get_info" => "Get Info",
         "command.export" => "Export Selection…",
         "command.import_xmp" => "Import XMP Metadata",
         "command.sort_date" => "Sort by Date Taken",

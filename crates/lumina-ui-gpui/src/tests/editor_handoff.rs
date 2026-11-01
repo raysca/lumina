@@ -557,3 +557,63 @@ fn launch_failures_reach_the_banner() {
         "a launcher that cannot start says why"
     );
 }
+
+#[core::prelude::v1::test]
+fn context_menu_get_info_opens_the_get_info_window() {
+    let (temp_dir, engine) = seed_library("menu_get_info", 3);
+    let card = media_card(&engine);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        app.inspector_tab = crate::views::inspector::InspectorTab::Location
+    });
+
+    right_click(vcx, card);
+    click(vcx, "inspect-menu-btn");
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.floating_inspector_window.is_some(),
+            "Get Info (⌘I) opens the Get Info window, not the docked inspector"
+        );
+        assert!(!app.inspector_open, "the docked inspector stays closed");
+        assert_eq!(
+            app.inspector_tab,
+            crate::views::inspector::InspectorTab::Info,
+            "Get Info opens on its Info tab"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn cmd_i_opens_get_info_and_i_toggles_the_inspector() {
+    let (temp_dir, engine) = seed_library("cmd_i", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let docked = view.update(vcx, |app, _| app.inspector_open);
+    crate::tests::ui_automation::keystrokes(vcx, "secondary-i");
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.floating_inspector_window.is_none(),
+            "⌘I with nothing selected does nothing, as in Finder"
+        )
+    });
+
+    crate::tests::ui_automation::keystrokes(vcx, "i");
+    view.update(vcx, |app, _| {
+        assert_ne!(app.inspector_open, docked, "I toggles the docked inspector")
+    });
+    crate::tests::ui_automation::keystrokes(vcx, "home");
+    crate::tests::ui_automation::keystrokes(vcx, "secondary-i");
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(!app.inspector_open, "⌘I undocks the inspector");
+        assert!(
+            app.floating_inspector_window.is_some(),
+            "⌘I opens the Get Info window"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
