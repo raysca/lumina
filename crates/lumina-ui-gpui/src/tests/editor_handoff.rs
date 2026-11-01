@@ -257,11 +257,12 @@ fn editor_handoff_command_construction_never_uses_a_shell() {
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
             vec![
-                OsStr::new("-a"),
+                OsStr::new("-b"),
                 OsStr::new("com.apple.TextEdit"),
                 file.as_os_str()
             ],
-            "the app and file must be separate open -a arguments, never a shell string"
+            "a bundle id goes to open -b (open -a takes a name or path), as separate \
+             arguments, never a shell string"
         );
     }
     #[cfg(not(target_os = "macos"))]
@@ -288,6 +289,33 @@ fn editor_handoff_command_construction_never_uses_a_shell() {
         spaced.get_args().any(|arg| arg == file.as_os_str()),
         "a file path with spaces must remain one argument"
     );
+    #[cfg(target_os = "macos")]
+    {
+        let flag = |editor: &str| {
+            external_editor_command(editor, file)
+                .and_then(|c| c.get_args().next().map(|a| a.to_owned()))
+        };
+        assert_eq!(
+            flag("/Applications/My Editor.app").as_deref(),
+            Some(std::ffi::OsStr::new("-a")),
+            "an application path goes to open -a"
+        );
+        assert_eq!(
+            flag("Preview").as_deref(),
+            Some(std::ffi::OsStr::new("-a")),
+            "a bare app name goes to open -a, as it always did"
+        );
+        assert_eq!(
+            flag("TextEdit.app").as_deref(),
+            Some(std::ffi::OsStr::new("-a")),
+            "an app bundle name goes to open -a"
+        );
+        assert_eq!(
+            flag("com.apple.TextEdit").as_deref(),
+            Some(std::ffi::OsStr::new("-b")),
+            "a bundle id goes to open -b"
+        );
+    }
 
     assert!(
         external_editor_command("", file).is_none(),
