@@ -140,23 +140,31 @@ impl DecoderPipeline {
     }
 
     pub fn decode_image(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        let bytes = fs::read(path)?;
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
 
-        // High-speed SIMD path for JPEGs
-        if ext == "jpg" || ext == "jpeg" {
-            if let Ok(frame) = Self::decode_jpeg_simd(id, path, &bytes, target_size) {
-                return Ok(frame);
+        let is_jpeg = ext == "jpg" || ext == "jpeg";
+
+        // For large non-JPEG files (> 8 MB), decode hardware-scaled via sips first to avoid full decode OOM
+        // without reading the entire large file into a heap buffer first.
+        if !is_jpeg {
+            if let Ok(metadata) = fs::metadata(path) {
+                if metadata.len() > 8 * 1024 * 1024 {
+                    if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+                        return Ok(frame);
+                    }
+                }
             }
         }
 
-        // For large non-JPEG files (> 8 MB), decode hardware-scaled via sips first to avoid full decode OOM
-        if bytes.len() > 8 * 1024 * 1024 {
-            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+        let bytes = fs::read(path)?;
+
+        // High-speed SIMD path for JPEGs
+        if is_jpeg {
+            if let Ok(frame) = Self::decode_jpeg_simd(id, path, &bytes, target_size) {
                 return Ok(frame);
             }
         }

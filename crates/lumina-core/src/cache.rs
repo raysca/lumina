@@ -95,11 +95,7 @@ impl DiskCache {
         let key = Self::compute_key(path, file_size, mtime_epoch_ms, target_size);
         let file_path = self.cache_file_path(&key);
 
-        if !file_path.exists() {
-            return None;
-        }
-
-        let bytes = fs::read(&file_path).ok()?;
+        let mut bytes = fs::read(&file_path).ok()?;
         if bytes.len() < 12 {
             return None;
         }
@@ -114,10 +110,12 @@ impl DiskCache {
             PixelFormat::Rgba8
         };
 
-        let data = bytes[12..].to_vec();
-        if data.len() != (width as usize * height as usize * 4) {
+        let expected_len = width as usize * height as usize * 4;
+        if bytes.len() - 12 != expected_len {
             return None;
         }
+
+        let data = bytes.split_off(12);
 
         Some(DecodedFrame {
             id,

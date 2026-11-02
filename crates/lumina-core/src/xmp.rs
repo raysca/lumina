@@ -57,6 +57,7 @@ fn unescape_xml(value: &str) -> String {
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
+        .replace("&apos;", "'")
         .replace("&amp;", "&")
 }
 
@@ -281,5 +282,23 @@ mod tests {
     fn missing_sidecar_is_none() {
         let media = temp_media("missing");
         assert_eq!(read_sidecar(&media).unwrap(), None);
+    }
+
+    #[test]
+    fn unescapes_apostrophes_and_standard_xml_entities() {
+        let xml = r#"
+        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+         <rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <dc:title>
+           <rdf:Alt><rdf:li xml:lang="x-default">It&apos;s a dog &amp; cat &quot;story&quot;</rdf:li></rdf:Alt>
+          </dc:title>
+          <dc:subject>
+           <rdf:Bag><rdf:li>rock &apos;n&apos; roll</rdf:li></rdf:Bag>
+          </dc:subject>
+         </rdf:Description>
+        </rdf:RDF>"#;
+        let parsed = parse_xmp(xml);
+        assert_eq!(parsed.title.as_deref(), Some("It's a dog & cat \"story\""));
+        assert_eq!(parsed.tags, vec!["rock 'n' roll"]);
     }
 }

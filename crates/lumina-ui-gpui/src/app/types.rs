@@ -55,6 +55,12 @@ pub enum UiMessage {
     FolderPicked(PathBuf),
     ExportFolderPicked(PathBuf),
     VideoFrameTick,
+    #[cfg_attr(test, allow(dead_code))]
+    SelectedTagsLoaded {
+        request: u64,
+        single_tags: Vec<String>,
+        counts: Vec<(String, usize)>,
+    },
     OpenFloatingInspector,
     OpenFloatingPip,
     FloatingInspectorClosed,

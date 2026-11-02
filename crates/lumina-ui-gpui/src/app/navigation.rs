@@ -1418,13 +1418,25 @@ impl LuminaApp {
 
     pub fn refresh_selected_tags(&mut self) {
         self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
-        if let Some(ref state) = self.grid_state {
-            let ids = self.get_selected_ids();
+        let request = self.selected_tags_request;
+        let Some(ref state) = self.grid_state else {
+            self.selected_item_tags = Vec::new();
             self.selected_tag_counts = Vec::new();
-            if ids.is_empty() {
-                self.selected_item_tags = Vec::new();
-            } else if ids.len() == 1 {
+            return;
+        };
+        let ids = self.get_selected_ids();
+        if ids.is_empty() {
+            self.selected_item_tags = Vec::new();
+            self.selected_tag_counts = Vec::new();
+            return;
+        }
+
+        #[cfg(test)]
+        {
+            let _ = request;
+            if ids.len() == 1 {
                 self.selected_item_tags = state.engine.get_tags_for_item(ids[0]);
+                self.selected_tag_counts = Vec::new();
             } else {
                 self.selected_tag_counts = state.engine.tag_counts_for_items(&ids);
                 self.selected_item_tags = self
@@ -1433,9 +1445,28 @@ impl LuminaApp {
                     .map(|(tag, _)| tag.clone())
                     .collect();
             }
-        } else {
-            self.selected_item_tags = Vec::new();
-            self.selected_tag_counts = Vec::new();
+        }
+
+        #[cfg(not(test))]
+        {
+            let engine = state.engine.clone();
+            let tx = self.ui_tx.clone();
+            let _ = std::thread::Builder::new()
+                .name("lumina-tag-refresh".to_string())
+                .spawn(move || {
+                    let (single_tags, counts) = if ids.len() == 1 {
+                        (engine.get_tags_for_item(ids[0]), Vec::new())
+                    } else {
+                        let counts = engine.tag_counts_for_items(&ids);
+                        let tags = counts.iter().map(|(t, _)| t.clone()).collect();
+                        (tags, counts)
+                    };
+                    let _ = tx.send_blocking(crate::app::types::UiMessage::SelectedTagsLoaded {
+                        request,
+                        single_tags,
+                        counts,
+                    });
+                });
         }
     }
 

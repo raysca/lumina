@@ -419,6 +419,17 @@ impl LuminaApp {
             UiMessage::FloatingInspectorClosed => {
                 self.floating_inspector_closed(cx);
             }
+            UiMessage::SelectedTagsLoaded {
+                request,
+                single_tags,
+                counts,
+            } => {
+                if self.selected_tags_request == request {
+                    self.selected_item_tags = single_tags;
+                    self.selected_tag_counts = counts;
+                    cx.notify();
+                }
+            }
             UiMessage::FloatingPipClosed(window) => {
                 self.floating_pip_closed(window, cx);
             }

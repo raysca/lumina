@@ -313,6 +313,61 @@
     return NO;
 }
 
+- (BOOL)copyFrameDirect:(uint8_t *)dst
+                 maxLen:(int)maxLen
+               outWidth:(int *)outWidth
+              outHeight:(int *)outHeight
+                 outLen:(int *)outLen {
+    if (!_videoOutput || !_playerItem || !dst || !outWidth || !outHeight || !outLen) {
+        return NO;
+    }
+
+    CMTime itemTime = [_playerItem currentTime];
+    if (![_videoOutput hasNewPixelBufferForItemTime:itemTime]) {
+        return NO;
+    }
+    CVPixelBufferRef buf = [_videoOutput copyPixelBufferForItemTime:itemTime itemTimeForDisplay:NULL];
+    if (!buf) {
+        return NO;
+    }
+
+    CVReturn lockErr = CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+    if (lockErr != kCVReturnSuccess) {
+        CVPixelBufferRelease(buf);
+        return NO;
+    }
+
+    size_t w = CVPixelBufferGetWidth(buf);
+    size_t h = CVPixelBufferGetHeight(buf);
+    size_t stride = CVPixelBufferGetBytesPerRow(buf);
+    uint8_t *src = (uint8_t *)CVPixelBufferGetBaseAddress(buf);
+
+    if (src && w > 0 && h > 0) {
+        size_t tightStride = w * 4;
+        size_t totalBytes = tightStride * h;
+        *outWidth = (int)w;
+        *outHeight = (int)h;
+        *outLen = (int)totalBytes;
+
+        if ((size_t)maxLen >= totalBytes) {
+            if (stride == tightStride) {
+                memcpy(dst, src, totalBytes);
+            } else {
+                for (size_t row = 0; row < h; row++) {
+                    memcpy(dst + row * tightStride, src + row * stride, tightStride);
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+            CVPixelBufferRelease(buf);
+            return YES;
+        }
+    }
+
+    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+    CVPixelBufferRelease(buf);
+    return NO;
+}
+
 @end
 
 // C FFI Interface
@@ -469,6 +524,14 @@ int lumina_player_copy_frame(void* player, int* out_width, int* out_height, uint
     @autoreleasepool {
         LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
         return [bridge copyFrameIntoWidth:out_width height:out_height data:out_data len:out_len] ? 1 : 0;
+    }
+}
+
+int lumina_player_copy_frame_direct(void* player, uint8_t* dst, int max_len, int* out_width, int* out_height, int* out_len) {
+    if (!player || !dst || !out_width || !out_height || !out_len) return 0;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        return [bridge copyFrameDirect:dst maxLen:max_len outWidth:out_width outHeight:out_height outLen:out_len] ? 1 : 0;
     }
 }
 

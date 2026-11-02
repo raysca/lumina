@@ -218,6 +218,18 @@ impl Catalog {
         Ok(Some(backup_path))
     }
 
+    /// Returns the SQLite EXPLAIN QUERY PLAN rows for `sql`.
+    pub fn explain_query_plan(&self, sql: &str) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(3))?;
+        let mut plan = Vec::new();
+        for r in rows {
+            plan.push(r?);
+        }
+        Ok(plan)
+    }
+
     pub(crate) fn map_query_rows<P>(
         stmt: &mut rusqlite::Statement,
         params: P,

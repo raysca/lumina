@@ -71,6 +71,9 @@ impl Catalog {
             CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type);
             CREATE INDEX IF NOT EXISTS idx_media_trashed ON media_items(is_trashed, timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 1;
             CREATE INDEX IF NOT EXISTS idx_media_favorite ON media_items(is_favorite, timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
+            CREATE INDEX IF NOT EXISTS idx_media_rating ON media_items(rating DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
+            CREATE INDEX IF NOT EXISTS idx_media_file_name ON media_items(file_name COLLATE NOCASE ASC, id ASC) WHERE is_trashed = 0 AND is_hidden = 0;
+            CREATE INDEX IF NOT EXISTS idx_media_file_size ON media_items(file_size DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
 
             CREATE TABLE IF NOT EXISTS timeline_buckets (
                 bucket_type TEXT NOT NULL,

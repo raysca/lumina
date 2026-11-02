@@ -166,6 +166,28 @@ impl LuminaApp {
                                 &[][..]
                             };
 
+                            let (row_textures, missing_items) = if let Some(ref state) = this.grid_state {
+                                let mut cache = state.texture_cache.lock();
+                                let mut texs = Vec::with_capacity(items.len());
+                                let mut missing = Vec::new();
+                                for item in items {
+                                    if let Some(tex) = cache.get(&item.id).cloned() {
+                                        texs.push(Some(tex));
+                                    } else {
+                                        texs.push(None);
+                                        missing.push(item);
+                                    }
+                                }
+                                drop(cache);
+                                (texs, missing)
+                            } else {
+                                (vec![None; items.len()], Vec::new())
+                            };
+
+                            for missing_item in missing_items {
+                                this.queue_thumbnail_request_item(missing_item);
+                            }
+
                             let mut row_cards = Vec::with_capacity(cols);
                             for (offset_in_row, item) in items.iter().enumerate() {
                                 let card_index = start + offset_in_row;
@@ -187,18 +209,7 @@ impl LuminaApp {
                                     item_color.is_some(),
                                 );
 
-                                let texture = if let Some(ref state) = this.grid_state {
-                                    let mut cache = state.texture_cache.lock();
-                                    if let Some(tex) = cache.get(&item.id).cloned() {
-                                        Some(tex)
-                                    } else {
-                                        drop(cache);
-                                        this.queue_thumbnail_request(item.id);
-                                        None
-                                    }
-                                } else {
-                                    None
-                                };
+                                let texture = row_textures.get(offset_in_row).cloned().flatten();
 
                                 let item_for_click = item.clone();
                                 let item_for_context = item.clone();

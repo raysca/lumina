@@ -986,10 +986,8 @@ impl LuminaEngine {
         F: FnOnce(Option<DecodedFrame>) + Send + 'static,
     {
         let catalog = self.catalog.clone();
-        let cache = self.cache.clone();
+        let this = self.clone();
 
-        // Dispatch catalog lookup, disk cache check, and decoding onto background Rayon thread
-        // so the UI thread never blocks on SQLite mutexes or disk I/O.
         self.decoder.spawn(move || {
             let item = match catalog.get_item_by_id(id) {
                 Ok(Some(it)) => it,
@@ -999,9 +997,21 @@ impl LuminaEngine {
                 }
             };
 
-            // Rotation is applied after the cache lookup: cached bytes stay in the
-            // file's own orientation, so changing the angle never makes the key
-            // (path, size, mtime, target) stale.
+            this.request_thumbnail_item(item, target_size, callback);
+        });
+    }
+
+    /// Requests a thumbnail using an already-fetched `MediaItem`, bypassing the
+    /// initial catalog query and eliminating SQLite connection lock contention.
+    pub fn request_thumbnail_item<F>(&self, item: MediaItem, target_size: u32, callback: F)
+    where
+        F: FnOnce(Option<DecodedFrame>) + Send + 'static,
+    {
+        let catalog = self.catalog.clone();
+        let cache = self.cache.clone();
+
+        self.decoder.spawn(move || {
+            let id = item.id;
             let rotation = match catalog.get_rotation(id) {
                 Ok(quarters) => quarters,
                 Err(err) => {

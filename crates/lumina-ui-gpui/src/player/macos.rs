@@ -36,11 +36,21 @@ extern "C" {
         out_data: *mut *mut u8,
         out_len: *mut c_int,
     ) -> c_int;
+    fn lumina_player_copy_frame_direct(
+        player: *mut c_void,
+        dst: *mut u8,
+        max_len: c_int,
+        out_width: *mut c_int,
+        out_height: *mut c_int,
+        out_len: *mut c_int,
+    ) -> c_int;
     fn lumina_player_free_frame(data: *mut u8);
 }
 
 pub struct AvFoundationPlayer {
     handle: *mut c_void,
+    cached_width: u32,
+    cached_height: u32,
 }
 
 unsafe impl Send for AvFoundationPlayer {}
@@ -48,7 +58,11 @@ unsafe impl Send for AvFoundationPlayer {}
 impl AvFoundationPlayer {
     pub fn new() -> Self {
         let handle = unsafe { lumina_player_create() };
-        Self { handle }
+        Self {
+            handle,
+            cached_width: 0,
+            cached_height: 0,
+        }
     }
 }
 
@@ -92,10 +106,13 @@ impl VideoPlayerBackend for AvFoundationPlayer {
             return Err(anyhow!("Failed to load video in AVFoundation: {:?}", path));
         }
 
+        self.cached_width = width.max(0) as u32;
+        self.cached_height = height.max(0) as u32;
+
         Ok(VideoMetadata {
             duration_secs: duration,
-            width: width.max(0) as u32,
-            height: height.max(0) as u32,
+            width: self.cached_width,
+            height: self.cached_height,
         })
     }
 
@@ -160,6 +177,34 @@ impl VideoPlayerBackend for AvFoundationPlayer {
     }
 
     fn next_frame(&mut self) -> Option<VideoFrame> {
+        let expected_len = (self.cached_width as usize) * (self.cached_height as usize) * 4;
+        if expected_len > 0 {
+            let mut vec = vec![0u8; expected_len];
+            let mut width = 0i32;
+            let mut height = 0i32;
+            let mut len = 0i32;
+            let ok = unsafe {
+                lumina_player_copy_frame_direct(
+                    self.handle,
+                    vec.as_mut_ptr(),
+                    vec.len() as c_int,
+                    &mut width,
+                    &mut height,
+                    &mut len,
+                )
+            };
+            if ok == 1 && len > 0 {
+                self.cached_width = width as u32;
+                self.cached_height = height as u32;
+                vec.truncate(len as usize);
+                return Some(VideoFrame {
+                    width: width as u32,
+                    height: height as u32,
+                    data: vec,
+                });
+            }
+        }
+
         let mut width = 0i32;
         let mut height = 0i32;
         let mut data_ptr: *mut u8 = std::ptr::null_mut();
@@ -184,6 +229,9 @@ impl VideoPlayerBackend for AvFoundationPlayer {
         unsafe {
             lumina_player_free_frame(data_ptr);
         }
+
+        self.cached_width = width as u32;
+        self.cached_height = height as u32;
 
         Some(VideoFrame {
             width: width as u32,

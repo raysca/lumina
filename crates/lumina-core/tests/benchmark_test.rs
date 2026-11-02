@@ -72,22 +72,25 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
     let cache_dir = temp_dir.join("bench_cache");
     std::fs::create_dir_all(&temp_dir).unwrap();
 
-    let desktop_pics = PathBuf::from("/Users/raymondottun/Desktop/pics");
-    let (target_folder, _cleanup_media) = if desktop_pics.exists() && desktop_pics.is_dir() {
-        (desktop_pics, false)
-    } else {
-        // Fallback: create synthetic real JPEG files so the benchmark runs everywhere
-        let media_dir = temp_dir.join("media");
-        std::fs::create_dir_all(&media_dir).unwrap();
-        for i in 0..10 {
-            let img = image::RgbImage::from_fn(64, 64, |x, y| {
-                image::Rgb([(x * 4) as u8, (y * 4) as u8, (i * 25) as u8])
-            });
-            img.save(media_dir.join(format!("img_{:02}.jpg", i)))
-                .unwrap();
-        }
-        (media_dir, true)
-    };
+    // Opt-in external media directory via LUMINA_BENCH_MEDIA_DIR; defaults to synthetic
+    // real JPEG files so the test runs isolated and deterministically per AGENTS.md §2.
+    let custom_media = std::env::var_os("LUMINA_BENCH_MEDIA_DIR").map(PathBuf::from);
+    let (target_folder, _cleanup_media) =
+        if let Some(media_dir) = custom_media.filter(|p| p.is_dir()) {
+            (media_dir, false)
+        } else {
+            // Fallback: create synthetic real JPEG files so the benchmark runs everywhere
+            let media_dir = temp_dir.join("media");
+            std::fs::create_dir_all(&media_dir).unwrap();
+            for i in 0..10 {
+                let img = image::RgbImage::from_fn(64, 64, |x, y| {
+                    image::Rgb([(x * 4) as u8, (y * 4) as u8, (i * 25) as u8])
+                });
+                img.save(media_dir.join(format!("img_{:02}.jpg", i)))
+                    .unwrap();
+            }
+            (media_dir, true)
+        };
 
     let start = Instant::now();
     // Open with ISOLATED db and cache to prevent touching production database!
@@ -105,7 +108,7 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
     let scan_rate = (total_discovered as f64) / scan_elapsed.as_secs_f64();
 
     println!(
-        "Desktop/pics Scan Benchmark: indexed {} items in {:?} ({:.0} items/sec)",
+        "Scan Benchmark: indexed {} items in {:?} ({:.0} items/sec)",
         total_discovered, scan_elapsed, scan_rate
     );
 
@@ -133,7 +136,7 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
     let decode_rate = (decoded_count as f64) / decode_elapsed.as_secs_f64();
 
     println!(
-        "Desktop/pics Thumbnail Benchmark: decoded {}/{} items in {:?} ({:.1} frames/sec)",
+        "Thumbnail Benchmark: decoded {}/{} items in {:?} ({:.1} frames/sec)",
         decoded_count,
         slice.len(),
         decode_elapsed,

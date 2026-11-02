@@ -750,6 +750,31 @@ impl LuminaApp {
         }
     }
 
+    pub(crate) fn queue_thumbnail_request_item(&self, item: &lumina_core::MediaItem) {
+        if let Some(ref state) = self.grid_state {
+            let item_id = item.id;
+            let should_request = {
+                let mut in_flight = state.in_flight.lock();
+                in_flight.insert(item_id)
+            };
+            if should_request {
+                let tx = self.ui_tx.clone();
+                let in_flight_clone = state.in_flight.clone();
+                let item_clone = item.clone();
+
+                state
+                    .engine
+                    .request_thumbnail_item(item_clone, 320, move |frame_opt| {
+                        in_flight_clone.lock().remove(&item_id);
+                        if let Some(frame) = frame_opt {
+                            let _ =
+                                tx.send_blocking(UiMessage::ThumbnailLoaded { id: item_id, frame });
+                        }
+                    });
+            }
+        }
+    }
+
     pub(crate) fn prefetch_rows(&self, range: std::ops::Range<usize>) {
         if range.start < range.end {
             let cols = self.grid_columns.clamp(2, 8);

@@ -1800,6 +1800,22 @@ fn test_sort_orders_library_search_and_albums() {
         vec!["b.jpg", "a.jpg", "c.jpg"]
     );
 
+    // Verify composite index usage in EXPLAIN QUERY PLAN per AGENTS.md §5.3
+    for sort in [by_name_asc, by_size_asc, by_rating_desc] {
+        let sql = format!(
+            "SELECT id FROM media_items WHERE is_trashed = 0 AND is_hidden = 0 ORDER BY {} LIMIT 10 OFFSET 0",
+            sort.order_by("")
+        );
+        let plan = catalog.explain_query_plan(&sql).unwrap();
+        let plan_str = plan.join(" ");
+        assert!(
+            plan_str.contains("INDEX idx_media_"),
+            "sort {:?} query plan must use an index, got: {}",
+            sort,
+            plan_str
+        );
+    }
+
     let favorites = StructuredQuery::parse("is:favorite");
     assert_eq!(
         names(
