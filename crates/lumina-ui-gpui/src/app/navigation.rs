@@ -1451,7 +1451,7 @@ impl LuminaApp {
         {
             let engine = state.engine.clone();
             let tx = self.ui_tx.clone();
-            let _ = std::thread::Builder::new()
+            if let Err(err) = std::thread::Builder::new()
                 .name("lumina-tag-refresh".to_string())
                 .spawn(move || {
                     let (single_tags, counts) = if ids.len() == 1 {
@@ -1466,7 +1466,10 @@ impl LuminaApp {
                         single_tags,
                         counts,
                     });
-                });
+                })
+            {
+                log::warn!("failed to spawn lumina-tag-refresh thread: {err}");
+            }
         }
     }
 

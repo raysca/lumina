@@ -177,7 +177,10 @@ impl VideoPlayerBackend for AvFoundationPlayer {
     }
 
     fn next_frame(&mut self) -> Option<VideoFrame> {
-        let expected_len = (self.cached_width as usize) * (self.cached_height as usize) * 4;
+        let expected_len = (self.cached_width as usize)
+            .checked_mul(self.cached_height as usize)
+            .and_then(|wh| wh.checked_mul(4))
+            .unwrap_or(0);
         if expected_len > 0 {
             let mut vec = vec![0u8; expected_len];
             let mut width = 0i32;

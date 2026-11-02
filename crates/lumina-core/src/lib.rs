@@ -986,7 +986,7 @@ impl LuminaEngine {
         F: FnOnce(Option<DecodedFrame>) + Send + 'static,
     {
         let catalog = self.catalog.clone();
-        let this = self.clone();
+        let cache = self.cache.clone();
 
         self.decoder.spawn(move || {
             let item = match catalog.get_item_by_id(id) {
@@ -997,7 +997,7 @@ impl LuminaEngine {
                 }
             };
 
-            this.request_thumbnail_item(item, target_size, callback);
+            Self::process_thumbnail_request(catalog, cache, item, target_size, callback);
         });
     }
 
@@ -1011,44 +1011,56 @@ impl LuminaEngine {
         let cache = self.cache.clone();
 
         self.decoder.spawn(move || {
-            let id = item.id;
-            let rotation = match catalog.get_rotation(id) {
-                Ok(quarters) => quarters,
-                Err(err) => {
-                    log::warn!("failed to read rotation for {id:?}: {err:?}");
-                    0
-                }
-            };
-
-            // Check disk cache first
-            if let Some(frame) = cache.get_cached(
-                id,
-                &item.path,
-                item.file_size,
-                item.mtime_epoch_ms,
-                target_size,
-            ) {
-                callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
-                return;
-            }
-
-            match DecoderPipeline::decode_media(id, item.media_type, &item.path, target_size) {
-                Ok(frame) => {
-                    let _ = cache.put_cached(
-                        &item.path,
-                        item.file_size,
-                        item.mtime_epoch_ms,
-                        target_size,
-                        &frame,
-                    );
-                    callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
-                }
-                Err(err) => {
-                    log::warn!("failed to decode thumbnail for {:?}: {err:?}", item.path);
-                    callback(None);
-                }
-            }
+            Self::process_thumbnail_request(catalog, cache, item, target_size, callback);
         });
+    }
+
+    fn process_thumbnail_request<F>(
+        catalog: Catalog,
+        cache: DiskCache,
+        item: MediaItem,
+        target_size: u32,
+        callback: F,
+    ) where
+        F: FnOnce(Option<DecodedFrame>),
+    {
+        let id = item.id;
+        let rotation = match catalog.get_rotation(id) {
+            Ok(quarters) => quarters,
+            Err(err) => {
+                log::warn!("failed to read rotation for {id:?}: {err:?}");
+                0
+            }
+        };
+
+        // Check disk cache first
+        if let Some(frame) = cache.get_cached(
+            id,
+            &item.path,
+            item.file_size,
+            item.mtime_epoch_ms,
+            target_size,
+        ) {
+            callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
+            return;
+        }
+
+        match DecoderPipeline::decode_media(id, item.media_type, &item.path, target_size) {
+            Ok(frame) => {
+                let _ = cache.put_cached(
+                    &item.path,
+                    item.file_size,
+                    item.mtime_epoch_ms,
+                    target_size,
+                    &frame,
+                );
+                callback(Some(DecoderPipeline::rotate_frame(frame, rotation)));
+            }
+            Err(err) => {
+                log::warn!("failed to decode thumbnail for {:?}: {err:?}", item.path);
+                callback(None);
+            }
+        }
     }
 
     pub fn cancel_scan(&self) {
