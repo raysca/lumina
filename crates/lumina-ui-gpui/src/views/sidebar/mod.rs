@@ -14,6 +14,7 @@ pub enum AlbumSelection {
     Tag(String),
     /// Active media that carries no tags at all.
     Untagged,
+    Duplicates,
     Trash,
 }
 

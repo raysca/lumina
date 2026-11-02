@@ -410,6 +410,10 @@ pub struct LuminaApp {
     pub library_tag_counts: Vec<(String, usize)>,
     /// Cached count of active media with no tags, shown by the Untagged row.
     pub untagged_count: usize,
+    /// Cached count of duplicate items across all duplicate groups.
+    pub duplicate_items_count: usize,
+    /// Cached duplicate groups.
+    pub duplicate_groups: Vec<lumina_core::DuplicateGroup>,
     pub tag_input_buffer: String,
     pub tag_input_active: bool,
     pub editing_tag: Option<String>,
@@ -579,6 +583,8 @@ impl LuminaApp {
             user_smart_albums: Vec::new(),
             library_tag_counts: Vec::new(),
             untagged_count: 0,
+            duplicate_items_count: 0,
+            duplicate_groups: Vec::new(),
             tag_input_buffer: String::new(),
             tag_input_active: false,
             editing_tag: None,

@@ -673,7 +673,7 @@ impl LuminaApp {
     }
 
     /// Renders an empty view with a clear next action instead of a dead-end line.
-    fn render_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let user_album = match &self.selection {
             AlbumSelection::User(id) => self
                 .user_smart_albums
@@ -714,6 +714,11 @@ impl LuminaApp {
                     Icon::Trash,
                     "Recently Deleted is empty".into(),
                     "Items you delete stay here until you empty the trash or restore them.".into(),
+                ),
+                AlbumSelection::Duplicates => copy(
+                    Icon::Repeat,
+                    "No Duplicates Found".into(),
+                    "Lumina scanned your library and found no duplicate photos or videos.".into(),
                 ),
                 AlbumSelection::System(SystemAlbum::Favorites) => EmptyCopy {
                     primary: show_all(),

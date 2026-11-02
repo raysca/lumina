@@ -1,6 +1,7 @@
 mod browser;
 mod delete_dialog;
 mod design_system;
+mod duplicates;
 mod editor_handoff;
 mod get_info;
 mod immersive_hud;

@@ -738,6 +738,7 @@ impl LuminaApp {
                 .map(|(_, count)| *count),
             // Cached by refresh_album_counts.
             AlbumSelection::Untagged => Some(self.untagged_count),
+            AlbumSelection::Duplicates => Some(self.duplicate_items_count),
         }
     }
 
@@ -773,6 +774,9 @@ impl LuminaApp {
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
+        if self.selection == AlbumSelection::Duplicates {
+            self.refresh_duplicates();
+        }
         self.clear_selection(cx);
         self.record_navigation_change(departing);
     }
@@ -1041,6 +1045,10 @@ impl LuminaApp {
             self.user_smart_albums = albums;
             self.library_tag_counts = engine.query_tag_counts();
             self.untagged_count = engine.query_untagged_count();
+            self.duplicate_items_count = engine.query_duplicate_count();
+            if self.selection == AlbumSelection::Duplicates {
+                self.duplicate_groups = engine.query_duplicate_groups();
+            }
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();
             self.item_captions = engine.get_captions_map();
@@ -1072,6 +1080,71 @@ impl LuminaApp {
             && (self.selected_item.is_some() || !self.selected_indices.is_empty())
         {
             self.clear_selection_fields();
+        }
+    }
+
+    pub fn refresh_duplicates(&mut self) {
+        if let Some(ref state) = self.grid_state {
+            self.duplicate_groups = state.engine.query_duplicate_groups();
+            self.duplicate_items_count = state.engine.query_duplicate_count();
+        }
+    }
+
+    pub fn merge_duplicate_group(
+        &mut self,
+        keep_id: MediaId,
+        trash_ids: &[MediaId],
+        cx: &mut Context<Self>,
+    ) {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+        let count = trash_ids.len();
+        match state.engine.merge_duplicate_group(keep_id, trash_ids) {
+            Ok(()) => {
+                let changes: Vec<(MediaId, bool, bool)> =
+                    trash_ids.iter().map(|id| (*id, false, true)).collect();
+                self.undo
+                    .undo_stack
+                    .push(crate::app::undo::UndoAction::Trashed { changes });
+                self.undo.redo_stack.clear();
+                self.refresh_album_counts();
+                self.refresh_duplicates();
+                self.show_toast(
+                    format!(
+                        "Merged {count} duplicate{}",
+                        if count == 1 { "" } else { "s" }
+                    ),
+                    cx,
+                );
+                cx.notify();
+            }
+            Err(err) => {
+                self.show_toast(format!("Could not merge duplicates: {err:#}"), cx);
+            }
+        }
+    }
+
+    pub fn merge_all_duplicates(&mut self, cx: &mut Context<Self>) {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+        match state.engine.merge_all_duplicates() {
+            Ok(total_merged) => {
+                self.refresh_album_counts();
+                self.refresh_duplicates();
+                self.show_toast(
+                    format!(
+                        "Merged {total_merged} duplicate{}",
+                        if total_merged == 1 { "" } else { "s" }
+                    ),
+                    cx,
+                );
+                cx.notify();
+            }
+            Err(err) => {
+                self.show_toast(format!("Could not merge all duplicates: {err:#}"), cx);
+            }
         }
     }
 }

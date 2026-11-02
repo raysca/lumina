@@ -493,6 +493,12 @@ impl LuminaApp {
                 Icon::Tag,
                 "untagged".into(),
             ),
+            go(
+                AlbumSelection::Duplicates,
+                "Duplicates".into(),
+                Icon::Repeat,
+                "duplicates".into(),
+            ),
         ];
         go_to.extend(
             self.timeline_year_buckets

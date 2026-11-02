@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod catalog;
 pub mod decoder;
+pub mod duplicates;
 pub mod geocoder;
 pub mod scanner;
 pub mod search;
@@ -24,6 +25,7 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{Catalog, DeletionTarget, SCHEMA_VERSION};
 pub use decoder::DecoderPipeline;
+pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
 pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, extract_video_size, Scanner};
 pub use search::StructuredQuery;
@@ -84,7 +86,7 @@ pub enum MediaType {
     Raw,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MediaItem {
     pub id: MediaId,
     pub path: PathBuf,
@@ -962,6 +964,220 @@ impl LuminaEngine {
             "query untagged sorted",
             self.catalog.query_untagged_sorted(limit, offset, sort),
         )
+    }
+
+    /// Scans candidate media items with duplicate file sizes, computes their
+    /// content hashes in parallel, stores them in `media_hashes`, and returns
+    /// a report of all duplicate groups.
+    pub fn scan_duplicates(&self) -> Result<DuplicateReport> {
+        let candidates = self.catalog.find_unhashed_duplicate_candidates()?;
+        let total_scanned = candidates.len();
+
+        if !candidates.is_empty() {
+            use rayon::prelude::*;
+            let computed: Vec<(MediaId, u64, String)> = candidates
+                .into_par_iter()
+                .filter_map(|(id, path, size)| match compute_file_hash(&path) {
+                    Ok(hash) => Some((id, size, hash)),
+                    Err(err) => {
+                        log::warn!("failed to compute hash for {}: {err:#}", path.display());
+                        None
+                    }
+                })
+                .collect();
+
+            self.catalog.batch_insert_hashes(&computed)?;
+        }
+
+        let groups = self.catalog.query_duplicate_groups()?;
+        let total_duplicate_items: usize = groups.iter().map(|g| g.items.len()).sum();
+        let potential_reclaimable_bytes: u64 =
+            groups.iter().map(|g| g.potential_reclaimable_bytes).sum();
+
+        Ok(DuplicateReport {
+            total_scanned,
+            groups,
+            total_duplicate_items,
+            potential_reclaimable_bytes,
+        })
+    }
+
+    /// Queries all duplicate groups. Ensures unhashed candidate items with
+    /// duplicate file sizes are hashed first.
+    pub fn query_duplicate_groups(&self) -> Vec<DuplicateGroup> {
+        let _ = self.scan_duplicates();
+        self.read(
+            "query duplicate groups",
+            self.catalog.query_duplicate_groups(),
+        )
+    }
+
+    /// Returns the total count of duplicate items across all duplicate groups.
+    pub fn query_duplicate_count(&self) -> usize {
+        self.read(
+            "query duplicate items count",
+            self.catalog.query_duplicate_items_count(),
+        )
+    }
+
+    /// Returns a slice of items in duplicate groups for pagination and grid viewing.
+    pub fn query_duplicate_items_slice(&self, offset: usize, limit: usize) -> Vec<MediaItem> {
+        self.read(
+            "query duplicate items slice",
+            self.catalog.query_duplicate_items_slice(offset, limit),
+        )
+    }
+
+    /// Merges duplicates into `keep_id` and moves `trash_ids` to Recently Deleted.
+    pub fn merge_duplicate_group(&self, keep_id: MediaId, trash_ids: &[MediaId]) -> Result<()> {
+        self.catalog.merge_duplicate_group(keep_id, trash_ids)
+    }
+
+    /// Merges all duplicate groups in the catalog, keeping the primary item for each group.
+    pub fn merge_all_duplicates(&self) -> Result<usize> {
+        let groups = self.catalog.query_duplicate_groups()?;
+        let mut total_merged = 0;
+        for group in groups {
+            if group.items.len() >= 2 {
+                let keep_id = group.items[0].id;
+                let trash_ids: Vec<MediaId> = group.items[1..].iter().map(|i| i.id).collect();
+                self.catalog.merge_duplicate_group(keep_id, &trash_ids)?;
+                total_merged += trash_ids.len();
+            }
+        }
+        Ok(total_merged)
+    }
+
+    /// Checks whether an external file is an exact duplicate of any item in the library.
+    pub fn check_file_is_duplicate(&self, path: &Path) -> Result<Option<MediaItem>> {
+        let meta = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(_) => return Ok(None),
+        };
+        let file_size = meta.len();
+        let candidates = self.catalog.find_candidates_by_size(file_size)?;
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+
+        let candidate_hash = compute_file_hash(path)?;
+
+        let matched = self.catalog.find_items_by_hash(&candidate_hash)?;
+        if let Some(item) = matched.into_iter().next() {
+            return Ok(Some(item));
+        }
+
+        let mut new_hashes = Vec::new();
+        let mut matched_item = None;
+        for (cand_id, cand_path) in candidates {
+            if let Ok(h) = compute_file_hash(&cand_path) {
+                if h == candidate_hash && matched_item.is_none() {
+                    matched_item = self.catalog.get_item_by_id(cand_id)?;
+                }
+                new_hashes.push((cand_id, file_size, h));
+            }
+        }
+        if !new_hashes.is_empty() {
+            let _ = self.catalog.batch_insert_hashes(&new_hashes);
+        }
+
+        Ok(matched_item)
+    }
+
+    /// Evaluates candidate files before importing them into the library.
+    pub fn check_import_duplicates(&self, paths: &[PathBuf]) -> Result<Vec<DuplicateCandidate>> {
+        use rayon::prelude::*;
+        let results: Vec<DuplicateCandidate> = paths
+            .par_iter()
+            .map(|path| {
+                let file_size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                if file_size == 0 {
+                    return DuplicateCandidate {
+                        path: path.clone(),
+                        file_size: 0,
+                        content_hash: None,
+                        matched_item_id: None,
+                        matched_item_path: None,
+                        is_duplicate: false,
+                    };
+                }
+
+                let candidates = self
+                    .catalog
+                    .find_candidates_by_size(file_size)
+                    .unwrap_or_default();
+                if candidates.is_empty() {
+                    return DuplicateCandidate {
+                        path: path.clone(),
+                        file_size,
+                        content_hash: None,
+                        matched_item_id: None,
+                        matched_item_path: None,
+                        is_duplicate: false,
+                    };
+                }
+
+                let content_hash = match compute_file_hash(path) {
+                    Ok(h) => h,
+                    Err(_) => {
+                        return DuplicateCandidate {
+                            path: path.clone(),
+                            file_size,
+                            content_hash: None,
+                            matched_item_id: None,
+                            matched_item_path: None,
+                            is_duplicate: false,
+                        };
+                    }
+                };
+
+                let matched = self
+                    .catalog
+                    .find_items_by_hash(&content_hash)
+                    .unwrap_or_default();
+                if let Some(existing) = matched.first() {
+                    return DuplicateCandidate {
+                        path: path.clone(),
+                        file_size,
+                        content_hash: Some(content_hash),
+                        matched_item_id: Some(existing.id),
+                        matched_item_path: Some(existing.path.clone()),
+                        is_duplicate: true,
+                    };
+                }
+
+                for (cand_id, cand_path) in candidates {
+                    if let Ok(cand_hash) = compute_file_hash(&cand_path) {
+                        let _ = self.catalog.batch_insert_hashes(&[(
+                            cand_id,
+                            file_size,
+                            cand_hash.clone(),
+                        )]);
+                        if cand_hash == content_hash {
+                            return DuplicateCandidate {
+                                path: path.clone(),
+                                file_size,
+                                content_hash: Some(content_hash),
+                                matched_item_id: Some(cand_id),
+                                matched_item_path: Some(cand_path),
+                                is_duplicate: true,
+                            };
+                        }
+                    }
+                }
+
+                DuplicateCandidate {
+                    path: path.clone(),
+                    file_size,
+                    content_hash: Some(content_hash),
+                    matched_item_id: None,
+                    matched_item_path: None,
+                    is_duplicate: false,
+                }
+            })
+            .collect();
+
+        Ok(results)
     }
 
     /// Newest active items carrying `tag`; see [`Catalog::get_items_by_tag`].

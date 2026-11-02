@@ -132,6 +132,14 @@ pub(super) fn render_library_section(
             }),
         ))
         .child(render_nav_item(
+            "Duplicates",
+            this.duplicate_items_count,
+            this.selection == AlbumSelection::Duplicates,
+            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.select_album(AlbumSelection::Duplicates, cx);
+            }),
+        ))
+        .child(render_nav_item(
             "Recently Deleted",
             if this.grid_state.is_some() {
                 trash_count

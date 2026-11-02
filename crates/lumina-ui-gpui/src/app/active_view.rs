@@ -59,6 +59,7 @@ impl ViewQuery {
             AlbumSelection::Trash => engine.query_system_album_count(SystemAlbum::RecentlyDeleted),
             AlbumSelection::Tag(tag) => engine.search_query_count(&tag_query(tag)),
             AlbumSelection::Untagged => engine.query_untagged_count(),
+            AlbumSelection::Duplicates => engine.query_duplicate_count(),
         }
     }
 
@@ -91,6 +92,7 @@ impl ViewQuery {
                 engine.search_query_sorted(&tag_query(tag), limit, offset, sort)
             }
             AlbumSelection::Untagged => engine.query_untagged_sorted(limit, offset, sort),
+            AlbumSelection::Duplicates => engine.query_duplicate_items_slice(offset, limit),
         }
     }
 }

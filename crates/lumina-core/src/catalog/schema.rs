@@ -115,6 +115,23 @@ impl Catalog {
                 FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS media_hashes (
+                media_id INTEGER PRIMARY KEY,
+                file_size INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                computed_epoch_ms INTEGER NOT NULL,
+                FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_media_hashes_hash ON media_hashes(content_hash);
+            CREATE INDEX IF NOT EXISTS idx_media_hashes_size ON media_hashes(file_size);
+
+            CREATE TRIGGER IF NOT EXISTS media_hashes_invalidate_au
+            AFTER UPDATE OF file_size, mtime_epoch_ms ON media_items
+            BEGIN
+                DELETE FROM media_hashes WHERE media_id = new.id;
+            END;
+
             CREATE VIRTUAL TABLE IF NOT EXISTS media_search_fts USING fts5(
                 file_name,
                 parent_dir,

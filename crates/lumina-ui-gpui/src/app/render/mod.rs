@@ -355,6 +355,7 @@ impl Render for LuminaApp {
                 .unwrap_or_else(|| "Album".into()),
             AlbumSelection::Tag(tag) => format!("#{tag}"),
             AlbumSelection::Untagged => "Untagged".into(),
+            AlbumSelection::Duplicates => "Duplicates".into(),
             AlbumSelection::Trash => "Recently Deleted".into(),
         };
 
@@ -498,7 +499,16 @@ impl Render for LuminaApp {
                                     .min_h_0()
                                     .flex()
                                     .flex_row()
-                                    .child(self.render_browser_grid(total_count, cx))
+                                    .child(if self.selection == AlbumSelection::Duplicates {
+                                        crate::views::duplicates::DuplicatesView::render(
+                                            self,
+                                            total_count,
+                                            cx,
+                                        )
+                                        .into_any_element()
+                                    } else {
+                                        self.render_browser_grid(total_count, cx).into_any_element()
+                                    })
                                     // Pinned Vertical Year Rail
                                     .child(self.render_year_rail(cx))
                                     // Selection dock and toast, over the grid column only

@@ -3121,3 +3121,153 @@ fn a_batch_that_fails_partway_changes_nothing() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn test_duplicate_detection_and_merging() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_dup_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let library_dir = tmp_dir.join("library");
+    let cache_dir = tmp_dir.join("cache");
+    let db_dir = tmp_dir.join("db");
+    std::fs::create_dir_all(&library_dir).unwrap();
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::create_dir_all(&db_dir).unwrap();
+
+    // 1. Create duplicate files (A and A_copy), a unique file (B), and a same-size-different-content file (C)
+    let mut content_a = vec![0x41u8; 100];
+    content_a[0..10].copy_from_slice(b"photo-A-01");
+    let mut content_b = vec![0x42u8; 200];
+    content_b[0..10].copy_from_slice(b"photo-B-01");
+    let mut content_c = vec![0x43u8; 100];
+    content_c[0..10].copy_from_slice(b"photo-C-01");
+
+    let p1 = library_dir.join("photo1.jpg");
+    let p1_copy = library_dir.join("photo1_copy.jpg");
+    let p2 = library_dir.join("photo2.jpg");
+    let p3 = library_dir.join("photo3.jpg");
+
+    std::fs::write(&p1, &content_a).unwrap();
+    std::fs::write(&p1_copy, &content_a).unwrap();
+    std::fs::write(&p2, &content_b).unwrap();
+    std::fs::write(&p3, &content_c).unwrap();
+
+    let db_path = db_dir.join("catalog.db");
+    let (engine, _event_rx) =
+        LuminaEngine::open_with_paths(library_dir.clone(), db_path, Some(cache_dir)).unwrap();
+
+    // Scan the library
+    engine.rescan();
+
+    // Wait for scan to populate catalog items
+    let mut attempts = 0;
+    while engine.total_count() < 4 && attempts < 50 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        attempts += 1;
+    }
+    assert_eq!(engine.total_count(), 4, "all 4 items indexed in catalog");
+
+    // Fetch items
+    let all_items = engine.get_item_slice(0..10);
+    let item1 = all_items
+        .iter()
+        .find(|i| i.file_name == "photo1.jpg")
+        .unwrap();
+    let item1_copy = all_items
+        .iter()
+        .find(|i| i.file_name == "photo1_copy.jpg")
+        .unwrap();
+
+    // Add metadata: tag & favorite on copy, rating on original
+    engine
+        .add_tags_batch(&[item1_copy.id], &["summer".to_string()])
+        .unwrap();
+    engine.batch_set_favorite(&[item1_copy.id], true).unwrap();
+    engine.set_ratings(&[(item1.id, 5)]).unwrap();
+
+    // Scan for duplicates
+    let report = engine.scan_duplicates().unwrap();
+    assert_eq!(report.groups.len(), 1, "exactly 1 duplicate group detected");
+    assert_eq!(report.total_duplicate_items, 2);
+    assert_eq!(report.potential_reclaimable_bytes, 100);
+
+    let group = &report.groups[0];
+    assert_eq!(group.items.len(), 2);
+    assert_eq!(group.file_size, 100);
+    let group_ids: Vec<MediaId> = group.items.iter().map(|i| i.id).collect();
+    assert!(group_ids.contains(&item1.id));
+    assert!(group_ids.contains(&item1_copy.id));
+
+    // Verify query helpers
+    assert_eq!(engine.query_duplicate_count(), 2);
+    let slice = engine.query_duplicate_items_slice(0, 10);
+    assert_eq!(slice.len(), 2);
+
+    // Test import duplicate checking
+    // 1. Single file check
+    let external_dup = tmp_dir.join("external_dup.jpg");
+    std::fs::write(&external_dup, &content_a).unwrap();
+    let match_result = engine.check_file_is_duplicate(&external_dup).unwrap();
+    assert!(
+        match_result.is_some(),
+        "external file with content A matched existing library item"
+    );
+
+    let external_unique = tmp_dir.join("external_unique.jpg");
+    std::fs::write(&external_unique, b"totally unique external photo bytes").unwrap();
+    let no_match = engine.check_file_is_duplicate(&external_unique).unwrap();
+    assert!(
+        no_match.is_none(),
+        "unique external file is not a duplicate"
+    );
+
+    // 2. Batch import pre-check
+    let candidates = engine
+        .check_import_duplicates(&[external_dup.clone(), external_unique.clone()])
+        .unwrap();
+    assert_eq!(candidates.len(), 2);
+    let cand_dup = candidates.iter().find(|c| c.path == external_dup).unwrap();
+    assert!(cand_dup.is_duplicate);
+    assert!(cand_dup.matched_item_id.is_some());
+    let cand_unique = candidates
+        .iter()
+        .find(|c| c.path == external_unique)
+        .unwrap();
+    assert!(!cand_unique.is_duplicate);
+
+    // Test merge duplicate group
+    engine
+        .merge_duplicate_group(item1.id, &[item1_copy.id])
+        .unwrap();
+
+    // Verify keeper has merged metadata
+    let keeper_after = engine.get_item_by_id(item1.id).unwrap();
+    assert!(
+        keeper_after.is_favorite,
+        "favorite flag merged from copy to keeper"
+    );
+    assert_eq!(engine.get_ratings_map().get(&item1.id).copied(), Some(5));
+    let tags = engine.get_tags_for_item(item1.id);
+    assert!(
+        tags.contains(&"summer".to_string()),
+        "tag merged from copy to keeper"
+    );
+
+    // Verify copy was moved to trash
+    let copy_after = engine.get_item_by_id(item1_copy.id).unwrap();
+    assert!(copy_after.is_trashed, "duplicate copy is trashed");
+
+    // Verify duplicates query reflects resolved state
+    assert_eq!(
+        engine.query_duplicate_count(),
+        0,
+        "no active duplicates remain after merge"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
