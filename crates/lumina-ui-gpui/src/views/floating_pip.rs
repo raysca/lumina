@@ -36,6 +36,7 @@ pub struct FloatingPipPlayerView {
 fn pip_icon_button(id: &'static str, icon: Icon, tooltip: &'static str) -> Stateful<Div> {
     div()
         .id(id)
+        .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
         .tooltip(theme::tooltip_label(tooltip))
         .size(px(20.0))
         .rounded(theme::RADIUS_MD)
@@ -163,14 +164,15 @@ impl Render for FloatingPipPlayerView {
             .child(
                 div()
                     .absolute()
-                    // Presses on the controls must not reach the video surface,
-                    // which starts a window drag on mouse-down.
-                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
+                        window.start_window_move();
+                    })
                     .top_0()
                     .left_0()
                     .right_0()
                     .h(px(26.0))
-                    .px_2()
+                    .pl(px(if cfg!(target_os = "macos") { 72.0 } else { 8.0 }))
+                    .pr_2()
                     .bg(theme::scrim())
                     .flex()
                     .flex_row()

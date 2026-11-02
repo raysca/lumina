@@ -418,9 +418,9 @@ fn default_inspector_visible() -> bool {
     false
 }
 
-/// Five of the 2..=8 columns: the thumbnail slider's midpoint (50%).
+/// Four of the 2..=8 columns: the middle level in SIZE_COLUMNS [8, 6, 4, 3, 2].
 fn default_grid_columns() -> usize {
-    5
+    4
 }
 
 fn default_card_fit_mode() -> bool {
@@ -633,8 +633,8 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let cfg = AppConfig::load_from(&path);
         assert_eq!(
-            cfg.grid_columns, 5,
-            "a fresh install starts at the 50% thumbnail size"
+            cfg.grid_columns, 4,
+            "a fresh install starts at 4 columns matching SIZE_COLUMNS"
         );
         assert!(cfg.card_fit_mode);
     }

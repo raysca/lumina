@@ -29,9 +29,9 @@ pub(super) const VIDEO_FRAME_MAX_WIDTH: f32 = 1040.0;
 /// `None` for photos and immersive fullscreen, which fill the stage.
 pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     const TOP_BAR: f32 = 52.0;
-    // ponytail: measured transport card (106) + its 12px top and 16px bottom
+    // ponytail: measured transport card (98) + its 12px top and 16px bottom
     // margins; update if the card grows.
-    const TRANSPORT_BLOCK: f32 = 134.0;
+    const TRANSPORT_BLOCK: f32 = 126.0;
     // The stage centres frame + transport, so a height-limited frame gets
     // 12px above it (the same as frame to transport) and 12px of slack below.
     const TOP_GAP: f32 = 24.0;

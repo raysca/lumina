@@ -8,7 +8,6 @@ use crate::motion;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
-use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::{AlbumSelection, SidebarView};
 
 mod grid;
@@ -491,7 +490,6 @@ impl Render for LuminaApp {
                             .h_full()
                             .flex()
                             .flex_col()
-                            .child(SearchBarView::render(self, cx))
                             .children(self.render_trash_note())
                             .child(
                                 div()

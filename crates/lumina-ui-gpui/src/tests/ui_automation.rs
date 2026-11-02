@@ -180,10 +180,7 @@ fn ui_automation_renders_all_core_controls() {
         "switch-library",
         "inspector-toggle",
         "toolbar-title",
-        "fit-mode-fit",
-        "thumb-size-slider",
-        "filter-chip-all",
-        "open-tag-manager",
+        "tags-toolbar-btn",
         "new-smart-album",
     ];
     let missing: Vec<_> = selectors
@@ -206,24 +203,6 @@ fn ui_automation_toolbar_buttons_by_mouse() {
     assert!(vcx.debug_bounds("expand-sidebar").is_some());
     click(vcx, "expand-sidebar");
     view.update(vcx, |app, _| assert!(!app.sidebar_collapsed));
-
-    click(vcx, "fit-mode-square");
-    view.update(vcx, |app, _| assert!(!app.card_fit_mode));
-    click(vcx, "fit-mode-fit");
-    view.update(vcx, |app, _| assert!(app.card_fit_mode));
-
-    // The size slider: the right end is the largest thumbnails (2 columns),
-    // the left end the smallest (8).
-    let slider = vcx.debug_bounds("thumb-size-slider").expect("size slider");
-    let mid_y = f32::from(slider.center().y);
-    click_point(vcx, f32::from(slider.right()) - 1.0, mid_y);
-    view.update(vcx, |app, _| {
-        assert_eq!(app.grid_columns, 2, "right end = largest")
-    });
-    click_point(vcx, f32::from(slider.left()) + 1.0, mid_y);
-    view.update(vcx, |app, _| {
-        assert_eq!(app.grid_columns, 8, "left end = smallest")
-    });
 
     click(vcx, "inspector-toggle");
     view.update(vcx, |app, _| assert!(app.inspector_open));
@@ -781,7 +760,7 @@ fn ui_automation_modals_dismiss_on_backdrop() {
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
-    click(vcx, "open-tag-manager");
+    click(vcx, "tags-toolbar-btn");
     view.update(vcx, |app, _| assert!(app.tag_manager.open));
     assert!(vcx.debug_bounds("tag-manager-dialog").is_some());
     click_point(vcx, 4.0, 4.0);

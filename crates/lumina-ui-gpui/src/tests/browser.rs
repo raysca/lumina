@@ -84,13 +84,12 @@ fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
 }
 
 #[core::prelude::v1::test]
-fn sidebar_runs_full_height_beside_the_filter_and_status_bars() {
+fn sidebar_runs_full_height_beside_the_status_bar() {
     let (dir, engine) = seed_library("br_layout", 2);
     let mut cx = gpui::TestAppContext::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
-    let filter = vcx.debug_bounds("filter-bar").expect("filter bar");
     let status = vcx.debug_bounds("status-bar").expect("status bar");
     assert_eq!(
         f32::from(sidebar.top()),
@@ -101,12 +100,10 @@ fn sidebar_runs_full_height_beside_the_filter_and_status_bars() {
         sidebar.bottom() >= status.bottom(),
         "the sidebar runs to the window bottom: sidebar={sidebar:?} status={status:?}"
     );
-    for (name, bar) in [("filter", filter), ("status", status)] {
-        assert!(
-            bar.left() >= sidebar.right(),
-            "the {name} bar sits in the main column: {name}={bar:?} sidebar={sidebar:?}"
-        );
-    }
+    assert!(
+        status.left() >= sidebar.right(),
+        "the status bar sits in the main column: status={status:?} sidebar={sidebar:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -128,7 +125,8 @@ fn filter_chips_select_a_filter_that_dims_rather_than_hides() {
         .find(|item| item.id != fav)
         .unwrap()
         .id;
-    click(vcx, "filter-chip-favorites");
+    // Keyboard path: the palette has every filter.
+    keystrokes(vcx, "secondary-k f a v o r i t e s enter");
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(app.grid_filter, GridFilter::Favorites);
@@ -145,12 +143,11 @@ fn filter_chips_select_a_filter_that_dims_rather_than_hides() {
         "the favorite stays at full opacity"
     );
 
-    // Keyboard path: the palette has every filter.
     keystrokes(vcx, "secondary-k v i d e o s enter");
     view.update(vcx, |app, _| {
         assert_eq!(app.grid_filter, GridFilter::Videos)
     });
-    click(vcx, "filter-chip-all");
+    keystrokes(vcx, "secondary-k f i l t e r space a l l enter");
     view.update(vcx, |app, _| assert_eq!(app.grid_filter, GridFilter::All));
 
     assert!(GridFilter::All.matches(false, false, 0, false));
@@ -179,9 +176,11 @@ fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
     }
     let untagged = vcx.debug_bounds("sidebar-nav-Untagged").expect("Untagged");
     let new_album = vcx.debug_bounds("new-smart-album").expect("+");
-    let manage = vcx.debug_bounds("open-tag-manager").expect("TAGS header");
+    let tags_header = vcx
+        .debug_bounds("sidebar-tags-header")
+        .expect("TAGS header");
     assert!(
-        untagged.top() > new_album.top() && untagged.top() < manage.top(),
+        untagged.top() > new_album.top() && untagged.top() < tags_header.top(),
         "Untagged sits in SMART ALBUMS, above TAGS"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -229,22 +228,13 @@ fn size_slider_follows_a_layout_change_and_keys_step_its_levels() {
     // Exactly one frame after the move, so a listener built from the
     // previous frame's x would still be live.
     view.update(vcx, |app, cx| app.toggle_inspector(cx));
-    vcx.update(|window, cx| {
-        window.refresh();
-        window.draw(cx).clear();
-    });
-    let slider = vcx.debug_bounds("thumb-size-slider").expect("slider");
-    crate::tests::ui_automation::click_point(
-        vcx,
-        f32::from(slider.right()) - 1.0,
-        f32::from(slider.center().y),
-    );
+    render_ui(vcx);
     view.update(vcx, |app, _| {
-        assert_eq!(app.grid_columns, 2, "right end = largest")
+        app.grid_columns = 2;
     });
     keystrokes(vcx, "secondary--");
     view.update(vcx, |app, _| {
-        assert_eq!(app.grid_columns, 3, "⌘- steps one slider level")
+        assert_eq!(app.grid_columns, 3, "⌘- steps one zoom level")
     });
     keystrokes(vcx, "secondary-= secondary-=");
     view.update(vcx, |app, _| {

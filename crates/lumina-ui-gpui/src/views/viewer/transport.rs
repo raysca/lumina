@@ -161,31 +161,6 @@ impl ViewerTransport {
             .flex()
             .flex_col()
             .gap_2()
-            // Time-only scrub/hover feedback. No image is invented: this is
-            // exactly the destination timestamp the transport is seeking to.
-            .child(if let Some((badge_pct, badge_time)) = time_badge {
-                div()
-                    .id("video-time-badge")
-                    .debug_selector(|| "video-time-badge".to_string())
-                    .absolute()
-                    .top(px(-26.0))
-                    .left(relative((badge_pct - 0.06).clamp(0.01, 0.85)))
-                    .px_2()
-                    .py_0p5()
-                    .bg(theme::bg_hud())
-                    .border_1()
-                    .border_color(theme::border_strong())
-                    .rounded(theme::RADIUS_SM)
-                    .shadow_lg()
-                    .text_xs()
-                    .font_family(theme::FONT_MONO)
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(theme::text())
-                    .child(format_time_fractional(badge_time))
-                    .into_any_element()
-            } else {
-                Empty.into_any_element()
-            })
             // Scrubber row: elapsed · track · total.
             .child(
                 div()
@@ -323,6 +298,27 @@ impl ViewerTransport {
                                     .bg(theme::accent())
                                     .shadow_md(),
                             )
+                            // Time-only scrub/hover badge anchored directly above the track.
+                            .children(time_badge.map(|(badge_pct, badge_time)| {
+                                div()
+                                    .id("video-time-badge")
+                                    .debug_selector(|| "video-time-badge".to_string())
+                                    .absolute()
+                                    .top(px(-28.0))
+                                    .left(relative((badge_pct - 0.06).clamp(0.01, 0.85)))
+                                    .px_2()
+                                    .py_0p5()
+                                    .bg(theme::bg_hud())
+                                    .border_1()
+                                    .border_color(theme::border_strong())
+                                    .rounded(theme::RADIUS_SM)
+                                    .shadow_lg()
+                                    .text_xs()
+                                    .font_family(theme::FONT_MONO)
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(theme::text())
+                                    .child(format_time_fractional(badge_time))
+                            }))
                     })
                     .child(time_label(duration)),
             )

@@ -214,6 +214,14 @@ fn scrubber_feedback_is_a_time_badge_not_a_synthetic_preview() {
     );
     vcx.simulate_mouse_move(hover, None, gpui::Modifiers::default());
     render_ui(vcx);
+    let track_hovered = vcx
+        .debug_bounds("video-scrubber")
+        .expect("the video transport must paint its scrubber");
+    assert_eq!(
+        track_hovered.top(),
+        track.top(),
+        "mousing over the scrubber track must not cause a layout jump"
+    );
     assert!(
         vcx.debug_bounds("video-time-badge").is_some(),
         "hovering the scrubber must show the honest time badge"

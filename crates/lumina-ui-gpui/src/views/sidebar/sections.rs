@@ -352,6 +352,7 @@ pub(super) fn render_tags_section(
         .gap_0p5()
         .child(
             div()
+                .debug_selector(|| "sidebar-tags-header".to_string())
                 .flex()
                 .flex_row()
                 .justify_between()
@@ -361,19 +362,6 @@ pub(super) fn render_tags_section(
                 .pb_1()
                 .child(
                     theme::section_label("TAGS"),
-                )
-                .child(
-                    div()
-                        .id("open-tag-manager-sidebar-btn")
-                        .debug_selector(|| "open-tag-manager".to_string())
-                        .cursor_pointer()
-                        .text_xs()
-                        .text_color(theme::text_muted())
-                        .hover(|s| s.text_color(theme::text()))
-                        .child("Manage…")
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.open_tag_manager(cx);
-                        })),
                 ),
         )
         .children(

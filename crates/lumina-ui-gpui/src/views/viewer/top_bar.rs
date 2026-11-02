@@ -2,7 +2,9 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::MediaItem;
 
-use crate::app::types::{format_bytes, month_name};
+#[cfg(test)]
+use crate::app::types::format_bytes;
+use crate::app::types::month_name;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -36,98 +38,61 @@ fn bar_button(id: &'static str, tooltip: &'static str, on: bool) -> Stateful<Div
         .hover(|s| s.bg(theme::bg_control_hover()))
 }
 
-/// Window width below which the top bar drops the breadcrumb date and specs
-/// line so the filename stays readable.
-const COMPACT_WINDOW_WIDTH: f32 = 1400.0;
-/// Width assumed before window bounds have been observed.
-const DEFAULT_WINDOW_WIDTH: f32 = 1440.0;
-
 impl ViewerTopBar {
     pub fn render(
         this: &LuminaApp,
         item: &MediaItem,
         cx: &mut Context<LuminaApp>,
     ) -> impl IntoElement {
-        let path = item.path.clone();
-        let file_name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&item.file_name)
-            .to_string();
-
         let is_inspector_open = this.inspector_open;
+        let compact = this
+            .window_bounds
+            .map(|(_, _, width, _)| width < 1400.0)
+            .unwrap_or(false);
 
         let month_str = month_name(item.month);
-        let date_prefix = if item.year > 0 {
-            format!("{} {}", month_str, item.year)
+        let date_title = if item.year > 0 {
+            if item.day > 0 {
+                format!("{} {}, {}", month_str, item.day, item.year)
+            } else {
+                format!("{} {}", month_str, item.year)
+            }
         } else {
             "Undated".to_string()
         };
         let is_fav = item.is_favorite;
 
-        // At narrow widths the breadcrumb date and specs line yield space so the
-        // filename stays readable at 1024px.
-        let window_width = this
-            .window_bounds
-            .map(|(_, _, width, _)| width)
-            .unwrap_or(DEFAULT_WINDOW_WIDTH);
-        let compact = window_width < COMPACT_WINDOW_WIDTH;
-
         let mut center_section = div()
             .flex()
             .flex_row()
             .items_center()
+            .justify_center()
             .gap_1p5()
             .flex_1()
             .min_w(px(0.0))
             .overflow_hidden();
 
-        // At compact widths the filename gets the whole center section. The
-        // breadcrumb date is secondary information that remains in the inspector.
-        if !compact {
-            center_section = center_section
-                .child(div().text_color(theme::text_muted()).child(date_prefix))
-                .child(div().text_color(theme::text_disabled()).child(render_icon(
-                    Icon::ChevronRight,
-                    px(10.0),
-                    theme::text_disabled(),
-                )));
-        }
-
         center_section = center_section.child(
             div()
                 .id("viewer-filename")
                 .debug_selector(|| "viewer-filename".to_string())
-                .min_w(px(70.0))
+                .min_w(px(40.0))
                 .truncate()
                 .font_weight(FontWeight::BOLD)
                 .text_color(theme::text())
-                .child(file_name),
+                .child(date_title),
         );
 
-        if !compact {
-            center_section = center_section.child(
-                div()
-                    .id("viewer-specs")
-                    .debug_selector(|| "viewer-specs".to_string())
-                    .ml_2()
-                    .min_w(px(0.0))
-                    .truncate()
-                    .text_color(theme::text_subtle())
-                    .child(specs_line(item)),
-            );
-        }
-
-        // "3 of 5" in the current view; hidden when the viewer has no grid index.
+        // "(3 of 5)" in the current view; hidden when the viewer has no grid index.
         if let Some(index) = this.selected_index {
             center_section = center_section.child(
                 div()
                     .id("viewer-position")
                     .debug_selector(|| "viewer-position".to_string())
-                    .ml_2()
+                    .ml_1()
                     .flex_shrink_0()
                     .text_color(theme::text_subtle())
-                    .child(format!("{} of {}", index + 1, this.displayed_count())),
+                    .child(format!("({} of {})", index + 1, this.displayed_count())),
             );
         }
 
@@ -257,6 +222,7 @@ impl ViewerTopBar {
 
 /// "4032 × 3024 · HEIC · 3.1 MB" from what the catalog actually knows: no
 /// guessed codec, frame rate or dimensions.
+#[cfg(test)]
 pub(crate) fn specs_line(item: &lumina_core::MediaItem) -> String {
     let mut parts = Vec::new();
     if item.width > 0 && item.height > 0 {

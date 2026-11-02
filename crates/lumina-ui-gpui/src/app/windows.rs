@@ -62,7 +62,31 @@ pub fn open_floating_pip_window(
         return;
     }
 
-    let bounds = Bounds::centered(None, size(px(480.0), px(270.0)), cx);
+    let (pip_w, pip_h) = weak_app
+        .upgrade()
+        .and_then(|app| {
+            let app = app.read(cx);
+            let item = app.video.item.as_ref()?;
+            let w = item.width;
+            let h = item.height;
+            if w > 0 && h > 0 {
+                let aspect = w as f32 / h as f32;
+                if aspect >= 1.0 {
+                    let width = 480.0f32.min(270.0 * aspect).max(280.0);
+                    let height = (width / aspect).max(160.0);
+                    Some((width, height))
+                } else {
+                    let height = 400.0f32;
+                    let width = (height * aspect).clamp(220.0, 360.0);
+                    Some((width, height))
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap_or((480.0, 270.0));
+
+    let bounds = Bounds::centered(None, size(px(pip_w), px(pip_h)), cx);
     let weak_app_clone = weak_app.clone();
     let tx_clone = ui_tx.clone();
 

@@ -178,62 +178,6 @@ impl SearchBarView {
 
         Some(gpui::deferred(panel).with_priority(1).into_any_element())
     }
-
-    /// Filter bar above the grid: filter chips, the fit/square toggle and
-    /// the thumbnail size slider.
-    pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-        div()
-            .debug_selector(|| "filter-bar".to_string())
-            .w_full()
-            .h(px(44.0))
-            .flex_shrink_0()
-            .px_4()
-            .bg(rgb(0x1A1B1E))
-            .border_b_1()
-            .border_color(theme::border_subtle())
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_2()
-            .children(GridFilter::ALL.into_iter().map(|filter| {
-                theme::segmented_item(
-                    ElementId::Name(filter.selector().into()),
-                    this.grid_filter == filter,
-                )
-                .debug_selector(move || filter.selector().to_string())
-                .child(filter.label())
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    this.grid_filter = filter;
-                    cx.notify();
-                }))
-            }))
-            .child(div().flex_1())
-            // [ Fit | Square ] segmented toggle
-            .child(
-                theme::segmented("fit-square-toggle")
-                    .child(
-                        theme::segmented_item("fit-mode-fit", this.card_fit_mode)
-                            .debug_selector(|| "fit-mode-fit".to_string())
-                            .child("Fit")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.card_fit_mode = true;
-                                this.save_config();
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        theme::segmented_item("fit-mode-square", !this.card_fit_mode)
-                            .debug_selector(|| "fit-mode-square".to_string())
-                            .child("Square")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.card_fit_mode = false;
-                                this.save_config();
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(render_size_slider(this, cx))
-    }
 }
 
 /// Grid filter chips. A filter dims non-matching items instead of hiding
@@ -249,34 +193,6 @@ pub enum GridFilter {
 }
 
 impl GridFilter {
-    pub const ALL: [GridFilter; 5] = [
-        GridFilter::All,
-        GridFilter::Favorites,
-        GridFilter::Videos,
-        GridFilter::ThreeStars,
-        GridFilter::Labeled,
-    ];
-
-    fn label(self) -> &'static str {
-        match self {
-            GridFilter::All => "All",
-            GridFilter::Favorites => "Favorites",
-            GridFilter::Videos => "Videos",
-            GridFilter::ThreeStars => "★ 3+",
-            GridFilter::Labeled => "Labeled",
-        }
-    }
-
-    fn selector(self) -> &'static str {
-        match self {
-            GridFilter::All => "filter-chip-all",
-            GridFilter::Favorites => "filter-chip-favorites",
-            GridFilter::Videos => "filter-chip-videos",
-            GridFilter::ThreeStars => "filter-chip-3stars",
-            GridFilter::Labeled => "filter-chip-labeled",
-        }
-    }
-
     /// Whether an item with these facts stays at full opacity.
     pub fn matches(self, favorite: bool, video: bool, rating: u8, labeled: bool) -> bool {
         match self {
@@ -291,8 +207,6 @@ impl GridFilter {
 
 /// Thumbnail size 1–5, smallest to largest, as grid columns.
 pub(crate) const SIZE_COLUMNS: [usize; 5] = [8, 6, 4, 3, 2];
-const SLIDER_WIDTH: f32 = 80.0;
-const THUMB: f32 = 12.0;
 
 /// Slider level (0-based) closest to a column count from ⌘-/⌘=.
 pub(crate) fn size_level(columns: usize) -> usize {
@@ -300,77 +214,4 @@ pub(crate) fn size_level(columns: usize) -> usize {
         .iter()
         .position(|&c| c <= columns.clamp(2, 8))
         .unwrap_or(SIZE_COLUMNS.len() - 1)
-}
-
-fn render_size_slider(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    let level = size_level(this.grid_columns);
-    let travel = SLIDER_WIDTH - THUMB;
-    let thumb_left = travel * level as f32 / (SIZE_COLUMNS.len() - 1) as f32;
-    // Click or drag anywhere on the track: the pointer's x picks the level.
-    // The painted x is read at event time: a value captured at render would
-    // be stale after a layout change (e.g. toggling the inspector).
-    let set_from_x = move |this: &mut LuminaApp, x: f32, cx: &mut Context<LuminaApp>| {
-        let frac = ((x - this.size_slider_left - THUMB / 2.0) / travel).clamp(0.0, 1.0);
-        let level = (frac * (SIZE_COLUMNS.len() - 1) as f32).round() as usize;
-        if this.grid_columns != SIZE_COLUMNS[level] {
-            this.grid_columns = SIZE_COLUMNS[level];
-            this.save_config();
-            cx.notify();
-        }
-    };
-    div()
-        .id("thumb-size-slider")
-        .debug_selector(|| "thumb-size-slider".to_string())
-        .tooltip(theme::tooltip_label("Thumbnail size (⌘- / ⌘=)"))
-        .w(px(SLIDER_WIDTH))
-        .h(px(THUMB))
-        .relative()
-        .flex()
-        .items_center()
-        .cursor_pointer()
-        .child(div().w_full().h(px(3.0)).rounded_full().bg(theme::border()))
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .left(px(thumb_left))
-                .size(px(THUMB))
-                .rounded_full()
-                .bg(theme::text()),
-        )
-        .child(
-            canvas(
-                {
-                    let app = cx.entity().downgrade();
-                    move |b, _w, cx| {
-                        let left = f32::from(b.origin.x);
-                        app.update(cx, |this, _| this.size_slider_left = left).ok();
-                    }
-                },
-                |_, _, _, _| {},
-            )
-            .absolute()
-            .size_full(),
-        )
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |this, e: &MouseDownEvent, _w, cx| {
-                cx.stop_propagation();
-                this.size_slider_dragging = true;
-                set_from_x(this, f32::from(e.position.x), cx);
-            }),
-        )
-        .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _w, cx| {
-            if e.pressed_button == Some(MouseButton::Left) && this.size_slider_dragging {
-                set_from_x(this, f32::from(e.position.x), cx);
-            }
-        }))
-        .on_mouse_up_out(
-            MouseButton::Left,
-            cx.listener(|this, _e: &MouseUpEvent, _w, _cx| this.size_slider_dragging = false),
-        )
-        .on_mouse_up(
-            MouseButton::Left,
-            cx.listener(|this, _e: &MouseUpEvent, _w, _cx| this.size_slider_dragging = false),
-        )
 }

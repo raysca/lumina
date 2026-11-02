@@ -347,10 +347,6 @@ pub struct LuminaApp {
     pub card_fit_mode: bool,
     /// Filter-bar chip; non-matching cards dim instead of hiding.
     pub grid_filter: crate::views::search_bar::GridFilter,
-    /// Painted x of the thumbnail size slider, for pointer-to-level math.
-    pub size_slider_left: f32,
-    /// A press started on the size slider; only then do moves resize.
-    pub size_slider_dragging: bool,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
     /// What the banner's Retry runs; None hides Retry.
@@ -543,8 +539,6 @@ impl LuminaApp {
             mark_pop: Default::default(),
             card_fit_mode: config.card_fit_mode,
             grid_filter: Default::default(),
-            size_slider_left: 0.0,
-            size_slider_dragging: false,
             error_message: None,
             error_retry: None,
             last_action: None,
