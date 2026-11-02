@@ -205,12 +205,21 @@ impl LuminaApp {
                 let selected_item_id = self.selected_item.as_ref().map(|item| item.id);
                 let mut removed_textures = Vec::new();
                 let mut error = None;
+                let mut selected_refresh = None;
 
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
                         EngineEvent::BatchDiscovered { items } => {
                             if let Some(scan) = self.first_scan.as_mut() {
                                 scan.add_items(&items);
+                            }
+                            // A reconnected file keeps its id at a new path.
+                            // Re-read it: the batch carries the file's own
+                            // date, not an edited one.
+                            if let Some(id) = selected_item_id
+                                .filter(|id| items.iter().any(|item| item.id == *id))
+                            {
+                                selected_refresh = state.engine.get_item_by_id(id);
                             }
                             let new_total = state.engine.total_count();
                             let structural_change = new_total != state.total_count;
@@ -279,12 +288,19 @@ impl LuminaApp {
                             }
                             cx.notify();
                         }
+                        EngineEvent::ItemsMissing(_) => {
+                            should_refresh_counts = true;
+                            cx.notify();
+                        }
                         EngineEvent::Error(message) => error = Some(message),
                     }
                 }
 
                 if let Some(message) = error {
                     self.set_error(message, cx);
+                }
+                if let Some(fresh) = selected_refresh {
+                    self.selected_item = Some(fresh);
                 }
                 for image in removed_textures {
                     self.retire_image(image);
@@ -336,6 +352,9 @@ impl LuminaApp {
             }
             UiMessage::ExportFolderPicked(folder) => {
                 self.export_to_folder(folder, cx);
+            }
+            UiMessage::LocatePicked(id, path) => {
+                self.apply_locate(id, path, cx);
             }
             UiMessage::VideoFrameTick => {
                 self.video.frame_pending.store(false, Ordering::Release);
@@ -1063,6 +1082,7 @@ impl LuminaApp {
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();
             self.item_captions = engine.get_captions_map();
+            self.missing_items = engine.get_missing_ids();
             self.month_header.counts = engine
                 .get_timeline_buckets("month")
                 .into_iter()

@@ -1,10 +1,9 @@
 use lumina_core::{
-    read_sidecar, write_sidecar, Catalog, DecodedFrame, DiskCache, EngineEvent, LuminaEngine,
-    MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, RuleField,
-    RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, SortDirection, SortField,
-    SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
+    read_sidecar, write_sidecar, Catalog, DecodedFrame, DeletionTarget, DiskCache, EngineEvent,
+    LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat,
+    RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, SortDirection,
+    SortField, SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
 };
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -120,10 +119,10 @@ fn test_catalog_in_memory() {
     );
 
     // Test removing items
-    let mut valid = HashSet::new();
-    valid.insert(item2.path.clone());
-    let removed = catalog.remove_items_not_in(&valid).unwrap();
-    assert_eq!(removed.len(), 1);
+    let removed = catalog
+        .permanently_delete_items(&[inserted[0].id], DeletionTarget::CatalogOnly)
+        .unwrap();
+    assert_eq!(removed, 1);
     assert_eq!(catalog.total_count().unwrap(), 1);
 }
 
@@ -337,10 +336,10 @@ fn test_fts5_caption_removed_when_media_deleted() {
     catalog.set_caption(keep_id, "landscape panorama").unwrap();
     assert_eq!(catalog.search_fts("narwhal", 10).unwrap().len(), 1);
 
-    let mut existing = HashSet::new();
-    existing.insert(inserted[0].path.clone());
-    let removed = catalog.remove_items_not_in(&existing).unwrap();
-    assert_eq!(removed, vec![doomed_id]);
+    let removed = catalog
+        .permanently_delete_items(&[doomed_id], DeletionTarget::CatalogOnly)
+        .unwrap();
+    assert_eq!(removed, 1);
 
     // The deleted media row no longer surfaces through the FTS join.
     assert!(catalog.search_fts("narwhal", 10).unwrap().is_empty());
@@ -1051,7 +1050,7 @@ fn test_system_smart_albums() {
         let _ = catalog.query_system_album(*album, 10, 0);
     }
     let elapsed = start.elapsed();
-    let per_album_ms = elapsed.as_secs_f64() * 1000.0 / 9.0;
+    let per_album_ms = elapsed.as_secs_f64() * 1000.0 / SystemAlbum::all().len() as f64;
     println!(
         "System smart album evaluation latency: {:.3} ms/album",
         per_album_ms
@@ -1396,8 +1395,6 @@ fn test_tag_management_lifecycle() {
 
 #[test]
 fn test_deletion_lifecycle_and_trash_restoration() {
-    use lumina_core::DeletionTarget;
-
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
     let tmp_dir = std::env::temp_dir().join(format!(

@@ -126,6 +126,21 @@ impl Catalog {
             CREATE INDEX IF NOT EXISTS idx_media_hashes_hash ON media_hashes(content_hash);
             CREATE INDEX IF NOT EXISTS idx_media_hashes_size ON media_hashes(file_size);
 
+            -- v12: where each row's file is. A side table, not media_items
+            -- columns: media_fts_au rewrites the search row on every
+            -- media_items UPDATE, and marking a folder missing must not.
+            -- No row means present, inode unknown.
+            CREATE TABLE IF NOT EXISTS media_file_state (
+                media_id INTEGER PRIMARY KEY,
+                file_inode INTEGER,
+                missing_since_epoch_ms INTEGER,
+                FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+            );
+
+            -- Every row, not only missing ones: a folder going missing looks
+            -- up each file's just-added twin (present) by inode.
+            CREATE INDEX IF NOT EXISTS idx_file_state_inode ON media_file_state(file_inode);
+
             CREATE TRIGGER IF NOT EXISTS media_hashes_invalidate_au
             AFTER UPDATE OF file_size, mtime_epoch_ms ON media_items
             BEGIN

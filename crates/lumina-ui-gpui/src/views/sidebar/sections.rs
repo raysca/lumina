@@ -36,6 +36,11 @@ pub(super) fn render_library_section(
         .get(&SystemAlbum::RecentlyDeleted)
         .copied()
         .unwrap_or(0);
+    let missing_count = this
+        .system_album_counts
+        .get(&SystemAlbum::Missing)
+        .copied()
+        .unwrap_or(0);
 
     div()
         .flex()
@@ -139,6 +144,17 @@ pub(super) fn render_library_section(
                 this.select_album(AlbumSelection::Duplicates, cx);
             }),
         ))
+        // Only while something is missing: there is nothing to do otherwise.
+        .children((missing_count > 0).then(|| {
+            render_nav_item(
+                "Missing",
+                missing_count,
+                this.selection == AlbumSelection::System(SystemAlbum::Missing),
+                cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.select_album(AlbumSelection::System(SystemAlbum::Missing), cx);
+                }),
+            )
+        }))
         .child(render_nav_item(
             "Recently Deleted",
             if this.grid_state.is_some() {

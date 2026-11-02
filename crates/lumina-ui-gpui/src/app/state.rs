@@ -425,6 +425,8 @@ pub struct LuminaApp {
     pub item_ratings: HashMap<MediaId, u8>,
     pub item_color_labels: HashMap<MediaId, u8>,
     pub item_captions: HashMap<MediaId, String>,
+    /// Items whose file is gone from disk (badged in the grid).
+    pub missing_items: HashSet<MediaId>,
     pub caption: CaptionState,
     /// Reversible catalog edits (ratings, tags, captions, favorites, trash).
     pub undo: crate::app::undo::UndoState,
@@ -596,6 +598,7 @@ impl LuminaApp {
             item_ratings: HashMap::new(),
             item_color_labels: HashMap::new(),
             item_captions: HashMap::new(),
+            missing_items: HashSet::new(),
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),
             event_receiver_thread: None,

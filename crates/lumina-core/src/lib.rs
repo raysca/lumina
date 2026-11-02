@@ -199,11 +199,24 @@ pub enum EngineEvent {
         current_file: Option<PathBuf>,
     },
     ItemRemoved(MediaId),
+    /// Files gone from disk. The rows and their metadata are kept, marked
+    /// missing; the order of the library is unchanged.
+    ItemsMissing(Vec<MediaId>),
     ScanComplete {
         total_items: usize,
     },
     /// A catalog or scan failure for the error banner, as "Title: detail".
     Error(String),
+}
+
+/// What [`LuminaEngine::relink`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelinkOutcome {
+    /// The missing item now points at the chosen file.
+    Relinked,
+    /// The chosen file was already catalogued as this item (now deleted);
+    /// its metadata was merged into the missing item, which took its file.
+    Folded(MediaId),
 }
 
 /// Result of exporting media + metadata.
@@ -306,14 +319,32 @@ impl LuminaEngine {
         // Start the real-time filesystem watcher alongside the initial scan so
         // external add/modify/delete operations are reflected without a manual
         // rescan. It lives as long as the engine (or any surviving clone).
-        let watcher =
-            match LibraryWatcher::new(library_root.clone(), catalog.clone(), event_tx.clone()) {
-                Ok(watcher) => Some(watcher),
-                Err(err) => {
-                    log::warn!("real-time filesystem watcher unavailable: {err:?}");
-                    None
+        // A watcher error means events were lost, so it rescans. The engine
+        // owns the watcher, so the hook holds it weakly. Untested: notify
+        // errors cannot be triggered on demand.
+        // ponytail: back-to-back errors each restart the scan (rescan cancels
+        // the running one); debounce here if an error storm is ever seen.
+        let rescan_target: Arc<std::sync::OnceLock<std::sync::Weak<Self>>> = Arc::default();
+        let on_error = {
+            let rescan_target = rescan_target.clone();
+            Box::new(move || {
+                if let Some(engine) = rescan_target.get().and_then(std::sync::Weak::upgrade) {
+                    engine.rescan();
                 }
-            };
+            })
+        };
+        let watcher = match LibraryWatcher::new(
+            library_root.clone(),
+            catalog.clone(),
+            event_tx.clone(),
+            on_error,
+        ) {
+            Ok(watcher) => Some(watcher),
+            Err(err) => {
+                log::warn!("real-time filesystem watcher unavailable: {err:?}");
+                None
+            }
+        };
 
         let engine = Arc::new(Self {
             library_root: library_root.clone(),
@@ -326,6 +357,8 @@ impl LuminaEngine {
             sidecar_writes: Arc::new(Mutex::new(())),
             _watcher: watcher,
         });
+
+        let _ = rescan_target.set(Arc::downgrade(&engine));
 
         // Trigger initial background scan
         let engine_clone = engine.clone();
@@ -1053,6 +1086,63 @@ impl LuminaEngine {
         self.catalog.merge_all_duplicates()
     }
 
+    /// Points the missing item `id` at `chosen`, a file inside the library
+    /// ("Locate…"). When `chosen` is already catalogued as another item, the
+    /// two merge only if they can be the same file: equal size and
+    /// dimensions, and equal content hash when one was stored. A different photo is never merged
+    /// away. Blocking: reads and may hash the file.
+    pub fn relink(&self, id: MediaId, chosen: &Path) -> Result<RelinkOutcome> {
+        const OUTSIDE: &str = "Choose a file inside the library folder. To bring in a file from elsewhere, import it first.";
+        let root = self.library_root.canonicalize().context("library folder")?;
+        let chosen = chosen.canonicalize().context("chosen file")?;
+        let Ok(relative) = chosen.strip_prefix(&root) else {
+            anyhow::bail!(OUTSIDE);
+        };
+        // Catalog paths use the library root as it was opened.
+        let path = self.library_root.join(relative);
+        if !scanner::is_supported_media(&path) {
+            anyhow::bail!("That file type is not supported.");
+        }
+        let missing = self
+            .catalog
+            .get_item_by_id(id)?
+            .context("the missing item no longer exists")?;
+        let item = Scanner::new(self.library_root.clone(), self.event_tx.clone())
+            .inspect_media_file(&path)
+            .context("the chosen file cannot be read")?;
+
+        let outcome = match self.catalog.id_at_path(&path)? {
+            Some(twin) if twin != id => {
+                // Fixed-size formats make size alone weak; dimensions too.
+                let same_file = item.file_size == missing.file_size
+                    && (item.width, item.height) == (missing.width, missing.height);
+                let same_content = match self.catalog.stored_hash(id)? {
+                    Some(hash) => compute_file_hash(&path)? == hash,
+                    None => true,
+                };
+                if !(same_file && same_content) {
+                    anyhow::bail!("That file is already in your library as another item. Delete one of them, or merge them from Duplicates.");
+                }
+                self.catalog.fold_into(id, twin)?;
+                let _ = self.event_tx.send(EngineEvent::ItemRemoved(twin));
+                RelinkOutcome::Folded(twin)
+            }
+            Some(_) => RelinkOutcome::Relinked,
+            None => {
+                self.catalog.relink_path(id, &path)?;
+                RelinkOutcome::Relinked
+            }
+        };
+        // Fresh size, dates and inode for the file now behind the row.
+        self.catalog.insert_or_update_batch(&[item])?;
+        Ok(outcome)
+    }
+
+    /// Ids of items whose file is missing from disk.
+    pub fn get_missing_ids(&self) -> std::collections::HashSet<MediaId> {
+        self.read("get missing ids", self.catalog.get_missing_ids())
+    }
+
     /// Checks whether an external file is an exact duplicate of any item in the library.
     pub fn check_file_is_duplicate(&self, path: &Path) -> Result<Option<MediaItem>> {
         let meta = match fs::metadata(path) {
@@ -1326,6 +1416,28 @@ impl LuminaEngine {
     }
 
     fn run_scan(&self, cancel_flag: Arc<AtomicBool>) {
+        // An unmounted or deleted library folder would make every file look
+        // gone; report it instead of marking the library missing.
+        if !self.library_root.is_dir() {
+            let _ = self.event_tx.send(EngineEvent::Error(format!(
+                "Library folder is not available: {}",
+                self.library_root.display()
+            )));
+            let total_items = self.catalog.total_count().unwrap_or(0);
+            let _ = self
+                .event_tx
+                .send(EngineEvent::ScanComplete { total_items });
+            return;
+        }
+        // Before the walk, so a file moved while Lumina was closed is already
+        // missing when the walk finds it at its new path, and reconnects.
+        match self.catalog.reconcile_files() {
+            Ok(missing) if !missing.is_empty() => {
+                let _ = self.event_tx.send(EngineEvent::ItemsMissing(missing));
+            }
+            Ok(_) => {}
+            Err(err) => log::warn!("checking catalogued files failed: {err:#}"),
+        }
         let (batch_tx, batch_rx) = unbounded();
         // An empty map would re-insert every file and overwrite edited dates
         // and places, so a failed read stops the scan instead.
@@ -1384,20 +1496,11 @@ impl LuminaEngine {
             }
         });
 
-        let scan_res = scanner.scan_and_collect_paths();
+        let scan_res = scanner.scan_files();
         let _ = ingest_handle.join();
 
-        if let Ok((total_items, all_scanned_paths)) = scan_res {
+        if let Ok(total_items) = scan_res {
             if !cancel_flag.load(Ordering::Relaxed) {
-                // Reconcile deleted files on disk: remove catalog entries that no longer exist
-                match self.catalog.remove_items_not_in(&all_scanned_paths) {
-                    Ok(removed_ids) => {
-                        for id in removed_ids {
-                            let _ = self.event_tx.send(EngineEvent::ItemRemoved(id));
-                        }
-                    }
-                    Err(e) => log::warn!("removing deleted files from the catalog failed: {e:#}"),
-                }
                 // Videos catalogued before the scanner read their size are
                 // unchanged on disk, so the incremental scan skips them.
                 if let Err(e) = self.catalog.fill_video_sizes(extract_video_size) {

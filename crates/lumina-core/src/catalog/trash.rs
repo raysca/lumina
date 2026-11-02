@@ -1,7 +1,6 @@
 use anyhow::Result;
 use rusqlite::{params, OptionalExtension};
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::{Catalog, DeletionTarget};
 use crate::MediaId;
@@ -164,59 +163,6 @@ impl Catalog {
             .into_iter()
             .map(|(id, _)| MediaId(id as u64))
             .collect())
-    }
-
-    pub fn remove_item_by_path(&self, path: &Path) -> Result<Option<MediaId>> {
-        let path_str = path.to_string_lossy().to_string();
-        let conn = self.conn.lock();
-
-        let id_opt: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM media_items WHERE file_path = ?1;",
-                params![path_str],
-                |row| row.get(0),
-            )
-            .optional()?;
-
-        if let Some(id) = id_opt {
-            conn.execute("DELETE FROM media_items WHERE id = ?1;", params![id])?;
-            Ok(Some(MediaId(id as u64)))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Reconciles the database against a set of existing file paths on disk, removing stale entries.
-    pub fn remove_items_not_in(&self, existing_paths: &HashSet<PathBuf>) -> Result<Vec<MediaId>> {
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-
-        let all_rows: Vec<(i64, String)> = {
-            let mut stmt = tx.prepare("SELECT id, file_path FROM media_items;")?;
-            let mapped = stmt.query_map([], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })?;
-            let mut v = Vec::new();
-            for r in mapped {
-                v.push(r?);
-            }
-            v
-        };
-
-        let mut removed = Vec::new();
-        {
-            let mut del_stmt = tx.prepare_cached("DELETE FROM media_items WHERE id = ?1;")?;
-            for (id, path_str) in all_rows {
-                let p = PathBuf::from(&path_str);
-                if !existing_paths.contains(&p) {
-                    del_stmt.execute(params![id])?;
-                    removed.push(MediaId(id as u64));
-                }
-            }
-        }
-
-        tx.commit()?;
-        Ok(removed)
     }
 
     pub fn clear_all(&self) -> Result<()> {

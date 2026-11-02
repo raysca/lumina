@@ -76,6 +76,11 @@ impl ViewerViewport {
             .map(|i| i.media_type == MediaType::Video)
             .unwrap_or(false);
 
+        let is_missing = this
+            .selected_item
+            .as_ref()
+            .is_some_and(|i| this.missing_items.contains(&i.id));
+
         let preview_image = this.viewer_image.clone();
         let scale = this.viewer_state.zoom_scale;
         let (pan_x, pan_y) = this.viewer_state.pan_offset;
@@ -324,6 +329,33 @@ impl ViewerViewport {
                         },
                     ),
             )
+            // The cached thumbnail may still show; say why it goes no further.
+            .when(is_missing, |d| {
+                d.child(
+                    div()
+                        .debug_selector(|| "viewer-missing".to_string())
+                        .absolute()
+                        .bottom(px(24.0))
+                        .px_3()
+                        .py_2()
+                        .rounded(theme::RADIUS_MD)
+                        .bg(theme::bg_hud())
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(render_icon(
+                            Icon::TriangleAlert,
+                            px(14.0),
+                            theme::danger_text(),
+                        ))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme::text())
+                                .child("The original file is missing."),
+                        ),
+                )
+            })
     }
 }
 

@@ -7,6 +7,9 @@ use super::Catalog;
 use crate::duplicates::DuplicateGroup;
 use crate::{MediaId, MediaItem};
 
+// Every query here counts only items whose file is present: a missing file
+// cannot be hashed, and merging one would trash metadata the user may want to
+// reconnect with Locate.
 impl Catalog {
     /// Returns media items that are unhashed but share a `file_size` with at
     /// least one other active item in the library (excluding 0-byte files).
@@ -17,11 +20,11 @@ impl Catalog {
             SELECT m.id, m.file_path, m.file_size
             FROM media_items m
             LEFT JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
               AND h.media_id IS NULL
               AND m.file_size IN (
                   SELECT file_size FROM media_items
-                  WHERE is_trashed = 0 AND is_hidden = 0 AND file_size > 0
+                  WHERE is_trashed = 0 AND is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = media_items.id AND s.missing_since_epoch_ms IS NOT NULL) AND file_size > 0
                   GROUP BY file_size
                   HAVING COUNT(*) > 1
               );
@@ -87,7 +90,7 @@ impl Catalog {
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
-            WHERE h.content_hash = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE h.content_hash = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL)
             ORDER BY m.timestamp_epoch_ms ASC, m.id ASC;
             "#,
         )?;
@@ -101,7 +104,7 @@ impl Catalog {
             r#"
             SELECT id, file_path
             FROM media_items
-            WHERE file_size = ?1 AND is_trashed = 0 AND is_hidden = 0 AND file_size > 0;
+            WHERE file_size = ?1 AND is_trashed = 0 AND is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = media_items.id AND s.missing_since_epoch_ms IS NOT NULL) AND file_size > 0;
             "#,
         )?;
         let rows = stmt.query_map(params![file_size as i64], |row| {
@@ -124,11 +127,11 @@ impl Catalog {
             SELECT COUNT(*)
             FROM media_hashes h
             JOIN media_items m ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = media_items.id AND s.missing_since_epoch_ms IS NOT NULL) AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               );
@@ -158,11 +161,11 @@ impl Catalog {
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = media_items.id AND s.missing_since_epoch_ms IS NOT NULL) AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               )
@@ -182,7 +185,7 @@ impl Catalog {
             SELECT h.content_hash, m.file_size, COUNT(*) as cnt
             FROM media_hashes h
             JOIN media_items m ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
             GROUP BY h.content_hash
             HAVING COUNT(*) > 1
             ORDER BY (COUNT(*) - 1) * m.file_size DESC, h.content_hash ASC;
@@ -220,11 +223,11 @@ impl Catalog {
                 h.content_hash
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = media_items.id AND s.missing_since_epoch_ms IS NOT NULL) AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               )
@@ -273,7 +276,24 @@ impl Catalog {
         if trash_ids.is_empty() {
             return Ok(());
         }
+        Self::merge_metadata_in_tx(tx, keep_id, trash_ids)?;
 
+        let mut trash_stmt =
+            tx.prepare_cached("UPDATE media_items SET is_trashed = 1 WHERE id = ?1;")?;
+        for trash_id in trash_ids {
+            trash_stmt.execute(params![trash_id.0 as i64])?;
+        }
+        Ok(())
+    }
+
+    /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
+    /// favorite (any), rating (highest), and caption, colour label and title
+    /// where the keeper has none.
+    pub(crate) fn merge_metadata_in_tx(
+        tx: &rusqlite::Transaction,
+        keep_id: MediaId,
+        trash_ids: &[MediaId],
+    ) -> Result<()> {
         // 1. Copy missing tags from trash_ids to keep_id
         {
             let mut tag_stmt = tx.prepare_cached(
@@ -357,15 +377,6 @@ impl Catalog {
                     updated_title.as_deref(),
                     keep_id.0 as i64
                 ])?;
-            }
-        }
-
-        // 4. Mark all trash_ids as trashed
-        {
-            let mut trash_stmt =
-                tx.prepare_cached("UPDATE media_items SET is_trashed = 1 WHERE id = ?1;")?;
-            for trash_id in trash_ids {
-                trash_stmt.execute(params![trash_id.0 as i64])?;
             }
         }
 

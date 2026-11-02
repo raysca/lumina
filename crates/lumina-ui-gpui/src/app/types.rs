@@ -54,6 +54,9 @@ pub enum UiMessage {
     #[cfg_attr(test, allow(dead_code))]
     FolderPicked(PathBuf),
     ExportFolderPicked(PathBuf),
+    /// The file chosen to reconnect a missing item. (Tests skip the picker.)
+    #[cfg_attr(test, allow(dead_code))]
+    LocatePicked(lumina_core::MediaId, PathBuf),
     VideoFrameTick,
     #[cfg_attr(test, allow(dead_code))]
     SelectedTagsLoaded {

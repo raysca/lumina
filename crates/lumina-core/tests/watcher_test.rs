@@ -124,13 +124,13 @@ fn wait_for_batch_with_path(
     }
 }
 
-/// Awaits the ItemRemoved event for a specific media id.
-fn wait_for_item_removed(rx: &Receiver<EngineEvent>, id: MediaId) {
+/// Awaits the ItemsMissing event naming a specific media id.
+fn wait_for_item_missing(rx: &Receiver<EngineEvent>, id: MediaId) {
     recv_until(
         rx,
         EVENT_TIMEOUT,
-        "ItemRemoved event",
-        |event| matches!(event, EngineEvent::ItemRemoved(removed) if *removed == id),
+        "ItemsMissing event",
+        |event| matches!(event, EngineEvent::ItemsMissing(ids) if ids.contains(&id)),
     );
 }
 
@@ -169,15 +169,200 @@ fn test_watcher_detects_external_add_and_delete() {
         "watcher should add the externally created image to the catalog"
     );
 
-    // Delete the image externally and expect a matching ItemRemoved.
+    // Delete the image externally: the row stays, marked missing.
     std::fs::remove_file(&added_path).expect("remove externally added image");
-    wait_for_item_removed(&rx, added_id);
+    wait_for_item_missing(&rx, added_id);
     assert_eq!(
         engine.total_count(),
-        1,
-        "watcher should drop the externally deleted image from the catalog"
+        2,
+        "an externally deleted image keeps its row and metadata"
+    );
+    assert!(
+        engine.get_missing_ids().contains(&added_id),
+        "the deleted image is marked missing"
     );
 
     // Dropping the engine must stop the watcher thread cleanly (no hang).
     drop(engine);
+}
+
+/// Opens the engine on `library`, waits for its scan, and returns it.
+fn open_scanned(library: &TestLibrary) -> (std::sync::Arc<LuminaEngine>, Receiver<EngineEvent>) {
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        library.media_dir(),
+        library.db_path(),
+        Some(library.cache_dir()),
+    )
+    .expect("open engine with isolated paths");
+    wait_for_scan_complete(&rx);
+    (engine, rx)
+}
+
+fn id_at(engine: &LuminaEngine, path: &Path) -> MediaId {
+    engine
+        .get_item_slice(0..100)
+        .into_iter()
+        .find(|item| item.path == path)
+        .map(|item| item.id)
+        .unwrap_or_else(|| panic!("{} must be catalogued", path.display()))
+}
+
+#[test]
+fn rescan_reconnects_moved_files_and_keeps_deleted_ones() {
+    let library = TestLibrary::new("rescan_missing");
+    let media = library.media_dir();
+    let (moved, deleted) = (media.join("moved.jpg"), media.join("deleted.jpg"));
+    write_jpeg(&moved);
+    write_jpeg(&deleted);
+    let (moved_id, deleted_id) = {
+        let (engine, _rx) = open_scanned(&library);
+        let ids = (id_at(&engine, &moved), id_at(&engine, &deleted));
+        engine
+            .add_tags_batch(&[ids.0], &["kept".to_string()])
+            .unwrap();
+        ids
+    };
+
+    // While Lumina is closed: one file moved into a folder, one deleted.
+    let new_path = media.join("2024/moved.jpg");
+    std::fs::create_dir_all(new_path.parent().unwrap()).unwrap();
+    std::fs::rename(&moved, &new_path).unwrap();
+    let deleted_bytes = std::fs::read(&deleted).unwrap();
+    std::fs::remove_file(&deleted).unwrap();
+
+    let (engine, _rx) = open_scanned(&library);
+    let item = engine.get_item_by_id(moved_id).expect("moved row kept");
+    assert_eq!(item.path, new_path, "a file moved while closed reconnects");
+    assert_eq!(engine.get_tags_for_item(moved_id), vec!["kept"]);
+    assert_eq!(engine.total_count(), 2, "nothing is added or dropped");
+    assert_eq!(
+        engine.get_missing_ids(),
+        [deleted_id].into_iter().collect(),
+        "a deleted file is kept, marked missing"
+    );
+    drop(engine);
+
+    // The deleted file comes back at its old path.
+    std::fs::write(&deleted, deleted_bytes).unwrap();
+    let (engine, _rx) = open_scanned(&library);
+    assert!(
+        engine.get_missing_ids().is_empty(),
+        "a file restored at its old path is present again"
+    );
+    assert_eq!(id_at(&engine, &deleted), deleted_id);
+}
+
+#[test]
+fn scan_of_unavailable_library_marks_nothing() {
+    let library = TestLibrary::new("rescan_root_gone");
+    write_jpeg(&library.media_dir().join("a.jpg"));
+    drop(open_scanned(&library));
+
+    let away = library.root.join("unmounted");
+    std::fs::rename(library.media_dir(), &away).unwrap();
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        library.media_dir(),
+        library.db_path(),
+        Some(library.cache_dir()),
+    )
+    .expect("an unavailable library still opens");
+    recv_until(
+        &rx,
+        EVENT_TIMEOUT,
+        "unavailable-library error",
+        |event| matches!(event, EngineEvent::Error(message) if message.starts_with("Library folder is not available")),
+    );
+    wait_for_scan_complete(&rx);
+    assert!(
+        engine.get_missing_ids().is_empty(),
+        "nothing is marked missing"
+    );
+    assert_eq!(engine.total_count(), 1);
+}
+
+/// A tagged photo copied to `copy.jpg` and deleted while Lumina was closed:
+/// the original is missing and the copy is catalogued as a new item.
+fn copied_back(name: &str) -> (TestLibrary, std::sync::Arc<LuminaEngine>, MediaId, MediaId) {
+    let library = TestLibrary::new(name);
+    let media = library.media_dir();
+    write_jpeg(&media.join("a.jpg"));
+    let original = {
+        let (engine, _rx) = open_scanned(&library);
+        let id = id_at(&engine, &media.join("a.jpg"));
+        engine.add_tags_batch(&[id], &["kept".to_string()]).unwrap();
+        id
+    };
+    std::fs::copy(media.join("a.jpg"), media.join("copy.jpg")).unwrap();
+    std::fs::remove_file(media.join("a.jpg")).unwrap();
+    let (engine, _rx) = open_scanned(&library);
+    let copy = id_at(&engine, &media.join("copy.jpg"));
+    assert!(engine.get_missing_ids().contains(&original));
+    (library, engine, original, copy)
+}
+
+#[test]
+fn locate_folds_a_copy_of_the_same_file() {
+    let (library, engine, original, copy) = copied_back("locate_fold");
+    let chosen = library.media_dir().join("copy.jpg");
+    assert_eq!(
+        engine.relink(original, &chosen).unwrap(),
+        lumina_core::RelinkOutcome::Folded(copy)
+    );
+    assert_eq!(engine.get_item_by_id(original).unwrap().path, chosen);
+    assert!(
+        engine.get_item_by_id(copy).is_none(),
+        "the copy's row folds in"
+    );
+    assert_eq!(engine.get_tags_for_item(original), vec!["kept"]);
+    assert!(engine.get_missing_ids().is_empty());
+}
+
+#[test]
+fn locate_repoints_to_an_uncatalogued_file() {
+    let (library, engine, original, copy) = copied_back("locate_repoint");
+    engine
+        .catalog()
+        .permanently_delete_items(&[copy], lumina_core::DeletionTarget::CatalogOnly)
+        .unwrap();
+    let chosen = library.media_dir().join("copy.jpg");
+    assert_eq!(
+        engine.relink(original, &chosen).unwrap(),
+        lumina_core::RelinkOutcome::Relinked
+    );
+    assert_eq!(engine.get_item_by_id(original).unwrap().path, chosen);
+    assert!(engine.get_missing_ids().is_empty());
+}
+
+#[test]
+fn locate_refuses_a_different_photo_and_outside_files() {
+    let (library, engine, original, copy) = copied_back("locate_refuse");
+    let other = library.media_dir().join("other.png");
+    image::RgbImage::from_fn(40, 40, |x, _| image::Rgb([x as u8, 0, 0]))
+        .save(&other)
+        .unwrap();
+    // Catalogue it now rather than waiting on the watcher.
+    let (tx, _rx) = crossbeam_channel::unbounded();
+    let item = lumina_core::scanner::Scanner::new(library.media_dir(), tx)
+        .inspect_media_file(&other)
+        .unwrap();
+    engine.catalog().insert_or_update_batch(&[item]).unwrap();
+
+    let err = engine.relink(original, &other).unwrap_err().to_string();
+    assert!(
+        err.starts_with("That file is already in your library"),
+        "{err}"
+    );
+    assert!(
+        engine.get_missing_ids().contains(&original),
+        "nothing changed"
+    );
+    assert!(engine.get_item_by_id(copy).is_some());
+
+    let outside = library.root.join("outside.jpg");
+    write_jpeg(&outside);
+    let err = engine.relink(original, &outside).unwrap_err().to_string();
+    assert!(
+        err.starts_with("Choose a file inside the library folder"),
+        "{err}"
+    );
 }

@@ -153,9 +153,10 @@ by UI automation.
 
 ## 2. Import, library lifecycle, and file management
 
-**Current:** opening a folder indexes it in place. There is no copy-into-library
-import, drag-and-drop ingestion, multi-root library, missing-file relink, or
-in-app backup/restore.
+**Current:** opening a folder indexes it in place. Files gone from disk are
+kept as missing (badge and Missing view); moves inside the library reconnect
+by inode, and "Locate…" relinks by hand. There is no copy-into-library import,
+drag-and-drop ingestion, multi-root library, or in-app backup/restore.
 
 **Target:**
 

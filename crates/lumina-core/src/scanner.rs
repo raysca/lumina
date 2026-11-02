@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Datelike};
 use crossbeam_channel::Sender;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -54,18 +54,12 @@ impl Scanner {
     }
 
     pub fn scan(&self) -> Result<usize> {
-        self.scan_and_collect_paths().map(|(count, _)| count)
+        self.scan_files()
     }
 
     /// Every non-hidden entry under the root, as both passes walk it.
     fn walk(&self) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
-        WalkDir::new(&self.library_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|e| {
-                let name = e.file_name().to_string_lossy();
-                !name.starts_with('.')
-            })
+        walk_entries(&self.library_root)
     }
 
     /// Counts media files by name only, for "X of Y" progress.
@@ -81,10 +75,9 @@ impl Scanner {
             .count()
     }
 
-    pub fn scan_and_collect_paths(&self) -> Result<(usize, HashSet<PathBuf>)> {
+    pub fn scan_files(&self) -> Result<usize> {
         let mut total_found: usize = 0;
         let mut skipped: usize = 0;
-        let mut seen_paths: HashSet<PathBuf> = HashSet::new();
         let mut batch: Vec<MediaItem> = Vec::with_capacity(BATCH_SIZE);
         // Only a first scan (no catalog yet) shows "X of Y"; rescans and
         // launches skip the extra walk.
@@ -126,16 +119,8 @@ impl Scanner {
 
             // Fast incremental check: if file size and mtime match catalog signature, skip deep parse
             if !self.known_signatures.is_empty() {
-                if let Ok(metadata) = std::fs::metadata(path) {
-                    let file_size = metadata.len();
-                    let mtime_epoch_ms = metadata
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                        .map(|d| d.as_millis() as i64)
-                        .unwrap_or(0);
-                    if self.known_signatures.get(path) == Some(&(file_size, mtime_epoch_ms)) {
-                        seen_paths.insert(path.to_path_buf());
+                if let Some(signature) = file_signature(path) {
+                    if self.known_signatures.get(path) == Some(&signature) {
                         total_found += 1;
                         continue;
                     }
@@ -143,7 +128,6 @@ impl Scanner {
             }
 
             if let Some(media_item) = self.inspect_media_file(path) {
-                seen_paths.insert(media_item.path.clone());
                 batch.push(media_item);
                 total_found += 1;
 
@@ -178,10 +162,10 @@ impl Scanner {
             total_items: total_found,
         });
 
-        Ok((total_found, seen_paths))
+        Ok(total_found)
     }
 
-    fn classify_media_extension(path: &Path) -> Option<MediaType> {
+    pub(crate) fn classify_media_extension(path: &Path) -> Option<MediaType> {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
@@ -405,6 +389,41 @@ pub struct MediaDetails {
     pub white_balance: Option<String>,
     pub software: Option<String>,
     pub focal_length_35mm: Option<u32>,
+}
+
+/// Every non-hidden entry under `dir`: hidden files and folders (and all
+/// inside them) are skipped, and symlinks are not followed.
+fn walk_entries(dir: &Path) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
+    WalkDir::new(dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
+}
+
+/// Media files under `dir`, by the scanner's rules.
+pub fn walk_media(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    walk_entries(dir)
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path())
+        .filter(|path| is_supported_media(path))
+}
+
+/// `(file_size, mtime_epoch_ms)` as the catalog stores them.
+pub(crate) fn file_signature(path: &Path) -> Option<(u64, i64)> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let mtime_epoch_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    Some((metadata.len(), mtime_epoch_ms))
+}
+
+/// True for a file name Lumina catalogues (by extension, any case).
+pub fn is_supported_media(path: &Path) -> bool {
+    Scanner::classify_media_extension(path).is_some()
 }
 
 /// Reads [`MediaDetails`] for `path`. Missing or unreadable fields are `None`;

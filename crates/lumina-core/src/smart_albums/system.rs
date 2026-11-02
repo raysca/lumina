@@ -12,6 +12,8 @@ pub enum SystemAlbum {
     Bursts,
     RecentlyDeleted,
     Places,
+    /// Items whose file is gone from disk; their metadata is kept.
+    Missing,
 }
 
 impl SystemAlbum {
@@ -26,6 +28,7 @@ impl SystemAlbum {
             SystemAlbum::Bursts,
             SystemAlbum::RecentlyDeleted,
             SystemAlbum::Places,
+            SystemAlbum::Missing,
         ]
     }
 
@@ -40,6 +43,7 @@ impl SystemAlbum {
             SystemAlbum::Bursts => "Bursts",
             SystemAlbum::RecentlyDeleted => "Recently Deleted",
             SystemAlbum::Places => "Places",
+            SystemAlbum::Missing => "Missing",
         }
     }
 
@@ -54,6 +58,7 @@ impl SystemAlbum {
             SystemAlbum::Bursts => "layers",
             SystemAlbum::RecentlyDeleted => "trash",
             SystemAlbum::Places => "map-pin",
+            SystemAlbum::Missing => "triangle-alert",
         }
     }
 
@@ -85,6 +90,9 @@ impl SystemAlbum {
             }
             SystemAlbum::Places => {
                 "m.latitude IS NOT NULL AND m.longitude IS NOT NULL AND m.is_trashed = 0 AND m.is_hidden = 0"
+            }
+            SystemAlbum::Missing => {
+                "EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
         }
     }

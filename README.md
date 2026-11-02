@@ -18,7 +18,7 @@ core handles cataloguing, decoding, and search.
   pre-aggregated for instant scrubbing.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a bundled GeoNames dataset.
-- **Smart albums** — 9 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
+- **Smart albums** — 10 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
   match all/any of conditions on kind, favorite, date (including "in the
   last N days/weeks/months"), tag, stars, color label, camera, lens,
   aperture, ISO, focal length, filename and place, with a live count and
@@ -47,6 +47,10 @@ core handles cataloguing, decoding, and search.
   `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
   card context menu applies sidecar titles, ratings, color labels, captions and
   tags (a sidecar without a label leaves the catalog's label alone).
+- **Missing files** — a file deleted or moved outside Lumina keeps its catalog
+  row, metadata and thumbnail, with a badge and a Missing view. Files moved or
+  renamed inside the library reconnect by inode; "Locate…" (context menu or
+  ⌘K) points an item at its file by hand.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

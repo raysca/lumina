@@ -4,6 +4,7 @@ use rusqlite::{params, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use super::files::{file_inode, PRESENT};
 use super::Catalog;
 use crate::text::{clean_caption, clean_text, MAX_TEXT_CHARS};
 use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
@@ -16,7 +17,13 @@ impl Catalog {
     /// edited values.
     /// ponytail: undoing an edit keeps its flag, so that item then ignores
     /// a later in-file date change; clear the flag on undo if that matters.
+    ///
+    /// Ingesting a file marks it present and records its inode. A path new
+    /// to the catalog first takes over the newest missing row with the same
+    /// inode and size: the file was moved or renamed, and keeps its metadata.
     pub fn insert_or_update_batch(&self, items: &[MediaItem]) -> Result<Vec<MediaItem>> {
+        // Stat before locking: no file IO under the catalog lock.
+        let inodes: Vec<Option<u64>> = items.iter().map(|item| file_inode(&item.path)).collect();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
 
@@ -72,7 +79,30 @@ impl Catalog {
                 "#,
             )?;
 
-            for item in items {
+            let mut reconnect = tx.prepare_cached(
+                r#"
+                UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3
+                WHERE id = (
+                    SELECT s.media_id FROM media_file_state s
+                    JOIN media_items m ON m.id = s.media_id
+                    WHERE s.missing_since_epoch_ms IS NOT NULL
+                      AND s.file_inode = ?4 AND m.file_size = ?5
+                    ORDER BY s.missing_since_epoch_ms DESC LIMIT 1
+                )
+                AND NOT EXISTS (SELECT 1 FROM media_items WHERE file_path = ?1);
+                "#,
+            )?;
+            let mut mark_present = tx.prepare_cached(
+                r#"
+                INSERT INTO media_file_state (media_id, file_inode, missing_since_epoch_ms)
+                VALUES (?1, ?2, NULL)
+                ON CONFLICT(media_id) DO UPDATE SET
+                    file_inode = COALESCE(excluded.file_inode, file_inode),
+                    missing_since_epoch_ms = NULL;
+                "#,
+            )?;
+
+            for (item, inode) in items.iter().zip(&inodes) {
                 let media_type_str = match item.media_type {
                     MediaType::Image => "image",
                     MediaType::Video => "video",
@@ -80,6 +110,15 @@ impl Catalog {
                 };
 
                 let path_str = item.path.to_string_lossy().to_string();
+                if let Some(inode) = inode {
+                    reconnect.execute(params![
+                        path_str,
+                        item.parent_dir,
+                        item.file_name,
+                        *inode as i64,
+                        item.file_size
+                    ])?;
+                }
 
                 let (row_id, db_fav, db_hid, db_trash, db_title): (
                     i64,
@@ -131,6 +170,8 @@ impl Catalog {
                     },
                 )?;
 
+                mark_present.execute(params![row_id, inode.map(|inode| inode as i64)])?;
+
                 let mut updated = item.clone();
                 updated.id = MediaId(row_id as u64);
                 updated.is_favorite = db_fav != 0;
@@ -146,10 +187,13 @@ impl Catalog {
     }
 
     /// Returns `(file_size, mtime_epoch_ms)` keyed by `PathBuf` for fast incremental rescans.
+    /// Missing rows are left out, so a file restored at its old path is
+    /// ingested again (which marks it present) instead of skipped.
     pub fn get_file_signatures(&self) -> Result<HashMap<PathBuf, (u64, i64)>> {
         let conn = self.conn.lock();
-        let mut stmt =
-            conn.prepare_cached("SELECT file_path, file_size, mtime_epoch_ms FROM media_items;")?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT m.file_path, m.file_size, m.mtime_epoch_ms FROM media_items m WHERE {PRESENT};"
+        ))?;
         let rows = stmt.query_map([], |row| {
             let path_str: String = row.get(0)?;
             let file_size: u64 = row.get(1)?;

@@ -8,6 +8,7 @@ mod immersive_hud;
 mod inspector;
 mod interaction;
 mod legacy_catalog;
+mod missing;
 mod motion;
 mod multi_select;
 mod overlay_isolation;

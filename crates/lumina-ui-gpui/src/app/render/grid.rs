@@ -202,6 +202,7 @@ impl LuminaApp {
                                 let item_rating = this.get_item_rating(item);
                                 let item_color = this.get_item_color_label(item);
                                 let is_video = item.media_type == MediaType::Video;
+                                let is_missing = this.missing_items.contains(&item.id);
                                 let dimmed = !this.grid_filter.matches(
                                     is_fav,
                                     is_video,
@@ -491,6 +492,31 @@ impl LuminaApp {
                                                         .into_any_element()
                                                 } else {
                                                     Empty.into_any_element()
+                                                })
+                                                // Missing file (top-right).
+                                                .when(is_missing, |card| {
+                                                    card.child(
+                                                        div()
+                                                            .id(("grid-missing-badge", item_id_num as u64))
+                                                            .debug_selector(move || {
+                                                                format!("grid-missing-badge-{}", item_id_num)
+                                                            })
+                                                            .absolute()
+                                                            .top_1()
+                                                            .right_1()
+                                                            .size(px(20.0))
+                                                            .rounded(theme::RADIUS_SM)
+                                                            .bg(rgba(0x00000099))
+                                                            .flex()
+                                                            .items_center()
+                                                            .justify_center()
+                                                            .tooltip(theme::tooltip_label("File is missing"))
+                                                            .child(render_icon(
+                                                                Icon::TriangleAlert,
+                                                                px(12.0),
+                                                                theme::danger_text(),
+                                                            )),
+                                                    )
                                                 })
                                                 // Video Duration Overlay (bottom-right)
                                                 .child(if is_video && !dur_text.is_empty() {

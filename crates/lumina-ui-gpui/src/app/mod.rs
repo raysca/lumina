@@ -6,6 +6,7 @@ pub mod first_scan;
 pub mod info_details;
 pub mod keymap;
 pub mod library;
+pub mod missing;
 pub mod navigation;
 pub mod panels;
 pub mod pip;

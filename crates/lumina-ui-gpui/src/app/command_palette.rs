@@ -49,6 +49,7 @@ pub enum CommandId {
     NewSmartAlbum,
     EditSmartAlbum,
     DeleteSmartAlbum,
+    LocateMissing,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
     EditLocation,
@@ -96,6 +97,7 @@ impl Command {
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
+            LocateMissing => Icon::TriangleAlert,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
         }
@@ -389,6 +391,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "smart album remove delete",
         },
         Command {
+            id: CommandId::LocateMissing,
+            key: "command.locate_missing",
+            shortcut: "",
+            keywords: "missing file find relink reconnect moved",
+        },
+        Command {
             id: CommandId::AdjustDate,
             key: "command.adjust_date",
             shortcut: "",
@@ -635,6 +643,7 @@ impl LuminaApp {
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
             CommandId::DeleteSmartAlbum => self.delete_selected_smart_album(cx),
+            CommandId::LocateMissing => self.locate_missing_selected(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);
                 self.start_date_input(cx);

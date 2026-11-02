@@ -72,6 +72,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.open_tag_manager" => "Open Tag Manager…",
         "command.edit_smart_album" => "Edit Smart Album…",
         "command.delete_smart_album" => "Delete Smart Album…",
+        "command.locate_missing" => "Locate Missing File…",
         _ => return None,
     })
 }

@@ -44,6 +44,7 @@ impl MediaContextMenu {
         let is_video = item.media_type == lumina_core::MediaType::Video;
         let in_viewer = app.is_fullscreen_viewer;
         let path = item.path.clone();
+        let is_missing = app.missing_items.contains(&item.id);
 
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
@@ -327,6 +328,20 @@ impl MediaContextMenu {
                             }),
                         )
                     })
+                    // Missing file: point it at where it went.
+                    .children(is_missing.then(|| {
+                        Self::render_menu_item(
+                            &hover,
+                            "missing-locate",
+                            "Locate…",
+                            None,
+                            false,
+                            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.close_context_menu(cx);
+                                this.locate_missing_selected(cx);
+                            }),
+                        )
+                    }))
                     // 12. Reveal in Finder
                     .child({
                         let path_for_reveal = path.clone();
