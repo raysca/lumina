@@ -368,7 +368,8 @@ impl Catalog {
         // 2. Fetch metadata of keep_id and trash_ids to merge favorites/ratings/titles
         let keep_item = self.get_item_by_id(keep_id)?;
         if let Some(keeper) = keep_item {
-            let mut updated_rating = self.get_rating(keep_id)?;
+            let initial_rating = self.get_rating(keep_id)?;
+            let mut updated_rating = initial_rating;
             let mut updated_favorite = keeper.is_favorite;
             let mut updated_title = keeper.title.clone();
 
@@ -390,7 +391,7 @@ impl Catalog {
             if updated_favorite != keeper.is_favorite {
                 self.batch_set_favorite(&[keep_id], updated_favorite)?;
             }
-            if updated_rating > 0 {
+            if updated_rating > initial_rating {
                 self.set_rating(keep_id, updated_rating)?;
             }
             if updated_title != keeper.title {
