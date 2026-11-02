@@ -7,12 +7,13 @@
 //! and catalogues each copy. Both block; callers run them off the UI thread.
 
 use anyhow::Result;
+use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::duplicates::compute_file_hash;
@@ -28,8 +29,8 @@ const TEMP_SUFFIX: &str = ".lumina-import";
 const CATALOG_BATCH: usize = 200;
 /// Longest a copy waits to be catalogued (the watcher debounces 500 ms).
 const CATALOG_EVERY: Duration = Duration::from_millis(250);
-/// Progress events per this many files (and at the end).
-const PROGRESS_EVERY: usize = 10;
+/// Most often a progress event is sent (one also follows a slow file).
+const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
 /// One file to copy.
 #[derive(Debug, Clone)]
@@ -104,15 +105,37 @@ impl LuminaEngine {
 
         // 2. Read each file once: date taken and the item to catalogue.
         let scanner = Scanner::new(self.library_root.clone(), self.event_tx.clone());
+        let total = sources.len();
+        let checked = AtomicUsize::new(0);
+        let reported = Mutex::new(Instant::now());
+        let send_checked = |checked: usize| {
+            let _ = self
+                .event_tx
+                .send(EngineEvent::ImportChecking { checked, total });
+        };
+        send_checked(0);
         let read: Vec<Option<MediaItem>> = sources
             .par_iter()
             .map(|path| {
                 if cancel.load(Ordering::Relaxed) {
                     return None;
                 }
-                scanner.inspect_media_file(path)
+                let item = scanner.inspect_media_file(path);
+                let done = checked.fetch_add(1, Ordering::Relaxed) + 1;
+                // try_lock: a worker never waits just to report.
+                if let Some(mut last) = reported.try_lock() {
+                    if last.elapsed() >= PROGRESS_EVERY {
+                        *last = Instant::now();
+                        send_checked(done);
+                    }
+                }
+                item
             })
             .collect();
+        // A cancelled plan's last count could land in a newer dialog.
+        if !cancel.load(Ordering::Relaxed) {
+            send_checked(total);
+        }
         let mut items = Vec::with_capacity(read.len());
         for item in read {
             match item {
@@ -163,6 +186,7 @@ impl LuminaEngine {
         let mut report = CopyImportReport::default();
         let mut batch = Vec::with_capacity(CATALOG_BATCH);
         let mut flushed = Instant::now();
+        let mut reported = Instant::now();
         // A missing row still owns its path: a new file there would inherit
         // that photo's metadata.
         let taken = |path: &Path| {
@@ -206,18 +230,20 @@ impl LuminaEngine {
                 self.catalogue_copies(std::mem::take(&mut batch));
                 flushed = Instant::now();
             }
-            if (index + 1) % PROGRESS_EVERY == 0 {
+            if reported.elapsed() >= PROGRESS_EVERY {
+                reported = Instant::now();
                 let _ = self.event_tx.send(EngineEvent::ImportProgress {
-                    copied: report.copied,
+                    done: index + 1,
                     total,
                 });
             }
         }
         self.catalogue_copies(batch);
-        let _ = self.event_tx.send(EngineEvent::ImportProgress {
-            copied: report.copied,
-            total,
-        });
+        // Files copied or failed: short of `total` when stopped early.
+        let done = report.copied + report.failed.len();
+        let _ = self
+            .event_tx
+            .send(EngineEvent::ImportProgress { done, total });
         if let Err(err) = self.catalog.compute_timeline_buckets() {
             log::warn!("timeline refresh after import failed: {err:#}");
         }

@@ -13,8 +13,12 @@ use crate::LuminaApp;
 
 /// The import confirmation dialog.
 pub(crate) enum ImportDialog {
-    /// Walking, reading and duplicate-checking `count` dropped or picked paths.
-    Planning { count: usize },
+    /// Walking, reading and duplicate-checking `count` dropped or picked
+    /// paths; `checked` is (files read, files found) once the walk is done.
+    Planning {
+        count: usize,
+        checked: Option<(usize, usize)>,
+    },
     /// Ready to copy; an empty plan offers only OK.
     Ready(ImportPlan),
 }
@@ -32,8 +36,22 @@ pub(crate) struct ImportState {
 }
 
 impl ImportState {
+    /// A copy in progress without a copy task, for status bar tests.
+    #[cfg(test)]
+    pub fn pretend_running(&mut self, done: usize, total: usize) {
+        self.running = Some(Arc::default());
+        self.progress = Some((done, total));
+    }
+
     pub fn is_busy(&self) -> bool {
         self.dialog.is_some() || self.running.is_some()
+    }
+
+    /// Cancel Import was chosen and the current file is finishing.
+    pub fn is_stopping(&self) -> bool {
+        self.running
+            .as_ref()
+            .is_some_and(|cancel| cancel.load(Ordering::Relaxed))
     }
 }
 
@@ -108,7 +126,10 @@ impl LuminaApp {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         self.import.plan_cancel = cancel.clone();
-        self.import.dialog = Some(ImportDialog::Planning { count: paths.len() });
+        self.import.dialog = Some(ImportDialog::Planning {
+            count: paths.len(),
+            checked: None,
+        });
         let mine = cancel.clone();
         let task = cx
             .background_executor()
@@ -193,7 +214,10 @@ impl LuminaApp {
     /// "Cancel Import": stops after the current file; copies so far stay.
     pub fn cancel_running_import(&mut self, cx: &mut Context<Self>) {
         match &self.import.running {
-            Some(cancel) => cancel.store(true, Ordering::Relaxed),
+            Some(cancel) => {
+                cancel.store(true, Ordering::Relaxed);
+                cx.notify();
+            }
             None => self.show_toast("No import is running", cx),
         }
     }

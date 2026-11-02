@@ -519,7 +519,7 @@ impl Render for LuminaApp {
                                     .child(self.render_action_dock(is_fullscreen_viewer, cx))
                                     .child(self.render_toast_overlay(cx)),
                             )
-                            .child(self.render_status_bar(total_count)),
+                            .child(self.render_status_bar(total_count, cx)),
                     )
                     // Inspector Resizer Drag Handle (260–380px)
                     .child(if inspector_open && !is_fullscreen_viewer {

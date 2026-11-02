@@ -45,7 +45,10 @@ fn import_dialog_flow() {
     view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
     view.update(vcx, |app, _| {
         assert!(
-            matches!(app.import.dialog, Some(ImportDialog::Planning { count: 1 })),
+            matches!(
+                app.import.dialog,
+                Some(ImportDialog::Planning { count: 1, .. })
+            ),
             "the dialog opens at once, checking the dropped folder"
         )
     });
@@ -308,5 +311,79 @@ fn import_waits_while_a_delete_confirmation_is_open() {
 
     drop(view);
     let _ = std::fs::remove_dir_all(&source);
+    let _ = std::fs::remove_dir_all(&library);
+}
+
+#[core::prelude::v1::test]
+fn checking_shows_a_live_count() {
+    let (library, engine) = seed_library("import_checking", 1);
+    let source = source_folder("checking", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.begin_import(vec![source.clone()], cx);
+        app.handle_ui_message(
+            crate::app::types::UiMessage::Engine(lumina_core::EngineEvent::ImportChecking {
+                checked: 340,
+                total: 1200,
+            }),
+            cx,
+        );
+        assert!(
+            matches!(
+                app.import.dialog,
+                Some(ImportDialog::Planning {
+                    checked: Some((340, 1200)),
+                    ..
+                })
+            ),
+            "the dialog follows the engine's count"
+        );
+    });
+    vcx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear();
+    });
+    assert!(
+        vcx.debug_bounds("import-check-progress").is_some(),
+        "a bar shows how far checking has got"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&source);
+    let _ = std::fs::remove_dir_all(&library);
+}
+
+#[core::prelude::v1::test]
+fn status_bar_shows_progress_and_cancels() {
+    let (library, engine) = seed_library("import_status", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.import.pretend_running(3, 10);
+        cx.notify();
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.status_right_text(), "Importing… 3 of 10")
+    });
+    assert!(
+        vcx.debug_bounds("import-progress").is_some(),
+        "a progress bar"
+    );
+
+    click(vcx, "import-cancel-running");
+    view.update(vcx, |app, _| {
+        assert!(app.import.is_stopping(), "Cancel stops the copy");
+        assert_eq!(
+            app.status_right_text(),
+            "Stopping import…",
+            "the bar says it is finishing the current file"
+        );
+    });
+
+    drop(view);
     let _ = std::fs::remove_dir_all(&library);
 }

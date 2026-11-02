@@ -203,9 +203,15 @@ pub enum EngineEvent {
     /// Files gone from disk. The rows and their metadata are kept, marked
     /// missing; the order of the library is unchanged.
     ItemsMissing(Vec<MediaId>),
-    /// Files copied so far by a running import, of `total`.
+    /// Files an import plan has read so far, of `total`; duplicates are
+    /// checked once `checked == total`.
+    ImportChecking {
+        checked: usize,
+        total: usize,
+    },
+    /// Files a running import has copied or failed so far, of `total`.
     ImportProgress {
-        copied: usize,
+        done: usize,
         total: usize,
     },
     ScanComplete {

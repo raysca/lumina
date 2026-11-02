@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
+use crate::app::import::ImportDialog;
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::bridge::{frame_to_gpui_image, video_frame_to_gpui_image};
@@ -292,9 +293,17 @@ impl LuminaApp {
                             should_refresh_counts = true;
                             cx.notify();
                         }
-                        EngineEvent::ImportProgress { copied, total } => {
+                        EngineEvent::ImportProgress { done, total } => {
                             if self.import.progress.is_some() {
-                                self.import.progress = Some((copied, total));
+                                self.import.progress = Some((done, total));
+                                cx.notify();
+                            }
+                        }
+                        EngineEvent::ImportChecking { checked, total } => {
+                            if let Some(ImportDialog::Planning { checked: shown, .. }) =
+                                self.import.dialog.as_mut()
+                            {
+                                *shown = Some((checked, total));
                                 cx.notify();
                             }
                         }

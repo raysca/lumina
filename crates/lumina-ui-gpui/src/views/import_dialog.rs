@@ -56,12 +56,22 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     };
     let line = |text: String| div().text_xs().text_color(theme::text_muted()).child(text);
 
+    let mut bar = None;
     let (title, lines, buttons): (String, Vec<String>, Vec<AnyElement>) = match dialog {
-        ImportDialog::Planning { count } => (
-            format!("Checking {}…", plural(*count, "item", "items")),
-            Vec::new(),
-            vec![cancel("Cancel").into_any_element()],
-        ),
+        ImportDialog::Planning { count, checked } => {
+            let title = match *checked {
+                None => format!("Checking {}…", plural(*count, "item", "items")),
+                Some((done, total)) if done < total => {
+                    bar = Some(done as f32 / total as f32);
+                    format!("Checking… {done} of {}", plural(total, "file", "files"))
+                }
+                Some(_) => {
+                    bar = Some(1.0);
+                    "Looking for duplicates…".to_string()
+                }
+            };
+            (title, Vec::new(), vec![cancel("Cancel").into_any_element()])
+        }
         ImportDialog::Ready(plan) => {
             let mut lines = Vec::new();
             if plan.duplicates + plan.in_library > 0 {
@@ -159,6 +169,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         )
                         .children(lines.into_iter().map(line)),
                 )
+                .children(
+                    bar.map(|fraction| progress_bar("import-check-progress", fraction, 380.0)),
+                )
                 .child(
                     div()
                         .flex()
@@ -169,6 +182,23 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 ),
         )
         .into_any_element()
+}
+
+/// A thin determinate bar, `fraction` (0–1) of `width` filled.
+pub fn progress_bar(id: &'static str, fraction: f32, width: f32) -> Div {
+    div()
+        .debug_selector(move || id.to_string())
+        .w(px(width))
+        .h(px(4.0))
+        .rounded(px(2.0))
+        .bg(theme::bg_control())
+        .child(
+            div()
+                .h_full()
+                .w(px(width * fraction.clamp(0.0, 1.0)))
+                .rounded(px(2.0))
+                .bg(theme::accent()),
+        )
 }
 
 /// A full-window target for files dragged in from Finder: invisible until a

@@ -21,8 +21,11 @@ pub(crate) fn format_status_right(
 
 impl LuminaApp {
     pub(crate) fn status_right_text(&self) -> String {
-        if let Some((copied, total)) = self.import.progress {
-            return format!("Importing… {copied} of {total}");
+        if self.import.is_stopping() {
+            return "Stopping import…".to_string();
+        }
+        if let Some((done, total)) = self.import.progress {
+            return format!("Importing… {done} of {total}");
         }
         let (is_scanning, scan_progress) = self
             .grid_state
@@ -32,7 +35,12 @@ impl LuminaApp {
         format_status_right(is_scanning, scan_progress, self.last_action.as_deref())
     }
 
-    pub(crate) fn render_status_bar(&self, total_count: usize) -> impl IntoElement {
+    pub(crate) fn render_status_bar(
+        &self,
+        total_count: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let importing = self.import.progress;
         let (is_scanning, _) = self
             .grid_state
             .as_ref()
@@ -68,13 +76,45 @@ impl LuminaApp {
             }))
             .child(
                 div()
-                    .text_xs()
-                    .text_color(if is_scanning {
-                        theme::text()
-                    } else {
-                        theme::text_subtle()
-                    })
-                    .child(self.status_right_text()),
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(if is_scanning || importing.is_some() {
+                                theme::text()
+                            } else {
+                                theme::text_subtle()
+                            })
+                            .child(self.status_right_text()),
+                    )
+                    .children(importing.map(|(done, total)| {
+                        crate::views::import_dialog::progress_bar(
+                            "import-progress",
+                            done as f32 / total.max(1) as f32,
+                            96.0,
+                        )
+                    }))
+                    .children(
+                        (importing.is_some() && !self.import.is_stopping()).then(|| {
+                            div()
+                                .id("import-cancel-running")
+                                .debug_selector(|| "import-cancel-running".to_string())
+                                .px_2()
+                                .rounded(theme::RADIUS_SM)
+                                .cursor_pointer()
+                                .text_xs()
+                                .text_color(theme::text())
+                                .hover(|s| s.bg(theme::bg_control_hover()))
+                                .tooltip(theme::tooltip_label("Stop after the current file"))
+                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                    this.cancel_running_import(cx);
+                                }))
+                                .child("Cancel")
+                        }),
+                    ),
             )
     }
 }

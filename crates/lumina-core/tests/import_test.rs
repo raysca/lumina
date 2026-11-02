@@ -11,6 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 struct Fixture {
     root: PathBuf,
     engine: Arc<LuminaEngine>,
+    events: crossbeam_channel::Receiver<lumina_core::EngineEvent>,
 }
 
 impl Fixture {
@@ -37,7 +38,11 @@ impl Fixture {
                 .expect("scan completes"),
             lumina_core::EngineEvent::ScanComplete { .. }
         ) {}
-        Self { root, engine }
+        Self {
+            root,
+            engine,
+            events: rx,
+        }
     }
 
     fn media(&self) -> PathBuf {
@@ -227,10 +232,20 @@ fn cancel_stops_copying() {
     let plan = fx.plan(&[fx.source()]);
     assert_eq!(plan.files.len(), 2);
 
+    while fx.events.try_recv().is_ok() {}
     let report = fx.engine.run_import(plan, &AtomicBool::new(true));
 
     assert!(report.cancelled);
     assert_eq!(report.copied, 0);
+    let last = fx.events.try_iter().find_map(|event| match event {
+        lumina_core::EngineEvent::ImportProgress { done, total } => Some((done, total)),
+        _ => None,
+    });
+    assert_eq!(
+        last,
+        Some((0, 2)),
+        "a stopped copy does not report itself complete"
+    );
 }
 
 #[test]
@@ -267,4 +282,37 @@ fn stale_temp_files_are_cleaned() {
     fx.plan(&[fx.source()]);
 
     assert!(!stale.exists(), "a crash's half-done copy is removed");
+}
+
+#[test]
+fn checking_and_copying_report_progress() {
+    use lumina_core::EngineEvent;
+    let fx = Fixture::new("progress");
+    for seed in 0..3 {
+        write_jpeg(&fx.source().join(format!("{seed}.jpg")), seed);
+    }
+    while fx.events.try_recv().is_ok() {}
+
+    let report = fx.import(&[fx.source()]);
+    assert_eq!(report.copied, 3);
+
+    let events: Vec<EngineEvent> = fx.events.try_iter().collect();
+    let checking: Vec<(usize, usize)> = events
+        .iter()
+        .filter_map(|event| match event {
+            EngineEvent::ImportChecking { checked, total } => Some((*checked, *total)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(checking.first(), Some(&(0, 3)), "checking starts at zero");
+    assert_eq!(
+        checking.last(),
+        Some(&(3, 3)),
+        "and ends with every file read"
+    );
+    let copying = events.iter().rev().find_map(|event| match event {
+        EngineEvent::ImportProgress { done, total } => Some((*done, *total)),
+        _ => None,
+    });
+    assert_eq!(copying, Some((3, 3)), "the copy ends with a full count");
 }
