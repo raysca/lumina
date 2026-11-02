@@ -32,6 +32,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.about" => "About Lumina",
         "command.empty_trash" => "Empty Trash…",
         "command.restore_all" => "Restore All from Trash",
+        "command.merge_all_duplicates" => "Merge All Duplicates",
         "command.retry_error" => "Retry Failed Action",
         "command.show_license" => "Show MIT License",
         "command.show_acknowledgements" => "Show Acknowledgements",

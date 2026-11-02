@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use gpui::*;
 use lumina_core::{MediaId, MediaItem};
 
@@ -25,6 +28,18 @@ impl DuplicatesView {
             .iter()
             .map(|g| g.potential_reclaimable_bytes)
             .sum();
+
+        let textures: HashMap<MediaId, Arc<RenderImage>> = if let Some(ref state) = this.grid_state
+        {
+            let mut cache = state.texture_cache.lock();
+            this.duplicate_groups
+                .iter()
+                .flat_map(|g| g.items.iter())
+                .filter_map(|item| cache.get(&item.id).cloned().map(|tex| (item.id, tex)))
+                .collect()
+        } else {
+            HashMap::new()
+        };
 
         div()
             .id("duplicates-view")
@@ -104,7 +119,7 @@ impl DuplicatesView {
             )
             // Duplicate Groups List
             .children(this.duplicate_groups.iter().enumerate().map(|(idx, group)| {
-                Self::render_group(this, idx, group, cx)
+                Self::render_group(this, idx, group, &textures, cx)
             }))
             .into_any_element()
     }
@@ -113,6 +128,7 @@ impl DuplicatesView {
         this: &LuminaApp,
         group_idx: usize,
         group: &lumina_core::DuplicateGroup,
+        textures: &HashMap<MediaId, Arc<RenderImage>>,
         cx: &mut Context<LuminaApp>,
     ) -> impl IntoElement {
         let keeper_id = group.items.first().map(|i| i.id).unwrap_or(MediaId(0));
@@ -184,19 +200,18 @@ impl DuplicatesView {
                     ),
             )
             // Group Cards
-            .child(
-                div().flex().flex_row().flex_wrap().gap_3().children(
-                    group.items.iter().enumerate().map(|(item_idx, item)| {
-                        Self::render_item_card(this, item, item_idx == 0, cx)
-                    }),
-                ),
-            )
+            .child(div().flex().flex_row().flex_wrap().gap_3().children(
+                group.items.iter().enumerate().map(|(item_idx, item)| {
+                    Self::render_item_card(this, item, item_idx == 0, textures, cx)
+                }),
+            ))
     }
 
     fn render_item_card(
         this: &LuminaApp,
         item: &MediaItem,
         is_keeper: bool,
+        textures: &HashMap<MediaId, Arc<RenderImage>>,
         cx: &mut Context<LuminaApp>,
     ) -> impl IntoElement {
         let item_id = item.id;
@@ -208,18 +223,11 @@ impl DuplicatesView {
             .map(|i| i.id == item_id)
             .unwrap_or(false);
 
-        // Thumbnail request
-        let texture = if let Some(ref state) = this.grid_state {
-            let mut cache = state.texture_cache.lock();
-            let tex = cache.get(&item_id).cloned();
-            drop(cache);
-            if tex.is_none() {
-                this.queue_thumbnail_request_item(item);
-            }
-            tex
-        } else {
-            None
-        };
+        // Thumbnail request (from pre-collected frame texture map)
+        let texture = textures.get(&item_id).cloned();
+        if texture.is_none() && this.grid_state.is_some() {
+            this.queue_thumbnail_request_item(item);
+        }
 
         let formatted_date = item.formatted_timestamp();
         let dimensions = if item.width > 0 && item.height > 0 {

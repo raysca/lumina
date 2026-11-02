@@ -22,6 +22,7 @@ pub enum CommandId {
     ShowAcknowledgements,
     EmptyTrash,
     RestoreAll,
+    MergeAllDuplicates,
     RetryError,
     Shortcuts,
     ToggleSidebar,
@@ -94,6 +95,7 @@ impl Command {
             RemoveLocation | DeleteSmartAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
+            MergeAllDuplicates => Icon::Repeat,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
         }
@@ -169,6 +171,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.restore_all",
             shortcut: "",
             keywords: "trash recently deleted undelete recover",
+        },
+        Command {
+            id: CommandId::MergeAllDuplicates,
+            key: "command.merge_all_duplicates",
+            shortcut: "",
+            keywords: "duplicate duplicates merge clean dedup",
         },
         Command {
             id: CommandId::RetryError,
@@ -430,6 +438,7 @@ impl LuminaApp {
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
+            CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
             _ => true,
         }
     }
@@ -590,6 +599,7 @@ impl LuminaApp {
             CommandId::ShowLicense => self.open_bundled_doc("LICENSE", cx),
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),
             CommandId::RestoreAll => self.restore_all_trash(cx),
+            CommandId::MergeAllDuplicates => self.merge_all_duplicates(cx),
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),

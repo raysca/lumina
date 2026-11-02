@@ -433,6 +433,17 @@ impl LuminaApp {
             UiMessage::FloatingPipClosed(window) => {
                 self.floating_pip_closed(window, cx);
             }
+            UiMessage::DuplicatesLoaded {
+                generation,
+                groups,
+                items_count,
+            } => {
+                if generation == self.library_generation {
+                    self.duplicate_groups = groups;
+                    self.duplicate_items_count = items_count;
+                    cx.notify();
+                }
+            }
             UiMessage::OpenFloatingInspector | UiMessage::OpenFloatingPip => {}
         }
     }
@@ -1084,9 +1095,40 @@ impl LuminaApp {
     }
 
     pub fn refresh_duplicates(&mut self) {
-        if let Some(ref state) = self.grid_state {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+
+        // Instant, non-blocking read of already-computed duplicate groups from SQLite cache.
+        self.duplicate_groups = state.engine.get_cached_duplicate_groups();
+        self.duplicate_items_count = state.engine.query_duplicate_count();
+
+        #[cfg(test)]
+        {
+            // In unit/automation tests, run scan_duplicates synchronously so tests don't need async waits.
             self.duplicate_groups = state.engine.query_duplicate_groups();
             self.duplicate_items_count = state.engine.query_duplicate_count();
+        }
+
+        #[cfg(not(test))]
+        {
+            let engine = state.engine.clone();
+            let tx = self.ui_tx.clone();
+            let generation = self.library_generation;
+            if let Err(err) = std::thread::Builder::new()
+                .name("lumina-duplicates-scan".into())
+                .spawn(move || {
+                    let groups = engine.query_duplicate_groups();
+                    let items_count = engine.query_duplicate_count();
+                    let _ = tx.send_blocking(UiMessage::DuplicatesLoaded {
+                        generation,
+                        groups,
+                        items_count,
+                    });
+                })
+            {
+                log::warn!("failed to spawn lumina-duplicates-scan thread: {err}");
+            }
         }
     }
 
@@ -1099,6 +1141,9 @@ impl LuminaApp {
         let Some(ref state) = self.grid_state else {
             return;
         };
+        if trash_ids.is_empty() {
+            return;
+        }
         let count = trash_ids.len();
         match state.engine.merge_duplicate_group(keep_id, trash_ids) {
             Ok(()) => {
@@ -1108,6 +1153,19 @@ impl LuminaApp {
                     .undo_stack
                     .push(crate::app::undo::UndoAction::Trashed { changes });
                 self.undo.redo_stack.clear();
+
+                // If selected item was trashed, point selection to keeper
+                if let Some(ref sel) = self.selected_item {
+                    if trash_ids.contains(&sel.id) {
+                        self.selected_item = self
+                            .duplicate_groups
+                            .iter()
+                            .flat_map(|g| &g.items)
+                            .find(|i| i.id == keep_id)
+                            .cloned();
+                    }
+                }
+
                 self.refresh_album_counts();
                 self.refresh_duplicates();
                 self.show_toast(
@@ -1130,7 +1188,23 @@ impl LuminaApp {
             return;
         };
         match state.engine.merge_all_duplicates() {
-            Ok(total_merged) => {
+            Ok(trashed_ids) => {
+                let total_merged = trashed_ids.len();
+                if !trashed_ids.is_empty() {
+                    let changes: Vec<(MediaId, bool, bool)> =
+                        trashed_ids.iter().map(|id| (*id, false, true)).collect();
+                    self.undo
+                        .undo_stack
+                        .push(crate::app::undo::UndoAction::Trashed { changes });
+                    self.undo.redo_stack.clear();
+
+                    if let Some(ref sel) = self.selected_item {
+                        if trashed_ids.contains(&sel.id) {
+                            self.clear_selection_fields();
+                        }
+                    }
+                }
+
                 self.refresh_album_counts();
                 self.refresh_duplicates();
                 self.show_toast(

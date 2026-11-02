@@ -1,19 +1,18 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::{MediaId, MediaItem};
 
 /// Computes the 128-bit xxHash (XXH3) of a file's contents, returning a 32-character hex string.
 pub fn compute_file_hash(path: &Path) -> Result<String> {
-    let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
-    let mut reader = BufReader::with_capacity(65536, file);
+    let mut file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut hasher = xxhash_rust::xxh3::Xxh3::new();
     let mut buf = [0u8; 65536];
     loop {
-        let n = reader
+        let n = file
             .read(&mut buf)
             .with_context(|| format!("reading {}", path.display()))?;
         if n == 0 {

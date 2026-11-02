@@ -2,10 +2,11 @@ use gpui::*;
 
 use crate::app::LuminaApp;
 use crate::theme;
+use crate::views::sidebar::AlbumSelection;
 
 impl LuminaApp {
     pub(crate) fn render_year_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.timeline_year_buckets.is_empty() {
+        if self.timeline_year_buckets.is_empty() || self.selection == AlbumSelection::Duplicates {
             return Empty.into_any_element();
         }
 

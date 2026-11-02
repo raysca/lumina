@@ -61,6 +61,12 @@ pub enum UiMessage {
         single_tags: Vec<String>,
         counts: Vec<(String, usize)>,
     },
+    #[cfg_attr(test, allow(dead_code))]
+    DuplicatesLoaded {
+        generation: u64,
+        groups: Vec<lumina_core::DuplicateGroup>,
+        items_count: usize,
+    },
     OpenFloatingInspector,
     OpenFloatingPip,
     FloatingInspectorClosed,

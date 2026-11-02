@@ -1,6 +1,5 @@
 use anyhow::Result;
 use rusqlite::params;
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -10,7 +9,7 @@ use crate::{MediaId, MediaItem};
 
 impl Catalog {
     /// Returns media items that are unhashed but share a `file_size` with at
-    /// least one other active item in the library.
+    /// least one other active item in the library (excluding 0-byte files).
     pub fn find_unhashed_duplicate_candidates(&self) -> Result<Vec<(MediaId, PathBuf, u64)>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(
@@ -18,11 +17,11 @@ impl Catalog {
             SELECT m.id, m.file_path, m.file_size
             FROM media_items m
             LEFT JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
               AND h.media_id IS NULL
               AND m.file_size IN (
                   SELECT file_size FROM media_items
-                  WHERE is_trashed = 0 AND is_hidden = 0
+                  WHERE is_trashed = 0 AND is_hidden = 0 AND file_size > 0
                   GROUP BY file_size
                   HAVING COUNT(*) > 1
               );
@@ -44,6 +43,8 @@ impl Catalog {
     }
 
     /// Stores precomputed content hashes in a single transaction.
+    /// Uses WHERE EXISTS to prevent foreign key errors if candidate items were
+    /// deleted by external watcher/scan events before insertion.
     pub fn batch_insert_hashes(&self, entries: &[(MediaId, u64, String)]) -> Result<()> {
         if entries.is_empty() {
             return Ok(());
@@ -59,7 +60,8 @@ impl Catalog {
             let mut stmt = tx.prepare_cached(
                 r#"
                 INSERT OR REPLACE INTO media_hashes (media_id, file_size, content_hash, computed_epoch_ms)
-                VALUES (?1, ?2, ?3, ?4);
+                SELECT ?1, ?2, ?3, ?4
+                WHERE EXISTS (SELECT 1 FROM media_items WHERE id = ?1);
                 "#,
             )?;
             for (id, size, hash) in entries {
@@ -99,7 +101,7 @@ impl Catalog {
             r#"
             SELECT id, file_path
             FROM media_items
-            WHERE file_size = ?1 AND is_trashed = 0 AND is_hidden = 0;
+            WHERE file_size = ?1 AND is_trashed = 0 AND is_hidden = 0 AND file_size > 0;
             "#,
         )?;
         let rows = stmt.query_map(params![file_size as i64], |row| {
@@ -122,11 +124,11 @@ impl Catalog {
             SELECT COUNT(*)
             FROM media_hashes h
             JOIN media_items m ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               );
@@ -156,11 +158,11 @@ impl Catalog {
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               )
@@ -180,7 +182,7 @@ impl Catalog {
             SELECT h.content_hash, m.file_size, COUNT(*) as cnt
             FROM media_hashes h
             JOIN media_items m ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
             GROUP BY h.content_hash
             HAVING COUNT(*) > 1
             ORDER BY (COUNT(*) - 1) * m.file_size DESC, h.content_hash ASC;
@@ -204,7 +206,7 @@ impl Catalog {
             return Ok(Vec::new());
         }
 
-        // 2. Fetch all matching media items in one query
+        // 2. Fetch all matching media items in one query using the shared row mapper
         let mut item_stmt = conn.prepare_cached(
             r#"
             SELECT
@@ -218,11 +220,11 @@ impl Catalog {
                 h.content_hash
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
-            WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND m.file_size > 0
               AND h.content_hash IN (
                   SELECT content_hash FROM media_hashes
                   JOIN media_items ON media_items.id = media_hashes.media_id
-                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0
+                  WHERE media_items.is_trashed = 0 AND media_items.is_hidden = 0 AND media_items.file_size > 0
                   GROUP BY content_hash
                   HAVING COUNT(*) > 1
               )
@@ -234,78 +236,8 @@ impl Catalog {
             std::collections::HashMap::new();
 
         let rows = item_stmt.query_map([], |row| {
-            let id: i64 = row.get(0)?;
-            let file_path: String = row.get(1)?;
-            let parent_dir: String = row.get(2)?;
-            let file_name: String = row.get(3)?;
-            let file_size: u64 = row.get(4)?;
-            let mtime_epoch_ms: i64 = row.get(5)?;
-            let media_type_str: String = row.get(6)?;
-            let width: u32 = row.get(7)?;
-            let height: u32 = row.get(8)?;
-            let duration_ms: Option<u64> = row.get(9)?;
-            let timestamp_epoch_ms: i64 = row.get(10)?;
-            let year: i32 = row.get(11)?;
-            let month: u32 = row.get(12)?;
-            let day: u32 = row.get(13)?;
-            let latitude: Option<f64> = row.get(14)?;
-            let longitude: Option<f64> = row.get(15)?;
-            let altitude: Option<f64> = row.get(16)?;
-            let country_code: Option<String> = row.get(17)?;
-            let admin1_region: Option<String> = row.get(18)?;
-            let city: Option<String> = row.get(19)?;
-            let make: Option<String> = row.get(20)?;
-            let model: Option<String> = row.get(21)?;
-            let lens: Option<String> = row.get(22)?;
-            let focal_length: Option<f64> = row.get(23)?;
-            let f_number: Option<f64> = row.get(24)?;
-            let iso: Option<u32> = row.get(25)?;
-            let exposure_time: Option<String> = row.get(26)?;
-            let is_favorite: i32 = row.get(27)?;
-            let is_hidden: i32 = row.get(28)?;
-            let is_trashed: i32 = row.get(29)?;
-            let title: Option<String> = row.get(30)?;
             let hash: String = row.get(31)?;
-
-            let media_type = match media_type_str.as_str() {
-                "video" => crate::MediaType::Video,
-                "raw" => crate::MediaType::Raw,
-                _ => crate::MediaType::Image,
-            };
-
-            let item = MediaItem {
-                id: MediaId(id as u64),
-                path: PathBuf::from(file_path),
-                parent_dir,
-                file_name,
-                title,
-                file_size,
-                mtime_epoch_ms,
-                media_type,
-                width,
-                height,
-                duration_ms,
-                timestamp_epoch_ms,
-                year,
-                month,
-                day,
-                latitude,
-                longitude,
-                altitude,
-                country_code,
-                admin1_region,
-                city,
-                make,
-                model,
-                lens,
-                focal_length,
-                f_number,
-                iso,
-                exposure_time,
-                is_favorite: is_favorite != 0,
-                is_hidden: is_hidden != 0,
-                is_trashed: is_trashed != 0,
-            };
+            let item = Self::map_media_item_row(row)?;
             Ok((hash, item))
         })?;
 
@@ -332,75 +264,151 @@ impl Catalog {
         Ok(groups)
     }
 
-    /// Merges duplicates into a keeper item:
-    /// - Collects tags from `trash_ids` and copies missing tags to `keep_id`.
-    /// - Sets `is_favorite = true` on `keep_id` if any trash item was favorite.
-    /// - Updates title if `keep_id` has none and a trash item does.
-    /// - Upgrades rating if any trash item has a higher rating.
-    /// - Soft-deletes `trash_ids` (`batch_set_trashed`).
+    /// Internal helper that merges a single group within an active SQLite transaction.
+    fn merge_duplicate_group_in_tx(
+        tx: &rusqlite::Transaction,
+        keep_id: MediaId,
+        trash_ids: &[MediaId],
+    ) -> Result<()> {
+        if trash_ids.is_empty() {
+            return Ok(());
+        }
+
+        // 1. Copy missing tags from trash_ids to keep_id
+        {
+            let mut tag_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_tags (media_id, tag)
+                SELECT ?1, tag FROM media_tags WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                tag_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 2. Copy missing caption from trash_ids to keep_id
+        {
+            let mut caption_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_captions (media_id, caption)
+                SELECT ?1, caption FROM media_captions WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 3. Merge favorite, rating, color label, and title onto keep_id
+        {
+            let mut read_stmt = tx.prepare_cached(
+                "SELECT is_favorite, rating, color_label, title FROM media_items WHERE id = ?1;",
+            )?;
+            let keeper_meta: Option<(i32, u8, u8, Option<String>)> = read_stmt
+                .query_row(params![keep_id.0 as i64], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                })
+                .ok();
+
+            if let Some((init_fav, init_rating, init_color, init_title)) = keeper_meta {
+                let mut updated_fav = init_fav != 0;
+                let mut updated_rating = init_rating;
+                let mut updated_color = init_color;
+                let mut updated_title = init_title;
+
+                for trash_id in trash_ids {
+                    if let Ok((fav, rating, color, title)) =
+                        read_stmt.query_row(params![trash_id.0 as i64], |row| {
+                            Ok((
+                                row.get::<_, i32>(0)?,
+                                row.get::<_, u8>(1)?,
+                                row.get::<_, u8>(2)?,
+                                row.get::<_, Option<String>>(3)?,
+                            ))
+                        })
+                    {
+                        if fav != 0 {
+                            updated_fav = true;
+                        }
+                        if rating > updated_rating {
+                            updated_rating = rating;
+                        }
+                        if updated_color == 0 && color != 0 {
+                            updated_color = color;
+                        }
+                        if updated_title.is_none() && title.is_some() {
+                            updated_title = title;
+                        }
+                    }
+                }
+
+                let mut update_stmt = tx.prepare_cached(
+                    r#"
+                    UPDATE media_items
+                    SET is_favorite = ?1, rating = ?2, color_label = ?3, title = ?4
+                    WHERE id = ?5;
+                    "#,
+                )?;
+                update_stmt.execute(params![
+                    updated_fav as i32,
+                    updated_rating,
+                    updated_color,
+                    updated_title.as_deref(),
+                    keep_id.0 as i64
+                ])?;
+            }
+        }
+
+        // 4. Mark all trash_ids as trashed
+        {
+            let mut trash_stmt =
+                tx.prepare_cached("UPDATE media_items SET is_trashed = 1 WHERE id = ?1;")?;
+            for trash_id in trash_ids {
+                trash_stmt.execute(params![trash_id.0 as i64])?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Merges duplicates into a keeper item within a single atomic SQLite transaction.
     pub fn merge_duplicate_group(&self, keep_id: MediaId, trash_ids: &[MediaId]) -> Result<()> {
         if trash_ids.is_empty() {
             return Ok(());
         }
 
-        // 1. Gather tags from trash_ids
-        let mut tags_to_add: HashSet<String> = HashSet::new();
-        for id in trash_ids {
-            let tags = self.get_tags_for_item(*id)?;
-            for tag in tags {
-                tags_to_add.insert(tag);
-            }
-        }
-
-        // Add missing tags to keep_id
-        if !tags_to_add.is_empty() {
-            let existing_tags: HashSet<String> =
-                self.get_tags_for_item(keep_id)?.into_iter().collect();
-            let new_tags: Vec<String> = tags_to_add
-                .into_iter()
-                .filter(|t| !existing_tags.contains(t))
-                .collect();
-            if !new_tags.is_empty() {
-                self.add_tags_batch(&[keep_id], &new_tags)?;
-            }
-        }
-
-        // 2. Fetch metadata of keep_id and trash_ids to merge favorites/ratings/titles
-        let keep_item = self.get_item_by_id(keep_id)?;
-        if let Some(keeper) = keep_item {
-            let initial_rating = self.get_rating(keep_id)?;
-            let mut updated_rating = initial_rating;
-            let mut updated_favorite = keeper.is_favorite;
-            let mut updated_title = keeper.title.clone();
-
-            for trash_id in trash_ids {
-                if let Some(item) = self.get_item_by_id(*trash_id)? {
-                    if item.is_favorite {
-                        updated_favorite = true;
-                    }
-                    let rating = self.get_rating(*trash_id)?;
-                    if rating > updated_rating {
-                        updated_rating = rating;
-                    }
-                    if updated_title.is_none() && item.title.is_some() {
-                        updated_title = item.title;
-                    }
-                }
-            }
-
-            if updated_favorite != keeper.is_favorite {
-                self.batch_set_favorite(&[keep_id], updated_favorite)?;
-            }
-            if updated_rating > initial_rating {
-                self.set_rating(keep_id, updated_rating)?;
-            }
-            if updated_title != keeper.title {
-                self.set_title(keep_id, updated_title.as_deref())?;
-            }
-        }
-
-        // 3. Move trash_ids to trash
-        self.batch_set_trashed(trash_ids, true)?;
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        Self::merge_duplicate_group_in_tx(&tx, keep_id, trash_ids)?;
+        Self::rebuild_timeline_buckets(&tx)?;
+        tx.commit()?;
         Ok(())
+    }
+
+    /// Merges all duplicate groups in a single atomic transaction.
+    /// Returns the IDs of all newly trashed duplicate items.
+    pub fn merge_all_duplicates(&self) -> Result<Vec<MediaId>> {
+        let groups = self.query_duplicate_groups()?;
+        if groups.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut all_trashed = Vec::new();
+        for group in groups {
+            if group.items.len() >= 2 {
+                let keep_id = group.items[0].id;
+                let trash_ids: Vec<MediaId> = group.items[1..].iter().map(|i| i.id).collect();
+                Self::merge_duplicate_group_in_tx(&tx, keep_id, &trash_ids)?;
+                all_trashed.extend(trash_ids);
+            }
+        }
+        if !all_trashed.is_empty() {
+            Self::rebuild_timeline_buckets(&tx)?;
+        }
+        tx.commit()?;
+        Ok(all_trashed)
     }
 }

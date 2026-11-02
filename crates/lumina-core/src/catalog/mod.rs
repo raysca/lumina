@@ -231,6 +231,80 @@ impl Catalog {
         Ok(plan)
     }
 
+    pub(crate) fn map_media_item_row(row: &rusqlite::Row) -> rusqlite::Result<MediaItem> {
+        let id: i64 = row.get(0)?;
+        let file_path: String = row.get(1)?;
+        let parent_dir: String = row.get(2)?;
+        let file_name: String = row.get(3)?;
+        let file_size: u64 = row.get(4)?;
+        let mtime_epoch_ms: i64 = row.get(5)?;
+        let media_type_str: String = row.get(6)?;
+        let width: u32 = row.get(7)?;
+        let height: u32 = row.get(8)?;
+        let duration_ms: Option<u64> = row.get(9)?;
+        let timestamp_epoch_ms: i64 = row.get(10)?;
+        let year: i32 = row.get(11)?;
+        let month: u32 = row.get(12)?;
+        let day: u32 = row.get(13)?;
+        let latitude: Option<f64> = row.get(14)?;
+        let longitude: Option<f64> = row.get(15)?;
+        let altitude: Option<f64> = row.get(16)?;
+        let country_code: Option<String> = row.get(17)?;
+        let admin1_region: Option<String> = row.get(18)?;
+        let city: Option<String> = row.get(19)?;
+        let make: Option<String> = row.get(20)?;
+        let model: Option<String> = row.get(21)?;
+        let lens: Option<String> = row.get(22)?;
+        let focal_length: Option<f64> = row.get(23)?;
+        let f_number: Option<f64> = row.get(24)?;
+        let iso: Option<u32> = row.get(25)?;
+        let exposure_time: Option<String> = row.get(26)?;
+        let is_favorite: i32 = row.get(27)?;
+        let is_hidden: i32 = row.get(28)?;
+        let is_trashed: i32 = row.get(29)?;
+        let title: Option<String> = row.get(30)?;
+
+        let media_type = match media_type_str.as_str() {
+            "video" => MediaType::Video,
+            "raw" => MediaType::Raw,
+            _ => MediaType::Image,
+        };
+
+        Ok(MediaItem {
+            id: MediaId(id as u64),
+            path: PathBuf::from(file_path),
+            parent_dir,
+            file_name,
+            title,
+            file_size,
+            mtime_epoch_ms,
+            media_type,
+            width,
+            height,
+            duration_ms,
+            timestamp_epoch_ms,
+            year,
+            month,
+            day,
+            latitude,
+            longitude,
+            altitude,
+            country_code,
+            admin1_region,
+            city,
+            make,
+            model,
+            lens,
+            focal_length,
+            f_number,
+            iso,
+            exposure_time,
+            is_favorite: is_favorite != 0,
+            is_hidden: is_hidden != 0,
+            is_trashed: is_trashed != 0,
+        })
+    }
+
     pub(crate) fn map_query_rows<P>(
         stmt: &mut rusqlite::Statement,
         params: P,
@@ -238,79 +312,7 @@ impl Catalog {
     where
         P: rusqlite::Params,
     {
-        let rows = stmt.query_map(params, |row| {
-            let id: i64 = row.get(0)?;
-            let file_path: String = row.get(1)?;
-            let parent_dir: String = row.get(2)?;
-            let file_name: String = row.get(3)?;
-            let file_size: u64 = row.get(4)?;
-            let mtime_epoch_ms: i64 = row.get(5)?;
-            let media_type_str: String = row.get(6)?;
-            let width: u32 = row.get(7)?;
-            let height: u32 = row.get(8)?;
-            let duration_ms: Option<u64> = row.get(9)?;
-            let timestamp_epoch_ms: i64 = row.get(10)?;
-            let year: i32 = row.get(11)?;
-            let month: u32 = row.get(12)?;
-            let day: u32 = row.get(13)?;
-            let latitude: Option<f64> = row.get(14)?;
-            let longitude: Option<f64> = row.get(15)?;
-            let altitude: Option<f64> = row.get(16)?;
-            let country_code: Option<String> = row.get(17)?;
-            let admin1_region: Option<String> = row.get(18)?;
-            let city: Option<String> = row.get(19)?;
-            let make: Option<String> = row.get(20)?;
-            let model: Option<String> = row.get(21)?;
-            let lens: Option<String> = row.get(22)?;
-            let focal_length: Option<f64> = row.get(23)?;
-            let f_number: Option<f64> = row.get(24)?;
-            let iso: Option<u32> = row.get(25)?;
-            let exposure_time: Option<String> = row.get(26)?;
-            let is_favorite: i32 = row.get(27)?;
-            let is_hidden: i32 = row.get(28)?;
-            let is_trashed: i32 = row.get(29)?;
-            let title: Option<String> = row.get(30)?;
-
-            let media_type = match media_type_str.as_str() {
-                "video" => MediaType::Video,
-                "raw" => MediaType::Raw,
-                _ => MediaType::Image,
-            };
-
-            Ok(MediaItem {
-                id: MediaId(id as u64),
-                path: PathBuf::from(file_path),
-                parent_dir,
-                file_name,
-                title,
-                file_size,
-                mtime_epoch_ms,
-                media_type,
-                width,
-                height,
-                duration_ms,
-                timestamp_epoch_ms,
-                year,
-                month,
-                day,
-                latitude,
-                longitude,
-                altitude,
-                country_code,
-                admin1_region,
-                city,
-                make,
-                model,
-                lens,
-                focal_length,
-                f_number,
-                iso,
-                exposure_time,
-                is_favorite: is_favorite != 0,
-                is_hidden: is_hidden != 0,
-                is_trashed: is_trashed != 0,
-            })
-        })?;
+        let rows = stmt.query_map(params, Self::map_media_item_row)?;
 
         let mut items = Vec::new();
         for r in rows {

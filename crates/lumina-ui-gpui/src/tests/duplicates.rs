@@ -117,3 +117,35 @@ fn command_palette_navigates_to_duplicates() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn command_palette_merges_all_duplicates() {
+    let (temp_dir, engine) = seed_library("dup_pal_merge", 3);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        app.refresh_duplicates();
+        assert_eq!(app.duplicate_items_count, 3);
+        assert_eq!(app.duplicate_groups.len(), 1);
+    });
+
+    run_palette_command(vcx, &view, "Merge All Duplicates");
+    render_ui(vcx);
+
+    view.update(vcx, |app, _| {
+        assert_eq!(app.duplicate_items_count, 0, "all duplicates merged");
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "undo entry created for batch merge"
+        );
+    });
+
+    let items = engine.get_item_slice(0..10);
+    assert_eq!(items.len(), 1, "only 1 active item remains after merge all");
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

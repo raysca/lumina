@@ -1005,9 +1005,23 @@ impl LuminaEngine {
     /// Queries all duplicate groups. Ensures unhashed candidate items with
     /// duplicate file sizes are hashed first.
     pub fn query_duplicate_groups(&self) -> Vec<DuplicateGroup> {
-        let _ = self.scan_duplicates();
+        match self.scan_duplicates() {
+            Ok(report) => report.groups,
+            Err(err) => {
+                log::warn!("scan_duplicates encountered an error: {err:#}");
+                self.read(
+                    "query duplicate groups fallback",
+                    self.catalog.query_duplicate_groups(),
+                )
+            }
+        }
+    }
+
+    /// Fast, non-blocking read of already-computed duplicate groups from the catalog
+    /// without scanning or hashing unhashed files.
+    pub fn get_cached_duplicate_groups(&self) -> Vec<DuplicateGroup> {
         self.read(
-            "query duplicate groups",
+            "get cached duplicate groups",
             self.catalog.query_duplicate_groups(),
         )
     }
@@ -1033,19 +1047,10 @@ impl LuminaEngine {
         self.catalog.merge_duplicate_group(keep_id, trash_ids)
     }
 
-    /// Merges all duplicate groups in the catalog, keeping the primary item for each group.
-    pub fn merge_all_duplicates(&self) -> Result<usize> {
-        let groups = self.catalog.query_duplicate_groups()?;
-        let mut total_merged = 0;
-        for group in groups {
-            if group.items.len() >= 2 {
-                let keep_id = group.items[0].id;
-                let trash_ids: Vec<MediaId> = group.items[1..].iter().map(|i| i.id).collect();
-                self.catalog.merge_duplicate_group(keep_id, &trash_ids)?;
-                total_merged += trash_ids.len();
-            }
-        }
-        Ok(total_merged)
+    /// Merges all duplicate groups in the catalog in a single atomic transaction.
+    /// Returns the IDs of all newly trashed items.
+    pub fn merge_all_duplicates(&self) -> Result<Vec<MediaId>> {
+        self.catalog.merge_all_duplicates()
     }
 
     /// Checks whether an external file is an exact duplicate of any item in the library.
@@ -1055,6 +1060,9 @@ impl LuminaEngine {
             Err(_) => return Ok(None),
         };
         let file_size = meta.len();
+        if file_size == 0 {
+            return Ok(None);
+        }
         let candidates = self.catalog.find_candidates_by_size(file_size)?;
         if candidates.is_empty() {
             return Ok(None);
@@ -1078,7 +1086,9 @@ impl LuminaEngine {
             }
         }
         if !new_hashes.is_empty() {
-            let _ = self.catalog.batch_insert_hashes(&new_hashes);
+            if let Err(err) = self.catalog.batch_insert_hashes(&new_hashes) {
+                log::warn!("failed to cache candidate hashes: {err:#}");
+            }
         }
 
         Ok(matched_item)
@@ -1087,6 +1097,9 @@ impl LuminaEngine {
     /// Evaluates candidate files before importing them into the library.
     pub fn check_import_duplicates(&self, paths: &[PathBuf]) -> Result<Vec<DuplicateCandidate>> {
         use rayon::prelude::*;
+        let newly_computed: Arc<Mutex<Vec<(MediaId, u64, String)>>> =
+            Arc::new(Mutex::new(Vec::new()));
+
         let results: Vec<DuplicateCandidate> = paths
             .par_iter()
             .map(|path| {
@@ -1148,11 +1161,9 @@ impl LuminaEngine {
 
                 for (cand_id, cand_path) in candidates {
                     if let Ok(cand_hash) = compute_file_hash(&cand_path) {
-                        let _ = self.catalog.batch_insert_hashes(&[(
-                            cand_id,
-                            file_size,
-                            cand_hash.clone(),
-                        )]);
+                        newly_computed
+                            .lock()
+                            .push((cand_id, file_size, cand_hash.clone()));
                         if cand_hash == content_hash {
                             return DuplicateCandidate {
                                 path: path.clone(),
@@ -1176,6 +1187,14 @@ impl LuminaEngine {
                 }
             })
             .collect();
+
+        // Batch insert newly computed hashes in a single transaction
+        let to_insert = newly_computed.lock().clone();
+        if !to_insert.is_empty() {
+            if let Err(err) = self.catalog.batch_insert_hashes(&to_insert) {
+                log::warn!("failed to cache computed import hashes: {err:#}");
+            }
+        }
 
         Ok(results)
     }
