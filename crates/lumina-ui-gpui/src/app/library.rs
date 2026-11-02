@@ -292,6 +292,12 @@ impl LuminaApp {
                             should_refresh_counts = true;
                             cx.notify();
                         }
+                        EngineEvent::ImportProgress { copied, total } => {
+                            if self.import.progress.is_some() {
+                                self.import.progress = Some((copied, total));
+                                cx.notify();
+                            }
+                        }
                         EngineEvent::Error(message) => error = Some(message),
                     }
                 }
@@ -355,6 +361,9 @@ impl LuminaApp {
             }
             UiMessage::LocatePicked(id, path) => {
                 self.apply_locate(id, path, cx);
+            }
+            UiMessage::ImportPicked(paths) => {
+                self.begin_import(paths, cx);
             }
             UiMessage::VideoFrameTick => {
                 self.video.frame_pending.store(false, Ordering::Release);
@@ -570,6 +579,8 @@ impl LuminaApp {
         self.selection = AlbumSelection::AllLibrary;
         // Album ids restart with each library.
         self.album_draft.confirm_delete = None;
+        // An import belongs to the library it was started in.
+        self.abandon_import(cx);
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;

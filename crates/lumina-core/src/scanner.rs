@@ -400,13 +400,17 @@ fn walk_entries(dir: &Path) -> impl Iterator<Item = walkdir::Result<walkdir::Dir
         .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
 }
 
-/// Media files under `dir`, by the scanner's rules.
-pub fn walk_media(dir: &Path) -> impl Iterator<Item = PathBuf> {
+/// Files under `dir`, skipping hidden names and not following symlinks.
+pub fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
     walk_entries(dir)
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_file())
         .map(|entry| entry.into_path())
-        .filter(|path| is_supported_media(path))
+}
+
+/// Media files under `dir`, by the scanner's rules.
+pub fn walk_media(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    walk_files(dir).filter(|path| is_supported_media(path))
 }
 
 /// `(file_size, mtime_epoch_ms)` as the catalog stores them.

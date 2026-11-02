@@ -20,6 +20,7 @@ pub fn build_menus() -> Vec<Menu> {
             name: "File".into(),
             items: vec![
                 MenuItem::action("Open Library…", OpenLibrary),
+                MenuItem::action("Import…", ImportMedia),
                 MenuItem::action("Rescan Library", RescanLibrary),
                 MenuItem::separator(),
                 MenuItem::action("New Smart Album…", NewSmartAlbum),

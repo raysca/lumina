@@ -111,6 +111,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("⌘K", "Command palette"),
             ("⌘F", "Focus search"),
             ("⌘O", "Open library…"),
+            ("⇧⌘I", "Import…"),
             ("⌘,", "Preferences"),
             ("⌘R", "Rescan library"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
@@ -401,6 +402,9 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
                 this.toggle_inspector(cx);
             }))
+            .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
+                this.pick_import_folders(cx);
+            }))
             .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                 this.import_sidecars_selected(cx);
             }))
@@ -565,6 +569,12 @@ impl Render for LuminaApp {
                 crate::views::smart_album_delete::render(self, cx),
                 "smart-album-delete-in",
             ))
+            // 8c. Import dialog
+            .child(motion::overlay_in(
+                self.import.dialog.is_some(),
+                crate::views::import_dialog::render(self, cx),
+                "import-dialog-in",
+            ))
             // 9. Media Card Context Menu Overlay
             .child(motion::overlay_in(
                 self.context_menu_state.is_some(),
@@ -601,6 +611,11 @@ impl Render for LuminaApp {
                 crate::views::command_palette::render_command_palette(self, cx),
                 "command-palette-in",
             ))
+            // 14. Files dragged in from Finder (shown only during a drag)
+            .children(
+                (self.grid_state.is_some() && !self.import_blocked_by_modal())
+                    .then(|| crate::views::import_dialog::render_drop_target(cx)),
+            )
             .into_any_element()
     }
 }

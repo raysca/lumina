@@ -50,6 +50,8 @@ pub enum CommandId {
     EditSmartAlbum,
     DeleteSmartAlbum,
     LocateMissing,
+    ImportMedia,
+    CancelImport,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
     EditLocation,
@@ -98,6 +100,8 @@ impl Command {
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
             LocateMissing => Icon::TriangleAlert,
+            ImportMedia => Icon::ArrowDownToLine,
+            CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
         }
@@ -143,6 +147,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.open_library",
             shortcut: "⌘O",
             keywords: "folder choose switch library",
+        },
+        Command {
+            id: CommandId::ImportMedia,
+            key: "command.import_media",
+            shortcut: "⇧⌘I",
+            keywords: "import copy add files folder card camera",
+        },
+        Command {
+            id: CommandId::CancelImport,
+            key: "command.cancel_import",
+            shortcut: "",
+            keywords: "import stop abort copy",
         },
         Command {
             id: CommandId::Rescan,
@@ -644,6 +660,8 @@ impl LuminaApp {
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
             CommandId::DeleteSmartAlbum => self.delete_selected_smart_album(cx),
             CommandId::LocateMissing => self.locate_missing_selected(cx),
+            CommandId::ImportMedia => self.pick_import_folders(cx),
+            CommandId::CancelImport => self.cancel_running_import(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);
                 self.start_date_input(cx);

@@ -171,9 +171,12 @@ impl LuminaApp {
             return;
         }
 
-        // ⌘I opens the Get Info window, as in Finder; I toggles the inspector.
+        // ⇧⌘I imports; ⌘I opens the Get Info window, as in Finder; I toggles
+        // the inspector.
         if key.eq_ignore_ascii_case("i") {
-            if cmd_or_ctrl {
+            if cmd_or_ctrl && keystroke.modifiers.shift {
+                self.pick_import_folders(cx);
+            } else if cmd_or_ctrl {
                 self.get_info(cx);
             } else {
                 self.toggle_inspector(cx);

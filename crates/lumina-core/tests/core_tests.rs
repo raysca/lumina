@@ -3224,7 +3224,10 @@ fn test_duplicate_detection_and_merging() {
 
     // 2. Batch import pre-check
     let candidates = engine
-        .check_import_duplicates(&[external_dup.clone(), external_unique.clone()])
+        .check_import_duplicates(
+            &[external_dup.clone(), external_unique.clone()],
+            &std::sync::atomic::AtomicBool::new(false),
+        )
         .unwrap();
     assert_eq!(candidates.len(), 2);
     let cand_dup = candidates.iter().find(|c| c.path == external_dup).unwrap();

@@ -15,6 +15,7 @@ actions!(
         ToggleSidebar,
         ToggleInspector,
         ImportXmp,
+        ImportMedia,
         NewSmartAlbum
     ]
 );

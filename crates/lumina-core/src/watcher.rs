@@ -317,8 +317,9 @@ pub(crate) fn handle_batch(
     }
 
     // Files already catalogued as they are need no new read. An import
-    // catalogues its copies itself; this keeps their events from re-reading
-    // each file and refreshing the UI once per file.
+    // catalogues its copies within 250 ms, before this debounced batch
+    // usually runs, so most of its events stop here. A copy that wins the
+    // race is read twice; the upsert keys on the path, so no duplicate row.
     let known = match catalog.present_signatures(&files) {
         Ok(known) => known,
         Err(err) => {

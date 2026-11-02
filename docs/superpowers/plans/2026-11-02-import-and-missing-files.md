@@ -137,6 +137,13 @@ git commit -m "feat: keep missing files and reconnect moved ones"
 
 ## Part 2: Import
 
+**As built:** `run_import` takes `&AtomicBool` and returns the report (no
+`ImportFinished` event; the UI awaits the task). `ImportDialog` has
+`Planning` and `Ready(plan)`; an empty plan is the "Nothing new" state, and
+its OK button reuses `import-confirm`. The name check is `claim_name` with
+`Catalog::id_at_path`. Tests count ⇧⌘I pickers with `IMPORT_PICKS`.
+Cancelled imports toast "Import cancelled after N items".
+
 ### Task 7: Import engine
 
 **Files:**

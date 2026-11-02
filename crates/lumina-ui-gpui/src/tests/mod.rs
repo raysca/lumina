@@ -5,6 +5,7 @@ mod duplicates;
 mod editor_handoff;
 mod get_info;
 mod immersive_hud;
+mod import;
 mod inspector;
 mod interaction;
 mod legacy_catalog;

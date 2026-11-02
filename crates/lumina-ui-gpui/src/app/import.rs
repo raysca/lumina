@@ -1,0 +1,245 @@
+//! Import by copy: drop or pick files and folders, review a plan, copy.
+//! Planning and copying run off the UI thread; see `lumina_core::import`.
+
+use gpui::*;
+use lumina_core::import::{CopyImportReport, ImportPlan};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+#[cfg(not(test))]
+use crate::app::types::UiMessage;
+use crate::LuminaApp;
+
+/// The import confirmation dialog.
+pub(crate) enum ImportDialog {
+    /// Walking, reading and duplicate-checking `count` dropped or picked paths.
+    Planning { count: usize },
+    /// Ready to copy; an empty plan offers only OK.
+    Ready(ImportPlan),
+}
+
+/// Import state on [`LuminaApp`]: the dialog and a running copy.
+#[derive(Default)]
+pub(crate) struct ImportState {
+    pub dialog: Option<ImportDialog>,
+    /// Cancels planning when the dialog is dismissed.
+    plan_cancel: Arc<AtomicBool>,
+    /// Set while a copy runs; storing true stops it after the current file.
+    running: Option<Arc<AtomicBool>>,
+    /// (copied, total) for the status bar.
+    pub progress: Option<(usize, usize)>,
+}
+
+impl ImportState {
+    pub fn is_busy(&self) -> bool {
+        self.dialog.is_some() || self.running.is_some()
+    }
+}
+
+impl LuminaApp {
+    /// Another dialog or menu is up. The import dialog would open under the
+    /// ones drawn above it, and ↵ would go to the ones whose keys come first
+    /// (a delete confirmation), so imports wait until it is closed.
+    pub(crate) fn import_blocked_by_modal(&self) -> bool {
+        self.command_palette_open
+            || self.shortcuts_overlay_open
+            || self.preferences_open
+            || self.delete_confirm_state.is_some()
+            || self.album_draft.confirm_delete.is_some()
+            || self.album_draft.modal_open
+            || self.tag_manager.open
+            || self.context_menu_state.is_some()
+            || self.sort_menu_open
+    }
+
+    /// "Import…": a folder picker allowing several folders. (Loose files can
+    /// be dropped; rfd cannot offer files and folders in one panel.)
+    pub fn pick_import_folders(&mut self, cx: &mut Context<Self>) {
+        if self.grid_state.is_none() {
+            self.show_toast("Open a library before importing", cx);
+            return;
+        }
+        // Say so before the picker, not after the folders are chosen.
+        if self.import.is_busy() {
+            self.show_toast("An import is already running", cx);
+            return;
+        }
+        if self.import_blocked_by_modal() {
+            self.show_toast("Close the open dialog before importing", cx);
+            return;
+        }
+        // Tests count the request instead of opening a real dialog.
+        #[cfg(test)]
+        IMPORT_PICKS.with(|n| n.set(n.get() + 1));
+        #[cfg(not(test))]
+        {
+            let tx = self.ui_tx.clone();
+            cx.spawn(async move |_this, _cx| {
+                if let Some(handles) = rfd::AsyncFileDialog::new()
+                    .set_title("Import into Library")
+                    .pick_folders()
+                    .await
+                {
+                    let paths = handles.iter().map(|h| h.path().to_path_buf()).collect();
+                    let _ = tx.send_blocking(UiMessage::ImportPicked(paths));
+                }
+            })
+            .detach();
+        }
+    }
+
+    /// Plans importing `paths` (dropped or picked) and opens the dialog.
+    pub fn begin_import(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
+            self.show_toast("Open a library before importing", cx);
+            return;
+        };
+        if self.import.is_busy() {
+            self.show_toast("An import is already running", cx);
+            return;
+        }
+        if self.import_blocked_by_modal() {
+            self.show_toast("Close the open dialog before importing", cx);
+            return;
+        }
+        if paths.is_empty() {
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.import.plan_cancel = cancel.clone();
+        self.import.dialog = Some(ImportDialog::Planning { count: paths.len() });
+        let mine = cancel.clone();
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.plan_import(&paths, &cancel) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |app, cx| {
+                // Dismissed while planning, or superseded by a newer import.
+                if mine.load(Ordering::Relaxed) || !Arc::ptr_eq(&app.import.plan_cancel, &mine) {
+                    return;
+                }
+                match result {
+                    Ok(plan) => app.import.dialog = Some(ImportDialog::Ready(plan)),
+                    Err(err) => {
+                        app.import.dialog = None;
+                        app.set_error(format!("Could not read the files to import: {err:#}"), cx);
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Esc / Cancel / backdrop: closes the dialog, stopping any planning.
+    pub fn cancel_import_dialog(&mut self, cx: &mut Context<Self>) {
+        self.import.plan_cancel.store(true, Ordering::Relaxed);
+        self.import.dialog = None;
+        cx.notify();
+    }
+
+    /// ↵ / Import: copies the plan in the background. On an empty plan (OK)
+    /// it only closes.
+    pub fn confirm_import(&mut self, cx: &mut Context<Self>) {
+        let Some(ImportDialog::Ready(plan)) = self.import.dialog.take() else {
+            // Planning: nothing to confirm yet.
+            return;
+        };
+        cx.notify();
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
+            return;
+        };
+        if plan.files.is_empty() {
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.import.running = Some(cancel.clone());
+        self.import.progress = Some((0, plan.files.len()));
+        let mine = cancel.clone();
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.run_import(plan, &cancel) });
+        cx.spawn(async move |this, cx| {
+            let report = task.await;
+            let _ = this.update(cx, |app, cx| {
+                // A library switch stopped it; the new library shows nothing.
+                if app
+                    .import
+                    .running
+                    .as_ref()
+                    .is_some_and(|r| Arc::ptr_eq(r, &mine))
+                {
+                    app.finish_import(report, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// A library switch: closes the dialog and stops a running copy after the
+    /// current file (the old engine's event thread is joined next, and the
+    /// copy holds that engine). Copies made so far stay in the old library.
+    pub(crate) fn abandon_import(&mut self, cx: &mut Context<Self>) {
+        self.cancel_import_dialog(cx);
+        if let Some(cancel) = self.import.running.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.import.progress = None;
+    }
+
+    /// "Cancel Import": stops after the current file; copies so far stay.
+    pub fn cancel_running_import(&mut self, cx: &mut Context<Self>) {
+        match &self.import.running {
+            Some(cancel) => cancel.store(true, Ordering::Relaxed),
+            None => self.show_toast("No import is running", cx),
+        }
+    }
+
+    fn finish_import(&mut self, report: CopyImportReport, cx: &mut Context<Self>) {
+        self.import.running = None;
+        self.import.progress = None;
+        self.refresh_album_counts();
+        let noun = if report.copied == 1 { "item" } else { "items" };
+        let message = if report.cancelled {
+            format!("Import cancelled after {} {noun}", report.copied)
+        } else {
+            format!("Imported {} {noun}", report.copied)
+        };
+        self.show_toast(message, cx);
+        if !report.failed.is_empty() {
+            let details: Vec<String> = report
+                .failed
+                .iter()
+                .take(3)
+                .map(|(path, err)| {
+                    let name = path.file_name().unwrap_or(path.as_os_str());
+                    format!("{}: {err}", name.to_string_lossy())
+                })
+                .collect();
+            let more = report.failed.len().saturating_sub(details.len());
+            let more = if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            };
+            self.set_error(
+                format!(
+                    "{} files could not be imported: {}{more}",
+                    report.failed.len(),
+                    details.join("; ")
+                ),
+                cx,
+            );
+        }
+        cx.notify();
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Import pickers the app asked to open on this test thread.
+    pub(crate) static IMPORT_PICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}

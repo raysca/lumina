@@ -47,6 +47,11 @@ core handles cataloguing, decoding, and search.
   `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
   card context menu applies sidecar titles, ratings, color labels, captions and
   tags (a sidecar without a label leaves the catalog's label alone).
+- **Import** — drop files or folders on the window, or File ▸ Import… (⇧⌘I),
+  to copy them into `Imports/YYYY/YYYY-MM-DD/` in the library by date taken.
+  A dialog shows what will be copied and what skipped (already in the
+  library, unsupported, unreadable) first; originals are never changed.
+  Opening a folder still indexes it in place.
 - **Missing files** — a file deleted or moved outside Lumina keeps its catalog
   row, metadata and thumbnail, with a badge and a Missing view. Files moved or
   renamed inside the library reconnect by inode; "Locate…" (context menu or

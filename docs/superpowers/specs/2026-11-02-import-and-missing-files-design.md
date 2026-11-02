@@ -317,9 +317,11 @@ the temp. On error remove the temp and record `(source, error)`. Stop the
 import on `ErrorKind::StorageFull`.
 
 Catalogue copies directly: clone the planned `MediaItem` with the
-destination path/name/parent, `insert_or_update_batch` every 200 files, send
-`BatchDiscovered`. The watcher's own events for these paths are skipped by
-its unchanged-file check.
+destination path/name/parent, `insert_or_update_batch` every 200 files or
+250 ms, send `BatchDiscovered`. The watcher's own events for these paths are
+mostly skipped by its unchanged-file check (its 500 ms debounce usually trails
+the catalogue write); a copy that wins the race is read twice, never
+catalogued twice.
 
 Progress: `EngineEvent::ImportProgress { copied, total }`; the status bar
 shows "Importing… 120 of 232", taking priority over scan text. Palette

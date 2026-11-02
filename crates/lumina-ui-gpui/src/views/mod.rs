@@ -7,6 +7,7 @@ pub mod first_scan;
 pub mod floating_inspector;
 pub mod floating_pip;
 pub mod grid;
+pub mod import_dialog;
 pub mod inspector;
 pub mod onboarding;
 pub mod preferences;

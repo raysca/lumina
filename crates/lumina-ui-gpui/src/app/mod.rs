@@ -3,6 +3,7 @@ pub mod album_builder_actions;
 pub mod command_palette;
 pub mod deletion;
 pub mod first_scan;
+pub mod import;
 pub mod info_details;
 pub mod keymap;
 pub mod library;

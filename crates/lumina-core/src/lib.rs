@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod decoder;
 pub mod duplicates;
 pub mod geocoder;
+pub mod import;
 pub mod scanner;
 pub mod search;
 pub mod smart_albums;
@@ -202,6 +203,11 @@ pub enum EngineEvent {
     /// Files gone from disk. The rows and their metadata are kept, marked
     /// missing; the order of the library is unchanged.
     ItemsMissing(Vec<MediaId>),
+    /// Files copied so far by a running import, of `total`.
+    ImportProgress {
+        copied: usize,
+        total: usize,
+    },
     ScanComplete {
         total_items: usize,
     },
@@ -1185,7 +1191,13 @@ impl LuminaEngine {
     }
 
     /// Evaluates candidate files before importing them into the library.
-    pub fn check_import_duplicates(&self, paths: &[PathBuf]) -> Result<Vec<DuplicateCandidate>> {
+    /// Once `cancel` is set, the remaining files are reported as not
+    /// duplicates without being hashed; the caller discards the result.
+    pub fn check_import_duplicates(
+        &self,
+        paths: &[PathBuf],
+        cancel: &AtomicBool,
+    ) -> Result<Vec<DuplicateCandidate>> {
         use rayon::prelude::*;
         let newly_computed: Arc<Mutex<Vec<(MediaId, u64, String)>>> =
             Arc::new(Mutex::new(Vec::new()));
@@ -1194,7 +1206,7 @@ impl LuminaEngine {
             .par_iter()
             .map(|path| {
                 let file_size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-                if file_size == 0 {
+                if file_size == 0 || cancel.load(Ordering::Relaxed) {
                     return DuplicateCandidate {
                         path: path.clone(),
                         file_size: 0,

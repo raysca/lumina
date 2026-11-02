@@ -155,8 +155,10 @@ by UI automation.
 
 **Current:** opening a folder indexes it in place. Files gone from disk are
 kept as missing (badge and Missing view); moves inside the library reconnect
-by inode, and "Locate…" relinks by hand. There is no copy-into-library import,
-drag-and-drop ingestion, multi-root library, or in-app backup/restore.
+by inode, and "Locate…" relinks by hand. Import copies dropped or picked files
+and folders into `Imports/` by date, skipping duplicates. There is no
+index-in-place import of outside folders, multi-root library, or in-app
+backup/restore.
 
 **Target:**
 

@@ -21,6 +21,9 @@ pub(crate) fn format_status_right(
 
 impl LuminaApp {
     pub(crate) fn status_right_text(&self) -> String {
+        if let Some((copied, total)) = self.import.progress {
+            return format!("Importing… {copied} of {total}");
+        }
         let (is_scanning, scan_progress) = self
             .grid_state
             .as_ref()
