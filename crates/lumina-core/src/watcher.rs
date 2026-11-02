@@ -29,9 +29,6 @@ use crate::EngineEvent;
 /// chmod, editor temp-file dance, ...) into a single inspection pass.
 const DEBOUNCE_WINDOW: Duration = Duration::from_millis(500);
 
-/// Interval at which the watcher thread checks its stop flag.
-const STOP_POLL_INTERVAL: Duration = Duration::from_millis(50);
-
 /// Handle to the background library watcher.
 ///
 /// Cloning the handle is cheap and shares the same underlying watcher. The
@@ -43,6 +40,7 @@ pub struct LibraryWatcher {
 }
 
 struct LibraryWatcherInner {
+    stop_tx: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
     stop: Arc<AtomicBool>,
     thread: Mutex<Option<JoinHandle<()>>>,
 }
@@ -59,6 +57,7 @@ impl LibraryWatcher {
         event_tx: Sender<EngineEvent>,
     ) -> Result<Self> {
         let stop = Arc::new(AtomicBool::new(false));
+        let (stop_tx, stop_rx) = std::sync::mpsc::sync_channel::<()>(0);
         // Startup handshake: report whether the OS watch was successfully
         // registered instead of silently running a dead watcher.
         let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<()>>(1);
@@ -66,7 +65,16 @@ impl LibraryWatcher {
         let thread_stop = stop.clone();
         let thread_handle = thread::Builder::new()
             .name("lumina-fs-watcher".to_string())
-            .spawn(move || watch_loop(library_root, catalog, event_tx, thread_stop, init_tx))
+            .spawn(move || {
+                watch_loop(
+                    library_root,
+                    catalog,
+                    event_tx,
+                    thread_stop,
+                    stop_rx,
+                    init_tx,
+                )
+            })
             .map_err(|err| {
                 anyhow::anyhow!("failed to spawn lumina filesystem watcher thread: {err}")
             })?;
@@ -74,6 +82,7 @@ impl LibraryWatcher {
         match init_rx.recv() {
             Ok(Ok(())) => Ok(Self {
                 inner: Arc::new(LibraryWatcherInner {
+                    stop_tx: Mutex::new(Some(stop_tx)),
                     stop,
                     thread: Mutex::new(Some(thread_handle)),
                 }),
@@ -100,6 +109,9 @@ impl LibraryWatcher {
 impl LibraryWatcherInner {
     fn shutdown(&self) {
         self.stop.store(true, Ordering::SeqCst);
+        if let Ok(mut guard) = self.stop_tx.lock() {
+            drop(guard.take());
+        }
         if let Ok(mut guard) = self.thread.lock() {
             if let Some(handle) = guard.take() {
                 let _ = handle.join();
@@ -121,6 +133,7 @@ fn watch_loop(
     catalog: Catalog,
     event_tx: Sender<EngineEvent>,
     stop: Arc<AtomicBool>,
+    stop_rx: std::sync::mpsc::Receiver<()>,
     init_tx: std::sync::mpsc::SyncSender<Result<()>>,
 ) {
     // notify reports paths using the form of the watched root. Canonicalize
@@ -151,9 +164,8 @@ fn watch_loop(
         return;
     }
 
-    while !stop.load(Ordering::SeqCst) {
-        thread::sleep(STOP_POLL_INTERVAL);
-    }
+    // Park until shutdown is signaled instead of polling
+    let _ = stop_rx.recv();
 
     // Dropping the debouncer stops its internal thread and releases the OS
     // watch handles (fsevents / inotify / kqueue).

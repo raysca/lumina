@@ -242,14 +242,18 @@ impl StructuredQuery {
 
         if let Some(has_tag) = self.has_tag {
             if has_tag {
-                clauses.push("m.id IN (SELECT DISTINCT media_id FROM media_tags)".to_string());
+                clauses.push("EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id)".to_string());
             } else {
-                clauses.push("m.id NOT IN (SELECT DISTINCT media_id FROM media_tags)".to_string());
+                clauses.push(
+                    "NOT EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id)".to_string(),
+                );
             }
         }
 
         if let Some(ref tag) = self.tag {
-            clauses.push("m.id IN (SELECT media_id FROM media_tags WHERE tag = ?)".to_string());
+            clauses.push(
+                "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND tag = ?)".to_string(),
+            );
             params.push(tag.clone().into());
         }
 
@@ -594,5 +598,34 @@ mod tests {
         let empty_terms: Vec<String> = vec!["*".to_string(), "\"\"".to_string()];
         let expr_empty = build_fts5_expression(&empty_terms);
         assert_eq!(expr_empty, "");
+    }
+
+    #[test]
+    fn test_has_tag_sql_clauses() {
+        let q_untagged = StructuredQuery {
+            has_tag: Some(false),
+            ..Default::default()
+        };
+        let (sql_untagged, _) = q_untagged.build_sql();
+        assert!(
+            sql_untagged.contains("NOT EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id)")
+        );
+
+        let q_tagged = StructuredQuery {
+            has_tag: Some(true),
+            ..Default::default()
+        };
+        let (sql_tagged, _) = q_tagged.build_sql();
+        assert!(sql_tagged.contains("EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id)"));
+
+        let q_tag = StructuredQuery {
+            tag: Some("vacation".to_string()),
+            ..Default::default()
+        };
+        let (sql_tag, params) = q_tag.build_sql();
+        assert!(
+            sql_tag.contains("EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND tag = ?)")
+        );
+        assert_eq!(params.len(), 1);
     }
 }

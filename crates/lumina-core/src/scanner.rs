@@ -556,7 +556,7 @@ fn parse_mvhd_duration(data: &[u8]) -> Option<(u64, f64)> {
         ]) as u64;
         if ts > 0 {
             let secs = (dur as f64) / (ts as f64);
-            let ms = (dur * 1000) / ts;
+            let ms = ((dur as u128 * 1000) / ts as u128).min(u64::MAX as u128) as u64;
             return Some((ms, secs));
         }
     } else if version == 1 && pos + 36 <= data.len() {
@@ -578,7 +578,7 @@ fn parse_mvhd_duration(data: &[u8]) -> Option<(u64, f64)> {
         ]);
         if ts > 0 {
             let secs = (dur as f64) / (ts as f64);
-            let ms = (dur * 1000) / ts;
+            let ms = ((dur as u128 * 1000) / ts as u128).min(u64::MAX as u128) as u64;
             return Some((ms, secs));
         }
     }
@@ -673,4 +673,25 @@ pub fn extract_video_duration(path: &Path) -> Option<(u64, f64)> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_mvhd_duration_v1_large_duration_does_not_overflow() {
+        let mut data = vec![0u8; 64];
+        data[0..4].copy_from_slice(b"mvhd");
+        data[4] = 1; // version 1
+        let ts: u32 = 1000;
+        data[24..28].copy_from_slice(&ts.to_be_bytes());
+        let dur: u64 = u64::MAX / 500;
+        data[28..36].copy_from_slice(&dur.to_be_bytes());
+
+        let res = parse_mvhd_duration(&data);
+        assert!(res.is_some());
+        let (ms, _secs) = res.unwrap();
+        assert_eq!(ms, dur);
+    }
 }

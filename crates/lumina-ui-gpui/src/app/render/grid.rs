@@ -146,7 +146,12 @@ impl LuminaApp {
                         let top = visible_items.first().map(|i| (i.year, i.month));
                         if this.month_header.top != top {
                             this.month_header.top = top;
-                            cx.notify();
+                            cx.spawn(async move |this, cx| {
+                                let _ = this.update(cx, |_app, cx| {
+                                    cx.notify();
+                                });
+                            })
+                            .detach();
                         }
 
                         for row_ix in range {
