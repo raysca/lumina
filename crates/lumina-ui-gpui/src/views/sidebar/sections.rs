@@ -21,6 +21,11 @@ pub(super) fn render_library_section(
         .get(&SystemAlbum::Videos)
         .copied()
         .unwrap_or(0);
+    let downloaded_count = this
+        .system_album_counts
+        .get(&SystemAlbum::Downloaded)
+        .copied()
+        .unwrap_or(0);
     let screenshot_count = this
         .system_album_counts
         .get(&SystemAlbum::Screenshots)
@@ -116,6 +121,17 @@ pub(super) fn render_library_section(
                 this.select_album(AlbumSelection::System(SystemAlbum::Videos), cx);
             }),
         ))
+        // Only once something was downloaded from a link.
+        .children((downloaded_count > 0).then(|| {
+            render_nav_item(
+                "Downloaded",
+                downloaded_count,
+                this.selection == AlbumSelection::System(SystemAlbum::Downloaded),
+                cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.select_album(AlbumSelection::System(SystemAlbum::Downloaded), cx);
+                }),
+            )
+        }))
         .child(render_nav_item(
             "Screenshots",
             if this.grid_state.is_some() {

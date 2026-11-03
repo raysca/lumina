@@ -16,7 +16,8 @@ pub(crate) enum DownloadsConfirm {
 }
 
 impl LuminaApp {
-    /// Rows that quitting or switching library would cut short.
+    /// Downloading and waiting rows: the toolbar badge, and what quitting or
+    /// switching library would cut short. Paused rows wait for the user.
     pub(crate) fn running_or_waiting_count(&self) -> usize {
         self.downloads
             .entries

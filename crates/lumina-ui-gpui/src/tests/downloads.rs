@@ -700,3 +700,127 @@ fn switching_library_drops_old_jobs() {
         );
     });
 }
+
+/// A second item in the seeded library, catalogued as downloaded from `url`.
+fn downloaded_item(
+    engine: &LuminaEngine,
+    dir: &std::path::Path,
+    url: &str,
+) -> lumina_core::MediaItem {
+    let mut item = engine
+        .catalog()
+        .get_item_by_id(MediaId(1))
+        .unwrap()
+        .expect("the seeded library has one item");
+    item.path = dir.join("Imports").join("clip.mp4");
+    std::fs::create_dir_all(item.path.parent().unwrap()).unwrap();
+    std::fs::write(&item.path, b"clip").unwrap();
+    engine
+        .catalog()
+        .insert_with_source(&item, url, None)
+        .unwrap()
+}
+
+fn downloaded_count(app: &LuminaApp) -> usize {
+    app.system_album_counts
+        .get(&lumina_core::SystemAlbum::Downloaded)
+        .copied()
+        .unwrap_or(0)
+}
+
+#[core::prelude::v1::test]
+fn downloaded_album_appears_after_a_download() {
+    let (_dir, engine, _fake, mut cx) = queue_app("dl_album_row");
+    engine
+        .catalog()
+        .record_media_source(MediaId(1), "https://example.com/sidecar", None)
+        .unwrap();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, _| assert_eq!(downloaded_count(app), 0));
+    assert!(
+        vcx.debug_bounds("sidebar-nav-Downloaded").is_none(),
+        "a sidecar source alone is not a download"
+    );
+
+    downloaded_item(&engine, &_dir, URL);
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        cx.notify();
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| assert_eq!(downloaded_count(app), 1));
+    assert!(
+        vcx.debug_bounds("sidebar-nav-Downloaded").is_some(),
+        "the sidebar lists Downloaded once something was downloaded"
+    );
+}
+
+fn assert_shows_in_downloaded(app: &LuminaApp, id: MediaId) {
+    assert_eq!(
+        app.selection,
+        crate::views::sidebar::AlbumSelection::System(lumina_core::SystemAlbum::Downloaded),
+        "Show in Library opens the Downloaded album"
+    );
+    assert_eq!(
+        app.selected_item.as_ref().map(|item| item.id),
+        Some(id),
+        "and selects the downloaded item"
+    );
+}
+
+#[core::prelude::v1::test]
+fn done_row_click_selects_item_in_downloaded_album() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_show_row");
+    let item = downloaded_item(&engine, &dir, URL);
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    view.update(vcx, |app, cx| {
+        app.enqueue_download(URL.to_string(), true, cx)
+    });
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    fake.finish(
+        URL,
+        JobOutcome::Imported {
+            item: Box::new(item.clone()),
+            timeline_error: None,
+        },
+    );
+    settle(vcx, &view, "the row is done", |app| {
+        count(app, DownloadState::Done) == 1
+    });
+    view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
+    render_ui(vcx);
+    let id = view.update(vcx, |app, _| row_id(app, URL));
+    super::ui_automation::click(
+        vcx,
+        Box::leak(format!("download-row-{id}").into_boxed_str()),
+    );
+    view.update(vcx, |app, _| {
+        assert_shows_in_downloaded(app, item.id);
+        assert!(!app.downloads.open, "the list closes");
+    });
+}
+
+#[core::prelude::v1::test]
+fn already_downloaded_enter_shows_in_library() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_show_dialog");
+    let item = downloaded_item(&engine, &dir, URL);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the dialog says it was downloaded", |app| {
+        matches!(
+            app.network_import.stage,
+            Some(NetworkImportStage::AlreadyDownloaded { .. })
+        )
+    });
+    super::ui_automation::focus_app(vcx, &view);
+    super::ui_automation::keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(app.network_import.stage.is_none(), "the dialog closes");
+        assert_shows_in_downloaded(app, item.id);
+        assert!(app.downloads.entries.is_empty(), "nothing is queued");
+    });
+}

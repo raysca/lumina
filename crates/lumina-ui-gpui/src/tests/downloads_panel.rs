@@ -57,18 +57,30 @@ fn badge_counts_active_rows() {
     queue(&view, vcx, &[A, B]);
     assert!(vcx.debug_bounds("downloads-toolbar-btn").is_some());
     assert!(vcx.debug_bounds("downloads-badge").is_some());
-    view.update(vcx, |app, _| assert_eq!(app.active_download_count(), 2));
+    view.update(vcx, |app, _| assert_eq!(app.running_or_waiting_count(), 2));
 
     fake.finish(A, imported(&engine));
     fake.finish(B, imported(&engine));
     settle(vcx, &view, "both finish", |app| {
-        app.active_download_count() == 0
+        app.running_or_waiting_count() == 0
     });
     // The bounds map only grows in GPUI 0.2.2 test support, so check the
     // count behind the badge rather than the badge's absence.
     view.update(vcx, |app, _| {
-        assert_eq!(app.active_download_count(), 0, "no badge once all are done");
+        assert_eq!(
+            app.running_or_waiting_count(),
+            0,
+            "no badge once all are done"
+        );
         assert_eq!(app.downloads.entries.len(), 2, "finished rows stay listed");
+    });
+    view.update(vcx, |app, _| {
+        app.downloads.entries[0].row.state = DownloadState::Paused;
+        assert_eq!(
+            app.running_or_waiting_count(),
+            0,
+            "paused rows are not counted"
+        );
     });
 }
 

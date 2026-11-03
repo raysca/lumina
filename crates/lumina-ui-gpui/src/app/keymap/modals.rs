@@ -104,13 +104,20 @@ impl LuminaApp {
         if let Some(ref stage) = self.network_import.stage {
             match key {
                 "escape" => self.close_network_import_dialog(cx),
-                "enter" | "return" => {
-                    if let crate::app::network_import::NetworkImportStage::Input { url, .. } = stage
-                    {
+                "enter" | "return" => match stage {
+                    crate::app::network_import::NetworkImportStage::Input { url, .. } => {
                         let url = url.clone();
                         self.submit_network_url(url, cx);
                     }
-                }
+                    crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
+                        prior,
+                        ..
+                    } => {
+                        let media_id = prior.media_id;
+                        self.show_download_in_library(media_id, cx);
+                    }
+                    crate::app::network_import::NetworkImportStage::Checking { .. } => {}
+                },
                 "backspace" => {
                     if let Some(crate::app::network_import::NetworkImportStage::Input {
                         ref mut url,

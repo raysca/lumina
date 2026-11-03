@@ -1,7 +1,10 @@
 # Download queue for URL video import
 
-Status: draft for review (2026-11-03). It builds on the network video import
-in `net_import` (see `docs/network-import.md`).
+Status: implemented (2026-11-03). It builds on the network video import
+in `net_import` (see `docs/network-import.md`). Deviations: the toolbar ring
+is a stroked arc around the icon, and each running row also has a thin
+progress bar; the dropdown has a Resume all footer action when rows are
+paused.
 
 Decisions are marked **(user)** when the user made them in the design
 conversation and **(call)** when the designer made them. Anything marked

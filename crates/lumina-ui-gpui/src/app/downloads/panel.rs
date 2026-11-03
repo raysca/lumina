@@ -2,9 +2,10 @@
 //! each row's main action, and Clear finished.
 
 use gpui::*;
-use lumina_core::DownloadState;
+use lumina_core::{DownloadState, MediaId, SystemAlbum};
 
 use super::DownloadEntry;
+use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
 
 /// The dropdown's sections, top to bottom.
@@ -93,15 +94,33 @@ impl LuminaApp {
     }
 
     /// ⏎ on a row and a click on its body: Retry on a failed row, Resume on
-    /// a paused one.
+    /// a paused one, Show in Library on a finished one.
     pub(crate) fn download_main_action(&mut self, row_id: i64, cx: &mut Context<Self>) {
         let Some(entry) = self.downloads.entries.iter().find(|e| e.row.id == row_id) else {
             return;
         };
-        match entry.row.state {
-            DownloadState::Failed if entry.row.can_retry => self.retry_download(row_id, cx),
-            DownloadState::Paused => self.resume_download(row_id, cx),
+        match (entry.row.state, entry.row.media_id) {
+            (DownloadState::Failed, _) if entry.row.can_retry => self.retry_download(row_id, cx),
+            (DownloadState::Paused, _) => self.resume_download(row_id, cx),
+            (DownloadState::Done | DownloadState::Duplicate, Some(id)) if entry.row.in_library => {
+                self.show_download_in_library(id, cx)
+            }
             _ => {}
+        }
+    }
+
+    /// Show in Library: the Downloaded album with the item selected.
+    pub fn show_download_in_library(&mut self, media_id: MediaId, cx: &mut Context<Self>) {
+        self.close_downloads_panel(cx);
+        self.close_network_import_dialog(cx);
+        self.select_album(AlbumSelection::System(SystemAlbum::Downloaded), cx);
+        // ponytail: walks the album like the startup restore does; an
+        // index-of-id query if Downloaded ever gets huge.
+        if let Some(index) = self.find_active_index(media_id) {
+            if let Some(item) = self.get_active_slice(index..index + 1).pop() {
+                self.select_item_at(item, index, cx);
+                self.reveal_grid_selection();
+            }
         }
     }
 

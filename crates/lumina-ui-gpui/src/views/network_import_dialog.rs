@@ -182,45 +182,59 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     .mt_2()
                     .child(cancel("Cancel")),
             ),
-        NetworkImportStage::AlreadyDownloaded { prior, .. } => div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .text_base()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(theme::text())
-                    .child("Already Downloaded"),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "net-import-already-downloaded".to_string())
-                    .text_xs()
-                    .text_color(theme::text_muted())
-                    .child(format!(
-                        "You downloaded this on {}.",
-                        format_day(prior.imported_epoch_ms)
-                    )),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_end()
-                    .gap_2()
-                    .mt_2()
-                    .child(cancel("Cancel"))
-                    .child(
-                        button("net-import-download-again", "Download Again")
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
-                            .text_color(theme::text())
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.download_again_from_dialog(cx);
-                            })),
-                    ),
-            ),
+        NetworkImportStage::AlreadyDownloaded { prior, .. } => {
+            let media_id = prior.media_id;
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(
+                    div()
+                        .text_base()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme::text())
+                        .child("Already Downloaded"),
+                )
+                .child(
+                    div()
+                        .debug_selector(|| "net-import-already-downloaded".to_string())
+                        .text_xs()
+                        .text_color(theme::text_muted())
+                        .child(format!(
+                            "You downloaded this on {}.",
+                            format_day(prior.imported_epoch_ms)
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .justify_end()
+                        .gap_2()
+                        .mt_2()
+                        .child(cancel("Cancel"))
+                        .child(
+                            button("net-import-download-again", "Download Again")
+                                .bg(theme::bg_control())
+                                .hover(|s| s.bg(theme::bg_control_hover()))
+                                .text_color(theme::text())
+                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                    this.download_again_from_dialog(cx);
+                                })),
+                        )
+                        .child(
+                            button("net-import-show-in-library", "Show in Library")
+                                .bg(theme::accent())
+                                .hover(|s| s.opacity(0.9))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::accent_fg())
+                                .child(theme::kbd("↵"))
+                                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                    this.show_download_in_library(media_id, cx);
+                                })),
+                        ),
+                )
+        }
     };
 
     div()

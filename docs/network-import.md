@@ -16,18 +16,39 @@ catalogue (e.g. WebM) are refused with a message.
 
 ## Flow
 
-1. Paste a link (⌘V) and press ↵ (Continue). Lumina checks it: title,
-   duration, uploader, size, and whether the same link was imported before.
-2. Review the file name, optionally press F for Favorites, and press ↵.
-3. The download stages in a hidden `.…lumina-import` folder inside
+1. Paste a link (⌘V) and press ↵ (Import). Lumina checks whether that link
+   was downloaded before and is still in the library; if so it says when and
+   offers Show in Library (↵) or Download Again. Otherwise the dialog closes
+   and the link joins the download list.
+2. Up to three downloads run at once; the rest wait in the order they were
+   added and move up as others finish or are removed.
+3. Each download stages in a hidden `.…lumina-import` folder inside
    `Imports/YYYY/YYYY-MM-DD/`, then takes a free name there (an existing file
    or catalogued item is never replaced; the new one gets " 2"). It is
    catalogued with its source URL and uploader, and a hidden `.xmp` sidecar records
    them as `dc:source` and `photoshop:Credit`. Get Info shows the source.
 
-While downloading, Cancel Download stops at once; Esc asks once, then stops;
-clicks outside the dialog are ignored. A crash leaves only the hidden staging
-folder, which is removed the next time the library opens.
+## The download list
+
+A toolbar icon appears once the library has any downloads: a count of the
+ones downloading or waiting, a ring for their combined progress, and a red
+dot when one failed since the list was last opened. ⌥⌘L, View > Show
+Downloads and the command palette open it too. The list groups rows into
+Downloading, Waiting, Paused, Failed and Done. In it, ↑/↓ move, ↵ retries a
+failed row, resumes a paused one or shows a finished one in the library, ⌫
+cancels or removes a row, and Esc closes it. Finished rows stay until Clear
+finished. Pasting a link already in the list highlights its row instead of
+adding it again.
+
+Quitting or opening another library while downloads run asks first.
+Confirming stops them; the next time the library opens they come back
+Paused and nothing downloads until Resume or Resume all, which start over
+rather than continue. A crash leaves only the hidden staging folder, which
+is removed the next time the library opens.
+
+The Downloaded album in the sidebar lists everything downloaded from a link
+(not items whose source only came from an imported sidecar). It shows once
+it has something in it.
 
 ## User-facing copy
 

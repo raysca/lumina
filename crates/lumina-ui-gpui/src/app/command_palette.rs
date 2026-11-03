@@ -530,6 +530,12 @@ impl LuminaApp {
                 "videos".into(),
             ),
             go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Downloaded),
+                "Downloaded".into(),
+                Icon::ArrowDownToLine,
+                "downloaded downloads url".into(),
+            ),
+            go(
                 AlbumSelection::Trash,
                 "Recently Deleted".into(),
                 Icon::Trash,

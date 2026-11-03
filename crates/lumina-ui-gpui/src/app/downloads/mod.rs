@@ -149,15 +149,6 @@ impl LuminaApp {
             .map(|state| state.engine.catalog().clone())
     }
 
-    /// Downloading, waiting and paused rows: the toolbar badge.
-    pub(crate) fn active_download_count(&self) -> usize {
-        self.downloads
-            .entries
-            .iter()
-            .filter(|entry| entry.is_active())
-            .count()
-    }
-
     /// The dialog's Import: checks the link, then either queues it, points
     /// at the row already in the list, or asks about an earlier download.
     pub fn submit_network_url(&mut self, url: String, cx: &mut Context<Self>) {
