@@ -218,6 +218,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .bg(theme::bg_control())
                                 .hover(|s| s.bg(theme::bg_control_hover()))
                                 .text_color(theme::text())
+                                .child(theme::kbd("⌘↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.download_again_from_dialog(cx);
                                 })),

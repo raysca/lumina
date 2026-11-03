@@ -89,7 +89,27 @@ impl LuminaApp {
             Some(at) => (at as isize + step).clamp(0, order.len() as isize - 1) as usize,
             None => 0,
         };
-        self.downloads.focused = Some(order[next]);
+        let id = order[next];
+        self.downloads.focused = Some(id);
+        // The body lists each non-empty section's label, then its rows.
+        let mut child = 0;
+        for (_, states) in SECTIONS {
+            let rows: Vec<i64> = self
+                .downloads
+                .entries
+                .iter()
+                .filter(|entry| states.contains(&entry.row.state))
+                .map(|entry| entry.row.id)
+                .collect();
+            if rows.is_empty() {
+                continue;
+            }
+            if let Some(at) = rows.iter().position(|row| *row == id) {
+                self.downloads.scroll.scroll_to_item(child + 1 + at);
+                break;
+            }
+            child += 1 + rows.len();
+        }
         cx.notify();
     }
 

@@ -135,12 +135,19 @@ fn render_row(
                 )
                 .child(
                     div()
-                        .truncate()
                         .text_xs()
                         .text_color(if row.state == DownloadState::Failed {
                             theme::danger_text()
                         } else {
                             theme::text_subtle()
+                        })
+                        // A failure reason ends with what to do; let it wrap.
+                        .map(|el| {
+                            if row.state == DownloadState::Failed {
+                                el.line_clamp(4).text_ellipsis()
+                            } else {
+                                el.truncate()
+                            }
                         })
                         .child(status(entry, first_waiting, highlighted)),
                 )
@@ -184,7 +191,7 @@ fn render_row(
                 row_button(
                     format!("download-again-{id}"),
                     "Download Again",
-                    "Make a second copy",
+                    "Make a second copy (⌘↵)",
                 )
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
@@ -225,7 +232,16 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .entries
         .iter()
         .any(|e| e.row.state == DownloadState::Paused);
-    let mut body = div().flex().flex_col().gap_0p5();
+    let mut body = div()
+        .id("downloads-panel-body")
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
+        .track_scroll(&app.downloads.scroll)
+        .p_1()
+        .flex()
+        .flex_col()
+        .gap_0p5();
     for (label, states) in SECTIONS {
         let rows: Vec<&DownloadEntry> = app
             .downloads
@@ -288,15 +304,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .shadow_2xl()
                 .flex()
                 .flex_col()
-                .child(
-                    div()
-                        .id("downloads-panel-body")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .p_1()
-                        .child(body),
-                )
+                // Each label and row is a direct child: `scroll_to_item`
+                // counts them.
+                .child(body)
                 .child(
                     div()
                         .flex_shrink_0()

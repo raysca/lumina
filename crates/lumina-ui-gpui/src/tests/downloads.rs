@@ -13,6 +13,10 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+pub(crate) fn title_for(url: &str) -> String {
+    format!("Title of {url}")
+}
+
 /// One URL's outcome channel: the test sends, the job thread receives.
 type OutcomeChannel = (Sender<JobOutcome>, Arc<Mutex<Receiver<JobOutcome>>>);
 
@@ -47,8 +51,13 @@ impl FakeJobs {
 
     pub(crate) fn job(&self) -> JobFn {
         let fake = self.clone();
-        Arc::new(move |request, cancel, _events| {
+        Arc::new(move |request, cancel, events| {
             fake.requests.lock().unwrap().push(request.clone());
+            // Like the real job: the link is inspected before anything else.
+            let _ = events.send_blocking(crate::app::downloads::JobEvent::Inspected {
+                canonical_url: request.url.clone(),
+                title: title_for(&request.url),
+            });
             let rx = fake.channel(&request.url).1;
             loop {
                 if cancel.load(Ordering::Relaxed) {
@@ -822,5 +831,159 @@ fn already_downloaded_enter_shows_in_library() {
         assert!(app.network_import.stage.is_none(), "the dialog closes");
         assert_shows_in_downloaded(app, item.id);
         assert!(app.downloads.entries.is_empty(), "nothing is queued");
+    });
+}
+
+#[core::prelude::v1::test]
+fn finished_rows_keep_title_and_state() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_title");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    // Queued before the job starts, so it ends right after inspecting: the
+    // title write and the final write race.
+    let prior = PriorDownload {
+        media_id: MediaId(1),
+        path: std::path::PathBuf::from("/x.mp4"),
+        imported_epoch_ms: 0,
+    };
+    fake.finish(URL, JobOutcome::AlreadyInLibrary(prior));
+    view.update(vcx, |app, cx| {
+        app.enqueue_download(URL.to_string(), false, cx)
+    });
+    settle(vcx, &view, "the row is a duplicate", |app| {
+        count(app, DownloadState::Duplicate) == 1
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.downloads.entries[0].row.title.as_deref(),
+            Some(title_for(URL).as_str()),
+            "a finished row keeps the title it showed while running"
+        );
+    });
+    settle(vcx, &view, "every write lands", |_| {
+        let rows = engine.catalog().list_downloads().unwrap();
+        rows[0].title.is_some()
+    });
+    let rows = engine.catalog().list_downloads().unwrap();
+    assert_eq!(
+        rows[0].state,
+        DownloadState::Duplicate,
+        "the title write never puts a finished row back to running"
+    );
+    assert_eq!(rows[0].title.as_deref(), Some(title_for(URL).as_str()));
+}
+
+#[core::prelude::v1::test]
+fn retry_pressed_twice_runs_one_job() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_retry_twice");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    fake.finish(URL, JobOutcome::Failed("The connection dropped".into()));
+    settle(vcx, &view, "it fails", |app| {
+        count(app, DownloadState::Failed) == 1
+    });
+    let id = view.update(vcx, |app, _| row_id(app, URL));
+    // Both presses land before either requeue write returns.
+    view.update(vcx, |app, cx| {
+        app.retry_download(id, cx);
+        app.retry_download(id, cx);
+    });
+    settle(vcx, &view, "the retry runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    vcx.run_until_parked();
+    let started = fake.requests().iter().filter(|r| r.url == URL).count();
+    assert_eq!(started, 2, "one first try and one retry, never two retries");
+}
+
+#[core::prelude::v1::test]
+fn quit_prompt_over_delete_confirm_takes_enter() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_quit_over_delete");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    view.update(vcx, |app, cx| {
+        let item = app.get_active_slice(0..1).remove(0);
+        app.select_item_at(item, 0, cx);
+        app.prompt_delete_selected(cx);
+        assert!(app.delete_confirm_state.is_some());
+        // Quit from the menu while the delete prompt is up.
+        app.request_quit(cx);
+    });
+    super::ui_automation::focus_app(vcx, &view);
+    super::ui_automation::keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.quit_requested, "↵ answers the prompt on top");
+    });
+    assert_eq!(
+        engine.query_system_album_count(lumina_core::SystemAlbum::RecentlyDeleted),
+        0,
+        "the delete prompt underneath never takes the keystroke"
+    );
+}
+
+#[core::prelude::v1::test]
+fn url_dialog_waits_while_downloads_list_is_open() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_dialog_over_list");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    view.update(vcx, |app, cx| {
+        app.toggle_downloads_panel(cx);
+        app.open_network_import_dialog(cx);
+        assert!(
+            app.network_import.stage.is_none(),
+            "the URL dialog doesn't open under the downloads list"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn command_enter_downloads_again_from_dialog_and_list() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_again_keys");
+    downloaded_item(&engine, &dir, URL);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the dialog says it was downloaded", |app| {
+        matches!(
+            app.network_import.stage,
+            Some(NetworkImportStage::AlreadyDownloaded { .. })
+        )
+    });
+    super::ui_automation::focus_app(vcx, &view);
+    super::ui_automation::keystrokes(vcx, "secondary-enter");
+    settle(vcx, &view, "⌘↵ downloads it again", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    view.update(vcx, |app, _| {
+        assert!(app.network_import.stage.is_none(), "the dialog closes");
+        assert!(app.downloads.entries[0].skip_prior_check);
+    });
+
+    // In the list: a Duplicate row gets ⌘↵ too.
+    let prior = PriorDownload {
+        media_id: MediaId(1),
+        path: std::path::PathBuf::from("/x.mp4"),
+        imported_epoch_ms: 0,
+    };
+    fake.finish(URL, JobOutcome::AlreadyInLibrary(prior));
+    settle(vcx, &view, "the row is a duplicate", |app| {
+        count(app, DownloadState::Duplicate) == 1
+    });
+    view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
+    super::ui_automation::keystrokes(vcx, "secondary-enter");
+    settle(vcx, &view, "⌘↵ on the row downloads it again", |app| {
+        count(app, DownloadState::Running) == 1
     });
 }

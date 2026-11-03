@@ -293,7 +293,7 @@ impl LuminaApp {
             return None;
         }
         let open = self.downloads.open;
-        let count = self.running_or_waiting_count();
+        let count = self.download_badge_count();
         Some(
             icon_button("downloads-toolbar-btn", open)
                 .debug_selector(|| "downloads-toolbar-btn".to_string())

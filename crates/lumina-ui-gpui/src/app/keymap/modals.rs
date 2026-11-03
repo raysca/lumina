@@ -18,6 +18,17 @@ impl LuminaApp {
         keystroke: &Keystroke,
         cx: &mut Context<Self>,
     ) -> bool {
+        // "Downloads are still running": it can open over any other dialog
+        // (Quit from the menu), so its keys come first.
+        if self.downloads.confirm.is_some() {
+            match key {
+                "escape" => self.dismiss_downloads_prompt(cx),
+                "enter" | "return" => self.confirm_downloads_prompt(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 0. Command palette
         if self.command_palette_open {
             match key {
@@ -110,6 +121,9 @@ impl LuminaApp {
                         self.submit_network_url(url, cx);
                     }
                     crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
+                        ..
+                    } if cmd_or_ctrl => self.download_again_from_dialog(cx),
+                    crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
                         prior,
                         ..
                     } => {
@@ -134,17 +148,7 @@ impl LuminaApp {
             return true;
         }
 
-        // 1e. "Downloads are still running" prompt
-        if self.downloads.confirm.is_some() {
-            match key {
-                "escape" => self.dismiss_downloads_prompt(cx),
-                "enter" | "return" => self.confirm_downloads_prompt(cx),
-                _ => {}
-            }
-            return true;
-        }
-
-        // 1f. Downloads dropdown: every key stays in the list, so ⌫ removes
+        // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {
             let focused = self.downloads.focused;
@@ -152,6 +156,12 @@ impl LuminaApp {
                 "escape" => self.close_downloads_panel(cx),
                 "up" => self.move_download_focus(-1, cx),
                 "down" => self.move_download_focus(1, cx),
+                // ⌘↵: Download Again on an "already in your library" row.
+                "enter" | "return" if cmd_or_ctrl => {
+                    if let Some(id) = focused {
+                        self.download_again(id, cx);
+                    }
+                }
                 "enter" | "return" => {
                     if let Some(id) = focused {
                         self.download_main_action(id, cx);

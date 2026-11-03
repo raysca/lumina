@@ -77,9 +77,14 @@ fn badge_counts_active_rows() {
     view.update(vcx, |app, _| {
         app.downloads.entries[0].row.state = DownloadState::Paused;
         assert_eq!(
+            app.download_badge_count(),
+            1,
+            "after reopening, paused rows show there is unfinished work"
+        );
+        assert_eq!(
             app.running_or_waiting_count(),
             0,
-            "paused rows are not counted"
+            "but quitting needn't ask about them"
         );
     });
 }
@@ -323,5 +328,83 @@ fn dropdown_truncates_and_scrolls() {
     assert!(
         row.size.width <= panel.size.width,
         "a long title truncates instead of widening the list"
+    );
+}
+
+#[core::prelude::v1::test]
+fn keyboard_focus_scrolls_into_view() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_scroll_focus");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    queue(&view, vcx, &[A]);
+    view.update(vcx, |app, cx| {
+        let template = app.downloads.entries[0].row.clone();
+        for n in 0..40 {
+            let mut row = template.clone();
+            row.id = 2_000 + n;
+            row.state = DownloadState::Done;
+            app.downloads
+                .entries
+                .push(crate::app::downloads::DownloadEntry::for_test(row));
+        }
+        app.toggle_downloads_panel(cx);
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    for _ in 0..40 {
+        keystrokes(vcx, "down");
+    }
+    render_ui(vcx);
+    render_ui(vcx);
+    let last = view.update(vcx, |app, _| app.downloads.focused.unwrap());
+    assert_eq!(last, 2_039, "focus reached the last row");
+    let panel = vcx
+        .debug_bounds("downloads-panel")
+        .expect("the list paints");
+    let row = vcx
+        .debug_bounds(leak(format!("download-row-{last}")))
+        .expect("the focused row paints");
+    assert!(
+        row.top() >= panel.top() && row.bottom() <= panel.bottom(),
+        "the focused row is scrolled into view: {row:?} in {panel:?}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn long_failure_reason_wraps() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_reason");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    queue(&view, vcx, &[A]);
+    view.update(vcx, |app, cx| {
+        let template = app.downloads.entries[0].row.clone();
+        let mut done = template.clone();
+        done.id = 3_000;
+        done.state = DownloadState::Done;
+        let mut failed = template;
+        failed.id = 3_001;
+        failed.state = DownloadState::Failed;
+        failed.error = Some(
+            "The video was saved as \"A long clip name.mp4\" in your Imports folder \
+             but couldn't be added to Lumina. Rescan the library to add it."
+                .into(),
+        );
+        for row in [done, failed] {
+            app.downloads
+                .entries
+                .push(crate::app::downloads::DownloadEntry::for_test(row));
+        }
+        app.toggle_downloads_panel(cx);
+    });
+    render_ui(vcx);
+    let done = vcx
+        .debug_bounds("download-row-3000")
+        .expect("done row paints");
+    let failed = vcx
+        .debug_bounds("download-row-3001")
+        .expect("failed row paints");
+    assert!(
+        failed.size.height > done.size.height,
+        "a long reason wraps onto more lines instead of losing its last sentence"
     );
 }

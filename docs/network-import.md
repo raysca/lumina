@@ -18,8 +18,8 @@ catalogue (e.g. WebM) are refused with a message.
 
 1. Paste a link (⌘V) and press ↵ (Import). Lumina checks whether that link
    was downloaded before and is still in the library; if so it says when and
-   offers Show in Library (↵) or Download Again. Otherwise the dialog closes
-   and the link joins the download list.
+   offers Show in Library (↵) or Download Again (⌘↵). Otherwise the dialog
+   closes and the link joins the download list.
 2. Up to three downloads run at once; the rest wait in the order they were
    added and move up as others finish or are removed.
 3. Each download stages in a hidden `.…lumina-import` folder inside
@@ -31,14 +31,14 @@ catalogue (e.g. WebM) are refused with a message.
 ## The download list
 
 A toolbar icon appears once the library has any downloads: a count of the
-ones downloading or waiting, a ring for their combined progress, and a red
-dot when one failed since the list was last opened. ⌥⌘L, View > Show
+ones downloading, waiting or paused, a ring for their combined progress, and
+a red dot when one failed since the list was last opened. ⌥⌘L, View > Show
 Downloads and the command palette open it too. The list groups rows into
 Downloading, Waiting, Paused, Failed and Done. In it, ↑/↓ move, ↵ retries a
-failed row, resumes a paused one or shows a finished one in the library, ⌫
-cancels or removes a row, and Esc closes it. Finished rows stay until Clear
-finished. Pasting a link already in the list highlights its row instead of
-adding it again.
+failed row, resumes a paused one or shows a finished one in the library (⌘↵
+downloads an "already in your library" row again), ⌫ cancels or removes a
+row, and Esc closes it. Finished rows stay until Clear finished. Pasting a
+link already in the list highlights its row instead of adding it again.
 
 Quitting or opening another library while downloads run asks first.
 Confirming stops them; the next time the library opens they come back

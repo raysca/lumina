@@ -32,6 +32,8 @@ pub(crate) struct DownloadEntry {
     /// Download Again: skip the "already in your library" check.
     pub skip_prior_check: bool,
     cancel: Arc<AtomicBool>,
+    /// A Retry/Resume write is on its way; repeat presses wait for it.
+    requeueing: bool,
 }
 
 impl DownloadEntry {
@@ -41,6 +43,7 @@ impl DownloadEntry {
             progress: None,
             skip_prior_check,
             cancel: Arc::new(AtomicBool::new(false)),
+            requeueing: false,
         }
     }
 
@@ -81,6 +84,8 @@ pub(crate) struct DownloadQueue {
     next_placeholder: i64,
     /// The "still running" prompt before quitting or switching library.
     pub confirm: Option<DownloadsConfirm>,
+    /// The dropdown body, so keyboard focus can scroll into view.
+    pub scroll: ScrollHandle,
     /// Set where the app would quit (the test platform's quit does nothing).
     #[cfg(test)]
     pub quit_requested: bool,
@@ -147,6 +152,16 @@ impl LuminaApp {
         self.grid_state
             .as_ref()
             .map(|state| state.engine.catalog().clone())
+    }
+
+    /// The toolbar badge: downloading, waiting and paused rows, so after a
+    /// reopen the icon shows there is unfinished work.
+    pub(crate) fn download_badge_count(&self) -> usize {
+        self.downloads
+            .entries
+            .iter()
+            .filter(|entry| entry.is_active())
+            .count()
     }
 
     /// The dialog's Import: checks the link, then either queues it, points
@@ -422,7 +437,6 @@ impl LuminaApp {
             return;
         };
         let catalog = self.download_catalog();
-        let mut inspected = false;
         let entry = &mut self.downloads.entries[index];
         for event in events {
             match event {
@@ -430,23 +444,22 @@ impl LuminaApp {
                     canonical_url,
                     title,
                 } => {
-                    entry.row.canonical_url = Some(canonical_url);
-                    entry.row.title = Some(title);
-                    inspected = true;
+                    entry.row.canonical_url = Some(canonical_url.clone());
+                    entry.row.title = Some(title.clone());
+                    let Some(catalog) = catalog.clone() else {
+                        continue;
+                    };
+                    cx.background_executor()
+                        .spawn(async move {
+                            if let Err(err) =
+                                catalog.set_download_title(row_id, &canonical_url, &title)
+                            {
+                                log::warn!("storing the title of download {row_id}: {err:#}");
+                            }
+                        })
+                        .detach();
                 }
                 JobEvent::Progress(progress) => entry.progress = Some(progress),
-            }
-        }
-        if inspected {
-            if let Some(catalog) = catalog {
-                let row = entry.row.clone();
-                cx.background_executor()
-                    .spawn(async move {
-                        if let Err(err) = catalog.update_download(&row) {
-                            log::warn!("storing the title of download {}: {err:#}", row.id);
-                        }
-                    })
-                    .detach();
             }
         }
         cx.notify();
@@ -464,7 +477,11 @@ impl LuminaApp {
             return;
         }
         let entry = &mut self.downloads.entries[index];
-        entry.row = finished.row;
+        // The job's copy of the row predates its inspection.
+        let mut row = finished.row;
+        row.title = row.title.or(entry.row.title.take());
+        row.canonical_url = row.canonical_url.or(entry.row.canonical_url.take());
+        entry.row = row;
         entry.progress = None;
         match finished.outcome {
             JobOutcome::Imported {
@@ -561,10 +578,22 @@ impl LuminaApp {
         skip_prior_check: bool,
         cx: &mut Context<Self>,
     ) {
-        let (Some(_), Some(catalog)) = (self.downloads.index_of(row_id), self.download_catalog())
+        let (Some(index), Some(catalog)) =
+            (self.downloads.index_of(row_id), self.download_catalog())
         else {
             return;
         };
+        let entry = &mut self.downloads.entries[index];
+        // Only finished-without-success rows start over; a running or
+        // waiting one is already on its way.
+        let restartable = matches!(
+            entry.row.state,
+            DownloadState::Failed | DownloadState::Paused | DownloadState::Duplicate
+        );
+        if entry.requeueing || !restartable {
+            return;
+        }
+        entry.requeueing = true;
         let generation = self.downloads.generation;
         let requeue = cx
             .background_executor()
@@ -578,6 +607,7 @@ impl LuminaApp {
                 let Some(index) = app.downloads.index_of(row_id) else {
                     return;
                 };
+                app.downloads.entries[index].requeueing = false;
                 match requeued {
                     Ok(row) => {
                         let mut entry = app.downloads.entries.remove(index);

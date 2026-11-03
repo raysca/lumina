@@ -129,10 +129,23 @@ impl Catalog {
         Ok(newest.map_or(now_ms(), |newest| now_ms().max(newest + 1)))
     }
 
-    /// Writes every field of `row` except its id, URL and position.
+    /// What inspecting the link found; leaves the state alone, so it can
+    /// never undo a finished row.
+    pub fn set_download_title(&self, id: i64, canonical_url: &str, title: &str) -> Result<()> {
+        self.conn.lock().execute(
+            "UPDATE download_queue SET canonical_url = ?2, title = ?3 WHERE id = ?1",
+            params![id, canonical_url, title],
+        )?;
+        Ok(())
+    }
+
+    /// Writes every field of `row` except its id, URL and position. A known
+    /// title or canonical URL is kept when `row` has none: the job thread's
+    /// copy of a row predates its inspection.
     pub fn update_download(&self, row: &DownloadRow) -> Result<()> {
         self.conn.lock().execute(
-            "UPDATE download_queue SET canonical_url = ?2, title = ?3, state = ?4, error = ?5,
+            "UPDATE download_queue SET canonical_url = COALESCE(?2, canonical_url),
+                 title = COALESCE(?3, title), state = ?4, error = ?5,
                  can_retry = ?6, media_id = ?7, finished_epoch_ms = ?8
              WHERE id = ?1",
             params![

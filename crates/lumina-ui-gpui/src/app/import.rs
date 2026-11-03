@@ -70,6 +70,8 @@ impl LuminaApp {
             || self.context_menu_state.is_some()
             || self.sort_menu_open
             || self.network_import.stage.is_some()
+            || self.downloads.open
+            || self.downloads.confirm.is_some()
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can
