@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::{params, OptionalExtension};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{Catalog, DeletionTarget};
 use crate::MediaId;
@@ -92,19 +92,7 @@ impl Catalog {
 
             if let Some(path_str) = file_path {
                 let path = PathBuf::from(&path_str);
-                match target {
-                    DeletionTarget::CatalogOnly => {}
-                    DeletionTarget::SystemTrash => {
-                        if path.exists() {
-                            let _ = trash::delete(&path);
-                        }
-                    }
-                    DeletionTarget::PermanentDisk => {
-                        if path.exists() {
-                            let _ = std::fs::remove_file(&path);
-                        }
-                    }
-                }
+                delete_from_disk(&path, target);
                 deleted_count += tx.execute(
                     "DELETE FROM media_items WHERE id = ?1;",
                     params![id.0 as i64],
@@ -141,19 +129,7 @@ impl Catalog {
 
         for (_, path_str) in &trashed_items {
             let path = PathBuf::from(path_str);
-            match target {
-                DeletionTarget::CatalogOnly => {}
-                DeletionTarget::SystemTrash => {
-                    if path.exists() {
-                        let _ = trash::delete(&path);
-                    }
-                }
-                DeletionTarget::PermanentDisk => {
-                    if path.exists() {
-                        let _ = std::fs::remove_file(&path);
-                    }
-                }
-            }
+            delete_from_disk(&path, target);
         }
 
         tx.execute("DELETE FROM media_items WHERE is_trashed = 1;", [])?;
@@ -184,5 +160,65 @@ impl Catalog {
         )?;
         tx.commit()?;
         Ok(())
+    }
+}
+
+/// Deletes `path` per `target`, and its XMP sidecar with it: sidecars are
+/// hidden in Finder, so one left behind would be invisible clutter. The
+/// sidecar goes only once the media is gone; if the media can't be deleted,
+/// the sidecar may be the last copy of its metadata.
+fn delete_from_disk(path: &Path, target: DeletionTarget) {
+    if target == DeletionTarget::CatalogOnly {
+        return;
+    }
+    let delete = |file: &Path| -> anyhow::Result<()> {
+        // Only a definite "not found" counts as gone: `exists()` is also
+        // false on a permission error, which must not let the sidecar go.
+        match std::fs::symlink_metadata(file) {
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(err.into()),
+            Ok(_) => {}
+        }
+        if target == DeletionTarget::SystemTrash {
+            trash::delete(file)?;
+        } else {
+            std::fs::remove_file(file)?;
+        }
+        Ok(())
+    };
+    if let Err(err) = delete(path) {
+        log::warn!("could not delete {path:?}: {err:#}");
+        return;
+    }
+    let sidecar = crate::xmp::sidecar_path(path);
+    if let Err(err) = delete(&sidecar) {
+        log::warn!("could not delete {sidecar:?}: {err:#}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_media_delete_keeps_the_sidecar() {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina-trash-keep-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+        ));
+        // remove_file fails on a directory: stands in for a locked file.
+        let media = dir.join("photo.jpg");
+        std::fs::create_dir_all(&media).unwrap();
+        let sidecar = crate::xmp::sidecar_path(&media);
+        std::fs::write(&sidecar, b"<x/>").unwrap();
+
+        delete_from_disk(&media, DeletionTarget::PermanentDisk);
+        assert!(media.exists(), "the undeletable media is still there");
+        assert!(
+            sidecar.exists(),
+            "a sidecar must survive when its media could not be deleted"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

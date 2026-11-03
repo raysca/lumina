@@ -38,6 +38,10 @@ core handles cataloguing, decoding, and search.
   `dc:description`) so ratings, color labels, tags, and captions survive outside
   the catalog (Lightroom has no Orange label and shows it as a custom one);
   the same sidecars can be generated in place via `write_metadata_sidecars`.
+  Sidecars inside the library are hidden in Finder (⇧⌘. shows them) but stay
+  next to their media, where other apps look for them. Moving a whole folder
+  in Finder takes them along; moving a single file leaves its sidecar behind
+  until Lumina next rewrites it. Exported sidecars stay visible.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
   item's XMP sidecar automatically; permanent deletion is deliberately not

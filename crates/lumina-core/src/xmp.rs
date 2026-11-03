@@ -208,6 +208,48 @@ pub fn write_sidecar(media_path: &Path, metadata: &SidecarMetadata) -> Result<Op
     Ok(Some(path))
 }
 
+/// [`write_sidecar`] for a sidecar inside the library: also sets the macOS
+/// hidden flag so Finder doesn't show one beside every item. The file stays
+/// next to its media, where Lightroom and Bridge look for it. A failure to
+/// hide is cosmetic and only logged (at debug: volumes without file flags,
+/// such as exFAT or SMB, would fail on every write).
+pub fn write_library_sidecar(
+    media_path: &Path,
+    metadata: &SidecarMetadata,
+) -> Result<Option<PathBuf>> {
+    let written = write_sidecar(media_path, metadata)?;
+    if let Some(path) = &written {
+        if let Err(err) = hide_in_finder(path) {
+            log::debug!("could not hide sidecar {path:?}: {err:#}");
+        }
+    }
+    Ok(written)
+}
+
+/// Sets `UF_HIDDEN`, keeping the file's other flags.
+#[cfg(target_os = "macos")]
+fn hide_in_finder(path: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::macos::fs::MetadataExt;
+    use std::os::unix::ffi::OsStrExt;
+    const UF_HIDDEN: u32 = 0x8000;
+    extern "C" {
+        fn chflags(path: *const std::ffi::c_char, flags: u32) -> std::ffi::c_int;
+    }
+    let flags = fs::metadata(path)?.st_flags() | UF_HIDDEN;
+    let c_path = CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: `c_path` is a valid NUL-terminated string for the call's duration.
+    if unsafe { chflags(c_path.as_ptr(), flags) } != 0 {
+        return Err(std::io::Error::last_os_error()).context("chflags failed");
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn hide_in_finder(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
 /// Reads a sidecar if present.
 pub fn read_sidecar(media_path: &Path) -> Result<Option<SidecarMetadata>> {
     let path = sidecar_path(media_path);
@@ -310,6 +352,50 @@ mod tests {
         assert_eq!(parse_xmp(&render_xmp(&label_only)), label_only);
         assert_eq!(parse_xmp(r#"<x xmp:Label="green"/>"#).color_label, 4);
         assert_eq!(parse_xmp(r#"<x xmp:Label="To Print"/>"#).color_label, 0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn library_sidecars_are_hidden_from_finder() {
+        use std::os::macos::fs::MetadataExt;
+        let media = temp_media("hidden");
+        fs::write(&media, b"jpeg").unwrap();
+        let metadata = SidecarMetadata {
+            rating: 4,
+            ..Default::default()
+        };
+        let sidecar = write_library_sidecar(&media, &metadata)
+            .unwrap()
+            .expect("sidecar should be written");
+        let flags = fs::metadata(&sidecar).unwrap().st_flags();
+        assert_ne!(flags & 0x8000, 0, "a library sidecar must carry UF_HIDDEN");
+        // A rewrite replaces the file; it must come back hidden too.
+        write_library_sidecar(
+            &media,
+            &SidecarMetadata {
+                rating: 5,
+                ..metadata
+            },
+        )
+        .unwrap();
+        let flags = fs::metadata(&sidecar).unwrap().st_flags();
+        assert_ne!(flags & 0x8000, 0, "a rewritten sidecar must stay hidden");
+        let exported = write_sidecar(
+            &media,
+            &SidecarMetadata {
+                rating: 2,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            fs::metadata(&exported).unwrap().st_flags() & 0x8000,
+            0,
+            "plain (export) sidecars stay visible"
+        );
+        let _ = fs::remove_file(&sidecar);
+        let _ = fs::remove_file(&media);
     }
 
     #[test]

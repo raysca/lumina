@@ -1488,13 +1488,21 @@ fn test_deletion_lifecycle_and_trash_restoration() {
         0
     );
 
-    // 4. Test PermanentDisk deletion on id3
+    // 4. Test PermanentDisk deletion on id3; its sidecar goes with it
     assert!(file_path3.exists());
+    let sidecar3 = lumina_core::sidecar_path(&file_path3);
+    std::fs::write(&sidecar3, b"<x/>").unwrap();
+    let sidecar1 = lumina_core::sidecar_path(&file_path1);
+    std::fs::write(&sidecar1, b"<x/>").unwrap();
     let deleted_count = catalog
         .permanently_delete_items(&[id3], DeletionTarget::PermanentDisk)
         .unwrap();
     assert_eq!(deleted_count, 1);
     assert!(!file_path3.exists());
+    assert!(
+        !sidecar3.exists(),
+        "deleting media from disk must not leave its (hidden) sidecar behind"
+    );
     assert!(catalog.get_item_by_id(id3).unwrap().is_none());
     assert_eq!(catalog.get_tags_for_item(id3).unwrap().len(), 0);
 
@@ -1504,6 +1512,10 @@ fn test_deletion_lifecycle_and_trash_restoration() {
     assert!(file_path2.exists());
     let emptied = catalog.empty_trash(DeletionTarget::CatalogOnly).unwrap();
     assert_eq!(emptied.len(), 2);
+    assert!(
+        sidecar1.exists(),
+        "catalog-only removal leaves the file and its sidecar alone"
+    );
     assert_eq!(
         catalog
             .query_system_album_count(SystemAlbum::RecentlyDeleted)

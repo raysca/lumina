@@ -486,7 +486,7 @@ impl LuminaEngine {
             source_url: Some(info.url.clone()),
             credit: info.uploader.clone(),
         };
-        if let Err(e) = crate::xmp::write_sidecar(final_path, &sidecar) {
+        if let Err(e) = crate::xmp::write_library_sidecar(final_path, &sidecar) {
             log::warn!(
                 "Failed to write companion XMP sidecar for {:?}: {e:#}",
                 final_path

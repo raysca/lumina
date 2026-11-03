@@ -798,7 +798,7 @@ impl LuminaEngine {
                 continue;
             };
             let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels)?;
-            if xmp::write_sidecar(&item.path, &metadata)?.is_some() {
+            if xmp::write_library_sidecar(&item.path, &metadata)?.is_some() {
                 written += 1;
             }
         }

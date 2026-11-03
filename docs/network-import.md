@@ -22,7 +22,7 @@ catalogue (e.g. WebM) are refused with a message.
 3. The download stages in a hidden `.…lumina-import` folder inside
    `Imports/YYYY/YYYY-MM-DD/`, then takes a free name there (an existing file
    or catalogued item is never replaced; the new one gets " 2"). It is
-   catalogued with its source URL and uploader, and a `.xmp` sidecar records
+   catalogued with its source URL and uploader, and a hidden `.xmp` sidecar records
    them as `dc:source` and `photoshop:Credit`. Get Info shows the source.
 
 While downloading, Cancel Download stops at once; Esc asks once, then stops;
