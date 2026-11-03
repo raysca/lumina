@@ -37,7 +37,38 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ## Bundled helper — yt-dlp
 
-The release app bundle may package a standalone universal build of [yt-dlp](https://github.com/yt-dlp/yt-dlp) for video import. yt-dlp is dedicated to the public domain under The Unlicense (<https://unlicense.org>).
+The release app bundle packages the standalone universal macOS build of
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) (`Contents/MacOS/yt-dlp`, version
+and SHA-256 pinned in `scripts/fetch_yt_dlp.sh`) for video import. yt-dlp is
+dedicated to the public domain under The Unlicense (<https://unlicense.org>).
+That executable is a PyInstaller build: it embeds a CPython runtime (Python
+Software Foundation License) and third-party Python packages, whose licenses
+are listed in yt-dlp's `THIRD_PARTY_LICENSES.txt` for the pinned release.
+
+## Bundled helper — FFmpeg
+
+The release app bundle also packages [FFmpeg](https://ffmpeg.org) 9.0.2
+(`Contents/MacOS/ffmpeg`), built unmodified from
+<https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz> (SHA-256 pinned in
+`scripts/fetch_ffmpeg.sh`). It is licensed under the GNU Lesser General
+Public License version 2.1 or later; no GPL or nonfree components are
+enabled. The license text ships as `Contents/Resources/ffmpeg-LICENSE.txt`.
+The complete corresponding source, the unmodified tarball and the build
+script with the exact configure flags, ships in
+`Contents/Resources/ffmpeg-source/`. It is configured with:
+
+```text
+--disable-everything --disable-autodetect --disable-network --disable-doc
+--disable-debug --disable-ffplay --disable-ffprobe --disable-x86asm
+--enable-zlib --enable-protocol=file,pipe
+--enable-demuxer=mov,matroska,mpegts,aac,mp3,h264,hevc
+--enable-muxer=mp4,mov,ipod
+--enable-parser=h264,hevc,aac,av1,vp9,opus,mpegaudio,ac3
+--enable-decoder=aac,h264,hevc,vp9
+--enable-bsf=aac_adtstoasc,extract_extradata,vp9_superframe,null
+```
+
+Lumina only runs the `ffmpeg` executable as a separate process.
 
 ## Rust crates
 

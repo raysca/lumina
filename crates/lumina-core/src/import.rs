@@ -24,7 +24,7 @@ use crate::{EngineEvent, LuminaEngine, MediaItem};
 pub const IMPORTS_DIR: &str = "Imports";
 /// A copy in progress: hidden (the scanner and watcher skip dot-names) until
 /// it is complete and linked under its real name.
-const TEMP_SUFFIX: &str = ".lumina-import";
+pub(crate) const TEMP_SUFFIX: &str = ".lumina-import";
 /// Copies catalogued per transaction, at most.
 const CATALOG_BATCH: usize = 200;
 /// Longest a copy waits to be catalogued (the watcher debounces 500 ms).
@@ -327,7 +327,7 @@ fn copy_file(
 
 /// Links `temp` under `name` in `dir`, or "name 2", "name 3"… when a file or
 /// a catalog row already has the name.
-fn claim_name(
+pub(crate) fn claim_name(
     temp: &Path,
     dir: &Path,
     name: &str,
@@ -369,8 +369,8 @@ fn claim_name(
     unreachable!("names run out only after usize::MAX tries")
 }
 
-/// Removes copies a crash left half-done.
-fn remove_stale_temps(imports: &Path) {
+/// Removes copies and downloads a crash left half-done.
+pub(crate) fn remove_stale_temps(imports: &Path) {
     if !imports.is_dir() {
         return;
     }
@@ -380,10 +380,20 @@ fn remove_stale_temps(imports: &Path) {
         .filter_map(|entry| entry.ok())
     {
         let name = entry.file_name().to_string_lossy();
-        if entry.file_type().is_file() && name.starts_with('.') && name.ends_with(TEMP_SUFFIX) {
-            if let Err(err) = fs::remove_file(entry.path()) {
-                log::warn!("could not remove {}: {err}", entry.path().display());
-            }
+        if !(name.starts_with('.') && name.ends_with(TEMP_SUFFIX)) {
+            continue;
+        }
+        // Network downloads stage in a temp folder (yt-dlp picks its own
+        // file names inside it); copies stage in a temp file.
+        let removed = if entry.file_type().is_dir() {
+            fs::remove_dir_all(entry.path())
+        } else if entry.file_type().is_file() {
+            fs::remove_file(entry.path())
+        } else {
+            continue;
+        };
+        if let Err(err) = removed {
+            log::warn!("could not remove {}: {err}", entry.path().display());
         }
     }
 }

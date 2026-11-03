@@ -1,44 +1,73 @@
-//! Network video import: downloads media from Direct URLs, HLS (.m3u8), and YouTube.
+//! Network video import: downloads media from direct URLs, HLS (.m3u8), and
+//! web video sites (YouTube and others, through the bundled yt-dlp).
 //!
-//! Media is staged in `<library>/Imports/YYYY/YYYY-MM-DD/` with `.lumina-import`
-//! temp suffixes, verified upon complete download, catalogued, and attributed with
-//! source URL and uploader in SQLite and companion `.xmp` sidecars.
+//! The user starts every request by pasting a URL; nothing runs in the
+//! background (see `docs/network-import.md`). A download is staged in a hidden
+//! `.<nanos>.lumina-import/` folder in `<library>/Imports/YYYY/YYYY-MM-DD/`
+//! (the scanner and watcher skip dot-names), then linked under a free name
+//! with [`crate::import::claim_name`], catalogued with its source URL, and
+//! given a companion `.xmp` sidecar.
 
 pub mod direct;
 pub mod helper;
 pub mod hls;
 
-pub use helper::{download_yt_dlp_helper, find_yt_dlp, inspect_url_helper, lumina_bin_dir};
+pub use helper::{find_ffmpeg, find_yt_dlp};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, Local};
-use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
-use crate::import::IMPORTS_DIR;
+use crate::import::{claim_name, remove_stale_temps, IMPORTS_DIR, TEMP_SUFFIX};
+use crate::scanner::Scanner;
 use crate::{LuminaEngine, MediaItem};
 
+/// Video containers a direct link may point at; all of them are ones the
+/// scanner catalogues.
+const DIRECT_EXTENSIONS: &[&str] = &["mp4", "mov", "m4v", "mkv", "avi"];
+/// Shown when a bundled helper is gone; names no tool (users never need to
+/// know how a download works).
+pub const MISSING_PART: &str =
+    "A part of Lumina needed for downloads is missing. Reinstall Lumina to fix this.";
+/// Shown when the library folder can't be written; the path goes to the log.
+const CANT_SAVE: &str =
+    "Lumina couldn't save to your library folder. Check that it is connected and has free space.";
+/// Longest a URL inspection may take before its tool is killed.
+const INSPECT_TIMEOUT: Duration = Duration::from_secs(60);
+/// Longest a file name stem may be, in characters.
+const MAX_STEM_CHARS: usize = 120;
+
 /// The classification of an incoming network media source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkSourceKind {
-    /// Direct video file download over HTTP/HTTPS (.mp4, .mov, .webm, etc.).
+    /// Direct video file download over HTTP/HTTPS (.mp4, .mov, etc.).
     DirectUrl,
     /// HTTP Live Streaming playlist (.m3u8).
     HlsStream,
     /// YouTube video link (watch, shorts, youtu.be).
     YouTube,
-    /// Generic web video platform supported by yt-dlp helper (e.g. Vimeo).
+    /// Another web video site supported by yt-dlp (e.g. Vimeo).
     GenericPlatform,
 }
 
 impl NetworkSourceKind {
     pub fn label(&self) -> &'static str {
         match self {
-            Self::DirectUrl => "Direct Video",
-            Self::HlsStream => "HLS Stream",
+            Self::DirectUrl => "Video File",
+            Self::HlsStream => "Video Stream",
             Self::YouTube => "YouTube",
             Self::GenericPlatform => "Web Video",
         }
+    }
+
+    /// Whether downloading this kind needs the yt-dlp helper.
+    pub fn needs_yt_dlp(&self) -> bool {
+        !matches!(self, Self::DirectUrl)
     }
 }
 
@@ -46,12 +75,10 @@ impl NetworkSourceKind {
 pub fn classify_url(raw_url: &str) -> Result<NetworkSourceKind> {
     let trimmed = raw_url.trim();
     if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
-        return Err(anyhow!("Invalid URL: must begin with http:// or https://"));
+        bail!("Enter a web address that starts with http:// or https://");
     }
 
     let lower = trimmed.to_lowercase();
-
-    // YouTube detection
     if lower.contains("youtube.com/watch")
         || lower.contains("youtu.be/")
         || lower.contains("youtube.com/shorts/")
@@ -59,189 +86,405 @@ pub fn classify_url(raw_url: &str) -> Result<NetworkSourceKind> {
     {
         return Ok(NetworkSourceKind::YouTube);
     }
-
-    // HLS detection
-    if lower.contains(".m3u8") {
+    let path = lower.split(['?', '#']).next().unwrap_or("");
+    if path.ends_with(".m3u8") {
         return Ok(NetworkSourceKind::HlsStream);
     }
-
-    // Direct video extensions
-    if let Some(path_part) = lower.split('?').next() {
-        if path_part.ends_with(".mp4")
-            || path_part.ends_with(".mov")
-            || path_part.ends_with(".webm")
-            || path_part.ends_with(".m4v")
-            || path_part.ends_with(".mkv")
-            || path_part.ends_with(".avi")
-        {
-            return Ok(NetworkSourceKind::DirectUrl);
-        }
+    if url_extension(path).is_some() {
+        return Ok(NetworkSourceKind::DirectUrl);
     }
-
-    // Default to generic platform (which can be resolved via yt-dlp or curl)
     Ok(NetworkSourceKind::GenericPlatform)
 }
 
-/// Sanitizes a string to make it safe for use as a file name.
+/// The supported video extension at the end of a URL or file name, if any.
+fn url_extension(path: &str) -> Option<&'static str> {
+    let path = path.split(['?', '#']).next().unwrap_or(path);
+    let ext = path.rsplit_once('.')?.1.to_lowercase();
+    DIRECT_EXTENSIONS
+        .iter()
+        .copied()
+        .find(|known| *known == ext)
+}
+
+/// Sanitizes a title into a file name stem: no path separators or characters
+/// Finder and SMB reject, at most [`MAX_STEM_CHARS`] characters.
 pub fn sanitize_filename(name: &str) -> String {
     let mut out = String::new();
     for c in name.chars() {
         match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0' => {
-                out.push('_');
-            }
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => out.push('_'),
             c if c.is_control() => {}
             c => out.push(c),
         }
     }
     let trimmed = out.trim().trim_matches('.');
-    if trimmed.is_empty() {
+    // Truncate by characters: a byte cut could split a multi-byte character.
+    let short: String = trimmed.chars().take(MAX_STEM_CHARS).collect();
+    let short = short.trim().trim_end_matches('.');
+    if short.is_empty() {
         "video".to_string()
-    } else if trimmed.len() > 120 {
-        trimmed[..120].trim().to_string()
     } else {
-        trimmed.to_string()
+        short.to_string()
     }
 }
 
 /// Information inspected about a remote media source prior to download.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct NetworkMediaInfo {
     pub url: String,
     pub kind: NetworkSourceKind,
+    /// The title as published; the file name is a sanitized copy.
     pub title: String,
     pub duration_secs: Option<f64>,
     pub uploader: Option<String>,
-    pub thumbnail_url: Option<String>,
     pub expected_bytes: Option<u64>,
+    /// Container of a direct download; yt-dlp downloads take the extension
+    /// of the file yt-dlp produces.
+    pub extension: &'static str,
 }
 
 /// Current phase of a download task.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadPhase {
     Connecting,
     Downloading,
     Finalizing,
-    Complete,
-    Failed,
-    Cancelled,
 }
 
 /// Real-time progress report emitted during download execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct NetworkDownloadProgress {
     pub phase: DownloadPhase,
     pub bytes_downloaded: u64,
     pub total_bytes: Option<u64>,
     pub speed_bytes_per_sec: u64,
-    pub eta_secs: Option<u64>,
+    /// What is happening, e.g. "Downloading audio"; the UI adds the sizes.
     pub message: String,
 }
 
 impl NetworkDownloadProgress {
-    pub fn percent(&self) -> Option<f32> {
-        let total = self.total_bytes?;
-        if total == 0 {
-            None
-        } else {
-            Some(((self.bytes_downloaded as f64 / total as f64) * 100.0) as f32)
+    pub fn new(phase: DownloadPhase, message: impl Into<String>) -> Self {
+        Self {
+            phase,
+            bytes_downloaded: 0,
+            total_bytes: None,
+            speed_bytes_per_sec: 0,
+            message: message.into(),
         }
     }
+
+    pub fn percent(&self) -> Option<f32> {
+        let total = self.total_bytes.filter(|t| *t > 0)?;
+        Some(((self.bytes_downloaded as f64 / total as f64) * 100.0) as f32)
+    }
+}
+
+/// A catalogued network download.
+#[derive(Debug)]
+pub struct NetworkIngest {
+    pub item: MediaItem,
+    /// The item is catalogued, but the timeline could not be refreshed.
+    pub timeline_error: Option<String>,
 }
 
 /// Callback type for receiving progress updates.
 pub type ProgressCallback = Box<dyn Fn(NetworkDownloadProgress) + Send + Sync>;
 
-impl LuminaEngine {
-    /// Computes the target import destination path for a network import item.
-    /// `<library_root>/Imports/YYYY/YYYY-MM-DD/<sanitized_title>.mp4`
-    pub fn destination_for_network_import(&self, title: &str, ext: &str) -> PathBuf {
-        let now = Local::now();
-        let year_dir = format!("{:04}", now.year());
-        let date_dir = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
+/// Whether a bundled helper `kind` needs is missing (a damaged install):
+/// yt-dlp for web video and streams, plus ffmpeg for streams (without it
+/// yt-dlp leaves MPEG-TS data in a `.mp4` file). Web video still works
+/// without ffmpeg, in a single-file format. Looks at the disk; call it off
+/// the UI thread.
+pub fn helper_missing(kind: NetworkSourceKind) -> bool {
+    (kind.needs_yt_dlp() && find_yt_dlp().is_none())
+        || (kind == NetworkSourceKind::HlsStream && find_ffmpeg().is_none())
+}
 
-        let target_dir = self
-            .library_root
-            .join(IMPORTS_DIR)
-            .join(year_dir)
-            .join(date_dir);
-
-        let clean_title = sanitize_filename(title);
-        let base_ext = ext.trim_start_matches('.');
-        let filename = format!("{clean_title}.{base_ext}");
-        let candidate = target_dir.join(&filename);
-
-        if !candidate.exists() {
-            return candidate;
+/// Inspects a URL off the UI thread: title, size, uploader. Killing the tool
+/// when `cancel` is set or after [`INSPECT_TIMEOUT`].
+pub fn inspect_url(url: &str, cancel: &AtomicBool) -> Result<NetworkMediaInfo> {
+    match classify_url(url)? {
+        NetworkSourceKind::DirectUrl => direct::inspect_direct_url(url, cancel),
+        NetworkSourceKind::HlsStream => hls::inspect_hls_url(url, cancel),
+        kind @ (NetworkSourceKind::YouTube | NetworkSourceKind::GenericPlatform) => {
+            let binary = find_yt_dlp().ok_or_else(|| anyhow!(MISSING_PART))?;
+            helper::inspect_url_helper(&binary, url, kind, cancel)
         }
+    }
+}
 
-        // Add numerical suffix if filename exists
-        for i in 1..10000 {
-            let disambiguated = format!("{clean_title} - {i}.{base_ext}");
-            let path = target_dir.join(disambiguated);
-            if !path.exists() {
-                return path;
+/// A hidden staging folder for one download, removed when dropped (after the
+/// result has been linked under its real name, or on any failure).
+struct StagingDir(PathBuf);
+
+impl StagingDir {
+    fn new(parent: &Path) -> Result<Self> {
+        fs::create_dir_all(parent)
+            .inspect_err(|err| log::error!("creating {}: {err}", parent.display()))
+            .context(CANT_SAVE)?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = parent.join(format!(".{nanos}{TEMP_SUFFIX}"));
+        fs::create_dir(&path)
+            .inspect_err(|err| log::error!("creating {}: {err}", path.display()))
+            .context(CANT_SAVE)?;
+        Ok(Self(path))
+    }
+}
+
+impl Drop for StagingDir {
+    fn drop(&mut self) {
+        if let Err(err) = fs::remove_dir_all(&self.0) {
+            if err.kind() != io::ErrorKind::NotFound {
+                log::warn!("could not remove {}: {err}", self.0.display());
+            }
+        }
+    }
+}
+
+/// The finished download in `dir`: its largest file, skipping yt-dlp's
+/// partial-download and resume files.
+fn produced_file(dir: &Path) -> Result<PathBuf> {
+    find_produced(dir)
+        .inspect_err(|err| log::error!("reading {}: {err}", dir.display()))
+        .context(CANT_SAVE)?
+        .ok_or_else(|| anyhow!("The download finished without a video. Try again."))
+}
+
+fn find_produced(dir: &Path) -> io::Result<Option<PathBuf>> {
+    let mut best: Option<(u64, PathBuf)> = None;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !entry.file_type()?.is_file() || name.ends_with(".part") || name.ends_with(".ytdl") {
+            continue;
+        }
+        let len = entry.metadata()?.len();
+        if best.as_ref().is_none_or(|(size, _)| len > *size) {
+            best = Some((len, path));
+        }
+    }
+    Ok(best.map(|(_, path)| path))
+}
+
+/// Output of a finished helper process.
+pub(crate) struct ToolOutput {
+    pub status: ExitStatus,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+/// Runs `command` to completion and captures its output, killing it when
+/// `cancel` is set or `timeout` passes (AGENTS.md: native tools never block
+/// a worker forever).
+pub(crate) fn run_captured(
+    command: &mut Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+) -> Result<ToolOutput> {
+    let (mut child, _reaper) = spawn_group(
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()),
+    )?;
+    // Drain both pipes on their own threads so a full pipe never stalls the child.
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let status = wait_child(&mut child, cancel, Some(Instant::now() + timeout), || {})?;
+    Ok(ToolOutput {
+        status,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
+}
+
+/// Spawns `command` as the leader of a new process group, tracked so the
+/// whole group dies at exit (see `decoder::live_children`).
+pub(crate) fn spawn_group(command: &mut Command) -> Result<(Child, impl Sized)> {
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(command, 0);
+    let child = command.spawn().with_context(|| {
+        // Log the tool; the user only needs to know the download didn't start.
+        log::error!("could not start {:?}", command.get_program());
+        "Could not start the download"
+    })?;
+    let reaper = crate::decoder::live_children::track_group(child.id());
+    Ok((child, reaper))
+}
+
+fn drain(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    })
+}
+
+/// Polls `child` (a group leader from [`spawn_group`]) until it exits,
+/// calling `tick` every 50 ms. Stops its whole group and fails when `cancel`
+/// is set or `deadline` passes.
+pub(crate) fn wait_child(
+    child: &mut Child,
+    cancel: &AtomicBool,
+    deadline: Option<Instant>,
+    mut tick: impl FnMut(),
+) -> Result<ExitStatus> {
+    loop {
+        let timed_out = deadline.is_some_and(|d| Instant::now() >= d);
+        if cancel.load(Ordering::Relaxed) || timed_out {
+            crate::decoder::live_children::stop_group(child);
+            if timed_out {
+                bail!("The server took too long to respond");
+            }
+            bail!("Download cancelled");
+        }
+        if let Some(status) = child
+            .try_wait()
+            .context("The download stopped unexpectedly. Try again.")?
+        {
+            return Ok(status);
+        }
+        tick();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+impl LuminaEngine {
+    /// Today's network import folder: `<library>/Imports/YYYY/YYYY-MM-DD/`.
+    pub fn network_import_dir(&self) -> PathBuf {
+        let now = Local::now();
+        self.library_root
+            .join(IMPORTS_DIR)
+            .join(format!("{:04}", now.year()))
+            .join(format!(
+                "{:04}-{:02}-{:02}",
+                now.year(),
+                now.month(),
+                now.day()
+            ))
+    }
+
+    /// Where a download of `info` is expected to land, for display. The
+    /// real name is claimed when the download finishes and may get a
+    /// " 2" suffix if the name is taken by then.
+    pub fn preview_network_destination(&self, info: &NetworkMediaInfo) -> PathBuf {
+        self.network_import_dir().join(format!(
+            "{}.{}",
+            sanitize_filename(&info.title),
+            info.extension
+        ))
+    }
+
+    /// Downloads `info` into today's import folder and returns the final
+    /// path. Blocks; run it off the UI thread. Never replaces an existing
+    /// file or a catalogued (even missing) path.
+    pub fn download_network_media(
+        &self,
+        info: &NetworkMediaInfo,
+        cancel: &AtomicBool,
+        progress: &ProgressCallback,
+    ) -> Result<PathBuf> {
+        let imports = self.library_root.join(IMPORTS_DIR);
+        // Only one import runs at a time, so any staging left is from a crash.
+        remove_stale_temps(&imports);
+        let dir = self.network_import_dir();
+        let staging = StagingDir::new(&dir)?;
+
+        match info.kind {
+            NetworkSourceKind::DirectUrl => {
+                let target = staging.0.join(format!("download.{}", info.extension));
+                direct::download_direct_url(
+                    &info.url,
+                    &target,
+                    info.expected_bytes,
+                    cancel,
+                    progress,
+                )?;
+            }
+            NetworkSourceKind::HlsStream
+            | NetworkSourceKind::YouTube
+            | NetworkSourceKind::GenericPlatform => {
+                if helper_missing(info.kind) {
+                    bail!(MISSING_PART);
+                }
+                let binary = find_yt_dlp().ok_or_else(|| anyhow!(MISSING_PART))?;
+                helper::download_yt_dlp(&binary, &info.url, &staging.0, cancel, progress)?;
             }
         }
 
-        candidate
+        let produced = produced_file(&staging.0)?;
+        if Scanner::classify_media_extension(&produced).is_none() {
+            log::warn!("network import produced unsupported {}", produced.display());
+            bail!("This video comes in a format Lumina can't show yet.");
+        }
+        let ext = produced
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_else(|| "mp4".to_string());
+        progress(NetworkDownloadProgress::new(
+            DownloadPhase::Finalizing,
+            "Adding to library",
+        ));
+        // A missing row still owns its path: a new file there would inherit
+        // that item's metadata.
+        let taken = |path: &Path| {
+            self.catalog
+                .id_at_path(path)
+                .map(|id| id.is_some())
+                .map_err(|err| io::Error::other(format!("{err:#}")))
+        };
+        let name = format!("{}.{ext}", sanitize_filename(&info.title));
+        claim_name(&produced, &dir, &name, &taken)
+            .inspect_err(|err| log::error!("saving into {}: {err}", dir.display()))
+            .context(CANT_SAVE)
     }
 
-    /// Ingests a downloaded file into the catalog, records source attribution,
-    /// and writes a companion `.xmp` sidecar.
+    /// Catalogues a downloaded file with its source attribution (one
+    /// transaction) and writes a companion `.xmp` sidecar. Blocks; run it off
+    /// the UI thread. An error means the file is not catalogued; a failed
+    /// timeline refresh after the commit is reported in the result instead.
     pub fn ingest_network_imported_file(
         &self,
         final_path: &Path,
-        source_url: &str,
-        uploader: Option<&str>,
-        title: Option<&str>,
-        tags: &[String],
+        info: &NetworkMediaInfo,
         is_favorite: bool,
-    ) -> Result<MediaItem> {
-        let scanner =
-            crate::scanner::Scanner::new(self.library_root.clone(), self.event_tx.clone());
+    ) -> Result<NetworkIngest> {
+        let scanner = Scanner::new(self.library_root.clone(), self.event_tx.clone());
         let mut item = scanner.inspect_media_file(final_path).ok_or_else(|| {
             anyhow!(
-                "Downloaded file at {:?} is not a supported media format",
-                final_path
+                "{} is not a media file Lumina can read",
+                final_path.display()
             )
         })?;
-
-        if let Some(t) = title {
-            if !t.trim().is_empty() {
-                item.title = Some(t.trim().to_string());
-            }
+        let title = info.title.trim();
+        if !title.is_empty() {
+            item.title = Some(title.to_string());
         }
         item.is_favorite = is_favorite;
 
-        // Ingest into catalog
-        let mut inserted_list = self.catalog.insert_or_update_batch(&[item])?;
-        let inserted = inserted_list
-            .pop()
-            .ok_or_else(|| anyhow!("Failed to insert media item into catalog"))?;
-        let media_id = inserted.id;
-
-        // Record source attribution in SQLite
-        self.catalog
-            .record_media_source(media_id, source_url, uploader)?;
-
-        // Attach tags if requested
-        if !tags.is_empty() {
-            self.catalog.add_tags_batch(&[media_id], tags)?;
-        }
-
+        let inserted =
+            self.catalog
+                .insert_with_source(&item, &info.url, info.uploader.as_deref())?;
         // Keep timeline buckets fresh for zoom levels (AGENTS.md 5.3)
-        self.catalog.compute_timeline_buckets()?;
+        let timeline_error = self.catalog.compute_timeline_buckets().err().map(|err| {
+            log::error!("refreshing the timeline after a network import: {err:#}");
+            format!("{err:#}")
+        });
 
-        // Write companion .xmp sidecar
         let sidecar = crate::xmp::SidecarMetadata {
             title: inserted.title.clone(),
             caption: None,
             rating: 0,
             color_label: 0,
-            tags: tags.to_vec(),
-            source_url: Some(source_url.to_string()),
-            credit: uploader.map(|s| s.to_string()),
+            tags: Vec::new(),
+            source_url: Some(info.url.clone()),
+            credit: info.uploader.clone(),
         };
         if let Err(e) = crate::xmp::write_sidecar(final_path, &sidecar) {
             log::warn!(
@@ -249,8 +492,15 @@ impl LuminaEngine {
                 final_path
             );
         }
+        Ok(NetworkIngest {
+            item: inserted,
+            timeline_error,
+        })
+    }
 
-        Ok(inserted)
+    /// The library file already downloaded from `url`, if any.
+    pub fn find_media_by_source_url(&self, url: &str) -> Result<Option<PathBuf>> {
+        self.catalog.find_media_by_source_url(url)
     }
 }
 
@@ -281,10 +531,26 @@ mod tests {
             NetworkSourceKind::DirectUrl
         );
         assert_eq!(
+            classify_url("https://example.com/clip.MOV?sig=1").unwrap(),
+            NetworkSourceKind::DirectUrl
+        );
+        assert_eq!(
             classify_url("https://vimeo.com/12345678").unwrap(),
             NetworkSourceKind::GenericPlatform
         );
+        assert_eq!(
+            classify_url("https://example.com/?next=a.mp4.html").unwrap(),
+            NetworkSourceKind::GenericPlatform,
+            "an extension in the query string is not a direct link"
+        );
         assert!(classify_url("not-a-url").is_err());
+    }
+
+    #[test]
+    fn test_url_extension_keeps_container() {
+        assert_eq!(url_extension("https://a.b/x.mkv?t=1"), Some("mkv"));
+        assert_eq!(url_extension("https://a.b/x.MOV"), Some("mov"));
+        assert_eq!(url_extension("https://a.b/x.webm"), None);
     }
 
     #[test]
@@ -298,13 +564,31 @@ mod tests {
     }
 
     #[test]
-    fn test_helper_bin_paths() {
-        let bin_dir = lumina_bin_dir().expect("should resolve application support bin dir");
-        assert!(bin_dir.to_string_lossy().contains("Lumina"));
-        assert!(bin_dir.to_string_lossy().contains("bin"));
+    fn test_sanitize_filename_truncates_on_char_boundary() {
+        // 1 + 45 * 3 bytes: byte 120 falls inside a character.
+        let title = format!("a{}", "日".repeat(45));
+        let out = sanitize_filename(&title);
+        assert_eq!(
+            out.chars().count(),
+            MAX_STEM_CHARS.min(46),
+            "a long multi-byte title must be cut by characters, not bytes"
+        );
+        let emoji = "🎬".repeat(200);
+        assert_eq!(sanitize_filename(&emoji).chars().count(), MAX_STEM_CHARS);
+    }
 
-        // If custom path is provided and exists, find_yt_dlp picks it
-        let custom = std::env::current_exe().unwrap();
-        assert_eq!(find_yt_dlp(Some(&custom)), Some(custom));
+    #[test]
+    fn test_produced_file_skips_partials() {
+        let dir = std::env::temp_dir().join(format!("lumina-produced-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("video.mp4.part"), vec![0u8; 100]).unwrap();
+        fs::write(dir.join("video.mp4"), vec![0u8; 10]).unwrap();
+        assert_eq!(
+            produced_file(&dir).unwrap(),
+            dir.join("video.mp4"),
+            "a .part file is never the finished download"
+        );
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

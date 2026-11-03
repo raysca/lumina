@@ -871,8 +871,10 @@ impl LuminaEngine {
                         self.catalog.add_tags_batch(&[*id], &metadata.tags)?;
                         changed = true;
                     }
+                    // Other tools write a file name to dc:source; only a
+                    // web address is a network attribution.
                     if let Some(ref source_url) = metadata.source_url {
-                        if !source_url.is_empty() {
+                        if source_url.starts_with("http://") || source_url.starts_with("https://") {
                             self.catalog.record_media_source(
                                 *id,
                                 source_url,
@@ -937,14 +939,6 @@ impl LuminaEngine {
         media_id: MediaId,
     ) -> Result<Option<(String, Option<String>, i64)>> {
         self.catalog.get_media_source(media_id)
-    }
-
-    pub fn download_yt_dlp_helper(
-        &self,
-        cancel_flag: &std::sync::atomic::AtomicBool,
-        progress_cb: Option<&net_import::ProgressCallback>,
-    ) -> Result<PathBuf> {
-        net_import::download_yt_dlp_helper(cancel_flag, progress_cb)
     }
 
     pub fn set_trashed(&self, id: MediaId, is_trashed: bool) -> Result<()> {

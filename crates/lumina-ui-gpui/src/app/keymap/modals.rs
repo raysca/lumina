@@ -103,7 +103,14 @@ impl LuminaApp {
         // 1d. Network import dialog
         if let Some(ref stage) = self.network_import.stage {
             match key {
-                "escape" => self.close_network_import_dialog(cx),
+                "escape" => self.dismiss_network_import(true, cx),
+                "f" if matches!(
+                    stage,
+                    crate::app::network_import::NetworkImportStage::Ready { .. }
+                ) =>
+                {
+                    self.toggle_network_import_favorite(cx)
+                }
                 "enter" | "return" => match stage {
                     crate::app::network_import::NetworkImportStage::Input { url, .. } => {
                         let url_to_inspect = url.clone();
@@ -112,9 +119,7 @@ impl LuminaApp {
                     crate::app::network_import::NetworkImportStage::Ready { .. } => {
                         self.confirm_network_download(cx);
                     }
-                    crate::app::network_import::NetworkImportStage::MissingHelper {
-                        url, ..
-                    } => {
+                    crate::app::network_import::NetworkImportStage::MissingHelper { url } => {
                         let retry_url = url.clone();
                         self.inspect_network_url(retry_url, cx);
                     }

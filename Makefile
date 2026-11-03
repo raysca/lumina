@@ -97,11 +97,13 @@ fmt-fix:
 icon:
 	cargo run -p lumina-ui-gpui --bin generate-icon --features generate-icon
 
-## Download standalone dependencies (yt-dlp) for offline bundling
+## Fetch the pinned, checksum-verified yt-dlp and ffmpeg and place them next to the dev binaries
 bundle-deps:
-	mkdir -p target/deps
-	curl -f -L -o target/deps/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-	chmod +x target/deps/yt-dlp
+	./scripts/fetch_yt_dlp.sh
+	./scripts/fetch_ffmpeg.sh
+	mkdir -p target/debug target/release
+	cp target/deps/yt-dlp target/deps/ffmpeg target/debug/
+	cp target/deps/yt-dlp target/deps/ffmpeg target/release/
 
 ## Package macOS Application Bundle (universal when targets installed)
 bundle:

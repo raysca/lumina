@@ -3295,10 +3295,10 @@ fn test_network_import_source_attribution_and_cascade() {
     assert_eq!(up.as_deref(), Some(uploader));
     assert!(ts > 0);
 
-    // Verify destination computation
-    let dest = engine.destination_for_network_import("My Video", "mp4");
-    assert!(dest.to_string_lossy().contains("Imports"));
-    assert!(dest.to_string_lossy().ends_with("My Video.mp4"));
+    // Network imports land in the dated Imports folder
+    assert!(engine
+        .network_import_dir()
+        .starts_with(tmp_dir.join("library/Imports")));
 
     // Verify cascade deletion
     engine

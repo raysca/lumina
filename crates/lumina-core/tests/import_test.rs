@@ -285,6 +285,23 @@ fn stale_temp_files_are_cleaned() {
 }
 
 #[test]
+fn stale_download_folders_are_cleaned() {
+    let fx = Fixture::new("stale_dir");
+    let stale = fx
+        .media()
+        .join("Imports/2020/2020-01-01/.123.lumina-import");
+    std::fs::create_dir_all(&stale).unwrap();
+    std::fs::write(stale.join("video.mp4.part"), b"half a download").unwrap();
+
+    fx.plan(&[fx.source()]);
+
+    assert!(
+        !stale.exists(),
+        "a crash's half-done network download folder is removed"
+    );
+}
+
+#[test]
 fn checking_and_copying_report_progress() {
     use lumina_core::EngineEvent;
     let fx = Fixture::new("progress");

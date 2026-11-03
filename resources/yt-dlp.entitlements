@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- yt-dlp only (the bundled helper, not Lumina itself). It is a
+         PyInstaller build that unpacks and loads its own Python.framework at
+         launch; hardened-runtime library validation would refuse that
+         framework, which is not signed with our Team ID. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

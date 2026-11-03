@@ -1,11 +1,12 @@
-//! Network video import state and asynchronous actions.
+//! Network video import state and asynchronous actions. All network, file
+//! and catalog work runs off the UI thread; see `lumina_core::net_import`.
 
 use gpui::*;
-use lumina_core::net_import::helper::{find_yt_dlp, inspect_url_helper};
 use lumina_core::net_import::{
-    classify_url, DownloadPhase, NetworkDownloadProgress, NetworkMediaInfo, NetworkSourceKind,
-    ProgressCallback,
+    classify_url, helper_missing, inspect_url, DownloadPhase, NetworkDownloadProgress,
+    NetworkMediaInfo, ProgressCallback,
 };
+use lumina_core::MediaItem;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -23,21 +24,19 @@ pub(crate) enum NetworkImportStage {
     Ready {
         info: NetworkMediaInfo,
         target_path: PathBuf,
-        tags: Vec<String>,
         is_favorite: bool,
+        /// A library file already downloaded from this URL.
+        already_imported: Option<PathBuf>,
     },
-    /// Downloading stream in background with live progress.
+    /// Downloading in the background with live progress.
     Downloading {
         title: String,
         progress: NetworkDownloadProgress,
+        /// Esc was pressed once; a second press stops the download.
+        confirm_cancel: bool,
     },
-    /// Downloading missing helper tool (yt-dlp) with live progress.
-    DownloadingHelper {
-        url: String,
-        progress: NetworkDownloadProgress,
-    },
-    /// Required helper binary (yt-dlp) is missing.
-    MissingHelper { url: String, message: String },
+    /// A helper this URL needs is not installed.
+    MissingHelper { url: String },
 }
 
 #[derive(Default)]
@@ -52,9 +51,23 @@ impl NetworkImportState {
             self.stage,
             Some(NetworkImportStage::Inspecting { .. })
                 | Some(NetworkImportStage::Downloading { .. })
-                | Some(NetworkImportStage::DownloadingHelper { .. })
         )
     }
+}
+
+/// How a download finished, decided on the download thread.
+enum Outcome {
+    /// Catalogued; the timeline refresh may still have failed.
+    Imported {
+        item: Box<MediaItem>,
+        timeline_error: Option<String>,
+    },
+    Cancelled,
+    Failed(String),
+    /// On disk but not in the catalog: kept, so the download is not lost.
+    NotCatalogued {
+        path: PathBuf,
+    },
 }
 
 impl LuminaApp {
@@ -72,21 +85,11 @@ impl LuminaApp {
             self.show_toast("Close the open dialog before importing", cx);
             return;
         }
-
-        // Auto-detect URL from system clipboard
-        let mut prefill_url = String::new();
-        if let Some(item) = cx.read_from_clipboard() {
-            if let Some(text) = item.text() {
-                let trimmed = text.trim();
-                if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-                    prefill_url = trimmed.to_string();
-                }
-            }
-        }
-
+        // ponytail: no clipboard read on open; macOS may prompt for every
+        // programmatic paste. ⌘V pastes into the field.
         self.network_import.cancel_flag = Arc::new(AtomicBool::new(false));
         self.network_import.stage = Some(NetworkImportStage::Input {
-            url: prefill_url,
+            url: String::new(),
             error: None,
         });
         cx.notify();
@@ -99,6 +102,25 @@ impl LuminaApp {
             .store(true, Ordering::Relaxed);
         self.network_import.stage = None;
         cx.notify();
+    }
+
+    /// Esc and backdrop clicks: close, except that a running download asks
+    /// for a second Esc so one stray key or click can't throw it away.
+    pub fn dismiss_network_import(&mut self, from_keyboard: bool, cx: &mut Context<Self>) {
+        if let Some(NetworkImportStage::Downloading {
+            ref mut confirm_cancel,
+            ..
+        }) = self.network_import.stage
+        {
+            if from_keyboard && *confirm_cancel {
+                self.close_network_import_dialog(cx);
+            } else if from_keyboard {
+                *confirm_cancel = true;
+                cx.notify();
+            }
+            return;
+        }
+        self.close_network_import_dialog(cx);
     }
 
     /// Updates the URL input buffer.
@@ -114,90 +136,6 @@ impl LuminaApp {
         }
     }
 
-    /// Downloads the missing yt-dlp helper tool into application support with live progress.
-    pub fn download_missing_helper(&mut self, url: String, cx: &mut Context<Self>) {
-        if self.network_import.is_busy() {
-            return;
-        }
-
-        let cancel_flag = Arc::new(AtomicBool::new(false));
-        self.network_import.cancel_flag = cancel_flag.clone();
-        self.network_import.stage = Some(NetworkImportStage::DownloadingHelper {
-            url: url.clone(),
-            progress: NetworkDownloadProgress {
-                phase: DownloadPhase::Connecting,
-                bytes_downloaded: 0,
-                total_bytes: None,
-                speed_bytes_per_sec: 0,
-                eta_secs: None,
-                message: "Connecting to download yt-dlp helper...".to_string(),
-            },
-        });
-        cx.notify();
-
-        let (progress_tx, progress_rx) = async_channel::unbounded::<NetworkDownloadProgress>();
-        let p_tx = progress_tx.clone();
-        let cb: ProgressCallback = Box::new(move |p| {
-            let _ = p_tx.send_blocking(p);
-        });
-
-        let cancel_for_task = cancel_flag.clone();
-        let download_task = cx.background_executor().spawn(async move {
-            lumina_core::net_import::download_yt_dlp_helper(&cancel_for_task, Some(&cb))
-        });
-
-        // Spawn progress poller
-        let this_progress = cx.spawn({
-            let rx = progress_rx.clone();
-            async move |this, cx| {
-                while let Ok(progress) = rx.recv().await {
-                    let _ = this.update(cx, |app, cx| {
-                        if let Some(NetworkImportStage::DownloadingHelper {
-                            progress: ref mut curr,
-                            ..
-                        }) = app.network_import.stage
-                        {
-                            *curr = progress;
-                            cx.notify();
-                        }
-                    });
-                }
-            }
-        });
-        this_progress.detach();
-
-        // Completion handler
-        let pending_url = url.clone();
-        cx.spawn(async move |this, cx| {
-            let result = download_task.await;
-            let _ = this.update(cx, |app, cx| {
-                if cancel_flag.load(Ordering::Relaxed) {
-                    app.network_import.stage = Some(NetworkImportStage::MissingHelper {
-                        url: pending_url,
-                        message: "yt-dlp download was cancelled.".to_string(),
-                    });
-                    cx.notify();
-                    return;
-                }
-
-                match result {
-                    Ok(_path) => {
-                        app.show_toast("yt-dlp helper installed successfully", cx);
-                        app.inspect_network_url(pending_url, cx);
-                    }
-                    Err(e) => {
-                        app.network_import.stage = Some(NetworkImportStage::MissingHelper {
-                            url: pending_url,
-                            message: format!("Failed to download yt-dlp: {e:#}"),
-                        });
-                        cx.notify();
-                    }
-                }
-            });
-        })
-        .detach();
-    }
-
     /// Toggles the favorite flag in the Ready stage.
     pub fn toggle_network_import_favorite(&mut self, cx: &mut Context<Self>) {
         if let Some(NetworkImportStage::Ready {
@@ -210,45 +148,28 @@ impl LuminaApp {
         }
     }
 
+    fn set_network_input_error(&mut self, url: String, error: String, cx: &mut Context<Self>) {
+        self.network_import.stage = Some(NetworkImportStage::Input {
+            url,
+            error: Some(error),
+        });
+        cx.notify();
+    }
+
     /// Inspects the candidate URL, fetching title, duration, and metadata off the UI thread.
     pub fn inspect_network_url(&mut self, url: String, cx: &mut Context<Self>) {
         let trimmed = url.trim().to_string();
         if trimmed.is_empty() {
-            if let Some(NetworkImportStage::Input { ref mut error, .. }) = self.network_import.stage
-            {
-                *error = Some("Please enter a valid URL".to_string());
-                cx.notify();
-            }
+            self.set_network_input_error(trimmed, "Enter a video link".to_string(), cx);
             return;
         }
-
         let kind = match classify_url(&trimmed) {
-            Ok(k) => k,
+            Ok(kind) => kind,
             Err(e) => {
-                if let Some(NetworkImportStage::Input { ref mut error, .. }) =
-                    self.network_import.stage
-                {
-                    *error = Some(e.to_string());
-                    cx.notify();
-                }
+                self.set_network_input_error(trimmed, e.to_string(), cx);
                 return;
             }
         };
-
-        // If it requires yt-dlp, verify presence before inspecting
-        if matches!(
-            kind,
-            NetworkSourceKind::YouTube | NetworkSourceKind::GenericPlatform
-        ) && find_yt_dlp(None).is_none()
-        {
-            self.network_import.stage = Some(NetworkImportStage::MissingHelper {
-                url: trimmed,
-                message: "YouTube imports require the 'yt-dlp' tool. Install it with 'brew install yt-dlp'.".to_string(),
-            });
-            cx.notify();
-            return;
-        }
-
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
@@ -256,27 +177,26 @@ impl LuminaApp {
         self.network_import.stage = Some(NetworkImportStage::Inspecting {
             url: trimmed.clone(),
         });
-        cx.notify();
-
         let cancel = Arc::new(AtomicBool::new(false));
         self.network_import.cancel_flag = cancel.clone();
-        let query_url = trimmed.clone();
-        let fallback_url = trimmed.clone();
+        cx.notify();
 
+        let query_url = trimmed.clone();
+        let task_cancel = cancel.clone();
         let inspect_task = cx.background_executor().spawn(async move {
-            match kind {
-                NetworkSourceKind::DirectUrl => {
-                    lumina_core::net_import::direct::inspect_direct_url(&query_url)
-                }
-                NetworkSourceKind::HlsStream => {
-                    lumina_core::net_import::hls::inspect_hls_url(&query_url)
-                }
-                NetworkSourceKind::YouTube | NetworkSourceKind::GenericPlatform => {
-                    let binary = find_yt_dlp(None)
-                        .ok_or_else(|| anyhow::anyhow!("yt-dlp is required to inspect this URL"))?;
-                    inspect_url_helper(&binary, &query_url)
-                }
+            // The tool lookup stats files: keep it off the UI thread too.
+            if helper_missing(kind) {
+                return anyhow::Ok(Err(()));
             }
+            let info = inspect_url(&query_url, &task_cancel)?;
+            let target = engine.preview_network_destination(&info);
+            let already = engine
+                .find_media_by_source_url(&info.url)
+                .unwrap_or_else(|err| {
+                    log::warn!("looking up earlier imports of {}: {err:#}", info.url);
+                    None
+                });
+            anyhow::Ok(Ok((info, target, already)))
         });
 
         cx.spawn(async move |this, cx| {
@@ -285,25 +205,27 @@ impl LuminaApp {
                 if cancel.load(Ordering::Relaxed) {
                     return;
                 }
-
                 match result {
-                    Ok(info) => {
-                        let dest = engine.destination_for_network_import(&info.title, "mp4");
+                    Ok(Err(())) => {
+                        app.network_import.stage =
+                            Some(NetworkImportStage::MissingHelper { url: trimmed });
+                        cx.notify();
+                    }
+                    Ok(Ok((info, target_path, already_imported))) => {
                         app.network_import.stage = Some(NetworkImportStage::Ready {
                             info,
-                            target_path: dest,
-                            tags: Vec::new(),
+                            target_path,
                             is_favorite: false,
+                            already_imported,
                         });
+                        cx.notify();
                     }
+                    // The top message is written for people; the chain is for the log.
                     Err(err) => {
-                        app.network_import.stage = Some(NetworkImportStage::Input {
-                            url: fallback_url,
-                            error: Some(format!("Could not inspect stream: {err:#}")),
-                        });
+                        log::warn!("inspecting {trimmed}: {err:#}");
+                        app.set_network_input_error(trimmed, err.to_string(), cx)
                     }
                 }
-                cx.notify();
             });
         })
         .detach();
@@ -312,180 +234,124 @@ impl LuminaApp {
     /// Starts downloading the inspected media stream.
     pub fn confirm_network_download(&mut self, cx: &mut Context<Self>) {
         let Some(NetworkImportStage::Ready {
-            info,
-            target_path,
-            tags,
-            is_favorite,
-            ..
+            info, is_favorite, ..
         }) = self.network_import.stage.clone()
         else {
             return;
         };
-
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
 
-        let cancel_flag = Arc::new(AtomicBool::new(false));
-        self.network_import.cancel_flag = cancel_flag.clone();
-
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.network_import.cancel_flag = cancel.clone();
+        let mut connecting = NetworkDownloadProgress::new(DownloadPhase::Connecting, "Connecting");
+        connecting.total_bytes = info.expected_bytes;
         self.network_import.stage = Some(NetworkImportStage::Downloading {
             title: info.title.clone(),
-            progress: NetworkDownloadProgress {
-                phase: DownloadPhase::Connecting,
-                bytes_downloaded: 0,
-                total_bytes: info.expected_bytes,
-                speed_bytes_per_sec: 0,
-                eta_secs: None,
-                message: "Connecting...".to_string(),
-            },
+            progress: connecting,
+            confirm_cancel: false,
         });
         cx.notify();
 
         let (progress_tx, progress_rx) = async_channel::unbounded::<NetworkDownloadProgress>();
-        let p_tx = progress_tx.clone();
-        let cb: ProgressCallback = Box::new(move |p| {
-            let _ = p_tx.send_blocking(p);
+        let (done_tx, done_rx) = async_channel::bounded::<Outcome>(1);
+        let progress: ProgressCallback = Box::new(move |p| {
+            let _ = progress_tx.send_blocking(p);
         });
 
-        let cancel_child = cancel_flag.clone();
-        let dest = target_path.clone();
-        let media_url = info.url.clone();
-        let media_kind = info.kind;
-
-        // Background download executor
-        let download_task = cx.background_executor().spawn(async move {
-            match media_kind {
-                NetworkSourceKind::DirectUrl => {
-                    lumina_core::net_import::direct::download_direct_url(
-                        &media_url,
-                        &dest,
-                        &cancel_child,
-                        Some(&cb),
-                    )
-                }
-                NetworkSourceKind::HlsStream => {
-                    // Try macOS native AVFoundation HLS bridge first
-                    let hls_cancel = cancel_child.clone();
-                    let cb_hls = cb;
-                    let result = crate::player::macos::export_hls_stream_macos(
-                        &media_url,
-                        &dest,
-                        &hls_cancel,
-                        move |fraction| {
-                            let pct = (fraction * 100.0) as u64;
-                            cb_hls(NetworkDownloadProgress {
-                                phase: DownloadPhase::Downloading,
-                                bytes_downloaded: pct,
-                                total_bytes: Some(100),
-                                speed_bytes_per_sec: 0,
-                                eta_secs: None,
-                                message: format!("Exporting HLS stream: {pct}%"),
-                            });
-                        },
-                    );
-                    match result {
-                        Ok(()) => Ok(dest),
-                        Err(_) => {
-                            // Fallback to yt-dlp helper if native export had issues
-                            lumina_core::net_import::hls::download_hls_via_helper(
-                                &media_url,
-                                &dest,
-                                &cancel_child,
-                                None,
-                            )
+        // A dedicated thread: a download can take hours and must not hold a
+        // shared executor worker.
+        let spawned = std::thread::Builder::new()
+            .name("lumina-net-import".to_string())
+            .spawn(move || {
+                let outcome = match engine.download_network_media(&info, &cancel, &progress) {
+                    Err(_) if cancel.load(Ordering::Relaxed) => Outcome::Cancelled,
+                    Err(e) => {
+                        log::warn!("network import of {} failed: {e:#}", info.url);
+                        Outcome::Failed(e.to_string())
+                    }
+                    Ok(path) => {
+                        match engine.ingest_network_imported_file(&path, &info, is_favorite) {
+                            Ok(ingest) => Outcome::Imported {
+                                item: Box::new(ingest.item),
+                                timeline_error: ingest.timeline_error,
+                            },
+                            Err(e) => {
+                                log::error!("cataloguing {}: {e:#}", path.display());
+                                Outcome::NotCatalogued { path }
+                            }
                         }
                     }
-                }
-                NetworkSourceKind::YouTube | NetworkSourceKind::GenericPlatform => {
-                    let binary = find_yt_dlp(None)
-                        .ok_or_else(|| anyhow::anyhow!("yt-dlp helper not found on system"))?;
-                    lumina_core::net_import::helper::download_yt_dlp(
-                        &binary,
-                        &media_url,
-                        &dest,
-                        &cancel_child,
-                        Some(&cb),
-                    )
-                }
-            }
-        });
-
-        // UI progress listener loop
-        let this_progress = cx.spawn({
-            let rx = progress_rx.clone();
-            async move |this, cx| {
-                while let Ok(progress) = rx.recv().await {
-                    let _ = this.update(cx, |app, cx| {
-                        if let Some(NetworkImportStage::Downloading {
-                            progress: ref mut cur_p,
-                            ..
-                        }) = app.network_import.stage
-                        {
-                            *cur_p = progress;
-                            cx.notify();
-                        }
-                    });
-                }
-            }
-        });
-        this_progress.detach();
-
-        // Completion handler
-        let title_clone = info.title.clone();
-        let uploader_clone = info.uploader.clone();
-        let tags_clone = tags.clone();
+                };
+                let _ = done_tx.send_blocking(outcome);
+            });
+        if let Err(err) = spawned {
+            self.network_import.stage = None;
+            log::error!("spawning the download thread: {err}");
+            self.set_error("Couldn't start the download. Try again.".to_string(), cx);
+            return;
+        }
 
         cx.spawn(async move |this, cx| {
-            let result = download_task.await;
-            let _ = this.update(cx, |app, cx| {
-                if cancel_flag.load(Ordering::Relaxed) {
-                    if let Ok(ref final_path) = result {
-                        let _ = std::fs::remove_file(final_path);
+            while let Ok(progress) = progress_rx.recv().await {
+                let _ = this.update(cx, |app, cx| {
+                    if let Some(NetworkImportStage::Downloading {
+                        progress: ref mut current,
+                        ..
+                    }) = app.network_import.stage
+                    {
+                        *current = progress;
+                        cx.notify();
                     }
-                    app.network_import.stage = None;
-                    cx.notify();
-                    return;
-                }
+                });
+            }
+        })
+        .detach();
 
-                match result {
-                    Ok(final_path) => {
-                        // Ingest media into catalog and sidecar
-                        match engine.ingest_network_imported_file(
-                            &final_path,
-                            &info.url,
-                            uploader_clone.as_deref(),
-                            Some(&title_clone),
-                            &tags_clone,
-                            is_favorite,
-                        ) {
-                            Ok(item) => {
-                                app.show_toast(format!("Imported \"{}\"", item.file_name), cx);
-                                app.network_import.stage = None;
-                                // Refresh catalog view and select newly imported item
-                                app.refresh_after_import(cx);
-                            }
-                            Err(e) => {
-                                app.set_error(format!("Ingestion failed: {e:#}"), cx);
-                                app.network_import.stage = None;
-                            }
+        cx.spawn(async move |this, cx| {
+            let Ok(outcome) = done_rx.recv().await else {
+                return;
+            };
+            let _ = this.update(cx, |app, cx| {
+                if matches!(
+                    app.network_import.stage,
+                    Some(NetworkImportStage::Downloading { .. })
+                ) {
+                    app.network_import.stage = None;
+                }
+                match outcome {
+                    Outcome::Imported {
+                        item,
+                        timeline_error,
+                    } => {
+                        app.show_toast(format!("Imported \"{}\"", item.file_name), cx);
+                        if timeline_error.is_some() {
+                            app.set_error(
+                                // The details are in the log (see `ingest_network_imported_file`).
+                                format!("Imported \"{}\". The timeline will update after Lumina restarts.", item.file_name),
+                                cx,
+                            );
                         }
+                        app.refresh_album_counts();
+                        app.refresh_active_view(cx);
                     }
-                    Err(e) => {
-                        app.set_error(format!("Download failed: {e:#}"), cx);
-                        app.network_import.stage = None;
+                    Outcome::Cancelled => {}
+                    Outcome::Failed(error) => {
+                        app.set_error(format!("Couldn't import the video. {error}"), cx)
                     }
+                    // The details are in the log; the file is kept so nothing is lost.
+                    Outcome::NotCatalogued { path } => app.set_error(
+                        format!(
+                            "The video was saved as \"{}\" in your Imports folder but couldn't be added to Lumina. Rescan the library to add it.",
+                            path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+                        ),
+                        cx,
+                    ),
                 }
                 cx.notify();
             });
         })
         .detach();
-    }
-
-    /// Helper to refresh grid and album counts after successful network import.
-    fn refresh_after_import(&mut self, cx: &mut Context<Self>) {
-        self.refresh_album_counts();
-        self.refresh_active_view(cx);
-        cx.notify();
     }
 }

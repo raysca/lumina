@@ -6,6 +6,7 @@ use crate::app::network_import::NetworkImportStage;
 use crate::app::types::format_bytes;
 use crate::theme;
 use crate::LuminaApp;
+use lumina_core::net_import::DownloadPhase;
 
 /// Formats seconds into MM:SS or HH:MM:SS.
 fn format_duration(seconds: f64) -> String {
@@ -18,6 +19,12 @@ fn format_duration(seconds: f64) -> String {
     } else {
         format!("{mins:02}:{secs:02}")
     }
+}
+
+/// The host part of a URL ("www.youtube.com"), for status text.
+fn host_of(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    rest.split(['/', '?', '#']).next().unwrap_or(rest)
 }
 
 pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
@@ -46,7 +53,12 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .bg(theme::bg_control())
             .hover(|s| s.bg(theme::bg_control_hover()))
             .text_color(theme::text())
-            .child(theme::kbd("Esc"))
+            // A download takes Esc twice (see `dismiss_network_import`).
+            .child(theme::kbd(if label == "Cancel Download" {
+                "Esc Esc"
+            } else {
+                "Esc"
+            }))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.close_network_import_dialog(cx);
             }))
@@ -70,7 +82,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     div()
                         .text_xs()
                         .text_color(theme::text_muted())
-                        .child("Enter a direct video URL (.mp4, .mov), YouTube video link, or HLS (.m3u8) stream."),
+                        .child("Paste a link to a video: a YouTube video, a page on another video site, or a video file."),
                 )
                 .child(
                     div()
@@ -103,7 +115,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                     theme::text()
                                 })
                                 .child(if url.is_empty() {
-                                    "https://example.com/video.mp4 or youtube.com/... |".to_string()
+                                    "Paste a video link (⌘V) |".to_string()
                                 } else {
                                     format!("{url}|")
                                 }),
@@ -140,7 +152,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .mt_2()
                         .child(cancel("Cancel"))
                         .child(
-                            button("net-import-inspect", "Inspect")
+                            button("net-import-inspect", "Continue")
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::BOLD)
@@ -161,13 +173,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     .text_base()
                     .font_weight(FontWeight::BOLD)
                     .text_color(theme::text())
-                    .child("Inspecting Stream…"),
+                    .child("Checking Link…"),
             )
             .child(
                 div()
                     .text_xs()
                     .text_color(theme::text_muted())
-                    .child(format!("Connecting to {url} and reading stream metadata…")),
+                    .child(format!("Getting video details from {}…", host_of(url))),
             )
             .child(
                 div()
@@ -181,8 +193,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         NetworkImportStage::Ready {
             info,
             target_path,
-            tags: _,
             is_favorite,
+            already_imported,
         } => {
             let is_fav = *is_favorite;
             div()
@@ -258,16 +270,29 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .text_xs()
                                 .text_color(theme::text_muted())
-                                .child("Destination:"),
+                                .child("Saves to your library's Imports folder as"),
                         )
                         .child(
-                            div()
-                                .text_xs()
-                                .font_family(theme::FONT_MONO)
-                                .text_color(theme::text())
-                                .child(target_path.to_string_lossy().to_string()),
+                            div().text_xs().text_color(theme::text()).child(
+                                target_path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default(),
+                            ),
                         ),
                 )
+                .children(already_imported.as_ref().map(|path| {
+                    div()
+                        .debug_selector(|| "net-import-already-imported".to_string())
+                        .text_xs()
+                        .text_color(theme::accent())
+                        .child(format!(
+                            "Already in your library as {}. Importing again makes a second copy.",
+                            path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default()
+                        ))
+                }))
                 .child(
                     div()
                         .id("net-import-favorite-toggle")
@@ -308,7 +333,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .text_xs()
                                 .text_color(theme::text())
                                 .child("Add to Favorites"),
-                        ),
+                        )
+                        .child(theme::kbd("F")),
                 )
                 .child(
                     div()
@@ -331,8 +357,32 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         ),
                 )
         }
-        NetworkImportStage::Downloading { title, progress } => {
+        NetworkImportStage::Downloading {
+            title,
+            progress,
+            confirm_cancel,
+        } => {
             let pct = progress.percent().unwrap_or(0.0);
+            let status = match progress.phase {
+                DownloadPhase::Downloading => {
+                    let mut text = format!(
+                        "{} · {}",
+                        progress.message,
+                        format_bytes(progress.bytes_downloaded)
+                    );
+                    if let Some(total) = progress.total_bytes {
+                        text.push_str(&format!(" of {}", format_bytes(total)));
+                    }
+                    if progress.speed_bytes_per_sec > 0 {
+                        text.push_str(&format!(
+                            " · {}/s",
+                            format_bytes(progress.speed_bytes_per_sec)
+                        ));
+                    }
+                    text
+                }
+                _ => format!("{}…", progress.message),
+            };
             div()
                 .flex()
                 .flex_col()
@@ -372,13 +422,20 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .justify_between()
                         .text_xs()
                         .text_color(theme::text_muted())
-                        .child(progress.message.clone())
+                        .child(status)
                         .child(if pct > 0.0 {
                             format!("{pct:.1}%")
                         } else {
                             String::new()
                         }),
                 )
+                .children(confirm_cancel.then(|| {
+                    div()
+                        .debug_selector(|| "net-import-confirm-cancel".to_string())
+                        .text_xs()
+                        .text_color(theme::accent())
+                        .child("Press Esc again to stop the download.")
+                }))
                 .child(
                     div()
                         .flex()
@@ -389,71 +446,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(cancel("Cancel Download")),
                 )
         }
-        NetworkImportStage::DownloadingHelper { url, progress } => {
-            let pct = progress.percent().unwrap_or(0.0);
-            let display_url = if url.len() > 40 {
-                format!("{}…", &url[..40])
-            } else {
-                url.clone()
-            };
-            div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(
-                    div()
-                        .text_base()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(theme::text())
-                        .child("Downloading yt-dlp Helper"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_muted())
-                        .child(format!("Fetching helper to import {display_url}...")),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(6.0))
-                        .rounded(px(3.0))
-                        .bg(theme::bg_control())
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative((pct / 100.0).clamp(0.0, 1.0)))
-                                .rounded(px(3.0))
-                                .bg(theme::accent()),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .text_xs()
-                        .text_color(theme::text_muted())
-                        .child(progress.message.clone())
-                        .child(if pct > 0.0 {
-                            format!("{pct:.1}%")
-                        } else {
-                            String::new()
-                        }),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .justify_end()
-                        .gap_2()
-                        .mt_2()
-                        .child(cancel("Cancel")),
-                )
-        }
-        NetworkImportStage::MissingHelper { url, message } => {
+        NetworkImportStage::MissingHelper { url } => {
             let retry_url = url.clone();
-            let download_url = url.clone();
+            // Say what the user can do, never which tool is missing.
             div()
                 .flex()
                 .flex_col()
@@ -463,37 +458,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .text_base()
                         .font_weight(FontWeight::BOLD)
                         .text_color(theme::text())
-                        .child("yt-dlp Required"),
+                        .child("Can't Download This Video"),
                 )
                 .child(
                     div()
                         .text_xs()
                         .text_color(theme::text_muted())
-                        .child(message.clone()),
-                )
-                .child(
-                    div()
-                        .p_2p5()
-                        .bg(theme::bg_control())
-                        .rounded(theme::RADIUS_MD)
-                        .border_1()
-                        .border_color(theme::border())
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme::text_muted())
-                                .child("Or install manually via Homebrew:"),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(theme::FONT_MONO)
-                                .text_color(theme::text())
-                                .child("brew install yt-dlp"),
-                        ),
+                        .child(lumina_core::net_import::MISSING_PART),
                 )
                 .child(
                     div()
@@ -505,21 +476,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(cancel("Close"))
                         .child(
                             button("net-import-retry", "Check Again")
-                                .bg(theme::bg_control())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
-                                .text_color(theme::text())
-                                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                    this.inspect_network_url(retry_url.clone(), cx);
-                                })),
-                        )
-                        .child(
-                            button("net-import-download-helper", "Download Automatically")
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme::accent_fg())
+                                .child(theme::kbd("↵"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                    this.download_missing_helper(download_url.clone(), cx);
+                                    this.inspect_network_url(retry_url.clone(), cx);
                                 })),
                         ),
                 )
@@ -535,8 +498,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .flex()
         .items_center()
         .justify_center()
+        // A stray click outside never stops a running download.
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.close_network_import_dialog(cx);
+            this.dismiss_network_import(false, cx);
         }))
         .child(
             div()

@@ -3,6 +3,7 @@
 # Environment:
 #   LUMINA_UNIVERSAL=0        build only the host architecture
 #   LUMINA_SIGN_IDENTITY=...  Developer ID identity; default "-" (ad-hoc)
+#   LUMINA_BUNDLE_DEPS=0      skip bundling yt-dlp and ffmpeg (local testing only)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -55,27 +56,49 @@ cp resources/Lumina.icns "$BUNDLE_DIR/Contents/Resources/Lumina.icns"
 # About → MIT License / Acknowledgements open these.
 install -m 644 LICENSE THIRD_PARTY_NOTICES.md "$BUNDLE_DIR/Contents/Resources/"
 
-# Bundle helper dependencies (yt-dlp standalone universal binary)
-YTDLP_CACHE="target/deps/yt-dlp"
+# Bundle the pinned yt-dlp and ffmpeg (network import). The fetch scripts
+# verify their SHA-256 and fail the build on any error; LUMINA_BUNDLE_DEPS=0
+# builds without them for local testing only (YouTube/stream import then needs
+# Homebrew's yt-dlp and ffmpeg).
 if [[ "${LUMINA_BUNDLE_DEPS:-1}" == "1" ]]; then
-    if [[ ! -f "$YTDLP_CACHE" ]]; then
-        echo "Fetching yt-dlp standalone dependency..."
-        mkdir -p "target/deps"
-        curl -f -L -o "$YTDLP_CACHE" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos" || true
-        chmod +x "$YTDLP_CACHE" || true
+    ./scripts/fetch_yt_dlp.sh
+    echo "Bundling yt-dlp into $BUNDLE_DIR/Contents/MacOS/yt-dlp"
+    install -m 755 target/deps/yt-dlp "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+    if [[ "$SIGN_IDENTITY" != "-" ]]; then
+        codesign --force --options runtime --timestamp \
+            --entitlements resources/yt-dlp.entitlements \
+            --sign "$SIGN_IDENTITY" "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+    else
+        codesign --force --sign - "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
     fi
-    if [[ -f "$YTDLP_CACHE" ]]; then
-        echo "Bundling yt-dlp into $BUNDLE_DIR/Contents/MacOS/yt-dlp"
-        cp "$YTDLP_CACHE" "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
-        chmod +x "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
-        if [[ "$SIGN_IDENTITY" != "-" ]]; then
-            codesign --force --options runtime --timestamp \
-                --entitlements resources/Lumina.entitlements \
-                --sign "$SIGN_IDENTITY" "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
-        else
-            codesign --force --sign - "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
-        fi
+    # A signing change that stops the helper from starting must fail the build.
+    if ! "$BUNDLE_DIR/Contents/MacOS/yt-dlp" --ignore-config --version >/dev/null; then
+        echo "error: the signed yt-dlp does not run" >&2
+        exit 1
     fi
+
+    ./scripts/fetch_ffmpeg.sh
+    echo "Bundling ffmpeg into $BUNDLE_DIR/Contents/MacOS/ffmpeg"
+    install -m 755 target/deps/ffmpeg "$BUNDLE_DIR/Contents/MacOS/ffmpeg"
+    # LGPL-2.1: the license, and the exact source and build script, travel
+    # with the binary.
+    install -m 644 target/deps/ffmpeg-LICENSE.txt "$BUNDLE_DIR/Contents/Resources/"
+    FFMPEG_VERSION="$(sed -n 's/^FFMPEG_VERSION="\(.*\)"$/\1/p' scripts/fetch_ffmpeg.sh)"
+    mkdir -p "$BUNDLE_DIR/Contents/Resources/ffmpeg-source"
+    install -m 644 "target/deps/src/ffmpeg-$FFMPEG_VERSION.tar.xz" scripts/fetch_ffmpeg.sh \
+        "$BUNDLE_DIR/Contents/Resources/ffmpeg-source/"
+    if [[ "$SIGN_IDENTITY" != "-" ]]; then
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$BUNDLE_DIR/Contents/MacOS/ffmpeg"
+    else
+        codesign --force --sign - "$BUNDLE_DIR/Contents/MacOS/ffmpeg"
+    fi
+    if ! "$BUNDLE_DIR/Contents/MacOS/ffmpeg" -hide_banner -version >/dev/null; then
+        echo "error: the signed ffmpeg does not run" >&2
+        exit 1
+    fi
+else
+    echo "warning: LUMINA_BUNDLE_DEPS=0: yt-dlp and ffmpeg not bundled; not a distributable release" >&2
 fi
 
 if [[ "$SIGN_IDENTITY" != "-" ]]; then

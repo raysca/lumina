@@ -26,7 +26,43 @@ impl Catalog {
         let inodes: Vec<Option<u64>> = items.iter().map(|item| file_inode(&item.path)).collect();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
+        let inserted = Self::upsert_in_tx(&tx, items, &inodes)?;
+        tx.commit()?;
+        Ok(inserted)
+    }
 
+    /// Upserts one network download and its source attribution in a single
+    /// transaction, so an item never lands without the URL it came from.
+    pub fn insert_with_source(
+        &self,
+        item: &MediaItem,
+        source_url: &str,
+        uploader: Option<&str>,
+    ) -> Result<MediaItem> {
+        let inodes = [file_inode(&item.path)];
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut inserted = Self::upsert_in_tx(&tx, std::slice::from_ref(item), &inodes)?
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("the catalog returned no row for {:?}", item.path))?;
+        // The watcher may have catalogued the new file first; an upsert keeps
+        // that row's favorite and title, so set the user's choices here.
+        tx.execute(
+            "UPDATE media_items SET is_favorite = ?1, title = ?2 WHERE id = ?3;",
+            params![item.is_favorite as i32, item.title, inserted.id.0 as i64],
+        )?;
+        inserted.is_favorite = item.is_favorite;
+        inserted.title = item.title.clone();
+        Self::record_source_in(&tx, inserted.id, source_url, uploader)?;
+        tx.commit()?;
+        Ok(inserted)
+    }
+
+    fn upsert_in_tx(
+        tx: &rusqlite::Transaction,
+        items: &[MediaItem],
+        inodes: &[Option<u64>],
+    ) -> Result<Vec<MediaItem>> {
         let mut inserted = Vec::with_capacity(items.len());
 
         {
@@ -102,7 +138,7 @@ impl Catalog {
                 "#,
             )?;
 
-            for (item, inode) in items.iter().zip(&inodes) {
+            for (item, inode) in items.iter().zip(inodes) {
                 let media_type_str = match item.media_type {
                     MediaType::Image => "image",
                     MediaType::Video => "video",
@@ -182,7 +218,6 @@ impl Catalog {
             }
         }
 
-        tx.commit()?;
         Ok(inserted)
     }
 
@@ -755,7 +790,15 @@ impl Catalog {
         source_url: &str,
         uploader: Option<&str>,
     ) -> Result<()> {
-        let conn = self.conn.lock();
+        Self::record_source_in(&self.conn.lock(), media_id, source_url, uploader)
+    }
+
+    fn record_source_in(
+        conn: &rusqlite::Connection,
+        media_id: MediaId,
+        source_url: &str,
+        uploader: Option<&str>,
+    ) -> Result<()> {
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
@@ -772,6 +815,19 @@ impl Catalog {
             params![media_id.0 as i64, source_url, uploader, now_ms],
         )?;
         Ok(())
+    }
+
+    /// The path of a library item (not in the trash) downloaded from `source_url`.
+    pub fn find_media_by_source_url(&self, source_url: &str) -> Result<Option<PathBuf>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(
+            "SELECT m.file_path FROM media_sources s JOIN media_items m ON m.id = s.media_id
+             WHERE s.source_url = ?1 AND m.is_trashed = 0 LIMIT 1;",
+        )?;
+        let path: Option<String> = stmt
+            .query_row(params![source_url], |row| row.get(0))
+            .optional()?;
+        Ok(path.map(PathBuf::from))
     }
 
     /// Returns `(source_url, uploader, imported_epoch_ms)` for an item if it was imported from the network.

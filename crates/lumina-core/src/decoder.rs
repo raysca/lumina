@@ -53,13 +53,17 @@ fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStat
 /// process exits mid-wait (app quit during a scan, a test finishing), the child
 /// is reparented to launchd and qlmanage, which never exits on a file it can't
 /// read, would leak forever. An `atexit` hook kills whatever is still tracked.
+/// Network downloads (curl, yt-dlp) run in their own process group and are
+/// tracked by group: the bundled yt-dlp is a PyInstaller launcher whose
+/// Python child (and ffmpeg) would survive a kill of the launcher alone.
 /// SIGKILL of the parent still leaks; macOS has no parent-death signal.
 #[cfg(unix)]
-mod live_children {
+pub(crate) mod live_children {
     use std::collections::HashSet;
     use std::sync::{Mutex, Once};
 
-    static PIDS: Mutex<Option<HashSet<u32>>> = Mutex::new(None);
+    /// Positive: one process. Negative: a whole process group.
+    static PIDS: Mutex<Option<HashSet<i32>>> = Mutex::new(None);
     static HOOK: Once = Once::new();
 
     extern "C" {
@@ -71,11 +75,11 @@ mod live_children {
         let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
         for &pid in pids.iter().flatten() {
             // SAFETY: plain syscall on a pid we spawned and have not reaped.
-            unsafe { kill(pid as i32, 9) };
+            unsafe { kill(pid, 9) };
         }
     }
 
-    pub(super) struct Tracked(u32);
+    pub(crate) struct Tracked(i32);
 
     impl Drop for Tracked {
         fn drop(&mut self) {
@@ -84,26 +88,61 @@ mod live_children {
         }
     }
 
-    pub(super) fn track(pid: u32) -> Tracked {
+    fn insert(id: i32) -> Tracked {
         // SAFETY: registers a function with no captured state.
         HOOK.call_once(|| unsafe {
             atexit(kill_tracked);
         });
         let mut pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-        pids.get_or_insert_with(HashSet::new).insert(pid);
-        Tracked(pid)
+        pids.get_or_insert_with(HashSet::new).insert(id);
+        Tracked(id)
+    }
+
+    pub(crate) fn track(pid: u32) -> Tracked {
+        insert(pid as i32)
+    }
+
+    /// Tracks the process group led by `pid` (spawned with `process_group(0)`).
+    pub(crate) fn track_group(pid: u32) -> Tracked {
+        insert(-(pid as i32))
+    }
+
+    /// Stops a child spawned as a group leader and everything it started:
+    /// SIGTERM to the group (the PyInstaller launcher forwards it to Python,
+    /// which cleans up), up to 2 s to exit, then SIGKILL to what is left.
+    pub(crate) fn stop_group(child: &mut std::process::Child) {
+        let group = -(child.id() as i32);
+        // SAFETY: signals a process group this process created.
+        unsafe { kill(group, 15) };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // The launcher may be gone while its children are not.
+        // SAFETY: as above; ESRCH when the group is already empty is fine.
+        unsafe { kill(group, 9) };
+        let _ = child.wait();
     }
 
     #[cfg(test)]
     pub(super) fn is_tracked(pid: u32) -> bool {
         let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-        pids.as_ref().is_some_and(|pids| pids.contains(&pid))
+        pids.as_ref()
+            .is_some_and(|pids| pids.contains(&(pid as i32)))
     }
 }
 
 #[cfg(not(unix))]
-mod live_children {
-    pub(super) fn track(_pid: u32) {}
+pub(crate) mod live_children {
+    pub(crate) fn track(_pid: u32) {}
+    pub(crate) fn track_group(_pid: u32) {}
+    pub(crate) fn stop_group(child: &mut std::process::Child) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 #[derive(Clone)]

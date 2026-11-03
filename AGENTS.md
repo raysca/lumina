@@ -16,9 +16,10 @@ Lumina is a local-first macOS photo and video manager:
 - Version is synchronized across `crates/*/Cargo.toml`, `resources/Info.plist`,
   and the `Makefile`; release builds fail on mismatch.
 
-Core promises: local-first with no network or telemetry; user data is never
-silently lost; the UI never blocks on IO; every feature is testable and
-reviewable.
+Core promises: local-first with no background network or telemetry (the
+network is used only for a URL the user asks to import, see §5.4); user data
+is never silently lost; the UI never blocks on IO; every feature is testable
+and reviewable.
 
 ## 2. Non-negotiable invariants
 
@@ -141,6 +142,18 @@ docs/             roadmap, architecture, accessibility, notes
   client-side encryption, no secrets in config/database/logs, and no automatic
   deletion of local or remote data. Update checks remain explicit opt-in and
   must not upload user data.
+- Approved exception: user-initiated URL video import (`net_import`, File >
+  Import Video from URL). It contacts the site in the URL the user pasted and
+  the servers that site sends the video from (CDN and API hosts), sends no
+  user data, and runs nothing in the background. It runs system curl and the
+  yt-dlp and ffmpeg bundled in the app, pinned by version and SHA-256 in
+  `scripts/fetch_yt_dlp.sh` and `scripts/fetch_ffmpeg.sh` (an LGPL-only,
+  copy-only ffmpeg built from source with network protocols disabled).
+  Without the bundled copies (a local build) it falls back to ones the user
+  installed (Homebrew, `PATH`). Lumina never downloads an executable at run
+  time. The UI never
+  names these tools: messages say what happened and what the user can do.
+  See `docs/network-import.md`.
 
 ## 6. Testing strategy
 
