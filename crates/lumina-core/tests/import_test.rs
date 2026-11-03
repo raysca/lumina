@@ -45,6 +45,16 @@ impl Fixture {
         }
     }
 
+    /// Opens the library again, as a relaunch would.
+    fn reopen(&self) {
+        LuminaEngine::open_with_paths(
+            self.media(),
+            self.root.join("catalog.db"),
+            Some(self.root.join("cache")),
+        )
+        .expect("reopen engine");
+    }
+
     fn media(&self) -> PathBuf {
         self.root.join("media")
     }
@@ -279,9 +289,12 @@ fn stale_temp_files_are_cleaned() {
     std::fs::create_dir_all(stale.parent().unwrap()).unwrap();
     std::fs::write(&stale, b"half a copy").unwrap();
 
-    fx.plan(&[fx.source()]);
+    fx.reopen();
 
-    assert!(!stale.exists(), "a crash's half-done copy is removed");
+    assert!(
+        !stale.exists(),
+        "a crash's half-done copy is removed when the library opens"
+    );
 }
 
 #[test]
@@ -293,11 +306,28 @@ fn stale_download_folders_are_cleaned() {
     std::fs::create_dir_all(&stale).unwrap();
     std::fs::write(stale.join("video.mp4.part"), b"half a download").unwrap();
 
-    fx.plan(&[fx.source()]);
+    fx.reopen();
 
     assert!(
         !stale.exists(),
-        "a crash's half-done network download folder is removed"
+        "a crash's half-done network download folder is removed when the library opens"
+    );
+}
+
+#[test]
+fn starting_an_import_keeps_other_jobs_staging() {
+    let fx = Fixture::new("live_staging");
+    let staging = fx
+        .media()
+        .join("Imports/2026/2026-11-03/.123.lumina-import");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("part.mp4"), b"a download in progress").unwrap();
+
+    fx.plan(&[fx.source()]);
+
+    assert!(
+        staging.join("part.mp4").exists(),
+        "starting an import must not delete another job's staging"
     );
 }
 

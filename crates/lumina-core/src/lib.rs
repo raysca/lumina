@@ -324,6 +324,10 @@ impl LuminaEngine {
                     }
                 });
         }
+        // Staging left in Imports/ is from a crash or a quit mid-download:
+        // nothing of this library's runs yet. Never clean it per job, since
+        // several imports and downloads run at once.
+        crate::import::remove_stale_temps(&library_root.join(crate::import::IMPORTS_DIR));
         let decoder = DecoderPipeline::new(0)?;
 
         let cancel_flag = Arc::new(AtomicBool::new(false));

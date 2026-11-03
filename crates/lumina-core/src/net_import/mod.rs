@@ -23,7 +23,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::import::{claim_name, remove_stale_temps, IMPORTS_DIR, TEMP_SUFFIX};
+use crate::import::{claim_name, IMPORTS_DIR, TEMP_SUFFIX};
 use crate::scanner::Scanner;
 use crate::{LuminaEngine, MediaItem};
 
@@ -390,9 +390,6 @@ impl LuminaEngine {
         cancel: &AtomicBool,
         progress: &ProgressCallback,
     ) -> Result<PathBuf> {
-        let imports = self.library_root.join(IMPORTS_DIR);
-        // Only one import runs at a time, so any staging left is from a crash.
-        remove_stale_temps(&imports);
         let dir = self.network_import_dir();
         let staging = StagingDir::new(&dir)?;
 

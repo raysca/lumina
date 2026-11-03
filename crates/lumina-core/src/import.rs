@@ -70,7 +70,6 @@ impl LuminaEngine {
     /// Works out what importing `paths` (files and folders) would copy.
     /// When `cancel` is set the plan is incomplete; discard it.
     pub fn plan_import(&self, paths: &[PathBuf], cancel: &AtomicBool) -> Result<ImportPlan> {
-        remove_stale_temps(&self.library_root.join(IMPORTS_DIR));
         let root = self
             .library_root
             .canonicalize()
@@ -369,7 +368,8 @@ pub(crate) fn claim_name(
     unreachable!("names run out only after usize::MAX tries")
 }
 
-/// Removes copies and downloads a crash left half-done.
+/// Removes copies and downloads a crash or quit left half-done. Runs only
+/// when a library opens: imports and downloads run in parallel after that.
 pub(crate) fn remove_stale_temps(imports: &Path) {
     if !imports.is_dir() {
         return;

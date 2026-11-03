@@ -27,7 +27,7 @@ catalogue (e.g. WebM) are refused with a message.
 
 While downloading, Cancel Download stops at once; Esc asks once, then stops;
 clicks outside the dialog are ignored. A crash leaves only the hidden staging
-folder, which the next import removes.
+folder, which is removed the next time the library opens.
 
 ## User-facing copy
 

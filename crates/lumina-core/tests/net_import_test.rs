@@ -313,3 +313,19 @@ fn ingest_applies_favorite_when_the_watcher_got_there_first() {
     assert!(row.is_favorite, "Add to Favorites must survive the race");
     assert_eq!(row.title.as_deref(), Some("Concert: Live"));
 }
+
+#[test]
+fn starting_a_download_keeps_other_jobs_staging() {
+    let fx = Fixture::new("live_staging");
+    let staging = fx.engine.network_import_dir().join(".123.lumina-import");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("part.mp4"), b"a download in progress").unwrap();
+
+    let url = fx.source("clip.mp4", b"another download");
+    fx.download(&direct_info(&url, "Clip"), false).unwrap();
+
+    assert!(
+        staging.join("part.mp4").exists(),
+        "starting a download must not delete another job's staging"
+    );
+}
