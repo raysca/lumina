@@ -117,6 +117,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘[", "Back"),
             ("⌥⌘N", "New smart album"),
+            ("⌥⌘L", "Show or hide downloads"),
             ("I", "Toggle inspector"),
             ("⌘I", "Get Info window"),
             ("F", "Favorite"),
@@ -408,6 +409,9 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &ImportNetworkVideo, _w, cx| {
                 this.open_network_import_dialog(cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleDownloads, _w, cx| {
+                this.toggle_downloads_panel(cx);
+            }))
             .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                 this.import_sidecars_selected(cx);
             }))
@@ -583,6 +587,12 @@ impl Render for LuminaApp {
                 self.network_import.stage.is_some(),
                 crate::views::network_import_dialog::render(self, cx),
                 "network-import-dialog-in",
+            ))
+            // 8e. Downloads dropdown
+            .child(motion::overlay_in(
+                self.downloads.open,
+                crate::views::downloads_panel::render(self, cx),
+                "downloads-panel-in",
             ))
             // 9. Media Card Context Menu Overlay
             .child(motion::overlay_in(

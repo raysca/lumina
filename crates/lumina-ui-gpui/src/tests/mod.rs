@@ -1,6 +1,8 @@
 mod browser;
 mod delete_dialog;
 mod design_system;
+mod downloads;
+mod downloads_panel;
 mod duplicates;
 mod editor_handoff;
 mod get_info;

@@ -36,6 +36,7 @@ pub fn build_menus() -> Vec<Menu> {
                 MenuItem::separator(),
                 MenuItem::action("Toggle Sidebar", ToggleSidebar),
                 MenuItem::action("Toggle Inspector", ToggleInspector),
+                MenuItem::action("Show Downloads", ToggleDownloads),
                 MenuItem::separator(),
                 MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
             ],

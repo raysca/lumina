@@ -119,6 +119,12 @@ impl LuminaApp {
             return;
         }
 
+        // ⌥⌘L: show or hide the downloads list
+        if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("l") {
+            self.toggle_downloads_panel(cx);
+            return;
+        }
+
         // ⌘O: Open Library… (also File menu and the sidebar LIBRARY header)
         if cmd_or_ctrl && !keystroke.modifiers.shift && key.eq_ignore_ascii_case("o") {
             self.pick_folder_dialog(cx);

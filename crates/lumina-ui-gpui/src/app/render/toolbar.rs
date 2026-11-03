@@ -221,6 +221,7 @@ impl LuminaApp {
                             })),
                     )
             }))
+            .children(self.render_downloads_button(cx))
             .child(
                 icon_button("sort-toolbar-btn", false)
                     .debug_selector(|| "sort-menu-button".to_string())
@@ -252,7 +253,99 @@ impl LuminaApp {
     }
 }
 
+/// The toolbar ring: a 2px arc from 12 o'clock, `fraction` of the way round.
+fn progress_ring(fraction: f32) -> impl IntoElement {
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let radius = bounds.size.width.min(bounds.size.height) / 2.0 - px(2.0);
+            let center = bounds.center();
+            // ponytail: a full circle can't be one arc; stop just short.
+            let angle = fraction.clamp(0.0, 0.999) * std::f32::consts::TAU;
+            let start = point(center.x, center.y - radius);
+            let end = point(
+                center.x + radius * angle.sin(),
+                center.y - radius * angle.cos(),
+            );
+            let mut path = PathBuilder::stroke(px(2.0));
+            path.move_to(start);
+            path.arc_to(
+                point(radius, radius),
+                px(0.0),
+                angle > std::f32::consts::PI,
+                true,
+                end,
+            );
+            if let Ok(path) = path.build() {
+                window.paint_path(path, theme::accent());
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
 impl LuminaApp {
+    /// Downloads (⌥⌘L): shown once the list has rows, with the count of
+    /// unfinished ones, a red dot for an unseen failure and a progress ring.
+    fn render_downloads_button(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        if self.downloads.entries.is_empty() {
+            return None;
+        }
+        let open = self.downloads.open;
+        let count = self.active_download_count();
+        Some(
+            icon_button("downloads-toolbar-btn", open)
+                .debug_selector(|| "downloads-toolbar-btn".to_string())
+                .relative()
+                .tooltip(theme::tooltip_label("Downloads (⌥⌘L)"))
+                .child(toolbar_icon(crate::icons::Icon::ArrowDownToLine, open))
+                .children(self.download_progress().map(|fraction| {
+                    div()
+                        .debug_selector(|| "downloads-progress-ring".to_string())
+                        .absolute()
+                        .inset_0()
+                        .child(progress_ring(fraction))
+                }))
+                .when(count > 0, |el| {
+                    el.child(
+                        div()
+                            .debug_selector(|| "downloads-badge".to_string())
+                            .absolute()
+                            .top(px(-3.0))
+                            .right(px(-3.0))
+                            .min_w(px(14.0))
+                            .h(px(14.0))
+                            .px(px(3.0))
+                            .rounded_full()
+                            .bg(theme::accent())
+                            .text_color(theme::accent_fg())
+                            .text_size(px(9.0))
+                            .font_weight(FontWeight::BOLD)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(count.to_string()),
+                    )
+                })
+                .when(self.downloads.unseen_failure, |el| {
+                    el.child(
+                        div()
+                            .debug_selector(|| "downloads-failure-dot".to_string())
+                            .absolute()
+                            .bottom(px(1.0))
+                            .right(px(1.0))
+                            .size(px(7.0))
+                            .rounded_full()
+                            .bg(theme::danger()),
+                    )
+                })
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.toggle_downloads_panel(cx);
+                })),
+        )
+    }
+
     /// "Items stay here until…" above a non-empty Recently Deleted.
     pub(crate) fn render_trash_note(&self) -> Option<Div> {
         let count = self

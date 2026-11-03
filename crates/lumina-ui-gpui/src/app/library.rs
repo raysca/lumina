@@ -569,6 +569,9 @@ impl LuminaApp {
         // An empty catalog gets the "Building your library" screen.
         self.first_scan =
             (engine.total_count() == 0).then(crate::app::first_scan::FirstScanState::new);
+        // Downloads belong to the library they were started in.
+        self.downloads
+            .reset(Some(crate::app::downloads::real_job(engine.clone())));
         let grid_state =
             GridState::with_resume_positions(engine, self.config.resume_positions.clone());
         if let Some(old) = self.grid_state.replace(grid_state) {

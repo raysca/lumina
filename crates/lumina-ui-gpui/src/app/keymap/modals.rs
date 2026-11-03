@@ -103,28 +103,14 @@ impl LuminaApp {
         // 1d. Network import dialog
         if let Some(ref stage) = self.network_import.stage {
             match key {
-                "escape" => self.dismiss_network_import(true, cx),
-                "f" if matches!(
-                    stage,
-                    crate::app::network_import::NetworkImportStage::Ready { .. }
-                ) =>
-                {
-                    self.toggle_network_import_favorite(cx)
+                "escape" => self.close_network_import_dialog(cx),
+                "enter" | "return" => {
+                    if let crate::app::network_import::NetworkImportStage::Input { url, .. } = stage
+                    {
+                        let url = url.clone();
+                        self.submit_network_url(url, cx);
+                    }
                 }
-                "enter" | "return" => match stage {
-                    crate::app::network_import::NetworkImportStage::Input { url, .. } => {
-                        let url_to_inspect = url.clone();
-                        self.inspect_network_url(url_to_inspect, cx);
-                    }
-                    crate::app::network_import::NetworkImportStage::Ready { .. } => {
-                        self.confirm_network_download(cx);
-                    }
-                    crate::app::network_import::NetworkImportStage::MissingHelper { url } => {
-                        let retry_url = url.clone();
-                        self.inspect_network_url(retry_url, cx);
-                    }
-                    _ => {}
-                },
                 "backspace" => {
                     if let Some(crate::app::network_import::NetworkImportStage::Input {
                         ref mut url,
@@ -136,6 +122,30 @@ impl LuminaApp {
                         cx.notify();
                     }
                 }
+                _ => {}
+            }
+            return true;
+        }
+
+        // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
+        // a download and never trashes the grid selection behind it.
+        if self.downloads.open {
+            let focused = self.downloads.focused;
+            match key {
+                "escape" => self.close_downloads_panel(cx),
+                "up" => self.move_download_focus(-1, cx),
+                "down" => self.move_download_focus(1, cx),
+                "enter" | "return" => {
+                    if let Some(id) = focused {
+                        self.download_main_action(id, cx);
+                    }
+                }
+                "backspace" | "delete" if !cmd_or_ctrl => {
+                    if let Some(id) = focused {
+                        self.cancel_or_remove_download(id, cx);
+                    }
+                }
+                "l" if cmd_or_ctrl && keystroke.modifiers.alt => self.close_downloads_panel(cx),
                 _ => {}
             }
             return true;

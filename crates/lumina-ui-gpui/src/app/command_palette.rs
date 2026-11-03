@@ -52,6 +52,7 @@ pub enum CommandId {
     LocateMissing,
     ImportMedia,
     ImportNetworkVideo,
+    ToggleDownloads,
     CancelImport,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
@@ -101,7 +102,7 @@ impl Command {
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
             LocateMissing => Icon::TriangleAlert,
-            ImportMedia | ImportNetworkVideo => Icon::ArrowDownToLine,
+            ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
@@ -160,6 +161,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.import_network_video",
             shortcut: "⌥⌘U",
             keywords: "import video url youtube hls download stream network link web",
+        },
+        Command {
+            id: CommandId::ToggleDownloads,
+            key: "command.toggle_downloads",
+            shortcut: "⌥⌘L",
+            keywords: "downloads queue progress url video",
         },
         Command {
             id: CommandId::CancelImport,
@@ -470,6 +477,7 @@ impl LuminaApp {
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
+            CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             _ => true,
         }
     }
@@ -669,6 +677,7 @@ impl LuminaApp {
             CommandId::LocateMissing => self.locate_missing_selected(cx),
             CommandId::ImportMedia => self.pick_import_folders(cx),
             CommandId::ImportNetworkVideo => self.open_network_import_dialog(cx),
+            CommandId::ToggleDownloads => self.toggle_downloads_panel(cx),
             CommandId::CancelImport => self.cancel_running_import(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);

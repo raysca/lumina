@@ -17,6 +17,7 @@ actions!(
         ImportXmp,
         ImportMedia,
         ImportNetworkVideo,
+        ToggleDownloads,
         NewSmartAlbum
     ]
 );
