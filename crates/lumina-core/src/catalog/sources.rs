@@ -71,45 +71,10 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use crate::catalog::Catalog;
-    use crate::{MediaId, MediaItem, MediaType, SystemAlbum, SCHEMA_VERSION};
+    use crate::{MediaId, SystemAlbum, SCHEMA_VERSION};
     use std::path::{Path, PathBuf};
 
-    fn item(path: &str) -> MediaItem {
-        let path = PathBuf::from(path);
-        MediaItem {
-            id: MediaId(0),
-            parent_dir: path.parent().unwrap().to_string_lossy().to_string(),
-            file_name: path.file_name().unwrap().to_string_lossy().to_string(),
-            path,
-            title: None,
-            file_size: 1_000,
-            mtime_epoch_ms: 1,
-            media_type: MediaType::Video,
-            width: 640,
-            height: 360,
-            duration_ms: Some(1_000),
-            timestamp_epoch_ms: 1,
-            year: 2026,
-            month: 11,
-            day: 3,
-            latitude: None,
-            longitude: None,
-            altitude: None,
-            country_code: None,
-            admin1_region: None,
-            city: None,
-            make: None,
-            model: None,
-            lens: None,
-            focal_length: None,
-            f_number: None,
-            iso: None,
-            exposure_time: None,
-            is_favorite: false,
-            is_hidden: false,
-            is_trashed: false,
-        }
-    }
+    use crate::catalog::tests_support::video_item as item;
 
     fn plain(catalog: &Catalog, path: &str) -> MediaId {
         catalog.insert_or_update_batch(&[item(path)]).unwrap()[0].id

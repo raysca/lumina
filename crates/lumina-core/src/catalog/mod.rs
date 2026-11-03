@@ -1,7 +1,9 @@
 mod albums;
+mod downloads;
 mod duplicates;
 pub(crate) mod files;
 mod sources;
+pub use downloads::{DownloadRow, DownloadState};
 pub use files::MissingChange;
 pub use sources::PriorDownload;
 mod media;
@@ -323,5 +325,49 @@ impl Catalog {
             items.push(r?);
         }
         Ok(items)
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use crate::{MediaId, MediaItem, MediaType};
+    use std::path::PathBuf;
+
+    /// A catalogue-ready video at `path`.
+    pub(crate) fn video_item(path: &str) -> MediaItem {
+        let path = PathBuf::from(path);
+        MediaItem {
+            id: MediaId(0),
+            parent_dir: path.parent().unwrap().to_string_lossy().to_string(),
+            file_name: path.file_name().unwrap().to_string_lossy().to_string(),
+            path,
+            title: None,
+            file_size: 1_000,
+            mtime_epoch_ms: 1,
+            media_type: MediaType::Video,
+            width: 640,
+            height: 360,
+            duration_ms: Some(1_000),
+            timestamp_epoch_ms: 1,
+            year: 2026,
+            month: 11,
+            day: 3,
+            latitude: None,
+            longitude: None,
+            altitude: None,
+            country_code: None,
+            admin1_region: None,
+            city: None,
+            make: None,
+            model: None,
+            lens: None,
+            focal_length: None,
+            f_number: None,
+            iso: None,
+            exposure_time: None,
+            is_favorite: false,
+            is_hidden: false,
+            is_trashed: false,
+        }
     }
 }

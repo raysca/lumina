@@ -155,6 +155,21 @@ impl Catalog {
 
             CREATE INDEX IF NOT EXISTS idx_media_sources_url ON media_sources(source_url);
 
+            -- v14: URL download queue. media_id is deliberately not a foreign
+            -- key: purging the media keeps the record.
+            CREATE TABLE IF NOT EXISTS download_queue (
+                id INTEGER PRIMARY KEY,
+                url TEXT NOT NULL,
+                canonical_url TEXT,
+                title TEXT,
+                state TEXT NOT NULL,
+                error TEXT,
+                can_retry INTEGER NOT NULL DEFAULT 1,
+                media_id INTEGER,
+                added_epoch_ms INTEGER NOT NULL,
+                finished_epoch_ms INTEGER
+            );
+
             CREATE TRIGGER IF NOT EXISTS media_hashes_invalidate_au
             AFTER UPDATE OF file_size, mtime_epoch_ms ON media_items
             BEGIN

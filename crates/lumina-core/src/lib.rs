@@ -25,7 +25,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub use cache::DiskCache;
-pub use catalog::{Catalog, DeletionTarget, PriorDownload, SCHEMA_VERSION};
+pub use catalog::{
+    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, SCHEMA_VERSION,
+};
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
 pub use geocoder::{GeoLocation, OfflineGeocoder};
