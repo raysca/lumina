@@ -266,3 +266,51 @@ fn network_import_shortcut_alt_cmd_u() {
         );
     });
 }
+
+#[core::prelude::v1::test]
+fn network_import_long_url_and_clear_button() {
+    let (_library, engine) = seed_library("net_import_long", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+
+    // Set a long URL that would previously overflow
+    let long_url = "https://ugc-cdn-caching-n3xhcgna8lhaqar6c1.cloudwindow-route.com/engine/playback/v1/manifest.m3u8?token=long_token_string_exceeding_container_bounds";
+    view.update(vcx, |app, cx| {
+        app.set_network_import_url(long_url.to_string(), cx);
+    });
+
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("net-import-url-input").is_some());
+    assert!(vcx.debug_bounds("net-import-clear-btn").is_some());
+
+    // Click clear button
+    click(vcx, "net-import-clear-btn");
+    view.update(vcx, |app, _| match &app.network_import.stage {
+        Some(NetworkImportStage::Input { url, .. }) => {
+            assert!(url.is_empty(), "clear button should empty the URL");
+        }
+        _ => panic!("expected Input stage"),
+    });
+}
+
+#[core::prelude::v1::test]
+fn network_import_missing_helper_download_action() {
+    let (_library, engine) = seed_library("net_import_helper_dl", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+
+    view.update(vcx, |app, _| {
+        app.network_import.stage = Some(NetworkImportStage::MissingHelper {
+            url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
+            message: "yt-dlp Required".to_string(),
+        });
+    });
+
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("net-import-download-helper").is_some());
+    assert!(vcx.debug_bounds("net-import-retry").is_some());
+}

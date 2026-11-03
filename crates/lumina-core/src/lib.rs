@@ -939,6 +939,14 @@ impl LuminaEngine {
         self.catalog.get_media_source(media_id)
     }
 
+    pub fn download_yt_dlp_helper(
+        &self,
+        cancel_flag: &std::sync::atomic::AtomicBool,
+        progress_cb: Option<&net_import::ProgressCallback>,
+    ) -> Result<PathBuf> {
+        net_import::download_yt_dlp_helper(cancel_flag, progress_cb)
+    }
+
     pub fn set_trashed(&self, id: MediaId, is_trashed: bool) -> Result<()> {
         self.catalog.set_trashed(id, is_trashed)
     }

@@ -8,6 +8,8 @@ pub mod direct;
 pub mod helper;
 pub mod hls;
 
+pub use helper::{download_yt_dlp_helper, find_yt_dlp, inspect_url_helper, lumina_bin_dir};
+
 use anyhow::{anyhow, Result};
 use chrono::{Datelike, Local};
 use serde::{Deserialize, Serialize};
@@ -293,5 +295,16 @@ mod tests {
         );
         assert_eq!(sanitize_filename("   ...clean name...   "), "clean name");
         assert_eq!(sanitize_filename(""), "video");
+    }
+
+    #[test]
+    fn test_helper_bin_paths() {
+        let bin_dir = lumina_bin_dir().expect("should resolve application support bin dir");
+        assert!(bin_dir.to_string_lossy().contains("Lumina"));
+        assert!(bin_dir.to_string_lossy().contains("bin"));
+
+        // If custom path is provided and exists, find_yt_dlp picks it
+        let custom = std::env::current_exe().unwrap();
+        assert_eq!(find_yt_dlp(Some(&custom)), Some(custom));
     }
 }

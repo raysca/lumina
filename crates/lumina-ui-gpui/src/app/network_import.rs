@@ -31,6 +31,11 @@ pub(crate) enum NetworkImportStage {
         title: String,
         progress: NetworkDownloadProgress,
     },
+    /// Downloading missing helper tool (yt-dlp) with live progress.
+    DownloadingHelper {
+        url: String,
+        progress: NetworkDownloadProgress,
+    },
     /// Required helper binary (yt-dlp) is missing.
     MissingHelper { url: String, message: String },
 }
@@ -47,6 +52,7 @@ impl NetworkImportState {
             self.stage,
             Some(NetworkImportStage::Inspecting { .. })
                 | Some(NetworkImportStage::Downloading { .. })
+                | Some(NetworkImportStage::DownloadingHelper { .. })
         )
     }
 }
@@ -95,8 +101,7 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Updates the URL input buffer (used in tests).
-    #[cfg(test)]
+    /// Updates the URL input buffer.
     pub fn set_network_import_url(&mut self, url: String, cx: &mut Context<Self>) {
         if let Some(NetworkImportStage::Input {
             url: ref mut current,
@@ -107,6 +112,90 @@ impl LuminaApp {
             *error = None;
             cx.notify();
         }
+    }
+
+    /// Downloads the missing yt-dlp helper tool into application support with live progress.
+    pub fn download_missing_helper(&mut self, url: String, cx: &mut Context<Self>) {
+        if self.network_import.is_busy() {
+            return;
+        }
+
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        self.network_import.cancel_flag = cancel_flag.clone();
+        self.network_import.stage = Some(NetworkImportStage::DownloadingHelper {
+            url: url.clone(),
+            progress: NetworkDownloadProgress {
+                phase: DownloadPhase::Connecting,
+                bytes_downloaded: 0,
+                total_bytes: None,
+                speed_bytes_per_sec: 0,
+                eta_secs: None,
+                message: "Connecting to download yt-dlp helper...".to_string(),
+            },
+        });
+        cx.notify();
+
+        let (progress_tx, progress_rx) = async_channel::unbounded::<NetworkDownloadProgress>();
+        let p_tx = progress_tx.clone();
+        let cb: ProgressCallback = Box::new(move |p| {
+            let _ = p_tx.send_blocking(p);
+        });
+
+        let cancel_for_task = cancel_flag.clone();
+        let download_task = cx.background_executor().spawn(async move {
+            lumina_core::net_import::download_yt_dlp_helper(&cancel_for_task, Some(&cb))
+        });
+
+        // Spawn progress poller
+        let this_progress = cx.spawn({
+            let rx = progress_rx.clone();
+            async move |this, cx| {
+                while let Ok(progress) = rx.recv().await {
+                    let _ = this.update(cx, |app, cx| {
+                        if let Some(NetworkImportStage::DownloadingHelper {
+                            progress: ref mut curr,
+                            ..
+                        }) = app.network_import.stage
+                        {
+                            *curr = progress;
+                            cx.notify();
+                        }
+                    });
+                }
+            }
+        });
+        this_progress.detach();
+
+        // Completion handler
+        let pending_url = url.clone();
+        cx.spawn(async move |this, cx| {
+            let result = download_task.await;
+            let _ = this.update(cx, |app, cx| {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    app.network_import.stage = Some(NetworkImportStage::MissingHelper {
+                        url: pending_url,
+                        message: "yt-dlp download was cancelled.".to_string(),
+                    });
+                    cx.notify();
+                    return;
+                }
+
+                match result {
+                    Ok(_path) => {
+                        app.show_toast("yt-dlp helper installed successfully", cx);
+                        app.inspect_network_url(pending_url, cx);
+                    }
+                    Err(e) => {
+                        app.network_import.stage = Some(NetworkImportStage::MissingHelper {
+                            url: pending_url,
+                            message: format!("Failed to download yt-dlp: {e:#}"),
+                        });
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     /// Toggles the favorite flag in the Ready stage.

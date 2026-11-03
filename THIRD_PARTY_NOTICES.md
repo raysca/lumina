@@ -35,6 +35,10 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
+## Bundled helper — yt-dlp
+
+The release app bundle may package a standalone universal build of [yt-dlp](https://github.com/yt-dlp/yt-dlp) for video import. yt-dlp is dedicated to the public domain under The Unlicense (<https://unlicense.org>).
+
 ## Rust crates
 
 The full dependency graph and versions are pinned in `Cargo.lock`. License

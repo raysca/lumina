@@ -55,6 +55,29 @@ cp resources/Lumina.icns "$BUNDLE_DIR/Contents/Resources/Lumina.icns"
 # About → MIT License / Acknowledgements open these.
 install -m 644 LICENSE THIRD_PARTY_NOTICES.md "$BUNDLE_DIR/Contents/Resources/"
 
+# Bundle helper dependencies (yt-dlp standalone universal binary)
+YTDLP_CACHE="target/deps/yt-dlp"
+if [[ "${LUMINA_BUNDLE_DEPS:-1}" == "1" ]]; then
+    if [[ ! -f "$YTDLP_CACHE" ]]; then
+        echo "Fetching yt-dlp standalone dependency..."
+        mkdir -p "target/deps"
+        curl -f -L -o "$YTDLP_CACHE" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos" || true
+        chmod +x "$YTDLP_CACHE" || true
+    fi
+    if [[ -f "$YTDLP_CACHE" ]]; then
+        echo "Bundling yt-dlp into $BUNDLE_DIR/Contents/MacOS/yt-dlp"
+        cp "$YTDLP_CACHE" "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+        chmod +x "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+        if [[ "$SIGN_IDENTITY" != "-" ]]; then
+            codesign --force --options runtime --timestamp \
+                --entitlements resources/Lumina.entitlements \
+                --sign "$SIGN_IDENTITY" "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+        else
+            codesign --force --sign - "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+        fi
+    fi
+fi
+
 if [[ "$SIGN_IDENTITY" != "-" ]]; then
     echo "Signing with identity: $SIGN_IDENTITY"
     codesign --force --options runtime --timestamp \

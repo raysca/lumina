@@ -13,6 +13,18 @@ use super::{
     ProgressCallback,
 };
 
+/// Official standalone universal macOS executable for yt-dlp.
+pub const YTDLP_MACOS_URL: &str =
+    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+
+/// Directory where Lumina stores application-managed helper binaries.
+pub fn lumina_bin_dir() -> Result<PathBuf> {
+    let base = dirs::data_local_dir()
+        .or_else(|| dirs::home_dir().map(|h| h.join("Library/Application Support")))
+        .ok_or_else(|| anyhow!("Could not resolve local application support directory"))?;
+    Ok(base.join("Lumina").join("bin"))
+}
+
 /// Common locations where `yt-dlp` may be installed on macOS.
 const CANDIDATE_PATHS: &[&str] = &[
     "/opt/homebrew/bin/yt-dlp",
@@ -21,6 +33,15 @@ const CANDIDATE_PATHS: &[&str] = &[
 ];
 
 /// Finds a valid `yt-dlp` executable on the host system.
+///
+/// Search order:
+/// 1. Explicit `custom_path` override.
+/// 2. Next to the running executable (e.g. `Lumina.app/Contents/MacOS/yt-dlp`).
+/// 3. App bundle resources (`Lumina.app/Contents/Resources/bin/yt-dlp`).
+/// 4. Lumina Application Support managed directory (`~/Library/Application Support/Lumina/bin/yt-dlp`).
+/// 5. User home local bin (`~/.local/bin/yt-dlp`).
+/// 6. System package paths (`/opt/homebrew`, `/usr/local`, `/usr/bin`).
+/// 7. System `PATH`.
 pub fn find_yt_dlp(custom_path: Option<&Path>) -> Option<PathBuf> {
     if let Some(custom) = custom_path {
         if custom.is_file() {
@@ -28,13 +49,30 @@ pub fn find_yt_dlp(custom_path: Option<&Path>) -> Option<PathBuf> {
         }
     }
 
-    for candidate in CANDIDATE_PATHS {
-        let p = PathBuf::from(candidate);
-        if p.is_file() {
-            return Some(p);
+    // 2 & 3. Bundled inside the application bundle
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let bundled = parent.join("yt-dlp");
+            if bundled.is_file() {
+                return Some(bundled);
+            }
+            if let Some(res) = parent.parent().map(|p| p.join("Resources/bin/yt-dlp")) {
+                if res.is_file() {
+                    return Some(res);
+                }
+            }
         }
     }
 
+    // 4. Managed Application Support directory
+    if let Ok(bin_dir) = lumina_bin_dir() {
+        let managed = bin_dir.join("yt-dlp");
+        if managed.is_file() {
+            return Some(managed);
+        }
+    }
+
+    // 5. User home ~/.local/bin
     if let Some(home) = dirs::home_dir() {
         let user_local = home.join(".local/bin/yt-dlp");
         if user_local.is_file() {
@@ -42,7 +80,15 @@ pub fn find_yt_dlp(custom_path: Option<&Path>) -> Option<PathBuf> {
         }
     }
 
-    // Check system PATH without spawning a subprocess
+    // 6. Common macOS Homebrew / system paths
+    for candidate in CANDIDATE_PATHS {
+        let p = PathBuf::from(candidate);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+
+    // 7. Check system PATH without spawning a subprocess
     if let Some(paths) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&paths) {
             let candidate = dir.join("yt-dlp");
@@ -284,4 +330,51 @@ pub fn download_yt_dlp(
     }
 
     Ok(final_dest.to_path_buf())
+}
+
+/// Downloads the standalone `yt-dlp` executable into Lumina's application support directory.
+pub fn download_yt_dlp_helper(
+    cancel_flag: &AtomicBool,
+    progress_cb: Option<&ProgressCallback>,
+) -> Result<PathBuf> {
+    let bin_dir = lumina_bin_dir()?;
+    let target = bin_dir.join("yt-dlp");
+
+    if let Some(cb) = progress_cb {
+        cb(NetworkDownloadProgress {
+            phase: DownloadPhase::Connecting,
+            bytes_downloaded: 0,
+            total_bytes: None,
+            speed_bytes_per_sec: 0,
+            eta_secs: None,
+            message: "Fetching official yt-dlp helper...".to_string(),
+        });
+    }
+
+    // Download to target using atomic promotion
+    let downloaded_path =
+        super::direct::download_direct_url(YTDLP_MACOS_URL, &target, cancel_flag, progress_cb)?;
+
+    // Mark as executable (chmod 0755)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = fs::Permissions::from_mode(0o755);
+        if let Err(e) = fs::set_permissions(&downloaded_path, perms) {
+            log::warn!("Failed to set 0755 permissions on yt-dlp helper: {e:#}");
+        }
+    }
+
+    if let Some(cb) = progress_cb {
+        cb(NetworkDownloadProgress {
+            phase: DownloadPhase::Complete,
+            bytes_downloaded: fs::metadata(&target).map(|m| m.len()).unwrap_or(0),
+            total_bytes: None,
+            speed_bytes_per_sec: 0,
+            eta_secs: None,
+            message: "yt-dlp helper installed successfully".to_string(),
+        });
+    }
+
+    Ok(target)
 }
