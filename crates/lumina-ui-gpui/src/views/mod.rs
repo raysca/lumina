@@ -9,6 +9,7 @@ pub mod floating_pip;
 pub mod grid;
 pub mod import_dialog;
 pub mod inspector;
+pub mod network_import_dialog;
 pub mod onboarding;
 pub mod preferences;
 pub mod search_bar;

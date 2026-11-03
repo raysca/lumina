@@ -17,6 +17,8 @@ pub struct SidecarMetadata {
     /// 0 = none, 1..=6 = [`LABEL_NAMES`] (the catalog's `color_label`).
     pub color_label: u8,
     pub tags: Vec<String>,
+    pub source_url: Option<String>,
+    pub credit: Option<String>,
 }
 
 /// xmp:Label values for color labels 1..=6, the names Lightroom and Bridge use.
@@ -26,6 +28,8 @@ impl SidecarMetadata {
     pub fn is_empty(&self) -> bool {
         self.title.as_deref().unwrap_or("").trim().is_empty()
             && self.caption.as_deref().unwrap_or("").trim().is_empty()
+            && self.source_url.as_deref().unwrap_or("").trim().is_empty()
+            && self.credit.as_deref().unwrap_or("").trim().is_empty()
             && self.rating == 0
             && self.color_label == 0
             && self.tags.is_empty()
@@ -93,9 +97,24 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
         _ => String::new(),
     };
 
+    let source = match metadata.source_url.as_deref() {
+        Some(source) if !source.trim().is_empty() => {
+            format!("   <dc:source>{}</dc:source>\n", escape_xml(source))
+        }
+        _ => String::new(),
+    };
+
+    let credit = match metadata.credit.as_deref() {
+        Some(credit) if !credit.trim().is_empty() => format!(
+            "   <photoshop:Credit>{}</photoshop:Credit>\n",
+            escape_xml(credit)
+        ),
+        _ => String::new(),
+    };
+
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n{}  >\n{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
-        metadata.rating, label, title, subject, description
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        metadata.rating, label, title, subject, description, source, credit
     )
 }
 
@@ -152,12 +171,22 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .map(extract_li_values)
         .unwrap_or_default();
 
+    let source_url = between(xml, "<dc:source>", "</dc:source>")
+        .map(|s| unescape_xml(s.trim()))
+        .filter(|s| !s.is_empty());
+
+    let credit = between(xml, "<photoshop:Credit>", "</photoshop:Credit>")
+        .map(|s| unescape_xml(s.trim()))
+        .filter(|s| !s.is_empty());
+
     SidecarMetadata {
         title,
         caption,
         rating,
         color_label,
         tags,
+        source_url,
+        credit,
     }
 }
 
@@ -212,11 +241,15 @@ mod tests {
             rating: 4,
             color_label: 2,
             tags: vec!["travel".to_string(), "japan & kyoto".to_string()],
+            source_url: Some("https://example.com/video.mp4?a=1&b=2".to_string()),
+            credit: Some("Channel & Artist".to_string()),
         };
         let xml = render_xmp(&metadata);
         assert!(xml.contains("xmp:Rating=\"4\""));
         assert!(xml.contains("xmp:Label=\"Orange\""));
         assert!(xml.contains("travel"));
+        assert!(xml.contains("<dc:source>https://example.com/video.mp4?a=1&amp;b=2</dc:source>"));
+        assert!(xml.contains("<photoshop:Credit>Channel &amp; Artist</photoshop:Credit>"));
         assert_eq!(parse_xmp(&xml), metadata);
     }
 
@@ -250,6 +283,7 @@ mod tests {
             rating: 3,
             color_label: 0,
             tags: vec!["one".to_string(), "two".to_string()],
+            ..Default::default()
         };
         let sidecar = write_sidecar(&media, &metadata)
             .unwrap()

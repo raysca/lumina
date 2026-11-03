@@ -1053,6 +1053,7 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
             rating: 5,
             color_label: 0,
             tags: vec!["imported".to_string()],
+            ..Default::default()
         },
     )
     .unwrap();

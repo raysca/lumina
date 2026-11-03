@@ -21,6 +21,7 @@ pub fn build_menus() -> Vec<Menu> {
             items: vec![
                 MenuItem::action("Open Library…", OpenLibrary),
                 MenuItem::action("Import…", ImportMedia),
+                MenuItem::action("Import Video from URL…", ImportNetworkVideo),
                 MenuItem::action("Rescan Library", RescanLibrary),
                 MenuItem::separator(),
                 MenuItem::action("New Smart Album…", NewSmartAlbum),

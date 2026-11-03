@@ -405,6 +405,9 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
                 this.pick_import_folders(cx);
             }))
+            .on_action(cx.listener(|this, _: &ImportNetworkVideo, _w, cx| {
+                this.open_network_import_dialog(cx);
+            }))
             .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                 this.import_sidecars_selected(cx);
             }))
@@ -574,6 +577,12 @@ impl Render for LuminaApp {
                 self.import.dialog.is_some(),
                 crate::views::import_dialog::render(self, cx),
                 "import-dialog-in",
+            ))
+            // 8d. Network video import dialog
+            .child(motion::overlay_in(
+                self.network_import.stage.is_some(),
+                crate::views::network_import_dialog::render(self, cx),
+                "network-import-dialog-in",
             ))
             // 9. Media Card Context Menu Overlay
             .child(motion::overlay_in(

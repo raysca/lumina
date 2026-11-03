@@ -51,6 +51,7 @@ pub enum CommandId {
     DeleteSmartAlbum,
     LocateMissing,
     ImportMedia,
+    ImportNetworkVideo,
     CancelImport,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
@@ -100,7 +101,7 @@ impl Command {
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
             LocateMissing => Icon::TriangleAlert,
-            ImportMedia => Icon::ArrowDownToLine,
+            ImportMedia | ImportNetworkVideo => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
@@ -153,6 +154,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.import_media",
             shortcut: "⇧⌘I",
             keywords: "import copy add files folder card camera",
+        },
+        Command {
+            id: CommandId::ImportNetworkVideo,
+            key: "command.import_network_video",
+            shortcut: "⌥⌘U",
+            keywords: "import video url youtube hls download stream network link web",
         },
         Command {
             id: CommandId::CancelImport,
@@ -661,6 +668,7 @@ impl LuminaApp {
             CommandId::DeleteSmartAlbum => self.delete_selected_smart_album(cx),
             CommandId::LocateMissing => self.locate_missing_selected(cx),
             CommandId::ImportMedia => self.pick_import_folders(cx),
+            CommandId::ImportNetworkVideo => self.open_network_import_dialog(cx),
             CommandId::CancelImport => self.cancel_running_import(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);

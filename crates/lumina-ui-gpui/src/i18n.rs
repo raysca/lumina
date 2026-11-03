@@ -74,6 +74,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.delete_smart_album" => "Delete Smart Album…",
         "command.locate_missing" => "Locate Missing File…",
         "command.import_media" => "Import…",
+        "command.import_network_video" => "Import Video from URL…",
         "command.cancel_import" => "Cancel Import",
         _ => return None,
     })

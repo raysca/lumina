@@ -17,6 +17,7 @@ pub struct InfoDetails {
     pub path: PathBuf,
     pub added_epoch_ms: Option<i64>,
     pub file: MediaDetails,
+    pub source: Option<(String, Option<String>, i64)>,
 }
 
 impl InfoDetails {
@@ -43,22 +44,31 @@ impl LuminaApp {
             path: path.clone(),
             added_epoch_ms: None,
             file: MediaDetails::default(),
+            source: None,
         });
         let read_path = path.clone();
         let read = cx.background_executor().spawn(async move {
-            let added = engine.and_then(|engine| {
-                engine
-                    .catalog()
-                    .get_added_epoch_ms(id)
-                    .unwrap_or_else(|err| {
-                        log::warn!("reading the added date for {id:?}: {err:#}");
+            let (added, source) = engine
+                .as_ref()
+                .map(|engine| {
+                    let added = engine
+                        .catalog()
+                        .get_added_epoch_ms(id)
+                        .unwrap_or_else(|err| {
+                            log::warn!("reading the added date for {id:?}: {err:#}");
+                            None
+                        });
+                    let source = engine.get_media_source(id).unwrap_or_else(|err| {
+                        log::warn!("reading media source for {id:?}: {err:#}");
                         None
-                    })
-            });
-            (added, read_media_details(&read_path))
+                    });
+                    (added, source)
+                })
+                .unwrap_or((None, None));
+            (added, source, read_media_details(&read_path))
         });
         cx.spawn(async move |this, cx| {
-            let (added, file) = read.await;
+            let (added, source, file) = read.await;
             // The app may be gone; nothing to show then.
             let _ = this.update(cx, |this, cx| {
                 if let Some(details) = this
@@ -67,6 +77,7 @@ impl LuminaApp {
                     .filter(|d| d.id == id && d.path == path)
                 {
                     details.added_epoch_ms = added;
+                    details.source = source;
                     details.file = file;
                     cx.notify();
                 }

@@ -4,6 +4,7 @@ pub mod decoder;
 pub mod duplicates;
 pub mod geocoder;
 pub mod import;
+pub mod net_import;
 pub mod scanner;
 pub mod search;
 pub mod smart_albums;
@@ -870,6 +871,16 @@ impl LuminaEngine {
                         self.catalog.add_tags_batch(&[*id], &metadata.tags)?;
                         changed = true;
                     }
+                    if let Some(ref source_url) = metadata.source_url {
+                        if !source_url.is_empty() {
+                            self.catalog.record_media_source(
+                                *id,
+                                source_url,
+                                metadata.credit.as_deref(),
+                            )?;
+                            changed = true;
+                        }
+                    }
                     if changed {
                         report.updated += 1;
                     }
@@ -892,17 +903,40 @@ impl LuminaEngine {
     ) -> Result<SidecarMetadata> {
         let tags = self.catalog.get_tags_for_item(id)?;
         let title = self.catalog.get_item_by_id(id)?.and_then(|item| item.title);
+        let (source_url, credit) = match self.catalog.get_media_source(id)? {
+            Some((url, uploader, _)) => (Some(url), uploader),
+            None => (None, None),
+        };
         Ok(SidecarMetadata {
             title,
             caption: captions.get(&id).cloned(),
             rating: ratings.get(&id).copied().unwrap_or(0),
             color_label: labels.get(&id).copied().unwrap_or(0),
             tags,
+            source_url,
+            credit,
         })
     }
 
     pub fn get_captions_map(&self) -> std::collections::HashMap<MediaId, String> {
         self.read("get captions map", self.catalog.get_captions_map())
+    }
+
+    pub fn record_media_source(
+        &self,
+        media_id: MediaId,
+        source_url: &str,
+        uploader: Option<&str>,
+    ) -> Result<()> {
+        self.catalog
+            .record_media_source(media_id, source_url, uploader)
+    }
+
+    pub fn get_media_source(
+        &self,
+        media_id: MediaId,
+    ) -> Result<Option<(String, Option<String>, i64)>> {
+        self.catalog.get_media_source(media_id)
     }
 
     pub fn set_trashed(&self, id: MediaId, is_trashed: bool) -> Result<()> {

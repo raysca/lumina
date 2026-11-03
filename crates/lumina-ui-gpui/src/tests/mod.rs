@@ -12,6 +12,7 @@ mod legacy_catalog;
 mod missing;
 mod motion;
 mod multi_select;
+mod network_import;
 mod overlay_isolation;
 mod palette_and_empty;
 mod pip;

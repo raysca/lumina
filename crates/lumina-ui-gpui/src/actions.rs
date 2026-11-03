@@ -16,6 +16,7 @@ actions!(
         ToggleInspector,
         ImportXmp,
         ImportMedia,
+        ImportNetworkVideo,
         NewSmartAlbum
     ]
 );

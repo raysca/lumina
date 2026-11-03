@@ -29,6 +29,7 @@ pub(crate) enum TextTarget {
     TagManagerRename,
     TagManagerSearch,
     Search,
+    NetworkImportUrl,
 }
 
 /// An IME composition in progress: the field it belongs to, its UTF-16
@@ -75,6 +76,11 @@ impl LuminaApp {
             || self.import.dialog.is_some()
         {
             return None;
+        }
+        if let Some(crate::app::network_import::NetworkImportStage::Input { .. }) =
+            self.network_import.stage
+        {
+            return Some(NetworkImportUrl);
         }
         if self.album_draft.modal_open {
             return (self.album_draft.popup.is_none() && self.draft_focus_is_typed())
@@ -124,6 +130,17 @@ impl LuminaApp {
             TagManagerRename => &mut self.tag_manager.editing_buffer,
             TagManagerSearch => &mut self.tag_manager.search,
             Search => &mut self.search_query,
+            NetworkImportUrl => {
+                if let Some(crate::app::network_import::NetworkImportStage::Input {
+                    ref mut url,
+                    ..
+                }) = self.network_import.stage
+                {
+                    url
+                } else {
+                    return None;
+                }
+            }
         })
     }
 
@@ -151,6 +168,15 @@ impl LuminaApp {
             TextTarget::Search => {
                 self.reset_search_suggestions();
                 self.clear_selection(cx);
+            }
+            TextTarget::NetworkImportUrl => {
+                if let Some(crate::app::network_import::NetworkImportStage::Input {
+                    ref mut error,
+                    ..
+                }) = self.network_import.stage
+                {
+                    *error = None;
+                }
             }
             _ => {}
         }

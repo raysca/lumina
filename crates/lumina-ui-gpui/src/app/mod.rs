@@ -9,6 +9,7 @@ pub mod keymap;
 pub mod library;
 pub mod missing;
 pub mod navigation;
+pub mod network_import;
 pub mod panels;
 pub mod pip;
 pub mod preferences;

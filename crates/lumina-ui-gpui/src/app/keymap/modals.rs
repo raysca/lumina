@@ -100,6 +100,42 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d. Network import dialog
+        if let Some(ref stage) = self.network_import.stage {
+            match key {
+                "escape" => self.close_network_import_dialog(cx),
+                "enter" | "return" => match stage {
+                    crate::app::network_import::NetworkImportStage::Input { url, .. } => {
+                        let url_to_inspect = url.clone();
+                        self.inspect_network_url(url_to_inspect, cx);
+                    }
+                    crate::app::network_import::NetworkImportStage::Ready { .. } => {
+                        self.confirm_network_download(cx);
+                    }
+                    crate::app::network_import::NetworkImportStage::MissingHelper {
+                        url, ..
+                    } => {
+                        let retry_url = url.clone();
+                        self.inspect_network_url(retry_url, cx);
+                    }
+                    _ => {}
+                },
+                "backspace" => {
+                    if let Some(crate::app::network_import::NetworkImportStage::Input {
+                        ref mut url,
+                        ref mut error,
+                    }) = self.network_import.stage
+                    {
+                        url.pop();
+                        *error = None;
+                        cx.notify();
+                    }
+                }
+                _ => {}
+            }
+            return true;
+        }
+
         // 2. Smart album builder sheet
         if self.album_draft.modal_open {
             self.handle_album_builder_key(key, cmd_or_ctrl, keystroke, cx);

@@ -548,3 +548,115 @@ int lumina_reduce_motion(void) {
         return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion] ? 1 : 0;
     }
 }
+
+// Native macOS HLS stream (.m3u8) downloader & remuxer to MP4 using AVAssetExportSession.
+int lumina_export_hls_stream(
+    const char *url_str,
+    const char *dest_path,
+    const uint8_t *cancel_flag,
+    void (*on_progress)(float progress, void *context),
+    void *context,
+    char *out_error,
+    int error_len
+) {
+    if (!url_str || !dest_path) {
+        if (out_error && error_len > 0) {
+            snprintf(out_error, error_len, "Invalid arguments");
+        }
+        return 0;
+    }
+
+    @autoreleasepool {
+        NSString *urlNs = [NSString stringWithUTF8String:url_str];
+        NSURL *remoteUrl = [NSURL URLWithString:urlNs];
+        if (!remoteUrl) {
+            if (out_error && error_len > 0) {
+                snprintf(out_error, error_len, "Invalid URL string");
+            }
+            return 0;
+        }
+
+        NSString *destNs = [NSString stringWithUTF8String:dest_path];
+        NSURL *outputUrl = [NSURL fileURLWithPath:destNs];
+        if (!outputUrl) {
+            if (out_error && error_len > 0) {
+                snprintf(out_error, error_len, "Invalid destination file path");
+            }
+            return 0;
+        }
+
+        // Remove any pre-existing file at destination to allow export
+        [[NSFileManager defaultManager] removeItemAtURL:outputUrl error:nil];
+
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:remoteUrl options:nil];
+        if (!asset) {
+            if (out_error && error_len > 0) {
+                snprintf(out_error, error_len, "Could not initialize AVURLAsset for stream");
+            }
+            return 0;
+        }
+
+        NSString *preset = AVAssetExportPresetPassthrough;
+        NSArray *compatiblePresets = [AVAssetExportSession exportPresetsCompatibleWithAsset:asset];
+        if (![compatiblePresets containsObject:preset]) {
+            if ([compatiblePresets containsObject:AVAssetExportPresetHighestQuality]) {
+                preset = AVAssetExportPresetHighestQuality;
+            } else if (compatiblePresets.count > 0) {
+                preset = [compatiblePresets firstObject];
+            }
+        }
+
+        AVAssetExportSession *session = [AVAssetExportSession exportSessionWithAsset:asset presetName:preset];
+        if (!session) {
+            if (out_error && error_len > 0) {
+                snprintf(out_error, error_len, "Failed to create AVAssetExportSession");
+            }
+            return 0;
+        }
+
+        session.outputURL = outputUrl;
+        session.outputFileType = AVFileTypeMPEG4;
+        session.shouldOptimizeForNetworkUse = YES;
+
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+        __block BOOL exportFinished = NO;
+
+        [session exportAsynchronouslyWithCompletionHandler:^{
+            exportFinished = YES;
+            dispatch_semaphore_signal(sem);
+        }];
+
+        while (!exportFinished) {
+            if (cancel_flag && *cancel_flag) {
+                [session cancelExport];
+                // Wait for the session to finish cancelling before removing outputUrl
+                dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+                [[NSFileManager defaultManager] removeItemAtURL:outputUrl error:nil];
+                if (out_error && error_len > 0) {
+                    snprintf(out_error, error_len, "Download cancelled by user");
+                }
+                return 0;
+            }
+
+            if (on_progress) {
+                on_progress(session.progress, context);
+            }
+
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
+        }
+
+        if (session.status == AVAssetExportSessionStatusCompleted) {
+            if (on_progress) {
+                on_progress(1.0f, context);
+            }
+            return 1;
+        } else {
+            NSString *errDesc = session.error.localizedDescription ?: @"Export session failed";
+            if (out_error && error_len > 0) {
+                snprintf(out_error, error_len, "%s", [errDesc UTF8String]);
+            }
+            [[NSFileManager defaultManager] removeItemAtURL:outputUrl error:nil];
+            return 0;
+        }
+    }
+}

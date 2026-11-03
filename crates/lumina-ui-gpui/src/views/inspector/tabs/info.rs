@@ -251,6 +251,17 @@ pub fn render_info_tab(
                     "Added to Lumina",
                     added_str.as_deref().unwrap_or("—"),
                 ))
+                .children(
+                    details
+                        .and_then(|d| d.source.as_ref())
+                        .map(|(url, uploader, _ts)| {
+                            let text = match uploader {
+                                Some(u) if !u.is_empty() => format!("{u} ({url})"),
+                                _ => url.clone(),
+                            };
+                            render_info_label_value_row("Source", &text)
+                        }),
+                )
                 // Path
                 .child(
                     div()

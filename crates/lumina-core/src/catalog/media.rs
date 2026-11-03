@@ -747,6 +747,52 @@ impl Catalog {
         }
         Ok(map)
     }
+
+    /// Records network source metadata (original URL, uploader, timestamp) for an imported item.
+    pub fn record_media_source(
+        &self,
+        media_id: MediaId,
+        source_url: &str,
+        uploader: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        conn.execute(
+            r#"
+            INSERT INTO media_sources (media_id, source_url, uploader, imported_epoch_ms)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(media_id) DO UPDATE SET
+                source_url = excluded.source_url,
+                uploader = excluded.uploader,
+                imported_epoch_ms = excluded.imported_epoch_ms;
+            "#,
+            params![media_id.0 as i64, source_url, uploader, now_ms],
+        )?;
+        Ok(())
+    }
+
+    /// Returns `(source_url, uploader, imported_epoch_ms)` for an item if it was imported from the network.
+    pub fn get_media_source(
+        &self,
+        media_id: MediaId,
+    ) -> Result<Option<(String, Option<String>, i64)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(
+            "SELECT source_url, uploader, imported_epoch_ms FROM media_sources WHERE media_id = ?1;",
+        )?;
+        let mut rows = stmt.query(params![media_id.0 as i64])?;
+        if let Some(row) = rows.next()? {
+            let url: String = row.get(0)?;
+            let uploader: Option<String> = row.get(1)?;
+            let epoch_ms: i64 = row.get(2)?;
+            Ok(Some((url, uploader, epoch_ms)))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]

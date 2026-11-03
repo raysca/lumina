@@ -113,6 +113,12 @@ impl LuminaApp {
             return;
         }
 
+        // ⌥⌘U: Import Video from URL…
+        if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("u") {
+            self.open_network_import_dialog(cx);
+            return;
+        }
+
         // ⌘O: Open Library… (also File menu and the sidebar LIBRARY header)
         if cmd_or_ctrl && !keystroke.modifiers.shift && key.eq_ignore_ascii_case("o") {
             self.pick_folder_dialog(cx);

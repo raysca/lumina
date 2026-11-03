@@ -45,6 +45,60 @@ extern "C" {
         out_len: *mut c_int,
     ) -> c_int;
     fn lumina_player_free_frame(data: *mut u8);
+    fn lumina_export_hls_stream(
+        url_str: *const c_char,
+        dest_path: *const c_char,
+        cancel_flag: *const u8,
+        on_progress: Option<extern "C" fn(progress: f32, context: *mut c_void)>,
+        context: *mut c_void,
+        out_error: *mut c_char,
+        error_len: c_int,
+    ) -> c_int;
+}
+
+/// Exports a remote HLS stream (.m3u8) to a local MP4 file using native AVFoundation.
+pub fn export_hls_stream_macos<F>(
+    url: &str,
+    dest_path: &Path,
+    cancel_flag: &std::sync::atomic::AtomicBool,
+    mut on_progress: F,
+) -> Result<()>
+where
+    F: FnMut(f32),
+{
+    let url_c = CString::new(url)?;
+    let dest_str = dest_path.to_string_lossy().to_string();
+    let dest_c = CString::new(dest_str)?;
+
+    let mut err_buf = vec![0u8; 1024];
+
+    extern "C" fn progress_trampoline<F: FnMut(f32)>(progress: f32, context: *mut c_void) {
+        unsafe {
+            let closure = &mut *(context as *mut F);
+            closure(progress);
+        }
+    }
+
+    let success = unsafe {
+        lumina_export_hls_stream(
+            url_c.as_ptr(),
+            dest_c.as_ptr(),
+            cancel_flag.as_ptr() as *const u8,
+            Some(progress_trampoline::<F>),
+            &mut on_progress as *mut F as *mut c_void,
+            err_buf.as_mut_ptr() as *mut c_char,
+            err_buf.len() as c_int,
+        )
+    };
+
+    if success != 0 {
+        Ok(())
+    } else {
+        let err_str = std::ffi::CStr::from_bytes_until_nul(&err_buf)
+            .map(|cs| cs.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| "HLS export failed".to_string());
+        Err(anyhow!("{err_str}"))
+    }
 }
 
 pub struct AvFoundationPlayer {

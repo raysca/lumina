@@ -141,6 +141,17 @@ impl Catalog {
             -- up each file's just-added twin (present) by inode.
             CREATE INDEX IF NOT EXISTS idx_file_state_inode ON media_file_state(file_inode);
 
+            -- v13: Source attribution for network imports (URL, uploader, timestamp).
+            CREATE TABLE IF NOT EXISTS media_sources (
+                media_id INTEGER PRIMARY KEY,
+                source_url TEXT NOT NULL,
+                uploader TEXT,
+                imported_epoch_ms INTEGER NOT NULL,
+                FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_media_sources_url ON media_sources(source_url);
+
             CREATE TRIGGER IF NOT EXISTS media_hashes_invalidate_au
             AFTER UPDATE OF file_size, mtime_epoch_ms ON media_items
             BEGIN

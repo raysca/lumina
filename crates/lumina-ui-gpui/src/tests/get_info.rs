@@ -351,6 +351,7 @@ fn cached_details_never_cross_libraries() {
         path: item.path.clone(),
         added_epoch_ms: Some(1),
         file: Default::default(),
+        source: None,
     };
     assert!(details.is_for(&item));
     let mut same_id_other_library = item.clone();

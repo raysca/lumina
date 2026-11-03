@@ -429,6 +429,8 @@ pub struct LuminaApp {
     pub missing_items: HashSet<MediaId>,
     /// Import dialog and a running copy.
     pub(crate) import: crate::app::import::ImportState,
+    /// Network video import dialog and running download.
+    pub(crate) network_import: crate::app::network_import::NetworkImportState,
     pub caption: CaptionState,
     /// Reversible catalog edits (ratings, tags, captions, favorites, trash).
     pub undo: crate::app::undo::UndoState,
@@ -602,6 +604,7 @@ impl LuminaApp {
             item_captions: HashMap::new(),
             missing_items: HashSet::new(),
             import: Default::default(),
+            network_import: Default::default(),
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),
             event_receiver_thread: None,

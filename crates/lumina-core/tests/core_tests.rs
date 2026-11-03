@@ -1951,6 +1951,7 @@ fn test_import_sidecars_applies_title_caption_rating_and_tags() {
             rating: 5,
             color_label: 4,
             tags: vec!["imported".to_string()],
+            ..Default::default()
         },
     )
     .unwrap();
@@ -3266,6 +3267,48 @@ fn test_duplicate_detection_and_merging() {
         engine.query_duplicate_count(),
         0,
         "no active duplicates remain after merge"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_network_import_source_attribution_and_cascade() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("net_import_attr");
+
+    let item = engine.get_item_slice(0..1).remove(0);
+
+    let source_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    let uploader = "Rick Astley";
+
+    // Record source attribution
+    engine
+        .record_media_source(item.id, source_url, Some(uploader))
+        .unwrap();
+
+    // Verify lookup
+    let record = engine.get_media_source(item.id).unwrap();
+    assert!(record.is_some(), "source record should be present");
+    let (url, up, ts): (String, Option<String>, i64) = record.unwrap();
+    assert_eq!(url, source_url);
+    assert_eq!(up.as_deref(), Some(uploader));
+    assert!(ts > 0);
+
+    // Verify destination computation
+    let dest = engine.destination_for_network_import("My Video", "mp4");
+    assert!(dest.to_string_lossy().contains("Imports"));
+    assert!(dest.to_string_lossy().ends_with("My Video.mp4"));
+
+    // Verify cascade deletion
+    engine
+        .permanently_delete_items(&[item.id], DeletionTarget::CatalogOnly)
+        .unwrap();
+
+    let record_after = engine.get_media_source(item.id).unwrap();
+    assert!(
+        record_after.is_none(),
+        "source record must be cascade deleted when media item is removed"
     );
 
     drop(engine);
