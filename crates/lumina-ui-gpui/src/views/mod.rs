@@ -2,6 +2,7 @@ pub mod album_builder;
 pub mod command_palette;
 pub mod context_menu;
 pub mod delete_modal;
+pub mod downloads_confirm;
 pub mod downloads_panel;
 pub mod duplicates;
 pub mod first_scan;

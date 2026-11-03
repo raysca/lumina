@@ -523,6 +523,12 @@ impl LuminaApp {
     }
 
     pub fn open_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if self.ask_before_leaving(
+            crate::app::downloads::DownloadsConfirm::OpenLibrary(path.clone()),
+            cx,
+        ) {
+            return;
+        }
         // A folder chosen by the user is a fresh session: drop the startup
         // restore context so another library's view or selection is never applied.
         self.pending_restore = None;
@@ -580,6 +586,7 @@ impl LuminaApp {
                 self.retire_image(image);
             }
         }
+        self.load_downloads(cx);
         self.selected_item = None;
         self.selected_index = None;
         self.selected_indices.clear();

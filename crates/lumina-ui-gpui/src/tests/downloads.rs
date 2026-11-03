@@ -2,7 +2,7 @@
 //! persistence, driven through a fake job so nothing touches the network.
 
 use super::ui_automation::{app_with_library, render_ui, seed_library};
-use crate::app::downloads::{JobFn, JobOutcome, JobRequest, MAX_RUNNING};
+use crate::app::downloads::{DownloadsConfirm, JobFn, JobOutcome, JobRequest, MAX_RUNNING};
 use crate::app::network_import::NetworkImportStage;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -82,17 +82,33 @@ pub(crate) fn settle(
     }
 }
 
+/// A seeded test library, deleted when the test ends (pass or fail).
+pub(crate) struct TempLibrary(std::path::PathBuf);
+
+impl std::ops::Deref for TempLibrary {
+    type Target = std::path::PathBuf;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for TempLibrary {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 pub(crate) fn queue_app(
     name: &str,
 ) -> (
-    std::path::PathBuf,
+    TempLibrary,
     Arc<LuminaEngine>,
     FakeJobs,
     gpui::TestAppContext,
 ) {
     let (dir, engine) = seed_library(name, 1);
     (
-        dir,
+        TempLibrary(dir),
         engine,
         FakeJobs::default(),
         gpui::TestAppContext::single(),
@@ -152,6 +168,7 @@ pub(crate) fn imported(engine: &LuminaEngine) -> JobOutcome {
 }
 
 const URL: &str = "https://example.com/a.mp4";
+const URL_B: &str = "https://example.com/b.mp4";
 
 #[core::prelude::v1::test]
 fn submit_closes_dialog_and_adds_a_row() {
@@ -520,5 +537,166 @@ fn dialog_opens_while_downloads_run() {
             ),
             "the dialog opens while a download runs"
         )
+    });
+}
+
+fn quit_via_menu(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
+    super::ui_automation::focus_app(vcx, view);
+    vcx.dispatch_action(crate::actions::QuitApp);
+    vcx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn quit_with_running_downloads_asks_first() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_quit_ask");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    quit_via_menu(&view, vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            matches!(app.downloads.confirm, Some(DownloadsConfirm::Quit)),
+            "quitting with a running download asks first"
+        );
+        assert!(!app.downloads.quit_requested, "the app has not quit yet");
+    });
+    render_ui(vcx);
+    super::ui_automation::click(vcx, "downloads-confirm-ok");
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.quit_requested, "Quit confirms");
+        assert!(app.downloads.entries.is_empty());
+    });
+}
+
+#[core::prelude::v1::test]
+fn quit_without_downloads_quits_at_once() {
+    let (_dir, engine, _fake, mut cx) = queue_app("dl_quit_now");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    quit_via_menu(&view, vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.confirm.is_none(), "nothing to ask about");
+        assert!(app.downloads.quit_requested, "the app quits at once");
+    });
+}
+
+#[core::prelude::v1::test]
+fn confirm_escape_and_backdrop_cancel() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_quit_cancel");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    quit_via_menu(&view, vcx);
+    super::ui_automation::keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.confirm.is_none(), "Esc cancels the prompt");
+        assert!(!app.downloads.quit_requested);
+    });
+    quit_via_menu(&view, vcx);
+    render_ui(vcx);
+    super::ui_automation::click_point(vcx, 20.0, 20.0);
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.confirm.is_none(), "the backdrop cancels");
+        assert!(!app.downloads.quit_requested);
+        assert_eq!(
+            states(app),
+            [DownloadState::Running],
+            "the download keeps going"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn paused_rows_load_without_starting() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_reopen");
+    for (url, state) in [
+        (URL, DownloadState::Running),
+        (URL_B, DownloadState::Waiting),
+    ] {
+        let mut row = engine.catalog().add_download(url).unwrap();
+        row.state = state;
+        engine.catalog().update_download(&row).unwrap();
+    }
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_library_inner(dir.clone(), cx));
+    install(&view, vcx, &fake);
+    settle(vcx, &view, "the stored rows load", |app| {
+        app.downloads.entries.len() == 2
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            states(app),
+            [DownloadState::Paused, DownloadState::Paused],
+            "unfinished downloads come back paused"
+        );
+    });
+    vcx.run_until_parked();
+    assert!(fake.requests().is_empty(), "nothing downloads at launch");
+}
+
+#[core::prelude::v1::test]
+fn resume_all_starts_up_to_three() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_resume_all");
+    for n in 0..4 {
+        let mut row = engine
+            .catalog()
+            .add_download(&format!("https://example.com/{n}.mp4"))
+            .unwrap();
+        row.state = DownloadState::Paused;
+        engine.catalog().update_download(&row).unwrap();
+    }
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_library_inner(dir.clone(), cx));
+    install(&view, vcx, &fake);
+    settle(vcx, &view, "the stored rows load", |app| {
+        app.downloads.entries.len() == 4
+    });
+    view.update(vcx, |app, cx| app.resume_all_downloads(cx));
+    settle(vcx, &view, "three run, one waits", |app| {
+        count(app, DownloadState::Running) == MAX_RUNNING && count(app, DownloadState::Waiting) == 1
+    });
+}
+
+#[core::prelude::v1::test]
+fn switching_library_drops_old_jobs() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_switch");
+    let (dir_b, engine_b) = seed_library("dl_switch_b", 1);
+    let dir_b = TempLibrary(dir_b);
+    drop(engine_b);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    view.update(vcx, |app, cx| app.open_library(dir_b.clone(), cx));
+    view.update(vcx, |app, _| {
+        assert!(
+            matches!(
+                app.downloads.confirm,
+                Some(DownloadsConfirm::OpenLibrary(_))
+            ),
+            "switching library with a running download asks first"
+        );
+    });
+    view.update(vcx, |app, cx| app.confirm_downloads_prompt(cx));
+    // A late outcome from the old job must not land anywhere new.
+    fake.finish(URL, JobOutcome::Failed("late".into()));
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.entries.is_empty(),
+            "the old library's rows are gone"
+        );
+        let engine = app.grid_state.as_ref().unwrap().engine.clone();
+        assert!(
+            engine.catalog().list_downloads().unwrap().is_empty(),
+            "the old job never writes into the new library"
+        );
     });
 }

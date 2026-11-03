@@ -418,8 +418,8 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                 this.open_album_builder(cx);
             }))
-            .on_action(cx.listener(|_this, _: &QuitApp, _w, cx| {
-                cx.quit();
+            .on_action(cx.listener(|this, _: &QuitApp, _w, cx| {
+                this.request_quit(cx);
             }))
             .on_mouse_down(
                 MouseButton::Left,
@@ -593,6 +593,12 @@ impl Render for LuminaApp {
                 self.downloads.open,
                 crate::views::downloads_panel::render(self, cx),
                 "downloads-panel-in",
+            ))
+            // 8f. "Downloads are still running" before quit / library switch
+            .child(motion::overlay_in(
+                self.downloads.confirm.is_some(),
+                crate::views::downloads_confirm::render(self, cx),
+                "downloads-confirm-in",
             ))
             // 9. Media Card Context Menu Overlay
             .child(motion::overlay_in(

@@ -127,7 +127,17 @@ impl LuminaApp {
             return true;
         }
 
-        // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
+        // 1e. "Downloads are still running" prompt
+        if self.downloads.confirm.is_some() {
+            match key {
+                "escape" => self.dismiss_downloads_prompt(cx),
+                "enter" | "return" => self.confirm_downloads_prompt(cx),
+                _ => {}
+            }
+            return true;
+        }
+
+        // 1f. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {
             let focused = self.downloads.focused;

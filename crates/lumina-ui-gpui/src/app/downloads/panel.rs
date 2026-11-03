@@ -92,20 +92,23 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// ⏎ on a row and a click on its body: Retry on a failed row.
+    /// ⏎ on a row and a click on its body: Retry on a failed row, Resume on
+    /// a paused one.
     pub(crate) fn download_main_action(&mut self, row_id: i64, cx: &mut Context<Self>) {
         let Some(entry) = self.downloads.entries.iter().find(|e| e.row.id == row_id) else {
             return;
         };
-        if entry.row.state == DownloadState::Failed && entry.row.can_retry {
-            self.retry_download(row_id, cx);
+        match entry.row.state {
+            DownloadState::Failed if entry.row.can_retry => self.retry_download(row_id, cx),
+            DownloadState::Paused => self.resume_download(row_id, cx),
+            _ => {}
         }
     }
 
     /// Clear finished: removes Done, Failed and Duplicate rows. The media
     /// stays in the library.
     pub fn clear_finished_downloads(&mut self, cx: &mut Context<Self>) {
-        let Some(engine) = self.download_engine() else {
+        let Some(catalog) = self.download_catalog() else {
             return;
         };
         let finished = |entry: &DownloadEntry| {
@@ -135,7 +138,7 @@ impl LuminaApp {
         let generation = self.downloads.generation;
         let clear = cx
             .background_executor()
-            .spawn(async move { engine.catalog().clear_finished_downloads() });
+            .spawn(async move { catalog.clear_finished_downloads() });
         let mut cleared = Some(cleared);
         cx.spawn(async move |this, cx| {
             if let Err(err) = clear.await {

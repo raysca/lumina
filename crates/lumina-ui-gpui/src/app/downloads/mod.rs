@@ -3,18 +3,20 @@
 //! (`download_queue`) so they survive a restart; progress is memory only.
 //!
 //! Every catalog write runs off the UI thread. Writes for a finished job
-//! happen on its own thread, against the engine it started with, so a job
+//! happen on its own thread, against the catalog it started with, so a job
 //! that outlives a library switch never touches the new library.
 
 mod job;
+mod lifecycle;
 mod panel;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
+pub(crate) use lifecycle::DownloadsConfirm;
 pub(crate) use panel::SECTIONS;
 
 use gpui::*;
 use lumina_core::net_import::{classify_url, NetworkDownloadProgress, MISSING_PART};
-use lumina_core::{DownloadRow, DownloadState, LuminaEngine};
+use lumina_core::{Catalog, DownloadRow, DownloadState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -77,6 +79,11 @@ pub(crate) struct DownloadQueue {
     pub job: Option<JobFn>,
     /// Ids for rows whose insert hasn't returned yet (always negative).
     next_placeholder: i64,
+    /// The "still running" prompt before quitting or switching library.
+    pub confirm: Option<DownloadsConfirm>,
+    /// Set where the app would quit (the test platform's quit does nothing).
+    #[cfg(test)]
+    pub quit_requested: bool,
 }
 
 impl DownloadQueue {
@@ -101,8 +108,19 @@ impl DownloadQueue {
         self.unseen_failure = false;
         self.focused = None;
         self.highlight = None;
+        self.confirm = None;
         self.generation += 1;
         self.job = job;
+    }
+}
+
+/// Closing the window (or a test ending) stops every job, so no thread keeps
+/// downloading for a library nobody shows.
+impl Drop for DownloadQueue {
+    fn drop(&mut self) {
+        for entry in &self.entries {
+            entry.cancel.store(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -122,8 +140,13 @@ struct Finished {
 }
 
 impl LuminaApp {
-    fn download_engine(&self) -> Option<Arc<LuminaEngine>> {
-        self.grid_state.as_ref().map(|state| state.engine.clone())
+    /// The open library's catalog. Background work holds this, never the
+    /// engine: a pending task holding the engine keeps its event thread
+    /// alive, and opening another library joins that thread.
+    pub(super) fn download_catalog(&self) -> Option<Catalog> {
+        self.grid_state
+            .as_ref()
+            .map(|state| state.engine.catalog().clone())
     }
 
     /// Downloading, waiting and paused rows: the toolbar badge.
@@ -161,7 +184,7 @@ impl LuminaApp {
             cx.notify();
             return;
         }
-        let Some(engine) = self.download_engine() else {
+        let Some(catalog) = self.download_catalog() else {
             return;
         };
         self.network_import.stage = Some(NetworkImportStage::Checking { url: url.clone() });
@@ -170,7 +193,7 @@ impl LuminaApp {
         let lookup_url = url.clone();
         let lookup = cx
             .background_executor()
-            .spawn(async move { engine.find_prior_download(&lookup_url) });
+            .spawn(async move { catalog.find_prior_download(&lookup_url) });
         cx.spawn(async move |this, cx| {
             let prior = lookup.await;
             let _ = this.update(cx, |app, cx| {
@@ -213,7 +236,7 @@ impl LuminaApp {
             cx.notify();
             return;
         }
-        let Some(engine) = self.download_engine() else {
+        let Some(catalog) = self.download_catalog() else {
             return;
         };
         // A placeholder until the insert returns, so a second press of
@@ -240,8 +263,8 @@ impl LuminaApp {
 
         let generation = self.downloads.generation;
         let insert = cx.background_executor().spawn({
-            let engine = engine.clone();
-            async move { engine.catalog().add_download(&url) }
+            let catalog = catalog.clone();
+            async move { catalog.add_download(&url) }
         });
         cx.spawn(async move |this, cx| {
             let inserted = insert.await;
@@ -252,7 +275,7 @@ impl LuminaApp {
                 let Some(index) = app.downloads.index_of(placeholder) else {
                     // Removed before it was stored: remove the stored row too.
                     if let Ok(row) = inserted {
-                        app.remove_stored_download(engine, row.id, cx);
+                        app.remove_stored_download(catalog, row.id, cx);
                     }
                     return;
                 };
@@ -273,10 +296,10 @@ impl LuminaApp {
         .detach();
     }
 
-    fn remove_stored_download(&self, engine: Arc<LuminaEngine>, id: i64, cx: &mut Context<Self>) {
+    fn remove_stored_download(&self, catalog: Catalog, id: i64, cx: &mut Context<Self>) {
         cx.background_executor()
             .spawn(async move {
-                if let Err(err) = engine.catalog().remove_download(id) {
+                if let Err(err) = catalog.remove_download(id) {
                     log::warn!("removing download {id}: {err:#}");
                 }
             })
@@ -285,7 +308,8 @@ impl LuminaApp {
 
     /// Starts waiting rows, oldest first, until [`MAX_RUNNING`] run.
     pub(crate) fn pump_downloads(&mut self, cx: &mut Context<Self>) {
-        let (Some(job), Some(engine)) = (self.downloads.job.clone(), self.download_engine()) else {
+        let (Some(job), Some(catalog)) = (self.downloads.job.clone(), self.download_catalog())
+        else {
             return;
         };
         let mut running = self
@@ -302,7 +326,7 @@ impl LuminaApp {
             if entry.row.state != DownloadState::Waiting || entry.row.id < 0 {
                 continue;
             }
-            self.start_download(index, job.clone(), engine.clone(), cx);
+            self.start_download(index, job.clone(), catalog.clone(), cx);
             running += 1;
         }
         cx.notify();
@@ -312,7 +336,7 @@ impl LuminaApp {
         &mut self,
         index: usize,
         job: JobFn,
-        engine: Arc<LuminaEngine>,
+        catalog: Catalog,
         cx: &mut Context<Self>,
     ) {
         let entry = &mut self.downloads.entries[index];
@@ -343,7 +367,6 @@ impl LuminaApp {
         let spawned = std::thread::Builder::new()
             .name(format!("lumina-download-{}", request.row_id))
             .spawn(move || {
-                let catalog = engine.catalog();
                 let mut write_failed = false;
                 if let Err(err) = catalog.update_download(&row) {
                     log::error!("storing download {}: {err:#}", row.id);
@@ -407,7 +430,7 @@ impl LuminaApp {
         let Some(index) = self.downloads.index_of(row_id) else {
             return;
         };
-        let engine = self.download_engine();
+        let catalog = self.download_catalog();
         let mut inspected = false;
         let entry = &mut self.downloads.entries[index];
         for event in events {
@@ -424,11 +447,11 @@ impl LuminaApp {
             }
         }
         if inspected {
-            if let Some(engine) = engine {
+            if let Some(catalog) = catalog {
                 let row = entry.row.clone();
                 cx.background_executor()
                     .spawn(async move {
-                        if let Err(err) = engine.catalog().update_download(&row) {
+                        if let Err(err) = catalog.update_download(&row) {
                             log::warn!("storing the title of download {}: {err:#}", row.id);
                         }
                     })
@@ -501,11 +524,11 @@ impl LuminaApp {
             self.downloads.highlight = None;
         }
         // A placeholder is removed once its insert returns.
-        if let (true, Some(engine)) = (row_id > 0, self.download_engine()) {
+        if let (true, Some(catalog)) = (row_id > 0, self.download_catalog()) {
             let generation = self.downloads.generation;
             let removal = cx
                 .background_executor()
-                .spawn(async move { engine.catalog().remove_download(row_id) });
+                .spawn(async move { catalog.remove_download(row_id) });
             let mut entry = Some(entry);
             cx.spawn(async move |this, cx| {
                 if let Err(err) = removal.await {
@@ -547,14 +570,14 @@ impl LuminaApp {
         skip_prior_check: bool,
         cx: &mut Context<Self>,
     ) {
-        let (Some(_), Some(engine)) = (self.downloads.index_of(row_id), self.download_engine())
+        let (Some(_), Some(catalog)) = (self.downloads.index_of(row_id), self.download_catalog())
         else {
             return;
         };
         let generation = self.downloads.generation;
         let requeue = cx
             .background_executor()
-            .spawn(async move { engine.catalog().requeue_download(row_id) });
+            .spawn(async move { catalog.requeue_download(row_id) });
         cx.spawn(async move |this, cx| {
             let requeued = requeue.await;
             let _ = this.update(cx, |app, cx| {

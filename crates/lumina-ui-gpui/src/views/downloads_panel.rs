@@ -169,6 +169,16 @@ fn render_row(
                 ),
             )
         })
+        .when(row.state == DownloadState::Paused, |el| {
+            el.child(
+                row_button(format!("download-resume-{id}"), "Resume", "Start over").on_click(
+                    cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                        cx.stop_propagation();
+                        this.resume_download(id, cx);
+                    }),
+                ),
+            )
+        })
         .when(row.state == DownloadState::Duplicate, |el| {
             el.child(
                 row_button(
@@ -210,6 +220,11 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .iter()
         .find(|e| e.row.state == DownloadState::Waiting)
         .map(|e| e.row.id);
+    let any_paused = app
+        .downloads
+        .entries
+        .iter()
+        .any(|e| e.row.state == DownloadState::Paused);
     let mut body = div().flex().flex_col().gap_0p5();
     for (label, states) in SECTIONS {
         let rows: Vec<&DownloadEntry> = app
@@ -304,6 +319,19 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                     this.clear_finished_downloads(cx);
                                 })),
                         )
+                        .when(any_paused, |el| {
+                            el.child(
+                                div()
+                                    .id("downloads-resume-all")
+                                    .debug_selector(|| "downloads-resume-all".to_string())
+                                    .cursor_pointer()
+                                    .text_color(theme::accent())
+                                    .child("Resume all")
+                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                        this.resume_all_downloads(cx);
+                                    })),
+                            )
+                        })
                         .child(
                             div()
                                 .id("downloads-show-album")
