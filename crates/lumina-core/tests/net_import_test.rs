@@ -224,7 +224,10 @@ fn yt_dlp_download_is_found_by_its_real_extension() {
     assert_eq!(source.0, info.url);
     assert_eq!(source.1.as_deref(), Some("Channel"));
     assert_eq!(
-        fx.engine.find_media_by_source_url(&info.url).unwrap(),
+        fx.engine
+            .find_prior_download(&info.url)
+            .unwrap()
+            .map(|prior| prior.path),
         Some(path),
         "a second import of the same URL can be detected"
     );

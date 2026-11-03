@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub enum SystemAlbum {
     Favorites,
     Videos,
+    /// Items Lumina downloaded from a URL.
+    Downloaded,
     Raw,
     Screenshots,
     LongExposures,
@@ -21,6 +23,7 @@ impl SystemAlbum {
         &[
             SystemAlbum::Favorites,
             SystemAlbum::Videos,
+            SystemAlbum::Downloaded,
             SystemAlbum::Raw,
             SystemAlbum::Screenshots,
             SystemAlbum::LongExposures,
@@ -36,6 +39,7 @@ impl SystemAlbum {
         match self {
             SystemAlbum::Favorites => "Favorites",
             SystemAlbum::Videos => "Videos",
+            SystemAlbum::Downloaded => "Downloaded",
             SystemAlbum::Raw => "RAW Media",
             SystemAlbum::Screenshots => "Screenshots",
             SystemAlbum::LongExposures => "Long Exposures",
@@ -51,6 +55,7 @@ impl SystemAlbum {
         match self {
             SystemAlbum::Favorites => "heart",
             SystemAlbum::Videos => "video",
+            SystemAlbum::Downloaded => "arrow-down-to-line",
             SystemAlbum::Raw => "aperture",
             SystemAlbum::Screenshots => "camera",
             SystemAlbum::LongExposures => "clock",
@@ -69,6 +74,9 @@ impl SystemAlbum {
             }
             SystemAlbum::Videos => {
                 "m.media_type = 'video' AND m.is_trashed = 0 AND m.is_hidden = 0"
+            }
+            SystemAlbum::Downloaded => {
+                "EXISTS (SELECT 1 FROM media_sources s WHERE s.media_id = m.id AND s.downloaded = 1) AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Raw => {
                 "(m.media_type = 'raw' OR m.file_name LIKE '%.arw' OR m.file_name LIKE '%.cr3' OR m.file_name LIKE '%.cr2' OR m.file_name LIKE '%.nef' OR m.file_name LIKE '%.dng' OR m.file_name LIKE '%.rw2' OR m.file_name LIKE '%.orf' OR m.file_name LIKE '%.raf') AND m.is_trashed = 0 AND m.is_hidden = 0"

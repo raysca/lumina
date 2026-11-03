@@ -147,6 +147,9 @@ impl Catalog {
                 source_url TEXT NOT NULL,
                 uploader TEXT,
                 imported_epoch_ms INTEGER NOT NULL,
+                -- v14: 1 = Lumina downloaded it; 0 = the URL came from an
+                -- imported sidecar; NULL = a v13 row the engine backfills.
+                downloaded INTEGER,
                 FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
             );
 
@@ -495,6 +498,18 @@ impl Catalog {
             )
             .context("rebuilding the search index after dropping legacy triggers")?;
             tx.commit()?;
+        }
+
+        // v14: v13 rows keep NULL until `backfill_downloaded_sources`.
+        let has_downloaded: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('media_sources') WHERE name = 'downloaded'")?
+            .exists([])?;
+        if !has_downloaded {
+            conn.execute(
+                "ALTER TABLE media_sources ADD COLUMN downloaded INTEGER;",
+                [],
+            )
+            .context("adding the downloaded flag to media sources")?;
         }
 
         // Stamp the schema version so future migrations can dispatch on it.

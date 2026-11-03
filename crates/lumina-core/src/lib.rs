@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub use cache::DiskCache;
-pub use catalog::{Catalog, DeletionTarget, SCHEMA_VERSION};
+pub use catalog::{Catalog, DeletionTarget, PriorDownload, SCHEMA_VERSION};
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
 pub use geocoder::{GeoLocation, OfflineGeocoder};
@@ -328,6 +328,9 @@ impl LuminaEngine {
         // nothing of this library's runs yet. Never clean it per job, since
         // several imports and downloads run at once.
         crate::import::remove_stale_temps(&library_root.join(crate::import::IMPORTS_DIR));
+        catalog
+            .backfill_downloaded_sources(&library_root)
+            .context("marking which sources are downloads")?;
         let decoder = DecoderPipeline::new(0)?;
 
         let cancel_flag = Arc::new(AtomicBool::new(false));

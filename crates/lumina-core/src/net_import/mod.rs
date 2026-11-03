@@ -495,9 +495,9 @@ impl LuminaEngine {
         })
     }
 
-    /// The library file already downloaded from `url`, if any.
-    pub fn find_media_by_source_url(&self, url: &str) -> Result<Option<PathBuf>> {
-        self.catalog.find_media_by_source_url(url)
+    /// The library item Lumina already downloaded from `url`, if any.
+    pub fn find_prior_download(&self, url: &str) -> Result<Option<crate::PriorDownload>> {
+        self.catalog.find_prior_download(url)
     }
 }
 

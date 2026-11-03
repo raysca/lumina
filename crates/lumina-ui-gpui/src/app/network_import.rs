@@ -191,7 +191,8 @@ impl LuminaApp {
             let info = inspect_url(&query_url, &task_cancel)?;
             let target = engine.preview_network_destination(&info);
             let already = engine
-                .find_media_by_source_url(&info.url)
+                .find_prior_download(&info.url)
+                .map(|prior| prior.map(|prior| prior.path))
                 .unwrap_or_else(|err| {
                     log::warn!("looking up earlier imports of {}: {err:#}", info.url);
                     None
