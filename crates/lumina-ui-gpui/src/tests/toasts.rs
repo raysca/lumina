@@ -124,9 +124,12 @@ fn toast_renders_with_message_and_dismiss_control() {
     });
     render_ui(vcx);
 
-    // GPUI 0.2.2 retains historical debug_bounds entries across frames, so a
-    // dismissed element cannot be asserted absent; assert the channel instead:
-    // a later toast renders with only its own message.
+    assert!(
+        vcx.debug_bounds("toast").is_none(),
+        "a dismissed toast is no longer painted"
+    );
+
+    // A later toast renders with only its own message.
     view.update(vcx, |app, cx| app.show_toast("Second action", cx));
     render_ui(vcx);
     view.update(vcx, |app, _| {

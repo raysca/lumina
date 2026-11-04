@@ -89,9 +89,11 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
             .contains(&"street".to_string()),
         "clicking a partial tag must add it to every selected item"
     );
-    // GPUI 0.2.2 never clears `debug_bounds` between frames, so a chip that
-    // has painted once cannot be proven gone by bounds; check the counts the
-    // batch panel partitions on instead.
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("batch-partial-tag-street").is_none(),
+        "a tag on every selected item is no longer shown as partial"
+    );
     let street_count = |vcx: &mut gpui::VisualTestContext| {
         view.update(vcx, |app, _| {
             app.selected_tag_counts

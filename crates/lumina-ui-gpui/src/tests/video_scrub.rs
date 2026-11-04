@@ -228,9 +228,7 @@ fn scrubber_feedback_is_a_time_badge_not_a_synthetic_preview() {
     );
 
     // Leaving the track clears the hover destination, so the honest badge is
-    // no longer driven. (The rendered bounds map is append-only in GPUI 0.2.2
-    // test support — `Frame::clear` does not reset `debug_bounds` — so the
-    // transport state is the reliable assertion here, not bounds absence.)
+    // no longer driven.
     vcx.simulate_mouse_move(
         gpui::point(gpui::px(4.0), gpui::px(4.0)),
         None,
@@ -247,6 +245,10 @@ fn scrubber_feedback_is_a_time_badge_not_a_synthetic_preview() {
             "leaving the track must clear the hover timestamp"
         );
     });
+    assert!(
+        vcx.debug_bounds("video-time-badge").is_none(),
+        "leaving the track hides the time badge"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

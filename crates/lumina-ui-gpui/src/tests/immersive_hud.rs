@@ -48,8 +48,10 @@ fn the_immersive_hud_hides_after_two_idle_seconds_and_wakes_on_input() {
     assert!(hud(&view, vcx), "the HUD stays before 2 s of idle");
     idle(vcx, std::time::Duration::from_millis(200));
     assert!(!hud(&view, vcx), "the HUD hides after 2 s of idle");
-    // ponytail: no bounds check for the hidden bar; GPUI 0.2.2 never clears
-    // debug bounds between frames, so a removed element keeps reporting.
+    assert!(
+        vcx.debug_bounds("viewer-top-bar").is_none(),
+        "the hidden HUD's top bar is no longer painted"
+    );
 
     let stage = vcx
         .debug_bounds("viewer-viewport")

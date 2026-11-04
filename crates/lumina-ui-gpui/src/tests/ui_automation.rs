@@ -1740,9 +1740,10 @@ fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
         );
         assert_eq!(app.batch_summary.count, 3, "the inspector shows the range");
     });
-    // Note: GPUI 0.2.2 keeps debug_bounds entries for selectors that stopped
-    // painting, so disappearance is asserted through the drag state above
-    // rather than through the bounds map.
+    assert!(
+        vcx.debug_bounds("grid-selection-rect").is_none(),
+        "the marquee rectangle is gone after mouse-up"
+    );
 
     // Suppression must be consumed: the next genuine click is still a single select.
     click(vcx, cards[1]);

@@ -173,11 +173,11 @@ impl LuminaApp {
     /// Zoom by `delta` anchored to the content point under the wheel cursor.
     ///
     /// `cursor` is the wheel position in window-content pixels
-    /// (`ScrollWheelEvent::position`) and `window_viewport` is the drawable
+    /// (`ScrollEvent::position`) and `window_viewport` is the drawable
     /// window size (`Window::viewport_size()`). Both are supplied by the
     /// viewport's scroll handler.
     ///
-    /// Approximation: GPUI 0.2.2 does not expose the laid-out
+    /// Approximation: GPUI does not expose the laid-out
     /// `media-canvas-fit` bounds to a scroll listener, so the viewer canvas
     /// center is taken as the center of the window content area. In the
     /// fullscreen viewer the canvas spans the window width and is inset only by

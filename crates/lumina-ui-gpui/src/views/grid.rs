@@ -179,7 +179,7 @@ impl GridZoomAnchor {
     /// Returns `None` when the grid has no items or the measured geometry is
     /// not usable yet (before the first prepaint of this layout).
     ///
-    /// GPUI 0.2.2's `UniformList` never fills `ScrollHandle::child_bounds`
+    /// GPUI's `UniformList` never fills `ScrollHandle::child_bounds`
     /// (it calls `Interactivity::prepaint` directly), so `top_item()` and
     /// `bounds_for_item()` stay empty for this list. The visible row is
     /// derived from the public `offset()` instead of inventing a top item.

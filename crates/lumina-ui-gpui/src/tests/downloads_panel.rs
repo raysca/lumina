@@ -64,8 +64,11 @@ fn badge_counts_active_rows() {
     settle(vcx, &view, "both finish", |app| {
         app.running_or_waiting_count() == 0
     });
-    // The bounds map only grows in GPUI 0.2.2 test support, so check the
-    // count behind the badge rather than the badge's absence.
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("downloads-badge").is_none(),
+        "no badge once all are done"
+    );
     view.update(vcx, |app, _| {
         assert_eq!(
             app.running_or_waiting_count(),

@@ -64,9 +64,10 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
             "Fit to window returns to Fit"
         );
     });
-    // ponytail: no "hidden again" check: GPUI 0.2.2 never clears debug_bounds
-    // between frames, so a vanished selector keeps its last bounds. The
-    // at-Fit absence above covers the same render condition.
+    assert!(
+        vcx.debug_bounds("viewer-zoom-fit").is_none(),
+        "back at Fit the zoom control hides again"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
