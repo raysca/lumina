@@ -17,8 +17,8 @@
 
 use gpui::base::input::{
     Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
-    InputEvent, InputModeKind, InputState, OutdentInline, Paste, SelectAll, Textarea,
-    TextareaState,
+    InputEditorStyle, InputEvent, InputModeKind, InputState, OutdentInline, Paste, SelectAll,
+    Textarea, TextareaState,
 };
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
@@ -139,6 +139,14 @@ fn load_field<M: InputModeKind>(
     window: &mut Window,
     cx: &mut Context<InputBaseState<M>>,
 ) {
+    // Unset colors fall back to GPUI Kit's light palette (a black caret).
+    let mut selection: Hsla = crate::theme::accent().into();
+    selection.a = 0.4;
+    state.set_editor_style(InputEditorStyle {
+        caret: crate::theme::text().into(),
+        selection,
+        ..Default::default()
+    });
     let (placeholder, label) = target.placeholder_and_label();
     state.set_placeholder(placeholder, window, cx);
     state.set_accessibility(
