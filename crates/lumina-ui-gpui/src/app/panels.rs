@@ -84,22 +84,21 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Saves whichever inspector field is being edited.
-    fn commit_inspector_edits(&mut self, cx: &mut Context<Self>) {
-        if self.tag_input_active {
-            self.commit_tag_input(cx);
-        }
+    /// Drops whichever inspector edit is open, unsaved.
+    fn cancel_inspector_edits(&mut self, cx: &mut Context<Self>) {
+        self.tag_input_active = false;
+        self.tag_input_buffer.clear();
         if self.caption.title_input_active {
-            self.commit_title_input(cx);
+            self.cancel_title_input(cx);
         }
         if self.caption.date_input_active {
-            self.commit_date_input(cx);
+            self.cancel_date_input(cx);
         }
         if self.caption.location_input_active {
-            self.commit_location_input(cx);
+            self.cancel_location_input(cx);
         }
         if self.caption.input_active {
-            self.commit_caption_input(cx);
+            self.cancel_caption_input(cx);
         }
     }
 
@@ -108,10 +107,10 @@ impl LuminaApp {
         tab: crate::views::inspector::InspectorTab,
         cx: &mut Context<Self>,
     ) {
-        // The open edit's field may not be on `tab`: save what was typed
+        // The open edit's field may not be on `tab`: end it as Esc would
         // instead of leaving its input taking keys out of sight.
         if tab != self.inspector_tab {
-            self.commit_inspector_edits(cx);
+            self.cancel_inspector_edits(cx);
         }
         self.inspector_tab = tab;
         cx.notify();

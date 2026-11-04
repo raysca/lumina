@@ -150,6 +150,29 @@ fn load_field<M: InputModeKind>(
     state.set_selected_range(end..end, cx);
 }
 
+/// The span of `new` (in UTF-16 units) that differs from `old`, and the
+/// text of `old` it replaced: everything between their common start and end.
+fn edited_span(old: &str, new: &str) -> (std::ops::Range<usize>, String) {
+    let prefix: usize = old
+        .chars()
+        .zip(new.chars())
+        .take_while(|(a, b)| a == b)
+        .map(|(c, _)| c.len_utf8())
+        .sum();
+    let (old_rest, new_rest) = (&old[prefix..], &new[prefix..]);
+    let suffix: usize = old_rest
+        .chars()
+        .rev()
+        .zip(new_rest.chars().rev())
+        .take_while(|(a, b)| a == b)
+        .map(|(c, _)| c.len_utf8())
+        .sum();
+    let utf16 = |text: &str| text.encode_utf16().count();
+    let start = utf16(&new[..prefix]);
+    let end = utf16(&new[..new.len() - suffix]);
+    (start..end, old_rest[..old_rest.len() - suffix].to_string())
+}
+
 impl LuminaApp {
     /// The input to draw for `target` while that field takes typing.
     pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<FieldEditor> {
@@ -316,18 +339,12 @@ impl LuminaApp {
                     && !text.chars().any(|c| c != '\n' && is_disallowed(c))
             };
             if !fits(&value) && fits(&synced) {
-                let typed =
-                    (value.encode_utf16().count()).saturating_sub(synced.encode_utf16().count());
+                // Put back exactly what the edit replaced, however it was
+                // made (one caret, several, a selection, a composition).
+                let (range, old) = edited_span(&synced, &value);
                 if let Some(FieldEditor::Lines(state)) = self.field_input_for(target) {
                     state.update(cx, |state, cx| {
-                        let caret = state.selected_text_range(false, window, cx);
-                        match caret {
-                            Some(caret) if typed > 0 && caret.range.end >= typed => {
-                                let end = caret.range.end;
-                                state.replace_text_in_range(Some(end - typed..end), "", window, cx);
-                            }
-                            _ => state.set_value(synced, window, cx),
-                        }
+                        state.replace_text_in_range(Some(range), &old, window, cx)
                     });
                 }
                 return;
@@ -615,4 +632,38 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     root.capture_action(move |_: &Paste, window, cx| {
         app.update(cx, |app, cx| app.paste_into_field(window, cx));
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::edited_span;
+
+    #[core::prelude::v1::test]
+    fn edited_span_finds_what_any_edit_replaced() {
+        assert_eq!(
+            edited_span("ab", "axb"),
+            (1..2, String::new()),
+            "one insert"
+        );
+        assert_eq!(
+            edited_span("abcd", "aXbcYd"),
+            (1..5, "bc".to_string()),
+            "two carets: the whole span between them goes back"
+        );
+        assert_eq!(
+            edited_span("abc", "aXYc"),
+            (1..3, "b".to_string()),
+            "a selection replaced"
+        );
+        assert_eq!(
+            edited_span("aa", "aaa"),
+            (2..3, String::new()),
+            "a repeated character"
+        );
+        assert_eq!(
+            edited_span("é😀", "é😀😀"),
+            (3..5, String::new()),
+            "UTF-16 offsets"
+        );
+    }
 }

@@ -759,7 +759,7 @@ fn tagging_from_the_viewer_shows_the_tag_field() {
 }
 
 #[core::prelude::v1::test]
-fn leaving_a_fields_tab_saves_what_was_typed() {
+fn leaving_a_fields_tab_ends_its_edit_unsaved() {
     let (dir, engine) = seed_library("text_tab_away", 2);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -780,9 +780,9 @@ fn leaving_a_fields_tab_saves_what_was_typed() {
         app.selected_item.clone().unwrap().id
     });
     assert_eq!(
-        engine.get_captions_map().get(&id).map(String::as_str),
-        Some("Hi"),
-        "what was typed before the field left the screen is saved"
+        engine.get_captions_map().get(&id),
+        None,
+        "leaving the tab is Esc: nothing typed is saved unconfirmed"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
