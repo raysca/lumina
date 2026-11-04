@@ -436,8 +436,16 @@ impl LuminaEngine {
 
     /// Runs `f` while the catalog lock is held; see [`Catalog::with_lock_held`].
     #[cfg(feature = "test-support")]
-    pub fn with_catalog_locked(&self, f: impl FnOnce()) {
-        self.catalog.with_lock_held(f);
+    pub fn with_catalog_locked<R>(&self, f: impl FnOnce() -> R) -> R {
+        self.catalog.with_lock_held(f)
+    }
+
+    /// How many times the current thread has taken the catalog lock, from
+    /// any engine. Tests compare it around UI work to prove the UI thread
+    /// never waits on the lock, without depending on timing.
+    #[cfg(feature = "test-support")]
+    pub fn catalog_locks_on_this_thread() -> u64 {
+        catalog::locks_on_this_thread()
     }
 
     pub fn total_count(&self) -> usize {

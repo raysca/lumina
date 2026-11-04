@@ -4,37 +4,46 @@
 
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gpui::VisualTestContext;
 use lumina_core::LuminaEngine;
 
 use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
 
-/// How long the "scan" keeps the catalog locked at most.
-const HOLD: Duration = Duration::from_millis(500);
-/// Generous debug budget for work that must not touch SQLite.
-const BUDGET: Duration = Duration::from_millis(150);
+/// How long the "scan" keeps the catalog locked at most. Far longer than any
+/// frame or key press takes even on a loaded debug build, so outlasting it
+/// means the UI was stuck on the lock.
+const HOLD: Duration = Duration::from_secs(5);
 
-/// Times `f` while another thread holds the catalog lock. The lock is
-/// released as soon as `f` returns, or after [`HOLD`] if `f` is stuck on it.
-fn timed_while_catalog_locked(engine: &Arc<LuminaEngine>, f: impl FnOnce()) -> Duration {
+/// Counts the catalog lock calls this thread (the UI thread) makes in `f`
+/// while another thread holds the lock. Every such call would wait, so the UI
+/// must make none. Counting rather than timing keeps the check exact on a
+/// loaded machine, where a slow debug frame is not a wait. The lock is
+/// released as soon as `f` returns, or after [`HOLD`] if `f` is stuck on it;
+/// that second case also catches a wait the count cannot see, such as
+/// joining a thread that queries the catalog.
+fn catalog_locks_while_held(engine: &Arc<LuminaEngine>, f: impl FnOnce()) -> u64 {
     let (held_tx, held_rx) = mpsc::channel();
     let (done_tx, done_rx) = mpsc::channel::<()>();
     let holder = engine.clone();
     let thread = std::thread::spawn(move || {
         holder.with_catalog_locked(|| {
             held_tx.send(()).expect("test thread waits for the lock");
-            let _ = done_rx.recv_timeout(HOLD);
+            done_rx.recv_timeout(HOLD).is_err()
         })
     });
     held_rx.recv().expect("the holder takes the lock");
-    let start = Instant::now();
+    let before = LuminaEngine::catalog_locks_on_this_thread();
     f();
-    let took = start.elapsed();
+    let locks = LuminaEngine::catalog_locks_on_this_thread() - before;
     let _ = done_tx.send(());
-    thread.join().expect("the holder thread finishes");
-    took
+    let outlasted = thread.join().expect("the holder thread finishes");
+    assert!(
+        !outlasted,
+        "UI work was still running when the {HOLD:?} lock hold ended: it waited on the catalog"
+    );
+    locks
 }
 
 /// One frame, without running background work.
@@ -57,20 +66,20 @@ fn a_frame_never_waits_on_the_catalog_lock() {
     render_ui(vcx);
     render_ui(vcx);
 
-    let steady = timed_while_catalog_locked(&engine, || draw(vcx));
-    assert!(
-        steady < BUDGET,
-        "redrawing an unchanged search must not query the catalog: took {steady:?}"
+    let steady = catalog_locks_while_held(&engine, || draw(vcx));
+    assert_eq!(
+        steady, 0,
+        "redrawing an unchanged search must not query the catalog"
     );
 
     view.update(vcx, |app, cx| {
         app.search_query = "photo_0".to_string();
         cx.notify();
     });
-    let switched = timed_while_catalog_locked(&engine, || draw(vcx));
-    assert!(
-        switched < BUDGET,
-        "the first frame of a new search must not wait for its results: took {switched:?}"
+    let switched = catalog_locks_while_held(&engine, || draw(vcx));
+    assert_eq!(
+        switched, 0,
+        "the first frame of a new search must not wait for its results"
     );
     render_ui(vcx);
     render_ui(vcx);
@@ -96,13 +105,13 @@ fn viewer_arrows_never_wait_on_the_catalog_lock() {
     render_ui(vcx);
     render_ui(vcx);
 
-    let took = timed_while_catalog_locked(&engine, || {
+    let locks = catalog_locks_while_held(&engine, || {
         view.update(vcx, |app, cx| app.navigate_selection(1, cx));
         draw(vcx);
     });
-    assert!(
-        took < BUDGET,
-        "stepping to the next photo must not wait on the catalog: took {took:?}"
+    assert_eq!(
+        locks, 0,
+        "stepping to the next photo must not wait on the catalog"
     );
     render_ui(vcx);
     view.update(vcx, |app, _| {
@@ -238,12 +247,12 @@ fn viewer_arrows_during_a_scan_never_wait_on_the_catalog_lock() {
     })
     .join()
     .expect("the scan batch lands");
-    let took = timed_while_catalog_locked(&engine, || {
+    let locks = catalog_locks_while_held(&engine, || {
         view.update(vcx, |app, cx| app.navigate_selection(1, cx));
     });
-    assert!(
-        took < BUDGET,
-        "an arrow press mid-scan must use the rows on screen, not wait: took {took:?}"
+    assert_eq!(
+        locks, 0,
+        "an arrow press mid-scan must use the rows on screen, not wait"
     );
     render_ui(vcx);
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(1)));

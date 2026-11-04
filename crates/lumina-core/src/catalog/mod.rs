@@ -50,6 +50,8 @@ impl Db {
     }
 
     pub(crate) fn lock(&self) -> DbGuard<'_> {
+        #[cfg(feature = "test-support")]
+        LOCKS_HERE.with(|locks| locks.set(locks.get() + 1));
         DbGuard {
             conn: self.conn.lock(),
             revision: &self.revision,
@@ -75,6 +77,18 @@ impl DerefMut for DbGuard<'_> {
     fn deref_mut(&mut self) -> &mut Connection {
         &mut self.conn
     }
+}
+
+/// Catalog lock calls made from the current thread, so tests can check that
+/// the UI thread never takes (and so never waits on) the lock.
+#[cfg(feature = "test-support")]
+pub(crate) fn locks_on_this_thread() -> u64 {
+    LOCKS_HERE.with(|locks| locks.get())
+}
+
+#[cfg(feature = "test-support")]
+thread_local! {
+    static LOCKS_HERE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 thread_local! {
@@ -148,9 +162,9 @@ impl Catalog {
     /// Holds the catalog lock while `f` runs, to test that callers never wait
     /// on it.
     #[cfg(feature = "test-support")]
-    pub fn with_lock_held(&self, f: impl FnOnce()) {
+    pub fn with_lock_held<R>(&self, f: impl FnOnce() -> R) -> R {
         let _guard = self.conn.lock();
-        f();
+        f()
     }
 
     /// Reads an application config key-value pair from SQLite.
