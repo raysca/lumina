@@ -42,8 +42,12 @@ The release app bundle packages the standalone universal macOS build of
 and SHA-256 pinned in `scripts/fetch_yt_dlp.sh`) for video import. yt-dlp is
 dedicated to the public domain under The Unlicense (<https://unlicense.org>).
 That executable is a PyInstaller build: it embeds a CPython runtime (Python
-Software Foundation License) and third-party Python packages, whose licenses
-are listed in yt-dlp's `THIRD_PARTY_LICENSES.txt` for the pinned release.
+Software Foundation License) and third-party libraries and Python packages,
+some under copyleft licenses (for example GPL-2.0-or-later mutagen). Their
+license texts, yt-dlp's `THIRD_PARTY_LICENSES.txt` at the pinned release tag
+(SHA-256 pinned in `scripts/fetch_yt_dlp.sh`), ship as
+`Contents/Resources/yt-dlp-THIRD_PARTY_LICENSES.txt`. That file also says
+where to get their source. Lumina only runs `yt-dlp` as a separate process.
 
 ## Bundled helper — FFmpeg
 

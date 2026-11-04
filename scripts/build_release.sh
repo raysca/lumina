@@ -64,6 +64,8 @@ if [[ "${LUMINA_BUNDLE_DEPS:-1}" == "1" ]]; then
     ./scripts/fetch_yt_dlp.sh
     echo "Bundling yt-dlp into $BUNDLE_DIR/Contents/MacOS/yt-dlp"
     install -m 755 target/deps/yt-dlp "$BUNDLE_DIR/Contents/MacOS/yt-dlp"
+    # The licenses of the runtime and packages its build bundles travel with it.
+    install -m 644 target/deps/yt-dlp-THIRD_PARTY_LICENSES.txt "$BUNDLE_DIR/Contents/Resources/"
     if [[ "$SIGN_IDENTITY" != "-" ]]; then
         codesign --force --options runtime --timestamp \
             --entitlements resources/yt-dlp.entitlements \
