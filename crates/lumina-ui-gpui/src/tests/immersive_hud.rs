@@ -46,6 +46,10 @@ fn the_immersive_hud_hides_after_two_idle_seconds_and_wakes_on_input() {
 
     idle(vcx, HUD_IDLE - std::time::Duration::from_millis(100));
     assert!(hud(&view, vcx), "the HUD stays before 2 s of idle");
+    assert!(
+        vcx.debug_bounds("viewer-top-bar").is_some(),
+        "the visible HUD paints its top bar"
+    );
     idle(vcx, std::time::Duration::from_millis(200));
     assert!(!hud(&view, vcx), "the HUD hides after 2 s of idle");
     assert!(

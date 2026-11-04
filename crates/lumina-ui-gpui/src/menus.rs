@@ -6,52 +6,36 @@ use crate::actions::*;
 
 pub fn build_menus() -> Vec<Menu> {
     vec![
-        Menu {
-            name: "Lumina".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("About Lumina", ShowAbout),
-                MenuItem::separator(),
-                MenuItem::action("Preferences…", OpenPreferences),
-                MenuItem::separator(),
-                MenuItem::action("Quit Lumina", QuitApp),
-            ],
-        },
-        Menu {
-            name: "File".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("Open Library…", OpenLibrary),
-                MenuItem::action("Import…", ImportMedia),
-                MenuItem::action("Import Video from URL…", ImportNetworkVideo),
-                MenuItem::action("Rescan Library", RescanLibrary),
-                MenuItem::separator(),
-                MenuItem::action("New Smart Album…", NewSmartAlbum),
-                MenuItem::separator(),
-                MenuItem::action("Import XMP Metadata", ImportXmp),
-            ],
-        },
-        Menu {
-            name: "View".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("Command Palette…", ShowCommandPalette),
-                MenuItem::separator(),
-                MenuItem::action("Toggle Sidebar", ToggleSidebar),
-                MenuItem::action("Toggle Inspector", ToggleInspector),
-                MenuItem::action("Show Downloads", ToggleDownloads),
-                MenuItem::separator(),
-                MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
-            ],
-        },
-        Menu {
-            name: "Help".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
-                MenuItem::action("About Lumina", ShowAbout),
-            ],
-        },
+        Menu::new("Lumina").items([
+            MenuItem::action("About Lumina", ShowAbout),
+            MenuItem::separator(),
+            MenuItem::action("Preferences…", OpenPreferences),
+            MenuItem::separator(),
+            MenuItem::action("Quit Lumina", QuitApp),
+        ]),
+        Menu::new("File").items([
+            MenuItem::action("Open Library…", OpenLibrary),
+            MenuItem::action("Import…", ImportMedia),
+            MenuItem::action("Import Video from URL…", ImportNetworkVideo),
+            MenuItem::action("Rescan Library", RescanLibrary),
+            MenuItem::separator(),
+            MenuItem::action("New Smart Album…", NewSmartAlbum),
+            MenuItem::separator(),
+            MenuItem::action("Import XMP Metadata", ImportXmp),
+        ]),
+        Menu::new("View").items([
+            MenuItem::action("Command Palette…", ShowCommandPalette),
+            MenuItem::separator(),
+            MenuItem::action("Toggle Sidebar", ToggleSidebar),
+            MenuItem::action("Toggle Inspector", ToggleInspector),
+            MenuItem::action("Show Downloads", ToggleDownloads),
+            MenuItem::separator(),
+            MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
+        ]),
+        Menu::new("Help").items([
+            MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
+            MenuItem::action("About Lumina", ShowAbout),
+        ]),
     ]
 }
 

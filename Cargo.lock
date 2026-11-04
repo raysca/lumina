@@ -2651,7 +2651,6 @@ dependencies = [
  "gpui-component",
  "gpui-fast",
  "gpui-fast-platform",
- "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-macros",
  "gpui-pre-platform",

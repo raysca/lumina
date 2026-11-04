@@ -76,8 +76,9 @@ Lumina only runs the `ffmpeg` executable as a separate process.
 
 ## Rust crates
 
-The UI framework is GPUI Kit (`gpui-kit`, `gpui-base`, `gpui-component`) and
-the GPUI snapshot it pins (`gpui-pre-*`), all Apache-2.0. The full dependency
+The UI framework is GPUI Kit (`gpui-kit`, `gpui-base`) and the GPUI snapshot
+it pins (`gpui-pre-*`), all Apache-2.0. Its optional component and icon-asset
+features are off, so no gpui-component code or Lucide icons are built in. The full dependency
 graph and versions are pinned in `Cargo.lock`. License
 texts for each crate are available from its publishing source (crates.io) and
 should be reviewed before redistribution.
