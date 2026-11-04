@@ -1,3 +1,4 @@
+use crate::app::caret::caret;
 use crate::theme;
 use crate::LuminaApp;
 use gpui::*;
@@ -10,7 +11,7 @@ impl SearchBarView {
         let active = !this.search_query.is_empty();
         let focused = this.search_focused;
         let query_text = if focused {
-            format!("{}|", this.search_query)
+            format!("{}{}", this.search_query, caret())
         } else if active {
             this.search_query.clone()
         } else {

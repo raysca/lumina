@@ -1,5 +1,6 @@
 //! v3 batch inspector: a flat panel for a multi-selection.
 
+use crate::app::caret::caret;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -288,8 +289,8 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                     theme::text_subtle()
                 })
                 .child(match (input_active, buffer.is_empty()) {
-                    (true, true) => "|".to_string(),
-                    (true, false) => format!("{buffer}|"),
+                    (true, true) => caret().to_string(),
+                    (true, false) => format!("{buffer}{}", caret()),
                     (false, _) => format!("Add a tag to all {total}… (T)"),
                 })
                 .on_click(move |_e, _w, cx| {

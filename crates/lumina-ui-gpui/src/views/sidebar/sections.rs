@@ -1,3 +1,4 @@
+use crate::app::caret::caret;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
@@ -442,7 +443,7 @@ pub(super) fn render_tags_section(
                                             .text_size(theme::TEXT_BODY)
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(theme::text())
-                                            .child(format!("{}|", this.editing_tag_buffer)),
+                                            .child(format!("{}{}", this.editing_tag_buffer, caret())),
                                     ),
                             )
                             .child(

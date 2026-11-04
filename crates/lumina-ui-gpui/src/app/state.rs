@@ -393,6 +393,7 @@ pub struct LuminaApp {
     /// IME composition range (UTF-16) and the field it belongs to; see
     /// app/text_input.rs.
     pub text_marked: Option<crate::app::text_input::MarkedText>,
+    pub(crate) caret: crate::app::caret::CaretBlink,
     pub command_selected: usize,
     /// Keeps the keyboard-selected palette row scrolled into view.
     pub command_scroll: ScrollHandle,
@@ -574,6 +575,7 @@ impl LuminaApp {
             command_palette_open: false,
             command_query: String::new(),
             text_marked: None,
+            caret: Default::default(),
             command_selected: 0,
             command_scroll: ScrollHandle::new(),
             shortcuts_scroll: ScrollHandle::new(),

@@ -1,5 +1,6 @@
 //! Cmd+K command palette overlay.
 
+use crate::app::caret::caret;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -93,9 +94,9 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                     theme::text()
                                 })
                                 .child(if query.is_empty() {
-                                    "Type a command, album, tag or year…|".to_string()
+                                    format!("Type a command, album, tag or year…{}", caret())
                                 } else {
-                                    format!("{}|", query)
+                                    format!("{}{}", query, caret())
                                 }),
                         )
                         .child(theme::kbd("esc")),

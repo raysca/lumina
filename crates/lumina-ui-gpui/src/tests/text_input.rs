@@ -286,3 +286,52 @@ fn confirming_an_untouched_legacy_tag_rename_keeps_it() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Lets one half-blink pass and draws the frame it produces.
+fn blink_tick(vcx: &mut gpui::VisualTestContext) -> &'static str {
+    vcx.executor().advance_clock(crate::app::caret::CARET_BLINK);
+    vcx.run_until_parked();
+    render_ui(vcx);
+    crate::app::caret::caret()
+}
+
+#[core::prelude::v1::test]
+fn the_caret_blinks_while_idle_and_stays_solid_while_typing() {
+    use crate::app::caret::caret;
+    let (dir, engine) = seed_library("text_caret", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    crate::tests::ui_automation::focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k");
+    render_ui(vcx);
+    assert_eq!(caret(), "|", "a newly focused field shows its caret");
+    assert_eq!(
+        blink_tick(vcx),
+        "|",
+        "the caret stays up for its first beat"
+    );
+    assert_eq!(blink_tick(vcx), " ", "an idle field blinks its caret off");
+    assert_eq!(blink_tick(vcx), "|", "and back on");
+    assert_eq!(blink_tick(vcx), " ", "test premise: the caret is off");
+
+    vcx.simulate_input("ra");
+    assert_eq!(
+        blink_tick(vcx),
+        "|",
+        "a field whose text just changed keeps its caret solid"
+    );
+    assert_eq!(blink_tick(vcx), " ", "blinking resumes once typing stops");
+
+    keystrokes(vcx, "escape");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open, "Escape closes the palette")
+    });
+    assert_eq!(
+        caret(),
+        "|",
+        "closing the field resets the caret so the next one starts visible"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

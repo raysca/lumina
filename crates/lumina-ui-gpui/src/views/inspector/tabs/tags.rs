@@ -1,3 +1,4 @@
+use crate::app::caret::caret;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
@@ -171,16 +172,18 @@ pub fn render_tags_section(
                 .cursor_text()
                 .text_size(theme::TEXT_BODY)
                 .child(if tag_input_active && !tag_input_buffer.is_empty() {
-                    div()
-                        .text_color(theme::text())
-                        .child(format!("{}|", tag_input_buffer))
+                    div().text_color(theme::text()).child(format!(
+                        "{}{}",
+                        tag_input_buffer,
+                        caret()
+                    ))
                 } else {
                     div()
                         .text_color(theme::text_subtle())
                         .child(if tag_input_active {
-                            "Type a tag, Enter to add|"
+                            format!("Type a tag, Enter to add{}", caret())
                         } else {
-                            "Add a tag…"
+                            "Add a tag…".to_string()
                         })
                 })
                 .on_click(move |_e, _window, cx| {

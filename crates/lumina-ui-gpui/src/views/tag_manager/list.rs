@@ -1,5 +1,6 @@
 //! Left column of the tag manager: filter, sort, checkable rows, bulk bar.
 
+use crate::app::caret::caret;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -146,7 +147,7 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                 .child(if search.is_empty() {
                     "Filter tags by name…".to_string()
                 } else {
-                    format!("{search}|")
+                    format!("{search}{}", caret())
                 }),
         )
 }

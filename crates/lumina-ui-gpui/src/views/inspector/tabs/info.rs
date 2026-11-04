@@ -1,3 +1,4 @@
+use crate::app::caret::caret;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
@@ -94,9 +95,9 @@ pub fn render_info_tab(
                         .text_color(theme::text())
                         .child(if title_input_active {
                             if title_input_buffer.is_empty() {
-                                "Type a title... (Enter to save, Esc to cancel)|".to_string()
+                                format!("Type a title... (Enter to save, Esc to cancel){}", caret())
                             } else {
-                                format!("{}|", title_input_buffer)
+                                format!("{}{}", title_input_buffer, caret())
                             }
                         } else {
                             display_title.to_string()
@@ -144,9 +145,9 @@ pub fn render_info_tab(
                         })
                         .child(if caption_input_active {
                             if caption_input_buffer.is_empty() {
-                                "Type caption... (Enter to save, Esc to cancel)|".to_string()
+                                format!("Type caption... (Enter to save, Esc to cancel){}", caret())
                             } else {
-                                format!("{}|", caption_input_buffer)
+                                format!("{}{}", caption_input_buffer, caret())
                             }
                         } else if let Some(cap) = caption {
                             cap.to_string()
@@ -180,9 +181,9 @@ pub fn render_info_tab(
                             .text_size(theme::TEXT_BODY)
                             .text_color(theme::text())
                             .child(if date_input_buffer.is_empty() {
-                                "YYYY-MM-DD HH:MM:SS|".to_string()
+                                format!("YYYY-MM-DD HH:MM:SS{}", caret())
                             } else {
-                                format!("{}|", date_input_buffer)
+                                format!("{}{}", date_input_buffer, caret())
                             })
                             .into_any_element()
                     } else {

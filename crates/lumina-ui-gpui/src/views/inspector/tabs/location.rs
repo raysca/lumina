@@ -1,3 +1,4 @@
+use crate::app::caret::caret;
 use gpui::*;
 use lumina_core::MediaItem;
 
@@ -72,9 +73,12 @@ pub fn render_location_tab(
                 .font_family(theme::FONT_MONO)
                 .text_color(theme::text())
                 .child(if input_buffer.is_empty() {
-                    "latitude, longitude (Enter to save, Esc to cancel)|".to_string()
+                    format!(
+                        "latitude, longitude (Enter to save, Esc to cancel){}",
+                        caret()
+                    )
                 } else {
-                    format!("{input_buffer}|")
+                    format!("{input_buffer}{}", caret())
                 })
         }))
         .child(

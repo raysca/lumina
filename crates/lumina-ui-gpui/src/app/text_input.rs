@@ -112,7 +112,7 @@ impl LuminaApp {
         Some(target)
     }
 
-    fn text_buffer(&mut self, target: TextTarget) -> Option<&mut String> {
+    pub(crate) fn text_buffer(&mut self, target: TextTarget) -> Option<&mut String> {
         use TextTarget::*;
         Some(match target {
             Palette => &mut self.command_query,

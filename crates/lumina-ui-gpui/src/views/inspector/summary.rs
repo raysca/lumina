@@ -2,6 +2,7 @@
 //! people check while browsing. Full editing (caption, title, date, location)
 //! stays in the tabbed Get Info window opened from the footer.
 
+use crate::app::caret::caret;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
@@ -418,8 +419,8 @@ fn render_tags(
                     theme::text_subtle()
                 })
                 .child(match (input_active, input_buffer.is_empty()) {
-                    (true, true) => "|".to_string(),
-                    (true, false) => format!("{input_buffer}|"),
+                    (true, true) => caret().to_string(),
+                    (true, false) => format!("{input_buffer}{}", caret()),
                     (false, _) => "add…".to_string(),
                 }),
         )

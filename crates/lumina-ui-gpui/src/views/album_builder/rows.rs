@@ -1,5 +1,6 @@
 //! Condition rows and the shared picker / text field / popup controls.
 
+use crate::app::caret::caret;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -61,8 +62,8 @@ pub(super) fn text_field(
         (true, false) => div()
             .text_color(theme::text_subtle())
             .child(placeholder.to_string()),
-        (true, true) => div().child("|"),
-        (false, true) => div().child(format!("{text}|")),
+        (true, true) => div().child(caret()),
+        (false, true) => div().child(format!("{text}{}", caret())),
         (false, false) => div().child(text.to_string()),
     };
     theme::field(ElementId::Name(selector.into()))
