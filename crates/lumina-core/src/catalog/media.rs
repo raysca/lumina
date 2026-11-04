@@ -810,10 +810,16 @@ impl Catalog {
             INSERT INTO media_sources (media_id, source_url, uploader, imported_epoch_ms, downloaded)
             VALUES (?1, ?2, ?3, ?4, ?5)
             ON CONFLICT(media_id) DO UPDATE SET
-                source_url = excluded.source_url,
-                uploader = excluded.uploader,
                 -- A sidecar imported onto a download keeps it a download,
-                -- with its download date.
+                -- with its address, uploader and download date.
+                source_url = CASE
+                    WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
+                    THEN media_sources.source_url
+                    ELSE excluded.source_url END,
+                uploader = CASE
+                    WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
+                    THEN media_sources.uploader
+                    ELSE excluded.uploader END,
                 imported_epoch_ms = CASE
                     WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
                     THEN media_sources.imported_epoch_ms

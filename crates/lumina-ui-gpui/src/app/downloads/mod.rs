@@ -12,7 +12,6 @@ mod panel;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
-pub(crate) use panel::SECTIONS;
 
 use gpui::*;
 use lumina_core::net_import::{classify_url, NetworkDownloadProgress, MISSING_PART};
@@ -469,8 +468,13 @@ impl LuminaApp {
         if self.downloads.generation != generation {
             return;
         }
-        // Removed (✕) while it ran: its outcome no longer matters.
+        // Removed (✕) while it ran: the row stays gone, but a file that
+        // made it into the catalog still shows in the library.
         let Some(index) = self.downloads.index_of(finished.row.id) else {
+            if matches!(finished.outcome, JobOutcome::Imported { .. }) {
+                self.refresh_album_counts();
+                self.refresh_active_view(cx);
+            }
             return;
         };
         if matches!(finished.outcome, JobOutcome::Cancelled) {

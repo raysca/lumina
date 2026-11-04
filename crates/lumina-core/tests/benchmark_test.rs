@@ -349,5 +349,32 @@ fn benchmark_scale_and_gates() {
         "Smart album query must resolve in < {album_budget}ms (got {album_per_query_ms:.3}ms)"
     );
 
+    // Gate 3: the Downloaded count the sidebar refreshes after each
+    // download (1% of the library downloaded).
+    for (n, mut item) in catalog
+        .get_item_slice(0, count / 100)
+        .expect("slice")
+        .into_iter()
+        .enumerate()
+    {
+        item.path = format!("/bench/Imports/dl_{n}.mp4").into();
+        catalog
+            .insert_with_source(&item, &format!("https://example.com/{n}"), None)
+            .expect("insert download");
+    }
+    let count_start = Instant::now();
+    for _ in 0..iterations {
+        let _ = catalog.query_system_album_count(SystemAlbum::Downloaded);
+    }
+    let count_per_query_ms = (count_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+    println!(
+        "Gate 3 - Downloaded Count Latency: {:.3} ms/count (< {:.1} ms target)",
+        count_per_query_ms, album_budget
+    );
+    assert!(
+        count_per_query_ms < album_budget,
+        "Downloaded count must resolve in < {album_budget}ms (got {count_per_query_ms:.3}ms)"
+    );
+
     let _ = std::fs::remove_file(&temp_db);
 }

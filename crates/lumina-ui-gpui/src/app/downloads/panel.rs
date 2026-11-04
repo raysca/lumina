@@ -9,7 +9,7 @@ use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
 
 /// The dropdown's sections, top to bottom.
-pub(crate) const SECTIONS: [(&str, &[DownloadState]); 5] = [
+const SECTIONS: [(&str, &[DownloadState]); 5] = [
     ("Downloading", &[DownloadState::Running]),
     ("Waiting", &[DownloadState::Waiting]),
     ("Paused", &[DownloadState::Paused]),
@@ -18,16 +18,28 @@ pub(crate) const SECTIONS: [(&str, &[DownloadState]); 5] = [
 ];
 
 impl LuminaApp {
-    /// Rows in the order the dropdown shows them.
-    pub(crate) fn download_display_order(&self) -> Vec<&DownloadEntry> {
+    /// The dropdown's non-empty sections, each label with its rows.
+    pub(crate) fn download_sections(&self) -> Vec<(&'static str, Vec<&DownloadEntry>)> {
         SECTIONS
             .iter()
-            .flat_map(|(_, states)| {
-                self.downloads
+            .map(|(label, states)| {
+                let rows = self
+                    .downloads
                     .entries
                     .iter()
-                    .filter(move |entry| states.contains(&entry.row.state))
+                    .filter(|entry| states.contains(&entry.row.state))
+                    .collect();
+                (*label, rows)
             })
+            .filter(|(_, rows): &(_, Vec<_>)| !rows.is_empty())
+            .collect()
+    }
+
+    /// Rows in the order the dropdown shows them.
+    pub(crate) fn download_display_order(&self) -> Vec<&DownloadEntry> {
+        self.download_sections()
+            .into_iter()
+            .flat_map(|(_, rows)| rows)
             .collect()
     }
 
@@ -93,22 +105,16 @@ impl LuminaApp {
         self.downloads.focused = Some(id);
         // The body lists each non-empty section's label, then its rows.
         let mut child = 0;
-        for (_, states) in SECTIONS {
-            let rows: Vec<i64> = self
-                .downloads
-                .entries
-                .iter()
-                .filter(|entry| states.contains(&entry.row.state))
-                .map(|entry| entry.row.id)
-                .collect();
-            if rows.is_empty() {
-                continue;
-            }
-            if let Some(at) = rows.iter().position(|row| *row == id) {
-                self.downloads.scroll.scroll_to_item(child + 1 + at);
+        let mut target = None;
+        for (_, rows) in self.download_sections() {
+            if let Some(at) = rows.iter().position(|entry| entry.row.id == id) {
+                target = Some(child + 1 + at);
                 break;
             }
             child += 1 + rows.len();
+        }
+        if let Some(target) = target {
+            self.downloads.scroll.scroll_to_item(target);
         }
         cx.notify();
     }
@@ -123,14 +129,20 @@ impl LuminaApp {
             (DownloadState::Failed, _) if entry.row.can_retry => self.retry_download(row_id, cx),
             (DownloadState::Paused, _) => self.resume_download(row_id, cx),
             (DownloadState::Done | DownloadState::Duplicate, Some(id)) if entry.row.in_library => {
-                self.show_download_in_library(id, cx)
+                // Trashed or hidden since it finished: say so on the row.
+                if !self.show_download_in_library(id, cx) {
+                    if let Some(index) = self.downloads.index_of(row_id) {
+                        self.downloads.entries[index].row.in_library = false;
+                    }
+                }
             }
             _ => {}
         }
     }
 
-    /// Show in Library: the Downloaded album with the item selected.
-    pub fn show_download_in_library(&mut self, media_id: MediaId, cx: &mut Context<Self>) {
+    /// Show in Library: the Downloaded album with the item selected. False
+    /// when the item is no longer in that album.
+    pub fn show_download_in_library(&mut self, media_id: MediaId, cx: &mut Context<Self>) -> bool {
         self.close_downloads_panel(cx);
         self.close_network_import_dialog(cx);
         self.select_album(AlbumSelection::System(SystemAlbum::Downloaded), cx);
@@ -140,8 +152,10 @@ impl LuminaApp {
             if let Some(item) = self.get_active_slice(index..index + 1).pop() {
                 self.select_item_at(item, index, cx);
                 self.reveal_grid_selection();
+                return true;
             }
         }
+        false
     }
 
     /// Clear finished: removes Done, Failed and Duplicate rows. The media

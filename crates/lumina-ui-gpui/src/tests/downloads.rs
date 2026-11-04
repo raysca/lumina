@@ -61,7 +61,13 @@ impl FakeJobs {
             let rx = fake.channel(&request.url).1;
             loop {
                 if cancel.load(Ordering::Relaxed) {
-                    return JobOutcome::Cancelled;
+                    // A result the test sent before the cancel still wins,
+                    // like a job that finished as it was stopped.
+                    return rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_millis(20))
+                        .unwrap_or(JobOutcome::Cancelled);
                 }
                 if let Ok(outcome) = rx.lock().unwrap().recv_timeout(Duration::from_millis(2)) {
                     return outcome;
@@ -284,12 +290,12 @@ fn finished_job_for_removed_row_is_ignored() {
     settle(vcx, &view, "the job runs", |app| {
         count(app, DownloadState::Running) == 1
     });
+    // The job ends with a result anyway (it raced the cancel).
+    fake.finish(URL, imported(&engine));
     view.update(vcx, |app, cx| {
         let id = row_id(app, URL);
         app.cancel_or_remove_download(id, cx);
     });
-    // The job ends with a result anyway (it raced the cancel).
-    fake.finish(URL, imported(&engine));
     settle(vcx, &view, "the removal is stored", |_| {
         persisted(&engine).is_empty()
     });
@@ -301,6 +307,36 @@ fn finished_job_for_removed_row_is_ignored() {
         )
     });
     assert!(persisted(&engine).is_empty());
+}
+
+#[core::prelude::v1::test]
+fn import_for_removed_row_still_refreshes_library() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_removed_refresh");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    // The file made it into the catalog just as ✕ was pressed.
+    let item = downloaded_item(&engine, &dir, URL);
+    fake.finish(
+        URL,
+        JobOutcome::Imported {
+            item: Box::new(item),
+            timeline_error: None,
+        },
+    );
+    view.update(vcx, |app, cx| {
+        let id = row_id(app, URL);
+        app.cancel_or_remove_download(id, cx);
+    });
+    settle(vcx, &view, "the library learns of the import", |app| {
+        downloaded_count(app) == 1
+    });
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.entries.is_empty(), "the row stays removed")
+    });
 }
 
 #[core::prelude::v1::test]
@@ -693,9 +729,9 @@ fn switching_library_drops_old_jobs() {
             "switching library with a running download asks first"
         );
     });
-    view.update(vcx, |app, cx| app.confirm_downloads_prompt(cx));
     // A late outcome from the old job must not land anywhere new.
     fake.finish(URL, JobOutcome::Failed("late".into()));
+    view.update(vcx, |app, cx| app.confirm_downloads_prompt(cx));
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert!(
@@ -809,6 +845,46 @@ fn done_row_click_selects_item_in_downloaded_album() {
     view.update(vcx, |app, _| {
         assert_shows_in_downloaded(app, item.id);
         assert!(!app.downloads.open, "the list closes");
+    });
+}
+
+#[core::prelude::v1::test]
+fn done_row_for_trashed_item_says_removed() {
+    let (dir, engine, fake, mut cx) = queue_app("dl_show_trashed");
+    let item = downloaded_item(&engine, &dir, URL);
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    view.update(vcx, |app, cx| {
+        app.enqueue_download(URL.to_string(), true, cx)
+    });
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    fake.finish(
+        URL,
+        JobOutcome::Imported {
+            item: Box::new(item.clone()),
+            timeline_error: None,
+        },
+    );
+    settle(vcx, &view, "the row is done", |app| {
+        count(app, DownloadState::Done) == 1
+    });
+    // Trashed later in the same session.
+    engine.set_trashed(item.id, true).unwrap();
+    view.update(vcx, |app, cx| {
+        let id = row_id(app, URL);
+        app.download_main_action(id, cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(
+            app.selected_item.is_none(),
+            "nothing is selected for a trashed item"
+        );
+        assert!(
+            !app.downloads.entries[0].row.in_library,
+            "the row learns the item left the library, so it says so"
+        );
     });
 }
 

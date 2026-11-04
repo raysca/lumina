@@ -133,6 +133,21 @@ mod tests {
     }
 
     #[test]
+    fn sidecar_import_keeps_download_address() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let inserted = catalog
+            .insert_with_source(&item("/lib/Imports/2026/a.mp4"), URL, None)
+            .unwrap();
+        catalog
+            .record_media_source(inserted.id, "https://other.example/page", None)
+            .unwrap();
+        assert!(
+            catalog.find_prior_download(URL).unwrap().is_some(),
+            "a sidecar's address must not replace the one Lumina downloaded from"
+        );
+    }
+
+    #[test]
     fn trashed_download_is_not_prior() {
         let catalog = Catalog::open_in_memory().unwrap();
         let inserted = catalog

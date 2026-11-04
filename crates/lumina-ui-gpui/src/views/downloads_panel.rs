@@ -6,7 +6,7 @@ use gpui::*;
 use lumina_core::net_import::{DownloadPhase, NetworkDownloadProgress};
 use lumina_core::DownloadState;
 
-use crate::app::downloads::{DownloadEntry, SECTIONS};
+use crate::app::downloads::DownloadEntry;
 use crate::app::types::format_bytes;
 use crate::theme;
 use crate::LuminaApp;
@@ -242,16 +242,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .flex()
         .flex_col()
         .gap_0p5();
-    for (label, states) in SECTIONS {
-        let rows: Vec<&DownloadEntry> = app
-            .downloads
-            .entries
-            .iter()
-            .filter(|entry| states.contains(&entry.row.state))
-            .collect();
-        if rows.is_empty() {
-            continue;
-        }
+    for (label, rows) in app.download_sections() {
         body = body.child(
             theme::section_label(label.to_uppercase())
                 .px_2()
