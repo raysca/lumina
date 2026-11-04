@@ -130,7 +130,8 @@ impl LuminaApp {
             (DownloadState::Paused, _) => self.resume_download(row_id, cx),
             (DownloadState::Done | DownloadState::Duplicate, Some(id)) if entry.row.in_library => {
                 // Trashed or hidden since it finished: say so on the row.
-                if !self.show_download_in_library(id, cx) {
+                let shown = self.show_download_in_library(id, cx);
+                if !shown {
                     if let Some(index) = self.downloads.index_of(row_id) {
                         self.downloads.entries[index].row.in_library = false;
                     }

@@ -165,11 +165,11 @@ impl LuminaApp {
     /// pixel-exact zoom transform.
     pub fn zoom_grid_with_wheel(
         &mut self,
-        event: &ScrollWheelEvent,
+        event: &ScrollEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !event.modifiers.secondary() {
+        if !event.modifiers.secondary(cx) {
             return false;
         }
 
@@ -207,7 +207,7 @@ impl LuminaApp {
         // scroll was applied. `max_offset` is from the layout the event was
         // dispatched against.
         let scroll_y_before = if viewport.contains(&event.position) {
-            (offset_after.y - px(delta_y)).clamp(-max_offset.height, px(0.0))
+            (offset_after.y - px(delta_y)).clamp(-max_offset.y, px(0.0))
         } else {
             offset_after.y
         };

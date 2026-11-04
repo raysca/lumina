@@ -343,7 +343,7 @@ fn checking_shows_a_live_count() {
     });
     vcx.update(|window, cx| {
         window.refresh();
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
     assert!(
         vcx.debug_bounds("import-check-progress").is_some(),

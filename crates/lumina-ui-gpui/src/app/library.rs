@@ -851,7 +851,7 @@ impl LuminaApp {
     /// to its content.
     pub fn scroll_shortcuts(&mut self, dy: f32, cx: &mut Context<Self>) {
         let handle = &self.shortcuts_scroll;
-        let max = handle.max_offset().height;
+        let max = handle.max_offset().y;
         let mut offset = handle.offset();
         offset.y = (offset.y - px(dy)).clamp(-max, px(0.0));
         handle.set_offset(offset);

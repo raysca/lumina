@@ -10,9 +10,10 @@ Lumina is a local-first macOS photo and video manager:
 
 - `lumina-core` is UI-free: SQLite catalog, scanner, decoder, search, smart
   albums, geocoding, caching, XMP sidecars, filesystem watcher.
-- `lumina-ui-gpui` is the GPUI 0.2.2 desktop app: state, views, player bridge,
+- `lumina-ui-gpui` is the GPUI desktop app (GPUI Kit 0.9, which pins
+  `gpui-pre` 0.3.11; imported as `gpui`): state, views, player bridge,
   icons, theme, and UI automation tests.
-- Rust stable, edition 2021, workspace resolver 2.
+- Rust stable (1.95 or newer), edition 2021, workspace resolver 2.
 - Version is synchronized across `crates/*/Cargo.toml`, `resources/Info.plist`,
   and the `Makefile`; release builds fail on mismatch.
 
@@ -317,10 +318,12 @@ Review checklist:
 - Do not add mouse-only controls. Icon-only controls get tooltips and labels.
 - Keep focus and selection states visible, and preserve scroll-into-view for
   keyboard navigation.
-- GPUI 0.2.2 exposes no NSAccessibility element tree, so VoiceOver currently
-  sees only the window frame. Do not claim screen-reader support that does not
-  exist; native menus and the command palette are the practical paths. See
-  `docs/accessibility.md` for the current limitation and mitigations.
+- GPUI reports elements to VoiceOver through AccessKit only when they have an
+  `id` and a `.role(...)` (plus `aria_label` and friends). Lumina's controls
+  do not set roles yet, so VoiceOver still sees little beyond the window.
+  Give new controls a role and label. Do not claim screen-reader support that
+  has not been checked with VoiceOver; native menus and the command palette
+  are the practical paths. See `docs/accessibility.md`.
 - Localization: user-facing command labels go through `src/i18n.rs`. New strings
   should use catalog keys where practical; en-US is the only shipped locale today.
 
@@ -372,8 +375,8 @@ A change is done only when all applicable items are true:
 - Semantic/AI search is not implemented in this tree; do not describe it as
   complete.
 - OS-level UI interaction tests require Accessibility permission; skip explicitly.
-- VoiceOver has no element tree from GPUI 0.2.2; native menus and palette are the
-  current accessible paths.
+- Lumina's controls set no AccessKit roles yet, so VoiceOver sees almost no
+  element tree; native menus and palette are the current accessible paths.
 - Signing/notarization requires Apple credentials; CI release artifacts are
   drafts until verified and published.
 - DMG creation may be blocked in sandboxed sessions; use `LUMINA_SKIP_DMG=1`

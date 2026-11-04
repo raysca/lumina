@@ -126,6 +126,7 @@ fn test_e2e_fullscreen_viewer_journey() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("ctrl-cmd-f").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -147,6 +148,7 @@ fn test_e2e_fullscreen_viewer_journey() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("h").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -168,6 +170,7 @@ fn test_e2e_fullscreen_viewer_journey() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("h").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -194,6 +197,7 @@ fn test_e2e_fullscreen_viewer_journey() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -215,6 +219,7 @@ fn test_e2e_fullscreen_viewer_journey() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -464,6 +469,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("space").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -484,6 +490,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("space").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -498,6 +505,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -516,6 +524,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,
@@ -528,7 +537,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
 
 fn press_viewer_key(
     app: &mut LuminaApp,
-    key: &str,
+    key: &'static str,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<LuminaApp>,
 ) {
@@ -536,6 +545,7 @@ fn press_viewer_key(
         &KeyDownEvent {
             keystroke: Keystroke::parse(key).expect("test keystroke must parse"),
             is_held: false,
+            prefer_character_input: false,
         },
         window,
         cx,
@@ -545,7 +555,7 @@ fn press_viewer_key(
 fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
     cx.run_until_parked();
 }

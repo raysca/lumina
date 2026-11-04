@@ -15,7 +15,7 @@ impl LuminaApp {
     ) {
         let keystroke = &event.keystroke;
         let key = keystroke.key.as_str();
-        let cmd_or_ctrl = keystroke.modifiers.secondary() || keystroke.modifiers.control;
+        let cmd_or_ctrl = keystroke.modifiers.secondary(cx) || keystroke.modifiers.control;
         // ⌃⌘ chords (⌃⌘F full screen) must not fall into the ⌘ handlers.
         let ctrl_cmd = keystroke.modifiers.platform && keystroke.modifiers.control;
 
@@ -25,7 +25,7 @@ impl LuminaApp {
             return;
         }
         let m = &keystroke.modifiers;
-        if m.secondary() && !m.shift && key == "v" && self.paste_into_text_field(cx) {
+        if m.secondary(cx) && !m.shift && key == "v" && self.paste_into_text_field(cx) {
             return;
         }
 

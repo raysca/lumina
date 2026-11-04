@@ -77,7 +77,7 @@ core handles cataloguing, decoding, and search.
 - macOS 12 or newer for the current release (Windows and Linux are planned but
   not yet supported; their video/player/packaging backends are not implemented)
 - Xcode Command Line Tools (cc, AVFoundation, AppKit) on macOS
-- Rust stable — see rust-toolchain.toml
+- Rust stable, 1.95 or newer — see rust-toolchain.toml
 
 ## Quick start
 

@@ -44,7 +44,7 @@ fn seed_library(prefix: &str, count: usize) -> (std::path::PathBuf, std::sync::A
 fn render_ui(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
     cx.run_until_parked();
 }
@@ -78,7 +78,7 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
 fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
     cx.update(|window, cx| {
         let handle = view.read(cx).focus_handle.clone();
-        window.focus(&handle);
+        window.focus(&handle, cx);
     });
 }
 

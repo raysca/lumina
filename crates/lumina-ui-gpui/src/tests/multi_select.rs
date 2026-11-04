@@ -24,7 +24,7 @@ fn select_two<'a>(
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
+    vcx.simulate_click(second, gpui::Modifiers::command());
     click(vcx, "inspector-toggle");
     render_ui(vcx);
     (dir, engine, [a, b], view, vcx)
@@ -51,7 +51,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
     // Select both through the real input path: click, then ⌘-click.
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
+    vcx.simulate_click(second, gpui::Modifiers::command());
     view.update(vcx, |app, cx| {
         assert_eq!(
             app.selected_indices.len(),
@@ -149,7 +149,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
 
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::secondary_key());
+    vcx.simulate_click(second, gpui::Modifiers::command());
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();

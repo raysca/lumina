@@ -39,7 +39,7 @@ fn main() {
         }
     };
 
-    Application::new()
+    gpui::application()
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
             cx.set_menus(crate::menus::build_menus());

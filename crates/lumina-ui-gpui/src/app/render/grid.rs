@@ -83,7 +83,7 @@ impl LuminaApp {
                     this.begin_grid_drag(
                         event.position,
                         None,
-                        mods.shift || mods.secondary() || mods.control,
+                        mods.shift || mods.secondary(cx) || mods.control,
                     );
                     cx.notify();
                 }),
@@ -107,8 +107,8 @@ impl LuminaApp {
             // plain wheel is left alone so the uniform list keeps scrolling.
             // The handler runs in the bubble phase after the list's own scroll
             // listener, and restores the offset it would have scrolled.
-            .on_scroll_wheel(cx.listener(
-                |this, event: &ScrollWheelEvent, window, cx| {
+            .on_scroll(cx.listener(
+                |this, event: &ScrollEvent, window, cx| {
                     if this.zoom_grid_with_wheel(event, window, cx) {
                         cx.stop_propagation();
                     }
@@ -273,7 +273,7 @@ impl LuminaApp {
                                                 }
                                                 let mods = window.modifiers();
                                                 let is_shift = mods.shift;
-                                                let is_cmd = mods.secondary() || mods.control;
+                                                let is_cmd = mods.secondary(cx) || mods.control;
                                                 if !is_shift && !is_cmd && event.click_count() >= 2
                                                 {
                                                     this.open_viewer(item_for_click.clone(), cx);
@@ -294,7 +294,7 @@ impl LuminaApp {
                                                 move |this, event: &MouseDownEvent, window, cx| {
                                                     let mods = window.modifiers();
                                                     let additive = mods.shift
-                                                        || mods.secondary()
+                                                        || mods.secondary(cx)
                                                         || mods.control
                                                         || (this.selected_indices.len() > 1
                                                             && this
@@ -594,7 +594,7 @@ impl LuminaApp {
                         rows
                     }),
                 )
-                .track_scroll(scroll_handle)
+                .track_scroll(&scroll_handle)
                 .flex_1()
                 .min_h_0(),
             )

@@ -59,7 +59,7 @@ fn test_epoch_ms(value: &str) -> i64 {
 pub(crate) fn render_ui(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
     cx.run_until_parked();
 }
@@ -67,7 +67,7 @@ pub(crate) fn render_ui(cx: &mut VisualTestContext) {
 pub(crate) fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
     cx.update(|window, cx| {
         let handle = view.read(cx).focus_handle.clone();
-        window.focus(&handle);
+        window.focus(&handle, cx);
     });
 }
 
@@ -221,9 +221,11 @@ fn ui_automation_search_click_type_clear() {
     click(vcx, "search-input");
     view.update(vcx, |app, _| assert!(app.search_focused));
 
-    type_text(vcx, "is:video");
+    // A query that matches the seeded photos, so the grid stays painted
+    // once the results land.
+    type_text(vcx, "photo");
     view.update(vcx, |app, _| {
-        assert_eq!(app.search_query, "is:video");
+        assert_eq!(app.search_query, "photo");
         assert!(app.search_focused, "typing keeps search focused");
     });
 
@@ -810,7 +812,7 @@ fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
     render_ui(vcx);
     let offset = |vcx: &mut VisualTestContext| {
         view.update(vcx, |app, _| {
-            let max = app.shortcuts_scroll.max_offset().height;
+            let max = app.shortcuts_scroll.max_offset().y;
             assert!(max > px(0.0), "the sheet overflows its card, so it scrolls");
             (app.shortcuts_scroll.offset().y, max)
         })
@@ -1883,7 +1885,7 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
         assert_eq!(app.selected_indices, BTreeSet::from([0usize]));
     });
 
-    let cmd = gpui::Modifiers::secondary_key();
+    let cmd = gpui::Modifiers::command();
     // Same row at the default column count, so the swept rectangle is 2..=3.
     let start = bounds_center(vcx, cards[2]);
     let end = bounds_center(vcx, cards[3]);
@@ -2004,11 +2006,12 @@ fn wheel(
     modifiers: gpui::Modifiers,
 ) {
     cx.simulate_mouse_move(position, None, gpui::Modifiers::default());
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position,
         delta,
         modifiers,
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::Pointer,
     });
     render_ui(cx);
 }
@@ -2249,7 +2252,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
-        gpui::Modifiers::secondary_key(),
+        gpui::Modifiers::command(),
     );
 
     let (columns_after_zoom, selection_len, dragging) = view.update(vcx, |app, _| {
@@ -2321,7 +2324,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
-        gpui::Modifiers::secondary_key(),
+        gpui::Modifiers::command(),
     );
     let (columns_at_limit, offset_at_limit) = view.update(vcx, |app, _| {
         (

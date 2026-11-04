@@ -61,7 +61,7 @@ impl MediaContextMenu {
             .id("context-menu-layer")
             .absolute()
             .inset_0()
-            .on_scroll_wheel(cx.listener(|this, _e: &ScrollWheelEvent, _w, cx| {
+            .on_scroll(cx.listener(|this, _e: &ScrollEvent, _w, cx| {
                 this.close_context_menu(cx);
             }))
             // Dismiss on background click

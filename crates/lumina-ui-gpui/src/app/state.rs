@@ -449,7 +449,7 @@ impl LuminaApp {
     /// events and the text input handler (app/text_input.rs) reach it.
     pub fn new_in_window(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let app = Self::new(cx);
-        window.focus(&app.focus_handle);
+        window.focus(&app.focus_handle, cx);
         app
     }
 
@@ -480,14 +480,14 @@ impl LuminaApp {
                     UiMessage::OpenFloatingInspector => {
                         let weak_app = weak_self.clone();
                         let tx = spawn_tx.clone();
-                        let _ = async_cx.update(|cx: &mut App| {
+                        async_cx.update(|cx: &mut App| {
                             open_floating_inspector_window(weak_app, tx, cx);
                         });
                     }
                     UiMessage::OpenFloatingPip => {
                         let weak_app = weak_self.clone();
                         let tx = spawn_tx.clone();
-                        let _ = async_cx.update(|cx: &mut App| {
+                        async_cx.update(|cx: &mut App| {
                             open_floating_pip_window(weak_app, tx, cx);
                         });
                     }

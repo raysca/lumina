@@ -41,7 +41,7 @@ fn timed_while_catalog_locked(engine: &Arc<LuminaEngine>, f: impl FnOnce()) -> D
 fn draw(vcx: &mut VisualTestContext) {
     vcx.update(|window, cx| {
         window.refresh();
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
 }
 

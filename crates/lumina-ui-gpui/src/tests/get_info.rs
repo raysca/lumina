@@ -30,7 +30,7 @@ fn get_info<'a>(
         .add_window_view(|window, cx| FloatingInspectorView::new(view.downgrade(), tx, window, cx));
     icx.update(|window, cx| {
         let handle = inspector.read(cx).focus_handle.clone();
-        window.focus(&handle);
+        window.focus(&handle, cx);
     });
     render_ui(icx);
     (temp_dir, view, icx)

@@ -37,8 +37,8 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   no map (no network); location shows as text only.
 - Rating has no direct key binding (in the viewer 1/2/4 are zoom presets);
   the ⌘K palette has Rate 1–5 Stars and Clear Rating.
-- Viewer pinch-to-zoom: GPUI 0.2.2 delivers no magnify event; the wheel,
-  +/−, 0/1/2/4 and Z zoom.
+- Viewer pinch-to-zoom: not wired up yet (GPUI now delivers `PinchEvent`);
+  the wheel, +/−, 0/1/2/4 and Z zoom.
 - Inspector: Modified/Created/Added rows keep the short date format; only
   the capture time reads "Mon 13 Jun 2022 · 10:03". Overflow scroll and the
   video strip have no dedicated UI test yet.

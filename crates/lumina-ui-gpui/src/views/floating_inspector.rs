@@ -23,7 +23,7 @@ impl FloatingInspectorView {
         let focus_handle = cx.focus_handle();
         // Keys and typed text reach the app through this handle, even when the
         // window becomes key without a click (⌘`).
-        window.focus(&focus_handle);
+        window.focus(&focus_handle, cx);
         let _subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _entity, cx| {
                 cx.notify();

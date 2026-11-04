@@ -28,16 +28,17 @@ launch, so relaunch after changing it.
 
 ## Screen readers
 
-GPUI 0.2.2 does not expose an NSAccessibility element tree, so VoiceOver
-currently sees only the window frame, not individual controls. Mitigations:
+GPUI (through GPUI Kit) reports an accessibility tree via AccessKit, but only
+for elements that have an `id` and a `.role(...)`, with labels from
+`aria_label`. Lumina's controls do not set roles yet, so VoiceOver currently
+sees almost nothing beyond the window frame. Mitigations:
 
 - every operation is reachable from the native menu bar or command palette;
 - the shortcut sheet documents all keyboard paths;
 - file dialogs, Preferences content and menus are native/accessible.
 
-Removing this limitation requires accessibility support in GPUI (role/label
-metadata and focus ordering). That is tracked as an upstream dependency rather
-than worked around with fake controls.
+Removing this limitation is now Lumina's own work: give each control a role
+and label, then check the result with VoiceOver before claiming support.
 
 ## Automated checks
 

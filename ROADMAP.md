@@ -364,8 +364,9 @@ interaction audit and test plan are in [docs/ux_audit.md](docs/ux_audit.md).
 ## 10. Accessibility and localization
 
 **Current:** keyboard-first navigation, command palette, native menu bar,
-tooltips, shortcut sheet. GPUI 0.2.2 exposes no NSAccessibility tree, so
-VoiceOver sees only the window. i18n catalog exists but ships en-US only.
+tooltips, shortcut sheet. GPUI now reports an AccessKit tree, but Lumina's
+controls set no roles yet, so VoiceOver sees almost nothing beyond the window.
+i18n catalog exists but ships en-US only.
 
 **Target:**
 

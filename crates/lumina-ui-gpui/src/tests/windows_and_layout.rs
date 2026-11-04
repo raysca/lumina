@@ -121,6 +121,7 @@ fn test_card_context_menu_lifecycle() {
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 },
                 window,
                 cx,

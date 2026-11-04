@@ -8,6 +8,7 @@ pub fn build_menus() -> Vec<Menu> {
     vec![
         Menu {
             name: "Lumina".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("About Lumina", ShowAbout),
                 MenuItem::separator(),
@@ -18,6 +19,7 @@ pub fn build_menus() -> Vec<Menu> {
         },
         Menu {
             name: "File".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("Open Library…", OpenLibrary),
                 MenuItem::action("Import…", ImportMedia),
@@ -31,6 +33,7 @@ pub fn build_menus() -> Vec<Menu> {
         },
         Menu {
             name: "View".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("Command Palette…", ShowCommandPalette),
                 MenuItem::separator(),
@@ -43,6 +46,7 @@ pub fn build_menus() -> Vec<Menu> {
         },
         Menu {
             name: "Help".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
                 MenuItem::action("About Lumina", ShowAbout),

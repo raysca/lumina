@@ -167,7 +167,7 @@ impl ViewerViewport {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .on_scroll_wheel(cx.listener(|this, e: &ScrollWheelEvent, w, cx| {
+                    .on_scroll(cx.listener(|this, e: &ScrollEvent, w, cx| {
                         let dy = match e.delta {
                             ScrollDelta::Pixels(p) => f32::from(p.y),
                             // A wheel notch is one line: ~50px zooms ~13%.
