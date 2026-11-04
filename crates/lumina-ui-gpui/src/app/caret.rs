@@ -40,7 +40,8 @@ impl LuminaApp {
     /// Runs at the top of render: starts the blink when a field takes
     /// typing, stops it when none does, and publishes the glyph.
     pub(crate) fn update_caret(&mut self, cx: &mut Context<Self>) {
-        if self.text_target().is_none() {
+        // Input-backed fields draw and blink their own caret.
+        if self.text_target().is_none_or(|target| target.uses_input()) {
             self.caret = CaretBlink::default();
         } else if self.caret.task.is_none() {
             self.caret.task = Some(cx.spawn(async move |this, cx| loop {

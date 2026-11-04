@@ -1,4 +1,3 @@
-use crate::app::caret::caret;
 use crate::theme;
 use crate::LuminaApp;
 use gpui::*;
@@ -10,9 +9,8 @@ impl SearchBarView {
     pub fn render_field(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
         let active = !this.search_query.is_empty();
         let focused = this.search_focused;
-        let query_text = if focused {
-            format!("{}{}", this.search_query, caret())
-        } else if active {
+        let input = this.field_input_for(crate::app::text_input::TextTarget::Search);
+        let query_text = if active {
             this.search_query.clone()
         } else {
             "Search — try camera:sony iso:>3200".to_string()
@@ -60,7 +58,10 @@ impl SearchBarView {
                     } else {
                         theme::text_subtle()
                     })
-                    .child(query_text),
+                    .child(match input {
+                        Some(input) => gpui::base::input::Input::new(input).into_any_element(),
+                        None => query_text.into_any_element(),
+                    }),
             )
             .children(active.then(|| {
                 div()

@@ -80,6 +80,134 @@ fn cmd_v_pastes_into_the_search_field_as_one_line() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The toolbar search, focused and drawn so its input takes keys.
+fn focused_search<'a>(
+    name: &str,
+    cx: &'a mut gpui::TestAppContext,
+) -> (
+    std::path::PathBuf,
+    gpui::Entity<LuminaApp>,
+    &'a mut gpui::VisualTestContext,
+) {
+    let (dir, engine) = seed_library(name, 2);
+    let (view, vcx) = app_with_library(cx, engine);
+    view.update(vcx, |app, cx| {
+        app.search_focused = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    (dir, view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn search_inserts_typed_text_at_the_caret() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_mid_insert", &mut cx);
+    vcx.simulate_input("Lisbn");
+    keystrokes(vcx, "left");
+    vcx.simulate_input("o");
+    keystrokes(vcx, "end");
+    vcx.simulate_input("!");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "Lisbon!",
+            "← moves the caret and typing lands there, not at the end"
+        );
+    });
+    let field = vcx
+        .debug_bounds("search-input")
+        .expect("search field drawn");
+    let text = view.update(vcx, |app, cx| {
+        let input = app.field_input_for(crate::app::text_input::TextTarget::Search);
+        input
+            .expect("focused search has an input")
+            .read(cx)
+            .input_bounds()
+    });
+    assert!(
+        text.size.height > gpui::px(0.0)
+            && field.contains(&text.origin)
+            && field.contains(&text.bottom_right()),
+        "the input draws inside the search field: {text:?} in {field:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn search_typing_replaces_the_selection_and_cut_copies_it() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_select", &mut cx);
+    vcx.simulate_input("Lisbon");
+    keystrokes(vcx, "shift-left shift-left shift-left");
+    vcx.simulate_input("ka");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "Liska",
+            "typing replaces the selected text"
+        );
+    });
+    keystrokes(vcx, "secondary-a secondary-x");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "", "⌘A ⌘X cuts the whole query");
+    });
+    assert_eq!(
+        vcx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref(),
+        Some("Liska"),
+        "the cut text is on the clipboard"
+    );
+    keystrokes(vcx, "secondary-v");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "Liska", "⌘V puts it back");
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn search_paste_replaces_the_selection_and_stops_at_the_cap() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_paste_cap", &mut cx);
+    vcx.simulate_input("ab");
+    let cap = lumina_core::text::MAX_TEXT_CHARS;
+    vcx.write_to_clipboard(ClipboardItem::new_string("x\ty".repeat(cap)));
+    keystrokes(vcx, "shift-left secondary-v");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.starts_with("ax y"),
+            "the paste replaces the selected b and tabs become spaces: {:?}",
+            &app.search_query[..8]
+        );
+        assert_eq!(
+            app.search_query.chars().count(),
+            cap,
+            "a paste is cut to the room the field has left"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_dialog_over_search_takes_its_keys() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_modal_focus", &mut cx);
+    vcx.simulate_input("Rio");
+    view.update(vcx, |app, cx| {
+        app.preferences_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    vcx.simulate_input("x");
+    keystrokes(vcx, "backspace backspace");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "Rio",
+            "keys under an open dialog must not edit the search behind it"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[core::prelude::v1::test]
 fn the_main_window_takes_typed_text_without_a_test_focus() {
     let (dir, engine) = seed_library("text_focus", 2);

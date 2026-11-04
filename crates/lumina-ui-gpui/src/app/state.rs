@@ -394,6 +394,8 @@ pub struct LuminaApp {
     /// app/text_input.rs.
     pub text_marked: Option<crate::app::text_input::MarkedText>,
     pub(crate) caret: crate::app::caret::CaretBlink,
+    /// The platform text input behind the active field; see app/text_input.rs.
+    pub(crate) field_input: Option<crate::app::text_input::FieldInput>,
     pub command_selected: usize,
     /// Keeps the keyboard-selected palette row scrolled into view.
     pub command_scroll: ScrollHandle,
@@ -576,6 +578,7 @@ impl LuminaApp {
             command_query: String::new(),
             text_marked: None,
             caret: Default::default(),
+            field_input: None,
             command_selected: 0,
             command_scroll: ScrollHandle::new(),
             shortcuts_scroll: ScrollHandle::new(),

@@ -4,11 +4,16 @@
 //! Printable keys are left to GPUI's input handler instead of the keymap, so
 //! Shift, ⌥ characters, dead keys and IME composition arrive as the text the
 //! user meant. The keymap keeps Enter, Escape, Backspace and the arrows.
-//! ponytail: edits always happen at the end of the field (no caret or
-//! selection); add a caret model when a field needs mid-text editing.
+//!
+//! Fields that `uses_input` edit through one GPUI Kit `InputState`
+//! ([`FieldInput`]) with a caret, selection and copy/cut; Enter and Escape
+//! still reach the keymap, and ↑/↓ and ⌘V are routed to the app. The other
+//! fields still edit at the end through the app's own `EntityInputHandler`
+//! below until they move to the input too.
 
 use std::ops::Range;
 
+use gpui::base::input::{InputEvent, InputState};
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
 
@@ -30,6 +35,27 @@ pub(crate) enum TextTarget {
     TagManagerSearch,
     Search,
     NetworkImportUrl,
+}
+
+impl TextTarget {
+    /// Fields edited through [`FieldInput`] (caret, selection, copy/cut,
+    /// IME). The rest still type at the end through the app's own handler.
+    pub(crate) fn uses_input(self) -> bool {
+        matches!(self, TextTarget::Search)
+    }
+}
+
+/// The one GPUI Kit `InputState` behind every field that `uses_input`. Only
+/// one field takes typing at a time, so the state follows `text_target()`:
+/// render loads the field's buffer into it and focuses it, and each edit is
+/// copied back into the buffer, which stays the app's source of truth.
+pub(crate) struct FieldInput {
+    pub(crate) state: Entity<InputState>,
+    target: Option<TextTarget>,
+    /// The text both sides last agreed on. The side that differs from it
+    /// changed: the buffer (app code) wins at render, the input on `Change`.
+    synced: String,
+    _events: Subscription,
 }
 
 /// An IME composition in progress: the field it belongs to, its UTF-16
@@ -61,6 +87,142 @@ impl LuminaApp {
         if buffer[start..end] == mark.text {
             self.text_marked = Some(mark);
         }
+    }
+
+    /// The input state of `target` while that field takes typing.
+    pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<&Entity<InputState>> {
+        let field = self.field_input.as_ref()?;
+        (field.target == Some(target)).then_some(&field.state)
+    }
+
+    /// Runs at the top of render: points the shared input at the active
+    /// field, loads text the app changed (a cleared search, an applied
+    /// suggestion), and moves keyboard focus between it and the root.
+    pub(crate) fn sync_field_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let target = self.text_target().filter(|t| t.uses_input());
+        if self.field_input.is_none() {
+            if target.is_none() {
+                return;
+            }
+            // Input key bindings and the base layer's globals. `main` never
+            // needs a field before this, and tests build the app without it.
+            if !cx.has_global::<gpui::base::GlobalState>() {
+                gpui::init(cx);
+            }
+            let state = cx.new(|cx| InputState::new(window, cx));
+            let _events = cx.subscribe_in(&state, window, |this, state, event, _window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.field_input_changed(state, cx);
+                }
+            });
+            self.field_input = Some(FieldInput {
+                state,
+                target: None,
+                synced: String::new(),
+                _events,
+            });
+        }
+        let text = target.and_then(|t| self.text_buffer(t).cloned());
+        let limit = target.map(|t| self.text_limit(t));
+        let Some(field) = self.field_input.as_mut() else {
+            return;
+        };
+        let retarget = field.target != target;
+        field.target = target;
+        let reload = retarget || text.as_ref().is_some_and(|text| *text != field.synced);
+        if let Some(text) = &text {
+            field.synced.clone_from(text);
+        }
+        let state = field.state.clone();
+        let focus = state.focus_handle(cx);
+        let (Some(text), Some(limit)) = (text, limit) else {
+            if focus.is_focused(window) {
+                window.focus(&self.focus_handle, cx);
+            }
+            return;
+        };
+        state.update(cx, |state, cx| {
+            if retarget {
+                // Typing and paste stop at the field's limit and never
+                // insert what the catalog drops (see `clean_text`).
+                state.set_validator(
+                    move |text, _| {
+                        text.chars().count() <= limit && !text.chars().any(is_disallowed)
+                    },
+                    cx,
+                );
+            }
+            if reload {
+                state.set_value(text, window, cx);
+            }
+            if !focus.is_focused(window) {
+                state.focus(window, cx);
+            }
+        });
+    }
+
+    fn field_input_changed(&mut self, state: &Entity<InputState>, cx: &mut Context<Self>) {
+        let value = state.read(cx).value();
+        let Some(field) = self.field_input.as_mut() else {
+            return;
+        };
+        // A late event for text the app has since replaced is not an edit.
+        let Some(target) = field.target.filter(|_| field.synced != value.as_ref()) else {
+            return;
+        };
+        field.synced = value.to_string();
+        let Some(buffer) = self.text_buffer(target) else {
+            return;
+        };
+        buffer.clear();
+        buffer.push_str(&value);
+        self.text_edited(target, cx);
+    }
+
+    /// The active field's input, when it has one.
+    fn active_field_input(&self) -> Option<(TextTarget, Entity<InputState>)> {
+        let target = self.text_target()?;
+        Some((target, self.field_input_for(target)?.clone()))
+    }
+
+    /// ↑/↓ belong to the app in one-line fields (suggestions, palette rows,
+    /// tag lists), so they skip the input and go through the keymap.
+    pub(crate) fn field_arrow(
+        &mut self,
+        key: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.active_field_input().is_none() {
+            return;
+        }
+        cx.stop_propagation();
+        let Ok(keystroke) = Keystroke::parse(key) else {
+            return;
+        };
+        let event = KeyDownEvent {
+            keystroke,
+            is_held: false,
+            prefer_character_input: false,
+        };
+        self.handle_key_down(&event, window, cx);
+    }
+
+    /// ⌘V into an input-backed field, cleaned like `paste_into_text_field`
+    /// and cut to the room left, instead of the input's own paste, which
+    /// would refuse the whole text past the limit or with a tab in it.
+    pub(crate) fn paste_into_field_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((target, state)) = self.active_field_input() else {
+            return;
+        };
+        cx.stop_propagation();
+        let line = clipboard_line(cx);
+        let limit = self.text_limit(target);
+        state.update(cx, |state, cx| {
+            let kept = state.value().chars().count() - state.selected_value().chars().count();
+            let text: String = line.chars().take(limit.saturating_sub(kept)).collect();
+            state.replace(text, window, cx);
+        });
     }
 
     /// The active field, in the same precedence as `handle_modal_key_down`.
@@ -213,15 +375,7 @@ impl LuminaApp {
         if self.text_target().is_none() {
             return false;
         }
-        let text = cx
-            .read_from_clipboard()
-            .and_then(|item| item.text())
-            .unwrap_or_default();
-        let line: String = text
-            .trim_matches(['\n', '\r'])
-            .chars()
-            .map(|c| if is_disallowed(c) { ' ' } else { c })
-            .collect();
+        let line = clipboard_line(cx);
         self.replace_text(None, &line, false, cx);
         true
     }
@@ -267,6 +421,19 @@ impl LuminaApp {
         }
         self.text_edited(target, cx);
     }
+}
+
+/// The clipboard as one line: line breaks, tabs and other characters the
+/// catalog never keeps become spaces.
+fn clipboard_line(cx: &App) -> String {
+    let text = cx
+        .read_from_clipboard()
+        .and_then(|item| item.text())
+        .unwrap_or_default();
+    text.trim_matches(['\n', '\r'])
+        .chars()
+        .map(|c| if is_disallowed(c) { ' ' } else { c })
+        .collect()
 }
 
 /// Registers `app` as the input handler of the window being painted while
