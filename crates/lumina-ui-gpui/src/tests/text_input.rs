@@ -678,3 +678,111 @@ fn shift_arrows_still_move_the_palette_selection() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
+    let (dir, engine) = seed_library("text_caption_full", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "home");
+    let full = format!("{}Z", "a".repeat(lumina_core::text::MAX_TEXT_CHARS - 1));
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        app.caption.input_buffer = full.clone();
+    });
+    let icx = info_window(&mut cx, &view);
+    keystrokes(icx, "secondary-up");
+    icx.simulate_input("x");
+    view.update(icx, |app, _| {
+        assert!(
+            app.caption.input_buffer == full,
+            "a keystroke past the cap is refused, not paid for with the last character"
+        );
+    });
+    // The caret stayed at the start: make room there and type again.
+    keystrokes(icx, "delete");
+    icx.simulate_input("x");
+    view.update(icx, |app, _| {
+        assert!(
+            app.caption.input_buffer.starts_with("xa") && app.caption.input_buffer.ends_with('Z'),
+            "the refused keystroke must leave the caret where it was"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_caption_stored_past_the_cap_keeps_its_end_when_edited() {
+    let (dir, engine) = seed_library("text_caption_long", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "home");
+    let long = format!("{}Z!", "a".repeat(lumina_core::text::MAX_TEXT_CHARS + 3));
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        app.caption.input_buffer = long.clone();
+    });
+    let icx = info_window(&mut cx, &view);
+    keystrokes(icx, "backspace");
+    view.update(icx, |app, _| {
+        assert!(
+            app.caption.input_buffer == long[..long.len() - 1],
+            "one ⌫ removes one character, not the text past the cap"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn tagging_from_the_viewer_shows_the_tag_field() {
+    let (dir, engine) = seed_library("text_viewer_tag", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "home");
+    view.update(vcx, |app, cx| {
+        let item = app.selected_item.clone().unwrap();
+        app.inspector_open = true;
+        app.open_viewer(item, cx);
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, cx| app.begin_tagging_selection(cx));
+    render_ui(vcx);
+    vcx.simulate_input("sun");
+    keystrokes(vcx, "enter");
+    let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
+    assert_eq!(
+        engine.get_tags_for_item(id),
+        vec!["sun".to_string()],
+        "Tags… in the viewer types into its inspector drawer and saves"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn leaving_a_fields_tab_saves_what_was_typed() {
+    let (dir, engine) = seed_library("text_tab_away", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "home");
+    view.update(vcx, |app, cx| app.start_caption_input(cx));
+    let icx = info_window(&mut cx, &view);
+    icx.simulate_input("Hi");
+    view.update(icx, |app, cx| {
+        app.set_inspector_tab(crate::views::inspector::InspectorTab::Camera, cx)
+    });
+    render_ui(icx);
+    icx.simulate_input("lost?");
+    let id = view.update(icx, |app, _| {
+        assert!(
+            !app.caption.input_active,
+            "a field that is no longer drawn must stop taking typing"
+        );
+        app.selected_item.clone().unwrap().id
+    });
+    assert_eq!(
+        engine.get_captions_map().get(&id).map(String::as_str),
+        Some("Hi"),
+        "what was typed before the field left the screen is saved"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

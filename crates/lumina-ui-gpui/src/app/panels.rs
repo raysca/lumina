@@ -84,11 +84,35 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Saves whichever inspector field is being edited.
+    fn commit_inspector_edits(&mut self, cx: &mut Context<Self>) {
+        if self.tag_input_active {
+            self.commit_tag_input(cx);
+        }
+        if self.caption.title_input_active {
+            self.commit_title_input(cx);
+        }
+        if self.caption.date_input_active {
+            self.commit_date_input(cx);
+        }
+        if self.caption.location_input_active {
+            self.commit_location_input(cx);
+        }
+        if self.caption.input_active {
+            self.commit_caption_input(cx);
+        }
+    }
+
     pub fn set_inspector_tab(
         &mut self,
         tab: crate::views::inspector::InspectorTab,
         cx: &mut Context<Self>,
     ) {
+        // The open edit's field may not be on `tab`: save what was typed
+        // instead of leaving its input taking keys out of sight.
+        if tab != self.inspector_tab {
+            self.commit_inspector_edits(cx);
+        }
         self.inspector_tab = tab;
         cx.notify();
     }

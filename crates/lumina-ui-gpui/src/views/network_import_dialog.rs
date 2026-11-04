@@ -107,10 +107,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 } else {
                                     theme::text()
                                 })
-                                .children(
-                                    app.field_input_for(TextTarget::NetworkImportUrl)
-                                        ,
-                                ),
+                                .children(app.field_input_for(TextTarget::NetworkImportUrl)),
                         )
                         .children((!url.is_empty()).then(|| {
                             div()

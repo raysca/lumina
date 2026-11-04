@@ -177,8 +177,8 @@ impl LuminaApp {
             if target.is_none() {
                 return;
             }
-            // Input key bindings and the base layer's globals. `main` never
-            // needs a field before this, and tests build the app without it.
+            // `main` sets up the input's key bindings and globals at launch;
+            // the UI tests build the app without it.
             if !cx.has_global::<gpui::base::GlobalState>() {
                 gpui::init(cx);
             }
@@ -304,22 +304,33 @@ impl LuminaApp {
         let Some(target) = field.target.filter(|_| field.synced != value.as_ref()) else {
             return;
         };
-        let mut value = value.to_string();
+        let value = value.to_string();
+        let synced = field.synced.clone();
         if target.multi_line() {
-            // A multi-line input has no validator: hold it to the same rules
-            // as one line, keeping line breaks (`clean_caption`).
+            // A multi-line input takes no validator: refuse an edit the way
+            // the one-line one does, by taking back what was just typed
+            // (line breaks are fine, `clean_caption`).
             let limit = self.text_limit(target);
-            let kept: String = value
-                .chars()
-                .filter(|&c| c == '\n' || !is_disallowed(c))
-                .take(limit)
-                .collect();
-            if kept != value {
-                value = kept;
+            let fits = |text: &str| {
+                text.chars().count() <= limit
+                    && !text.chars().any(|c| c != '\n' && is_disallowed(c))
+            };
+            if !fits(&value) && fits(&synced) {
+                let typed =
+                    (value.encode_utf16().count()).saturating_sub(synced.encode_utf16().count());
                 if let Some(FieldEditor::Lines(state)) = self.field_input_for(target) {
-                    let text = value.clone();
-                    state.update(cx, |state, cx| state.set_value(text, window, cx));
+                    state.update(cx, |state, cx| {
+                        let caret = state.selected_text_range(false, window, cx);
+                        match caret {
+                            Some(caret) if typed > 0 && caret.range.end >= typed => {
+                                let end = caret.range.end;
+                                state.replace_text_in_range(Some(end - typed..end), "", window, cx);
+                            }
+                            _ => state.set_value(synced, window, cx),
+                        }
+                    });
                 }
+                return;
             }
         }
         let Some(field) = self.field_input.as_mut() else {

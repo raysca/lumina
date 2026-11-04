@@ -437,10 +437,7 @@ pub(super) fn render_tags_section(
                                     .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme::text())
-                                    .children(
-                                        this.field_input_for(TextTarget::TagRename)
-                                            ,
-                                    ),
+                                    .children(this.field_input_for(TextTarget::TagRename)),
                             )
                             .child(
                                 div()

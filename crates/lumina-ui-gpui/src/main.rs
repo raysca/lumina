@@ -43,6 +43,8 @@ fn main() {
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
             cx.set_menus(crate::menus::build_menus());
+            // The text fields' input key bindings and globals.
+            gpui::init(cx);
 
             // Register bundled IBM Plex fonts
             if let Err(e) = cx.text_system().add_fonts(vec![
