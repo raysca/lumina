@@ -1,19 +1,23 @@
-//! Platform text input for the app's one-line fields (search, palette,
-//! inspector title/caption/date/place, tag names, smart-album values).
+//! The app's one-line text fields (search, palette, inspector
+//! title/caption/date/place, tag names, smart-album values, video link).
 //!
-//! Printable keys are left to GPUI's input handler instead of the keymap, so
-//! Shift, ⌥ characters, dead keys and IME composition arrive as the text the
-//! user meant. The keymap keeps Enter, Escape, Backspace and the arrows.
+//! They all edit through one GPUI Kit `InputState` ([`FieldInput`]): caret,
+//! selection, copy/cut/paste, undo, and IME. Only one field takes typing at a
+//! time (`text_target`), so the input follows it: render loads the field's
+//! `String` into it and focuses it in the window that draws the field, and
+//! each edit is copied back, so the `String` stays the source of truth for
+//! the keymap and the commits.
 //!
-//! Fields that `uses_input` edit through one GPUI Kit `InputState`
-//! ([`FieldInput`]) with a caret, selection and copy/cut; Enter and Escape
-//! still reach the keymap, and ↑/↓ and ⌘V are routed to the app. The other
-//! fields still edit at the end through the app's own `EntityInputHandler`
-//! below until they move to the input too.
+//! Printable keys go to the input, not the keymap, so Shift, ⌥ characters,
+//! dead keys and composition arrive as the text the user meant. The input
+//! passes Enter and Escape on to the keymap; ↑/↓, Tab and the rest the
+//! fields never edit with go there too (`field_input_actions`), and ⌘V keeps
+//! the one-line clean-up.
 
-use std::ops::Range;
-
-use gpui::base::input::{InputEvent, InputState};
+use gpui::base::input::{
+    Backspace, DeleteToBeginningOfLine, IndentInline, InputAccessibility, InputEvent, InputState,
+    MoveDown, MoveUp, OutdentInline, Paste, SelectAll,
+};
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
 
@@ -38,19 +42,37 @@ pub(crate) enum TextTarget {
 }
 
 impl TextTarget {
-    /// Fields edited through [`FieldInput`] (caret, selection, copy/cut,
-    /// IME). The rest still type at the end through the app's own handler.
-    pub(crate) fn uses_input(self) -> bool {
-        matches!(self, TextTarget::Search)
+    /// Fields the inspector draws, in the floating window while it is open.
+    fn in_inspector(self) -> bool {
+        use TextTarget::*;
+        matches!(self, Tag | Title | Date | Location | Caption)
+    }
+
+    /// What the empty field shows, and what VoiceOver calls it.
+    fn placeholder_and_label(self) -> (&'static str, &'static str) {
+        use TextTarget::*;
+        match self {
+            Palette => ("Type a command, album, tag or year…", "Command"),
+            AlbumDraft => ("", "Smart album field"),
+            Tag => ("Add a tag…", "Tag"),
+            Title => ("Type a title... (Enter to save, Esc to cancel)", "Title"),
+            Date => ("YYYY-MM-DD HH:MM:SS", "Date"),
+            Location => (
+                "latitude, longitude (Enter to save, Esc to cancel)",
+                "Location",
+            ),
+            Caption => ("Type caption... (Enter to save, Esc to cancel)", "Caption"),
+            TagRename | TagManagerRename => ("", "Tag name"),
+            TagManagerSearch => ("Filter tags by name…", "Filter tags"),
+            Search => ("", "Search"),
+            NetworkImportUrl => ("Paste a video link (⌘V)", "Video link"),
+        }
     }
 }
 
-/// The one GPUI Kit `InputState` behind every field that `uses_input`. Only
-/// one field takes typing at a time, so the state follows `text_target()`:
-/// render loads the field's buffer into it and focuses it, and each edit is
-/// copied back into the buffer, which stays the app's source of truth.
+/// The input behind whichever field takes typing.
 pub(crate) struct FieldInput {
-    pub(crate) state: Entity<InputState>,
+    state: Entity<InputState>,
     target: Option<TextTarget>,
     /// The text both sides last agreed on. The side that differs from it
     /// changed: the buffer (app code) wins at render, the input on `Change`.
@@ -58,48 +80,26 @@ pub(crate) struct FieldInput {
     _events: Subscription,
 }
 
-/// An IME composition in progress: the field it belongs to, its UTF-16
-/// range there, and the marked text itself.
-#[derive(Clone, Debug)]
-pub(crate) struct MarkedText {
-    target: TextTarget,
-    range: Range<usize>,
-    text: String,
-}
-
 impl LuminaApp {
-    /// Forgets a composition whose field closed, changed, or no longer holds
-    /// the marked text (another field, or the same field reopened for
-    /// another item). Runs every render and before each edit, so a stale
-    /// range can never replace text.
-    pub(crate) fn drop_stale_text_mark(&mut self) {
-        let Some(mark) = self.text_marked.take() else {
-            return;
-        };
-        if self.text_target() != Some(mark.target) {
-            return;
-        }
-        let Some(buffer) = self.text_buffer(mark.target) else {
-            return;
-        };
-        let start = byte_offset(buffer, mark.range.start);
-        let end = byte_offset(buffer, mark.range.end).max(start);
-        if buffer[start..end] == mark.text {
-            self.text_marked = Some(mark);
-        }
-    }
-
-    /// The input state of `target` while that field takes typing.
-    pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<&Entity<InputState>> {
+    /// The input to draw for `target` while that field takes typing.
+    pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<Entity<InputState>> {
         let field = self.field_input.as_ref()?;
-        (field.target == Some(target)).then_some(&field.state)
+        (field.target == Some(target)).then(|| field.state.clone())
     }
 
-    /// Runs at the top of render: points the shared input at the active
-    /// field, loads text the app changed (a cleared search, an applied
-    /// suggestion), and moves keyboard focus between it and the root.
-    pub(crate) fn sync_field_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let target = self.text_target().filter(|t| t.uses_input());
+    /// Runs at the top of each window's render: points the input at the
+    /// active field, loads text the app changed (a cleared search, an
+    /// applied suggestion), and moves focus between the input and `root`.
+    /// The floating inspector window owns the inspector's fields; the main
+    /// window owns the rest.
+    pub(crate) fn sync_field_input(
+        &mut self,
+        window: &mut Window,
+        root: &FocusHandle,
+        floating_inspector: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let target = self.text_target();
         if self.field_input.is_none() {
             if target.is_none() {
                 return;
@@ -122,27 +122,42 @@ impl LuminaApp {
                 _events,
             });
         }
-        let text = target.and_then(|t| self.text_buffer(t).cloned());
-        let limit = target.map(|t| self.text_limit(t));
+        let docked = self.floating_inspector_window.is_none();
+        let owned = target.filter(|t| {
+            if floating_inspector {
+                t.in_inspector()
+            } else {
+                docked || !t.in_inspector()
+            }
+        });
+        let text = owned.and_then(|t| self.text_buffer(t).cloned());
+        let limit = owned.map(|t| self.text_limit(t));
         let Some(field) = self.field_input.as_mut() else {
             return;
         };
-        let retarget = field.target != target;
-        field.target = target;
-        let reload = retarget || text.as_ref().is_some_and(|text| *text != field.synced);
-        if let Some(text) = &text {
-            field.synced.clone_from(text);
-        }
         let state = field.state.clone();
         let focus = state.focus_handle(cx);
-        let (Some(text), Some(limit)) = (text, limit) else {
+        let (Some(target), Some(text), Some(limit)) = (owned, text, limit) else {
+            // Only the window that draws the field points the input at it.
+            if target.is_none() {
+                field.target = None;
+            }
             if focus.is_focused(window) {
-                window.focus(&self.focus_handle, cx);
+                window.focus(root, cx);
             }
             return;
         };
+        // Another smart-album row is the same target with another buffer.
+        let reload = field.target != Some(target) || text != field.synced;
+        field.target = Some(target);
+        field.synced.clone_from(&text);
         state.update(cx, |state, cx| {
-            if retarget {
+            if reload {
+                let (placeholder, label) = target.placeholder_and_label();
+                state.set_placeholder(placeholder, window, cx);
+                state.set_accessibility(
+                    InputAccessibility::new(Some(Role::TextInput)).with_label(Some(label.into())),
+                );
                 // Typing and paste stop at the field's limit and never
                 // insert what the catalog drops (see `clean_text`).
                 state.set_validator(
@@ -151,12 +166,15 @@ impl LuminaApp {
                     },
                     cx,
                 );
-            }
-            if reload {
                 state.set_value(text, window, cx);
             }
             if !focus.is_focused(window) {
                 state.focus(window, cx);
+                // A field opened from the other window (T in the main
+                // window with the inspector floating) brings this one up.
+                if !window.is_window_active() {
+                    window.activate_window();
+                }
             }
         });
     }
@@ -170,36 +188,50 @@ impl LuminaApp {
         let Some(target) = field.target.filter(|_| field.synced != value.as_ref()) else {
             return;
         };
-        field.synced = value.to_string();
+        let synced = std::mem::replace(&mut field.synced, value.to_string());
         let Some(buffer) = self.text_buffer(target) else {
             return;
         };
+        // The app changed the field since the last render (cleared it, say):
+        // its text wins and the next render loads it.
+        if *buffer != synced {
+            if let Some(field) = self.field_input.as_mut() {
+                field.synced = synced;
+            }
+            return;
+        }
         buffer.clear();
         buffer.push_str(&value);
         self.text_edited(target, cx);
     }
 
-    /// The active field's input, when it has one.
-    fn active_field_input(&self) -> Option<(TextTarget, Entity<InputState>)> {
-        let target = self.text_target()?;
-        Some((target, self.field_input_for(target)?.clone()))
-    }
-
-    /// ↑/↓ belong to the app in one-line fields (suggestions, palette rows,
-    /// tag lists), so they skip the input and go through the keymap.
-    pub(crate) fn field_arrow(
+    /// Runs `key` through the keymap instead of the input when `wanted` says
+    /// the active field has no use for it.
+    fn field_key(
         &mut self,
         key: &'static str,
+        wanted: fn(&mut Self, TextTarget) -> bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.active_field_input().is_none() {
-            return;
-        }
-        cx.stop_propagation();
-        let Ok(keystroke) = Keystroke::parse(key) else {
+        let Some(target) = self.text_target() else {
             return;
         };
+        if !wanted(self, target) {
+            return;
+        }
+        // `Keystroke::parse` needs the OS to read "secondary" (⌘ on macOS).
+        let (secondary, key) = match key.strip_prefix("secondary-") {
+            Some(key) => (true, key),
+            None => (false, key),
+        };
+        let Ok(mut keystroke) = Keystroke::parse(key) else {
+            return;
+        };
+        if secondary {
+            keystroke.modifiers = Modifiers::secondary_key(cx);
+        }
+        cx.stop_propagation();
         let event = KeyDownEvent {
             keystroke,
             is_held: false,
@@ -208,15 +240,26 @@ impl LuminaApp {
         self.handle_key_down(&event, window, cx);
     }
 
-    /// ⌘V into an input-backed field, cleaned like `paste_into_text_field`
-    /// and cut to the room left, instead of the input's own paste, which
-    /// would refuse the whole text past the limit or with a tab in it.
-    pub(crate) fn paste_into_field_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((target, state)) = self.active_field_input() else {
+    /// ⌘V into the active field: one line, with line breaks, tabs and other
+    /// characters the catalog never keeps turned into spaces, and cut to the
+    /// room left. The input's own paste would refuse the whole text instead.
+    fn paste_into_field(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.text_target() else {
+            return;
+        };
+        let Some(state) = self.field_input_for(target) else {
             return;
         };
         cx.stop_propagation();
-        let line = clipboard_line(cx);
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        let line: String = text
+            .trim_matches(['\n', '\r'])
+            .chars()
+            .map(|c| if is_disallowed(c) { ' ' } else { c })
+            .collect();
         let limit = self.text_limit(target);
         state.update(cx, |state, cx| {
             let kept = state.value().chars().count() - state.selected_value().chars().count();
@@ -367,215 +410,42 @@ impl LuminaApp {
             .as_deref()
             .is_some_and(|text| !text.is_empty() && !text.chars().any(char::is_control))
     }
+}
 
-    /// ⌘V into the active field. Fields are one line, so line breaks, tabs
-    /// and other characters the catalog never keeps become spaces. Returns
-    /// false when no field is active.
-    pub(crate) fn paste_into_text_field(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.text_target().is_none() {
-            return false;
-        }
-        let line = clipboard_line(cx);
-        self.replace_text(None, &line, false, cx);
+/// Sends the input's ↑/↓ and Tab to the keymap (suggestions, palette rows,
+/// smart-album focus), and Backspace in an empty field (it removes the last
+/// tag) and ⌘V to the app. Each window root that draws fields calls this.
+pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
+    fn always(_: &mut LuminaApp, _: TextTarget) -> bool {
         true
     }
-
-    fn replace_text(
-        &mut self,
-        range_utf16: Option<Range<usize>>,
-        text: &str,
-        mark: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(target) = self.text_target() else {
-            return;
-        };
-        self.drop_stale_text_mark();
-        let marked = self.text_marked.take().map(|mark| mark.range);
-        // Enter and Tab also arrive here as "\n" / "\t" after the keymap ran;
-        // the same characters `clean_text` drops never enter a field.
-        let text: String = text.chars().filter(|&c| !is_disallowed(c)).collect();
-        let limit = self.text_limit(target);
-        let Some(buffer) = self.text_buffer(target) else {
-            return;
-        };
-        let end = utf16_len(buffer);
-        let range = range_utf16.or(marked).unwrap_or(end..end);
-        let start = byte_offset(buffer, range.start);
-        let stop = byte_offset(buffer, range.end).max(start);
-        // Typing stops at the field's limit, so it shows what will be saved.
-        let room =
-            limit.saturating_sub(buffer.chars().count() - buffer[start..stop].chars().count());
-        let text: String = text.chars().take(room).collect();
-        if start == stop && text.is_empty() {
-            return;
-        }
-        buffer.replace_range(start..stop, &text);
-        let start_utf16 = utf16_len(&buffer[..start]);
-        if mark && !text.is_empty() {
-            self.text_marked = Some(MarkedText {
-                target,
-                range: start_utf16..start_utf16 + utf16_len(&text),
-                text,
-            });
-        }
-        self.text_edited(target, cx);
+    fn empty(app: &mut LuminaApp, target: TextTarget) -> bool {
+        app.text_buffer(target).is_some_and(|text| text.is_empty())
     }
-}
-
-/// The clipboard as one line: line breaks, tabs and other characters the
-/// catalog never keeps become spaces.
-fn clipboard_line(cx: &App) -> String {
-    let text = cx
-        .read_from_clipboard()
-        .and_then(|item| item.text())
-        .unwrap_or_default();
-    text.trim_matches(['\n', '\r'])
-        .chars()
-        .map(|c| if is_disallowed(c) { ' ' } else { c })
-        .collect()
-}
-
-/// Registers `app` as the input handler of the window being painted while
-/// one of its fields is active (`app.text_target()`; callers pass it in
-/// because the main window renders inside an update of `app`). `focus` is
-/// that window's root focus handle.
-pub(crate) fn text_input_handler(
-    active: bool,
-    app: &Entity<LuminaApp>,
-    focus: &FocusHandle,
-) -> Option<AnyElement> {
-    if !active {
-        return None;
+    // ⌘A checks every shown tag, as it did before the filter took a caret.
+    fn tag_filter(_: &mut LuminaApp, target: TextTarget) -> bool {
+        target == TextTarget::TagManagerSearch
     }
-    let (app, focus) = (app.clone(), focus.clone());
-    Some(
-        canvas(
-            |_, _, _| {},
-            move |bounds, _, window, cx| {
-                window.handle_input(&focus, ElementInputHandler::new(bounds, app), cx);
-            },
-        )
-        .absolute()
-        .size_full()
-        .into_any_element(),
-    )
-}
-
-fn utf16_len(text: &str) -> usize {
-    text.encode_utf16().count()
-}
-
-/// Byte offset of a UTF-16 offset, clamped to the text and to char bounds.
-fn byte_offset(text: &str, utf16: usize) -> usize {
-    let mut seen = 0;
-    for (byte, c) in text.char_indices() {
-        if seen >= utf16 {
-            return byte;
-        }
-        seen += c.len_utf16();
-    }
-    text.len()
-}
-
-impl EntityInputHandler for LuminaApp {
-    fn text_for_range(
-        &mut self,
-        range: Range<usize>,
-        adjusted_range: &mut Option<Range<usize>>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<String> {
-        let target = self.text_target()?;
-        let buffer = self.text_buffer(target)?;
-        let start = byte_offset(buffer, range.start);
-        let end = byte_offset(buffer, range.end).max(start);
-        *adjusted_range = Some(utf16_len(&buffer[..start])..utf16_len(&buffer[..end]));
-        Some(buffer[start..end].to_string())
-    }
-
-    fn selected_text_range(
-        &mut self,
-        _ignore_disabled_input: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<UTF16Selection> {
-        let target = self.text_target()?;
-        let end = utf16_len(self.text_buffer(target)?);
-        Some(UTF16Selection {
-            range: end..end,
-            reversed: false,
+    fn reroute<A: Action>(
+        root: Div,
+        app: &Entity<LuminaApp>,
+        key: &'static str,
+        wanted: fn(&mut LuminaApp, TextTarget) -> bool,
+    ) -> Div {
+        let app = app.clone();
+        root.capture_action(move |_: &A, window, cx| {
+            app.update(cx, |app, cx| app.field_key(key, wanted, window, cx));
         })
     }
-
-    fn marked_text_range(
-        &self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<Range<usize>> {
-        // Stale marks are dropped each render (`drop_stale_text_mark`).
-        let mark = self.text_marked.as_ref()?;
-        (self.text_target() == Some(mark.target)).then(|| mark.range.clone())
-    }
-
-    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        self.text_marked = None;
-    }
-
-    fn replace_text_in_range(
-        &mut self,
-        range: Option<Range<usize>>,
-        text: &str,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.replace_text(range, text, false, cx);
-    }
-
-    fn replace_and_mark_text_in_range(
-        &mut self,
-        range: Option<Range<usize>>,
-        new_text: &str,
-        _new_selected_range: Option<Range<usize>>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.replace_text(range, new_text, true, cx);
-    }
-
-    // ponytail: the IME candidate window anchors to the window, not the
-    // field; pass field bounds in when that placement matters.
-    fn bounds_for_range(
-        &mut self,
-        _range_utf16: Range<usize>,
-        element_bounds: Bounds<Pixels>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<Bounds<Pixels>> {
-        Some(element_bounds)
-    }
-
-    fn character_index_for_point(
-        &mut self,
-        _point: Point<Pixels>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<usize> {
-        None
-    }
-}
-
-#[cfg(test)]
-mod unit {
-    use super::byte_offset;
-
-    #[core::prelude::v1::test]
-    fn utf16_offsets_map_to_char_boundaries() {
-        let text = "a😀é";
-        assert_eq!(byte_offset(text, 0), 0);
-        assert_eq!(byte_offset(text, 1), 1);
-        assert_eq!(byte_offset(text, 3), 5, "the emoji is two UTF-16 units");
-        assert_eq!(byte_offset(text, 4), text.len());
-        assert_eq!(byte_offset(text, 99), text.len(), "past the end clamps");
-    }
+    let root = reroute::<MoveUp>(root, app, "up", always);
+    let root = reroute::<MoveDown>(root, app, "down", always);
+    let root = reroute::<IndentInline>(root, app, "tab", always);
+    let root = reroute::<OutdentInline>(root, app, "shift-tab", always);
+    let root = reroute::<Backspace>(root, app, "backspace", empty);
+    let root = reroute::<DeleteToBeginningOfLine>(root, app, "secondary-backspace", empty);
+    let root = reroute::<SelectAll>(root, app, "secondary-a", tag_filter);
+    let app = app.clone();
+    root.capture_action(move |_: &Paste, window, cx| {
+        app.update(cx, |app, cx| app.paste_into_field(window, cx));
+    })
 }

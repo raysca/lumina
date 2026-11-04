@@ -36,12 +36,6 @@ impl LuminaApp {
                 "enter" | "return" => self.execute_selected_command(cx),
                 "up" => self.move_command_selection(-1, cx),
                 "down" => self.move_command_selection(1, cx),
-                "backspace" => {
-                    self.command_query.pop();
-                    self.command_selected = 0;
-                    self.command_scroll.scroll_to_item(1);
-                    cx.notify();
-                }
                 _ => {}
             }
             return true;
@@ -132,17 +126,6 @@ impl LuminaApp {
                     }
                     crate::app::network_import::NetworkImportStage::Checking { .. } => {}
                 },
-                "backspace" => {
-                    if let Some(crate::app::network_import::NetworkImportStage::Input {
-                        ref mut url,
-                        ref mut error,
-                    }) = self.network_import.stage
-                    {
-                        url.pop();
-                        *error = None;
-                        cx.notify();
-                    }
-                }
                 _ => {}
             }
             return true;
@@ -197,14 +180,13 @@ impl LuminaApp {
                 return true;
             }
             if key == "backspace" {
-                // Token-field behaviour: ⌫ in an empty field removes the
-                // single item's last tag (the keyboard path for ×).
+                // Token-field behaviour: ⌫ in an empty field (the input
+                // passes it on, see app/text_input.rs) removes the single
+                // item's last tag, the keyboard path for ×.
                 if self.tag_input_buffer.is_empty() && self.selected_indices.len() <= 1 {
                     if let Some(last) = self.selected_item_tags.last().cloned() {
                         self.batch_remove_tag(last, cx);
                     }
-                } else {
-                    self.tag_input_buffer.pop();
                 }
                 cx.notify();
                 return true;
@@ -222,11 +204,6 @@ impl LuminaApp {
                 self.commit_title_input(cx);
                 return true;
             }
-            if key == "backspace" {
-                self.caption.title_input_buffer.pop();
-                cx.notify();
-                return true;
-            }
             return true;
         }
 
@@ -238,11 +215,6 @@ impl LuminaApp {
             }
             if key == "enter" || key == "return" {
                 self.commit_date_input(cx);
-                return true;
-            }
-            if key == "backspace" {
-                self.caption.date_input_buffer.pop();
-                cx.notify();
                 return true;
             }
             return true;
@@ -258,11 +230,6 @@ impl LuminaApp {
                 self.commit_location_input(cx);
                 return true;
             }
-            if key == "backspace" {
-                self.caption.location_input_buffer.pop();
-                cx.notify();
-                return true;
-            }
             return true;
         }
 
@@ -274,11 +241,6 @@ impl LuminaApp {
             }
             if key == "enter" || key == "return" {
                 self.commit_caption_input(cx);
-                return true;
-            }
-            if key == "backspace" {
-                self.caption.input_buffer.pop();
-                cx.notify();
                 return true;
             }
             return true;
@@ -294,11 +256,6 @@ impl LuminaApp {
                 self.commit_tag_rename(cx);
                 return true;
             }
-            if key == "backspace" {
-                self.editing_tag_buffer.pop();
-                cx.notify();
-                return true;
-            }
             return true;
         }
 
@@ -311,11 +268,6 @@ impl LuminaApp {
                 }
                 if key == "enter" || key == "return" {
                     self.commit_modal_tag_rename(cx);
-                    return true;
-                }
-                if key == "backspace" {
-                    self.tag_manager.editing_buffer.pop();
-                    cx.notify();
                     return true;
                 }
                 return true;
@@ -373,12 +325,7 @@ impl LuminaApp {
                 return true;
             }
 
-            // When in Tag Manager without active rename, typing filters tags
-            if key == "backspace" {
-                self.tag_manager.search.pop();
-                cx.notify();
-                return true;
-            }
+            // Typing filters tags through the field input (app/text_input.rs).
             return true;
         }
 
@@ -417,12 +364,6 @@ impl LuminaApp {
             if key == "up" || key == "down" {
                 // Moving the highlight must not edit the query.
                 self.move_search_suggestion(if key == "up" { -1 } else { 1 }, cx);
-                return true;
-            }
-            if key == "backspace" {
-                self.search_query.pop();
-                self.reset_search_suggestions();
-                self.clear_selection(cx);
                 return true;
             }
             return true;
@@ -489,8 +430,6 @@ impl LuminaApp {
         if self.draft_focus_is_typed() {
             if enter {
                 self.save_draft_smart_album(cx);
-            } else if key == "backspace" {
-                self.backspace_draft_text(cx);
             }
         } else if enter || key == "space" {
             self.activate_draft_focus(cx);

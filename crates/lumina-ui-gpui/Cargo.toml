@@ -21,8 +21,9 @@ generate-icon = []
 [dependencies]
 lumina-core = { path = "../lumina-core" }
 # GPUI comes through GPUI Kit, which pins the matching gpui-pre snapshot.
-# Renamed so `use gpui::*` stays the import everywhere. Default features
-# (gpui-component widgets, bundled icon assets) stay off until a widget is used.
+# Renamed so `use gpui::*` stays the import everywhere. The text fields use
+# gpui-base's unstyled Input, which is always built; the default features
+# (gpui-component widgets, bundled icon assets) stay off until one is used.
 gpui = { package = "gpui-kit", version = "0.9.0", default-features = false }
 rfd = "0.15"
 parking_lot = "0.12"

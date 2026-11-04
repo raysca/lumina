@@ -1,4 +1,4 @@
-use crate::app::caret::caret;
+use gpui::base::input::{Input, InputState};
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
@@ -21,13 +21,17 @@ pub fn render_info_tab(
     display_title: &str,
     caption: Option<&str>,
     caption_input_active: bool,
-    caption_input_buffer: &str,
     title_input_active: bool,
-    title_input_buffer: &str,
     date_input_active: bool,
-    date_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
+    // The input of whichever of these fields takes typing.
+    let input = || {
+        field_input
+            .clone()
+            .map(|input| Input::new(&input).into_any_element())
+    };
     let kind_str = kind_label(item.media_type, file_name);
 
     // Dimensions with megapixels
@@ -93,15 +97,11 @@ pub fn render_info_tab(
                         .cursor_text()
                         .text_size(theme::TEXT_BODY)
                         .text_color(theme::text())
-                        .child(if title_input_active {
-                            if title_input_buffer.is_empty() {
-                                format!("Type a title... (Enter to save, Esc to cancel){}", caret())
-                            } else {
-                                format!("{}{}", title_input_buffer, caret())
-                            }
-                        } else {
-                            display_title.to_string()
-                        })
+                        .child(
+                            input()
+                                .filter(|_| title_input_active)
+                                .unwrap_or_else(|| display_title.to_string().into_any_element()),
+                        )
                         .on_click(move |_e, _w, cx| {
                             if !title_input_active {
                                 if let Some(app) = app_title_start.upgrade() {
@@ -143,17 +143,12 @@ pub fn render_info_tab(
                         } else {
                             theme::text_subtle()
                         })
-                        .child(if caption_input_active {
-                            if caption_input_buffer.is_empty() {
-                                format!("Type caption... (Enter to save, Esc to cancel){}", caret())
-                            } else {
-                                format!("{}{}", caption_input_buffer, caret())
-                            }
-                        } else if let Some(cap) = caption {
-                            cap.to_string()
-                        } else {
-                            "Add a caption".to_string()
-                        })
+                        .child(input().filter(|_| caption_input_active).unwrap_or_else(|| {
+                            caption
+                                .unwrap_or("Add a caption")
+                                .to_string()
+                                .into_any_element()
+                        }))
                         .on_click(move |_e, _w, cx| {
                             if !caption_input_active {
                                 if let Some(app) = app_caption_start.upgrade() {
@@ -180,11 +175,7 @@ pub fn render_info_tab(
                             .rounded(theme::RADIUS_MD)
                             .text_size(theme::TEXT_BODY)
                             .text_color(theme::text())
-                            .child(if date_input_buffer.is_empty() {
-                                format!("YYYY-MM-DD HH:MM:SS{}", caret())
-                            } else {
-                                format!("{}{}", date_input_buffer, caret())
-                            })
+                            .children(input())
                             .into_any_element()
                     } else {
                         div()

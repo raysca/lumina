@@ -1,10 +1,11 @@
 //! Condition rows and the shared picker / text field / popup controls.
 
-use crate::app::caret::caret;
+use gpui::base::input::{Input, InputState};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::smart_draft::{field_label, operator_label, DraftFocus, DraftRow, ValueKind};
+use crate::app::text_input::TextTarget;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
@@ -22,7 +23,7 @@ fn ring(focused: bool) -> Rgba {
 /// Text that fills its control and is cut with "…" only when it overflows.
 /// GPUI truncates by summing per-character widths, which can exceed the
 /// shaped width a content-sized box gets; without filling the control the
-/// last character (the "|" caret, or a label's last letter) was dropped.
+/// last character (a label's last letter) was dropped.
 fn fill_and_truncate(text: Div) -> Div {
     text.flex_1().min_w_0().truncate()
 }
@@ -47,24 +48,25 @@ pub(super) fn picker(
         }))
 }
 
-/// A text field drawn from app state; typing goes through the key handler.
+/// A text field drawn from app state; while focused it draws `input`, the
+/// field input that takes the typing (app/text_input.rs).
 pub(super) fn text_field(
     selector: String,
     text: &str,
     placeholder: &str,
     focused: bool,
+    input: Option<Entity<InputState>>,
     target: DraftFocus,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     let sel = selector.clone();
     let text_sel = format!("{selector}-text");
-    let content = match (text.is_empty(), focused) {
-        (true, false) => div()
+    let content = match (input, text.is_empty()) {
+        (Some(input), _) => div().child(Input::new(&input)),
+        (None, true) => div()
             .text_color(theme::text_subtle())
             .child(placeholder.to_string()),
-        (true, true) => div().child(caret()),
-        (false, true) => div().child(format!("{text}{}", caret())),
-        (false, false) => div().child(text.to_string()),
+        (None, false) => div().child(text.to_string()),
     };
     theme::field(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
@@ -169,6 +171,8 @@ pub(super) fn render_row(
             &row.text,
             kind.placeholder(),
             focus == DraftFocus::Value(i),
+            app.field_input_for(TextTarget::AlbumDraft)
+                .filter(|_| focus == DraftFocus::Value(i)),
             DraftFocus::Value(i),
             cx,
         )

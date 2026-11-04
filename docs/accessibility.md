@@ -30,8 +30,10 @@ launch, so relaunch after changing it.
 
 GPUI (through GPUI Kit) reports an accessibility tree via AccessKit, but only
 for elements that have an `id` and a `.role(...)`, with labels from
-`aria_label`. Lumina's controls do not set roles yet, so VoiceOver currently
-sees almost nothing beyond the window frame. Mitigations:
+`aria_label`. Apart from the one-line text fields (GPUI Kit inputs with the
+text-input role and a label, not yet checked with VoiceOver), Lumina's
+controls do not set roles yet, so VoiceOver currently sees little beyond the
+window frame. Mitigations:
 
 - every operation is reachable from the native menu bar or command palette;
 - the shortcut sheet documents all keyboard paths;

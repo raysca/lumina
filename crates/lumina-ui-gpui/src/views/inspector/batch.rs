@@ -1,6 +1,7 @@
 //! v3 batch inspector: a flat panel for a multi-selection.
 
-use crate::app::caret::caret;
+use crate::app::text_input::TextTarget;
+use gpui::base::input::{Input, InputState};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -57,6 +58,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                             "batch-title-input",
                             &caption.title_input_buffer,
                             caption.title_input_active,
+                            app.field_input_for(TextTarget::Title),
                             weak_app.clone(),
                         ))
                         .child(render_batch_metadata_row(
@@ -65,6 +67,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                             "batch-caption-input",
                             &caption.input_buffer,
                             caption.input_active,
+                            app.field_input_for(TextTarget::Caption),
                             weak_app.clone(),
                         ))
                         .child(render_batch_metadata_row(
@@ -73,6 +76,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                             "batch-date-input",
                             &caption.date_input_buffer,
                             caption.date_input_active,
+                            app.field_input_for(TextTarget::Date),
                             weak_app.clone(),
                         ))
                         .child(render_batch_metadata_row(
@@ -81,6 +85,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                             "batch-location-input",
                             &caption.location_input_buffer,
                             caption.location_input_active,
+                            app.field_input_for(TextTarget::Location),
                             weak_app,
                         )),
                 )),
@@ -261,7 +266,7 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
     let mut counts = app.selected_tag_counts.clone();
     counts.sort_by(|(a, an), (b, bn)| bn.cmp(an).then_with(|| a.cmp(b)));
     let input_active = app.tag_input_active;
-    let buffer = app.tag_input_buffer.clone();
+    let input = app.field_input_for(TextTarget::Tag);
     let app_add = weak_app.clone();
     div()
         .flex()
@@ -283,15 +288,14 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                 } else {
                     theme::border()
                 })
-                .text_color(if input_active && !buffer.is_empty() {
+                .text_color(if input_active {
                     theme::text()
                 } else {
                     theme::text_subtle()
                 })
-                .child(match (input_active, buffer.is_empty()) {
-                    (true, true) => caret().to_string(),
-                    (true, false) => format!("{buffer}{}", caret()),
-                    (false, _) => format!("Add a tag to all {total}… (T)"),
+                .child(match input {
+                    Some(input) => Input::new(&input).into_any_element(),
+                    None => format!("Add a tag to all {total}… (T)").into_any_element(),
                 })
                 .on_click(move |_e, _w, cx| {
                     if let Some(app) = app_add.upgrade() {
@@ -412,6 +416,7 @@ fn render_batch_metadata_row(
     selector: &'static str,
     value: &str,
     editing: bool,
+    input: Option<Entity<InputState>>,
     weak_app: WeakEntity<LuminaApp>,
 ) -> AnyElement {
     let display = if value.is_empty() {
@@ -486,7 +491,10 @@ fn render_batch_metadata_row(
                     .text_xs()
                     .font_family(theme::FONT_MONO)
                     .text_color(theme::text())
-                    .child(display),
+                    .child(match input {
+                        Some(input) => Input::new(&input).into_any_element(),
+                        None => display.into_any_element(),
+                    }),
             )
         })
         .child(

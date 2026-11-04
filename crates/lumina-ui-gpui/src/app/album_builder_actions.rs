@@ -349,25 +349,6 @@ impl LuminaApp {
         }
     }
 
-    /// Deletes the last character of the focused text field. Typing arrives
-    /// through the input handler (app/text_input.rs).
-    pub fn backspace_draft_text(&mut self, cx: &mut Context<Self>) {
-        let focus = self.album_draft.focus;
-        let target = match focus {
-            DraftFocus::Title => &mut self.album_draft.album_title,
-            DraftFocus::Value(i) => match self.album_draft.rows.get_mut(i) {
-                Some(row) => &mut row.text,
-                None => return,
-            },
-            _ => return,
-        };
-        target.pop();
-        if focus != DraftFocus::Title {
-            self.refresh_draft_preview();
-        }
-        cx.notify();
-    }
-
     /// With no rows, `Add(0)` is the empty state's + and inserts at 0.
     pub fn add_draft_row_after(&mut self, index: usize, cx: &mut Context<Self>) {
         let at = (index + 1).min(self.album_draft.rows.len());

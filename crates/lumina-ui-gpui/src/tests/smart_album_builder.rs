@@ -323,16 +323,15 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
 }
 
 #[core::prelude::v1::test]
-fn focused_text_fields_have_room_for_the_caret() {
+fn focused_text_fields_give_the_input_the_whole_field() {
     let (dir, engine, _ids) = library("sab_caret");
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
     keystrokes(vcx, "b e a c h");
 
-    // The text box must span the field, not just its own text: GPUI's
-    // ellipsis measures per character and dropped the trailing "|" caret
-    // when the box was only as wide as the shaped text.
+    // The text box must span the field, not just its own text, so the
+    // input has room to show its caret and scroll a long title.
     let field = vcx
         .debug_bounds("album-builder-title")
         .expect("title field");

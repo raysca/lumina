@@ -1,7 +1,8 @@
 //! Import Video from URL dialog: URL entry and the "already downloaded"
 //! prompt. Downloads themselves show in the toolbar list.
 
-use crate::app::caret::caret;
+use crate::app::text_input::TextTarget;
+use gpui::base::input::Input;
 use gpui::*;
 
 use crate::app::network_import::NetworkImportStage;
@@ -107,11 +108,10 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 } else {
                                     theme::text()
                                 })
-                                .child(if url.is_empty() {
-                                    format!("Paste a video link (⌘V) {}", caret())
-                                } else {
-                                    format!("{url}{}", caret())
-                                }),
+                                .children(
+                                    app.field_input_for(TextTarget::NetworkImportUrl)
+                                        .map(|input| Input::new(&input)),
+                                ),
                         )
                         .children((!url.is_empty()).then(|| {
                             div()

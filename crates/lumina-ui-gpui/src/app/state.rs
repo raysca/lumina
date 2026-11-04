@@ -390,10 +390,6 @@ pub struct LuminaApp {
     pub last_scan_at: Option<std::time::Instant>,
     pub command_palette_open: bool,
     pub command_query: String,
-    /// IME composition range (UTF-16) and the field it belongs to; see
-    /// app/text_input.rs.
-    pub text_marked: Option<crate::app::text_input::MarkedText>,
-    pub(crate) caret: crate::app::caret::CaretBlink,
     /// The platform text input behind the active field; see app/text_input.rs.
     pub(crate) field_input: Option<crate::app::text_input::FieldInput>,
     pub command_selected: usize,
@@ -576,8 +572,6 @@ impl LuminaApp {
             last_scan_at: None,
             command_palette_open: false,
             command_query: String::new(),
-            text_marked: None,
-            caret: Default::default(),
             field_input: None,
             command_selected: 0,
             command_scroll: ScrollHandle::new(),

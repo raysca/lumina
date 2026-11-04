@@ -1,6 +1,7 @@
 //! Left column of the tag manager: filter, sort, checkable rows, bulk bar.
 
-use crate::app::caret::caret;
+use crate::app::text_input::TextTarget;
+use gpui::base::input::Input;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -139,15 +140,17 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
         .child(render_icon(Icon::Search, px(12.0), theme::text_subtle()))
         .child(
             div()
+                .flex_1()
+                .min_w_0()
                 .text_color(if search.is_empty() {
                     theme::text_subtle()
                 } else {
                     theme::text()
                 })
-                .child(if search.is_empty() {
-                    "Filter tags by name…".to_string()
-                } else {
-                    format!("{search}{}", caret())
+                .child(match app.field_input_for(TextTarget::TagManagerSearch) {
+                    Some(input) => Input::new(&input).into_any_element(),
+                    None if search.is_empty() => "Filter tags by name…".into_any_element(),
+                    None => search.clone().into_any_element(),
                 }),
         )
 }

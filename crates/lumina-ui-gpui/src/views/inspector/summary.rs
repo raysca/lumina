@@ -2,7 +2,7 @@
 //! people check while browsing. Full editing (caption, title, date, location)
 //! stays in the tabbed Get Info window opened from the footer.
 
-use crate::app::caret::caret;
+use gpui::base::input::{Input, InputState};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
@@ -20,7 +20,7 @@ pub fn render_summary_body(
     item: &MediaItem,
     tags: &[String],
     tag_input_active: bool,
-    tag_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
     is_trash: bool,
     rating: u8,
     star_pop: Option<(u8, ElementId)>,
@@ -89,7 +89,7 @@ pub fn render_summary_body(
         ))
         .child(section(
             "TAGS",
-            render_tags(weak_app.clone(), tags, tag_input_active, tag_input_buffer),
+            render_tags(weak_app.clone(), tags, tag_input_active, field_input),
         ))
         .children(place.map(|place| {
             section(
@@ -321,7 +321,7 @@ fn render_tags(
     weak_app: WeakEntity<LuminaApp>,
     tags: &[String],
     input_active: bool,
-    input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
 ) -> impl IntoElement {
     let app_add = weak_app.clone();
     div()
@@ -413,15 +413,14 @@ fn render_tags(
                 .min_w(px(40.0))
                 .px(px(4.0))
                 .text_xs()
-                .text_color(if input_active && !input_buffer.is_empty() {
+                .text_color(if input_active {
                     theme::text()
                 } else {
                     theme::text_subtle()
                 })
-                .child(match (input_active, input_buffer.is_empty()) {
-                    (true, true) => caret().to_string(),
-                    (true, false) => format!("{input_buffer}{}", caret()),
-                    (false, _) => "add…".to_string(),
+                .child(match field_input.filter(|_| input_active) {
+                    Some(input) => Input::new(&input).into_any_element(),
+                    None => "add…".into_any_element(),
                 }),
         )
         // Clicking anywhere in the field starts typing (Enter adds, Esc stops).

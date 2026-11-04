@@ -1,4 +1,5 @@
-use crate::app::caret::caret;
+use crate::app::text_input::TextTarget;
+use gpui::base::input::Input;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
@@ -428,22 +429,18 @@ pub(super) fn render_tags_section(
                             .flex_row()
                             .items_center()
                             .justify_between()
-                            // A long name shrinks and clips on the left, so the
-                            // caret at its end and the buttons stay in view.
+                            // The input scrolls a long name to its caret, so
+                            // the buttons stay in view.
                             .child(
                                 div()
+                                    .flex_1()
                                     .min_w_0()
-                                    .overflow_hidden()
-                                    .flex()
-                                    .justify_end()
-                                    .child(
-                                        div()
-                                            .flex_none()
-                                            .whitespace_nowrap()
-                                            .text_size(theme::TEXT_BODY)
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(theme::text())
-                                            .child(format!("{}{}", this.editing_tag_buffer, caret())),
+                                    .text_size(theme::TEXT_BODY)
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme::text())
+                                    .children(
+                                        this.field_input_for(TextTarget::TagRename)
+                                            .map(|input| Input::new(&input)),
                                     ),
                             )
                             .child(

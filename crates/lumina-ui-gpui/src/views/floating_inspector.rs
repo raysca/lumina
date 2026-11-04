@@ -21,8 +21,8 @@ impl FloatingInspectorView {
         cx: &mut Context<Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
-        // Keys and typed text reach the app through this handle, even when the
-        // window becomes key without a click (⌘`).
+        // Keys reach the app through this handle, even when the window
+        // becomes key without a click (⌘`).
         window.focus(&focus_handle, cx);
         let _subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _entity, cx| {
@@ -64,7 +64,9 @@ impl Render for FloatingInspectorView {
 
         // This window paints `viewer_image` too; evict retired frames here
         // so playback cannot pile them up while the main window is hidden.
+        let root = self.focus_handle.clone();
         let retired = app.update(cx, |app, cx| {
+            app.sync_field_input(window, &root, true, cx);
             app.ensure_info_details(cx);
             std::mem::take(&mut app.retired_images)
         });
@@ -95,13 +97,13 @@ impl Render for FloatingInspectorView {
             .as_ref()
             .and_then(|it| app_read.item_captions.get(&it.id).cloned());
         let caption_input_active = app_read.caption.input_active;
-        let caption_input_buffer = app_read.caption.input_buffer.clone();
         let title_input_active = app_read.caption.title_input_active;
-        let title_input_buffer = app_read.caption.title_input_buffer.clone();
         let date_input_active = app_read.caption.date_input_active;
-        let date_input_buffer = app_read.caption.date_input_buffer.clone();
         let location_input_active = app_read.caption.location_input_active;
-        let location_input_buffer = app_read.caption.location_input_buffer.clone();
+        // The inspector's fields all share the one field input.
+        let field_input = app_read
+            .text_target()
+            .and_then(|target| app_read.field_input_for(target));
 
         let file_name = selected_item
             .as_ref()
@@ -119,14 +121,9 @@ impl Render for FloatingInspectorView {
         let app_key_event = self.app.clone();
         let app_traffic_close = self.app.clone();
 
-        div()
+        crate::app::text_input::field_input_actions(div(), &app)
             .id("floating-inspector-root")
             .track_focus(&self.focus_handle)
-            .children(crate::app::text_input::text_input_handler(
-                app.read(cx).text_target().is_some(),
-                &app,
-                &self.focus_handle,
-            ))
             .on_key_down(cx.listener(move |_this, event: &KeyDownEvent, window, cx| {
                 if let Some(app) = app_key_event.upgrade() {
                     app.update(cx, |this, cx| {
@@ -273,13 +270,10 @@ impl Render for FloatingInspectorView {
                             &mark_pop,
                             caption.as_deref(),
                             caption_input_active,
-                            &caption_input_buffer,
                             title_input_active,
-                            &title_input_buffer,
                             date_input_active,
-                            &date_input_buffer,
                             location_input_active,
-                            &location_input_buffer,
+                            field_input,
                             info_details.as_ref(),
                         )
                     })),

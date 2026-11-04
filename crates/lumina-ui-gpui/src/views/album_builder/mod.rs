@@ -2,6 +2,7 @@
 //! name, "Match all/any of the following conditions", one row per condition,
 //! then a live count and preview of the first matches.
 
+use crate::app::text_input::TextTarget;
 mod rows;
 
 use gpui::prelude::FluentBuilder;
@@ -75,6 +76,8 @@ impl AlbumBuilderModal {
                                     &draft.album_title,
                                     "Untitled Smart Album",
                                     focus == DraftFocus::Title,
+                                    app.field_input_for(TextTarget::AlbumDraft)
+                                        .filter(|_| focus == DraftFocus::Title),
                                     DraftFocus::Title,
                                     cx,
                                 )

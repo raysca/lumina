@@ -1,7 +1,7 @@
-use crate::app::caret::caret;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
+use gpui::base::input::{Input, InputState};
 use gpui::*;
 
 /// Library tags offered under the input; more would crowd the editor.
@@ -13,6 +13,7 @@ pub fn render_tags_tab(
     library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
 ) -> AnyElement {
     render_tags_section(
         weak_app,
@@ -21,6 +22,7 @@ pub fn render_tags_tab(
         library_tag_counts,
         tag_input_active,
         tag_input_buffer,
+        field_input,
     )
 }
 
@@ -50,6 +52,7 @@ pub fn render_tags_section(
     library_tag_counts: &[(String, usize)],
     tag_input_active: bool,
     tag_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
 ) -> AnyElement {
     let typed = if tag_input_active {
         tag_input_buffer
@@ -171,20 +174,12 @@ pub fn render_tags_section(
                 })
                 .cursor_text()
                 .text_size(theme::TEXT_BODY)
-                .child(if tag_input_active && !tag_input_buffer.is_empty() {
-                    div().text_color(theme::text()).child(format!(
-                        "{}{}",
-                        tag_input_buffer,
-                        caret()
-                    ))
-                } else {
-                    div()
-                        .text_color(theme::text_subtle())
-                        .child(if tag_input_active {
-                            format!("Type a tag, Enter to add{}", caret())
-                        } else {
-                            "Add a tag…".to_string()
-                        })
+                .child(match field_input.filter(|_| tag_input_active) {
+                    Some(input) => div()
+                        .flex_1()
+                        .text_color(theme::text())
+                        .child(Input::new(&input)),
+                    None => div().text_color(theme::text_subtle()).child("Add a tag…"),
                 })
                 .on_click(move |_e, _window, cx| {
                     if !tag_input_active {

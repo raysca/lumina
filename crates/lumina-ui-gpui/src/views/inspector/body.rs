@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use gpui::base::input::InputState;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
@@ -101,13 +102,10 @@ pub fn render_inspector_body(
     mark_pop: &MarkPop,
     caption: Option<&str>,
     caption_input_active: bool,
-    caption_input_buffer: &str,
     title_input_active: bool,
-    title_input_buffer: &str,
     date_input_active: bool,
-    date_input_buffer: &str,
     location_input_active: bool,
-    location_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
     let item = match selected_item {
@@ -140,13 +138,10 @@ pub fn render_inspector_body(
         mark_pop,
         caption,
         caption_input_active,
-        caption_input_buffer,
         title_input_active,
-        title_input_buffer,
         date_input_active,
-        date_input_buffer,
         location_input_active,
-        location_input_buffer,
+        field_input,
         details,
     )
 }
@@ -166,13 +161,10 @@ fn render_single_body(
     mark_pop: &MarkPop,
     caption: Option<&str>,
     caption_input_active: bool,
-    caption_input_buffer: &str,
     title_input_active: bool,
-    title_input_buffer: &str,
     date_input_active: bool,
-    date_input_buffer: &str,
     location_input_active: bool,
-    location_input_buffer: &str,
+    field_input: Option<Entity<InputState>>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
     let path = item.path.clone();
@@ -413,11 +405,9 @@ fn render_single_body(
                         &display_title,
                         caption,
                         caption_input_active,
-                        caption_input_buffer,
                         title_input_active,
-                        title_input_buffer,
                         date_input_active,
-                        date_input_buffer,
+                        field_input.clone(),
                         details,
                     ),
                     InspectorTab::Camera => render_camera_tab(&item, details),
@@ -425,7 +415,7 @@ fn render_single_body(
                         weak_app.clone(),
                         &item,
                         location_input_active,
-                        location_input_buffer,
+                        field_input.clone(),
                     ),
                     InspectorTab::Tags => render_tags_tab(
                         weak_app.clone(),
@@ -433,6 +423,7 @@ fn render_single_body(
                         library_tag_counts,
                         tag_input_active,
                         tag_input_buffer,
+                        field_input,
                     ),
                 }),
         )

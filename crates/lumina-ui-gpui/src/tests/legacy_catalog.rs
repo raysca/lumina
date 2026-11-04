@@ -73,6 +73,8 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
         no_error(app, "favouriting");
         app.execute_command(CommandId::Rate(4), cx);
         no_error(app, "rating");
+        // The docked inspector draws the tag field.
+        app.inspector_open = true;
         app.start_tag_input(cx);
     });
     keystrokes(vcx, "s u n enter");

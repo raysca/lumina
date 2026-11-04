@@ -319,8 +319,9 @@ Review checklist:
 - Keep focus and selection states visible, and preserve scroll-into-view for
   keyboard navigation.
 - GPUI reports elements to VoiceOver through AccessKit only when they have an
-  `id` and a `.role(...)` (plus `aria_label` and friends). Lumina's controls
-  do not set roles yet, so VoiceOver still sees little beyond the window.
+  `id` and a `.role(...)` (plus `aria_label` and friends). Apart from the
+  text fields (`app/text_input.rs`), Lumina's controls do not set roles yet,
+  so VoiceOver still sees little beyond the window.
   Give new controls a role and label. Do not claim screen-reader support that
   has not been checked with VoiceOver; native menus and the command palette
   are the practical paths. See `docs/accessibility.md`.
@@ -375,8 +376,9 @@ A change is done only when all applicable items are true:
 - Semantic/AI search is not implemented in this tree; do not describe it as
   complete.
 - OS-level UI interaction tests require Accessibility permission; skip explicitly.
-- Lumina's controls set no AccessKit roles yet, so VoiceOver sees almost no
-  element tree; native menus and palette are the current accessible paths.
+- Lumina's controls, apart from the text fields, set no AccessKit roles yet,
+  so VoiceOver sees almost no element tree; native menus and palette are the
+  current accessible paths.
 - Signing/notarization requires Apple credentials; CI release artifacts are
   drafts until verified and published.
 - DMG creation may be blocked in sandboxed sessions; use `LUMINA_SKIP_DMG=1`

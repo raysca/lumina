@@ -19,13 +19,9 @@ impl LuminaApp {
         // ⌃⌘ chords (⌃⌘F full screen) must not fall into the ⌘ handlers.
         let ctrl_cmd = keystroke.modifiers.platform && keystroke.modifiers.control;
 
-        // Typed text for the active field goes to the platform input handler
-        // (Shift, ⌥ characters, dead keys, IME); see app/text_input.rs.
+        // Typed text for the active field goes to its input (Shift, ⌥
+        // characters, dead keys, IME); see app/text_input.rs.
         if self.leaves_key_for_text_input(keystroke) {
-            return;
-        }
-        let m = &keystroke.modifiers;
-        if m.secondary(cx) && !m.shift && key == "v" && self.paste_into_text_field(cx) {
             return;
         }
 

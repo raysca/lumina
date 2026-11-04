@@ -45,7 +45,7 @@ impl InspectorView {
                 item,
                 &this.selected_item_tags,
                 this.tag_input_active,
-                &this.tag_input_buffer,
+                this.field_input_for(crate::app::text_input::TextTarget::Tag),
                 this.selection == AlbumSelection::Trash,
                 this.get_item_rating(item),
                 this.mark_pop.star(Some(item.id)),

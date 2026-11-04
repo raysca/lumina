@@ -271,9 +271,8 @@ impl LuminaApp {
 
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.drop_stale_text_mark();
-        self.sync_field_input(window, cx);
-        self.update_caret(cx);
+        let root = self.focus_handle.clone();
+        self.sync_field_input(window, &root, false, cx);
         // Evict replaced viewer frames before painting the new one.
         crate::app::viewer_actions::evict_retired_images(
             std::mem::take(&mut self.retired_images),
@@ -368,7 +367,7 @@ impl Render for LuminaApp {
         let inspector_open = self.inspector_open;
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
-        div()
+        crate::app::text_input::field_input_actions(div(), &cx.entity())
             .id("lumina-app-root")
             .debug_selector(|| "app-root".to_string())
             .font_family(theme::FONT_SANS)
@@ -376,27 +375,6 @@ impl Render for LuminaApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
-            // ↑/↓ and ⌘V in a field input go to the app (app/text_input.rs).
-            .capture_action(
-                cx.listener(|this, _: &gpui::base::input::MoveUp, window, cx| {
-                    this.field_arrow("up", window, cx);
-                }),
-            )
-            .capture_action(
-                cx.listener(|this, _: &gpui::base::input::MoveDown, window, cx| {
-                    this.field_arrow("down", window, cx);
-                }),
-            )
-            .capture_action(
-                cx.listener(|this, _: &gpui::base::input::Paste, window, cx| {
-                    this.paste_into_field_input(window, cx);
-                }),
-            )
-            .children(crate::app::text_input::text_input_handler(
-                self.text_target().is_some(),
-                &cx.entity(),
-                &self.focus_handle,
-            ))
             .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
                 this.open_preferences(cx);
             }))
