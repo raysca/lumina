@@ -657,3 +657,24 @@ fn tagging_from_the_floating_inspector_shows_the_tag_field() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn shift_arrows_still_move_the_palette_selection() {
+    let (dir, engine) = seed_library("text_shift_arrows", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "secondary-k");
+    render_ui(vcx);
+    keystrokes(vcx, "shift-down shift-down");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.command_selected, 2,
+            "Shift-↓ in the one-line palette field must move the row"
+        )
+    });
+    keystrokes(vcx, "shift-up");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.command_selected, 1, "Shift-↑ must move it back")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

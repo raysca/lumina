@@ -10,14 +10,15 @@
 //!
 //! Printable keys go to the input, not the keymap, so Shift, ⌥ characters,
 //! dead keys and composition arrive as the text the user meant. The input
-//! passes Enter and Escape on to the keymap; ↑/↓, Tab and the rest the
-//! fields never edit with go there too (`field_input_actions`), and ⌘V keeps
-//! the one-line clean-up.
+//! passes Enter and Escape on to the keymap. A one-line input has no ↑/↓
+//! handler, so those reach the keymap (suggestions, palette rows) as well;
+//! Tab and the rest the fields never edit with are sent there by
+//! `field_input_actions`, and ⌘V keeps the one-line clean-up.
 
 use gpui::base::input::{
     Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
-    InputEvent, InputModeKind, InputState, MoveDown, MoveUp, OutdentInline, Paste, SelectAll,
-    Textarea, TextareaState,
+    InputEvent, InputModeKind, InputState, OutdentInline, Paste, SelectAll, Textarea,
+    TextareaState,
 };
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
@@ -570,17 +571,11 @@ impl LuminaApp {
     }
 }
 
-/// Sends the input's ↑/↓ and Tab to the keymap (suggestions, palette rows,
-/// smart-album focus), and Backspace in an empty field (it removes the last
+/// Sends Tab to the keymap (smart-album focus), and Backspace in an empty field (it removes the last
 /// tag) and ⌘V to the app. Each window root that draws fields calls this.
 pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     fn always(_: &mut LuminaApp, _: TextTarget) -> bool {
         true
-    }
-    // A caption moves its caret between lines; one-line fields hand ↑/↓
-    // to the list or rows beside them.
-    fn one_line(_: &mut LuminaApp, target: TextTarget) -> bool {
-        !target.multi_line()
     }
     fn empty(app: &mut LuminaApp, target: TextTarget) -> bool {
         app.text_buffer(target).is_some_and(|text| text.is_empty())
@@ -600,8 +595,6 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
             app.update(cx, |app, cx| app.field_key(key, wanted, window, cx));
         })
     }
-    let root = reroute::<MoveUp>(root, app, "up", one_line);
-    let root = reroute::<MoveDown>(root, app, "down", one_line);
     let root = reroute::<IndentInline>(root, app, "tab", always);
     let root = reroute::<OutdentInline>(root, app, "shift-tab", always);
     let root = reroute::<Backspace>(root, app, "backspace", empty);

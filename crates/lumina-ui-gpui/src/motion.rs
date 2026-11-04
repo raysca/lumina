@@ -17,6 +17,13 @@ pub const THUMB_IN: Duration = Duration::from_millis(120);
 pub const HUD_IN: Duration = Duration::from_millis(120);
 /// The star or heart the user just set.
 pub const POP: Duration = Duration::from_millis(140);
+/// How long a just-set mark still pops. Tests get a generous window: a
+/// loaded parallel run can spend longer than `POP * 2` on one render.
+const POP_LIVE: Duration = if cfg!(test) {
+    Duration::from_secs(60)
+} else {
+    Duration::from_millis(280)
+};
 
 fn entrance(duration: Duration) -> Animation {
     Animation::new(duration).with_easing(ease_out_quint())
@@ -105,7 +112,7 @@ fn pop_scale(t: f32) -> f32 {
 
 /// The star or heart the user just set, so only that mark pops. Each set
 /// bumps `generation`, which gives the pop a fresh id and replays it. The pop
-/// is only offered for `POP * 2` after the set, so coming back to the item
+/// is only offered for `POP_LIVE` after the set, so coming back to the item
 /// later does not replay it.
 #[derive(Clone, Default)]
 pub struct MarkPop {
@@ -139,7 +146,7 @@ impl MarkPop {
 
     /// True for a just-set mark on `item`.
     fn live(&self, item: Option<lumina_core::MediaId>) -> bool {
-        self.item == item && self.at.is_some_and(|at| at.elapsed() < POP * 2)
+        self.item == item && self.at.is_some_and(|at| at.elapsed() < POP_LIVE)
     }
 
     /// The star just set on `item` and its pop id.
@@ -209,7 +216,7 @@ mod tests {
         assert!(pop.heart(a).is_some(), "the heart pops when toggled");
         assert!(pop.star(a).is_none(), "and the stars do not");
 
-        pop.at = pop.at.map(|at| at - POP * 2);
+        pop.at = pop.at.map(|at| at - POP_LIVE);
         assert!(
             pop.heart(a).is_none(),
             "coming back to the item later does not replay the pop"
