@@ -4,7 +4,7 @@
 
 use gpui::{ClipboardItem, EntityInputHandler};
 
-use crate::app::text_input::TextTarget;
+use crate::app::text_input::{FieldEditor, TextTarget};
 
 use crate::app::LuminaApp;
 use crate::tests::ui_automation::{app_with_library, keystrokes, render_ui, seed_library};
@@ -47,17 +47,17 @@ fn a_title_keeps_capitals_and_punctuation() {
 }
 
 #[core::prelude::v1::test]
-fn a_composed_accent_lands_once_in_the_caption() {
+fn a_composed_accent_lands_once_in_the_title() {
     let (dir, engine) = seed_library("text_ime", 2);
     let mut cx = gpui::TestAppContext::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
-    view.update(vcx, |app, cx| app.start_caption_input(cx));
+    view.update(vcx, |app, cx| app.start_title_input(cx));
     let icx = info_window(&mut cx, &view);
     icx.simulate_input("caf");
     // ⌥E then E on a US layout: the IME marks "´", then replaces it with "é".
-    let input = field_input(&view, icx, TextTarget::Caption);
+    let input = field_input(&view, icx, TextTarget::Title);
     icx.update(|window, cx| {
         input.update(cx, |input, cx| {
             input.replace_and_mark_text_in_range(None, "´", None, window, cx);
@@ -67,21 +67,36 @@ fn a_composed_accent_lands_once_in_the_caption() {
     });
     view.update(icx, |app, _| {
         assert_eq!(
-            app.caption.input_buffer, "café",
+            app.caption.title_input_buffer, "café",
             "the composed character replaces the marked one"
         );
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The input drawn for `target`, which must be the field taking typing.
+/// The one-line input drawn for `target`, which must be taking typing.
 fn field_input(
     view: &gpui::Entity<LuminaApp>,
     vcx: &mut gpui::VisualTestContext,
     target: TextTarget,
 ) -> gpui::Entity<gpui::base::input::InputState> {
-    view.update(vcx, |app, _| app.field_input_for(target))
-        .unwrap_or_else(|| panic!("{target:?} takes typing through the field input"))
+    match view.update(vcx, |app, _| app.field_input_for(target)) {
+        Some(FieldEditor::Line(input)) => input,
+        _ => panic!("{target:?} takes typing through the one-line field input"),
+    }
+}
+
+/// Where the input of `target` is drawn.
+fn field_bounds(
+    view: &gpui::Entity<LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    target: TextTarget,
+) -> gpui::Bounds<gpui::Pixels> {
+    match view.update(vcx, |app, _| app.field_input_for(target)) {
+        Some(FieldEditor::Line(input)) => input.read_with(vcx, |input, _| input.input_bounds()),
+        Some(FieldEditor::Lines(input)) => input.read_with(vcx, |input, _| input.input_bounds()),
+        None => panic!("{target:?} takes typing through a field input"),
+    }
 }
 
 #[core::prelude::v1::test]
@@ -143,13 +158,7 @@ fn search_inserts_typed_text_at_the_caret() {
     let field = vcx
         .debug_bounds("search-input")
         .expect("search field drawn");
-    let text = view.update(vcx, |app, cx| {
-        let input = app.field_input_for(crate::app::text_input::TextTarget::Search);
-        input
-            .expect("focused search has an input")
-            .read(cx)
-            .input_bounds()
-    });
+    let text = field_bounds(&view, vcx, TextTarget::Search);
     assert!(
         text.size.height > gpui::px(0.0)
             && field.contains(&text.origin)
@@ -263,16 +272,16 @@ fn a_composition_left_in_one_field_never_edits_the_next() {
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
-    view.update(vcx, |app, cx| app.start_caption_input(cx));
+    view.update(vcx, |app, cx| app.start_date_input(cx));
     let icx = info_window(&mut cx, &view);
     icx.simulate_input("caf");
-    let caption = field_input(&view, icx, TextTarget::Caption);
+    let date = field_input(&view, icx, TextTarget::Date);
     icx.update(|window, cx| {
-        caption.update(cx, |input, cx| {
+        date.update(cx, |input, cx| {
             input.replace_and_mark_text_in_range(None, "´", None, window, cx);
         })
     });
-    // Leave the caption mid-composition and edit the title instead.
+    // Leave the date mid-composition and edit the title instead.
     keystrokes(icx, "escape");
     view.update(icx, |app, cx| {
         app.start_title_input(cx);
@@ -285,7 +294,7 @@ fn a_composition_left_in_one_field_never_edits_the_next() {
             assert_eq!(
                 input.marked_text_range(window, cx),
                 None,
-                "the caption's composition is not reported for the title"
+                "the date's composition is not reported for the title"
             );
             input.replace_text_in_range(None, "!", window, cx);
         })
@@ -332,20 +341,20 @@ fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
-    view.update(vcx, |app, cx| app.start_caption_input(cx));
+    view.update(vcx, |app, cx| app.start_title_input(cx));
     let icx = info_window(&mut cx, &view);
     icx.simulate_input("caf");
-    let input = field_input(&view, icx, TextTarget::Caption);
+    let input = field_input(&view, icx, TextTarget::Title);
     icx.update(|window, cx| {
         input.update(cx, |input, cx| {
             input.replace_and_mark_text_in_range(None, "´", None, window, cx);
         })
     });
-    // Close the caption, then reopen it holding different text.
+    // Close the title, then reopen it holding different text.
     keystrokes(icx, "escape");
     view.update(icx, |app, cx| {
-        app.start_caption_input(cx);
-        app.caption.input_buffer = "Hello".to_string();
+        app.start_title_input(cx);
+        app.caption.title_input_buffer = "Hello".to_string();
         cx.notify();
     });
     render_ui(icx);
@@ -361,8 +370,8 @@ fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
     });
     view.update(icx, |app, _| {
         assert_eq!(
-            app.caption.input_buffer, "Hellox",
-            "a stale composition range must not replace caption text"
+            app.caption.title_input_buffer, "Hellox",
+            "a stale composition range must not replace title text"
         );
     });
     let _ = std::fs::remove_dir_all(&dir);
@@ -467,7 +476,6 @@ fn edits_mid_text(
         wcx: &mut gpui::VisualTestContext,
         target: TextTarget,
     ) {
-        let input = field_input(view, wcx, target);
         wcx.simulate_input("ac");
         keystrokes(wcx, "left");
         wcx.simulate_input("b");
@@ -477,7 +485,7 @@ fn edits_mid_text(
             text.as_deref().is_some_and(|text| text.ends_with("abc")),
             "{target:?}: typing lands at the caret, got {text:?}"
         );
-        let bounds = input.read_with(wcx, |input, _| input.input_bounds());
+        let bounds = field_bounds(view, wcx, target);
         assert!(
             bounds.size.width > gpui::px(40.0) && bounds.size.height > gpui::px(0.0),
             "{target:?}: the input is drawn with room to type, got {bounds:?}"
@@ -546,4 +554,106 @@ fn every_field_edits_at_its_caret() {
     edits_mid_text("mid_url", NetworkImportUrl, false, |app, cx| {
         app.open_network_import_dialog(cx)
     });
+}
+
+#[core::prelude::v1::test]
+fn a_caption_keeps_its_line_breaks_and_shift_enter_adds_one() {
+    let (dir, engine) = seed_library("text_caption_lines", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "home");
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        // An imported caption with paragraphs (`clean_caption` keeps them).
+        app.caption.input_buffer = "Day one\nDay two".to_string();
+    });
+    let icx = info_window(&mut cx, &view);
+    icx.simulate_input("!");
+    keystrokes(icx, "shift-enter");
+    icx.simulate_input("x");
+    view.update(icx, |app, _| {
+        assert_eq!(
+            app.caption.input_buffer, "Day one\nDay two!\nx",
+            "editing a caption keeps its line breaks and ⇧Enter adds one"
+        );
+    });
+    keystrokes(icx, "enter");
+    let id = view.update(icx, |app, _| app.selected_item.clone().unwrap().id);
+    assert_eq!(
+        engine.get_captions_map().get(&id).map(String::as_str),
+        Some("Day one\nDay two!\nx"),
+        "Enter saves the caption with its lines"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_stored_value_past_the_cap_still_loads_into_its_field() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_legacy_load", &mut cx);
+    vcx.simulate_input("beach");
+    // Text the app sets can be longer than typing allows (a legacy value).
+    let long = "y".repeat(lumina_core::text::MAX_TEXT_CHARS + 5);
+    view.update(vcx, |app, cx| {
+        app.search_query = long.clone();
+        cx.notify();
+    });
+    render_ui(vcx);
+    let input = field_input(&view, vcx, TextTarget::Search);
+    let shown = input.read_with(vcx, |input, _| input.value().to_string());
+    assert!(
+        shown == long,
+        "the field shows the stored text, not the last field's: {:?}…",
+        &shown[..shown.len().min(8)]
+    );
+    keystrokes(vcx, "backspace");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query == long[1..],
+            "editing the long value changes that value"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn the_link_dialog_takes_keys_while_it_checks() {
+    let mut cx = gpui::TestAppContext::single();
+    let (dir, view, vcx) = focused_search("text_checking_focus", &mut cx);
+    vcx.simulate_input("Rio");
+    view.update(vcx, |app, cx| {
+        app.network_import.stage = Some(crate::app::network_import::NetworkImportStage::Checking {
+            url: "https://example.com/v".to_string(),
+        });
+        cx.notify();
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "backspace secondary-x secondary-z");
+    vcx.simulate_input("x");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "Rio",
+            "keys under the link dialog must not edit the search behind it"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn tagging_from_the_floating_inspector_shows_the_tag_field() {
+    let (dir, engine) = seed_library("text_float_tag", 2);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "home");
+    let icx = info_window(&mut cx, &view);
+    view.update(icx, |app, cx| app.begin_tagging_selection(cx));
+    render_ui(icx);
+    icx.simulate_input("sun");
+    view.update(icx, |app, _| {
+        assert_eq!(
+            app.tag_input_buffer, "sun",
+            "T with the inspector floating must open a tag field that takes typing"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1,7 +1,6 @@
 //! Cmd+K command palette overlay.
 
 use crate::app::text_input::TextTarget;
-use gpui::base::input::Input;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -94,10 +93,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                 } else {
                                     theme::text()
                                 })
-                                .children(
-                                    app.field_input_for(TextTarget::Palette)
-                                        .map(|input| Input::new(&input)),
-                                ),
+                                .children(app.field_input_for(TextTarget::Palette)),
                         )
                         .child(theme::kbd("esc")),
                 )

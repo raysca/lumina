@@ -2,7 +2,6 @@
 //! prompt. Downloads themselves show in the toolbar list.
 
 use crate::app::text_input::TextTarget;
-use gpui::base::input::Input;
 use gpui::*;
 
 use crate::app::network_import::NetworkImportStage;
@@ -110,7 +109,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 })
                                 .children(
                                     app.field_input_for(TextTarget::NetworkImportUrl)
-                                        .map(|input| Input::new(&input)),
+                                        ,
                                 ),
                         )
                         .children((!url.is_empty()).then(|| {

@@ -2,7 +2,7 @@
 //! people check while browsing. Full editing (caption, title, date, location)
 //! stays in the tabbed Get Info window opened from the footer.
 
-use gpui::base::input::{Input, InputState};
+use crate::app::text_input::FieldEditor;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
@@ -20,7 +20,7 @@ pub fn render_summary_body(
     item: &MediaItem,
     tags: &[String],
     tag_input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
     is_trash: bool,
     rating: u8,
     star_pop: Option<(u8, ElementId)>,
@@ -321,7 +321,7 @@ fn render_tags(
     weak_app: WeakEntity<LuminaApp>,
     tags: &[String],
     input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
 ) -> impl IntoElement {
     let app_add = weak_app.clone();
     div()
@@ -419,7 +419,7 @@ fn render_tags(
                     theme::text_subtle()
                 })
                 .child(match field_input.filter(|_| input_active) {
-                    Some(input) => Input::new(&input).into_any_element(),
+                    Some(input) => input.into_any_element(),
                     None => "add…".into_any_element(),
                 }),
         )

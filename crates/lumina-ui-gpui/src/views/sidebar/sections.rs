@@ -1,5 +1,4 @@
 use crate::app::text_input::TextTarget;
-use gpui::base::input::Input;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
@@ -440,7 +439,7 @@ pub(super) fn render_tags_section(
                                     .text_color(theme::text())
                                     .children(
                                         this.field_input_for(TextTarget::TagRename)
-                                            .map(|input| Input::new(&input)),
+                                            ,
                                     ),
                             )
                             .child(

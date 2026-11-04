@@ -1,4 +1,4 @@
-use gpui::base::input::{Input, InputState};
+use crate::app::text_input::FieldEditor;
 use gpui::*;
 use lumina_core::MediaItem;
 
@@ -12,7 +12,7 @@ pub fn render_location_tab(
     weak_app: WeakEntity<LuminaApp>,
     item: &MediaItem,
     input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
 ) -> AnyElement {
     let has_coords = item.latitude.is_some() && item.longitude.is_some();
     let place = [&item.city, &item.admin1_region, &item.country_code]
@@ -72,7 +72,7 @@ pub fn render_location_tab(
                 .text_size(theme::TEXT_BODY)
                 .font_family(theme::FONT_MONO)
                 .text_color(theme::text())
-                .children(field_input.clone().map(|input| Input::new(&input)))
+                .children(field_input.clone())
         }))
         .child(
             div()

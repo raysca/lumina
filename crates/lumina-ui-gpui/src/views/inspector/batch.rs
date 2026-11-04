@@ -1,7 +1,7 @@
 //! v3 batch inspector: a flat panel for a multi-selection.
 
+use crate::app::text_input::FieldEditor;
 use crate::app::text_input::TextTarget;
-use gpui::base::input::{Input, InputState};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -294,7 +294,7 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                     theme::text_subtle()
                 })
                 .child(match input {
-                    Some(input) => Input::new(&input).into_any_element(),
+                    Some(input) => input.into_any_element(),
                     None => format!("Add a tag to all {total}… (T)").into_any_element(),
                 })
                 .on_click(move |_e, _w, cx| {
@@ -416,7 +416,7 @@ fn render_batch_metadata_row(
     selector: &'static str,
     value: &str,
     editing: bool,
-    input: Option<Entity<InputState>>,
+    input: Option<FieldEditor>,
     weak_app: WeakEntity<LuminaApp>,
 ) -> AnyElement {
     let display = if value.is_empty() {
@@ -492,7 +492,7 @@ fn render_batch_metadata_row(
                     .font_family(theme::FONT_MONO)
                     .text_color(theme::text())
                     .child(match input {
-                        Some(input) => Input::new(&input).into_any_element(),
+                        Some(input) => input.into_any_element(),
                         None => display.into_any_element(),
                     }),
             )

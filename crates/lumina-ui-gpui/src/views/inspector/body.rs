@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gpui::base::input::InputState;
+use crate::app::text_input::FieldEditor;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
@@ -105,7 +105,7 @@ pub fn render_inspector_body(
     title_input_active: bool,
     date_input_active: bool,
     location_input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
     let item = match selected_item {
@@ -164,7 +164,7 @@ fn render_single_body(
     title_input_active: bool,
     date_input_active: bool,
     location_input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
     let path = item.path.clone();

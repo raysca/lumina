@@ -1,7 +1,6 @@
 //! Left column of the tag manager: filter, sort, checkable rows, bulk bar.
 
 use crate::app::text_input::TextTarget;
-use gpui::base::input::Input;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -148,7 +147,7 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                     theme::text()
                 })
                 .child(match app.field_input_for(TextTarget::TagManagerSearch) {
-                    Some(input) => Input::new(&input).into_any_element(),
+                    Some(input) => input.into_any_element(),
                     None if search.is_empty() => "Filter tags by name…".into_any_element(),
                     None => search.clone().into_any_element(),
                 }),

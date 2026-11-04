@@ -59,7 +59,7 @@ impl SearchBarView {
                         theme::text_subtle()
                     })
                     .child(match input {
-                        Some(input) => gpui::base::input::Input::new(&input).into_any_element(),
+                        Some(input) => input.into_any_element(),
                         None => query_text.into_any_element(),
                     }),
             )

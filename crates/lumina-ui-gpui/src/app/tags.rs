@@ -151,6 +151,10 @@ impl LuminaApp {
             self.inspector_open = true;
             self.save_config();
         }
+        // The floating inspector draws one item's tag field on its Tags tab.
+        if self.floating_inspector_window.is_some() && self.selected_indices.len() <= 1 {
+            self.inspector_tab = crate::views::inspector::InspectorTab::Tags;
+        }
         self.start_tag_input(cx);
     }
 

@@ -1,7 +1,6 @@
 //! Right column of the tag manager: the focused tag's name, items and actions.
 
 use crate::app::text_input::TextTarget;
-use gpui::base::input::Input;
 use gpui::*;
 
 use crate::theme;
@@ -155,7 +154,7 @@ fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) ->
         })
         .text_color(theme::text())
         .child(match app.field_input_for(TextTarget::TagManagerRename) {
-            Some(input) if editing => Input::new(&input).into_any_element(),
+            Some(input) if editing => input.into_any_element(),
             _ => tag.to_string().into_any_element(),
         })
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

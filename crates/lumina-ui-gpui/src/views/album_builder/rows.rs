@@ -1,6 +1,6 @@
 //! Condition rows and the shared picker / text field / popup controls.
 
-use gpui::base::input::{Input, InputState};
+use crate::app::text_input::FieldEditor;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -55,14 +55,14 @@ pub(super) fn text_field(
     text: &str,
     placeholder: &str,
     focused: bool,
-    input: Option<Entity<InputState>>,
+    input: Option<FieldEditor>,
     target: DraftFocus,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     let sel = selector.clone();
     let text_sel = format!("{selector}-text");
     let content = match (input, text.is_empty()) {
-        (Some(input), _) => div().child(Input::new(&input)),
+        (Some(input), _) => div().child(input),
         (None, true) => div()
             .text_color(theme::text_subtle())
             .child(placeholder.to_string()),

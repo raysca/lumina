@@ -15,8 +15,9 @@
 //! the one-line clean-up.
 
 use gpui::base::input::{
-    Backspace, DeleteToBeginningOfLine, IndentInline, InputAccessibility, InputEvent, InputState,
-    MoveDown, MoveUp, OutdentInline, Paste, SelectAll,
+    Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
+    InputEvent, InputModeKind, InputState, MoveDown, MoveUp, OutdentInline, Paste, SelectAll,
+    Textarea, TextareaState,
 };
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
@@ -48,13 +49,19 @@ impl TextTarget {
         matches!(self, Tag | Title | Date | Location | Caption)
     }
 
+    /// Captions keep their line breaks (`clean_caption`), so they edit in a
+    /// multi-line input: Enter saves, ⇧Enter starts a new line.
+    fn multi_line(self) -> bool {
+        self == TextTarget::Caption
+    }
+
     /// What the empty field shows, and what VoiceOver calls it.
     fn placeholder_and_label(self) -> (&'static str, &'static str) {
         use TextTarget::*;
         match self {
             Palette => ("Type a command, album, tag or year…", "Command"),
             AlbumDraft => ("", "Smart album field"),
-            Tag => ("Add a tag…", "Tag"),
+            Tag => ("Type a tag, Enter to add", "Tag"),
             Title => ("Type a title... (Enter to save, Esc to cancel)", "Title"),
             Date => ("YYYY-MM-DD HH:MM:SS", "Date"),
             Location => (
@@ -70,21 +77,86 @@ impl TextTarget {
     }
 }
 
-/// The input behind whichever field takes typing.
+/// The input drawn for the active field.
+#[derive(Clone)]
+pub(crate) enum FieldEditor {
+    Line(Entity<InputState>),
+    Lines(Entity<TextareaState>),
+}
+
+impl FieldEditor {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        match self {
+            FieldEditor::Line(state) => state.focus_handle(cx),
+            FieldEditor::Lines(state) => state.focus_handle(cx),
+        }
+    }
+}
+
+impl IntoElement for FieldEditor {
+    type Element = AnyElement;
+
+    fn into_element(self) -> AnyElement {
+        match self {
+            FieldEditor::Line(state) => Input::new(&state).into_any_element(),
+            FieldEditor::Lines(state) => Textarea::new(&state).into_any_element(),
+        }
+    }
+}
+
+/// The inputs behind whichever field takes typing: one line, and a
+/// multi-line one made the first time a caption is edited.
 pub(crate) struct FieldInput {
-    state: Entity<InputState>,
+    line: Entity<InputState>,
+    lines: Option<Entity<TextareaState>>,
     target: Option<TextTarget>,
+    /// The smart-album control `AlbumDraft` edits (the title or a value).
+    draft: DraftFocus,
     /// The text both sides last agreed on. The side that differs from it
     /// changed: the buffer (app code) wins at render, the input on `Change`.
     synced: String,
-    _events: Subscription,
+    _events: Vec<Subscription>,
+}
+
+impl FieldInput {
+    fn editor(&self, multi_line: bool) -> Option<FieldEditor> {
+        if multi_line {
+            self.lines.clone().map(FieldEditor::Lines)
+        } else {
+            Some(FieldEditor::Line(self.line.clone()))
+        }
+    }
+}
+
+/// Loads `text` into an input for `target`. The text goes in before
+/// any validator, so a stored value the validator would refuse (a legacy
+/// over-long tag) still loads and can be fixed.
+fn load_field<M: InputModeKind>(
+    state: &mut InputBaseState<M>,
+    target: TextTarget,
+    text: String,
+    window: &mut Window,
+    cx: &mut Context<InputBaseState<M>>,
+) {
+    let (placeholder, label) = target.placeholder_and_label();
+    state.set_placeholder(placeholder, window, cx);
+    state.set_accessibility(
+        InputAccessibility::new(Some(Role::TextInput)).with_label(Some(label.into())),
+    );
+    let end = text.len();
+    state.set_value(text, window, cx);
+    // A caption would start at its first line; every field opens at its end.
+    state.set_selected_range(end..end, cx);
 }
 
 impl LuminaApp {
     /// The input to draw for `target` while that field takes typing.
-    pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<Entity<InputState>> {
+    pub(crate) fn field_input_for(&self, target: TextTarget) -> Option<FieldEditor> {
         let field = self.field_input.as_ref()?;
-        (field.target == Some(target)).then(|| field.state.clone())
+        if field.target != Some(target) {
+            return None;
+        }
+        field.editor(target.multi_line())
     }
 
     /// Runs at the top of each window's render: points the input at the
@@ -109,18 +181,39 @@ impl LuminaApp {
             if !cx.has_global::<gpui::base::GlobalState>() {
                 gpui::init(cx);
             }
-            let state = cx.new(|cx| InputState::new(window, cx));
-            let _events = cx.subscribe_in(&state, window, |this, state, event, _window, cx| {
+            let line = cx.new(|cx| InputState::new(window, cx));
+            let events = vec![
+                cx.subscribe_in(&line, window, |this, state, event, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        let value = state.read(cx).value();
+                        this.field_input_changed(value, window, cx);
+                    }
+                }),
+            ];
+            self.field_input = Some(FieldInput {
+                line,
+                lines: None,
+                target: None,
+                draft: self.album_draft.focus,
+                synced: String::new(),
+                _events: events,
+            });
+        }
+        if target.is_some_and(TextTarget::multi_line)
+            && self.field_input.as_ref().is_some_and(|f| f.lines.is_none())
+        {
+            // Enter goes on to the keymap, which saves; ⇧Enter adds a line.
+            let lines = cx.new(|cx| TextareaState::new(window, cx).submit_on_enter(true));
+            let events = cx.subscribe_in(&lines, window, |this, state, event, window, cx| {
                 if matches!(event, InputEvent::Change) {
-                    this.field_input_changed(state, cx);
+                    let value = state.read(cx).value();
+                    this.field_input_changed(value, window, cx);
                 }
             });
-            self.field_input = Some(FieldInput {
-                state,
-                target: None,
-                synced: String::new(),
-                _events,
-            });
+            if let Some(field) = self.field_input.as_mut() {
+                field.lines = Some(lines);
+                field._events.push(events);
+            }
         }
         let docked = self.floating_inspector_window.is_none();
         let owned = target.filter(|t| {
@@ -132,55 +225,77 @@ impl LuminaApp {
         });
         let text = owned.and_then(|t| self.text_buffer(t).cloned());
         let limit = owned.map(|t| self.text_limit(t));
+        let draft = self.album_draft.focus;
         let Some(field) = self.field_input.as_mut() else {
             return;
         };
-        let state = field.state.clone();
-        let focus = state.focus_handle(cx);
-        let (Some(target), Some(text), Some(limit)) = (owned, text, limit) else {
+        let editor = owned.and_then(|t| field.editor(t.multi_line()));
+        let (Some(target), Some(text), Some(limit), Some(editor)) = (owned, text, limit, editor)
+        else {
             // Only the window that draws the field points the input at it.
             if target.is_none() {
                 field.target = None;
             }
-            if focus.is_focused(window) {
-                window.focus(root, cx);
+            for editor in [field.editor(false), field.editor(true)]
+                .into_iter()
+                .flatten()
+            {
+                if editor.focus_handle(cx).is_focused(window) {
+                    window.focus(root, cx);
+                }
             }
             return;
         };
-        // Another smart-album row is the same target with another buffer.
-        let reload = field.target != Some(target) || text != field.synced;
+        // Another smart-album control is the same target with another buffer.
+        let reload = field.target != Some(target)
+            || (target == TextTarget::AlbumDraft && field.draft != draft)
+            || text != field.synced;
         field.target = Some(target);
+        field.draft = draft;
         field.synced.clone_from(&text);
-        state.update(cx, |state, cx| {
-            if reload {
-                let (placeholder, label) = target.placeholder_and_label();
-                state.set_placeholder(placeholder, window, cx);
-                state.set_accessibility(
-                    InputAccessibility::new(Some(Role::TextInput)).with_label(Some(label.into())),
-                );
-                // Typing and paste stop at the field's limit and never
-                // insert what the catalog drops (see `clean_text`).
-                state.set_validator(
-                    move |text, _| {
-                        text.chars().count() <= limit && !text.chars().any(is_disallowed)
-                    },
-                    cx,
-                );
-                state.set_value(text, window, cx);
-            }
-            if !focus.is_focused(window) {
-                state.focus(window, cx);
-                // A field opened from the other window (T in the main
-                // window with the inspector floating) brings this one up.
-                if !window.is_window_active() {
-                    window.activate_window();
+        let focus = editor.focus_handle(cx);
+        let focusing = !focus.is_focused(window);
+        match &editor {
+            FieldEditor::Line(state) => state.update(cx, |state, cx| {
+                if reload {
+                    // The last field's validator would refuse the new text.
+                    state.set_validator(|_, _| true, cx);
+                    load_field(state, target, text, window, cx);
+                    // Typing and paste stop at the field's limit and never
+                    // insert what the catalog drops (see `clean_text`).
+                    state.set_validator(
+                        move |text, _| {
+                            text.chars().count() <= limit && !text.chars().any(is_disallowed)
+                        },
+                        cx,
+                    );
                 }
-            }
-        });
+                if focusing {
+                    state.focus(window, cx);
+                }
+            }),
+            FieldEditor::Lines(state) => state.update(cx, |state, cx| {
+                if reload {
+                    load_field(state, target, text, window, cx);
+                }
+                if focusing {
+                    state.focus(window, cx);
+                }
+            }),
+        }
+        // A field opened from the other window (T in the main window with
+        // the inspector floating) brings this one up.
+        if focusing && !window.is_window_active() {
+            window.activate_window();
+        }
     }
 
-    fn field_input_changed(&mut self, state: &Entity<InputState>, cx: &mut Context<Self>) {
-        let value = state.read(cx).value();
+    fn field_input_changed(
+        &mut self,
+        value: SharedString,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(field) = self.field_input.as_mut() else {
             return;
         };
@@ -188,7 +303,28 @@ impl LuminaApp {
         let Some(target) = field.target.filter(|_| field.synced != value.as_ref()) else {
             return;
         };
-        let synced = std::mem::replace(&mut field.synced, value.to_string());
+        let mut value = value.to_string();
+        if target.multi_line() {
+            // A multi-line input has no validator: hold it to the same rules
+            // as one line, keeping line breaks (`clean_caption`).
+            let limit = self.text_limit(target);
+            let kept: String = value
+                .chars()
+                .filter(|&c| c == '\n' || !is_disallowed(c))
+                .take(limit)
+                .collect();
+            if kept != value {
+                value = kept;
+                if let Some(FieldEditor::Lines(state)) = self.field_input_for(target) {
+                    let text = value.clone();
+                    state.update(cx, |state, cx| state.set_value(text, window, cx));
+                }
+            }
+        }
+        let Some(field) = self.field_input.as_mut() else {
+            return;
+        };
+        let synced = std::mem::replace(&mut field.synced, value.clone());
         let Some(buffer) = self.text_buffer(target) else {
             return;
         };
@@ -200,8 +336,7 @@ impl LuminaApp {
             }
             return;
         }
-        buffer.clear();
-        buffer.push_str(&value);
+        *buffer = value;
         self.text_edited(target, cx);
     }
 
@@ -247,7 +382,7 @@ impl LuminaApp {
         let Some(target) = self.text_target() else {
             return;
         };
-        let Some(state) = self.field_input_for(target) else {
+        let Some(editor) = self.field_input_for(target) else {
             return;
         };
         cx.stop_propagation();
@@ -261,16 +396,33 @@ impl LuminaApp {
             .map(|c| if is_disallowed(c) { ' ' } else { c })
             .collect();
         let limit = self.text_limit(target);
-        state.update(cx, |state, cx| {
+        fn paste<M: InputModeKind>(
+            state: &mut InputBaseState<M>,
+            line: &str,
+            limit: usize,
+            window: &mut Window,
+            cx: &mut Context<InputBaseState<M>>,
+        ) {
             let kept = state.value().chars().count() - state.selected_value().chars().count();
             let text: String = line.chars().take(limit.saturating_sub(kept)).collect();
             state.replace(text, window, cx);
-        });
+        }
+        match editor {
+            FieldEditor::Line(state) => {
+                state.update(cx, |state, cx| paste(state, &line, limit, window, cx))
+            }
+            FieldEditor::Lines(state) => {
+                state.update(cx, |state, cx| paste(state, &line, limit, window, cx))
+            }
+        }
     }
 
     /// The active field, in the same precedence as `handle_modal_key_down`.
     pub(crate) fn text_target(&self) -> Option<TextTarget> {
         use TextTarget::*;
+        if self.downloads.confirm.is_some() {
+            return None;
+        }
         if self.command_palette_open {
             return Some(Palette);
         }
@@ -282,10 +434,16 @@ impl LuminaApp {
         {
             return None;
         }
-        if let Some(crate::app::network_import::NetworkImportStage::Input { .. }) =
-            self.network_import.stage
-        {
-            return Some(NetworkImportUrl);
+        // Every stage of the dialog takes the keys; only the first types.
+        if let Some(ref stage) = self.network_import.stage {
+            return matches!(
+                stage,
+                crate::app::network_import::NetworkImportStage::Input { .. }
+            )
+            .then_some(NetworkImportUrl);
+        }
+        if self.downloads.open {
+            return None;
         }
         if self.album_draft.modal_open {
             return (self.album_draft.popup.is_none() && self.draft_focus_is_typed())
@@ -419,6 +577,11 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     fn always(_: &mut LuminaApp, _: TextTarget) -> bool {
         true
     }
+    // A caption moves its caret between lines; one-line fields hand ↑/↓
+    // to the list or rows beside them.
+    fn one_line(_: &mut LuminaApp, target: TextTarget) -> bool {
+        !target.multi_line()
+    }
     fn empty(app: &mut LuminaApp, target: TextTarget) -> bool {
         app.text_buffer(target).is_some_and(|text| text.is_empty())
     }
@@ -437,8 +600,8 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
             app.update(cx, |app, cx| app.field_key(key, wanted, window, cx));
         })
     }
-    let root = reroute::<MoveUp>(root, app, "up", always);
-    let root = reroute::<MoveDown>(root, app, "down", always);
+    let root = reroute::<MoveUp>(root, app, "up", one_line);
+    let root = reroute::<MoveDown>(root, app, "down", one_line);
     let root = reroute::<IndentInline>(root, app, "tab", always);
     let root = reroute::<OutdentInline>(root, app, "shift-tab", always);
     let root = reroute::<Backspace>(root, app, "backspace", empty);

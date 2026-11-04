@@ -1,4 +1,4 @@
-use gpui::base::input::{Input, InputState};
+use crate::app::text_input::FieldEditor;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
@@ -23,15 +23,11 @@ pub fn render_info_tab(
     caption_input_active: bool,
     title_input_active: bool,
     date_input_active: bool,
-    field_input: Option<Entity<InputState>>,
+    field_input: Option<FieldEditor>,
     details: Option<&InfoDetails>,
 ) -> AnyElement {
     // The input of whichever of these fields takes typing.
-    let input = || {
-        field_input
-            .clone()
-            .map(|input| Input::new(&input).into_any_element())
-    };
+    let input = || field_input.clone().map(IntoElement::into_any_element);
     let kind_str = kind_label(item.media_type, file_name);
 
     // Dimensions with megapixels
