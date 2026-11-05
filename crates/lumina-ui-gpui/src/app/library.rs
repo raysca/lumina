@@ -203,6 +203,7 @@ impl LuminaApp {
                 let mut should_refresh_counts = false;
                 let mut should_clear_selection = false;
                 let mut should_restore_session = false;
+                let scan_completed = matches!(evt, EngineEvent::ScanComplete { .. });
                 let had_multi_selection = !self.selected_indices.is_empty();
                 // Read before ScanComplete clears a selection made during the
                 // scan: a card the user picked still counts as them acting.
@@ -340,6 +341,9 @@ impl LuminaApp {
                 if should_restore_session {
                     self.apply_restored_session(user_moved, cx);
                 }
+                if scan_completed && std::mem::take(&mut self.import.pending_import_after_open) {
+                    self.pick_import_folders(cx);
+                }
             }
             UiMessage::ThumbnailLoaded { id, frame } => {
                 let Some(state) = self.grid_state.as_ref() else {
@@ -400,6 +404,13 @@ impl LuminaApp {
             }
             UiMessage::FolderPicked(folder) => {
                 self.open_library(folder, cx);
+            }
+            UiMessage::NewLibraryPicked(folder) => {
+                let generation = self.library_generation;
+                self.open_library(folder, cx);
+                // Only a library that opened (not a failed open, not one
+                // waiting on the downloads prompt) gets the import.
+                self.import.pending_import_after_open = self.library_generation != generation;
             }
             UiMessage::ExportFolderPicked(folder) => {
                 self.export_to_folder(folder, cx);

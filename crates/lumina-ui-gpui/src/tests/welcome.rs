@@ -29,10 +29,51 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
     let logo = vcx.debug_bounds("welcome-logo").unwrap();
     assert_eq!(f32::from(logo.size.width), 60.0);
     assert_eq!(logo.origin.x, column.origin.x, "content is left-aligned");
-    let choose = vcx.debug_bounds("pick-folder-btn").unwrap();
-    let pictures = vcx.debug_bounds("pick-desktop-pics-btn").unwrap();
-    assert_eq!(choose.size.width, pictures.size.width, "two equal buttons");
-    assert_eq!(choose.origin.y, pictures.origin.y, "side by side");
+    let open = vcx.debug_bounds("welcome-open-btn").unwrap();
+    let import = vcx.debug_bounds("welcome-import-new-btn").unwrap();
+    assert_eq!(open.size.width, import.size.width, "two equal buttons");
+    assert_eq!(open.origin.y, import.origin.y, "side by side");
+    let pictures = vcx
+        .debug_bounds("welcome-pictures-link")
+        .expect("Use Pictures Folder stays as a secondary link");
+    assert!(
+        pictures.origin.y > open.origin.y,
+        "the Pictures link sits below the two buttons"
+    );
+    assert!(
+        pictures.size.height < open.size.height,
+        "the Pictures link is quieter than a button"
+    );
+    for hint in [
+        "welcome-open-key",
+        "welcome-import-new-key",
+        "welcome-pictures-key",
+    ] {
+        assert!(
+            vcx.debug_bounds(hint).is_some(),
+            "{hint}: every welcome path shows its keyboard shortcut"
+        );
+    }
+
+    let (folders, new_libraries, pictures_opens) = (picks(), new_library_picks(), picture_opens());
+    click(vcx, "welcome-open-btn");
+    click(vcx, "welcome-import-new-btn");
+    click(vcx, "welcome-pictures-link");
+    assert_eq!(
+        picks(),
+        folders + 1,
+        "Open Existing Library… opens the picker"
+    );
+    assert_eq!(
+        new_library_picks(),
+        new_libraries + 1,
+        "Import into New Library… asks for the new library's folder"
+    );
+    assert_eq!(
+        picture_opens(),
+        pictures_opens + 1,
+        "the link opens the Pictures folder"
+    );
 }
 
 fn feed(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, event: EngineEvent) {
@@ -419,7 +460,7 @@ fn missing_last_library_shows_notice() {
         assert!(app.grid_state.is_none());
     });
     let before = picks();
-    click(vcx, "pick-folder-btn");
+    click(vcx, "welcome-open-btn");
     keystrokes(vcx, "enter");
     assert_eq!(picks(), before + 2, "the Open button and ↵ stay usable");
 }
@@ -729,4 +770,159 @@ fn welcome_cmd_o_and_escape_work_and_modified_enter_is_gated() {
             "Esc on welcome dismisses the error banner"
         );
     });
+}
+
+// ---- Welcome paths: open, import into a new library, Pictures (Task 7b) ----
+
+fn new_library_picks() -> usize {
+    crate::app::import::NEW_LIBRARY_PICKS.with(|n| n.get())
+}
+
+fn import_picks() -> usize {
+    crate::app::import::IMPORT_PICKS.with(|n| n.get())
+}
+
+fn picture_opens() -> usize {
+    crate::app::first_scan::PICTURE_OPENS.with(|n| n.get())
+}
+
+#[core::prelude::v1::test]
+fn import_into_new_library_opens_then_asks_for_sources() {
+    let folder = temp_folder("new_library");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    let before = import_picks();
+    // Checked in the same update: the real scan's own ScanComplete may
+    // arrive at the next run-until-parked.
+    view.update(vcx, |app, cx| {
+        app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(folder.as_ref()),
+            "the chosen folder opens as the new library"
+        );
+        assert!(
+            app.first_scan.is_some(),
+            "an empty library shows the first-scan screen"
+        );
+        assert!(app.import.pending_import_after_open);
+        assert_eq!(
+            import_picks(),
+            before,
+            "the import picker waits for the first scan: that screen paints no import dialog"
+        );
+    });
+
+    feed(&view, vcx, EngineEvent::ScanComplete { total_items: 0 });
+    assert_eq!(
+        import_picks(),
+        before + 1,
+        "the first ScanComplete of the new library asks for the photos to copy in"
+    );
+    feed(&view, vcx, EngineEvent::ScanComplete { total_items: 0 });
+    assert_eq!(
+        import_picks(),
+        before + 1,
+        "a later scan (⌘R) must not ask again"
+    );
+}
+
+#[core::prelude::v1::test]
+fn new_library_open_failure_asks_nothing() {
+    let folder = temp_folder("new_library_fail");
+    let file = folder.join("photo.jpg");
+    std::fs::write(&file, b"not a folder").unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    let before = import_picks();
+    view.update(vcx, |app, cx| {
+        app.handle_ui_message(UiMessage::NewLibraryPicked(file.clone()), cx);
+        assert!(app.grid_state.is_none(), "a file is not a library");
+        assert!(app.error_message.is_some(), "the banner says it failed");
+        assert!(
+            !app.import.pending_import_after_open,
+            "a failed open must not leave an import waiting for a later library"
+        );
+    });
+    assert_eq!(
+        import_picks(),
+        before,
+        "no import picker after a failed open"
+    );
+}
+
+#[core::prelude::v1::test]
+fn welcome_keyboard_paths() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.has_desktop_pics = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let (folders, new_libraries, pictures, imports) = (
+        picks(),
+        new_library_picks(),
+        picture_opens(),
+        import_picks(),
+    );
+
+    keystrokes(vcx, "enter");
+    assert_eq!(picks(), folders + 1, "↵ opens an existing library");
+    keystrokes(vcx, "shift-enter");
+    assert_eq!(picture_opens(), pictures + 1, "⇧↵ uses the Pictures folder");
+    keystrokes(vcx, "secondary-shift-i");
+    assert_eq!(
+        new_library_picks(),
+        new_libraries + 1,
+        "⇧⌘I imports into a new library on the welcome screen"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "⇧⌘I on welcome must not say \"Open a library before importing\""
+        );
+    });
+    vcx.dispatch_action(crate::actions::ImportMedia);
+    assert_eq!(
+        new_library_picks(),
+        new_libraries + 2,
+        "File > Import… on welcome imports into a new library"
+    );
+    keystrokes(vcx, "secondary-i alt-shift-secondary-i");
+    assert_eq!(
+        new_library_picks(),
+        new_libraries + 2,
+        "⌘I and ⌥⇧⌘I are not ⇧⌘I"
+    );
+    assert_eq!(
+        import_picks(),
+        imports,
+        "no import picker without a library"
+    );
+    assert_eq!(picks(), folders + 1, "no stray folder pickers");
+}
+
+#[core::prelude::v1::test]
+fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
+    let folder = temp_folder("new_library_rescan");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    let before = import_picks();
+    view.update(vcx, |app, cx| {
+        app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
+        assert!(app.import.pending_import_after_open);
+        // A failed first scan sends no ScanComplete; the user then rescans.
+        app.rescan_library(cx);
+        assert!(
+            !app.import.pending_import_after_open,
+            "the user's own rescan cancels the new-library import prompt"
+        );
+    });
+    feed(&view, vcx, EngineEvent::ScanComplete { total_items: 0 });
+    assert_eq!(
+        import_picks(),
+        before,
+        "a rescan's ScanComplete must not open the import picker out of nowhere"
+    );
 }

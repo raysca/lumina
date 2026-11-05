@@ -232,8 +232,11 @@ impl LuminaApp {
             })
             .collect();
         WelcomeProps {
-            on_pick_folder: Box::new(
+            on_open: Box::new(
                 cx.listener(|this, _: &ClickEvent, _, cx| this.pick_folder_dialog(cx)),
+            ),
+            on_import_new: Box::new(
+                cx.listener(|this, _: &ClickEvent, _, cx| this.pick_new_library_for_import(cx)),
             ),
             on_pick_desktop_pics: Box::new(
                 cx.listener(|this, _: &ClickEvent, _, cx| this.open_pictures_library(cx)),

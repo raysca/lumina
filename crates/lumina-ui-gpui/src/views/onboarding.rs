@@ -49,7 +49,11 @@ pub struct RecentRow {
 /// What the welcome screen shows (AGENTS §5.1: a struct, not a long
 /// parameter list).
 pub struct WelcomeProps {
-    pub on_pick_folder: WelcomeHandler,
+    /// Open Existing Library… (↵).
+    pub on_open: WelcomeHandler,
+    /// Import into New Library… (⇧⌘I).
+    pub on_import_new: WelcomeHandler,
+    /// Use Pictures Folder (⇧↵), shown only when there is one.
     pub on_pick_desktop_pics: WelcomeHandler,
     pub has_desktop_pics: bool,
     pub recents: Vec<RecentRow>,
@@ -62,7 +66,8 @@ pub struct OnboardingView;
 impl OnboardingView {
     pub fn render(props: WelcomeProps) -> impl IntoElement {
         let WelcomeProps {
-            on_pick_folder,
+            on_open,
+            on_import_new,
             on_pick_desktop_pics,
             has_desktop_pics,
             recents,
@@ -88,12 +93,14 @@ impl OnboardingView {
                             div()
                                 .text_3xl()
                                 .font_weight(FontWeight::BOLD)
-                                .child("Welcome to Lumina"),
+                                .child(t("welcome.title")),
                         )
-                        .child(div().text_base().text_color(theme::text_muted()).child(
-                            "A fast, private browser for the photos and videos \
-                                     already on your Mac. Pick the folder that holds them.",
-                        )),
+                        .child(
+                            div()
+                                .text_base()
+                                .text_color(theme::text_muted())
+                                .child(t("welcome.intro")),
+                        ),
                 )
                 .child(
                     div()
@@ -103,18 +110,18 @@ impl OnboardingView {
                         .gap_4()
                         .child(feature(
                             Icon::Folder,
-                            "Works in place",
-                            "Your folders stay as they are. Nothing is moved, copied or uploaded.",
+                            t("welcome.in_place_title"),
+                            t("welcome.in_place_body"),
                         ))
                         .child(feature(
-                            Icon::Film,
-                            "Reads everything",
-                            "JPEG, HEIC, RAW and video, with dates, cameras and places.",
+                            Icon::Check,
+                            t("welcome.originals_title"),
+                            t("welcome.originals_body"),
                         ))
                         .child(feature(
-                            Icon::Zap,
-                            "Stays fast",
-                            "Scrolls smoothly through tens of thousands of items.",
+                            Icon::Database,
+                            t("welcome.catalog_title"),
+                            t("welcome.catalog_body"),
                         )),
                 )
                 .when(!recents.is_empty(), |column| {
@@ -127,24 +134,61 @@ impl OnboardingView {
                         .flex_row()
                         .gap_3()
                         .child(
-                            button("pick-folder-btn", "Choose Photos Folder…", true)
-                                .tooltip(theme::tooltip_label("Choose Photos Folder… (↵)"))
-                                .on_click(on_pick_folder),
+                            button("welcome-open-btn", t("welcome.open_existing"), true)
+                                .child(shortcut_hint("welcome-open-key", "↵"))
+                                .tooltip(theme::tooltip_label(format!(
+                                    "{} (↵)",
+                                    t("welcome.open_existing")
+                                )))
+                                .on_click(on_open),
                         )
-                        .children(has_desktop_pics.then(|| {
-                            button("pick-desktop-pics-btn", "Use Pictures Folder", false)
-                                .tooltip(theme::tooltip_label("Use Pictures Folder (⇧↵)"))
-                                .on_click(on_pick_desktop_pics)
-                        })),
+                        .child(
+                            button("welcome-import-new-btn", t("welcome.import_new"), false)
+                                .child(shortcut_hint("welcome-import-new-key", "⇧⌘I"))
+                                .tooltip(theme::tooltip_label(format!(
+                                    "{} (⇧⌘I)",
+                                    t("welcome.import_new")
+                                )))
+                                .on_click(on_import_new),
+                        ),
                 )
+                .children(has_desktop_pics.then(|| pictures_link(on_pick_desktop_pics)))
                 .child(
                     div()
                         .text_xs()
                         .text_color(theme::text_subtle())
-                        .child("You can switch to another folder later."),
+                        .child(t("welcome.footer")),
                 ),
         )
     }
+}
+
+/// The shortcut shown next to a welcome control's label.
+fn shortcut_hint(selector: &'static str, keys: &'static str) -> Div {
+    theme::kbd(keys)
+        .debug_selector(move || selector.to_string())
+        .flex_none()
+}
+
+/// "Use Pictures Folder": a quiet secondary link under the two buttons.
+fn pictures_link(on_click: WelcomeHandler) -> impl IntoElement {
+    let label = t("welcome.use_pictures");
+    div()
+        .id("welcome-pictures-link")
+        .debug_selector(|| "welcome-pictures-link".to_string())
+        .role(Role::Link)
+        .aria_label(format!("{label} (⇧↵)"))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .cursor_pointer()
+        .text_sm()
+        .text_color(theme::accent())
+        .hover(|s| s.underline())
+        .on_click(on_click)
+        .child(label)
+        .child(shortcut_hint("welcome-pictures-key", "⇧↵"))
 }
 
 /// The last or chosen library is not where it was.
@@ -295,7 +339,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
         )
 }
 
-fn feature(icon: Icon, title: &'static str, body: &'static str) -> impl IntoElement {
+fn feature(icon: Icon, title: String, body: String) -> impl IntoElement {
     div()
         .flex()
         .flex_row()
@@ -327,11 +371,19 @@ fn feature(icon: Icon, title: &'static str, body: &'static str) -> impl IntoElem
         )
 }
 
-/// Two equal-width buttons: amber primary, quiet secondary.
-pub(crate) fn button(id: &'static str, label: &'static str, primary: bool) -> Stateful<Div> {
+/// Two equal-width buttons: amber primary, quiet secondary. Callers may add
+/// a shortcut hint as a further child.
+pub(crate) fn button(
+    id: &'static str,
+    label: impl Into<SharedString>,
+    primary: bool,
+) -> Stateful<Div> {
+    let label: SharedString = label.into();
     div()
         .id(id)
         .debug_selector(move || id.to_string())
+        .role(Role::Button)
+        .aria_label(label.clone())
         .flex_1()
         .h(px(38.0))
         .rounded(theme::RADIUS_LG)
@@ -339,6 +391,7 @@ pub(crate) fn button(id: &'static str, label: &'static str, primary: bool) -> St
         .flex()
         .justify_center()
         .items_center()
+        .gap_2()
         .text_sm()
         .font_weight(FontWeight::SEMIBOLD)
         .map(|b| {

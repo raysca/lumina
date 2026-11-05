@@ -61,6 +61,9 @@ pub enum UiMessage {
     #[cfg_attr(test, allow(dead_code))]
     FolderPicked(PathBuf),
     ExportFolderPicked(PathBuf),
+    /// The folder chosen for "Import into New Library…": open it, then ask
+    /// for the photos to copy in once its first scan is done.
+    NewLibraryPicked(PathBuf),
     /// The file chosen to reconnect a missing item. (Tests skip the picker.)
     #[cfg_attr(test, allow(dead_code))]
     LocatePicked(lumina_core::MediaId, PathBuf),

@@ -43,8 +43,9 @@ impl LuminaApp {
         // Welcome: ↑/↓ focus a recent library and ↵ opens it; with none
         // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌫
         // forgets the focused recent, Esc clears the focus (then the error
-        // banner). ⌘O opens a library and ⌘, Preferences. Every other key
-        // stops here: the palette, shortcut sheet and grid are not painted
+        // banner). ⌘O opens a library, ⇧⌘I imports into a new one (before
+        // the global ⇧⌘I, which needs an open library) and ⌘, Preferences.
+        // Every other key stops here: the palette, shortcut sheet and grid are not painted
         // on this screen, and an invisible overlay would swallow every key.
         if self.grid_state.is_none() {
             let plain = !cmd_or_ctrl && !keystroke.modifiers.alt && !keystroke.modifiers.shift;
@@ -75,6 +76,13 @@ impl LuminaApp {
                 }
                 "escape" if self.error_message.is_some() => self.dismiss_error(cx),
                 "o" if cmd_or_ctrl && !keystroke.modifiers.shift => self.pick_folder_dialog(cx),
+                k if k.eq_ignore_ascii_case("i")
+                    && cmd_or_ctrl
+                    && keystroke.modifiers.shift
+                    && !keystroke.modifiers.alt =>
+                {
+                    self.pick_new_library_for_import(cx)
+                }
                 "," if cmd_or_ctrl && !keystroke.modifiers.shift && !keystroke.modifiers.alt => {
                     self.open_preferences(cx)
                 }

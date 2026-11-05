@@ -103,10 +103,20 @@ impl Default for FirstScanState {
 impl LuminaApp {
     /// Use Pictures Folder (welcome screen).
     pub fn open_pictures_library(&mut self, cx: &mut Context<Self>) {
-        let pics_dir = dirs::picture_dir()
-            .or_else(|| dirs::home_dir().map(|h| h.join("Pictures")))
-            .unwrap_or_else(|| PathBuf::from("."));
-        self.open_library(pics_dir, cx);
+        // Tests count the request: opening the real Pictures folder would
+        // write a catalog into the user's home (AGENTS §2).
+        #[cfg(test)]
+        {
+            PICTURE_OPENS.with(|n| n.set(n.get() + 1));
+            let _ = cx;
+        }
+        #[cfg(not(test))]
+        {
+            let pics_dir = dirs::picture_dir()
+                .or_else(|| dirs::home_dir().map(|h| h.join("Pictures")))
+                .unwrap_or_else(|| PathBuf::from("."));
+            self.open_library(pics_dir, cx);
+        }
     }
 
     /// Open Library: show the grid while the scan carries on.
@@ -146,4 +156,10 @@ mod tests {
             "long waits read in minutes"
         );
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// "Use Pictures Folder" opens asked for on this test thread.
+    pub(crate) static PICTURE_OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

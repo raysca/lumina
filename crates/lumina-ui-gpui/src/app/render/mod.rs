@@ -325,6 +325,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
                     this.open_about(cx);
                 }))
+                .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
+                    this.pick_new_library_for_import(cx);
+                }))
                 .size_full()
                 .font_family(theme::FONT_SANS)
                 .track_focus(&self.focus_handle)

@@ -184,6 +184,9 @@ impl LuminaApp {
             state.scan_progress = 0;
             // Rescan is the retry for thumbnails that failed to decode.
             state.clear_all_failed();
+            // A first scan that failed sends no ScanComplete; the user's own
+            // rescan must not then pop up the new-library import picker.
+            self.import.pending_import_after_open = false;
             state.engine.rescan();
         }
         self.last_action = None;

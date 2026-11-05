@@ -297,13 +297,16 @@ one step; every context action is discoverable from the command palette.
 
 **Current**
 
-- One welcome screen with Choose Photos Folder and an optional Pictures shortcut.
+- One welcome screen with two paths, Open Existing Library… (↵) and Import
+  into New Library… (⇧⌘I, also File > Import… there), plus a Use Pictures
+  Folder link (⇧↵). Each shows its shortcut. The copy explains local-first
+  storage: Lumina works on photos where they are or copies them in, never
+  changes the originals, and keeps its catalog in Application Support.
 - Recent libraries on the welcome screen (keyboard: ↑/↓, ↵, ⌫) and in ⌘K
   (Open Recent Library, Clear Recent Libraries). Forgetting one never deletes
   its folder or catalog. A missing last library or recent is named in a notice
   instead of being skipped silently.
-- No guided setup, sample library, import options or progress on the welcome
-  screen.
+- No guided setup, sample library or import options on the welcome screen.
 
 **Target**
 

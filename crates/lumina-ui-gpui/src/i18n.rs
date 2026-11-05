@@ -81,6 +81,28 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.forward" => "Forward",
         "command.open_recent" => "Open Recent Library: {name}",
         "command.clear_recents" => "Clear Recent Libraries",
+        "welcome.title" => "Welcome to Lumina",
+        "welcome.intro" => {
+            "A fast, private browser for the photos and videos on your Mac: \
+            JPEG, HEIC, RAW and video."
+        }
+        "welcome.in_place_title" => "Works where your photos are",
+        "welcome.in_place_body" => {
+            "Open a folder and Lumina shows the photos where they already are. \
+            Or start a new library, and Lumina copies photos into it."
+        }
+        "welcome.originals_title" => "Leaves your originals alone",
+        "welcome.originals_body" => {
+            "Lumina never edits your original files, and nothing is uploaded."
+        }
+        "welcome.catalog_title" => "Keeps its catalog on this Mac",
+        "welcome.catalog_body" => {
+            "Dates, tags and albums are kept in Lumina's catalog in Application Support."
+        }
+        "welcome.open_existing" => "Open Existing Library…",
+        "welcome.import_new" => "Import into New Library…",
+        "welcome.use_pictures" => "Use Pictures Folder",
+        "welcome.footer" => "You can open another library later with File > Open Library… (⌘O).",
         "welcome.recent_heading" => "Recent Libraries",
         "welcome.not_available" => "Not available",
         "welcome.open_recent" => "Open {name}",

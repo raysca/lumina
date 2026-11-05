@@ -129,13 +129,17 @@ of the roadmap.
 
 ## 1. Onboarding and first-run
 
-**Current:** a welcome screen with one primary action (Choose Photos Folder),
-one shortcut to Pictures, and a Recent Libraries list (up to 8, most recent
+**Current:** a welcome screen with two paths, Open Existing Library… (↵) and
+Import into New Library… (⇧⌘I: choose or create a folder, it opens, and once
+its first scan is done Lumina asks for the photos to copy in), a secondary Use
+Pictures Folder link (⇧↵), copy that explains local-first storage (works on
+photos where they are or copies them in, never changes originals, catalog in
+Application Support), and a Recent Libraries list (up to 8, most recent
 first; ↑/↓ and ↵ open one, ⌫ or × forgets one without touching its folder or
 catalog; a missing folder is marked "Not available"). If the last library is
 gone at launch, the welcome screen says which folder is missing. ⌘K has Open
 Recent Library and Clear Recent Libraries. No guided setup, sample library or
-import options.
+import options yet.
 
 **Target:**
 

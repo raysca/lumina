@@ -33,6 +33,9 @@ pub(crate) struct ImportState {
     running: Option<Arc<AtomicBool>>,
     /// (copied, total) for the status bar.
     pub progress: Option<(usize, usize)>,
+    /// "Import into New Library…" opened this library: ask for the photos to
+    /// copy in when its first scan completes. Cleared when another opens.
+    pub pending_import_after_open: bool,
 }
 
 impl ImportState {
@@ -104,6 +107,31 @@ impl LuminaApp {
                 {
                     let paths = handles.iter().map(|h| h.path().to_path_buf()).collect();
                     let _ = tx.send_blocking(UiMessage::ImportPicked(paths));
+                }
+            })
+            .detach();
+        }
+    }
+
+    /// "Import into New Library…" (welcome ⇧⌘I): choose or create the new
+    /// library's folder; it opens, and its first scan then asks for sources.
+    pub fn pick_new_library_for_import(&mut self, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        {
+            NEW_LIBRARY_PICKS.with(|n| n.set(n.get() + 1));
+            let _ = cx;
+        }
+        #[cfg(not(test))]
+        {
+            let tx = self.ui_tx.clone();
+            cx.spawn(async move |_this, _cx| {
+                if let Some(handle) = rfd::AsyncFileDialog::new()
+                    .set_title("Choose or Create a Folder for the New Library")
+                    .pick_folder()
+                    .await
+                {
+                    let _ =
+                        tx.send_blocking(UiMessage::NewLibraryPicked(handle.path().to_path_buf()));
                 }
             })
             .detach();
@@ -207,6 +235,7 @@ impl LuminaApp {
     /// current file (the old engine's event thread is joined next, and the
     /// copy holds that engine). Copies made so far stay in the old library.
     pub(crate) fn abandon_import(&mut self, cx: &mut Context<Self>) {
+        self.import.pending_import_after_open = false;
         self.cancel_import_dialog(cx);
         if let Some(cancel) = self.import.running.take() {
             cancel.store(true, Ordering::Relaxed);
@@ -269,4 +298,6 @@ impl LuminaApp {
 thread_local! {
     /// Import pickers the app asked to open on this test thread.
     pub(crate) static IMPORT_PICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// "Import into New Library…" folder pickers asked for on this thread.
+    pub(crate) static NEW_LIBRARY_PICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
