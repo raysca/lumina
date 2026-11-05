@@ -96,14 +96,16 @@ fn test_immersive_fullscreen_mode_lifecycle() {
 fn test_e2e_fullscreen_viewer_journey() {
     use crate::views::viewer::MediaViewer;
 
+    // Keys reach the viewer only with a library open (the welcome screen
+    // gates every key it does not handle).
+    let (dir, engine) = seed_library("viewer_journey", 1);
     let mut cx = gpui::TestAppContext::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let (view, cx) = app_with_library(&mut cx, engine);
 
     let sample = get_sample_items();
 
     // 1. Initial State: Viewer closed
     view.update(cx, |app, cx| {
-        app.grid_state = None;
         assert!(!app.is_fullscreen_viewer);
         assert!(!app.is_immersive_fullscreen);
 
@@ -295,6 +297,7 @@ fn test_e2e_fullscreen_viewer_journey() {
         assert!(app.immersive_hud_visible);
     });
     cx.run_until_parked();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -564,13 +567,15 @@ fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
 fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
     use crate::views::viewer_state::{ViewerZoomPreset, ZOOM_MAX_SCALE, ZOOM_MIN_SCALE};
 
+    // Keys reach the viewer only with a library open (the welcome screen
+    // gates every key it does not handle).
+    let (dir, engine) = seed_library("viewer_zoom_keys", 1);
     let mut cx = gpui::TestAppContext::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let (view, cx) = app_with_library(&mut cx, engine);
     let sample = get_sample_items();
     let photo = sample[0].clone();
 
     view.update(cx, |app, cx| {
-        app.grid_state = None;
         app.select_item_at(photo.clone(), 0, cx);
         app.open_viewer(photo.clone(), cx);
         assert_eq!(app.viewer_state.zoom_label(), "Fit");
@@ -660,6 +665,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
         });
     });
     cx.run_until_parked();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]

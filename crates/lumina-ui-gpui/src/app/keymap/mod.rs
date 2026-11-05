@@ -42,41 +42,45 @@ impl LuminaApp {
         }
         // Welcome: ↑/↓ focus a recent library and ↵ opens it; with none
         // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌫
-        // forgets the focused recent, Esc clears the focus.
+        // forgets the focused recent, Esc clears the focus (then the error
+        // banner). ⌘O opens a library and ⌘, Preferences. Every other key
+        // stops here: the palette, shortcut sheet and grid are not painted
+        // on this screen, and an invisible overlay would swallow every key.
         if self.grid_state.is_none() {
             let plain = !cmd_or_ctrl && !keystroke.modifiers.alt && !keystroke.modifiers.shift;
             let focused = self.welcome.focused_recent;
             match key {
-                "enter" if keystroke.modifiers.shift => {
+                "enter"
+                    if keystroke.modifiers.shift && !cmd_or_ctrl && !keystroke.modifiers.alt =>
+                {
                     if self.has_desktop_pics {
                         self.open_pictures_library(cx);
                     }
-                    return;
                 }
-                "enter" => {
-                    match focused {
-                        Some(index) => self.open_recent_at(index, cx),
-                        None => self.pick_folder_dialog(cx),
-                    }
-                    return;
-                }
+                "enter" if plain => match focused {
+                    Some(index) => self.open_recent_at(index, cx),
+                    None => self.pick_folder_dialog(cx),
+                },
                 "up" | "down" if plain => {
                     self.move_recent_focus(if key == "up" { -1 } else { 1 }, cx);
-                    return;
                 }
                 "backspace" | "delete" if plain => {
                     if let Some(index) = focused {
                         self.remove_recent_at(index, cx);
                     }
-                    return;
                 }
                 "escape" if focused.is_some() => {
                     self.welcome.focused_recent = None;
                     cx.notify();
-                    return;
+                }
+                "escape" if self.error_message.is_some() => self.dismiss_error(cx),
+                "o" if cmd_or_ctrl && !keystroke.modifiers.shift => self.pick_folder_dialog(cx),
+                "," if cmd_or_ctrl && !keystroke.modifiers.shift && !keystroke.modifiers.alt => {
+                    self.open_preferences(cx)
                 }
                 _ => {}
             }
+            return;
         }
 
         // The viewer's right-click menu is modal: Escape closes it and every

@@ -269,6 +269,18 @@ impl LuminaApp {
     }
 }
 
+/// Menu actions every root handles: the welcome screen, "Building your
+/// library" and the library window. Only actions that need no overlay go
+/// here; one whose overlay a root does not paint must not be registered there.
+fn app_actions(div: Div, cx: &mut Context<LuminaApp>) -> Div {
+    div.on_action(cx.listener(|this, _: &QuitApp, _w, cx| {
+        this.request_quit(cx);
+    }))
+    .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
+        this.pick_folder_dialog(cx);
+    }))
+}
+
 impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root = self.focus_handle.clone();
@@ -304,7 +316,15 @@ impl Render for LuminaApp {
 
         if self.grid_state.is_none() {
             self.check_recent_availability(cx);
-            return div()
+            // Preferences and About paint here (Review Focus 7: never
+            // register an action whose overlay this root does not paint).
+            return app_actions(div(), cx)
+                .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
+                    this.open_preferences(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
+                    this.open_about(cx);
+                }))
                 .size_full()
                 .font_family(theme::FONT_SANS)
                 .track_focus(&self.focus_handle)
@@ -317,11 +337,16 @@ impl Render for LuminaApp {
                 .child(self.render_error_banner(cx))
                 .child(OnboardingView::render(self.welcome_props(cx)))
                 .child(self.render_toast_overlay(cx))
+                .child(motion::overlay_in(
+                    self.preferences_open,
+                    crate::views::preferences::render_preferences_modal(self, cx),
+                    "preferences-in",
+                ))
                 .into_any_element();
         }
 
         if let Some(scan) = self.first_scan.clone() {
-            return div()
+            return app_actions(div(), cx)
                 .size_full()
                 .font_family(theme::FONT_SANS)
                 .track_focus(&self.focus_handle)
@@ -360,7 +385,11 @@ impl Render for LuminaApp {
         let inspector_open = self.inspector_open;
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
-        crate::app::text_input::field_input_actions(div(), &cx.entity())
+        let app_root = app_actions(
+            crate::app::text_input::field_input_actions(div(), &cx.entity()),
+            cx,
+        );
+        app_root
             .id("lumina-app-root")
             .debug_selector(|| "app-root".to_string())
             .font_family(theme::FONT_SANS)
@@ -373,9 +402,6 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &ShowCommandPalette, _w, cx| {
                 this.open_command_palette(cx);
-            }))
-            .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
-                this.pick_folder_dialog(cx);
             }))
             .on_action(cx.listener(|this, _: &RescanLibrary, _w, cx| {
                 this.rescan_library(cx);
@@ -406,9 +432,6 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                 this.open_album_builder(cx);
-            }))
-            .on_action(cx.listener(|this, _: &QuitApp, _w, cx| {
-                this.request_quit(cx);
             }))
             .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
                 this.navigate_back(cx);

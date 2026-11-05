@@ -590,3 +590,143 @@ fn failed_open_does_not_become_last_library() {
         assert!(app.error_message.is_some(), "the banner says it failed");
     });
 }
+
+// ---- Menu actions and the key gate on the welcome screen (UX-1 Task 7a) ----
+
+#[core::prelude::v1::test]
+fn welcome_cmd_k_does_not_open_an_invisible_palette() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    keystrokes(vcx, "secondary-k secondary-/");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_palette_open,
+            "⌘K must not open a palette the welcome screen never paints"
+        );
+        assert!(
+            !app.shortcuts_overlay_open,
+            "⌘/ must not open a sheet the welcome screen never paints"
+        );
+    });
+    let before = picks();
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        picks(),
+        before + 1,
+        "↵ still reaches the welcome picker after the gated keys"
+    );
+}
+
+#[core::prelude::v1::test]
+fn welcome_menu_actions_reach_the_app() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    let before = picks();
+    vcx.dispatch_action(crate::actions::OpenLibrary);
+    assert_eq!(
+        picks(),
+        before + 1,
+        "File > Open Library… works on the welcome screen"
+    );
+    vcx.dispatch_action(crate::actions::QuitApp);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.quit_requested,
+            "Quit works on the welcome screen"
+        )
+    });
+}
+
+#[core::prelude::v1::test]
+fn first_scan_quit_reaches_the_app() {
+    let (dir, engine) = seed_library("first_scan_quit", 1);
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.first_scan = Some(FirstScanState::new());
+        cx.notify();
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    let before = picks();
+    vcx.dispatch_action(crate::actions::OpenLibrary);
+    assert_eq!(
+        picks(),
+        before + 1,
+        "File > Open Library… works while the first scan runs"
+    );
+    vcx.dispatch_action(crate::actions::QuitApp);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.quit_requested,
+            "Quit works while the first scan runs"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn welcome_preferences_paint_and_escape_closes() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+
+    vcx.dispatch_action(crate::actions::OpenPreferences);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("preferences-card").is_some(),
+        "Preferences paints on the welcome screen when opened"
+    );
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_open, "Esc closes Preferences")
+    });
+
+    keystrokes(vcx, "secondary-,");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "⌘, opens Preferences on welcome")
+    });
+    keystrokes(vcx, "escape");
+
+    vcx.dispatch_action(crate::actions::ShowAbout);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("preferences-version").is_some(),
+        "About paints on the welcome screen when opened"
+    );
+    keystrokes(vcx, "escape");
+
+    let before = picks();
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_open, "Esc closed About");
+    });
+    assert_eq!(
+        picks(),
+        before + 1,
+        "↵ reaches the welcome picker once Preferences is closed"
+    );
+}
+
+#[core::prelude::v1::test]
+fn welcome_cmd_o_and_escape_work_and_modified_enter_is_gated() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    let before = picks();
+    keystrokes(vcx, "secondary-o");
+    assert_eq!(picks(), before + 1, "⌘O on welcome opens the folder picker");
+    keystrokes(vcx, "secondary-enter alt-enter");
+    assert_eq!(
+        picks(),
+        before + 1,
+        "⌘↵ and ⌥↵ are not plain ↵ (⌥↵ is kept for the sample library)"
+    );
+
+    view.update(vcx, |app, cx| app.set_error("boom", cx));
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message.is_none(),
+            "Esc on welcome dismisses the error banner"
+        );
+    });
+}
