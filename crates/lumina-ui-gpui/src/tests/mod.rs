@@ -28,6 +28,7 @@ mod states;
 mod tag_manager;
 mod tags_and_albums;
 mod text_input;
+mod thumbnails;
 mod toasts;
 mod ui_automation;
 mod ui_thread;

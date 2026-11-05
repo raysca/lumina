@@ -46,6 +46,9 @@ pub enum UiMessage {
         id: MediaId,
         frame: DecodedFrame,
     },
+    /// A thumbnail decode failed for good (already recorded in the grid's
+    /// failure set); the handler only repaints.
+    ThumbnailFailed,
     ViewerLoaded {
         id: MediaId,
         frame: DecodedFrame,

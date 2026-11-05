@@ -323,6 +323,11 @@ pub struct GridState {
     /// When each thumbnail finished decoding, so only fresh ones fade in;
     /// a card scrolled back into view shows its cached image at once.
     pub fresh_thumbs: Arc<Mutex<HashMap<MediaId, Instant>>>,
+    /// Ids whose thumbnail decode failed for good. Decode callbacks capture
+    /// this library's `Arc`, so a late failure from a closed library cannot
+    /// mark an id in the next one. Cleared when the file is re-upserted or
+    /// removed, and wholesale by Rescan (the retry).
+    pub thumb_failures: Arc<Mutex<HashSet<MediaId>>>,
     pub scroll_handle: UniformListScrollHandle,
     /// Per-video resume positions for the open library.
     pub video_resume: VideoResumeState,
@@ -344,6 +349,27 @@ impl GridState {
             .is_some_and(|at| at.elapsed() < crate::motion::THUMB_IN * 2)
     }
 
+    /// Marks `id`'s thumbnail as failed: it shows "No preview" and is not
+    /// decoded again until cleared.
+    pub fn mark_failed(&self, id: MediaId) {
+        self.thumb_failures.lock().insert(id);
+    }
+
+    /// True when `id`'s thumbnail failed to decode.
+    pub fn is_failed(&self, id: MediaId) -> bool {
+        self.thumb_failures.lock().contains(&id)
+    }
+
+    /// Lets `id` be decoded again (the file changed or went away).
+    pub fn clear_failed(&self, id: MediaId) {
+        self.thumb_failures.lock().remove(&id);
+    }
+
+    /// Lets every failed thumbnail be decoded again (Rescan).
+    pub fn clear_all_failed(&self) {
+        self.thumb_failures.lock().clear();
+    }
+
     pub fn new(engine: Arc<LuminaEngine>) -> Self {
         let total_count = engine.total_count();
         let cache_capacity = NonZeroUsize::new(800).unwrap();
@@ -356,6 +382,7 @@ impl GridState {
             texture_cache: Arc::new(Mutex::new(LruCache::new(cache_capacity))),
             in_flight: Arc::new(Mutex::new(HashSet::new())),
             fresh_thumbs: Arc::new(Mutex::new(HashMap::new())),
+            thumb_failures: Arc::new(Mutex::new(HashSet::new())),
             scroll_handle: UniformListScrollHandle::new(),
             video_resume: VideoResumeState::default(),
         }

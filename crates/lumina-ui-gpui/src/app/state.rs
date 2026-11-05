@@ -741,51 +741,39 @@ impl LuminaApp {
     }
 
     pub(crate) fn queue_thumbnail_request(&self, item_id: MediaId) {
-        if let Some(ref state) = self.grid_state {
-            let should_request = {
-                let mut in_flight = state.in_flight.lock();
-                in_flight.insert(item_id)
-            };
-            if should_request {
-                let tx = self.ui_tx.clone();
-                let in_flight_clone = state.in_flight.clone();
-
-                state
-                    .engine
-                    .request_thumbnail(item_id, 320, move |frame_opt| {
-                        in_flight_clone.lock().remove(&item_id);
-                        if let Some(frame) = frame_opt {
-                            let _ =
-                                tx.send_blocking(UiMessage::ThumbnailLoaded { id: item_id, frame });
-                        }
-                    });
+        if let Some(state) = self.grid_state.as_ref() {
+            if let Some(callback) = self.begin_thumbnail_request(state, item_id) {
+                state.engine.request_thumbnail(item_id, 320, callback);
             }
         }
     }
 
     pub(crate) fn queue_thumbnail_request_item(&self, item: &lumina_core::MediaItem) {
-        if let Some(ref state) = self.grid_state {
-            let item_id = item.id;
-            let should_request = {
-                let mut in_flight = state.in_flight.lock();
-                in_flight.insert(item_id)
-            };
-            if should_request {
-                let tx = self.ui_tx.clone();
-                let in_flight_clone = state.in_flight.clone();
-                let item_clone = item.clone();
-
+        if let Some(state) = self.grid_state.as_ref() {
+            if let Some(callback) = self.begin_thumbnail_request(state, item.id) {
                 state
                     .engine
-                    .request_thumbnail_item(item_clone, 320, move |frame_opt| {
-                        in_flight_clone.lock().remove(&item_id);
-                        if let Some(frame) = frame_opt {
-                            let _ =
-                                tx.send_blocking(UiMessage::ThumbnailLoaded { id: item_id, frame });
-                        }
-                    });
+                    .request_thumbnail_item(item.clone(), 320, callback);
             }
         }
+    }
+
+    /// Claims a decode of `id` and returns its callback, or `None` when one
+    /// is already in flight or the thumbnail failed before (Rescan retries).
+    pub(crate) fn begin_thumbnail_request(
+        &self,
+        state: &GridState,
+        id: MediaId,
+    ) -> Option<impl FnOnce(Option<lumina_core::DecodedFrame>) + Send + 'static> {
+        if state.is_failed(id) || !state.in_flight.lock().insert(id) {
+            return None;
+        }
+        #[cfg(test)]
+        THUMB_REQUESTS.with(|n| n.set(n.get() + 1));
+        let tx = self.ui_tx.clone();
+        let failures = state.thumb_failures.clone();
+        let in_flight = state.in_flight.clone();
+        Some(move |frame| on_thumbnail_result(&failures, &in_flight, &tx, id, frame))
     }
 
     pub(crate) fn prefetch_rows(&self, range: std::ops::Range<usize>) {
@@ -804,6 +792,37 @@ impl LuminaApp {
             }
         }
     }
+}
+
+/// A thumbnail decode's answer, on the decoder pool. `failures` and
+/// `in_flight` belong to the library that asked, so a late answer from a
+/// closed library cannot mark an id in the open one. A `None` (unreadable,
+/// offline or undecodable file) is recorded so the card shows "No preview"
+/// instead of being decoded again every frame.
+pub(crate) fn on_thumbnail_result(
+    failures: &parking_lot::Mutex<HashSet<MediaId>>,
+    in_flight: &parking_lot::Mutex<HashSet<MediaId>>,
+    tx: &async_channel::Sender<UiMessage>,
+    id: MediaId,
+    frame: Option<lumina_core::DecodedFrame>,
+) {
+    // Mark the failure before releasing the in-flight claim, so a render in
+    // between cannot see the id as neither and queue a duplicate decode.
+    if frame.is_none() {
+        failures.lock().insert(id);
+    }
+    in_flight.lock().remove(&id);
+    // A closed receiver means the app is gone; nothing is left to repaint.
+    let _ = match frame {
+        Some(frame) => tx.send_blocking(UiMessage::ThumbnailLoaded { id, frame }),
+        None => tx.send_blocking(UiMessage::ThumbnailFailed),
+    };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Thumbnail decodes actually sent to the engine from this test thread.
+    pub(crate) static THUMB_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]

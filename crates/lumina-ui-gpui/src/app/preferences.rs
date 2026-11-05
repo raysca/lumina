@@ -182,6 +182,8 @@ impl LuminaApp {
         if let Some(state) = self.grid_state.as_mut() {
             state.is_scanning = true;
             state.scan_progress = 0;
+            // Rescan is the retry for thumbnails that failed to decode.
+            state.clear_all_failed();
             state.engine.rescan();
         }
         self.last_action = None;

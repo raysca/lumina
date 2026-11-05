@@ -231,6 +231,11 @@ impl LuminaApp {
                                 let fit_mode = this.card_fit_mode;
                                 let in_trash = this.selection == AlbumSelection::Trash;
                                 let has_texture = texture.is_some();
+                                let thumb_failed = !has_texture
+                                    && this
+                                        .grid_state
+                                        .as_ref()
+                                        .is_some_and(|s| s.is_failed(item.id));
                                 let fresh_thumb = has_texture
                                     && this
                                         .grid_state
@@ -252,6 +257,7 @@ impl LuminaApp {
                                         // Stable automation contract for card state:
                                         // media-card-<id>, media-card-photo-<id>,
                                         // media-card-skeleton-<id>, media-card-thumb-<id>,
+                                        // media-card-failed-<id>,
                                         // media-card-selected-<id>.
                                         .debug_selector(move || {
                                             format!("media-card-{}", item_id_num)
@@ -424,6 +430,56 @@ impl LuminaApp {
                                                     } else {
                                                         thumb.into_any_element()
                                                     }
+                                                } else if thumb_failed {
+                                                    // The decode failed for good: say so
+                                                    // in text (not only in a tooltip) and
+                                                    // look unlike the skeleton.
+                                                    div()
+                                                        .id(("media-card-failed", item_id_num as u64))
+                                                        .debug_selector(move || {
+                                                            format!(
+                                                                "media-card-failed-{}",
+                                                                item_id_num
+                                                            )
+                                                        })
+                                                        .size_full()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .gap(px(6.0))
+                                                        .tooltip(theme::tooltip_label(
+                                                            crate::i18n::t("grid.preview_failed"),
+                                                        ))
+                                                        .child(
+                                                            div()
+                                                                .size(px(34.0))
+                                                                .rounded_full()
+                                                                .bg(theme::bg_control())
+                                                                .border_1()
+                                                                .border_color(theme::border_subtle())
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .child(render_icon(
+                                                                    Icon::TriangleAlert,
+                                                                    px(17.0),
+                                                                    theme::text_subtle(),
+                                                                )),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .debug_selector(move || {
+                                                                    format!(
+                                                                        "media-card-failed-caption-{}",
+                                                                        item_id_num
+                                                                    )
+                                                                })
+                                                                .text_xs()
+                                                                .text_color(theme::text_subtle())
+                                                                .child(crate::i18n::t("grid.no_preview")),
+                                                        )
+                                                        .into_any_element()
                                                 } else {
                                                     // Static skeleton placeholder. The seed
                                                     // fixtures decode to no texture, so this is

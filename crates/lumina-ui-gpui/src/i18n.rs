@@ -79,6 +79,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.cancel_import" => "Cancel Import",
         "command.back" => "Back",
         "command.forward" => "Forward",
+        "grid.no_preview" => "No preview",
+        "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         _ => return None,
     })
 }

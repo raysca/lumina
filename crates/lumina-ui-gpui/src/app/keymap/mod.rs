@@ -173,13 +173,7 @@ impl LuminaApp {
 
         // Cmd+R: rescan the active library (filesystem watcher is best-effort)
         if cmd_or_ctrl && key.eq_ignore_ascii_case("r") {
-            if let Some(state) = self.grid_state.as_mut() {
-                state.is_scanning = true;
-                state.scan_progress = 0;
-                state.engine.rescan();
-            }
-            self.last_action = None;
-            cx.notify();
+            self.rescan_library(cx);
             return;
         }
 

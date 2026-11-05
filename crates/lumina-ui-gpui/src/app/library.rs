@@ -219,6 +219,10 @@ impl LuminaApp {
                             if let Some(scan) = self.first_scan.as_mut() {
                                 scan.add_items(&items);
                             }
+                            // A re-upserted file may decode now.
+                            for item in &items {
+                                state.clear_failed(item.id);
+                            }
                             // A reconnected file keeps its id at a new path.
                             // Re-read it: the batch carries the file's own
                             // date, not an edited one.
@@ -284,6 +288,7 @@ impl LuminaApp {
                                 removed_textures.push(old);
                             }
                             state.in_flight.lock().remove(&id);
+                            state.clear_failed(id);
                             // The media is gone; its resume point can never load.
                             state.video_resume.positions.remove(id);
                             should_refresh_counts = true;
@@ -341,17 +346,26 @@ impl LuminaApp {
                     return;
                 };
                 state.in_flight.lock().remove(&id);
-                if let Ok(gpui_img) = frame_to_gpui_image(frame) {
-                    // `push` hands back the LRU entry it evicts (or the entry it
-                    // replaces); its texture must be freed too.
-                    let evicted = state.texture_cache.lock().push(id, gpui_img);
-                    state.mark_fresh_thumb(id);
-                    if let Some((_, old)) = evicted {
-                        self.retire_image(old);
+                match frame_to_gpui_image(frame) {
+                    Ok(gpui_img) => {
+                        state.clear_failed(id);
+                        // `push` hands back the LRU entry it evicts (or the entry
+                        // it replaces); its texture must be freed too.
+                        let evicted = state.texture_cache.lock().push(id, gpui_img);
+                        state.mark_fresh_thumb(id);
+                        if let Some((_, old)) = evicted {
+                            self.retire_image(old);
+                        }
                     }
-                    cx.notify();
+                    Err(e) => {
+                        log::warn!("thumbnail for {id:?} could not be converted: {e:#}");
+                        state.mark_failed(id);
+                    }
                 }
+                cx.notify();
             }
+            // Already recorded in the failure set by the decode callback.
+            UiMessage::ThumbnailFailed => cx.notify(),
             UiMessage::ViewerLoaded { id, frame } => {
                 // A poster must not replace live frames of the video the
                 // viewer is playing.

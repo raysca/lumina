@@ -200,8 +200,12 @@ produce the same seek behavior.
 
 **Current**
 
-- Thumbnails render as blank cards until loaded; no skeleton, shimmer or
-  per-card error state.
+- Thumbnails show a static skeleton card until loaded (no shimmer) and fade
+  in. A thumbnail that fails to decode (unreadable, offline or unsupported
+  file) shows a failed card instead: an alert icon and the caption "No
+  preview", with a tooltip saying Rescan tries again. It is not decoded again
+  until the file changes or the library is rescanned (⌘R). There is no
+  per-card retry; Reveal in Finder stays available.
 - Empty states are a single line of text with no action button or visual.
 - Status bar shows the last action indefinitely; errors use a dismissible banner.
 - No toasts, no inline undo, no job center. Export runs synchronously in the UI
