@@ -828,22 +828,56 @@ impl LuminaEngine {
     /// tags merged),
     /// so importing never clears metadata that the sidecar does not mention.
     pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
-        let captions = self
-            .catalog
-            .get_captions_map()
-            .context("could not read captions")?;
-        let ratings = self
-            .catalog
-            .get_ratings_map()
-            .context("could not read ratings")?;
-        let labels = self
-            .catalog
-            .get_color_labels_map()
-            .context("could not read color labels")?;
+        let before = self.edits_snapshot(ids)?;
+        self.import_sidecars_since(ids, &before)
+    }
+
+    /// The user-editable fields of `ids` as they are now, read before any
+    /// sidecar so an edit made while the import runs can be told apart.
+    fn edits_snapshot(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, ItemEdits>> {
+        let mut before = HashMap::with_capacity(ids.len());
+        for &id in ids {
+            if let Some(item) = self.catalog.get_item_by_id(id)? {
+                before.insert(id, self.item_edits(&item)?);
+            }
+        }
+        Ok(before)
+    }
+
+    fn item_edits(&self, item: &MediaItem) -> Result<ItemEdits> {
+        Ok(ItemEdits {
+            title: item.title.clone(),
+            rating: self
+                .catalog
+                .get_rating(item.id)
+                .context("could not read rating")?,
+            label: self
+                .catalog
+                .get_color_label(item.id)
+                .context("could not read color label")?,
+            caption: self
+                .catalog
+                .get_caption(item.id)
+                .context("could not read caption")?,
+        })
+    }
+
+    /// Applies each item's sidecar, except to a field the user changed since
+    /// `before` was taken: the import runs in the background, and an edit made
+    /// meanwhile must win over the (older) sidecar value.
+    // ponytail: read-then-write per field, so an edit landing in the
+    // microseconds between the fresh read and the write can still lose; a
+    // conditional `UPDATE ... WHERE rating = ?before` closes that if needed.
+    fn import_sidecars_since(
+        &self,
+        ids: &[MediaId],
+        before: &HashMap<MediaId, ItemEdits>,
+    ) -> Result<ImportReport> {
         let mut report = ImportReport::default();
 
         for id in ids {
-            let Some(item) = self.catalog.get_item_by_id(*id)? else {
+            let (Some(item), Some(then)) = (self.catalog.get_item_by_id(*id)?, before.get(id))
+            else {
                 report.skipped += 1;
                 continue;
             };
@@ -851,6 +885,7 @@ impl LuminaEngine {
                 Ok(Some(metadata)) => {
                     report.imported += 1;
                     let mut changed = false;
+                    let now = self.item_edits(&item)?;
 
                     // Compare as stored, so a sidecar with untidy text is not
                     // rewritten (and counted as updated) on every import.
@@ -859,19 +894,20 @@ impl LuminaEngine {
                         .as_deref()
                         .map(|title| text::clean_text(title, text::MAX_TEXT_CHARS))
                         .filter(|title| !title.is_empty());
-                    if metadata.title.is_some() && title != item.title {
+                    if metadata.title.is_some() && title != now.title && now.title == then.title {
                         self.catalog.set_title(*id, metadata.title.as_deref())?;
                         changed = true;
                     }
-                    let current_rating = ratings.get(id).copied().unwrap_or(0);
-                    if metadata.rating != current_rating {
+                    if metadata.rating != now.rating && now.rating == then.rating {
                         self.catalog.set_rating(*id, metadata.rating)?;
                         changed = true;
                     }
                     // Sidecars from before labels were written carry none; that
                     // must not clear a label set in Lumina.
-                    let current_label = labels.get(id).copied().unwrap_or(0);
-                    if metadata.color_label != 0 && metadata.color_label != current_label {
+                    if metadata.color_label != 0
+                        && metadata.color_label != now.label
+                        && now.label == then.label
+                    {
                         self.catalog.set_color_label(*id, metadata.color_label)?;
                         changed = true;
                     }
@@ -880,7 +916,10 @@ impl LuminaEngine {
                         .as_deref()
                         .map(|caption| text::clean_caption(caption, text::MAX_TEXT_CHARS))
                         .filter(|caption| !caption.is_empty());
-                    if metadata.caption.is_some() && caption != captions.get(id).cloned() {
+                    if metadata.caption.is_some()
+                        && caption != now.caption
+                        && now.caption == then.caption
+                    {
                         self.catalog
                             .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
                         changed = true;
@@ -1590,6 +1629,15 @@ impl LuminaEngine {
     }
 }
 
+/// The fields an XMP import may overwrite, as the catalog holds them.
+#[derive(Debug, Clone, PartialEq)]
+struct ItemEdits {
+    title: Option<String>,
+    rating: u8,
+    label: u8,
+    caption: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1618,6 +1666,67 @@ mod tests {
         rx.recv_timeout(Duration::from_secs(10))
             .expect("thumbnail callback must arrive")
             .expect("thumbnail must decode")
+    }
+
+    #[test]
+    fn xmp_import_keeps_a_field_the_user_edited_while_it_ran() {
+        let dir = temp_library("xmp_edit_race");
+        fs::write(dir.join("a.jpg"), b"test-jpeg-content").expect("fixture writes");
+        let (engine, rx) = LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), None)
+            .expect("engine opens");
+        while let Ok(event) = rx.recv_timeout(Duration::from_secs(10)) {
+            if let EngineEvent::ScanComplete { .. } = event {
+                break;
+            }
+        }
+        let item = engine.get_item_slice(0..1).remove(0);
+        write_sidecar(
+            &item.path,
+            &SidecarMetadata {
+                title: Some("Sidecar title".into()),
+                caption: Some("Sidecar caption".into()),
+                rating: 5,
+                color_label: 4,
+                ..Default::default()
+            },
+        )
+        .expect("sidecar writes");
+
+        let before = engine.edits_snapshot(&[item.id]).expect("snapshot");
+        // The user edits while the background import is still running.
+        engine.catalog.set_rating(item.id, 2).expect("rating");
+        engine
+            .catalog
+            .set_title(item.id, Some("Mine"))
+            .expect("title");
+        engine
+            .import_sidecars_since(&[item.id], &before)
+            .expect("import runs");
+
+        assert_eq!(
+            engine.catalog.get_rating(item.id).unwrap(),
+            2,
+            "a rating set during the import must not be overwritten by the sidecar"
+        );
+        let title = engine
+            .catalog
+            .get_item_by_id(item.id)
+            .unwrap()
+            .unwrap()
+            .title;
+        assert_eq!(title.as_deref(), Some("Mine"), "the user's title wins");
+        assert_eq!(
+            engine.catalog.get_color_label(item.id).unwrap(),
+            4,
+            "an untouched field still imports"
+        );
+        assert_eq!(
+            engine.catalog.get_caption(item.id).unwrap().as_deref(),
+            Some("Sidecar caption"),
+            "an untouched caption still imports"
+        );
+        drop(engine);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

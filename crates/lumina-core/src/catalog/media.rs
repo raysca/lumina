@@ -461,6 +461,19 @@ impl Catalog {
         )
     }
 
+    /// One item's color label (0 when none or unknown).
+    pub fn get_color_label(&self, id: MediaId) -> Result<u8> {
+        let conn = self.conn.lock();
+        let label: Option<i32> = conn
+            .query_row(
+                "SELECT color_label FROM media_items WHERE id = ?1;",
+                params![id.0 as i64],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(label.unwrap_or(0).clamp(0, 6) as u8)
+    }
+
     pub fn get_color_labels_map(&self) -> Result<HashMap<MediaId, u8>> {
         let conn = self.conn.lock();
         let mut stmt =
@@ -765,6 +778,18 @@ impl Catalog {
         )?;
 
         Ok(())
+    }
+
+    /// One item's caption, if it has one.
+    pub fn get_caption(&self, id: MediaId) -> Result<Option<String>> {
+        let conn = self.conn.lock();
+        Ok(conn
+            .query_row(
+                "SELECT caption FROM media_captions WHERE media_id = ?1;",
+                params![id.0 as i64],
+                |row| row.get(0),
+            )
+            .optional()?)
     }
 
     pub fn get_captions_map(&self) -> Result<HashMap<MediaId, String>> {

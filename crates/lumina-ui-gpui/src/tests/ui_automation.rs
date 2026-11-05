@@ -893,6 +893,8 @@ fn ui_automation_export_writes_originals_and_sidecars() {
         app.selected_item = Some(item.clone());
         app.export_to_folder(destination.clone(), cx);
     });
+    // The copy runs in the background.
+    render_ui(vcx);
 
     let copied = destination.join(&item.file_name);
     assert!(copied.exists(), "export must copy the original file");
@@ -1062,6 +1064,8 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
     view.update(vcx, |app, cx| {
         app.import_sidecars_selected(cx);
     });
+    // The sidecars are read in the background.
+    render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item

@@ -7,6 +7,7 @@ pub mod first_scan;
 pub mod history;
 pub mod import;
 pub mod info_details;
+pub mod jobs;
 pub mod keymap;
 pub mod library;
 pub mod missing;

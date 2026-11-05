@@ -430,6 +430,8 @@ pub struct LuminaApp {
     pub(crate) import: crate::app::import::ImportState,
     /// Network video import dialog and running download.
     pub(crate) network_import: crate::app::network_import::NetworkImportState,
+    /// Export and XMP import running in the background.
+    pub(crate) jobs: crate::app::jobs::ForegroundJobs,
     pub(crate) downloads: crate::app::downloads::DownloadQueue,
     pub caption: CaptionState,
     /// Reversible catalog edits (ratings, tags, captions, favorites, trash).
@@ -605,6 +607,7 @@ impl LuminaApp {
             missing_items: HashSet::new(),
             import: Default::default(),
             network_import: Default::default(),
+            jobs: Default::default(),
             downloads: Default::default(),
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),

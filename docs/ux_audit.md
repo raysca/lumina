@@ -208,9 +208,13 @@ produce the same seek behavior.
   per-card retry; Reveal in Finder stays available.
 - Empty states are a single line of text with no action button or visual.
 - Status bar shows the last action indefinitely; errors use a dismissible banner.
-- No toasts, no inline undo, no job center. Export runs synchronously in the UI
-  update and can block a large selection. Initial scan has a count but no
-  cancel/retry panel. Watcher changes are silent.
+- No inline undo and no job center. Export and XMP import run in the
+  background with a status-bar line ("Exporting 40 items…", "Reading XMP for
+  12 items…") and a final toast or error banner; a second one while the first
+  runs is refused with a toast. There is no per-item progress or cancel, and
+  Quit does not wait (at most one partial copy at the export destination).
+  Initial scan has a count but no cancel/retry panel. Watcher changes are
+  silent.
 
 **Target**
 

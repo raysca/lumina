@@ -286,3 +286,220 @@ fn trashing_in_the_viewer_moves_on_to_the_next_photo() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Selects every item of the view, as ⌘A does.
+fn select_all(view: &gpui::Entity<crate::app::LuminaApp>, vcx: &mut VisualTestContext) {
+    view.update(vcx, |app, cx| app.select_all(cx));
+}
+
+#[core::prelude::v1::test]
+fn export_runs_in_background_and_refuses_a_second() {
+    let (dir, engine) = seed_library("ui_thread_export", 3);
+    let destination = dir.join("exported");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    select_all(&view, vcx);
+
+    view.update(vcx, |app, cx| {
+        app.command_query = "export".to_string();
+        assert!(
+            app.palette_rows()
+                .iter()
+                .any(|row| row.selector == "command-item-command.export"),
+            "control: the palette lists Export while none runs"
+        );
+        app.command_query.clear();
+        app.export_to_folder(destination.clone(), cx);
+        assert_eq!(
+            app.jobs.export,
+            Some(3),
+            "the export is recorded as running before any file is copied"
+        );
+        assert!(
+            app.status_right_text().contains("Exporting 3 items"),
+            "the status bar names the running export, got {:?}",
+            app.status_right_text()
+        );
+        assert!(
+            !destination.exists(),
+            "the copy runs in the background, not inside the call"
+        );
+        app.command_query = "export".to_string();
+        assert!(
+            !app.palette_rows()
+                .iter()
+                .any(|row| row.selector == "command-item-command.export"),
+            "the palette hides Export while one runs"
+        );
+        app.command_query.clear();
+        app.export_to_folder(dir.join("second"), cx);
+        app.toast.dismiss();
+        app.export_pick_folder(cx);
+        assert_eq!(
+            app.toast.current().map(|t| t.message.as_str()),
+            Some("An export is already running"),
+            "the picker path refuses before any folder dialog opens"
+        );
+        assert_eq!(
+            app.toast.current().map(|t| t.message.as_str()),
+            Some("An export is already running"),
+            "a second export is refused, not queued"
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.jobs.export, None, "a finished export clears the job");
+        assert!(
+            app.toast
+                .current()
+                .is_some_and(|t| t.message.contains("Exported 3")),
+            "the result toast shows, got {:?}",
+            app.toast.current().map(|t| &t.message)
+        );
+    });
+    assert_eq!(
+        std::fs::read_dir(&destination)
+            .expect("the export folder exists")
+            .filter(|e| e
+                .as_ref()
+                .is_ok_and(|e| e.path().extension().is_some_and(|x| x == "jpg")))
+            .count(),
+        3,
+        "every selected file is copied"
+    );
+    assert!(
+        !dir.join("second").exists(),
+        "the refused export wrote nothing"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn export_failure_still_reaches_the_banner() {
+    let (dir, engine) = seed_library("ui_thread_export_fail", 2);
+    let destination = dir.join("not_a_folder");
+    std::fs::write(&destination, b"a file").unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    select_all(&view, vcx);
+
+    view.update(vcx, |app, cx| app.export_to_folder(destination.clone(), cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.jobs.export, None, "a failed export clears the job");
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Export failed")),
+            "a failed export reaches the error banner, got {:?}",
+            app.error_message
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn xmp_import_runs_in_background() {
+    let (dir, engine) = seed_library("ui_thread_xmp", 2);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    lumina_core::write_sidecar(
+        &item.path,
+        &lumina_core::SidecarMetadata {
+            rating: 4,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.import_sidecars_selected(cx);
+        assert_eq!(
+            app.jobs.xmp,
+            Some(1),
+            "the XMP import is recorded as running"
+        );
+        assert!(
+            app.status_right_text().contains("Reading XMP for 1 item"),
+            "the status bar names the running XMP import, got {:?}",
+            app.status_right_text()
+        );
+        assert_eq!(
+            engine.get_ratings_map().get(&item.id).copied().unwrap_or(0),
+            0,
+            "the sidecar is read in the background, not inside the call"
+        );
+        app.import_sidecars_selected(cx);
+        assert_eq!(
+            app.toast.current().map(|t| t.message.as_str()),
+            Some("An XMP import is already running"),
+            "a second XMP import is refused"
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.jobs.xmp, None, "a finished XMP import clears the job");
+        assert_eq!(
+            engine.get_ratings_map().get(&item.id).copied(),
+            Some(4),
+            "the sidecar rating lands in the catalog"
+        );
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied(),
+            Some(4),
+            "the same library refreshes after the import"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn xmp_result_after_library_switch_does_not_refresh_the_new_library() {
+    let (dir_a, engine_a) = seed_library("ui_thread_xmp_a", 2);
+    let (dir_b, _engine_b) = seed_library("ui_thread_xmp_b", 2);
+    let item = engine_a.get_item_slice(0..1)[0].clone();
+    lumina_core::write_sidecar(
+        &item.path,
+        &lumina_core::SidecarMetadata {
+            rating: 5,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine_a.clone());
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.import_sidecars_selected(cx);
+        assert_eq!(app.jobs.xmp, Some(1), "the XMP import is still running");
+        app.open_library(dir_b.clone(), cx);
+        // A marker a refresh would reset (nothing is selected in the new
+        // library). The new library's own scan never touches it.
+        app.batch_summary.count = 99;
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.jobs.xmp, None, "the job clears after a library switch");
+        assert!(
+            app.toast
+                .current()
+                .is_some_and(|t| t.message.starts_with("Imported 1 sidecar")),
+            "the result toast still shows, got {:?}",
+            app.toast.current().map(|t| &t.message)
+        );
+        assert_eq!(
+            app.batch_summary.count, 99,
+            "the old library's result must not refresh the new library's view"
+        );
+    });
+    assert_eq!(
+        engine_a.get_ratings_map().get(&item.id).copied(),
+        Some(5),
+        "the import still lands in the library it was started in"
+    );
+    let _ = std::fs::remove_dir_all(&dir_a);
+    let _ = std::fs::remove_dir_all(&dir_b);
+}

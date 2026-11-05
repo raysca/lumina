@@ -161,9 +161,9 @@ Keyboard: no new action. Rescan (⌘R) is the retry. **Size: S–M.**
 - The same shape for `import_sidecars_selected`; it calls `refresh_after_history` on success only when `library_generation` is unchanged. The menu (File → Import XMP Metadata) and palette paths both reach the refusal.
 - A Quit while a job runs is not blocked (open question 4); the worst case is one partial copy at the export destination.
 
-- [ ] Failing tests: `export_runs_in_background_and_refuses_a_second` (start an export of 3 items to a temp dir; before the background task runs, `jobs.export == Some(3)` and the status bar says Exporting; a second call does not spawn and shows the refusal toast; after run-until-parked the files exist, `jobs.export == None` and the toast shows); `export_failure_still_reaches_the_banner` (destination is a file, not a folder; `jobs.export` cleared); `xmp_import_runs_in_background` (sidecar rating lands in the catalog after run-until-parked, not before); `xmp_result_after_library_switch_does_not_refresh_the_new_library` (start, `open_library(other)`, run → toast shown, the new library's view is untouched).
-- [ ] Implement; PASS.
-- [ ] Docs: ux_audit §6 ("Export runs synchronously" is no longer true).
+- [x] Failing tests: `export_runs_in_background_and_refuses_a_second` (start an export of 3 items to a temp dir; before the background task runs, `jobs.export == Some(3)` and the status bar says Exporting; a second call does not spawn and shows the refusal toast; after run-until-parked the files exist, `jobs.export == None` and the toast shows); `export_failure_still_reaches_the_banner` (destination is a file, not a folder; `jobs.export` cleared); `xmp_import_runs_in_background` (sidecar rating lands in the catalog after run-until-parked, not before); `xmp_result_after_library_switch_does_not_refresh_the_new_library` (start, `open_library(other)`, run → toast shown, the new library's view is untouched).
+- [x] Implement; PASS.
+- [x] Docs: ux_audit §6 ("Export runs synchronously" is no longer true).
 
 Keyboard: unchanged (⌘K Export Selection…). **Size: M.**
 

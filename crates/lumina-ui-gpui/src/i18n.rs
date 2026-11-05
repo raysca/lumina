@@ -81,6 +81,12 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.forward" => "Forward",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
+        "jobs.export_running" => "An export is already running",
+        "jobs.xmp_running" => "An XMP import is already running",
+        "status.exporting_one" => "Exporting {n} item…",
+        "status.exporting_other" => "Exporting {n} items…",
+        "status.reading_xmp_one" => "Reading XMP for {n} item…",
+        "status.reading_xmp_other" => "Reading XMP for {n} items…",
         _ => return None,
     })
 }

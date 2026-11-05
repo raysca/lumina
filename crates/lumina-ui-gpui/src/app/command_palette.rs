@@ -497,6 +497,8 @@ impl LuminaApp {
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
+            CommandId::ExportSelection => self.jobs.export.is_none(),
+            CommandId::ImportXmp => self.jobs.xmp.is_none(),
             _ => true,
         }
     }

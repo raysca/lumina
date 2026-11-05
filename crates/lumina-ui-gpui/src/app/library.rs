@@ -678,6 +678,12 @@ impl LuminaApp {
 
     /// Opens a folder picker for exporting the current selection.
     pub fn export_pick_folder(&mut self, cx: &mut Context<Self>) {
+        // Refuse before the picker, so the user does not choose a folder
+        // only to be told an export is already running.
+        if self.jobs.export.is_some() {
+            self.show_toast(crate::i18n::t("jobs.export_running"), cx);
+            return;
+        }
         let selected = self.get_selected_ids();
         if selected.is_empty() {
             self.set_error("Select at least one item to export", cx);
@@ -695,97 +701,6 @@ impl LuminaApp {
             }
         })
         .detach();
-    }
-
-    /// Copies the selection into `folder`, writing XMP sidecars for annotated items.
-    pub fn export_to_folder(&mut self, folder: std::path::PathBuf, cx: &mut Context<Self>) {
-        let ids = self.get_selected_ids();
-        if ids.is_empty() {
-            return;
-        }
-        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
-            self.set_error("Open a library before exporting", cx);
-            return;
-        };
-        match engine.export_items(&ids, &folder) {
-            Ok(report) => {
-                let mut summary = format!(
-                    "Exported {} item(s) to {}",
-                    report.exported,
-                    folder.display()
-                );
-                if report.sidecars > 0 {
-                    summary.push_str(&format!(" ({} XMP sidecar(s))", report.sidecars));
-                }
-                self.set_last_action(summary);
-                if report.failed.is_empty() {
-                    self.show_toast(format!("Exported {} item(s)", report.exported), cx);
-                } else {
-                    let details = report
-                        .failed
-                        .iter()
-                        .take(3)
-                        .map(|(path, error)| format!("{}: {error}", path.display()))
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    self.set_error(
-                        format!("{} export(s) failed: {details}", report.failed.len()),
-                        cx,
-                    );
-                }
-            }
-            Err(err) => self.set_error(format!("Export failed: {err:#}"), cx),
-        }
-    }
-
-    /// Imports rating/title/caption/tags from adjacent XMP sidecars for the selection.
-    pub fn import_sidecars_selected(&mut self, cx: &mut Context<Self>) {
-        let ids = self.get_selected_ids();
-        if ids.is_empty() {
-            return;
-        }
-        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
-            self.set_error("Open a library before importing metadata", cx);
-            return;
-        };
-        match engine.import_sidecars(&ids) {
-            Ok(report) => {
-                self.refresh_after_history(cx);
-                let mut summary = format!(
-                    "Imported XMP metadata: {} sidecar(s), {} updated",
-                    report.imported, report.updated
-                );
-                if report.skipped > 0 {
-                    summary.push_str(&format!(", {} without sidecar", report.skipped));
-                }
-                self.set_last_action(summary);
-                if !report.failed.is_empty() {
-                    let details = report
-                        .failed
-                        .iter()
-                        .take(3)
-                        .map(|(path, error)| format!("{}: {error}", path.display()))
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    self.set_error(
-                        format!(
-                            "{} sidecar import(s) failed: {details}",
-                            report.failed.len()
-                        ),
-                        cx,
-                    );
-                } else {
-                    self.show_toast(
-                        format!(
-                            "Imported {} sidecar(s), {} updated",
-                            report.imported, report.updated
-                        ),
-                        cx,
-                    );
-                }
-            }
-            Err(err) => self.set_error(format!("XMP import failed: {err:#}"), cx),
-        }
     }
 
     /// The view's count from the sidebar's cached counts, without querying.

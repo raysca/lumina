@@ -27,6 +27,9 @@ impl LuminaApp {
         if let Some((done, total)) = self.import.progress {
             return format!("Importing… {done} of {total}");
         }
+        if let Some(job) = self.jobs.status_text() {
+            return job;
+        }
         let (is_scanning, scan_progress) = self
             .grid_state
             .as_ref()
