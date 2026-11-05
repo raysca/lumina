@@ -16,6 +16,7 @@ pub mod network_import;
 pub mod panels;
 pub mod pip;
 pub mod preferences;
+pub mod recents;
 pub mod render;
 pub mod smart_draft;
 pub mod sort;

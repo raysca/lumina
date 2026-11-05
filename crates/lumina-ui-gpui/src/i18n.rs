@@ -79,6 +79,17 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.cancel_import" => "Cancel Import",
         "command.back" => "Back",
         "command.forward" => "Forward",
+        "command.open_recent" => "Open Recent Library: {name}",
+        "command.clear_recents" => "Clear Recent Libraries",
+        "welcome.recent_heading" => "Recent Libraries",
+        "welcome.not_available" => "Not available",
+        "welcome.open_recent" => "Open {name}",
+        "welcome.remove_recent" => "Remove from Recent Libraries",
+        "welcome.remove_recent_named" => "Remove {name} from Recent Libraries",
+        "welcome.missing_library" => {
+            "Lumina can't find the library “{name}” at {path}. \
+            If it is on a drive, connect the drive. If you moved it, open it from its new place."
+        }
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",

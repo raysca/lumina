@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use gpui::prelude::FluentBuilder;
@@ -30,14 +31,43 @@ pub(crate) fn logo() -> Div {
         .child(render_icon(Icon::Sparkles, px(26.0), theme::accent_fg()))
 }
 
+/// A click handler for a welcome control.
+pub type WelcomeHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+
+/// One Recent Libraries row.
+pub struct RecentRow {
+    pub name: String,
+    pub path: String,
+    /// The folder was not there when checked; the row says so in text.
+    pub unavailable: bool,
+    /// Focused from the keyboard (↑/↓).
+    pub focused: bool,
+    pub on_open: WelcomeHandler,
+    pub on_remove: WelcomeHandler,
+}
+
+/// What the welcome screen shows (AGENTS §5.1: a struct, not a long
+/// parameter list).
+pub struct WelcomeProps {
+    pub on_pick_folder: WelcomeHandler,
+    pub on_pick_desktop_pics: WelcomeHandler,
+    pub has_desktop_pics: bool,
+    pub recents: Vec<RecentRow>,
+    /// The notice for a library that is not where it was.
+    pub missing_notice: Option<String>,
+}
+
 pub struct OnboardingView;
 
 impl OnboardingView {
-    pub fn render(
-        on_pick_folder: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-        on_pick_desktop_pics: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-        has_desktop_pics: bool,
-    ) -> impl IntoElement {
+    pub fn render(props: WelcomeProps) -> impl IntoElement {
+        let WelcomeProps {
+            on_pick_folder,
+            on_pick_desktop_pics,
+            has_desktop_pics,
+            recents,
+            missing_notice,
+        } = props;
         welcome_column().child(
             div()
                 .id("welcome-column")
@@ -48,6 +78,7 @@ impl OnboardingView {
                 .items_start()
                 .gap_6()
                 .child(logo().debug_selector(|| "welcome-logo".to_string()))
+                .children(missing_notice.map(missing_library_notice))
                 .child(
                     div()
                         .flex()
@@ -86,6 +117,9 @@ impl OnboardingView {
                             "Scrolls smoothly through tens of thousands of items.",
                         )),
                 )
+                .when(!recents.is_empty(), |column| {
+                    column.child(recent_libraries(recents))
+                })
                 .child(
                     div()
                         .w_full()
@@ -111,6 +145,154 @@ impl OnboardingView {
                 ),
         )
     }
+}
+
+/// The last or chosen library is not where it was.
+fn missing_library_notice(message: String) -> impl IntoElement {
+    div()
+        .id("welcome-missing-library")
+        .debug_selector(|| "welcome-missing-library".to_string())
+        .role(Role::Alert)
+        .aria_label(message.clone())
+        .w_full()
+        .flex()
+        .flex_row()
+        .items_start()
+        .gap_3()
+        .p_3()
+        .rounded(theme::RADIUS_LG)
+        .bg(theme::danger_bg())
+        .border_1()
+        .border_color(theme::danger_border())
+        .child(render_icon(
+            Icon::TriangleAlert,
+            px(15.0),
+            theme::danger_text(),
+        ))
+        .child(div().text_sm().text_color(theme::text()).child(message))
+}
+
+/// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets.
+fn recent_libraries(rows: Vec<RecentRow>) -> impl IntoElement {
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(theme::section_label(t("welcome.recent_heading")).mb_1())
+        .children(
+            rows.into_iter()
+                .enumerate()
+                .map(|(i, row)| recent_row(i, row)),
+        )
+}
+
+fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
+    let selector = format!("welcome-recent-{i}");
+    let remove_selector = format!("welcome-recent-remove-{i}");
+    let remove_label = t("welcome.remove_recent_named").replace("{name}", &row.name);
+    let on_remove = row.on_remove;
+    let mut open_label = t("welcome.open_recent").replace("{name}", &row.name);
+    if row.unavailable {
+        // Dimming alone says nothing to VoiceOver.
+        open_label = format!("{open_label}, {}", t("welcome.not_available"));
+    }
+    div()
+        .id(("welcome-recent", i))
+        .debug_selector(move || selector.clone())
+        .role(Role::Button)
+        .aria_label(open_label)
+        .w_full()
+        .h(px(44.0))
+        .px_3()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .rounded(theme::RADIUS_LG)
+        .border_1()
+        .cursor_pointer()
+        .map(|r| {
+            if row.focused {
+                r.bg(theme::selection_bg())
+                    .border_color(theme::focus_ring())
+            } else {
+                r.border_color(theme::border_subtle())
+                    .hover(|s| s.bg(theme::bg_control_hover()))
+            }
+        })
+        .on_click(row.on_open)
+        .child(render_icon(
+            Icon::Folder,
+            px(15.0),
+            if row.unavailable {
+                theme::text_disabled()
+            } else {
+                theme::text_muted()
+            },
+        ))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(if row.unavailable {
+                            theme::text_disabled()
+                        } else {
+                            theme::text()
+                        })
+                        .truncate()
+                        .child(row.name),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme::text_subtle())
+                        .truncate()
+                        .child(row.path),
+                ),
+        )
+        .when(row.unavailable, |r| {
+            let unavailable_selector = format!("welcome-recent-unavailable-{i}");
+            r.child(
+                div()
+                    .debug_selector(move || unavailable_selector.clone())
+                    .flex_none()
+                    .text_xs()
+                    .text_color(theme::text_muted())
+                    .child(t("welcome.not_available")),
+            )
+        })
+        .child(
+            div()
+                .id(("welcome-recent-remove", i))
+                .debug_selector(move || remove_selector.clone())
+                .role(Role::Button)
+                .aria_label(remove_label)
+                .flex_none()
+                .size(px(24.0))
+                .rounded(theme::RADIUS_MD)
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::bg_control_hover()))
+                .tooltip(theme::tooltip_label(format!(
+                    "{} (⌫)",
+                    t("welcome.remove_recent")
+                )))
+                .on_click(move |event, window, cx| {
+                    // The row behind it would open the library.
+                    cx.stop_propagation();
+                    on_remove(event, window, cx);
+                })
+                .child(render_icon(Icon::X, px(13.0), theme::text_muted())),
+        )
 }
 
 fn feature(icon: Icon, title: &'static str, body: &'static str) -> impl IntoElement {

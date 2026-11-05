@@ -228,3 +228,365 @@ fn a_replaced_librarys_late_scan_complete_is_ignored() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- Recent libraries and the missing-library notice (UX-1 Task 6) ----
+
+use crate::app::command_palette::{CommandId, PaletteTarget};
+use crate::app::downloads::DownloadsConfirm;
+use crate::app::library::FOLDER_PICKS;
+use crate::app::recents::{missing_library_message, startup_library};
+use crate::tests::downloads::{install, queue_app, settle, submit, TempLibrary};
+use std::path::PathBuf;
+
+/// An empty temporary folder, deleted when the test ends.
+fn temp_folder(name: &str) -> TempLibrary {
+    let dir = std::env::temp_dir().join(format!(
+        "lumina_uitest_recent_{name}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    TempLibrary(dir.canonicalize().unwrap())
+}
+
+fn welcome_with_recents(
+    cx: &mut gpui::TestAppContext,
+    recents: Vec<PathBuf>,
+) -> (Entity<LuminaApp>, &mut VisualTestContext) {
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    view.update(vcx, |app, cx| {
+        app.config.recent_libraries = recents;
+        cx.notify();
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    (view, vcx)
+}
+
+fn picks() -> usize {
+    FOLDER_PICKS.with(|n| n.get())
+}
+
+fn open_root(app: &LuminaApp) -> Option<PathBuf> {
+    app.grid_state
+        .as_ref()
+        .map(|state| state.engine.library_root().to_path_buf())
+}
+
+#[core::prelude::v1::test]
+fn welcome_lists_recents_and_enter_opens_focused() {
+    let (a, b) = (temp_folder("list_a"), temp_folder("list_b"));
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![a.to_path_buf(), b.to_path_buf()]);
+    for selector in ["welcome-recent-0", "welcome-recent-1"] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "{selector}: each recent library is listed"
+        );
+    }
+    let before = picks();
+    keystrokes(vcx, "down down");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.focused_recent, Some(1), "↓ moves the focus")
+    });
+    keystrokes(vcx, "up down enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(b.as_path()),
+            "↵ opens the focused recent"
+        );
+        assert_eq!(picks(), before, "↵ on a recent opens no folder picker");
+        assert_eq!(
+            app.config.recent_libraries,
+            vec![b.to_path_buf(), a.to_path_buf()],
+            "the opened library moves to the front"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn welcome_click_opens_a_recent() {
+    let a = temp_folder("click_a");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![a.to_path_buf()]);
+    click(vcx, "welcome-recent-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(a.as_path()),
+            "a click opens it"
+        )
+    });
+}
+
+#[core::prelude::v1::test]
+fn welcome_backspace_removes_focused_recent() {
+    let (a, b, c) = (
+        temp_folder("rm_a"),
+        temp_folder("rm_b"),
+        temp_folder("rm_c"),
+    );
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(
+        &mut cx,
+        vec![a.to_path_buf(), b.to_path_buf(), c.to_path_buf()],
+    );
+    keystrokes(vcx, "down down backspace");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.recent_libraries,
+            vec![a.to_path_buf(), c.to_path_buf()],
+            "⌫ forgets the focused recent"
+        );
+        assert_eq!(app.welcome.focused_recent, Some(1), "focus stays in place");
+    });
+    render_ui(vcx);
+    click(vcx, "welcome-recent-remove-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.recent_libraries,
+            vec![c.to_path_buf()],
+            "× forgets its row"
+        );
+        assert!(app.grid_state.is_none(), "× does not open the row");
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.focused_recent, None, "Esc clears the focus")
+    });
+    for dir in [&a, &b, &c] {
+        assert!(dir.is_dir(), "forgetting a recent never deletes its folder");
+    }
+}
+
+#[core::prelude::v1::test]
+fn failed_recents_save_reverts_and_shows_banner() {
+    let (a, b) = (temp_folder("save_a"), temp_folder("save_b"));
+    let mut cx = gpui::TestAppContext::single();
+    let recents = vec![a.to_path_buf(), b.to_path_buf()];
+    let (view, vcx) = welcome_with_recents(&mut cx, recents.clone());
+    view.update(vcx, |app, _| {
+        assert!(app.error_message.is_none(), "control: no banner yet")
+    });
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    keystrokes(vcx, "down backspace");
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.config.recent_libraries, recents,
+            "a failed save puts the removed recent back"
+        );
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not save settings")),
+            "and the banner says why, got {:?}",
+            app.error_message
+        );
+        app.clear_recents(cx);
+        assert_eq!(
+            app.config.recent_libraries, recents,
+            "clear is reverted too"
+        );
+    });
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+}
+
+#[core::prelude::v1::test]
+fn missing_last_library_shows_notice() {
+    let gone = temp_folder("gone").to_path_buf(); // deleted at once
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.config.last_library_path = Some(gone.clone());
+        let startup = startup_library(&app.config);
+        app.apply_startup_library(startup, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("welcome-missing-library").is_some(),
+        "a missing last library is explained, not skipped silently"
+    );
+    let name = gone.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(
+        missing_library_message(&gone).contains(&name),
+        "the notice names the folder"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.missing.as_deref(), Some(gone.as_path()));
+        assert!(app.grid_state.is_none());
+    });
+    let before = picks();
+    click(vcx, "pick-folder-btn");
+    keystrokes(vcx, "enter");
+    assert_eq!(picks(), before + 2, "the Open button and ↵ stay usable");
+}
+
+#[core::prelude::v1::test]
+fn enter_on_unavailable_recent_shows_notice_not_open() {
+    let gone = temp_folder("unavail").to_path_buf();
+    let here = temp_folder("avail");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![gone.clone(), here.to_path_buf()]);
+    // The off-thread check has answered; draw what it found.
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.welcome
+                .unavailable
+                .as_ref()
+                .is_some_and(|set| set.contains(&gone) && !set.contains(here.as_path())),
+            "the availability check finds the gone folder only"
+        )
+    });
+    assert!(
+        vcx.debug_bounds("welcome-recent-unavailable-0").is_some(),
+        "an unavailable recent says so in text"
+    );
+    assert!(vcx.debug_bounds("welcome-recent-unavailable-1").is_none());
+    keystrokes(vcx, "down enter");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "a gone folder is not opened");
+        assert_eq!(app.welcome.missing.as_deref(), Some(gone.as_path()));
+        assert_eq!(app.config.recent_libraries.len(), 2, "it stays in the list");
+    });
+    assert!(vcx.debug_bounds("welcome-missing-library").is_some());
+}
+
+fn library_rows(app: &LuminaApp) -> Vec<PathBuf> {
+    app.palette_rows()
+        .into_iter()
+        .filter_map(|row| match row.target {
+            PaletteTarget::Library(path) => Some(path),
+            _ => None,
+        })
+        .collect()
+}
+
+#[core::prelude::v1::test]
+fn palette_opens_a_recent_library() {
+    let (dir, engine) = seed_library("recent_palette", 1);
+    let current = TempLibrary(dir);
+    let other = temp_folder("palette_other");
+    let gone = temp_folder("palette_gone").to_path_buf();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        // While a library is open it is the first recent (open_library_inner).
+        app.config.recent_libraries = vec![
+            current.canonicalize().unwrap(),
+            other.to_path_buf(),
+            gone.clone(),
+        ];
+        app.welcome.unavailable = Some([gone.clone()].into_iter().collect());
+        assert_eq!(
+            library_rows(app),
+            vec![other.to_path_buf()],
+            "rows leave out the open library and unavailable ones"
+        );
+    });
+    keystrokes(vcx, "secondary-k o p e n space r e c e n t");
+    view.update(vcx, |app, _| {
+        let row = app
+            .palette_rows()
+            .into_iter()
+            .find(|row| matches!(row.target, PaletteTarget::Library(_)))
+            .expect("typing finds the recent");
+        assert!(
+            row.title
+                .contains(&other.file_name().unwrap().to_string_lossy().into_owned()),
+            "the row names the folder: {}",
+            row.title
+        );
+    });
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open);
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(other.as_path()),
+            "↵ opens it"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn palette_recent_while_downloading_asks_first() {
+    let (dir, engine, fake, mut cx) = queue_app("recent_dl");
+    let other = temp_folder("dl_other");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, "https://example.com/a.mp4");
+    settle(vcx, &view, "the job runs", |app| {
+        app.running_or_waiting_count() == 1
+    });
+    view.update(vcx, |app, cx| {
+        app.config.recent_libraries = vec![dir.canonicalize().unwrap(), other.to_path_buf()];
+        app.run_palette_target(PaletteTarget::Library(other.to_path_buf()), cx);
+        assert_eq!(
+            app.downloads.confirm,
+            Some(DownloadsConfirm::OpenLibrary(other.to_path_buf())),
+            "switching library with a running download asks first"
+        );
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(dir.as_path()),
+            "the library is unchanged"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn clear_recents_empties_the_list_only() {
+    let (dir, engine) = seed_library("recent_clear", 1);
+    let current = TempLibrary(dir);
+    let other = temp_folder("clear_other");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let clear_listed = |app: &LuminaApp| {
+        app.palette_rows()
+            .iter()
+            .any(|row| row.target == PaletteTarget::Command(CommandId::ClearRecents))
+    };
+    view.update(vcx, |app, cx| {
+        app.command_query = "clear recent".into();
+        assert!(
+            !clear_listed(app),
+            "nothing to clear: the command is hidden"
+        );
+        app.config.recent_libraries = vec![current.canonicalize().unwrap(), other.to_path_buf()];
+        assert!(clear_listed(app), "⌘K offers Clear Recent Libraries");
+        app.execute_command(CommandId::ClearRecents, cx);
+        assert!(app.config.recent_libraries.is_empty(), "the list is empty");
+        assert!(!clear_listed(app));
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(current.as_path()),
+            "the open library stays open"
+        );
+    });
+    assert!(current.join("catalog.db").is_file(), "its catalog is kept");
+    assert!(other.is_dir(), "the other folder is kept");
+}
+
+#[core::prelude::v1::test]
+fn failed_open_does_not_become_last_library() {
+    let folder = temp_folder("not_a_dir");
+    let file = folder.join("photo.jpg");
+    std::fs::write(&file, b"not a folder").unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    view.update(vcx, |app, cx| {
+        app.open_library_inner(file.clone(), cx);
+        assert!(app.grid_state.is_none(), "a file is not a library");
+        assert_eq!(
+            app.config.last_library_path, None,
+            "a failed open must not become the startup library"
+        );
+        assert!(app.config.recent_libraries.is_empty(), "nor a recent");
+        assert!(app.error_message.is_some(), "the banner says it failed");
+    });
+}

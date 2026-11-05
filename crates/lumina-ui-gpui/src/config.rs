@@ -368,6 +368,11 @@ pub struct AppConfig {
     /// files loading and keeps tests off the real config path.
     #[serde(default)]
     pub recent_searches: Vec<String>,
+    /// Libraries opened successfully, most recent first, canonical and
+    /// deduplicated (see `app::recents`). Forgetting one never touches its
+    /// folder or catalog.
+    #[serde(default)]
+    pub recent_libraries: Vec<PathBuf>,
     /// Per-video resume positions in seconds, keyed by media id.
     ///
     /// The value is a shared handle: grid playback state updates it in place,
@@ -457,6 +462,7 @@ impl Default for AppConfig {
             last_selected_media_id: None,
             last_scroll_anchor_id: None,
             recent_searches: Vec::new(),
+            recent_libraries: Vec::new(),
             resume_positions: ResumePositions::default(),
             external_editor: None,
         }

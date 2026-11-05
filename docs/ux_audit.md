@@ -298,8 +298,12 @@ one step; every context action is discoverable from the command palette.
 **Current**
 
 - One welcome screen with Choose Photos Folder and an optional Pictures shortcut.
-- No guided setup, sample library, import options, progress, recent libraries or
-  error recovery.
+- Recent libraries on the welcome screen (keyboard: ↑/↓, ↵, ⌫) and in ⌘K
+  (Open Recent Library, Clear Recent Libraries). Forgetting one never deletes
+  its folder or catalog. A missing last library or recent is named in a notice
+  instead of being skipped silently.
+- No guided setup, sample library, import options or progress on the welcome
+  screen.
 
 **Target**
 

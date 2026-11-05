@@ -40,17 +40,43 @@ impl LuminaApp {
             }
             return;
         }
-        // Welcome: ↵ chooses a folder, ⇧↵ uses Pictures (when offered).
-        if self.grid_state.is_none() && key == "enter" {
-            if keystroke.modifiers.shift {
-                if !self.has_desktop_pics {
+        // Welcome: ↑/↓ focus a recent library and ↵ opens it; with none
+        // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌫
+        // forgets the focused recent, Esc clears the focus.
+        if self.grid_state.is_none() {
+            let plain = !cmd_or_ctrl && !keystroke.modifiers.alt && !keystroke.modifiers.shift;
+            let focused = self.welcome.focused_recent;
+            match key {
+                "enter" if keystroke.modifiers.shift => {
+                    if self.has_desktop_pics {
+                        self.open_pictures_library(cx);
+                    }
                     return;
                 }
-                self.open_pictures_library(cx);
-            } else {
-                self.pick_folder_dialog(cx);
+                "enter" => {
+                    match focused {
+                        Some(index) => self.open_recent_at(index, cx),
+                        None => self.pick_folder_dialog(cx),
+                    }
+                    return;
+                }
+                "up" | "down" if plain => {
+                    self.move_recent_focus(if key == "up" { -1 } else { 1 }, cx);
+                    return;
+                }
+                "backspace" | "delete" if plain => {
+                    if let Some(index) = focused {
+                        self.remove_recent_at(index, cx);
+                    }
+                    return;
+                }
+                "escape" if focused.is_some() => {
+                    self.welcome.focused_recent = None;
+                    cx.notify();
+                    return;
+                }
+                _ => {}
             }
-            return;
         }
 
         // The viewer's right-click menu is modal: Escape closes it and every

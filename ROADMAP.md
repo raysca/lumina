@@ -129,9 +129,13 @@ of the roadmap.
 
 ## 1. Onboarding and first-run
 
-**Current:** a welcome screen with one primary action (Choose Photos Folder) and
-one shortcut to Pictures. No guided setup, sample library, import options,
-recent libraries, or recovery guidance.
+**Current:** a welcome screen with one primary action (Choose Photos Folder),
+one shortcut to Pictures, and a Recent Libraries list (up to 8, most recent
+first; ↑/↓ and ↵ open one, ⌫ or × forgets one without touching its folder or
+catalog; a missing folder is marked "Not available"). If the last library is
+gone at launch, the welcome screen says which folder is missing. ⌘K has Open
+Recent Library and Clear Recent Libraries. No guided setup, sample library or
+import options.
 
 **Target:**
 

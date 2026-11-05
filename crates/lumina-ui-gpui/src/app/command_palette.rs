@@ -8,6 +8,7 @@ use crate::views::inspector::InspectorTab;
 use crate::views::sidebar::AlbumSelection;
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 
 /// Commands shown at once; typing reaches the rest.
 pub const MAX_COMMANDS: usize = 8;
@@ -62,6 +63,8 @@ pub enum CommandId {
     /// Browsing history; shown only when it would move.
     Back,
     Forward,
+    /// Forgets every recent library; shown only when there are some.
+    ClearRecents,
 }
 
 pub struct Command {
@@ -109,6 +112,7 @@ impl Command {
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
+            ClearRecents => Icon::X,
             Back => Icon::ChevronLeft,
             Forward => Icon::ChevronRight,
         }
@@ -121,6 +125,8 @@ pub enum PaletteTarget {
     Command(CommandId),
     Go(AlbumSelection),
     Year(i32),
+    /// Open Recent Library: switches to that library.
+    Library(std::path::PathBuf),
 }
 
 /// One rendered palette row: a command, or a GO TO destination.
@@ -467,6 +473,12 @@ pub fn commands() -> &'static [Command] {
             shortcut: "⌘]",
             keywords: "history next go redo",
         },
+        Command {
+            id: CommandId::ClearRecents,
+            key: "command.clear_recents",
+            shortcut: "",
+            keywords: "forget remove history libraries",
+        },
     ]
 }
 
@@ -491,6 +503,7 @@ impl LuminaApp {
             CommandId::RetryError => self.error_retry.is_some(),
             CommandId::Back => self.can_navigate_back(),
             CommandId::Forward => self.can_navigate_forward(),
+            CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
@@ -531,7 +544,26 @@ impl LuminaApp {
             icon,
             selector: format!("palette-go-{slug}"),
         };
-        let mut go_to = vec![
+        // open_library_inner puts every opened library first, so while one
+        // is open the first recent is it.
+        let skip_current = usize::from(self.grid_state.is_some());
+        let mut go_to: Vec<PaletteRow> = self
+            .config
+            .recent_libraries
+            .iter()
+            .enumerate()
+            .skip(skip_current)
+            .filter(|(_, path)| !self.recent_unavailable(path))
+            .map(|(i, path)| PaletteRow {
+                target: PaletteTarget::Library(path.clone()),
+                title: t("command.open_recent")
+                    .replace("{name}", &crate::app::recents::library_name(path)),
+                shortcut: "",
+                icon: Icon::Folder,
+                selector: format!("palette-recent-{i}"),
+            })
+            .collect();
+        go_to.extend([
             go(
                 AlbumSelection::AllLibrary,
                 "All Photos".into(),
@@ -574,7 +606,7 @@ impl LuminaApp {
                 Icon::Repeat,
                 "duplicates".into(),
             ),
-        ];
+        ]);
         go_to.extend(
             self.timeline_year_buckets
                 .iter()
@@ -639,6 +671,10 @@ impl LuminaApp {
             PaletteTarget::Go(selection) => {
                 self.close_command_palette(cx);
                 self.select_album(selection, cx);
+            }
+            PaletteTarget::Library(path) => {
+                self.close_command_palette(cx);
+                self.open_recent_library(path, cx);
             }
             PaletteTarget::Year(year) => {
                 self.close_command_palette(cx);
@@ -724,6 +760,7 @@ impl LuminaApp {
             CommandId::OpenTagManager => self.open_tag_manager(cx),
             CommandId::Back => self.navigate_back(cx),
             CommandId::Forward => self.navigate_forward(cx),
+            CommandId::ClearRecents => self.clear_recents(cx),
         }
     }
 }

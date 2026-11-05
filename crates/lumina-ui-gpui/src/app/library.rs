@@ -580,13 +580,8 @@ impl LuminaApp {
         // PiP plays media from the library being closed.
         self.close_pip(cx);
 
-        self.config.last_library_path = Some(path.clone());
         // Tests must never write the user's real config or catalogs: they keep
         // the catalog inside the (temporary) library folder instead.
-        #[cfg(not(test))]
-        if let Err(err) = self.config.save() {
-            self.set_error(format!("Could not save settings: {err}"), cx);
-        }
         #[cfg(not(test))]
         let opened = LuminaEngine::open(path.clone());
         #[cfg(test)]
@@ -604,6 +599,15 @@ impl LuminaApp {
                 return;
             }
         };
+        // Only a library that opened becomes the startup library and a recent.
+        self.config.last_library_path = Some(path.clone());
+        crate::app::recents::push_recent(&mut self.config.recent_libraries, &path);
+        self.welcome.missing = None;
+        self.welcome.focused_recent = None;
+        #[cfg(not(test))]
+        if let Err(err) = self.config.save() {
+            self.set_error(format!("Could not save settings: {err}"), cx);
+        }
 
         self.last_scan_at = None;
         // Share the config's resume map so playback positions recorded in the

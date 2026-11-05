@@ -98,7 +98,7 @@ pub(crate) fn settle(
 }
 
 /// A seeded test library, deleted when the test ends (pass or fail).
-pub(crate) struct TempLibrary(std::path::PathBuf);
+pub(crate) struct TempLibrary(pub(crate) std::path::PathBuf);
 
 impl std::ops::Deref for TempLibrary {
     type Target = std::path::PathBuf;

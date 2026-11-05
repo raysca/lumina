@@ -303,6 +303,7 @@ impl Render for LuminaApp {
         }
 
         if self.grid_state.is_none() {
+            self.check_recent_availability(cx);
             return div()
                 .size_full()
                 .font_family(theme::FONT_SANS)
@@ -314,15 +315,7 @@ impl Render for LuminaApp {
                 .flex_col()
                 .relative()
                 .child(self.render_error_banner(cx))
-                .child(OnboardingView::render(
-                    cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                        this.pick_folder_dialog(cx);
-                    }),
-                    cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                        this.open_pictures_library(cx);
-                    }),
-                    self.has_desktop_pics,
-                ))
+                .child(OnboardingView::render(self.welcome_props(cx)))
                 .child(self.render_toast_overlay(cx))
                 .into_any_element();
         }

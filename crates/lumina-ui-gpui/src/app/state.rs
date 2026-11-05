@@ -318,6 +318,8 @@ pub struct LuminaApp {
     pub has_desktop_pics: bool,
     /// "Building your library" while an empty catalog is first scanned.
     pub first_scan: Option<crate::app::first_scan::FirstScanState>,
+    /// Welcome screen: recent-library focus, availability, missing notice.
+    pub(crate) welcome: crate::app::recents::WelcomeState,
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub focus_handle: FocusHandle,
 
@@ -530,6 +532,7 @@ impl LuminaApp {
             retired_images: Vec::new(),
             has_desktop_pics,
             first_scan: None,
+            welcome: Default::default(),
             ui_tx,
             focus_handle,
             sidebar_collapsed: !config.sidebar_visible,
@@ -624,19 +627,29 @@ impl LuminaApp {
         // If previously selected library exists, open it immediately.
         // Tests are isolated: they must set up their own temporary library.
         #[cfg(not(test))]
-        if let Some(ref path) = config.last_library_path {
-            if path.exists() && path.is_dir() {
-                // Startup keeps the pending restore; a user-chosen folder clears it.
-                app.open_library_inner(path.clone(), cx);
-            }
-        }
+        app.apply_startup_library(crate::app::recents::startup_library(&config), cx);
 
         app
     }
 
+    /// Writes the config, putting a failure in the error banner. Callers that
+    /// must revert an optimistic change on failure use [`Self::try_save_config`].
     pub fn save_config(&mut self) {
+        if let Err(err) = self.try_save_config() {
+            self.error_message = Some(format!("Could not save settings: {err}"));
+        }
+    }
+
+    /// Writes the config with the live window, layout and session state.
+    /// A no-op under test (AGENTS §2), unless the test-only `SAVE_FAILS` asks it to fail.
+    pub(crate) fn try_save_config(&mut self) -> anyhow::Result<()> {
         #[cfg(test)]
-        return;
+        {
+            if SAVE_FAILS.with(std::cell::Cell::get) {
+                anyhow::bail!("the disk is full");
+            }
+            Ok(())
+        }
         #[cfg(not(test))]
         {
             let mut cfg = self.config.clone();
@@ -669,9 +682,7 @@ impl LuminaApp {
                 cfg.window_width = Some(width);
                 cfg.window_height = Some(height);
             }
-            if let Err(err) = cfg.save() {
-                self.error_message = Some(format!("Could not save settings: {err}"));
-            }
+            cfg.save()
         }
     }
 
@@ -924,4 +935,11 @@ pub struct MonthHeader {
     /// (year, month) of the first visible item, recorded while rows render.
     pub top: Option<(i32, u32)>,
     pub counts: HashMap<(i32, u32), usize>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Makes [`LuminaApp::try_save_config`] fail on this test thread, so the
+    /// revert-on-failure paths can be tested without a real config file.
+    pub(crate) static SAVE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
