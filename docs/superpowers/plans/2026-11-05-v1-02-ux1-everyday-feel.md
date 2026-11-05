@@ -238,9 +238,9 @@ Two commits: 7a (menu actions on the welcome and first-scan roots, a bug fix) an
 
 ### Task 9: Docs sweep
 
-- [ ] ROADMAP §1 and §9 "Current", and the backlog rows 521-523: mark Back/Forward, restore, skeletons, toasts and empty states as shipped, and say what is still missing (job center, watcher summary, shared-element motion).
-- [ ] `docs/ux_audit.md` §1, §3, §6 and §9 "Current" bullets. Several are stale today: it claims no toasts and no skeletons, says empty states are a single line, and says thumbnails appear abruptly.
-- [ ] Run the full gate: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace`, `make ui-smoke`. `make bench` is not needed: no SQL changes, and `grid_top_item_id` reads only cached rows. Task 3 does add one `thumb_failures` lock per uncached visible card per frame, the same cost as the existing `texture_cache` lock beside it, and removes the per-frame re-decode of failed items; note this in the commit instead of a bench run.
+- [x] ROADMAP §1 and §9 "Current", and the backlog rows 521-523: mark Back/Forward, restore, skeletons, toasts and empty states as shipped, and say what is still missing (job center, watcher summary, shared-element motion).
+- [x] `docs/ux_audit.md` §1, §3, §6 and §9 "Current" bullets. Several are stale today: it claims no toasts and no skeletons, says empty states are a single line, and says thumbnails appear abruptly.
+- [x] Run the full gate: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace`, `make ui-smoke`. `make bench` is not needed: no SQL changes, and `grid_top_item_id` reads only cached rows. Task 3 does add one `thumb_failures` lock per uncached visible card per frame, the same cost as the existing `texture_cache` lock beside it, and removes the per-frame re-decode of failed items; note this in the commit instead of a bench run.
 
 **Size: S.**
 

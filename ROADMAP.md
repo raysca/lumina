@@ -337,8 +337,17 @@ Detailed audit: [docs/ux_audit.md](docs/ux_audit.md).
 sheet, persisted window/layout/sort, Back/Forward history, and a restored
 browsing context on relaunch (view, search, year, selection and grid scroll
 position; dropped if the user acts during the startup scan; Quit saves it).
-Toasts with Undo and skeleton cards exist. There is no selection/open
-animation, pointer-anchored grid zoom, or real video scrub previews.
+A toast (one at a time) with Undo for reversible actions; static skeleton
+cards that the decoded thumbnail fades into, and a "No preview" card when a
+thumbnail cannot be decoded; empty states with an icon, a sentence and an action
+(Show all photos, Edit Rules…, Rescan, Choose Another Folder…, or removable
+search terms). The viewer fades in on open and keeps the full stage while a
+frame decodes; menus, dialogs and the palette fade in. Export and Import XMP
+Metadata run off the UI thread with a status-bar line and a final toast.
+Still missing: a background job center, per-item export progress and cancel,
+a watcher summary (watcher changes are silent), shared-element viewer
+open/close, item crossfade, animated grid reflow, and real video scrub
+previews.
 
 **Target:**
 
@@ -530,9 +539,9 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P0 | Top | Signed/notarized release + CI validation | 0.2.x | Needs Apple credentials and a native CI run. |
 | P0 | Top | Onboarding + import/copy + import templates/verification | 0.3 | Core new-user and data-ingestion path. |
 | P0 | Top | Migration importers (Photos, Takeout, Lightroom) | 0.3 | Removes switching friction. |
-| P0 | Top | Selection/open/hover states + motion foundation | 0.3 | UX-1; single click selects, double click opens. |
-| P0 | Top | Back/forward, restore last view/selection/scroll | 0.3 | UX-1 navigation continuity. |
-| P0 | Top | Skeletons, actionable empty states, toasts/undo, background jobs | 0.3 | UX-1 feedback and orientation. |
+| P0 | Top | Selection/open/hover states + motion foundation | 0.3 | UX-1; single click selects, double click opens. Shipped: selection/open semantics, motion tokens, overlay/toast/thumbnail fades. Missing: shared-element viewer motion, item crossfade. |
+| P0 | Top | Back/forward, restore last view/selection/scroll | 0.3 | UX-1 navigation continuity. Shipped (Go menu, ⌘[ / ⌘], ⌘K; restore on relaunch). Missing: recent views, clickable breadcrumbs. |
+| P0 | Top | Skeletons, actionable empty states, toasts/undo, background jobs | 0.3 | UX-1 feedback and orientation. Shipped: skeletons, "No preview" cards, actionable empty states, toast with Undo, export and XMP import off the UI thread. Missing: job center, per-item progress/cancel, watcher summary. |
 | P0 | Top | Grid/viewer zoom anchoring + pinch/presets | 0.4 | UX-2 precision browsing. |
 | P0 | Top | Video drag-scrub with real previews + resume | 0.4 | UX-2 everyday media controls. |
 | P0 | Top | Search/filter/tag/smart-album polish | 0.4 | UX-2 correctness and discoverability. |

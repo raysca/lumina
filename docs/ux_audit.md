@@ -50,13 +50,14 @@ even when the feature list is strong.
   session. The viewer is not reopened; Enter opens the restored selection.
 - Closing the viewer leaves the grid where it was (the grid stays mounted).
 - Sidebar sections do not collapse; albums/tags cannot be pinned or reordered.
-- Switching library or album clears search, year and selection without a way to
-  return.
+- Switching album clears search, year and selection; Back returns to the
+  previous view. Opening another library starts a fresh Back/Forward trail.
 
 **Missing / weak**
 
 - No branching trail; Back/Forward is a single linear stack (50 entries).
-- No recent libraries or recent views.
+- No recent views (recent libraries are on the welcome screen and in Cmd+K;
+  see §9).
 - No "reset restored view" action (the sidebar, Cmd+K Go to rows and Cmd+[
   return to All Photos).
 - No clickable breadcrumb or "return to album" affordance.
@@ -215,15 +216,21 @@ produce the same seek behavior.
   preview", with a tooltip saying Rescan tries again. It is not decoded again
   until the file changes or the library is rescanned (⌘R). There is no
   per-card retry; Reveal in Finder stays available.
-- Empty states are a single line of text with no action button or visual.
+- Empty states have an icon, a title, a sentence and, where one helps, an
+  action: Show all photos, Edit Rules… for a smart album, Manage tags, Rescan
+  or Choose Another Folder… for an empty library, and a removable chip per
+  search term. Recently Deleted and Duplicates explain themselves without a
+  button.
 - Status bar shows the last action indefinitely; errors use a dismissible banner.
-- No inline undo and no job center. Export and XMP import run in the
+- One toast at a time (no stack), with Undo for reversible actions; it closes
+  after 8 s unless hovered. No job center. Export and XMP import run in the
   background with a status-bar line ("Exporting 40 items…", "Reading XMP for
   12 items…") and a final toast or error banner; a second one while the first
   runs is refused with a toast. There is no per-item progress or cancel, and
   Quit does not wait (at most one partial copy at the export destination).
-  Initial scan has a count but no cancel/retry panel. Watcher changes are
-  silent.
+  The first scan of an empty library shows a progress screen (count, current
+  file, time estimate) with Stop Scan; rescans of a populated library show
+  only a status-bar count, with no cancel. Watcher changes are silent.
 
 **Target**
 
@@ -297,16 +304,18 @@ one step; every context action is discoverable from the command palette.
 
 **Current**
 
-- One welcome screen with two paths, Open Existing Library… (↵) and Import
-  into New Library… (⇧⌘I, also File > Import… there), plus a Use Pictures
-  Folder link (⇧↵). Each shows its shortcut. The copy explains local-first
+- One welcome screen with three paths, Open Existing Library… (↵), Import
+  into New Library… (⇧⌘I, also File > Import… there) and Explore a Sample
+  Library (⌥↵: 24 generated gradient photos with no EXIF or places, written
+  to Application Support and opened as an ordinary library), plus a Use
+  Pictures Folder link (⇧↵). Each shows its shortcut. The copy explains local-first
   storage: Lumina works on photos where they are or copies them in, never
   changes the originals, and keeps its catalog in Application Support.
 - Recent libraries on the welcome screen (keyboard: ↑/↓, ↵, ⌫) and in ⌘K
   (Open Recent Library, Clear Recent Libraries). Forgetting one never deletes
   its folder or catalog. A missing last library or recent is named in a notice
   instead of being skipped silently.
-- No guided setup, sample library or import options on the welcome screen.
+- No guided setup or import options on the welcome screen.
 
 **Target**
 
