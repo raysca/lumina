@@ -119,7 +119,6 @@ impl Render for FloatingInspectorView {
         };
 
         let app_key_event = self.app.clone();
-        let app_traffic_close = self.app.clone();
 
         crate::app::text_input::field_input_actions(div(), &app)
             .id("floating-inspector-root")
@@ -137,7 +136,7 @@ impl Render for FloatingInspectorView {
             .flex()
             .flex_col()
             .overflow_hidden()
-            // 1. Draggable macOS Titlebar with Traffic Lights & Window Title
+            // 1. Draggable titlebar; the system draws the traffic lights.
             .child(
                 div()
                     .id("floating-inspector-titlebar")
@@ -151,55 +150,11 @@ impl Render for FloatingInspectorView {
                     .border_color(theme::border_subtle())
                     .flex()
                     .flex_row()
-                    .justify_between()
+                    .justify_end()
                     .items_center()
                     .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
                         window.start_window_move();
                     })
-                    // Left: Traffic Light dots
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            // Close (red)
-                            .child(
-                                div()
-                                    .id("traffic-light-close")
-                                    .w(px(12.0))
-                                    .h(px(12.0))
-                                    .rounded_full()
-                                    .bg(theme::label_red())
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, window, cx| {
-                                            if let Some(app_entity) = app_traffic_close.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.floating_inspector_closed(cx);
-                                                });
-                                            }
-                                            window.remove_window();
-                                        },
-                                    )),
-                            )
-                            // Minimize (yellow)
-                            .child(
-                                div()
-                                    .w(px(12.0))
-                                    .h(px(12.0))
-                                    .rounded_full()
-                                    .bg(theme::label_yellow()),
-                            )
-                            // Zoom (green)
-                            .child(
-                                div()
-                                    .w(px(12.0))
-                                    .h(px(12.0))
-                                    .rounded_full()
-                                    .bg(theme::label_green()),
-                            ),
-                    )
                     // Center: window title, centred on the bar (v3: 13px medium).
                     .child(
                         div()
@@ -221,7 +176,7 @@ impl Render for FloatingInspectorView {
                                     .child(window_title),
                             ),
                     )
-                    // Right: icon-only Dock; the traffic lights close the window.
+                    // Right: icon-only Dock.
                     .child(
                         div()
                             .id("floating-inspector-redock-btn")

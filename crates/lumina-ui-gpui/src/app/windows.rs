@@ -21,7 +21,8 @@ pub fn open_floating_inspector_window(
             titlebar: Some(TitlebarOptions {
                 title: Some("Inspector".into()),
                 appears_transparent: true,
-                ..Default::default()
+                // Centred in the 38px titlebar the view draws.
+                traffic_light_position: Some(point(px(14.0), px(12.0))),
             }),
             ..Default::default()
         },
