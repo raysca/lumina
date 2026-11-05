@@ -102,6 +102,12 @@ fn en_us(key: &str) -> Option<&'static str> {
         "welcome.open_existing" => "Open Existing Library…",
         "welcome.import_new" => "Import into New Library…",
         "welcome.use_pictures" => "Use Pictures Folder",
+        "welcome.sample" => "Explore a Sample Library",
+        "welcome.sample_preparing" => "Preparing the Sample Library…",
+        "welcome.sample_failed" => "Could not prepare the sample library",
+        "welcome.sample_no_folder" => {
+            "Could not prepare the sample library: this Mac has no Application Support folder"
+        }
         "welcome.footer" => "You can open another library later with File > Open Library… (⌘O).",
         "welcome.recent_heading" => "Recent Libraries",
         "welcome.not_available" => "Not available",

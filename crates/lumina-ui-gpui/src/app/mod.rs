@@ -18,6 +18,7 @@ pub mod pip;
 pub mod preferences;
 pub mod recents;
 pub mod render;
+pub mod sample;
 pub mod smart_draft;
 pub mod sort;
 pub mod state;

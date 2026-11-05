@@ -56,6 +56,10 @@ pub struct WelcomeProps {
     /// Use Pictures Folder (⇧↵), shown only when there is one.
     pub on_pick_desktop_pics: WelcomeHandler,
     pub has_desktop_pics: bool,
+    /// Explore a Sample Library (⌥↵).
+    pub on_sample: WelcomeHandler,
+    /// The sample photos are being written.
+    pub sample_busy: bool,
     pub recents: Vec<RecentRow>,
     /// The notice for a library that is not where it was.
     pub missing_notice: Option<String>,
@@ -70,6 +74,8 @@ impl OnboardingView {
             on_import_new,
             on_pick_desktop_pics,
             has_desktop_pics,
+            on_sample,
+            sample_busy,
             recents,
             missing_notice,
         } = props;
@@ -152,7 +158,32 @@ impl OnboardingView {
                                 .on_click(on_import_new),
                         ),
                 )
-                .children(has_desktop_pics.then(|| pictures_link(on_pick_desktop_pics)))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .gap_6()
+                        .child(text_link(
+                            "welcome-sample-btn",
+                            Role::Button,
+                            if sample_busy {
+                                t("welcome.sample_preparing")
+                            } else {
+                                t("welcome.sample")
+                            },
+                            ("welcome-sample-key", "⌥↵"),
+                            on_sample,
+                        ))
+                        .children(has_desktop_pics.then(|| {
+                            text_link(
+                                "welcome-pictures-link",
+                                Role::Link,
+                                t("welcome.use_pictures"),
+                                ("welcome-pictures-key", "⇧↵"),
+                                on_pick_desktop_pics,
+                            )
+                        })),
+                )
                 .child(
                     div()
                         .text_xs()
@@ -170,14 +201,20 @@ fn shortcut_hint(selector: &'static str, keys: &'static str) -> Div {
         .flex_none()
 }
 
-/// "Use Pictures Folder": a quiet secondary link under the two buttons.
-fn pictures_link(on_click: WelcomeHandler) -> impl IntoElement {
-    let label = t("welcome.use_pictures");
+/// A quiet secondary path under the two buttons ("Explore a Sample
+/// Library", "Use Pictures Folder"), with its shortcut shown beside it.
+fn text_link(
+    id: &'static str,
+    role: Role,
+    label: String,
+    (hint_id, keys): (&'static str, &'static str),
+    on_click: WelcomeHandler,
+) -> impl IntoElement {
     div()
-        .id("welcome-pictures-link")
-        .debug_selector(|| "welcome-pictures-link".to_string())
-        .role(Role::Link)
-        .aria_label(format!("{label} (⇧↵)"))
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .role(role)
+        .aria_label(format!("{label} ({keys})"))
         .flex()
         .flex_row()
         .items_center()
@@ -188,7 +225,7 @@ fn pictures_link(on_click: WelcomeHandler) -> impl IntoElement {
         .hover(|s| s.underline())
         .on_click(on_click)
         .child(label)
-        .child(shortcut_hint("welcome-pictures-key", "⇧↵"))
+        .child(shortcut_hint(hint_id, keys))
 }
 
 /// The last or chosen library is not where it was.

@@ -5,6 +5,7 @@ pub mod duplicates;
 pub mod geocoder;
 pub mod import;
 pub mod net_import;
+pub mod sample;
 pub mod scanner;
 pub mod search;
 pub mod smart_albums;

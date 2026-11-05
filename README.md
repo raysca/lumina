@@ -85,7 +85,11 @@ core handles cataloguing, decoding, and search.
 cargo run -p lumina-ui-gpui        # or: make dev
 ```
 
-Use **Choose Folder** to open a photo library. Lumina stores its catalog in
+On first run the welcome screen offers **Open Existing Library…** (↵),
+**Import into New Library…** (⇧⌘I), **Explore a Sample Library** (⌥↵: 24
+generated gradient photos written to
+`~/Library/Application Support/lumina/Sample Library/`, then opened like any
+other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog in
 `~/Library/Application Support/lumina/` and thumbnails in
 `~/Library/Caches/lumina/thumbnails/`; UI preferences live in
 `~/Library/Application Support/lumina/config.json`.

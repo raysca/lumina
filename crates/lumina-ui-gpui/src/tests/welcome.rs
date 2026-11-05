@@ -48,6 +48,7 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
         "welcome-open-key",
         "welcome-import-new-key",
         "welcome-pictures-key",
+        "welcome-sample-key",
     ] {
         assert!(
             vcx.debug_bounds(hint).is_some(),
@@ -925,4 +926,138 @@ fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
         before,
         "a rescan's ScanComplete must not open the import picker out of nowhere"
     );
+}
+
+// ---- Explore a Sample Library (Task 8) ----
+
+fn sample_opens() -> usize {
+    crate::app::sample::SAMPLE_OPENS.with(|n| n.get())
+}
+
+fn sample_files(dir: &std::path::Path) -> usize {
+    std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().starts_with("sample_"))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[core::prelude::v1::test]
+fn sample_button_opens_the_sample_library() {
+    let folder = temp_folder("sample");
+    let dest = folder.join("Sample Library");
+    let other = folder.join("Second Request");
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+
+    let before = sample_opens();
+    click(vcx, "welcome-sample-btn");
+    assert_eq!(
+        sample_opens(),
+        before + 1,
+        "the button asks for the sample library"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.open_sample_library_at(dest.clone(), cx);
+        assert!(
+            app.grid_state.is_none(),
+            "the photos are written off the UI thread before the library opens"
+        );
+        app.open_sample_library_at(other.clone(), cx);
+    });
+    vcx.run_until_parked();
+    render_ui(vcx);
+
+    assert_eq!(
+        sample_files(&dest),
+        lumina_core::sample::SAMPLE_COUNT,
+        "every sample photo is written"
+    );
+    assert!(
+        !other.exists(),
+        "a second request while the first is generating is ignored"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app),
+            dest.canonicalize().ok(),
+            "the sample library opens once its photos are written"
+        );
+        assert!(app.error_message.is_none(), "no banner on success");
+        assert!(!app.welcome.generating_sample, "the job is cleared");
+    });
+}
+
+#[core::prelude::v1::test]
+fn sample_generation_failure_reaches_the_banner() {
+    let folder = temp_folder("sample_fail");
+    let file = folder.join("Sample Library");
+    std::fs::write(&file, b"not a folder").unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| app.open_sample_library_at(file.clone(), cx));
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "no library opens after a failure");
+        let message = app.error_message.clone().unwrap_or_default();
+        assert!(
+            message.contains("sample library"),
+            "the banner says the sample library could not be prepared, got {message:?}"
+        );
+        assert!(
+            !app.welcome.generating_sample,
+            "a failure clears the job so the user can try again"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn welcome_alt_enter_explores_the_sample_library() {
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.has_desktop_pics = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let (samples, folders, pictures) = (sample_opens(), picks(), picture_opens());
+    keystrokes(vcx, "alt-enter");
+    assert_eq!(
+        sample_opens(),
+        samples + 1,
+        "⌥↵ explores the sample library"
+    );
+    keystrokes(vcx, "alt-shift-enter secondary-alt-enter");
+    assert_eq!(sample_opens(), samples + 1, "⌥⇧↵ and ⌥⌘↵ are not ⌥↵");
+    assert_eq!(picks(), folders, "⌥↵ is not ↵");
+    assert_eq!(picture_opens(), pictures, "⌥↵ is not ⇧↵");
+}
+
+#[core::prelude::v1::test]
+fn sample_ready_after_another_library_opened_keeps_that_library() {
+    let folder = temp_folder("sample_meanwhile");
+    let dest = folder.join("Sample Library");
+    let chosen = folder.join("Chosen");
+    std::fs::create_dir_all(&chosen).unwrap();
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.open_sample_library_at(dest.clone(), cx);
+        // The user picks a library while the sample photos are written.
+        app.open_library(chosen.clone(), cx);
+    });
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(chosen.as_path()),
+            "a sample that finishes later must not replace the library the user opened"
+        );
+        assert!(!app.welcome.generating_sample, "the busy state is cleared");
+    });
 }

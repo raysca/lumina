@@ -10,7 +10,8 @@ Lumina is designed to be usable without a mouse:
   sidebar destination (views, years, tags, smart albums). Type to filter (each
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
-  new library and `⇧↵` uses Pictures; each control shows its shortcut. With
+  new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
+  each control shows its shortcut. With
   recent libraries listed, `↑`/`↓` focus one, `↵` opens it, `⌫` forgets it
   (its folder and catalog stay) and `Esc` clears the focus. ⌘K offers Open
   Recent Library and Clear Recent Libraries once a library is open. The

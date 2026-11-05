@@ -25,6 +25,8 @@ pub(crate) struct WelcomeState {
     /// Recents whose folder is not there. `None` = not checked yet, shown
     /// as available.
     pub(crate) unavailable: Option<HashSet<PathBuf>>,
+    /// The sample library is being written (a second request is ignored).
+    pub(crate) generating_sample: bool,
     /// The list the last availability check was started for.
     checked: Option<Vec<PathBuf>>,
 }
@@ -241,6 +243,10 @@ impl LuminaApp {
             on_pick_desktop_pics: Box::new(
                 cx.listener(|this, _: &ClickEvent, _, cx| this.open_pictures_library(cx)),
             ),
+            on_sample: Box::new(
+                cx.listener(|this, _: &ClickEvent, _, cx| this.open_sample_library(cx)),
+            ),
+            sample_busy: self.welcome.generating_sample,
             has_desktop_pics: self.has_desktop_pics,
             recents,
             missing_notice: self.welcome.missing.as_deref().map(missing_library_message),

@@ -41,7 +41,8 @@ impl LuminaApp {
             return;
         }
         // Welcome: ↑/↓ focus a recent library and ↵ opens it; with none
-        // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌫
+        // focused ↵ chooses a folder. ⇧↵ uses Pictures (when offered), ⌥↵
+        // explores the sample library, ⌫
         // forgets the focused recent, Esc clears the focus (then the error
         // banner). ⌘O opens a library, ⇧⌘I imports into a new one (before
         // the global ⇧⌘I, which needs an open library) and ⌘, Preferences.
@@ -57,6 +58,11 @@ impl LuminaApp {
                     if self.has_desktop_pics {
                         self.open_pictures_library(cx);
                     }
+                }
+                "enter"
+                    if keystroke.modifiers.alt && !cmd_or_ctrl && !keystroke.modifiers.shift =>
+                {
+                    self.open_sample_library(cx)
                 }
                 "enter" if plain => match focused {
                     Some(index) => self.open_recent_at(index, cx),

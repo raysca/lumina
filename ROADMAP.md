@@ -129,17 +129,20 @@ of the roadmap.
 
 ## 1. Onboarding and first-run
 
-**Current:** a welcome screen with two paths, Open Existing Library… (↵) and
+**Current:** a welcome screen with three paths, Open Existing Library… (↵),
 Import into New Library… (⇧⌘I: choose or create a folder, it opens, and once
-its first scan is done Lumina asks for the photos to copy in), a secondary Use
+its first scan is done Lumina asks for the photos to copy in) and Explore a
+Sample Library (⌥↵: 24 generated gradient photos dated over the last 90 days,
+written off the UI thread to `Application Support/lumina/Sample Library` and
+then opened as an ordinary library, so it lands in recents), a secondary Use
 Pictures Folder link (⇧↵), copy that explains local-first storage (works on
 photos where they are or copies them in, never changes originals, catalog in
 Application Support), and a Recent Libraries list (up to 8, most recent
 first; ↑/↓ and ↵ open one, ⌫ or × forgets one without touching its folder or
 catalog; a missing folder is marked "Not available"). If the last library is
 gone at launch, the welcome screen says which folder is missing. ⌘K has Open
-Recent Library and Clear Recent Libraries. No guided setup, sample library or
-import options yet.
+Recent Library and Clear Recent Libraries. No guided setup or import options
+yet; the sample photos are plain gradients (no EXIF, places or people).
 
 **Target:**
 
