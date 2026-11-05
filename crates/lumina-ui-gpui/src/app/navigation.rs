@@ -359,6 +359,18 @@ impl LuminaApp {
         self.schedule_session_save(cx);
     }
 
+    /// Index of the top visible grid row, from the scroll offset (0 with no
+    /// library open).
+    pub(crate) fn grid_top_row(&self) -> usize {
+        let Some(state) = self.grid_state.as_ref() else {
+            return 0;
+        };
+        let scroll_y = f32::from(state.scroll_handle.0.borrow().base_handle.offset().y);
+        // Half a pixel of slack: a row scrolled exactly to the top can land a
+        // float rounding short of its boundary.
+        ((0.5 - scroll_y) / self.row_height()).floor().max(0.0) as usize
+    }
+
     /// Keeps the keyboard-selected row visible in the virtualized grid.
     pub(crate) fn reveal_grid_selection(&self) {
         let (Some(state), Some(index)) = (self.grid_state.as_ref(), self.selected_index) else {

@@ -6,6 +6,7 @@ mod downloads_panel;
 mod duplicates;
 mod editor_handoff;
 mod get_info;
+mod grid_scroll;
 mod history;
 mod immersive_hud;
 mod import;

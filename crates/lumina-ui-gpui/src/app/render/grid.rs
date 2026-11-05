@@ -131,6 +131,17 @@ impl LuminaApp {
                         let prefetch_end = cmp::min(prefetch_start + 2, total_rows);
                         this.prefetch_rows(prefetch_start..prefetch_end);
 
+                        // uniform_list also calls this with row 0 on every
+                        // layout, only to measure a row. That call must not move
+                        // the fetch window or the month band, or a deep scroll
+                        // swaps both between row 0 and the viewport each frame
+                        // and never stops redrawing.
+                        // A real pass can also be 0..1 (a viewport one row
+                        // tall, scrolled to the top), so it only counts as
+                        // measuring when the list is scrolled away from row 0.
+                        let measuring =
+                            range == (0..1) && total_rows > 1 && this.grid_top_row() != 0;
+
                         // Fetch all visible items for this frame in a single SQLite query
                         let visible_start = range.start * cols;
                         let visible_end = cmp::min(range.end * cols, effective_count);
@@ -138,13 +149,15 @@ impl LuminaApp {
                             if visible_start >= visible_end || this.grid_state.is_none() {
                                 Vec::new()
                             } else {
-                                this.want_view_rows(visible_start..visible_end, cx);
+                                if !measuring {
+                                    this.want_view_rows(visible_start..visible_end, cx);
+                                }
                                 this.displayed_rows(visible_start..visible_end)
                             };
                         // The month band reads the top row from this fetch, so
                         // it costs no extra query.
                         let top = visible_items.first().map(|i| (i.year, i.month));
-                        if this.month_header.top != top {
+                        if !measuring && this.month_header.top != top {
                             this.month_header.top = top;
                             cx.spawn(async move |this, cx| {
                                 let _ = this.update(cx, |_app, cx| {
