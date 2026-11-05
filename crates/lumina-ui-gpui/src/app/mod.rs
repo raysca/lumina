@@ -4,6 +4,7 @@ pub mod command_palette;
 pub mod deletion;
 pub mod downloads;
 pub mod first_scan;
+pub mod history;
 pub mod import;
 pub mod info_details;
 pub mod keymap;

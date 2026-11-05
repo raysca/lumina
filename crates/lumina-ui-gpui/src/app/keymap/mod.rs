@@ -74,10 +74,14 @@ impl LuminaApp {
             return;
         }
 
-        // Cmd+[: browsing Back. Secondary modifier only, so the viewer's plain
-        // [ / ] previous/next shortcuts keep working.
+        // ⌘[ / ⌘]: browsing Back / Forward. Secondary modifier only, so the
+        // viewer's plain [ / ] previous/next shortcuts keep working.
         if cmd_or_ctrl && key == "[" {
             self.navigate_back(cx);
+            return;
+        }
+        if cmd_or_ctrl && key == "]" {
+            self.navigate_forward(cx);
             return;
         }
 

@@ -135,7 +135,8 @@ impl LuminaApp {
                         this.toggle_sidebar(cx);
                     })),
             )
-            // Back is ⌘[ only; the design has no toolbar button for it.
+            // Back/Forward are ⌘[ / ⌘], the Go menu and ⌘K; the design has no
+            // toolbar buttons for them.
             // The page title (v3: 15px semibold), then the Trash item count.
             // A long album or tag name truncates instead of pushing the
             // buttons off the bar.

@@ -59,6 +59,9 @@ pub enum CommandId {
     EditLocation,
     RemoveLocation,
     OpenTagManager,
+    /// Browsing history; shown only when it would move.
+    Back,
+    Forward,
 }
 
 pub struct Command {
@@ -106,6 +109,8 @@ impl Command {
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
+            Back => Icon::ChevronLeft,
+            Forward => Icon::ChevronRight,
         }
     }
 }
@@ -450,6 +455,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "tags keywords manage rename",
         },
+        Command {
+            id: CommandId::Back,
+            key: "command.back",
+            shortcut: "⌘[",
+            keywords: "history previous go return",
+        },
+        Command {
+            id: CommandId::Forward,
+            key: "command.forward",
+            shortcut: "⌘]",
+            keywords: "history next go redo",
+        },
     ]
 }
 
@@ -472,6 +489,8 @@ impl LuminaApp {
     fn command_applies(&self, id: CommandId) -> bool {
         match id {
             CommandId::RetryError => self.error_retry.is_some(),
+            CommandId::Back => self.can_navigate_back(),
+            CommandId::Forward => self.can_navigate_forward(),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
@@ -701,6 +720,8 @@ impl LuminaApp {
                 cx,
             ),
             CommandId::OpenTagManager => self.open_tag_manager(cx),
+            CommandId::Back => self.navigate_back(cx),
+            CommandId::Forward => self.navigate_forward(cx),
         }
     }
 }

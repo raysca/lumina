@@ -18,6 +18,8 @@ actions!(
         ImportMedia,
         ImportNetworkVideo,
         ToggleDownloads,
-        NewSmartAlbum
+        NewSmartAlbum,
+        GoBack,
+        GoForward
     ]
 );

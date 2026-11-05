@@ -32,6 +32,10 @@ pub fn build_menus() -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
         ]),
+        Menu::new("Go").items([
+            MenuItem::action("Back", GoBack),
+            MenuItem::action("Forward", GoForward),
+        ]),
         Menu::new("Help").items([
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
             MenuItem::action("About Lumina", ShowAbout),
@@ -47,7 +51,7 @@ mod tests {
     fn menu_bar_has_core_commands() {
         let menus = build_menus();
         let names: Vec<&str> = menus.iter().map(|menu| menu.name.as_ref()).collect();
-        assert_eq!(names, vec!["Lumina", "File", "View", "Help"]);
+        assert_eq!(names, vec!["Lumina", "File", "View", "Go", "Help"]);
 
         let app_items = &menus[0].items;
         assert!(app_items
@@ -57,5 +61,23 @@ mod tests {
             .items
             .iter()
             .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Open Library…")));
+    }
+
+    #[test]
+    fn go_menu_has_back_and_forward() {
+        let menus = build_menus();
+        let go = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Go")
+            .expect("the menu bar has a Go menu");
+        let names: Vec<&str> = go
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                MenuItem::Action { name, .. } => Some(name.as_ref()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names, vec!["Back", "Forward"], "Go lists Back then Forward");
     }
 }

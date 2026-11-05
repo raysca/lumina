@@ -39,16 +39,18 @@ even when the feature list is strong.
 - The media viewer is a fullscreen overlay over the grid. Arrows and `[`/`]`
   navigate items, the viewer Back button (or Escape) returns to the grid, and
   stage prev/next buttons step through items (v3 removed the filmstrip).
-- Breadcrumb is display-only. Back history exists (Cmd+[ and the fullscreen
-  viewer's Back button); there is no Forward, recent view, clickable breadcrumb,
-  or scroll-position restore.
+- Breadcrumb is display-only. Back and Forward history exist (Cmd+[ / Cmd+],
+  Go > Back / Forward, the Cmd+K "Back" and "Forward" rows, and the fullscreen
+  viewer's Back button). A new destination after Back drops the Forward
+  entries, as in a browser. There is no recent view, clickable breadcrumb, or
+  scroll-position restore.
 - Sidebar sections do not collapse; albums/tags cannot be pinned or reordered.
 - Switching library or album clears search, year and selection without a way to
   return.
 
 **Missing / weak**
 
-- No Forward history or branching trail; Back is a single linear stack.
+- No branching trail; Back/Forward is a single linear stack (50 entries).
 - No recent libraries or recent views.
 - No restored browsing state after relaunch (only window, sort and inspector
   state persist).

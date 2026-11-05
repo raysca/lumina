@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::app::navigation::{NavigationHistory, NavigationSnapshot};
+use crate::app::history::{NavigationHistory, NavigationSnapshot};
 use crate::app::types::{BatchSelectionSummary, DeleteConfirmState, TagSortOrder, UiMessage};
 use crate::app::windows::{open_floating_inspector_window, open_floating_pip_window};
 #[cfg(not(test))]

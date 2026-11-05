@@ -99,12 +99,12 @@ pub(crate) fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
     render_ui(cx);
 }
 
-fn type_text(cx: &mut VisualTestContext, text: &str) {
+pub(crate) fn type_text(cx: &mut VisualTestContext, text: &str) {
     cx.simulate_input(text);
     render_ui(cx);
 }
 
-fn double_click(cx: &mut VisualTestContext, selector: &'static str) {
+pub(crate) fn double_click(cx: &mut VisualTestContext, selector: &'static str) {
     let position = bounds_center(cx, selector);
     cx.simulate_event(gpui::MouseDownEvent {
         position,
@@ -1482,7 +1482,7 @@ fn ui_automation_navigation_edge_no_ops() {
     render_ui(vcx);
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
-    // Cmd+] is no longer a navigation shortcut.
+    // Cmd+] with nothing ahead is a no-op.
     keystrokes(vcx, "secondary-]");
     keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
@@ -1510,13 +1510,21 @@ fn ui_automation_navigation_edge_no_ops() {
             "Cmd+[ at the oldest entry must stay put"
         );
     });
-    // Forward was removed: the shortcut must not move the trail.
+    // Cmd+] redoes the Back; at the newest entry it stays put.
     keystrokes(vcx, "secondary-]");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
-            AlbumSelection::AllLibrary,
-            "Cmd+] must be inert now that Forward is removed"
+            AlbumSelection::Trash,
+            "Cmd+] must go Forward to the album Back left"
+        );
+    });
+    keystrokes(vcx, "secondary-]");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::Trash,
+            "Cmd+] at the newest entry must stay put"
         );
     });
 

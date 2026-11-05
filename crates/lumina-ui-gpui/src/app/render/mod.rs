@@ -115,7 +115,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("⌘,", "Preferences"),
             ("⌘R", "Rescan library"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
-            ("⌘[", "Back"),
+            ("⌘[ / ⌘]", "Back / Forward"),
             ("⌥⌘N", "New smart album"),
             ("⌥⌘L", "Show or hide downloads"),
             ("I", "Toggle inspector"),
@@ -416,6 +416,12 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &QuitApp, _w, cx| {
                 this.request_quit(cx);
+            }))
+            .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
+                this.navigate_back(cx);
+            }))
+            .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
+                this.navigate_forward(cx);
             }))
             .on_mouse_down(
                 MouseButton::Left,

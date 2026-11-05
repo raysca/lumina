@@ -1,8 +1,9 @@
 use gpui::*;
 use lumina_core::{MediaId, MediaItem, MediaType};
 use std::cmp;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 
+use crate::app::history::{NavigationHistory, NavigationSnapshot};
 use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::{BatchSelectionSummary, UiMessage};
@@ -13,179 +14,8 @@ use crate::theme;
 use crate::views::sidebar::AlbumSelection;
 use lumina_core::Coordinates;
 
-/// Longest browsing trail kept for Back. Older destinations fall off
-/// the front so the stack stays bounded no matter how long a session runs.
-pub(crate) const NAVIGATION_HISTORY_LIMIT: usize = 50;
-
-/// A restorable browsing destination.
-///
-/// Only durable navigation state belongs here: transient overlays (menus,
-/// toasts, inline editors) must not reset the user's place when they go back.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NavigationSnapshot {
-    pub selection: AlbumSelection,
-    pub search_query: String,
-    pub active_year: Option<i32>,
-    pub selected_media_id: Option<MediaId>,
-    pub selected_index: Option<usize>,
-    pub selection_anchor: Option<usize>,
-    pub viewer_open: bool,
-}
-
-impl Default for NavigationSnapshot {
-    fn default() -> Self {
-        Self {
-            selection: AlbumSelection::AllLibrary,
-            search_query: String::new(),
-            active_year: None,
-            selected_media_id: None,
-            selected_index: None,
-            selection_anchor: None,
-            viewer_open: false,
-        }
-    }
-}
-
-impl NavigationSnapshot {
-    /// Whether two snapshots point at the same browsing destination.
-    ///
-    /// Selection is deliberately excluded: arrow keys move the selection
-    /// without navigating and must not flood the trail with entries.
-    fn same_destination(&self, other: &Self) -> bool {
-        self.selection == other.selection
-            && self.search_query == other.search_query
-            && self.active_year == other.active_year
-            && self.viewer_open == other.viewer_open
-    }
-
-    fn remember_selection(&mut self, other: &Self) {
-        self.selected_media_id = other.selected_media_id;
-        self.selected_index = other.selected_index;
-        self.selection_anchor = other.selection_anchor;
-    }
-}
-
-/// Bounded Back trail of browsing destinations.
-#[derive(Debug)]
-pub(crate) struct NavigationHistory {
-    entries: VecDeque<NavigationSnapshot>,
-    cursor: usize,
-    restoring: bool,
-}
-
-impl NavigationHistory {
-    pub(crate) fn new(initial: NavigationSnapshot) -> Self {
-        let mut entries = VecDeque::with_capacity(NAVIGATION_HISTORY_LIMIT);
-        entries.push_back(initial);
-        Self {
-            entries,
-            cursor: 0,
-            restoring: false,
-        }
-    }
-
-    pub(crate) fn is_restoring(&self) -> bool {
-        self.restoring
-    }
-
-    pub(crate) fn begin_restore(&mut self) {
-        self.restoring = true;
-    }
-
-    pub(crate) fn end_restore(&mut self) {
-        self.restoring = false;
-    }
-
-    /// True when the live state left the recorded cursor without a snapshot,
-    /// for example a search typed straight into the field or a viewer opened
-    /// from the grid.
-    pub(crate) fn has_pending_destination(&self, snapshot: &NavigationSnapshot) -> bool {
-        match self.entries.get(self.cursor) {
-            Some(current) => !current.same_destination(snapshot),
-            None => true,
-        }
-    }
-
-    /// Materializes the live destination if the app moved without an explicit
-    /// record call. Called before Back so the place being left stays reachable.
-    pub(crate) fn sync_pending(&mut self, snapshot: NavigationSnapshot) {
-        if self.restoring {
-            return;
-        }
-        if !self.has_pending_destination(&snapshot) {
-            if let Some(current) = self.entries.get_mut(self.cursor) {
-                current.remember_selection(&snapshot);
-            }
-            return;
-        }
-        if self.entries.is_empty() {
-            self.entries.push_back(snapshot);
-            self.cursor = 0;
-            return;
-        }
-        // Opening the viewer happens over the grid, so the state underneath is
-        // the same destination with the viewer closed.
-        if snapshot.viewer_open && !self.entries[self.cursor].viewer_open {
-            let mut grid = snapshot.clone();
-            grid.viewer_open = false;
-            self.entries[self.cursor] = grid;
-        }
-        self.entries.truncate(self.cursor + 1);
-        self.entries.push_back(snapshot);
-        self.trim_front();
-        self.cursor = self.entries.len().saturating_sub(1);
-    }
-
-    /// Appends a destination change. `departing` is the state before the
-    /// change, so going Back restores the selection the user actually left.
-    pub(crate) fn record(&mut self, departing: NavigationSnapshot, arriving: NavigationSnapshot) {
-        if self.restoring || departing.same_destination(&arriving) {
-            return;
-        }
-        if self.entries.is_empty() {
-            self.entries.push_back(departing);
-            self.cursor = 0;
-        } else if self.entries[self.cursor].same_destination(&departing) {
-            self.entries[self.cursor] = departing;
-        } else {
-            // The live state drifted before this explicit change; keep it as a
-            // destination rather than silently dropping a visited place.
-            self.entries.truncate(self.cursor + 1);
-            self.entries.push_back(departing);
-            self.trim_front();
-            self.cursor = self.entries.len().saturating_sub(1);
-        }
-        self.entries.truncate(self.cursor + 1);
-        self.entries.push_back(arriving);
-        self.trim_front();
-        self.cursor = self.entries.len().saturating_sub(1);
-    }
-
-    pub(crate) fn go_back(&mut self) -> Option<NavigationSnapshot> {
-        if self.restoring || self.cursor == 0 || self.entries.is_empty() {
-            return None;
-        }
-        self.cursor -= 1;
-        self.entries.get(self.cursor).cloned()
-    }
-
-    /// Keeps the record in sync when a saved album/tag/media had to fall back
-    /// to the nearest valid view.
-    pub(crate) fn replace_current(&mut self, snapshot: NavigationSnapshot) {
-        if let Some(current) = self.entries.get_mut(self.cursor) {
-            *current = snapshot;
-        }
-    }
-
-    fn trim_front(&mut self) {
-        while self.entries.len() > NAVIGATION_HISTORY_LIMIT {
-            self.entries.pop_front();
-        }
-    }
-}
-
 impl LuminaApp {
-    /// Snapshot of the durable browsing destination used by Back.
+    /// Snapshot of the durable browsing destination used by Back/Forward.
     pub(crate) fn navigation_snapshot(&self) -> NavigationSnapshot {
         NavigationSnapshot {
             selection: self.selection.clone(),
@@ -221,6 +51,36 @@ impl LuminaApp {
             return;
         };
         self.apply_navigation_snapshot(snapshot, cx);
+    }
+
+    /// Redoes a Back. Syncing first means a destination reached since the
+    /// Back (a typed search, say) drops the Forward entries, like a browser.
+    pub fn navigate_forward(&mut self, cx: &mut Context<Self>) {
+        self.navigation_history
+            .sync_pending(self.navigation_snapshot());
+        let Some(snapshot) = self.navigation_history.go_forward() else {
+            cx.notify();
+            return;
+        };
+        self.apply_navigation_snapshot(snapshot, cx);
+    }
+
+    /// Back would move: a recorded entry precedes the cursor, or the live
+    /// state drifted (an unsynced typed search can always go Back).
+    pub(crate) fn can_navigate_back(&self) -> bool {
+        self.navigation_history.can_go_back()
+            || self
+                .navigation_history
+                .has_pending_destination(&self.navigation_snapshot())
+    }
+
+    /// Forward would move: an entry is ahead and no unsynced destination
+    /// would truncate it first.
+    pub(crate) fn can_navigate_forward(&self) -> bool {
+        self.navigation_history.can_go_forward()
+            && !self
+                .navigation_history
+                .has_pending_destination(&self.navigation_snapshot())
     }
 
     fn apply_navigation_snapshot(&mut self, snapshot: NavigationSnapshot, cx: &mut Context<Self>) {

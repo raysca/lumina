@@ -77,6 +77,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.import_network_video" => "Import Video from URL…",
         "command.toggle_downloads" => "Show Downloads",
         "command.cancel_import" => "Cancel Import",
+        "command.back" => "Back",
+        "command.forward" => "Forward",
         _ => return None,
     })
 }
