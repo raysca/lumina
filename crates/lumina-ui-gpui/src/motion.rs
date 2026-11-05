@@ -1,7 +1,8 @@
 //! Entrance motion (v3.1 motion sheet): one easing, nothing over 220 ms.
 //! GPUI has no exit or layout animation, so only entrances animate;
 //! closing is instant. Reduce Motion keeps fades and drops movement and
-//! scale.
+//! scale. Overlays and the fullscreen viewer fade in with [`overlay_in`];
+//! stepping between viewer items does not animate.
 
 use std::time::{Duration, Instant};
 

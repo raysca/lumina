@@ -114,12 +114,21 @@ selection survives resize and focus changes.
 
 **Current**
 
-- Viewer opens and closes instantly. There is no shared-element or zoom
-  transition from the card, no fade, and no crossfade between viewer items.
-- Modals, sidebar, sort menu, command palette, preference tabs and toasts have no
-  explicit enter/exit motion.
-- Thumbnails appear abruptly when decoded; cards have no skeleton or fade-in.
-- No animation or transition API usage in the UI code.
+- The viewer fades in on open (160 ms, `motion::overlay_in`, also under
+  Reduce Motion) and closes instantly. There is no shared-element zoom from
+  the card and no crossfade between viewer items (GPUI has no layout or exit
+  animation).
+- While a frame decodes, the viewer keeps the full stage: the cached grid
+  thumbnail, else a neutral full-stage canvas (`viewer-stage-placeholder`),
+  so opening and stepping never show a blank box or jump in size. The
+  thumbnail-to-full-frame swap has no fade. Opening or stepping prefetches
+  the grid thumbnails of the items before and after.
+- An item whose decode failed shows a full-stage "Lumina can't show a
+  preview of this file." with "Press O to open it in its default app."
+  (`viewer-stage-failed`).
+- Menus, dialogs, the palette and toasts fade in (`motion.rs`); toasts also
+  rise unless Reduce Motion is on. Decoded thumbnails fade in over a static
+  skeleton card.
 
 **Target motion system**
 

@@ -3,7 +3,6 @@ use lumina_core::{MediaItem, MediaType};
 use std::path::Path;
 use std::process::Command;
 
-use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::config::validate_external_editor;
 use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
@@ -276,6 +275,34 @@ impl LuminaApp {
         .detach();
     }
 
+    /// Ids of the items before and after the selection, from the cached
+    /// rows only (no SQL), for the viewer's prefetch.
+    pub(crate) fn viewer_neighbour_ids(&self) -> Vec<lumina_core::MediaId> {
+        let Some(index) = self.selected_index else {
+            return Vec::new();
+        };
+        let start = index.saturating_sub(1);
+        self.displayed_rows(start..index + 2)
+            .into_iter()
+            .zip(start..)
+            .filter(|(_, at)| *at != index)
+            .map(|(item, _)| item.id)
+            .collect()
+    }
+
+    /// Queues the neighbours' grid thumbnails, so stepping in the viewer
+    /// shows a picture at once. Cached, in-flight and failed ids are skipped.
+    pub(crate) fn prefetch_viewer_neighbours(&self) {
+        let Some(state) = self.grid_state.as_ref() else {
+            return;
+        };
+        for id in self.viewer_neighbour_ids() {
+            if !state.texture_cache.lock().contains(&id) {
+                self.queue_thumbnail_request(id);
+            }
+        }
+    }
+
     pub fn open_viewer(&mut self, item: MediaItem, cx: &mut Context<Self>) {
         // With PiP open, playing a video means playing it there.
         if self.video.in_pip && item.media_type == MediaType::Video {
@@ -285,6 +312,7 @@ impl LuminaApp {
         }
         self.select_item(item, cx);
         self.is_fullscreen_viewer = true;
+        self.prefetch_viewer_neighbours();
         self.viewer_state.reset();
         self.sync_viewer_player(cx);
         cx.notify();
@@ -497,15 +525,7 @@ impl LuminaApp {
         // Re-request the full viewer frame through the normal background path so
         // the displayed image is transformed by the decoder, not by the UI.
         if let Some(state) = self.grid_state.as_ref() {
-            let tx = self.ui_tx.clone();
-            let id = item.id;
-            state
-                .engine
-                .request_thumbnail(id, VIEWER_IMAGE_SIZE, move |frame| {
-                    if let Some(frame) = frame {
-                        let _ = tx.send_blocking(UiMessage::ViewerLoaded { id, frame });
-                    }
-                });
+            self.request_viewer_frame(state, item.id);
         }
         self.queue_thumbnail_request(item.id);
         self.set_last_action(match direction {

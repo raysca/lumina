@@ -6,9 +6,8 @@ use std::collections::BTreeSet;
 use crate::app::history::{NavigationHistory, NavigationSnapshot};
 use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
-use crate::app::types::{BatchSelectionSummary, UiMessage};
+use crate::app::types::BatchSelectionSummary;
 use crate::app::undo::{BatchField, BatchLocationChange, UndoAction};
-use crate::app::viewer_actions::VIEWER_IMAGE_SIZE;
 use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
@@ -489,18 +488,13 @@ impl LuminaApp {
             self.set_viewer_image(cached);
         }
         self.load_selected_item_tags(item.id, cx);
-        if let Some(ref state) = self.grid_state {
-            let tx = self.ui_tx.clone();
-            state
-                .engine
-                .request_thumbnail(item.id, VIEWER_IMAGE_SIZE, move |frame_opt| {
-                    if let Some(frame) = frame_opt {
-                        let _ = tx.send_blocking(UiMessage::ViewerLoaded { id: item.id, frame });
-                    }
-                });
+        self.viewer_failed = None;
+        if let Some(state) = self.grid_state.as_ref().filter(|s| !s.is_failed(item.id)) {
+            self.request_viewer_frame(state, item.id);
         }
 
         if self.is_fullscreen_viewer {
+            self.prefetch_viewer_neighbours();
             self.sync_viewer_player(cx);
         }
 

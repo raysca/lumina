@@ -82,3 +82,32 @@ fn a_fading_palette_and_toast_work_mid_animation() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn viewer_fades_in_under_reduce_motion_too() {
+    for reduce in [true, false] {
+        crate::motion::REDUCE_MOTION.with(|on| on.set(reduce));
+        let (dir, engine) = seed_library("motion_viewer", 2);
+        let mut cx = gpui::TestAppContext::single();
+        let (view, vcx) = app_with_library(&mut cx, engine);
+        keystrokes(vcx, "home enter");
+        assert!(
+            vcx.debug_bounds("viewer-back").is_some(),
+            "the viewer lays out while it fades in (reduce motion {reduce})"
+        );
+        click(vcx, "viewer-back");
+        view.update(vcx, |app, _| {
+            assert!(
+                !app.is_fullscreen_viewer,
+                "a fading viewer takes clicks (reduce motion {reduce})"
+            )
+        });
+        keystrokes(vcx, "enter");
+        assert!(
+            vcx.debug_bounds("viewer-viewport").is_some(),
+            "the viewer paints again on reopen (reduce motion {reduce})"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    crate::motion::REDUCE_MOTION.with(|on| on.set(true));
+}

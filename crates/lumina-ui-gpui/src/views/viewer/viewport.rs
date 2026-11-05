@@ -81,6 +81,16 @@ impl ViewerViewport {
             .as_ref()
             .is_some_and(|i| this.missing_items.contains(&i.id));
 
+        // The decode gave up on this item: its grid thumbnail, or the
+        // viewer's own full-size decode.
+        let is_failed = this.selected_item.as_ref().is_some_and(|i| {
+            this.viewer_failed == Some(i.id)
+                || this
+                    .grid_state
+                    .as_ref()
+                    .is_some_and(|state| state.is_failed(i.id))
+        });
+
         let preview_image = this.viewer_image.clone();
         let scale = this.viewer_state.zoom_scale;
         let (pan_x, pan_y) = this.viewer_state.pan_offset;
@@ -248,17 +258,44 @@ impl ViewerViewport {
                             .overflow_hidden()
                             .bg(theme::bg_media())
                             .into_any_element()
-                    } else {
+                    } else if is_failed {
+                        // The decode gave up: say so, and how to see the file.
                         div()
-                            .w(px(400.0))
-                            .h(px(400.0))
-                            .bg(theme::bg_pane())
+                            .debug_selector(|| "viewer-stage-failed".to_string())
+                            .size_full()
                             .rounded(theme::RADIUS_LG)
+                            .bg(theme::bg_media())
                             .flex()
+                            .flex_col()
                             .justify_center()
                             .items_center()
-                            .text_color(theme::text_subtle())
-                            .child("Loading media…")
+                            .gap_2()
+                            .child(render_icon(
+                                Icon::TriangleAlert,
+                                px(28.0),
+                                theme::text_subtle(),
+                            ))
+                            .child(
+                                div()
+                                    .text_color(theme::text())
+                                    .child(crate::i18n::t("viewer.preview_failed")),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(theme::text_subtle())
+                                    .child(crate::i18n::t("viewer.open_default_hint")),
+                            )
+                            .into_any_element()
+                    } else {
+                        // Neutral full stage until the frame arrives: the same
+                        // size as the picture, so stepping never jumps (the
+                        // swap to the full frame has no fade, Decision 8).
+                        div()
+                            .debug_selector(|| "viewer-stage-placeholder".to_string())
+                            .size_full()
+                            .rounded(theme::RADIUS_LG)
+                            .bg(theme::bg_media())
                             .into_any_element()
                     })
                     .child({

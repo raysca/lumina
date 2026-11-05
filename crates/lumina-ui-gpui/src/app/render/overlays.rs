@@ -148,8 +148,10 @@ impl LuminaApp {
     }
 
     /// Fullscreen viewer modal overlay
+    /// Fades in on every open (a fade, so under Reduce Motion too).
     pub(crate) fn render_viewer_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.is_fullscreen_viewer && self.selected_item.is_some() {
+        let open = self.is_fullscreen_viewer && self.selected_item.is_some();
+        let viewer = if open {
             div()
                 .absolute()
                 .inset_0()
@@ -161,7 +163,8 @@ impl LuminaApp {
                 .into_any_element()
         } else {
             Empty.into_any_element()
-        }
+        };
+        crate::motion::overlay_in(open, viewer, "viewer-in")
     }
 
     /// Smart album builder modal overlay

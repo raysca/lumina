@@ -374,11 +374,28 @@ impl LuminaApp {
                     && self.video.item.as_ref().is_some_and(|item| item.id == id);
                 if let Some(current) = self.selected_item.as_ref().filter(|_| !playing_here) {
                     if current.id == id {
-                        if let Ok(gpui_img) = frame_to_gpui_image(frame) {
-                            self.set_viewer_image(Some(gpui_img));
-                            cx.notify();
+                        match frame_to_gpui_image(frame) {
+                            Ok(gpui_img) => {
+                                self.viewer_failed = None;
+                                self.set_viewer_image(Some(gpui_img));
+                            }
+                            Err(e) => {
+                                log::warn!("viewer frame for {id:?} could not be converted: {e:#}");
+                                self.viewer_failed = Some(id);
+                            }
                         }
+                        cx.notify();
                     }
+                }
+            }
+            UiMessage::ViewerFailed { id } => {
+                if self
+                    .selected_item
+                    .as_ref()
+                    .is_some_and(|item| item.id == id)
+                {
+                    self.viewer_failed = Some(id);
+                    cx.notify();
                 }
             }
             UiMessage::FolderPicked(folder) => {

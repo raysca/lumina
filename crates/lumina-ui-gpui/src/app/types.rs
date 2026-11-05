@@ -53,6 +53,10 @@ pub enum UiMessage {
         id: MediaId,
         frame: DecodedFrame,
     },
+    /// The viewer's full-size decode of `id` failed.
+    ViewerFailed {
+        id: MediaId,
+    },
     // Only the real folder dialog sends this; tests count the request instead.
     #[cfg_attr(test, allow(dead_code))]
     FolderPicked(PathBuf),
