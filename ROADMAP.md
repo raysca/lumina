@@ -323,10 +323,11 @@ Detailed audit: [docs/ux_audit.md](docs/ux_audit.md).
 
 **Current:** dark graphite theme, status-bar feedback, error banner, preferences
 (General/Storage/About), native menus, command palette, tooltips, shortcut
-sheet, persisted window/layout/sort. There is no explicit motion system,
-selection/open animation, back/forward history, restored browsing context,
-toast stack, skeleton cards, pointer-anchored zoom, real video scrub previews,
-or video resume.
+sheet, persisted window/layout/sort, Back/Forward history, and a restored
+browsing context on relaunch (view, search, year, selection and grid scroll
+position; dropped if the user acts during the startup scan; Quit saves it).
+Toasts with Undo and skeleton cards exist. There is no selection/open
+animation, pointer-anchored grid zoom, or real video scrub previews.
 
 **Target:**
 

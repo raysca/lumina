@@ -654,11 +654,8 @@ impl LuminaApp {
                 };
                 cfg.last_active_year = self.active_year;
                 cfg.last_selected_media_id = self.selected_item.as_ref().map(|item| item.id.0);
+                cfg.last_scroll_anchor_id = self.grid_top_item_id().map(|id| id.0);
             }
-            // The grid scroll row is deliberately not persisted: GPUI only
-            // exposes UniformListScrollHandle::logical_scroll_top_index under the
-            // test-support feature, so production cannot read the top row without
-            // inventing one. The restored selection's row is revealed instead.
             if let Some((x, y, width, height)) = self.window_bounds {
                 cfg.window_x = Some(x);
                 cfg.window_y = Some(y);

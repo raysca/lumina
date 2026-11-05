@@ -371,6 +371,17 @@ impl LuminaApp {
         ((0.5 - scroll_y) / self.row_height()).floor().max(0.0) as usize
     }
 
+    /// First item of the top visible grid row: the scroll anchor saved for
+    /// relaunch. Reads only the cached rows, never SQL, so `None` when they
+    /// are stale or no library is open.
+    pub(crate) fn grid_top_item_id(&self) -> Option<MediaId> {
+        self.grid_state.as_ref()?;
+        let first = self.grid_top_row() * self.grid_columns.clamp(2, 8);
+        self.displayed_rows(first..first + 1)
+            .first()
+            .map(|item| item.id)
+    }
+
     /// Keeps the keyboard-selected row visible in the virtualized grid.
     pub(crate) fn reveal_grid_selection(&self) {
         let (Some(state), Some(index)) = (self.grid_state.as_ref(), self.selected_index) else {

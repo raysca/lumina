@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
+use crate::app::history::NavigationSnapshot;
 use crate::app::import::ImportDialog;
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
@@ -203,6 +204,10 @@ impl LuminaApp {
                 let mut should_clear_selection = false;
                 let mut should_restore_session = false;
                 let had_multi_selection = !self.selected_indices.is_empty();
+                // Read before ScanComplete clears a selection made during the
+                // scan: a card the user picked still counts as them acting.
+                let user_moved = self.pending_restore.is_some()
+                    && self.navigation_snapshot() != NavigationSnapshot::default();
                 let selected_item_id = self.selected_item.as_ref().map(|item| item.id);
                 let mut removed_textures = Vec::new();
                 let mut error = None;
@@ -328,7 +333,7 @@ impl LuminaApp {
                     cx.notify();
                 }
                 if should_restore_session {
-                    self.apply_restored_session(cx);
+                    self.apply_restored_session(user_moved, cx);
                 }
             }
             UiMessage::ThumbnailLoaded { id, frame } => {
@@ -1012,7 +1017,11 @@ impl LuminaApp {
     /// Called exactly once, after the initial scan completes so the library's
     /// user albums and counts are known. The view/search/year are restored even
     /// when the saved media item has disappeared; in that case no item is selected.
-    fn apply_restored_session(&mut self, cx: &mut Context<Self>) {
+    ///
+    /// `user_moved`: the live state left the startup default (album, typed
+    /// search, year, card, viewer) before the scan finished. Their choice
+    /// then wins: the restore is dropped and their Back trail stays.
+    fn apply_restored_session(&mut self, user_moved: bool, cx: &mut Context<Self>) {
         if self
             .grid_state
             .as_ref()
@@ -1024,6 +1033,12 @@ impl LuminaApp {
         let Some(restored) = self.pending_restore.take() else {
             return;
         };
+        // One snapshot check covers every path, including a typed search
+        // that never records a navigation change.
+        if user_moved {
+            self.save_config();
+            return;
+        }
 
         self.selection = resolve_restored_view(restored.view, &self.user_smart_albums);
         self.search_query = restored.search_query;
@@ -1051,10 +1066,10 @@ impl LuminaApp {
                     self.select_item_internal(item, cx);
                     self.refresh_selected_tags();
                     self.update_batch_summary();
-                    self.reveal_grid_selection();
                 }
             }
         }
+        self.restore_grid_scroll(restored.scroll_anchor_id.map(MediaId));
         // The startup restore is a jump, not user navigation: seed the trail
         // with the restored destination so Back cannot return to pre-restore state.
         self.reset_navigation_history();
@@ -1062,6 +1077,47 @@ impl LuminaApp {
         // leave an empty session on disk before the initial scan finishes.
         self.save_config();
         cx.notify();
+    }
+
+    /// Scrolls the restored grid so the saved anchor item's row is on top.
+    ///
+    /// GPUI keeps one deferred scroll, so revealing the selection afterwards
+    /// would replace the anchor scroll: the selection is revealed only when
+    /// the anchor is gone or the selected row falls outside the anchored
+    /// viewport.
+    fn restore_grid_scroll(&self, anchor: Option<MediaId>) {
+        let Some(state) = self.grid_state.as_ref() else {
+            return;
+        };
+        let cols = self.grid_columns.clamp(2, 8);
+        let Some(anchor_row) = anchor
+            .and_then(|id| self.find_active_index(id))
+            .map(|index| index / cols)
+        else {
+            self.reveal_grid_selection();
+            return;
+        };
+        state
+            .scroll_handle
+            .scroll_to_item_strict(anchor_row, gpui::ScrollStrategy::Top);
+        let viewport = f32::from(
+            state
+                .scroll_handle
+                .0
+                .borrow()
+                .base_handle
+                .bounds()
+                .size
+                .height,
+        );
+        // Zero before the first layout: the anchor wins then.
+        let visible_rows = (viewport / self.row_height()) as usize;
+        let selected_row = self.selected_index.map(|index| index / cols);
+        if selected_row.is_some_and(|row| {
+            visible_rows > 0 && !(anchor_row..anchor_row + visible_rows).contains(&row)
+        }) {
+            self.reveal_grid_selection();
+        }
     }
 
     /// Finds a media item's position in the active result set without per-frame SQL.
@@ -1363,6 +1419,7 @@ mod restore_tests {
                 search_query: String::new(),
                 active_year: None,
                 selected_media_id: Some(target.id.0),
+                scroll_anchor_id: None,
             });
 
             let total = app
@@ -1395,11 +1452,15 @@ mod restore_tests {
             );
 
             // A saved item that no longer exists must keep the view but select nothing.
+            // Back to the untouched startup state first: a selection made
+            // before the restore would (rightly) cancel it.
+            app.clear_selection(cx);
             app.pending_restore = Some(RestoredSession {
                 view: LastView::Favorites,
                 search_query: String::new(),
                 active_year: None,
                 selected_media_id: Some(u64::MAX),
+                scroll_anchor_id: None,
             });
             app.handle_ui_message(
                 UiMessage::Engine(EngineEvent::ScanComplete { total_items: total }),

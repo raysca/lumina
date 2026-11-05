@@ -53,6 +53,8 @@ impl LuminaApp {
         }
         // Rows stay Running/Waiting on disk; the next open shows them paused.
         self.downloads.reset(None);
+        // State changed since the last debounced session save would be lost.
+        self.save_config();
         #[cfg(test)]
         {
             self.downloads.quit_requested = true;

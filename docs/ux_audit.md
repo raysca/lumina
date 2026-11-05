@@ -42,8 +42,13 @@ even when the feature list is strong.
 - Breadcrumb is display-only. Back and Forward history exist (Cmd+[ / Cmd+],
   Go > Back / Forward, the Cmd+K "Back" and "Forward" rows, and the fullscreen
   viewer's Back button). A new destination after Back drops the Forward
-  entries, as in a browser. There is no recent view, clickable breadcrumb, or
-  scroll-position restore.
+  entries, as in a browser. There is no recent view or clickable breadcrumb.
+- Relaunch restores the last view, search, year, selection and grid scroll
+  position (anchored on the first visible item, so it survives column and
+  density changes). The restore waits for the startup scan and is dropped if
+  the user navigated, typed a search or selected a card first. Quit saves the
+  session. The viewer is not reopened; Enter opens the restored selection.
+- Closing the viewer leaves the grid where it was (the grid stays mounted).
 - Sidebar sections do not collapse; albums/tags cannot be pinned or reordered.
 - Switching library or album clears search, year and selection without a way to
   return.
@@ -52,9 +57,8 @@ even when the feature list is strong.
 
 - No branching trail; Back/Forward is a single linear stack (50 entries).
 - No recent libraries or recent views.
-- No restored browsing state after relaunch (only window, sort and inspector
-  state persist).
-- No scroll-position restore when returning from viewer or relaunch.
+- No "reset restored view" action (the sidebar, Cmd+K Go to rows and Cmd+[
+  return to All Photos).
 - No clickable breadcrumb or "return to album" affordance.
 - No jump-to-date.
 - No command-palette navigation history or recent commands.

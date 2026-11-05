@@ -22,6 +22,7 @@ mod palette_and_empty;
 mod pip;
 mod preferences;
 mod regressions;
+mod session_restore;
 mod smart_album_builder;
 mod states;
 mod tag_manager;

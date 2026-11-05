@@ -313,6 +313,8 @@ pub struct RestoredSession {
     pub search_query: String,
     pub active_year: Option<i32>,
     pub selected_media_id: Option<u64>,
+    /// First item of the top visible grid row; see `last_scroll_anchor_id`.
+    pub scroll_anchor_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -356,6 +358,11 @@ pub struct AppConfig {
     /// Database id of the selected media item when the config was saved.
     #[serde(default)]
     pub last_selected_media_id: Option<u64>,
+    /// Database id of the first item in the top visible grid row when the
+    /// config was saved. An item id, not a row, so it survives column and
+    /// density changes and new photos shifting indices.
+    #[serde(default)]
+    pub last_scroll_anchor_id: Option<u64>,
     /// Most recent committed toolbar searches, newest first. The app trims and
     /// bounds this list when recording; `serde(default)` keeps existing config
     /// files loading and keeps tests off the real config path.
@@ -448,6 +455,7 @@ impl Default for AppConfig {
             last_search_query: None,
             last_active_year: None,
             last_selected_media_id: None,
+            last_scroll_anchor_id: None,
             recent_searches: Vec::new(),
             resume_positions: ResumePositions::default(),
             external_editor: None,
@@ -542,6 +550,7 @@ impl AppConfig {
             search_query: self.last_search_query.clone().unwrap_or_default(),
             active_year: self.last_active_year,
             selected_media_id: self.last_selected_media_id,
+            scroll_anchor_id: self.last_scroll_anchor_id,
         }
     }
 
@@ -559,6 +568,7 @@ impl AppConfig {
         self.last_search_query = None;
         self.last_active_year = None;
         self.last_selected_media_id = None;
+        self.last_scroll_anchor_id = None;
     }
 }
 
@@ -718,8 +728,43 @@ mod tests {
                 search_query: "camera:sony".to_string(),
                 active_year: Some(2024),
                 selected_media_id: Some(42),
+                scroll_anchor_id: None,
             },
             "a saved session must round-trip through the config file"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn scroll_anchor_round_trips_and_old_config_defaults_none() {
+        let path = temp_config_path("scroll_anchor");
+        let cfg = AppConfig {
+            last_scroll_anchor_id: Some(24),
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path)
+                .restored_session()
+                .scroll_anchor_id,
+            Some(24),
+            "the scroll anchor must round-trip through the config file"
+        );
+
+        // Older config files predate the key and must still load.
+        std::fs::write(&path, br#"{"last_view":"all"}"#).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path).last_scroll_anchor_id,
+            None,
+            "a missing last_scroll_anchor_id key must default to None"
+        );
+
+        let mut cleared = cfg.clone();
+        cleared.clear_session_state();
+        assert_eq!(
+            cleared.last_scroll_anchor_id, None,
+            "a new library starts at the top"
         );
 
         let _ = std::fs::remove_file(&path);
