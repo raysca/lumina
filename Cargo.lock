@@ -4134,6 +4134,7 @@ name = "lumina-core"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "cc",
  "chrono",
  "crossbeam-channel",
  "dirs",

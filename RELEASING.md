@@ -111,8 +111,9 @@ remain the primary, tested path while portability work lands incrementally.
   Non-macOS builds currently use a dummy player backend; the window, menu and
   input layers need platform-specific validation and, where GPUI lacks a
   portable API, small platform adapters.
-- **Media decoding** — the JPEG/PNG/WebP path is portable, but HEIC/RAW and video
-  thumbnails currently fall back to macOS `sips`/`qlmanage`. Windows needs
+- **Media decoding** — the JPEG/PNG/WebP path is portable, but HEIC/RAW
+  thumbnails currently fall back to macOS `sips`/`qlmanage` and video
+  thumbnails come from AVFoundation in process. Windows needs
   Windows Imaging Component (or libheif/ffmpeg) and Linux needs libheif/ffmpeg
   or GStreamer, with a capability matrix for unsupported formats.
 - **Video playback** — the real player today is AVFoundation. Windows needs a

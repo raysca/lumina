@@ -10,6 +10,7 @@ pub mod search;
 pub mod smart_albums;
 pub mod sort;
 pub mod text;
+mod video_frame;
 pub mod watcher;
 pub mod xmp;
 

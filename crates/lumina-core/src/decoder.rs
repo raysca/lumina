@@ -26,7 +26,7 @@ impl Drop for TempDir {
     }
 }
 
-/// Native helpers (sips/QuickLook) must never hang a decode worker.
+/// Native helpers (sips, QuickLook, AVFoundation) must never hang a decode worker.
 const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
@@ -304,8 +304,14 @@ impl DecoderPipeline {
         Err(anyhow!("sips decode failed"))
     }
 
+    /// A video's thumbnail: a frame decoded in process by AVFoundation.
     pub fn decode_video(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        // Use macOS quicklook thumbnail generator (instant native GPU/AVFoundation thumbnail)
+        crate::video_frame::decode(id, path, target_size, NATIVE_TOOL_TIMEOUT)
+    }
+
+    /// QuickLook's thumbnail of `path`, for images the decoders above cannot
+    /// read. (Videos go through [`Self::decode_video`]: qlmanage hung on some.)
+    fn decode_via_quicklook(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
@@ -366,16 +372,16 @@ impl DecoderPipeline {
                 // HEIC/HEIF formats lack pure-Rust decoding in image crate; use native sips ImageIO hardware decode first
                 if ext == "heic" || ext == "heif" {
                     return Self::decode_via_sips(id, path, target_size)
-                        .or_else(|_| Self::decode_video(id, path, target_size));
+                        .or_else(|_| Self::decode_via_quicklook(id, path, target_size));
                 }
                 Self::decode_image(id, path, target_size)
-                    .or_else(|_| Self::decode_video(id, path, target_size))
+                    .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
             }
             MediaType::Video => Self::decode_video(id, path, target_size),
             MediaType::Raw => {
                 // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode
                 Self::decode_via_sips(id, path, target_size)
-                    .or_else(|_| Self::decode_video(id, path, target_size))
+                    .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
             }
         }
     }
@@ -674,5 +680,21 @@ mod tests {
         let rotated = DecoderPipeline::rotate_frame(odd, 1);
         assert_eq!((rotated.width, rotated.height), (2, 1));
         assert_eq!(rotated.data, vec![1, 2, 3]);
+    }
+
+    /// Regression: videos went to a qlmanage subprocess that hung until its
+    /// timeout on some files, leaving their cards blank.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn videos_decode_in_process_through_avfoundation() {
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../lumina-ui-gpui/tests/fixtures/clip.mp4");
+        let frame = DecoderPipeline::decode_media(MediaId(3), MediaType::Video, &fixture, 320)
+            .expect("a video thumbnail must decode");
+        assert_eq!(
+            (frame.width, frame.height, frame.format),
+            (64, 48, PixelFormat::Bgra8),
+            "video frames come back at their own size in the texture format"
+        );
     }
 }

@@ -159,7 +159,8 @@ Three layers of UI coverage live alongside the unit tests:
 - **Thumbnail cache budget**: startup cleanup removes entries older than 30 days
   and evicts oldest files down to a 1.5 GB budget (cache keys are format-versioned).
 - **Decode safety**: native `sips`/QuickLook helpers run with a 10 s timeout and
-  are killed if they hang, so a bad file cannot pin a decode worker forever.
+  are killed if they hang, and the in-process AVFoundation video frame grab is
+  cancelled after 10 s, so a bad file cannot pin a decode worker forever.
 
 ## Continuous integration
 
