@@ -40,6 +40,7 @@ pub use smart_albums::{
     SmartAlbumRule, SystemAlbum,
 };
 pub use sort::{SortDirection, SortField, SortSpec};
+pub use video_frame::video_preview_strip;
 pub use watcher::LibraryWatcher;
 pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, SidecarMetadata};
 

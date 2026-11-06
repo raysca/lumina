@@ -27,7 +27,7 @@ impl Drop for TempDir {
 }
 
 /// Native helpers (sips, QuickLook, AVFoundation) must never hang a decode worker.
-const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
     command.stdout(Stdio::null()).stderr(Stdio::null());

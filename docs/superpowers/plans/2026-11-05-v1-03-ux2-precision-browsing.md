@@ -110,7 +110,7 @@ Several "current" claims in ROADMAP.md §7–§8 and ux_audit.md §4/§5/§7 are
 - **D4 One grid density ladder.** ⌘-wheel and pinch walk `SIZE_COLUMNS` like the keyboard and slider do; pixel (trackpad) ⌘-scroll accumulates to a threshold per step like pinch, a line (mouse-wheel notch) is one step. *Rejected:* keeping the 7-step wheel. The slider cannot show 5 or 7 columns.
 - **D5 Animated grid reflow is out of scope.** GPUI's uniform list has no layout transition. Faking one costs a second render pass for little gain.
 - **D6 Scrub previews: a lazy, cancellable batch strip.** `count = clamp(ceil(duration_s), 2, 48)` frames (at most one per second of video), long edge 256 px, decoded in one `AVAssetImageGenerator` call with tolerance ± half the spacing (so it snaps to keyframes and stays fast). The strip is built on the first scrubber hover (or press) for the open video, only when the player loaded it, held in `VideoPlaybackState`, and dropped (through `retire_image`) on close or media change. Memory: 48 × 256×144 × 4 B ≈ 7 MB for 16:9, ≤ 12.6 MB worst case (square), plus atlas textures for frames actually painted.
-  - Cancellation: the request owns an `Arc<AtomicBool>`; the stop path sets it and the batch call polls it, cancels generation and returns. Leaving the scrubber does **not** cancel: the strip is per video and reused on the next hover.
+  - Cancellation: the request owns an `Arc<AtomicI32>` (non-zero = stop; see Task 4's Done note); the stop path sets it and the batch call polls it, cancels generation and returns. Leaving the scrubber does **not** cancel: the strip is per video and reused on the next hover.
   - Failure (unsupported codec such as VP9-in-MP4, unreadable file, timeout with zero frames): `log::warn!`, stay time-only, and do not retry for that item until it is reopened.
   - *Rejected:* a per-hover exact decode (opens an asset per move, queues work, needs debounce and an LRU).
   - *Rejected:* a second `AVPlayer` (heavy, owns audio).
@@ -229,17 +229,18 @@ Steps:
   - Behaviour: one generator; `appliesPreferredTrackTransform = YES`; tolerance before and after = `tolerance_s`; one deadline for the whole batch, waited in 50 ms slices; between slices, if `*cancel != 0` or the deadline passed, call `cancelAllCGImageGeneration` and keep the slots completed so far.
   - Each `data` is freed with `lumina_video_frame_free`.
   - Shared BGRA conversion: factor the existing CGBitmapContext block (`:96-112`) into `static uint8_t *lumina_bgra(CGImageRef, int *w, int *h)`.
-- Rust: `pub(crate) fn decode_at(path: &Path, times: &[f64], max_size: u32, tolerance: Duration, timeout: Duration, cancel: &AtomicBool) -> Result<Vec<(f64, DecodedFrame)>>`. It errors on non-macOS. It returns frames in ascending time order. An empty result is an `Err` ("no frames"). (`AtomicBool` is passed to C as a pointer to its `i32`-sized storage via an `AtomicI32`; pick whichever is sound and add a SAFETY comment.)
-- Public: `pub fn video_preview_strip(path: &Path, duration_secs: f64, max_size: u32, cancel: &AtomicBool) -> Result<Vec<(f64, DecodedFrame)>>` in `video_frame.rs`. `count = clamp(ceil(duration), 2, 48)`; times are `(i + 0.5) * duration / count`, tolerance is `duration / count / 2`; timeout `NATIVE_TOOL_TIMEOUT` (10 s). `duration_secs` ≤ 0 or non-finite is an `Err`.
+- Rust: `pub(crate) fn decode_at(path: &Path, times: &[f64], max_size: u32, tolerance: Duration, timeout: Duration, cancel: &AtomicI32) -> Result<Vec<(f64, DecodedFrame)>>`. It errors on non-macOS. It returns frames in ascending time order. An empty result is an `Err` ("no frames"). (Built with `AtomicI32`, read by C as a volatile `int32_t`.)
+- Public: `pub fn video_preview_strip(path: &Path, duration_secs: f64, max_size: u32, cancel: &AtomicI32) -> Result<Vec<(f64, DecodedFrame)>>` in `video_frame.rs`. `count = clamp(ceil(duration), 2, 48)`; times are `(i + 0.5) * duration / count`, tolerance is `duration / count / 2`; timeout `NATIVE_TOOL_TIMEOUT` (10 s). `duration_secs` ≤ 0 or non-finite is an `Err`.
 
 Steps:
-- [ ] Failing tests:
+- [x] Failing tests:
   - `strip_returns_sorted_frames_within_size` (fixture, `max_size` 32: 1..=count frames, times ascending and inside the duration, each ≤ 32 px long edge (the fixture is 64×48, so this proves scaling), opaque, not all black).
   - `strip_of_missing_file_errors` (no panic, returns well under the timeout).
   - `strip_of_undecodable_file_errors_fast` (a temp `.mp4` of random bytes stands in for a codec AVFoundation cannot read, such as VP9-in-MP4: `Err`, under 2 s).
   - `strip_with_zero_or_nan_duration_errors`.
   - `strip_cancel_flag_stops_batch_early` (cancel set before the call: returns `Err` or fewer frames, under 200 ms).
-- [ ] Implement, then run `cargo test -p lumina-core video_frame`. Check `cargo clippy` for the FFI `unsafe` blocks (each one has a SAFETY comment).
+- [x] Implement, then run `cargo test -p lumina-core video_frame`. Check `cargo clippy` for the FFI `unsafe` blocks (each one has a SAFETY comment).
+- Done 2026-11-06: the cancel flag is an `AtomicI32` (the bridge reads it with an atomic load), so Task 5 holds an `Arc<AtomicI32>`. AVFoundation's first use in a process costs 1-7 s; the timed tests warm it up once first.
 
 ### Task 5: Hover and drag previews on the scrubber, pause while scrubbing (M)
 
@@ -252,7 +253,7 @@ Steps:
 
 **Interfaces:**
 - `pub(crate) struct ScrubStrip { pub item: MediaId, pub frames: Vec<(f64, Arc<RenderImage>)> }`.
-- `pub(crate) struct StripRequest { pub item: MediaId, pub cancel: Arc<AtomicBool>, pub failed: bool }`. Kept until the item closes, so one item gets at most one request per open.
+- `pub(crate) struct StripRequest { pub item: MediaId, pub cancel: Arc<AtomicI32>, pub failed: bool }`. Kept until the item closes, so one item gets at most one request per open.
 - `fn request_scrub_strip(&mut self, cx)`. It runs only if the player loaded the item (`video.player.is_some()`), `video.duration > 0`, and `strip_request` is `None` for this item. It spawns `cx.background_executor().spawn(video_preview_strip(path, duration, 256, &cancel))`, converts with `bridge::frame_to_gpui_image` on the background thread, then on the UI thread stores the strip only if `self.video.item` is still that id **and** the request's cancel flag is unset (an A → B → A reopen gets a fresh request; the old one is cancelled and its result dropped). On error it logs `log::warn!`, sets `failed = true`, and stays time-only. There is no banner, because the preview is an enhancement.
 - `fn scrub_preview_at(&self, time: f64) -> Option<Arc<RenderImage>>`: nearest frame by binary search on frame time.
 - Test seams: `#[cfg(test)] fn set_scrub_strip_for_test(&mut self, strip: ScrubStrip)` and a `#[cfg(test)]` thread-local counter + result injector in place of the real spawn (tests never call AVFoundation from the UI crate).
