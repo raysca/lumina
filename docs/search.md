@@ -27,7 +27,7 @@ spaces. Every part must match (AND). The grammar lives in
 | `iso:>800`, `f:<2.8` | ISO and aperture (`>`, `>=`, `<`, `<=`, or an exact value) |
 | `rating:>=4` (`stars:`) | Star rating |
 | `color:red` | Color label: `red`, `orange`, `yellow`, `green`, `blue`, `purple` (or `1`-`6`) |
-| `tag:travel` (`keyword:`) | Has the tag (case-insensitive) |
+| `tag:travel` (`keyword:`) | Has the tag (case-insensitive). Keywords are paths separated by `/`, and `tag:places` also matches sub-keywords such as `places/europe/paris`, but not `places-old` |
 | `is:favorite` (`is:fav`, `is:favourite`) | Favorites |
 | `is:video`, `is:photo` (`is:image`), `is:raw` | Media type. `is:photo` means non-RAW stills |
 | `is:trashed` | Items in the trash (otherwise the trash is never searched) |
@@ -43,7 +43,7 @@ A leading `-` excludes:
 - `-beach` hides items matching `beach`. Like inclusion this is a prefix
   match, so `-beach` also hides "beaches".
 - `-"two words"` hides a phrase.
-- `-tag:work` hides items tagged `work`.
+- `-tag:work` hides items tagged `work` or a sub-keyword such as `work/clients`.
 - `-is:favorite` shows only non-favorites.
 - `-has:location`, `-has:tag`, `-has:color` show items without GPS, tags or a
   color label.

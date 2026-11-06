@@ -120,10 +120,13 @@ mod tests {
             vec![rule_eq],
         );
         let (sql_eq, params_eq) = album_eq.build_sql().unwrap();
-        assert!(sql_eq.contains("m.id IN (SELECT media_id FROM media_tags WHERE tag = ?)"));
+        assert!(
+            sql_eq.contains("m.id IN (SELECT media_id FROM media_tags WHERE (tag >= ?"),
+            "Tag Equals is a subtree test: {sql_eq}"
+        );
         assert_eq!(
-            params_eq[0],
-            rusqlite::types::Value::Text("nature".to_string())
+            params_eq,
+            vec![rusqlite::types::Value::Text("nature".to_string()); 4]
         );
 
         // Tag NotEquals
@@ -139,10 +142,13 @@ mod tests {
             vec![rule_neq],
         );
         let (sql_neq, params_neq) = album_neq.build_sql().unwrap();
-        assert!(sql_neq.contains("m.id NOT IN (SELECT media_id FROM media_tags WHERE tag = ?)"));
+        assert!(
+            sql_neq.contains("m.id NOT IN (SELECT media_id FROM media_tags WHERE (tag >= ?"),
+            "Tag NotEquals is a subtree test: {sql_neq}"
+        );
         assert_eq!(
-            params_neq[0],
-            rusqlite::types::Value::Text("work".to_string())
+            params_neq,
+            vec![rusqlite::types::Value::Text("work".to_string()); 4]
         );
 
         // Tag Contains

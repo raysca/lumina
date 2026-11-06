@@ -1,4 +1,5 @@
 use gpui::*;
+use lumina_core::catalog::keywords::normalize_path;
 use lumina_core::text::{clean_text, MAX_NAME_CHARS};
 
 use crate::app::types::TagSortOrder;
@@ -53,10 +54,13 @@ impl LuminaApp {
     }
 
     pub fn batch_add_tag(&mut self, tag: String, cx: &mut Context<Self>) {
-        let clean = clean_text(&tag, MAX_NAME_CHARS).to_lowercase();
-        if clean.is_empty() {
+        // The stored path, so undo and the "already had it" check see the
+        // same row the catalog writes. An empty or over-long path is refused
+        // with an error, never cut.
+        let Some(clean) = self.apply_tag_mutation("Could not add tag", normalize_path(&tag), cx)
+        else {
             return;
-        }
+        };
         let ids = self.get_selected_ids();
         if ids.is_empty() {
             return;
@@ -175,6 +179,21 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// The path a rename buffer stores, or `None` when there is nothing to
+    /// rename: the buffer is untouched or blank, or [`normalize_path`]
+    /// refused it (then the error banner says why).
+    fn renamed_path(
+        &mut self,
+        old_tag: &str,
+        buffer: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        if buffer == old_tag || clean_text(buffer, MAX_NAME_CHARS).is_empty() {
+            return None;
+        }
+        self.apply_tag_mutation("Could not rename tag", normalize_path(buffer), cx)
+    }
+
     pub fn start_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
         self.editing_tag = Some(tag.clone());
         self.editing_tag_buffer = tag;
@@ -184,9 +203,13 @@ impl LuminaApp {
     pub fn commit_tag_rename(&mut self, cx: &mut Context<Self>) {
         if let Some(old_tag) = self.editing_tag.take() {
             let new_tag = std::mem::take(&mut self.editing_tag_buffer);
-            let clean_new = clean_text(&new_tag, MAX_NAME_CHARS).to_lowercase();
-            // An untouched buffer never renames, even if cleaning would change it.
-            if !clean_new.is_empty() && new_tag != old_tag && clean_new != old_tag {
+            // An untouched or emptied buffer never renames, even if cleaning
+            // would change it; an over-long path is refused with an error.
+            let Some(clean_new) = self.renamed_path(&old_tag, &new_tag, cx) else {
+                cx.notify();
+                return;
+            };
+            if clean_new != old_tag {
                 let result = if let Some(ref state) = self.grid_state {
                     state.engine.rename_tag(&old_tag, &clean_new).map(|_| ())
                 } else {
@@ -394,9 +417,11 @@ impl LuminaApp {
     pub fn commit_modal_tag_rename(&mut self, cx: &mut Context<Self>) {
         if let Some(old_tag) = self.tag_manager.editing.take() {
             let buffer = std::mem::take(&mut self.tag_manager.editing_buffer);
-            let new_tag = clean_text(&buffer, MAX_NAME_CHARS).to_lowercase();
-            // An untouched buffer never renames, even if cleaning would change it.
-            if !new_tag.is_empty() && buffer != old_tag && new_tag != old_tag.to_lowercase() {
+            let Some(new_tag) = self.renamed_path(&old_tag, &buffer, cx) else {
+                cx.notify();
+                return;
+            };
+            if new_tag != old_tag.to_lowercase() {
                 let result = if let Some(ref state) = self.grid_state {
                     state.engine.rename_tag(&old_tag, &new_tag).map(|_| ())
                 } else {

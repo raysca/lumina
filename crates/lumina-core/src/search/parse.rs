@@ -1,6 +1,7 @@
 //! Query text parsing: tokenizing and the `prefix:value` filter grammar.
 
 use super::StructuredQuery;
+use crate::catalog::keywords::filter_value;
 
 impl StructuredQuery {
     /// Parses a user search query string containing keywords and structured tokens.
@@ -48,7 +49,9 @@ impl StructuredQuery {
         let value = value.trim_matches('"').trim().to_lowercase();
         let prefix = prefix.to_lowercase();
         match (prefix.as_str(), value.as_str()) {
-            ("tag" | "keyword", tag) if !tag.is_empty() => self.exclude_tags.push(tag.to_string()),
+            ("tag" | "keyword", tag) if !tag.is_empty() => {
+                self.exclude_tags.push(filter_value(tag))
+            }
             ("is", "favorite" | "favourite" | "fav") => self.is_favorite = Some(false),
             ("has", "location" | "geo" | "gps") => self.has_location = Some(false),
             ("has", "tag" | "tags" | "label") => self.has_tag = Some(false),
@@ -75,7 +78,7 @@ impl StructuredQuery {
                 parse_float_filter(val, &mut self.min_f_number, &mut self.max_f_number)
             }
             "rating" | "stars" => parse_num_filter(val, &mut self.min_rating, &mut self.max_rating),
-            "tag" | "keyword" => set(&mut self.tag, non_empty(val).map(|t| t.to_lowercase())),
+            "tag" | "keyword" => set(&mut self.tag, non_empty(val).map(|t| filter_value(&t))),
             "is" => {
                 match val.to_lowercase().as_str() {
                     "favorite" | "favourite" | "fav" => self.is_favorite = Some(true),

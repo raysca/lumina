@@ -926,8 +926,22 @@ impl LuminaEngine {
                             .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
                         changed = true;
                     }
-                    if !metadata.tags.is_empty() {
-                        self.catalog.add_tags_batch(&[*id], &metadata.tags)?;
+                    // A keyword the catalog refuses (over the length cap) is
+                    // reported; the item's other keywords still import. A
+                    // blank one (no segment left after cleaning) is skipped.
+                    let mut tags = Vec::new();
+                    for tag in &metadata.tags {
+                        match catalog::keywords::normalize_path(tag) {
+                            Ok(path) => tags.push(path),
+                            Err(_) if catalog::keywords::is_blank_path(tag) => {}
+                            Err(err) => report.failed.push((
+                                item.path.clone(),
+                                format!("could not import keyword: {err}"),
+                            )),
+                        }
+                    }
+                    if !tags.is_empty() {
+                        self.catalog.add_tags_batch(&[*id], &tags)?;
                         changed = true;
                     }
                     // Other tools write a file name to dc:source; only a

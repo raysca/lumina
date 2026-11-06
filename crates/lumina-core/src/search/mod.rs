@@ -1,3 +1,4 @@
+use crate::catalog::keywords::{subtree_clause, subtree_params};
 use serde::{Deserialize, Serialize};
 
 mod explain;
@@ -185,18 +186,21 @@ impl StructuredQuery {
             }
         }
 
+        // `tag:x` and `-tag:x` share one subtree test, so both cover x/...
         if let Some(ref tag) = self.tag {
             clauses.push(format!(
-                "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {TAG_PREDICATE})"
+                "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {})",
+                subtree_clause("tag")
             ));
-            params.push(tag.clone().into());
+            params.extend(subtree_params(tag));
         }
 
         for tag in &self.exclude_tags {
             clauses.push(format!(
-                "NOT EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {TAG_PREDICATE})"
+                "NOT EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {})",
+                subtree_clause("tag")
             ));
-            params.push(tag.clone().into());
+            params.extend(subtree_params(tag));
         }
 
         if let Some(min_r) = self.min_rating {
@@ -355,9 +359,6 @@ impl StructuredQuery {
     }
 }
 
-/// The tag test shared by `tag:x` and `-tag:x`, so both stay in step.
-const TAG_PREDICATE: &str = "tag = ?";
-
 /// Escapes each term as a literal FTS5 prefix phrase (`"term"*`), dropping
 /// quotes and `*` so typed text can never become FTS5 syntax.
 fn fts5_terms(terms: &[String]) -> Vec<String> {
@@ -416,10 +417,11 @@ mod tests {
             ..Default::default()
         };
         let (sql_tag, params) = q_tag.build_sql();
-        assert!(
-            sql_tag.contains("EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND tag = ?)")
-        );
-        assert_eq!(params.len(), 1);
+        assert!(sql_tag.contains(&format!(
+            "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {})",
+            subtree_clause("tag")
+        )));
+        assert_eq!(params.len(), 4, "the subtree test binds the tag four times");
     }
 
     #[test]

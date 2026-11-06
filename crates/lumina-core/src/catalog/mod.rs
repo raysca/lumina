@@ -2,6 +2,7 @@ mod albums;
 mod downloads;
 mod duplicates;
 pub(crate) mod files;
+pub mod keywords;
 mod sources;
 pub use downloads::{DownloadRow, DownloadState};
 pub use files::MissingChange;

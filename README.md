@@ -15,7 +15,9 @@ core handles cataloguing, decoding, and search.
 
 - **SQLite catalog with FTS5** — filename, folder, camera/lens, location, tags,
   and captions are all searchable; timeline buckets (year/month/day) are
-  pre-aggregated for instant scrubbing.
+  pre-aggregated for instant scrubbing. Keywords can be paths
+  (`places/europe/paris`): `tag:places` includes sub-keywords, and so do
+  smart-album "tag is" / "is not" rules.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
   geocoding against a bundled GeoNames dataset.
 - **Smart albums** — 10 system albums plus a Photos-style builder (⌥⌘N or ⌘K):

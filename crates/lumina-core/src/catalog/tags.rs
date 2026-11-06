@@ -1,8 +1,11 @@
 use anyhow::Result;
-use rusqlite::{params, Transaction};
+use rusqlite::types::Value;
+use rusqlite::{params, params_from_iter, Transaction};
 
+use super::keywords::{
+    filter_value, is_blank_path, normalize_path, subtree_clause, subtree_params,
+};
 use super::Catalog;
-use crate::text::{clean_text, MAX_NAME_CHARS};
 use crate::{MediaId, MediaItem, SortSpec};
 
 impl Catalog {
@@ -60,22 +63,19 @@ impl Catalog {
         Ok(())
     }
 
-    /// Attaches one or more normalized tags to a batch of media items. Tags
-    /// are cleaned to one line of at most [`MAX_NAME_CHARS`] and lowercased.
+    /// Attaches one or more tags to a batch of media items, each stored as
+    /// its [`normalize_path`] form (exact rows; no ancestor rows are added).
+    /// Refuses the whole batch, writing nothing, when any tag is empty or
+    /// longer than [`crate::text::MAX_NAME_CHARS`].
     pub fn add_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {
         if ids.is_empty() || tags.is_empty() {
             return Ok(());
         }
 
-        let normalized_tags: Vec<String> = tags
+        let normalized_tags = tags
             .iter()
-            .map(|t| clean_text(t, MAX_NAME_CHARS).to_lowercase())
-            .filter(|t| !t.is_empty())
-            .collect();
-
-        if normalized_tags.is_empty() {
-            return Ok(());
-        }
+            .map(|t| normalize_path(t))
+            .collect::<Result<Vec<String>>>()?;
 
         let raw_ids: Vec<i64> = ids.iter().map(|id| id.0 as i64).collect();
         let mut conn = self.conn.lock();
@@ -100,17 +100,28 @@ impl Catalog {
         Ok(())
     }
 
-    /// Removes one or more tags from a batch of media items.
+    /// Removes one or more tags from a batch of media items. Exact rows:
+    /// removing `a` leaves `a/x` alone (tag undo depends on it).
     pub fn remove_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {
         if ids.is_empty() || tags.is_empty() {
             return Ok(());
         }
 
-        let normalized_tags: Vec<String> = tags
-            .iter()
-            .map(|t| t.trim().to_lowercase())
-            .filter(|t| !t.is_empty())
-            .collect();
+        // Both the text as given and its path form: a chip shows the stored
+        // text, and a row saved before paths were normalized (`a / b`, or
+        // over 100 characters) must stay removable by it.
+        let mut normalized_tags: Vec<String> = Vec::new();
+        for tag in tags {
+            let exact = tag.trim().to_lowercase();
+            if let Ok(path) = normalize_path(tag) {
+                if path != exact {
+                    normalized_tags.push(path);
+                }
+            }
+            if !exact.is_empty() {
+                normalized_tags.push(exact);
+            }
+        }
 
         if normalized_tags.is_empty() {
             return Ok(());
@@ -247,12 +258,16 @@ impl Catalog {
     }
 
     /// Globally renames a tag across all media items (handles collision by
-    /// merging). The new name is cleaned like [`Self::add_tags_batch`]; the
-    /// old one is only trimmed, so a tag stored before cleaning still matches.
+    /// merging). The new name is stored as its [`normalize_path`] form and
+    /// an over-long one is refused; the old one is only trimmed and
+    /// lowercased, so a tag stored before cleaning still matches.
     pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
         let old_clean = old_tag.trim().to_lowercase();
-        let new_clean = clean_text(new_tag, MAX_NAME_CHARS).to_lowercase();
-        if old_clean.is_empty() || new_clean.is_empty() || old_clean == new_clean {
+        if old_clean.is_empty() || is_blank_path(new_tag) {
+            return Ok(0);
+        }
+        let new_clean = normalize_path(new_tag)?;
+        if old_clean == new_clean {
             return Ok(0);
         }
 
@@ -427,18 +442,37 @@ impl Catalog {
         Self::map_query_rows(&mut stmt, params![limit as i64, offset as i64])
     }
 
-    /// Queries media items matching a specific tag.
+    /// Queries media items carrying `tag` or a keyword below it, each once.
     pub fn get_items_by_tag(
         &self,
         tag: &str,
         limit: usize,
         offset: usize,
     ) -> Result<Vec<MediaItem>> {
-        let clean = tag.trim().to_lowercase();
+        let clean = filter_value(tag);
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            r#"
-            SELECT 
+        let mut stmt = conn.prepare_cached(&items_by_tag_sql())?;
+        let mut values: Vec<Value> = subtree_params(&clean).into();
+        values.extend([Value::Integer(limit as i64), Value::Integer(offset as i64)]);
+        Self::map_query_rows(&mut stmt, params_from_iter(values))
+    }
+}
+
+/// The `get_items_by_tag` query, one `?` per subtree value then limit and
+/// offset. Shared with the plan test.
+///
+/// `IN`, not `EXISTS`: the plan asked for `EXISTS` to avoid one row per
+/// matching tag, and `IN` does that too, but lets SQLite start from the tag
+/// range and sort the few hits instead of walking the whole timeline with a
+/// correlated subquery per row (a rare tag on 100k items: ~60 µs vs ~56 ms).
+// ponytail: even with LIMIT 24 every match is read and sorted, so the cost
+// grows with the tag's size (a 50k-item tag: tens of ms, on the UI thread in
+// the tag manager, about 2x the old JOIN). Load the tag manager's grid off the
+// UI thread if large tags make arrowing through it feel slow.
+fn items_by_tag_sql() -> String {
+    format!(
+        r#"
+            SELECT
                 m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
                 m.media_type, m.width, m.height, m.duration_ms,
                 m.timestamp_epoch_ms, m.year, m.month, m.day,
@@ -447,19 +481,19 @@ impl Catalog {
                 m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
                 m.is_favorite, m.is_hidden, m.is_trashed, m.title
             FROM media_items m
-            JOIN media_tags mt ON mt.media_id = m.id
-            WHERE mt.tag = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0
+            WHERE m.id IN (SELECT media_id FROM media_tags WHERE {})
+                AND m.is_trashed = 0 AND m.is_hidden = 0
             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
-            LIMIT ?2 OFFSET ?3;
+            LIMIT ? OFFSET ?;
             "#,
-        )?;
-        Self::map_query_rows(&mut stmt, params![clean, limit as i64, offset as i64])
-    }
+        subtree_clause("tag")
+    )
 }
 
 #[cfg(test)]
 mod untagged_media_tests {
     use super::*;
+    use crate::text::MAX_NAME_CHARS;
     use crate::{MediaType, SortDirection, SortField};
 
     fn media_item(path: &str, timestamp_epoch_ms: i64, hidden: bool, trashed: bool) -> MediaItem {
@@ -569,14 +603,16 @@ mod untagged_media_tests {
         );
 
         catalog
-            .add_tags_batch(&[id], &[dirty.to_string(), "x".repeat(150)])
+            .add_tags_batch(&[id], &[dirty.to_string()])
             .expect("add tags");
-        let mut tags = catalog.get_tags_for_item(id).expect("tags");
-        tags.sort();
+        assert!(
+            catalog.add_tags_batch(&[id], &["x".repeat(150)]).is_err(),
+            "an over-long tag is refused: cutting it would store a different keyword"
+        );
         assert_eq!(
-            tags,
-            vec!["a b c".to_string(), "x".repeat(crate::text::MAX_NAME_CHARS)],
-            "tags are cleaned and capped"
+            catalog.get_tags_for_item(id).expect("tags"),
+            vec!["a b c".to_string()],
+            "tags are cleaned to one line"
         );
 
         catalog
@@ -631,6 +667,82 @@ mod untagged_media_tests {
             catalog.get_captions_map().expect("captions")[&id],
             "Para one\n\nPara two",
             "captions keep their paragraphs but lose disguising characters"
+        );
+    }
+
+    #[test]
+    fn items_by_tag_plan_drives_from_the_tag_range() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let items: Vec<_> = (0..2_000)
+            .map(|i| media_item(&format!("/lib/{i}.jpg"), i, false, false))
+            .collect();
+        let ids: Vec<_> = catalog
+            .insert_or_update_batch(&items)
+            .expect("insert media")
+            .iter()
+            .map(|it| it.id)
+            .collect();
+        catalog
+            .add_tags_batch(&ids[..2], &["rare".to_string()])
+            .expect("tag");
+        catalog
+            .add_tags_batch(&ids, &["common".to_string()])
+            .expect("tag");
+        // No ANALYZE: the app never runs it, so plan without statistics.
+        // Inline the values (explain binds nothing): four times the tag,
+        // then limit and offset.
+        let mut values = ["'rare'"; 4].into_iter().chain(["24", "0"]);
+        let sql: String = items_by_tag_sql()
+            .chars()
+            .map(|c| match c {
+                '?' => values.next().expect("one value per ?").to_string(),
+                c => c.to_string(),
+            })
+            .collect();
+        let rows = catalog.explain_query_plan(&sql).expect("explain");
+        let plan = rows.join(" | ");
+        assert!(
+            rows.iter().any(
+                |r| r.starts_with("SEARCH media_tags USING INDEX idx_media_tags_tag")
+                    && r.contains("tag>")
+            ),
+            "a rare tag must seek media_tags by tag range: {plan}"
+        );
+        assert!(
+            !rows
+                .iter()
+                .any(|r| r.starts_with("SCAN m") || r.contains("CORRELATED")),
+            "no timeline walk with a per-row subquery: {plan}"
+        );
+    }
+
+    #[test]
+    fn a_legacy_over_long_tag_stays_removable() {
+        let catalog = Catalog::open_in_memory().expect("open in-memory catalog");
+        let id = catalog
+            .insert_or_update_batch(&[media_item("/lib/a.jpg", 1_000, false, false)])
+            .expect("insert media")[0]
+            .id;
+        let legacy = "y".repeat(MAX_NAME_CHARS + 50);
+        {
+            // Seeded the way the catalog writes tags, keeping the index in step.
+            let mut conn = catalog.conn.lock();
+            let tx = conn.transaction().expect("begin");
+            Catalog::delete_fts_for_items(&tx, &[id.0 as i64]).expect("unindex");
+            tx.execute(
+                "INSERT INTO media_tags (media_id, tag) VALUES (?1, ?2)",
+                params![id.0 as i64, legacy],
+            )
+            .expect("seed a tag saved before paths were capped");
+            Catalog::insert_fts_for_items(&tx, &[id.0 as i64]).expect("reindex");
+            tx.commit().expect("commit");
+        }
+        catalog
+            .remove_tags_batch(&[id], &[legacy])
+            .expect("removing a legacy tag succeeds");
+        assert!(
+            catalog.get_tags_for_item(id).expect("tags").is_empty(),
+            "a tag too long to normalize is still removed by its exact text"
         );
     }
 

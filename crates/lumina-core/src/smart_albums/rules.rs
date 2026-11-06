@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
+use crate::catalog::keywords::{filter_value, subtree_clause, subtree_params};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MatchMode {
@@ -233,20 +235,20 @@ fn compile_rule(
     }
     if rule.field == RuleField::Tag {
         return match &rule.operator {
-            RuleOperator::Equals => {
-                let s = rule_value_to_string(&rule.value)?;
-                let clean = s.trim().to_lowercase();
+            // Equals / NotEquals cover the keyword and its descendants.
+            RuleOperator::Equals | RuleOperator::NotEquals => {
+                let clean = filter_value(&rule_value_to_string(&rule.value)?);
+                let not = if rule.operator == RuleOperator::NotEquals {
+                    "NOT "
+                } else {
+                    ""
+                };
                 Ok((
-                    "m.id IN (SELECT media_id FROM media_tags WHERE tag = ?)".to_string(),
-                    vec![clean.into()],
-                ))
-            }
-            RuleOperator::NotEquals => {
-                let s = rule_value_to_string(&rule.value)?;
-                let clean = s.trim().to_lowercase();
-                Ok((
-                    "m.id NOT IN (SELECT media_id FROM media_tags WHERE tag = ?)".to_string(),
-                    vec![clean.into()],
+                    format!(
+                        "m.id {not}IN (SELECT media_id FROM media_tags WHERE {})",
+                        subtree_clause("tag")
+                    ),
+                    subtree_params(&clean).into(),
                 ))
             }
             RuleOperator::Contains => {

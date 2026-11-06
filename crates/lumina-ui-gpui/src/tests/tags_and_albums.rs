@@ -346,6 +346,101 @@ fn test_tag_manager_modular_flow() {
 }
 
 #[core::prelude::v1::test]
+fn adding_a_keyword_path_stores_it_normalized_and_refuses_over_long_ones() {
+    let (temp_dir, engine) = seed_library("keyword_path_add", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        app.selected_indices = [0].into_iter().collect();
+        app.selection_anchor = Some(0);
+        app.selected_index = Some(0);
+        app.selected_item = Some(item.clone());
+        app.update_batch_summary();
+
+        app.batch_add_tag(" Places / Europe ".to_string(), cx);
+        assert!(app.error_message.is_none(), "a valid path is written");
+        assert_eq!(
+            engine.get_tags_for_item(item.id),
+            vec!["places/europe".to_string()],
+            "the catalog stores the normalized path"
+        );
+        app.undo_last(cx);
+        assert!(
+            engine.get_tags_for_item(item.id).is_empty(),
+            "undo removes the row the add wrote"
+        );
+
+        // Typing is capped, but a parent plus child can still go over.
+        let long = format!("{}/{}", "a".repeat(lumina_core::text::MAX_NAME_CHARS), "b");
+        app.batch_add_tag(long, cx);
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not add tag")),
+            "an over-long path surfaces an error instead of being cut: {:?}",
+            app.error_message
+        );
+        assert!(
+            engine.get_tags_for_item(item.id).is_empty(),
+            "a refused path writes nothing"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn renaming_a_tag_stores_the_normalized_path_and_refuses_over_long_ones() {
+    let (temp_dir, engine) = seed_library("keyword_path_rename", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine
+        .add_tags_batch(&[item.id], &["trip".to_string()])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        app.start_tag_rename("trip".to_string(), cx);
+        app.editing_tag_buffer = " Places / Europe ".to_string();
+        app.commit_tag_rename(cx);
+        assert!(app.error_message.is_none(), "a valid path renames");
+        assert_eq!(
+            engine.get_tags_for_item(item.id),
+            vec!["places/europe".to_string()],
+            "the sidebar rename stores the normalized path"
+        );
+
+        app.start_modal_tag_rename("places/europe".to_string(), cx);
+        app.tag_manager.editing_buffer = "Places / Asia".to_string();
+        app.commit_modal_tag_rename(cx);
+        assert_eq!(
+            engine.get_tags_for_item(item.id),
+            vec!["places/asia".to_string()],
+            "the tag manager rename stores the normalized path"
+        );
+
+        let long = format!("{}/b", "a".repeat(lumina_core::text::MAX_NAME_CHARS));
+        app.start_modal_tag_rename("places/asia".to_string(), cx);
+        app.tag_manager.editing_buffer = long;
+        app.commit_modal_tag_rename(cx);
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not rename tag")),
+            "an over-long rename surfaces an error instead of being cut: {:?}",
+            app.error_message
+        );
+        assert_eq!(
+            engine.get_tags_for_item(item.id),
+            vec!["places/asia".to_string()],
+            "a refused rename changes nothing"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
     let (temp_dir, engine) = seed_library("untagged_count", 2);
     let items = engine.get_item_slice(0..2);

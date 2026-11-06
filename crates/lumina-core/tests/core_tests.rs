@@ -3937,3 +3937,406 @@ fn merge_keeps_search_index_in_sync() {
         "the merged caption must keep matching after the tag edit"
     );
 }
+
+// --- Keyword paths: filters match a keyword and its descendants ---
+
+/// One item per tag, in order; returns the catalog and the ids.
+fn catalog_with_tags(tags: &[&str]) -> (Catalog, Vec<MediaId>) {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..tags.len())
+        .map(|i| {
+            sample_media_item(
+                &format!("/photos/kw/{i}.jpg"),
+                MediaType::Image,
+                1_000 + i as i64,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .iter()
+        .map(|it| it.id)
+        .collect();
+    for (id, tag) in ids.iter().zip(tags) {
+        catalog
+            .add_tags_batch(&[*id], &[tag.to_string()])
+            .expect("add tag");
+    }
+    (catalog, ids)
+}
+
+fn structured_ids(catalog: &Catalog, text: &str) -> Vec<MediaId> {
+    let mut ids: Vec<MediaId> = catalog
+        .search_structured(&StructuredQuery::parse(text), 100, 0)
+        .expect("structured search runs")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    ids.sort_by_key(|id| id.0);
+    ids
+}
+
+fn tag_album(operator: RuleOperator, tag: &str) -> lumina_core::SmartAlbum {
+    lumina_core::SmartAlbum::new(
+        tag.to_string(),
+        "tag".to_string(),
+        MatchMode::All,
+        vec![SmartAlbumRule {
+            field: RuleField::Tag,
+            operator,
+            value: RuleValue::Text(tag.to_string()),
+        }],
+    )
+}
+
+fn album_ids(catalog: &Catalog, album: &lumina_core::SmartAlbum) -> Vec<MediaId> {
+    let mut ids: Vec<MediaId> = catalog
+        .query_smart_album(album, 100, 0)
+        .expect("smart album runs")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    ids.sort_by_key(|id| id.0);
+    ids
+}
+
+const SIBLING_TAGS: [&str; 7] = [
+    "places",
+    "places/europe/paris",
+    "placesx",
+    "placesx/a",
+    "places-old",
+    "places.x",
+    "other/places",
+];
+
+#[test]
+fn tag_filter_matches_descendants_not_siblings() {
+    let (catalog, ids) = catalog_with_tags(&SIBLING_TAGS);
+    let expected = vec![ids[0], ids[1]];
+    assert_eq!(
+        structured_ids(&catalog, "tag:places"),
+        expected,
+        "tag:places matches places and places/europe/paris, never a sibling prefix"
+    );
+    let mut by_tag: Vec<MediaId> = catalog
+        .get_items_by_tag("places", 100, 0)
+        .expect("items by tag")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    by_tag.sort_by_key(|id| id.0);
+    assert_eq!(by_tag, expected, "the tag view matches the same subtree");
+    assert_eq!(
+        structured_ids(&catalog, "tag:places/europe"),
+        vec![ids[1]],
+        "a mid-level keyword matches its descendants"
+    );
+}
+
+#[test]
+fn negated_tag_filter_excludes_descendants_only() {
+    let (catalog, ids) = catalog_with_tags(&["places", "places/europe", "places-old", "other"]);
+    assert_eq!(
+        structured_ids(&catalog, "-tag:places"),
+        vec![ids[2], ids[3]],
+        "-tag:places drops places and places/europe but keeps places-old"
+    );
+}
+
+#[test]
+fn items_by_parent_tag_are_not_duplicated() {
+    let (catalog, ids) = catalog_with_tags(&["a/x"]);
+    catalog
+        .add_tags_batch(&[ids[0]], &["a/y".to_string()])
+        .expect("add second child");
+    let found = catalog.get_items_by_tag("a", 100, 0).expect("items by tag");
+    assert_eq!(
+        found.iter().map(|item| item.id).collect::<Vec<_>>(),
+        vec![ids[0]],
+        "an item with two matching children appears once"
+    );
+    assert_eq!(structured_ids(&catalog, "tag:a"), vec![ids[0]]);
+}
+
+#[test]
+fn smart_album_tag_equals_includes_children() {
+    let (catalog, ids) = catalog_with_tags(&SIBLING_TAGS);
+    assert_eq!(
+        album_ids(&catalog, &tag_album(RuleOperator::Equals, "Places")),
+        vec![ids[0], ids[1]],
+        "Tag Equals matches the keyword and its descendants, not siblings"
+    );
+}
+
+#[test]
+fn smart_album_tag_not_equals_excludes_children() {
+    let (catalog, ids) = catalog_with_tags(&SIBLING_TAGS);
+    assert_eq!(
+        album_ids(&catalog, &tag_album(RuleOperator::NotEquals, "places")),
+        ids[2..].to_vec(),
+        "Tag NotEquals excludes the keyword and its descendants, keeps siblings"
+    );
+}
+
+#[test]
+fn tag_filter_plan_uses_index() {
+    let (catalog, _) = catalog_with_tags(&SIBLING_TAGS);
+    let mut queries: Vec<(String, (String, Vec<rusqlite::types::Value>))> =
+        ["tag:places", "-tag:places", "tag:places is:favorite"]
+            .iter()
+            .map(|text| {
+                (
+                    text.to_string(),
+                    StructuredQuery::parse(text).synthesize_query(50, 0),
+                )
+            })
+            .collect();
+    for operator in [RuleOperator::Equals, RuleOperator::NotEquals] {
+        let album = tag_album(operator.clone(), "places");
+        queries.push((
+            format!("album {operator:?}"),
+            album.synthesize_query(50, 0).expect("compiles"),
+        ));
+    }
+    for (label, (sql, params)) in queries {
+        let rows = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain");
+        let plan = rows.join(" | ");
+        assert!(
+            rows.iter()
+                .any(|r| r.contains("media_tags USING") && r.contains("tag>")),
+            "{label}: the tag filter must seek a media_tags index by range, got: {plan}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.starts_with("SCAN media_tags")),
+            "{label}: the tag filter must not scan media_tags, got: {plan}"
+        );
+    }
+}
+
+#[test]
+fn tag_undo_ids_stay_exact() {
+    let (catalog, ids) = catalog_with_tags(&["a", "a/x"]);
+    assert_eq!(
+        catalog.ids_with_tag(&ids, "a").expect("ids with tag"),
+        vec![ids[0]],
+        "undo records exact rows: an item with only a/x does not carry a"
+    );
+    catalog
+        .remove_tags_batch(&ids, &["a".to_string()])
+        .expect("remove");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[1]).expect("tags"),
+        vec!["a/x".to_string()],
+        "removing a parent keyword is exact and leaves children alone"
+    );
+}
+
+#[test]
+fn normalize_path_refuses_over_long_paths() {
+    let (catalog, ids) = catalog_with_tags(&["kept"]);
+    let long = "x".repeat(lumina_core::text::MAX_NAME_CHARS + 1);
+    assert!(lumina_core::catalog::keywords::normalize_path(&long).is_err());
+    assert!(
+        catalog
+            .add_tags_batch(&ids, &["fine".to_string(), long])
+            .is_err(),
+        "an over-long keyword is refused, not truncated"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).expect("tags"),
+        vec!["kept".to_string()],
+        "a refused batch writes nothing"
+    );
+}
+
+#[test]
+fn tag_writes_store_the_normalized_path() {
+    let (catalog, ids) = catalog_with_tags(&[" Places // Europe/ "]);
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).expect("tags"),
+        vec!["places/europe".to_string()],
+        "add stores the canonical path"
+    );
+    catalog
+        .remove_tags_batch(&ids, &["places / europe".to_string()])
+        .expect("remove");
+    assert!(
+        catalog.get_tags_for_item(ids[0]).expect("tags").is_empty(),
+        "remove normalizes the same way, so it finds the stored row"
+    );
+}
+
+#[test]
+fn an_over_long_sidecar_keyword_is_reported_and_the_rest_import() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("long_sidecar_keyword");
+    let item = engine.get_item_slice(0..1).remove(0);
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            tags: vec![
+                "Places/Europe".to_string(),
+                "z".repeat(lumina_core::text::MAX_NAME_CHARS + 1),
+            ],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report = engine
+        .import_sidecars(&[item.id])
+        .expect("one bad keyword must not abort the import");
+    assert_eq!(
+        engine.get_tags_for_item(item.id),
+        vec!["places/europe".to_string()],
+        "the valid keyword imports as a normalized path"
+    );
+    assert_eq!(
+        report.failed.len(),
+        1,
+        "the refused keyword is reported, not silently cut or dropped: {:?}",
+        report.failed
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn rename_stores_the_normalized_path_and_its_chip_removes() {
+    let (catalog, ids) = catalog_with_tags(&["trip"]);
+    catalog
+        .rename_tag("trip", "Places / Europe")
+        .expect("rename");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).expect("tags"),
+        vec!["places/europe".to_string()],
+        "rename writes the canonical path, like add"
+    );
+    assert!(
+        catalog
+            .rename_tag(
+                "places/europe",
+                &"r".repeat(lumina_core::text::MAX_NAME_CHARS + 50)
+            )
+            .is_err(),
+        "an over-long rename is refused, not truncated"
+    );
+    catalog
+        .remove_tags_batch(&ids, &["places/europe".to_string()])
+        .expect("remove");
+    assert!(
+        catalog.get_tags_for_item(ids[0]).expect("tags").is_empty(),
+        "removing the chip deletes the renamed row"
+    );
+}
+
+#[test]
+fn removing_a_pre_path_spaced_tag_deletes_its_exact_row() {
+    let (tmp_dir, db_path, engine, _rx) = scanned_library("spaced_legacy_tag");
+    let item = engine.get_item_slice(0..1).remove(0);
+    drop(engine);
+    // A tag stored before paths were normalized, written with the index in step.
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let fts_row = "rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption";
+    let fts_values = format!(
+        "m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, \
+         m.model, m.lens, CAST(m.year AS TEXT), \
+         COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''), \
+         COALESCE((SELECT caption FROM media_captions WHERE media_id = m.id), '') \
+         FROM media_items m WHERE m.id = {}",
+        item.id.0
+    );
+    conn.execute_batch(&format!(
+        "INSERT INTO media_search_fts(media_search_fts, {fts_row}) SELECT 'delete', {fts_values};
+         INSERT INTO media_tags (media_id, tag) VALUES ({}, 'places / europe');
+         INSERT INTO media_search_fts({fts_row}) SELECT {fts_values};",
+        item.id.0
+    ))
+    .unwrap();
+    drop(conn);
+    let catalog = Catalog::open(&db_path).expect("reopen");
+    catalog
+        .remove_tags_batch(&[item.id], &["places / europe".to_string()])
+        .expect("remove");
+    assert!(
+        catalog.get_tags_for_item(item.id).expect("tags").is_empty(),
+        "the chip of a pre-path tag removes its exact row"
+    );
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn filter_values_are_normalized_like_stored_paths() {
+    let (catalog, ids) = catalog_with_tags(&["places/europe", "other"]);
+    for text in [
+        "tag:places/",
+        "tag:\"Places / Europe\"",
+        "tag:Places//Europe",
+    ] {
+        assert_eq!(
+            structured_ids(&catalog, text),
+            vec![ids[0]],
+            "{text:?} matches the stored path"
+        );
+    }
+    assert_eq!(structured_ids(&catalog, "-tag:places/"), vec![ids[1]]);
+    assert_eq!(
+        album_ids(
+            &catalog,
+            &tag_album(RuleOperator::Equals, "Places / Europe")
+        ),
+        vec![ids[0]],
+        "a smart-album Tag value is normalized too"
+    );
+    assert_eq!(
+        catalog
+            .get_items_by_tag("Places / ", 10, 0)
+            .expect("items")
+            .len(),
+        1,
+        "the tag view normalizes its value"
+    );
+}
+
+#[test]
+fn tag_filter_keeps_spaced_and_unicode_siblings_apart() {
+    let (catalog, ids) =
+        catalog_with_tags(&["places x", "places/a", "café", "café/paris", "cafée"]);
+    assert_eq!(
+        structured_ids(&catalog, "tag:places"),
+        vec![ids[1]],
+        "`places x` is a sibling"
+    );
+    assert_eq!(
+        structured_ids(&catalog, "tag:café"),
+        vec![ids[2], ids[3]],
+        "café matches café/paris but not cafée"
+    );
+}
+
+#[test]
+fn a_blank_sidecar_keyword_is_skipped_not_reported() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("blank_sidecar_keyword");
+    let item = engine.get_item_slice(0..1).remove(0);
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            tags: vec!["/".to_string(), " / / ".to_string(), "kept".to_string()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report = engine.import_sidecars(&[item.id]).expect("import");
+    assert!(
+        report.failed.is_empty(),
+        "a keyword with no segments is skipped, not a failure: {:?}",
+        report.failed
+    );
+    assert_eq!(engine.get_tags_for_item(item.id), vec!["kept".to_string()]);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}

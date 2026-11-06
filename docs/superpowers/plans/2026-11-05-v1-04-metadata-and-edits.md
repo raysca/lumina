@@ -110,7 +110,7 @@ Verified by reading the code on 2026-11-05 (HEAD `5110780`, plus uncommitted net
 
 ### Task 2: Keyword paths, descendant matching (M)
 
-**Files:** Create `crates/lumina-core/src/catalog/keywords.rs` (path helpers; tags.rs is 775 lines). Modify `catalog/tags.rs` (`add_tags_batch` and `remove_tags_batch` call `normalize_path` but stay exact-row; `get_items_by_tag` switches its `JOIN` to an `EXISTS` subtree filter so an item with two matching tags appears once; `ids_with_tag` is **not** changed, tag undo relies on exact rows), `search.rs:253-257`, `smart_albums/rules.rs:220-235`, `catalog/mod.rs` (mod decl). Tests in `keywords.rs`, `search.rs`, `core_tests.rs`.
+**Files:** Create `crates/lumina-core/src/catalog/keywords.rs` (path helpers; tags.rs is 775 lines). Modify `catalog/tags.rs` (`add_tags_batch` and `remove_tags_batch` call `normalize_path` but stay exact-row; `get_items_by_tag` switches its `JOIN` to an `m.id IN (SELECT media_id FROM media_tags WHERE <subtree>)` filter so an item with two matching tags appears once (implemented as `IN`, not the `EXISTS` first planned: `EXISTS` walked the whole timeline with a correlated subquery, about 56 ms for a rare tag on 100k items, against about 60 µs for `IN`, which starts from the tag range); `ids_with_tag` is **not** changed, tag undo relies on exact rows), `search.rs:253-257`, `smart_albums/rules.rs:220-235`, `catalog/mod.rs` (mod decl). Tests in `keywords.rs`, `search.rs`, `core_tests.rs`.
 
 **Interfaces:**
 - `pub fn normalize_path(raw: &str) -> Result<String>` (segments trimmed, empties dropped, `clean_text` + lowercase; `bail!` when the result is empty-after-cleaning or longer than `MAX_NAME_CHARS`, instead of truncating).
