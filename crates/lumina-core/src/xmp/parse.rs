@@ -1,6 +1,7 @@
 //! Sidecar parsing: the subset of XMP Lumina reads, string-based (no XML crate).
 
 use super::{SidecarMetadata, LABEL_NAMES};
+use crate::catalog::Rights;
 
 fn unescape_xml(value: &str) -> String {
     value
@@ -108,7 +109,35 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         tags,
         source_url,
         credit,
+        rights: parse_rights(xml),
     }
+}
+
+/// dc:creator (every name, joined with `; `), dc:rights,
+/// xmpRights:UsageTerms and the work email and URL of
+/// Iptc4xmpCore:CreatorContactInfo, as elements or (Lightroom) attributes.
+fn parse_rights(xml: &str) -> Rights {
+    let present = |value: String| Some(value).filter(|value| !value.trim().is_empty());
+    let first_li = |name: &str| {
+        between(xml, &format!("<{name}>"), &format!("</{name}>"))
+            .and_then(|section| extract_li_values(section).into_iter().next())
+    };
+    let contact = |name: &str| {
+        between(xml, &format!("<{name}>"), &format!("</{name}>"))
+            .or_else(|| between(xml, &format!("{name}=\""), "\""))
+            .map(|value| unescape_xml(value.trim()))
+            .and_then(present)
+    };
+    Rights {
+        creator: between(xml, "<dc:creator>", "</dc:creator>")
+            .map(|section| extract_li_values(section).join("; "))
+            .and_then(present),
+        copyright: first_li("dc:rights").and_then(present),
+        usage_terms: first_li("xmpRights:UsageTerms").and_then(present),
+        contact_email: contact("Iptc4xmpCore:CiEmailWork"),
+        contact_url: contact("Iptc4xmpCore:CiUrlWork"),
+    }
+    .cleaned()
 }
 
 #[cfg(test)]
@@ -238,6 +267,60 @@ mod tests {
             "a tag with | cannot be expressed in Lightroom's syntax"
         );
         assert_eq!(tags_of(&xml), vec!["a|b", "x/y"], "the | tag stays flat");
+    }
+
+    #[test]
+    fn several_creators_round_trip_as_separate_entries() {
+        let metadata = SidecarMetadata {
+            rights: crate::catalog::Rights {
+                creator: Some("Ada Lovelace; Alan Turing".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let xml = crate::xmp::render::render_xmp(&metadata);
+        assert_eq!(
+            xml.matches("<rdf:li>").count(),
+            2,
+            "each creator gets its own rdf:li: {xml}"
+        );
+        assert_eq!(
+            parse_xmp(&xml).rights.creator.as_deref(),
+            Some("Ada Lovelace; Alan Turing")
+        );
+    }
+
+    #[test]
+    fn lightroom_contact_attributes_parse() {
+        // Lightroom writes the contact struct's fields as attributes.
+        let xml = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/"
+    xmlns:Iptc4xmpCore="http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/">
+   <dc:creator><rdf:Seq><rdf:li>Ada</rdf:li><rdf:li>Bea</rdf:li></rdf:Seq></dc:creator>
+   <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">© Ada &amp; Bea</rdf:li></rdf:Alt></dc:rights>
+   <Iptc4xmpCore:CreatorContactInfo
+    Iptc4xmpCore:CiEmailWork="ada@example.com"
+    Iptc4xmpCore:CiUrlWork="https://ada.example/?a=1&amp;b=2"/>
+  </rdf:Description></rdf:RDF></x:xmpmeta>"#;
+        let rights = parse_xmp(xml).rights;
+        assert_eq!(
+            rights.creator.as_deref(),
+            Some("Ada; Bea"),
+            "every creator is kept"
+        );
+        assert_eq!(rights.copyright.as_deref(), Some("© Ada & Bea"));
+        assert_eq!(rights.usage_terms, None);
+        assert_eq!(
+            rights.contact_email.as_deref(),
+            Some("ada@example.com"),
+            "attribute-form contact fields must parse"
+        );
+        assert_eq!(
+            rights.contact_url.as_deref(),
+            Some("https://ada.example/?a=1&b=2")
+        );
     }
 
     #[test]

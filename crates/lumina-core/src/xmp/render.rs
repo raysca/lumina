@@ -85,10 +85,75 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
         _ => String::new(),
     };
 
+    let rights = metadata.rights.cleaned();
+    let creator = match rights.creator.as_deref() {
+        // Import joins several creators with "; ", so split them back into
+        // one rdf:li each and a multi-creator sidecar round-trips.
+        Some(creator) => {
+            let items: String = creator
+                .split("; ")
+                .filter(|name| !name.trim().is_empty())
+                .map(|name| format!("     <rdf:li>{}</rdf:li>\n", escape_xml(name.trim())))
+                .collect();
+            format!("   <dc:creator>\n    <rdf:Seq>\n{items}    </rdf:Seq>\n   </dc:creator>\n")
+        }
+        None => String::new(),
+    };
+    let copyright = alt("dc:rights", rights.copyright.as_deref());
+    let usage_terms = alt("xmpRights:UsageTerms", rights.usage_terms.as_deref());
+    let contact_fields: String = [
+        ("Iptc4xmpCore:CiEmailWork", rights.contact_email.as_deref()),
+        ("Iptc4xmpCore:CiUrlWork", rights.contact_url.as_deref()),
+    ]
+    .into_iter()
+    .filter_map(|(name, value)| {
+        value.map(|value| format!("    <{name}>{}</{name}>\n", escape_xml(value)))
+    })
+    .collect();
+    let contact = if contact_fields.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "   <Iptc4xmpCore:CreatorContactInfo rdf:parseType=\"Resource\">\n{contact_fields}   </Iptc4xmpCore:CreatorContactInfo>\n"
+        )
+    };
+    let mut rights_namespaces = String::new();
+    if rights.usage_terms.is_some() {
+        rights_namespaces.push_str("    xmlns:xmpRights=\"http://ns.adobe.com/xap/1.0/rights/\"\n");
+    }
+    if !contact.is_empty() {
+        rights_namespaces
+            .push_str("    xmlns:Iptc4xmpCore=\"http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/\"\n");
+    }
+
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n{}    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
-        lr_namespace, metadata.rating, label, title, subject, hierarchical, description, source, credit
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n{}{}    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        lr_namespace,
+        rights_namespaces,
+        metadata.rating,
+        label,
+        title,
+        subject,
+        hierarchical,
+        description,
+        source,
+        credit,
+        creator,
+        copyright,
+        usage_terms,
+        contact
     )
+}
+
+/// A language-alternative element (`rdf:Alt`, `x-default`), or nothing.
+fn alt(name: &str, value: Option<&str>) -> String {
+    match value {
+        Some(value) => format!(
+            "   <{name}>\n    <rdf:Alt>\n     <rdf:li xml:lang=\"x-default\">{}</rdf:li>\n    </rdf:Alt>\n   </{name}>\n",
+            escape_xml(value)
+        ),
+        None => String::new(),
+    }
 }
 
 /// An `rdf:Bag` element named `name`, or nothing when `values` is empty.

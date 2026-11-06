@@ -287,7 +287,7 @@ impl Catalog {
     }
 
     /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
-    /// favorite (any), rating (highest), and caption, colour label and title
+    /// favorite (any), rating (highest), and caption, colour label, title and rights
     /// where the keeper has none.
     pub(crate) fn merge_metadata_in_tx(
         tx: &rusqlite::Transaction,
@@ -383,6 +383,22 @@ impl Catalog {
             )?;
             for trash_id in trash_ids {
                 caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 4. Rights when keep_id has none (not indexed, so FTS order does not
+        // matter here). The first trash row that has any wins.
+        {
+            let mut rights_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_rights
+                    (media_id, creator, copyright, usage_terms, contact_email, contact_url)
+                SELECT ?1, creator, copyright, usage_terms, contact_email, contact_url
+                FROM media_rights WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                rights_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
             }
         }
 

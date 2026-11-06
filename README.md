@@ -70,6 +70,12 @@ core handles cataloguing, decoding, and search.
   rewrites or deletes a sidecar another app wrote (darktable and digiKam use
   the same `photo.jpg.xmp` name): it still reads it on import, keeps your edit
   in the catalog, and the status bar says how many sidecars were left unchanged.
+  Rights travel too: creator (`dc:creator`), copyright (`dc:rights`), usage
+  terms (`xmpRights:UsageTerms`) and contact email and URL
+  (`Iptc4xmpCore:CreatorContactInfo` `CiEmailWork` / `CiUrlWork`, also read in
+  Lightroom's attribute form). Get Info shows the ones an item has, read-only;
+  they are not searchable. Importing a sidecar sets the rights fields it names
+  and never clears the others, and merging duplicates keeps them.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
   item's XMP sidecar automatically; permanent deletion is deliberately not

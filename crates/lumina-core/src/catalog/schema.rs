@@ -128,6 +128,19 @@ impl Catalog {
             );
             CREATE INDEX IF NOT EXISTS idx_tag_aliases_tag ON tag_aliases(tag);
 
+            -- v17: creator, copyright and contact per item. Not searched,
+            -- so no index or trigger; a row with every field NULL is
+            -- deleted instead of stored.
+            CREATE TABLE IF NOT EXISTS media_rights (
+                media_id INTEGER PRIMARY KEY,
+                creator TEXT,
+                copyright TEXT,
+                usage_terms TEXT,
+                contact_email TEXT,
+                contact_url TEXT,
+                FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS app_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL

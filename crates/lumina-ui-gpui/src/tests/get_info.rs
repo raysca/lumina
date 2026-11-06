@@ -146,6 +146,59 @@ fn general_tab_shows_dates_and_adjusts_date_taken() {
 }
 
 #[core::prelude::v1::test]
+fn general_tab_shows_set_rights_read_only() {
+    let mut cx = crate::tests::TestApp::single();
+    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_rights");
+    assert!(
+        icx.debug_bounds("info-rights-creator").is_none(),
+        "no rights rows for an item without rights"
+    );
+    let rights = lumina_core::Rights {
+        creator: Some("Ada".into()),
+        contact_url: Some("https://ada.example".into()),
+        ..Default::default()
+    };
+    view.update(icx, |app, cx| {
+        let id = app.selected_item.as_ref().unwrap().id;
+        let engine = &app.grid_state.as_ref().unwrap().engine;
+        engine
+            .catalog()
+            .set_rights(&[(id, rights.clone())])
+            .unwrap();
+        // Reload, as selecting the item again would.
+        app.info_details = None;
+        cx.notify();
+    });
+    render_ui(icx);
+    render_ui(icx);
+    view.update(icx, |app, _| {
+        assert_eq!(
+            app.info_details.as_ref().map(|d| &d.rights),
+            Some(&rights),
+            "Get Info reads the item's rights from the catalog"
+        );
+    });
+    for selector in ["info-rights-creator", "info-rights-contact-url"] {
+        assert!(
+            f32::from(bounds(icx, selector).size.height) >= 32.0,
+            "{selector} renders as a full row"
+        );
+    }
+    for selector in [
+        "info-rights-copyright",
+        "info-rights-usage-terms",
+        "info-rights-contact-email",
+    ] {
+        assert!(
+            icx.debug_bounds(selector).is_none(),
+            "{selector}: only rights that are set get a row"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
 fn camera_tab_has_summary_strip_and_only_known_rows() {
     let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_camera");
@@ -352,6 +405,7 @@ fn cached_details_never_cross_libraries() {
         added_epoch_ms: Some(1),
         file: Default::default(),
         source: None,
+        rights: Default::default(),
     };
     assert!(details.is_for(&item));
     let mut same_id_other_library = item.clone();

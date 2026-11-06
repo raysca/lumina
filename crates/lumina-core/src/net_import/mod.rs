@@ -482,6 +482,7 @@ impl LuminaEngine {
             tags: Vec::new(),
             source_url: Some(info.url.clone()),
             credit: info.uploader.clone(),
+            ..Default::default()
         };
         if let Err(e) = crate::xmp::write_library_sidecar(final_path, &sidecar) {
             log::warn!(

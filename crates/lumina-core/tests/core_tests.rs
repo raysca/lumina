@@ -1,6 +1,6 @@
 use lumina_core::{
     read_sidecar, write_sidecar, Catalog, DecodedFrame, DeletionTarget, DiskCache, EngineEvent,
-    LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat,
+    LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, Rights,
     RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, SortDirection,
     SortField, SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
 };
@@ -2006,6 +2006,81 @@ fn test_import_sidecars_applies_title_caption_rating_and_tags() {
         .get_tags_for_item(item.id)
         .unwrap()
         .contains(&"imported".to_string()));
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn import_never_clears_rights() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_rights_import_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    std::fs::write(tmp_dir.join("photo.jpg"), b"test-jpeg-content").unwrap();
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        tmp_dir.clone(),
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    let item = engine.get_item_slice(0..1).remove(0);
+    let full = Rights {
+        creator: Some("Ada".to_string()),
+        copyright: Some("© 2026 Ada".to_string()),
+        usage_terms: Some("Editorial use only".to_string()),
+        contact_email: Some("ada@example.com".to_string()),
+        contact_url: Some("https://ada.example".to_string()),
+    };
+    engine
+        .catalog()
+        .set_rights(&[(item.id, full.clone())])
+        .unwrap();
+
+    // The engine's sidecar sync writes the catalog's rights.
+    engine.write_metadata_sidecars(&[item.id]).unwrap();
+    assert_eq!(
+        read_sidecar(&item.path)
+            .unwrap()
+            .map(|sidecar| sidecar.rights),
+        Some(full.clone()),
+        "write_metadata_sidecars must carry rights into the sidecar"
+    );
+
+    // A sidecar naming only a new creator updates it and keeps the rest.
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            rights: Rights {
+                creator: Some("Bea".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(report.updated, 1, "a changed creator counts as an update");
+    assert_eq!(
+        engine.catalog().get_rights(&[item.id]).unwrap()[&item.id],
+        Rights {
+            creator: Some("Bea".to_string()),
+            ..full
+        },
+        "import applies the fields a sidecar sets and never clears the others"
+    );
+    let again = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(again.updated, 0, "an unchanged sidecar is not an update");
 
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);

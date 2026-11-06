@@ -3,12 +3,15 @@
 //! Ratings, color labels, captions and tags live in SQLite, but that data is trapped in
 //! Lumina unless it is also written next to the media. We emit a small RDF/XML
 //! sidecar (photo.jpg.xmp) compatible with Adobe conventions for
-//! xmp:Rating, xmp:Label, dc:description, dc:subject and lr:hierarchicalSubject
-//! (keyword paths), and can read it back.
+//! xmp:Rating, xmp:Label, dc:description, dc:subject, lr:hierarchicalSubject
+//! (keyword paths) and the rights fields (dc:creator, dc:rights,
+//! xmpRights:UsageTerms, Iptc4xmpCore:CreatorContactInfo), and can read it back.
 
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use crate::catalog::Rights;
 
 mod owner;
 mod parse;
@@ -27,6 +30,7 @@ pub struct SidecarMetadata {
     pub tags: Vec<String>,
     pub source_url: Option<String>,
     pub credit: Option<String>,
+    pub rights: Rights,
 }
 
 /// xmp:Label values for color labels 1..=6, the names Lightroom and Bridge use.
@@ -41,6 +45,7 @@ impl SidecarMetadata {
             && self.rating == 0
             && self.color_label == 0
             && self.tags.is_empty()
+            && self.rights.is_empty()
     }
 }
 
@@ -185,6 +190,7 @@ mod tests {
             tags: vec!["travel".to_string(), "japan & kyoto".to_string()],
             source_url: Some("https://example.com/video.mp4?a=1&b=2".to_string()),
             credit: Some("Channel & Artist".to_string()),
+            rights: Rights::default(),
         };
         let xml = render_xmp(&metadata);
         assert!(xml.contains("xmp:Rating=\"4\""));
@@ -288,6 +294,65 @@ mod tests {
             0,
             "plain (export) sidecars stay visible"
         );
+        let _ = fs::remove_file(&sidecar);
+        let _ = fs::remove_file(&media);
+    }
+
+    fn full_rights() -> Rights {
+        Rights {
+            creator: Some("Ada & Co".to_string()),
+            copyright: Some("© 2026 Ada <ada>".to_string()),
+            usage_terms: Some("Editorial use only".to_string()),
+            contact_email: Some("ada@example.com".to_string()),
+            contact_url: Some("https://ada.example/?a=1&b=2".to_string()),
+        }
+    }
+
+    #[test]
+    fn rights_roundtrip_through_xmp() {
+        let metadata = SidecarMetadata {
+            rating: 2,
+            tags: vec!["travel".to_string()],
+            rights: full_rights(),
+            ..Default::default()
+        };
+        let xml = render_xmp(&metadata);
+        for expected in [
+            "<dc:creator>\n    <rdf:Seq>\n     <rdf:li>Ada &amp; Co</rdf:li>",
+            "<dc:rights>\n    <rdf:Alt>\n     <rdf:li xml:lang=\"x-default\">© 2026 Ada &lt;ada&gt;</rdf:li>",
+            "<xmpRights:UsageTerms>\n    <rdf:Alt>",
+            "<Iptc4xmpCore:CreatorContactInfo rdf:parseType=\"Resource\">",
+            "<Iptc4xmpCore:CiEmailWork>ada@example.com</Iptc4xmpCore:CiEmailWork>",
+            "xmlns:xmpRights=\"http://ns.adobe.com/xap/1.0/rights/\"",
+            "xmlns:Iptc4xmpCore=\"http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/\"",
+        ] {
+            assert!(xml.contains(expected), "missing {expected:?} in {xml}");
+        }
+        assert_eq!(parse_xmp(&xml), metadata, "every rights field reads back");
+        assert!(
+            !render_xmp(&SidecarMetadata::default()).contains("xmpRights"),
+            "no rights, no rights namespaces"
+        );
+    }
+
+    #[test]
+    fn rights_only_sidecar_is_kept() {
+        let media = temp_media("rights_only");
+        fs::write(&media, b"jpeg").unwrap();
+        let creator_only = SidecarMetadata {
+            rights: Rights {
+                creator: Some("Ada".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(!creator_only.is_empty(), "a creator alone is metadata");
+        let sidecar = written(write_sidecar(&media, &creator_only));
+        assert!(
+            sidecar.exists(),
+            "a sidecar holding only a creator must not be deleted as empty"
+        );
+        assert_eq!(read_sidecar(&media).unwrap(), Some(creator_only));
         let _ = fs::remove_file(&sidecar);
         let _ = fs::remove_file(&media);
     }

@@ -10,6 +10,8 @@ pub use downloads::{DownloadRow, DownloadState};
 pub use files::MissingChange;
 pub use sources::PriorDownload;
 mod media;
+mod rights;
+pub use rights::Rights;
 mod schema;
 mod tags;
 mod trash;
@@ -28,7 +30,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 17;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {

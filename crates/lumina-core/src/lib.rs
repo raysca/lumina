@@ -28,7 +28,8 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, TagChange, SCHEMA_VERSION,
+    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, Rights, TagChange,
+    SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -768,6 +769,10 @@ impl LuminaEngine {
             .catalog
             .get_color_labels_map()
             .context("could not read color labels")?;
+        let rights = self
+            .catalog
+            .get_rights(ids)
+            .context("could not read rights")?;
         let mut report = ExportReport::default();
 
         for id in ids {
@@ -790,7 +795,7 @@ impl LuminaEngine {
             }
             report.exported += 1;
 
-            match self.sidecar_metadata_for(*id, &captions, &ratings, &labels) {
+            match self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights) {
                 Ok(metadata) => match xmp::write_sidecar(&destination_path, &metadata) {
                     Ok(SidecarOutcome::Written(_)) => report.sidecars += 1,
                     Ok(SidecarOutcome::Removed | SidecarOutcome::Unchanged) => {}
@@ -832,12 +837,16 @@ impl LuminaEngine {
             .catalog
             .get_color_labels_map()
             .context("could not read color labels")?;
+        let rights = self
+            .catalog
+            .get_rights(ids)
+            .context("could not read rights")?;
         let mut report = SidecarWriteReport::default();
         for id in ids {
             let Some(item) = self.catalog.get_item_by_id(*id)? else {
                 continue;
             };
-            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels)?;
+            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights)?;
             match xmp::write_library_sidecar(&item.path, &metadata)? {
                 SidecarOutcome::Written(_) => report.written += 1,
                 SidecarOutcome::SkippedForeign => {
@@ -856,8 +865,8 @@ impl LuminaEngine {
     }
 
     /// Imports XMP sidecars for the given items. Only values present in the
-    /// sidecar are applied (ratings always, title/caption/color label when set,
-    /// tags merged),
+    /// sidecar are applied (ratings always, title/caption/color label and each
+    /// rights field when set, tags merged),
     /// so importing never clears metadata that the sidecar does not mention.
     pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
         let before = self.edits_snapshot(ids)?;
@@ -891,6 +900,12 @@ impl LuminaEngine {
                 .catalog
                 .get_caption(item.id)
                 .context("could not read caption")?,
+            rights: self
+                .catalog
+                .get_rights(&[item.id])
+                .context("could not read rights")?
+                .remove(&item.id)
+                .unwrap_or_default(),
         })
     }
 
@@ -956,6 +971,13 @@ impl LuminaEngine {
                             .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
                         changed = true;
                     }
+                    // Fields the sidecar sets replace the catalog's; the
+                    // others stay (parse_xmp already cleaned and dropped blanks).
+                    let rights = now.rights.merged_with(&metadata.rights);
+                    if rights != now.rights && now.rights == then.rights {
+                        self.catalog.set_rights(&[(*id, rights)])?;
+                        changed = true;
+                    }
                     // A keyword the catalog refuses (over the length cap, or
                     // at or below an alias) is reported; the item's other
                     // keywords still import. A blank one (no segment left
@@ -1018,6 +1040,7 @@ impl LuminaEngine {
         captions: &HashMap<MediaId, String>,
         ratings: &HashMap<MediaId, u8>,
         labels: &HashMap<MediaId, u8>,
+        rights: &HashMap<MediaId, Rights>,
     ) -> Result<SidecarMetadata> {
         let tags = self.catalog.get_tags_for_item(id)?;
         let title = self.catalog.get_item_by_id(id)?.and_then(|item| item.title);
@@ -1033,6 +1056,7 @@ impl LuminaEngine {
             tags,
             source_url,
             credit,
+            rights: rights.get(&id).cloned().unwrap_or_default(),
         })
     }
 
@@ -1729,6 +1753,7 @@ struct ItemEdits {
     rating: u8,
     label: u8,
     caption: Option<String>,
+    rights: Rights,
 }
 
 #[cfg(test)]
@@ -1780,12 +1805,24 @@ mod tests {
                 caption: Some("Sidecar caption".into()),
                 rating: 5,
                 color_label: 4,
+                rights: crate::catalog::Rights {
+                    creator: Some("Sidecar creator".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
         .expect("sidecar writes");
 
         let before = engine.edits_snapshot(&[item.id]).expect("snapshot");
+        let mine = crate::catalog::Rights {
+            creator: Some("My name".into()),
+            ..Default::default()
+        };
+        engine
+            .catalog
+            .set_rights(&[(item.id, mine.clone())])
+            .expect("rights");
         // The user edits while the background import is still running.
         engine.catalog.set_rating(item.id, 2).expect("rating");
         engine
@@ -1808,6 +1845,11 @@ mod tests {
             .unwrap()
             .title;
         assert_eq!(title.as_deref(), Some("Mine"), "the user's title wins");
+        assert_eq!(
+            engine.catalog.get_rights(&[item.id]).unwrap().get(&item.id),
+            Some(&mine),
+            "rights set during the import must not be overwritten by the sidecar"
+        );
         assert_eq!(
             engine.catalog.get_color_label(item.id).unwrap(),
             4,

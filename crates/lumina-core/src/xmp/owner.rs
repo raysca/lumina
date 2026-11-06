@@ -3,9 +3,10 @@
 //! and their sidecars hold edit history Lumina cannot carry over.
 
 /// Every qualified element and attribute name any released Lumina version
-/// has written (git `4a94c34`, `73480ad`, `c76f15e`, `0147095`, and the
-/// `lr:` names since keyword paths). A name allow-list, so sidecars from
-/// older versions need no marker. Extend it when the renderer gains a name.
+/// has written (git `4a94c34`, `73480ad`, `c76f15e`, `0147095`, the `lr:`
+/// names since keyword paths, and the rights names since schema v17). A name
+/// allow-list, so sidecars from older versions need no marker. Extend it
+/// when the renderer gains a name.
 const KNOWN_NAMES: &[&str] = &[
     "x:xmpmeta",
     "xmlns:x",
@@ -17,6 +18,8 @@ const KNOWN_NAMES: &[&str] = &[
     "xmlns:photoshop",
     "xmlns:xmp",
     "xmlns:lr",
+    "xmlns:xmpRights",
+    "xmlns:Iptc4xmpCore",
     "xmp:Rating",
     "xmp:Label",
     "dc:title",
@@ -25,6 +28,14 @@ const KNOWN_NAMES: &[&str] = &[
     "dc:source",
     "photoshop:Credit",
     "lr:hierarchicalSubject",
+    "dc:creator",
+    "dc:rights",
+    "xmpRights:UsageTerms",
+    "Iptc4xmpCore:CreatorContactInfo",
+    "Iptc4xmpCore:CiEmailWork",
+    "Iptc4xmpCore:CiUrlWork",
+    "rdf:parseType",
+    "rdf:Seq",
     "rdf:Alt",
     "rdf:Bag",
     "rdf:li",
@@ -172,6 +183,13 @@ mod tests {
             tags: vec!["travel".into(), "places/japan/kyoto".into()],
             source_url: Some("https://example.com/v.mp4?a=1&b=2".into()),
             credit: Some("Channel".into()),
+            rights: crate::catalog::Rights {
+                creator: Some("Ada".into()),
+                copyright: Some("© 2026 Ada".into()),
+                usage_terms: Some("Editorial use only".into()),
+                contact_email: Some("ada@example.com".into()),
+                contact_url: Some("https://ada.example".into()),
+            },
         };
         let today = render_xmp(&full);
         // One packet per released render version, as each one wrote it.

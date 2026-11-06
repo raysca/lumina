@@ -250,6 +250,23 @@ pub fn render_info_tab(
                             render_info_label_value_row("Source", &text)
                         }),
                 )
+                // Rights, read-only: set through metadata templates.
+                .children(details.into_iter().flat_map(|d| {
+                    let rights = &d.rights;
+                    [
+                        ("creator", "Creator", &rights.creator),
+                        ("copyright", "Copyright", &rights.copyright),
+                        ("usage-terms", "Usage terms", &rights.usage_terms),
+                        ("contact-email", "Contact email", &rights.contact_email),
+                        ("contact-url", "Contact URL", &rights.contact_url),
+                    ]
+                    .into_iter()
+                    .filter_map(|(field, label, value)| {
+                        value.as_deref().map(|value| {
+                            render_value_row(format!("info-rights-{field}"), label, value)
+                        })
+                    })
+                }))
                 // Path
                 .child(
                     div()
@@ -347,6 +364,11 @@ fn render_info_field_row(label: &str, content: impl IntoElement) -> impl IntoEle
 /// Label/value row; `info-row-<label>` is its automation selector.
 pub(crate) fn render_info_label_value_row(label: &str, value: &str) -> impl IntoElement {
     let selector = format!("info-row-{}", label.to_lowercase().replace(' ', "-"));
+    render_value_row(selector, label, value)
+}
+
+/// Label/value row with `selector` as its automation selector.
+fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElement {
     div()
         .debug_selector(move || selector.clone())
         .w_full()

@@ -1,9 +1,10 @@
 //! Get Info facts that are not on `MediaItem`: the catalog's added date and
-//! the per-file EXIF details, loaded for the item the window shows.
+//! the per-file EXIF details, source and rights, loaded for the item the
+//! window shows.
 
 use gpui::*;
 use lumina_core::scanner::{read_media_details, MediaDetails};
-use lumina_core::{MediaId, MediaItem};
+use lumina_core::{MediaId, MediaItem, Rights};
 use std::path::PathBuf;
 
 use crate::app::LuminaApp;
@@ -18,6 +19,7 @@ pub struct InfoDetails {
     pub added_epoch_ms: Option<i64>,
     pub file: MediaDetails,
     pub source: Option<(String, Option<String>, i64)>,
+    pub rights: Rights,
 }
 
 impl InfoDetails {
@@ -45,10 +47,11 @@ impl LuminaApp {
             added_epoch_ms: None,
             file: MediaDetails::default(),
             source: None,
+            rights: Rights::default(),
         });
         let read_path = path.clone();
         let read = cx.background_executor().spawn(async move {
-            let (added, source) = engine
+            let (added, source, rights) = engine
                 .as_ref()
                 .map(|engine| {
                     let added = engine
@@ -62,13 +65,21 @@ impl LuminaApp {
                         log::warn!("reading media source for {id:?}: {err:#}");
                         None
                     });
-                    (added, source)
+                    let rights = engine
+                        .catalog()
+                        .get_rights(&[id])
+                        .map(|mut rights| rights.remove(&id).unwrap_or_default())
+                        .unwrap_or_else(|err| {
+                            log::warn!("reading rights for {id:?}: {err:#}");
+                            Rights::default()
+                        });
+                    (added, source, rights)
                 })
-                .unwrap_or((None, None));
-            (added, source, read_media_details(&read_path))
+                .unwrap_or_default();
+            (added, source, rights, read_media_details(&read_path))
         });
         cx.spawn(async move |this, cx| {
-            let (added, source, file) = read.await;
+            let (added, source, rights, file) = read.await;
             // The app may be gone; nothing to show then.
             let _ = this.update(cx, |this, cx| {
                 if let Some(details) = this
@@ -78,6 +89,7 @@ impl LuminaApp {
                 {
                     details.added_epoch_ms = added;
                     details.source = source;
+                    details.rights = rights;
                     details.file = file;
                     cx.notify();
                 }
