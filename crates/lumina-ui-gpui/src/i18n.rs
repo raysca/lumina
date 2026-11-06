@@ -93,6 +93,14 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.edit_location" => "Edit Location…",
         "command.remove_location" => "Remove Location",
         "command.open_tag_manager" => "Open Tag Manager…",
+        "command.add_keyword_alias" => "Add Alias for Keyword…",
+        "command.move_keyword" => "Move Keyword…",
+        "tags.renamed_to" => "Renamed tag to \"{path}\"",
+        "tags.moved_to" => "Moved keyword to \"{path}\"",
+        "tags.bulk_delete_tooltip" => "Delete {n} keywords and the keywords below them (⌘⌫)",
+        "tags.delete_note" => {
+            "Removes this keyword and the keywords below it from {items}. The photos stay."
+        }
         "command.edit_smart_album" => "Edit Smart Album…",
         "command.delete_smart_album" => "Delete Smart Album…",
         "command.locate_missing" => "Locate Missing File…",

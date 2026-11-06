@@ -67,6 +67,10 @@ pub enum CommandId {
     EditLocation,
     RemoveLocation,
     OpenTagManager,
+    /// Act on the tag manager's focused keyword (or the sidebar's tag view);
+    /// shown only when there is one.
+    AddKeywordAlias,
+    MoveKeyword,
     /// Browsing history; shown only when it would move.
     Back,
     Forward,
@@ -123,7 +127,8 @@ impl Command {
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
-            OpenTagManager => Icon::Tag,
+            OpenTagManager | AddKeywordAlias => Icon::Tag,
+            MoveKeyword => Icon::Pencil,
             ClearRecents | ClearRecentSearches => Icon::X,
             Back => Icon::ChevronLeft,
             Forward => Icon::ChevronRight,
@@ -577,6 +582,18 @@ pub fn commands() -> &'static [Command] {
             keywords: "tags keywords manage rename",
         },
         Command {
+            id: CommandId::AddKeywordAlias,
+            key: "command.add_keyword_alias",
+            shortcut: "",
+            keywords: "tag keyword alias synonym",
+        },
+        Command {
+            id: CommandId::MoveKeyword,
+            key: "command.move_keyword",
+            shortcut: "",
+            keywords: "tag keyword move parent hierarchy reparent",
+        },
+        Command {
             id: CommandId::Back,
             key: "command.back",
             shortcut: "⌘[",
@@ -605,6 +622,11 @@ pub fn commands() -> &'static [Command] {
 
 impl LuminaApp {
     pub fn open_command_palette(&mut self, cx: &mut Context<Self>) {
+        // Commands act on the grid; over the tag manager they would change
+        // media behind the sheet (the menu item reaches here, not the keymap).
+        if self.tag_manager.open {
+            return;
+        }
         self.command_palette_open = true;
         self.command_query.clear();
         self.command_selected = 0;
@@ -636,6 +658,7 @@ impl LuminaApp {
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
+            CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
             CommandId::ViewerZoom(_) => {
                 self.is_fullscreen_viewer
                     && self
@@ -889,6 +912,8 @@ impl LuminaApp {
                 cx,
             ),
             CommandId::OpenTagManager => self.open_tag_manager(cx),
+            CommandId::AddKeywordAlias => self.start_alias_input(cx),
+            CommandId::MoveKeyword => self.start_keyword_move(cx),
             CommandId::Back => self.navigate_back(cx),
             CommandId::Forward => self.navigate_forward(cx),
             CommandId::ClearRecents => self.clear_recents(cx),

@@ -38,6 +38,7 @@ pub(crate) enum TextTarget {
     Caption,
     TagRename,
     TagManagerRename,
+    TagManagerAlias,
     TagManagerSearch,
     Search,
     NetworkImportUrl,
@@ -71,6 +72,7 @@ impl TextTarget {
             ),
             Caption => ("Type caption... (Enter to save, Esc to cancel)", "Caption"),
             TagRename | TagManagerRename => ("", "Tag name"),
+            TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
             TagManagerSearch => ("Filter tags by name…", "Filter tags"),
             Search => ("", "Search"),
             NetworkImportUrl => ("Paste a video link (⌘V)", "Video link"),
@@ -501,6 +503,8 @@ impl LuminaApp {
         } else if self.tag_manager.open {
             if self.tag_manager.editing.is_some() {
                 TagManagerRename
+            } else if self.tag_manager.alias_editing {
+                TagManagerAlias
             } else {
                 TagManagerSearch
             }
@@ -528,6 +532,7 @@ impl LuminaApp {
             Caption => &mut self.caption.input_buffer,
             TagRename => &mut self.editing_tag_buffer,
             TagManagerRename => &mut self.tag_manager.editing_buffer,
+            TagManagerAlias => &mut self.tag_manager.alias_buffer,
             TagManagerSearch => &mut self.tag_manager.search,
             Search => &mut self.search_query,
             NetworkImportUrl => {
@@ -549,7 +554,7 @@ impl LuminaApp {
     fn text_limit(&self, target: TextTarget) -> usize {
         use TextTarget::*;
         match target {
-            Tag | TagRename | TagManagerRename => MAX_NAME_CHARS,
+            Tag | TagRename | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             _ => MAX_TEXT_CHARS,
         }
@@ -558,6 +563,8 @@ impl LuminaApp {
     /// Side effects the keymap used to run after each typed character.
     fn text_edited(&mut self, target: TextTarget, cx: &mut Context<Self>) {
         match target {
+            // New text means new suggestions; the old highlight is stale.
+            TextTarget::Tag => self.keywords.suggestion_focus = None,
             TextTarget::Palette => {
                 self.command_selected = 0;
                 self.command_scroll.scroll_to_item(1);

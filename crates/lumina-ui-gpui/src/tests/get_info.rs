@@ -265,9 +265,9 @@ fn tags_tab_adds_with_enter_and_suggests_library_tags() {
         icx.debug_bounds("tag-input").is_some(),
         "the ADD field is always visible"
     );
-    assert!(icx.debug_bounds("suggest-tag-trees").is_some());
+    assert!(icx.debug_bounds("tag-suggestion-trees").is_some());
     assert!(
-        icx.debug_bounds("suggest-tag-travel").is_none(),
+        icx.debug_bounds("tag-suggestion-travel").is_none(),
         "tags already on the item are not suggested"
     );
 

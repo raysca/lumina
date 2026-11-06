@@ -1,29 +1,31 @@
 //! Left column of the tag manager: filter, sort, checkable rows, bulk bar.
 
+use crate::app::keywords::KeywordRow;
 use crate::app::text_input::TextTarget;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::{LuminaApp, TagSortOrder};
 
 pub fn render_list(
     app: &LuminaApp,
-    rows: &[(String, usize)],
+    rows: &[KeywordRow],
     cx: &mut Context<LuminaApp>,
 ) -> impl IntoElement {
     let selected = &app.tag_manager.selected;
     let shown_checked = rows
         .iter()
-        .filter(|(tag, _)| selected.contains(tag))
+        .filter(|row| selected.contains(&row.path))
         .count();
     let all_state = match shown_checked {
         0 => Check::Off,
         n if n == rows.len() => Check::On,
         _ => Check::Mixed,
     };
-    let max_count = rows.iter().map(|(_, n)| *n).max().unwrap_or(0);
+    let max_count = rows.iter().filter_map(|row| row.count).max().unwrap_or(0);
 
     div()
         .w(px(440.0))
@@ -110,10 +112,7 @@ pub fn render_list(
                             }),
                     )
                 })
-                .children(
-                    rows.iter()
-                        .map(|(tag, count)| render_row(app, tag, *count, max_count, cx)),
-                ),
+                .children(rows.iter().map(|row| render_row(app, row, max_count, cx))),
         )
         // The bar is for acting on several tags; one tag uses the detail.
         .when(selected.len() >= 2, |col| {
@@ -169,17 +168,25 @@ fn sort_item(
         }))
 }
 
+/// Indent per tree level.
+const INDENT: f32 = 16.0;
+
 fn render_row(
     app: &LuminaApp,
-    tag: &str,
-    count: usize,
+    row: &KeywordRow,
     max_count: usize,
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
+    let tag = row.path.as_str();
+    // An ancestor with no items of its own shows no count; the detail loads
+    // its subtree count when it is focused.
+    let count = row.count.unwrap_or(0);
+    let depth = row.depth;
+    let path_selector = format!("tag-row-{tag}");
+    let indent_selector = format!("tag-row-indent-{depth}");
     let focused = app.tag_manager.focused.as_deref() == Some(tag);
     let checked = app.tag_manager.selected.contains(tag);
-    let tag_owned = tag.to_string();
-    let (row_tag, check_tag) = (tag_owned.clone(), tag_owned.clone());
+    let (row_tag, check_tag) = (tag.to_string(), tag.to_string());
     let row_selector = format!("tag-manager-row-{tag}");
     let check_selector = format!("tag-manager-checkbox-{tag}");
     let usage_selector = format!("tag-manager-usage-{tag}");
@@ -218,11 +225,21 @@ fn render_row(
     )
     .child(
         div()
+            .debug_selector(move || indent_selector.clone())
+            .w(px(INDENT * depth as f32))
+            .flex_none(),
+    )
+    .child(
+        div()
+            .debug_selector(move || path_selector.clone())
             .flex_1()
             .min_w(px(0.0))
             .truncate()
             .text_sm()
-            .child(tag_owned),
+            .when(row.count.is_none(), |name| {
+                name.text_color(theme::text_muted())
+            })
+            .child(row.label().to_string()),
     )
     .child(
         div()
@@ -258,7 +275,7 @@ fn render_row(
                     } else {
                         theme::text_subtle()
                     })
-                    .child(count.to_string()),
+                    .child(row.count.map_or(String::new(), |n| n.to_string())),
             ),
     )
     .into_any_element()
@@ -338,7 +355,9 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
             div()
                 .id("bulk-delete-tags-btn")
                 .debug_selector(|| "bulk-delete-tags-btn".to_string())
-                .tooltip(theme::tooltip_label(format!("Delete {n} tags (⌘⌫)")))
+                .tooltip(theme::tooltip_label(
+                    t("tags.bulk_delete_tooltip").replace("{n}", &n.to_string()),
+                ))
                 .size(px(28.0))
                 .rounded(theme::RADIUS_MD)
                 .flex()

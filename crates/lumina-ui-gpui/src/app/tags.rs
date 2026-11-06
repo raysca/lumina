@@ -4,11 +4,13 @@ use lumina_core::text::{clean_text, MAX_NAME_CHARS};
 
 use crate::app::types::TagSortOrder;
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::views::sidebar::AlbumSelection;
 
 impl LuminaApp {
     #[cfg(test)]
     pub fn refresh_tag_counts(&mut self) {
+        self.refresh_keyword_aliases();
         if let Some(ref state) = self.grid_state {
             self.library_tag_counts = state.engine.query_tag_counts();
             self.untagged_count = state.engine.query_untagged_count();
@@ -215,12 +217,17 @@ impl LuminaApp {
     pub fn start_tag_input(&mut self, cx: &mut Context<Self>) {
         self.tag_input_active = true;
         self.tag_input_buffer.clear();
+        self.keywords.suggestion_focus = None;
         cx.notify();
     }
 
     pub fn commit_tag_input(&mut self, cx: &mut Context<Self>) {
-        let tag = std::mem::take(&mut self.tag_input_buffer);
+        // Enter on a highlighted suggestion adds its stored keyword.
+        let suggested = self.focused_tag_suggestion();
+        let typed = std::mem::take(&mut self.tag_input_buffer);
+        let tag = suggested.unwrap_or(typed);
         self.tag_input_active = false;
+        self.keywords.suggestion_focus = None;
         let clean = tag.trim().to_string();
         if !clean.is_empty() {
             self.set_last_action(format!("Added tag \"{}\"", clean));
@@ -304,6 +311,8 @@ impl LuminaApp {
         self.retarget_tag_refs(&clean, None, cx);
         self.refresh_selected_tags();
         self.refresh_album_counts();
+        // A deleted child changes the focused keyword's count.
+        self.load_tag_manager_items();
         cx.notify();
     }
 
@@ -314,6 +323,8 @@ impl LuminaApp {
         self.tag_manager.selected.clear();
         self.tag_manager.editing = None;
         self.tag_manager.focused = None;
+        self.tag_manager.moving = false;
+        self.tag_manager.alias_editing = false;
         self.tag_manager.tagged_items.clear();
         self.tag_manager.list_scroll = gpui::ScrollHandle::new();
         cx.notify();
@@ -323,6 +334,8 @@ impl LuminaApp {
         self.tag_manager.open = false;
         self.tag_manager.search_focused = false;
         self.tag_manager.editing = None;
+        self.tag_manager.moving = false;
+        self.tag_manager.alias_editing = false;
         cx.notify();
     }
 
@@ -351,15 +364,15 @@ impl LuminaApp {
         let visible = self.tag_manager_rows();
         if visible
             .iter()
-            .all(|(tag, _)| self.tag_manager.selected.contains(tag))
+            .all(|row| self.tag_manager.selected.contains(&row.path))
         {
-            for (tag, _) in &visible {
-                self.tag_manager.selected.remove(tag);
+            for row in &visible {
+                self.tag_manager.selected.remove(&row.path);
             }
         } else {
             self.tag_manager
                 .selected
-                .extend(visible.into_iter().map(|(tag, _)| tag));
+                .extend(visible.into_iter().map(|row| row.path));
         }
         cx.notify();
     }
@@ -368,8 +381,7 @@ impl LuminaApp {
     pub fn focus_tag_manager_tag(&mut self, tag: String, cx: &mut Context<Self>) {
         // A rename belongs to the tag it started on; moving away cancels it.
         if self.tag_manager.focused.as_ref() != Some(&tag) {
-            self.tag_manager.editing = None;
-            self.tag_manager.editing_buffer.clear();
+            self.cancel_tag_manager_prompts();
         }
         self.tag_manager.focused = Some(tag);
         self.load_tag_manager_items();
@@ -386,40 +398,34 @@ impl LuminaApp {
             .tag_manager
             .focused
             .as_ref()
-            .and_then(|focused| rows.iter().position(|(tag, _)| tag == focused));
+            .and_then(|focused| rows.iter().position(|row| &row.path == focused));
         let next = match current {
             Some(i) => (i as isize + delta).clamp(0, rows.len() as isize - 1) as usize,
             None if delta < 0 => rows.len() - 1,
             None => 0,
         };
-        self.tag_manager.focused = Some(rows[next].0.clone());
+        if self.tag_manager.focused.as_ref() != Some(&rows[next].path) {
+            self.cancel_tag_manager_prompts();
+        }
+        self.tag_manager.focused = Some(rows[next].path.clone());
         self.load_tag_manager_items();
         // The list's children are exactly these rows when it is non-empty.
         self.tag_manager.list_scroll.scroll_to_item(next);
         cx.notify();
     }
 
-    /// Library tags after the manager's filter and sort, as painted in its list.
-    pub(crate) fn tag_manager_rows(&self) -> Vec<(String, usize)> {
-        let query = self.tag_manager.search.to_lowercase();
-        let mut rows: Vec<(String, usize)> = self
-            .library_tag_counts
-            .iter()
-            .filter(|(tag, _)| query.is_empty() || tag.to_lowercase().contains(&query))
-            .cloned()
-            .collect();
-        match self.tag_manager.sort {
-            TagSortOrder::Alphabetical => {
-                rows.sort_by_key(|row| row.0.to_lowercase());
-            }
-            TagSortOrder::CountDesc => {
-                rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-            }
-        }
-        rows
+    /// Drops a rename, move or alias in progress (focus moved away).
+    fn cancel_tag_manager_prompts(&mut self) {
+        self.tag_manager.editing = None;
+        self.tag_manager.editing_buffer.clear();
+        self.tag_manager.moving = false;
+        self.tag_manager.alias_editing = false;
+        self.tag_manager.alias_buffer.clear();
     }
 
     pub fn start_modal_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
+        self.tag_manager.moving = false;
+        self.tag_manager.alias_editing = false;
         self.tag_manager.editing = Some(tag.clone());
         self.tag_manager.editing_buffer = tag;
         cx.notify();
@@ -428,7 +434,9 @@ impl LuminaApp {
     pub fn commit_modal_tag_rename(&mut self, cx: &mut Context<Self>) {
         if let Some(old_tag) = self.tag_manager.editing.take() {
             let buffer = std::mem::take(&mut self.tag_manager.editing_buffer);
-            let Some(new_tag) = self.renamed_path(&old_tag, &buffer, cx) else {
+            let target = self.modal_rename_target(&old_tag, &buffer);
+            let moved = std::mem::take(&mut self.tag_manager.moving);
+            let Some(new_tag) = self.renamed_path(&old_tag, &target, cx) else {
                 cx.notify();
                 return;
             };
@@ -445,13 +453,21 @@ impl LuminaApp {
                 self.retarget_tag_refs(&old_tag, Some(&new_tag), cx);
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
-                self.show_toast(format!("Renamed tag to \"{}\"", new_tag), cx);
+                // A move onto an existing keyword merges, so recount.
+                self.load_tag_manager_items();
+                let message = if moved {
+                    t("tags.moved_to")
+                } else {
+                    t("tags.renamed_to")
+                };
+                self.show_toast(message.replace("{path}", &new_tag), cx);
             }
             cx.notify();
         }
     }
 
     pub fn cancel_modal_tag_rename(&mut self, cx: &mut Context<Self>) {
+        self.tag_manager.moving = false;
         self.tag_manager.editing = None;
         self.tag_manager.editing_buffer.clear();
         cx.notify();
@@ -515,6 +531,7 @@ impl LuminaApp {
 
     /// Loads the focused tag's items for the detail grid (6 columns × 4 rows).
     pub(crate) fn load_tag_manager_items(&mut self) {
+        self.load_focused_keyword_count();
         self.tag_manager.tagged_items = match (self.tag_manager.focused.as_ref(), &self.grid_state)
         {
             (Some(tag), Some(state)) => match state.engine.items_with_tag(tag, 24) {
@@ -552,6 +569,8 @@ impl LuminaApp {
         }
         self.refresh_selected_tags();
         self.refresh_album_counts();
+        // A deleted child changes the focused keyword's count.
+        self.load_tag_manager_items();
         cx.notify();
     }
 }

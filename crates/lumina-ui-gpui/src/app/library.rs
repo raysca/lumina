@@ -926,6 +926,8 @@ impl LuminaApp {
                 })
                 .collect();
         }
+        // Aliases change with tag renames, so they reload with the counts.
+        self.refresh_keyword_aliases();
 
         // Tag mutations, scan removals, and undo/redo all refresh counts here.
         // If the active tag view lost its last item, drop the stale

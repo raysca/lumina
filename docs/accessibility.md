@@ -19,9 +19,23 @@ Lumina is designed to be usable without a mouse:
   Recent Library and Clear Recent Libraries once a library is open. The
   recent rows and their × buttons carry a button role and a label, not yet
   checked with VoiceOver.
+- **Tags and keywords**: `T` opens the tag field for the selection; `↑`/`↓`
+  walk the suggestions and `↵` adds the highlighted one (or the typed text),
+  `⌫` in an empty field removes the item's last tag. In the Tag Manager
+  (⌘K Open Tag Manager…), `↑`/`↓` move through the keyword tree, `↵`
+  renames, `Space` checks, `⌘M` merges and `⌘⌫` deletes the checked rows,
+  `⇧⌘A` adds an alias for the focused keyword (`↵` saves, `⌫` in the empty
+  field removes its last alias) and `⇧⌘M` moves it under another parent
+  (type the parent path, empty for the top level, then `↵`); the shortcut
+  sheet lists both. The Tag Manager absorbs `⌘K`, so no command can run
+  behind it; with a keyword selected in the sidebar, ⌘K Add Alias for
+  Keyword… and Move Keyword… open the Tag Manager on it. The alias
+  chips' × buttons and the suggestion chips carry a button role and a label,
+  not yet checked with VoiceOver.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
-- **Shortcut sheet** (`⌘/`) lists general, browsing, viewer and video keys;
+- **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video and Tag
+  Manager keys;
   `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` and `Space` scroll it.
 - **Native menu bar** exposes File, View and Help commands; macOS treats these
   as accessible menu items for VoiceOver.

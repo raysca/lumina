@@ -12,7 +12,7 @@ use crate::theme;
 use crate::views::inspector::tabs::camera::render_camera_tab;
 use crate::views::inspector::tabs::info::render_info_tab;
 use crate::views::inspector::tabs::location::render_location_tab;
-use crate::views::inspector::tabs::tags::render_tags_tab;
+use crate::views::inspector::tabs::tags::{render_tags_tab, Suggestion};
 use crate::LuminaApp;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -93,9 +93,9 @@ pub fn render_inspector_body(
     selected_item: Option<MediaItem>,
     preview_image: Option<Arc<RenderImage>>,
     tags: &[String],
-    library_tag_counts: &[(String, usize)],
+    suggestions: &[Suggestion],
+    suggestion_focus: Option<usize>,
     tag_input_active: bool,
-    tag_input_buffer: &str,
     is_trash: bool,
     tab: InspectorTab,
     rating: u8,
@@ -129,9 +129,9 @@ pub fn render_inspector_body(
         item,
         preview_image,
         tags,
-        library_tag_counts,
+        suggestions,
+        suggestion_focus,
         tag_input_active,
-        tag_input_buffer,
         is_trash,
         tab,
         rating,
@@ -152,9 +152,9 @@ fn render_single_body(
     item: MediaItem,
     preview_image: Option<Arc<RenderImage>>,
     tags: &[String],
-    library_tag_counts: &[(String, usize)],
+    suggestions: &[Suggestion],
+    suggestion_focus: Option<usize>,
     tag_input_active: bool,
-    tag_input_buffer: &str,
     is_trash: bool,
     tab: InspectorTab,
     rating: u8,
@@ -420,9 +420,9 @@ fn render_single_body(
                     InspectorTab::Tags => render_tags_tab(
                         weak_app.clone(),
                         tags,
-                        library_tag_counts,
+                        suggestions,
+                        suggestion_focus,
                         tag_input_active,
-                        tag_input_buffer,
                         field_input,
                     ),
                 }),

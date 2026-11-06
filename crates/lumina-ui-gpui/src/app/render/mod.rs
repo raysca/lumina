@@ -104,7 +104,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 5] = [
     (
         "GENERAL",
         &[
@@ -168,6 +168,13 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("L", "Loop"),
             ("M", "Mute"),
             ("⌥P", "Picture-in-Picture on / off"),
+        ],
+    ),
+    (
+        "IN THE TAG MANAGER",
+        &[
+            ("⇧⌘A", "Add an alias for the keyword"),
+            ("⇧⌘M", "Move the keyword to another parent"),
         ],
     ),
 ];

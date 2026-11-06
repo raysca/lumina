@@ -11,6 +11,7 @@ use crate::app::types::format_duration_badge;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::inspector::body::{display_title, format_bytes, render_meta_row};
+use crate::views::inspector::tabs::tags::{render_suggestions, Suggestion};
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
 
@@ -21,6 +22,7 @@ pub fn render_summary_body(
     tags: &[String],
     tag_input_active: bool,
     field_input: Option<FieldEditor>,
+    (suggestions, suggestion_focus): (&[Suggestion], Option<usize>),
     is_trash: bool,
     rating: u8,
     star_pop: Option<(u8, ElementId)>,
@@ -89,7 +91,24 @@ pub fn render_summary_body(
         ))
         .child(section(
             "TAGS",
-            render_tags(weak_app.clone(), tags, tag_input_active, field_input),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(render_tags(
+                    weak_app.clone(),
+                    tags,
+                    tag_input_active,
+                    field_input,
+                ))
+                // Only while typing: the docked summary stays compact.
+                .children(
+                    tag_input_active
+                        .then(|| {
+                            render_suggestions(weak_app.clone(), suggestions, suggestion_focus)
+                        })
+                        .flatten(),
+                ),
         ))
         .children(place.map(|place| {
             section(

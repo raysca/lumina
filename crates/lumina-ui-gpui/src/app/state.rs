@@ -146,6 +146,15 @@ pub struct TagManagerState {
     pub focused: Option<String>,
     /// Tracks the list so ↑/↓ can keep the focused row in view.
     pub list_scroll: gpui::ScrollHandle,
+    /// Distinct items under the focused keyword (itself and its children),
+    /// loaded on focus: the detail count and what a rename or move changes.
+    pub focused_count: usize,
+    /// The rename in `editing` is a Move to…: `editing_buffer` holds the new
+    /// parent path and the keyword keeps its last segment.
+    pub moving: bool,
+    /// The alias field in the detail panel takes typing.
+    pub alias_editing: bool,
+    pub alias_buffer: String,
 }
 
 impl Default for TagManagerState {
@@ -161,8 +170,22 @@ impl Default for TagManagerState {
             tagged_items: Vec::new(),
             focused: None,
             list_scroll: gpui::ScrollHandle::new(),
+            focused_count: 0,
+            moving: false,
+            alias_editing: false,
+            alias_buffer: String::new(),
         }
     }
+}
+
+/// Keyword vocabulary for autocomplete and the tag manager, loaded with the
+/// tag counts and never queried while rendering.
+#[derive(Debug, Default)]
+pub struct KeywordState {
+    /// `(alias, keyword)` rows, A–Z by alias.
+    pub aliases: Vec<(String, String)>,
+    /// The tag field's highlighted suggestion (↑/↓), `None` while typing.
+    pub suggestion_focus: Option<usize>,
 }
 
 /// Smart album builder sheet state. See `smart_draft` for the row model.
@@ -436,6 +459,7 @@ pub struct LuminaApp {
     pub duplicate_groups: Vec<lumina_core::DuplicateGroup>,
     pub tag_input_buffer: String,
     pub tag_input_active: bool,
+    pub keywords: KeywordState,
     pub editing_tag: Option<String>,
     pub editing_tag_buffer: String,
     pub context_menu_state: Option<ContextMenuState>,
@@ -619,6 +643,7 @@ impl LuminaApp {
             duplicate_groups: Vec::new(),
             tag_input_buffer: String::new(),
             tag_input_active: false,
+            keywords: KeywordState::default(),
             editing_tag: None,
             editing_tag_buffer: String::new(),
             context_menu_state: None,

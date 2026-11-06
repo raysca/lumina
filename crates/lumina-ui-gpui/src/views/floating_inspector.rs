@@ -83,9 +83,9 @@ impl Render for FloatingInspectorView {
         let viewer_image = app_read.viewer_image.clone();
         let selected_item_tags = app_read.selected_item_tags.clone();
         let info_details = app_read.info_details.clone();
-        let library_tag_counts = app_read.library_tag_counts.clone();
+        let suggestions = app_read.tag_input_suggestions();
+        let suggestion_focus = app_read.keywords.suggestion_focus;
         let tag_input_active = app_read.tag_input_active;
-        let tag_input_buffer = app_read.tag_input_buffer.clone();
         let is_trash = app_read.selection == AlbumSelection::Trash;
         let tab = app_read.inspector_tab;
         let rating = selected_item
@@ -216,9 +216,9 @@ impl Render for FloatingInspectorView {
                             selected_item,
                             viewer_image,
                             &selected_item_tags,
-                            &library_tag_counts,
+                            &suggestions,
+                            suggestion_focus,
                             tag_input_active,
-                            &tag_input_buffer,
                             is_trash,
                             tab,
                             rating,

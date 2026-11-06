@@ -40,6 +40,19 @@ core handles cataloguing, decoding, and search.
   another video plays it there.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
+- **Keywords** — a keyword can be a path (`places/usa/new york`). The Tag
+  Manager and the sidebar show the tree, each level indented under its
+  parent (a parent no item carries directly still gets a row), and filtering
+  on a keyword (`tag:places`, the sidebar row, a smart-album "tag is" rule)
+  includes everything below it. The tag field suggests keywords whose whole
+  path or any segment starts with what you type, shown as
+  `places › usa › new york`. Aliases (Tag Manager detail panel, ⇧⌘A there,
+  or ⌘K "Add Alias for Keyword…" on a sidebar keyword) let `nyc` add `places/usa/new york`; the alias is
+  never stored on a photo, and an alias cannot be a keyword already in use.
+  "Move to…" (⇧⌘M in the Tag Manager, or ⌘K "Move Keyword…") moves a keyword and its children
+  under another parent, and the rename and move prompts say how many items
+  change. Importing XMP metadata treats a sidecar keyword the same way: one
+  that matches an alias is stored as the keyword the alias points to.
 - **Metadata portability** — exporting a selection copies the originals and
   writes Adobe-compatible XMP sidecars (`xmp:Rating`, `xmp:Label`, `dc:subject`,
   `dc:description`) so ratings, color labels, tags, and captions survive outside

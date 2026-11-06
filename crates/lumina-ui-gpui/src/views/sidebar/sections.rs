@@ -1,4 +1,5 @@
 use crate::app::text_input::TextTarget;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
@@ -406,13 +407,18 @@ pub(super) fn render_tags_section(
                 ),
         )
         .children(
-            tags.iter()
-                .map(|(tag_name, count)| {
-                    let tag_str = tag_name.clone();
+            // Keyword tree: children indent under their parent; an ancestor
+            // no item carries directly shows no count (filtering it still
+            // shows its whole subtree).
+            crate::app::keywords::keyword_tree(&tags).iter()
+                .map(|row| {
+                    let tag_str = row.path.clone();
+                    let depth = row.depth;
+                    let label = row.label().to_string();
                     let is_editing = this.editing_tag.as_ref() == Some(&tag_str);
                     let is_active =
                         matches!(&this.selection, AlbumSelection::Tag(t) if t == &tag_str);
-                    let tag_count = *count;
+                    let tag_count = row.count;
                     let tag_for_select = tag_str.clone();
 
                     if is_editing {
@@ -541,11 +547,19 @@ pub(super) fn render_tags_section(
                                     .flex_row()
                                     .items_center()
                                     .gap_2()
+                                    // 16 px per level: the spacer plus the row's 8 px gap.
+                                    .when(depth > 0, |name| {
+                                        name.child(div().flex_none().w(px(16.0 * depth as f32 - 8.0)))
+                                    })
                                     .child(
                                         div().flex_none().size(px(7.0)).rounded_full().bg(dot_color),
                                     )
                                     .child(
                                         div()
+                                            .debug_selector({
+                                                let id = format!("sidebar-tag-name-{tag_str}");
+                                                move || id.clone()
+                                            })
                                             .min_w_0()
                                             .truncate()
                                             .text_size(theme::TEXT_BODY)
@@ -559,7 +573,7 @@ pub(super) fn render_tags_section(
                                             } else {
                                                 theme::text_row()
                                             })
-                                            .child(tag_str.clone()),
+                                            .child(label),
                                     )
                                     .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
                                         if e.click_count() >= 2 {
@@ -583,7 +597,7 @@ pub(super) fn render_tags_section(
                                     } else {
                                         theme::text_subtle()
                                     })
-                                    .child(tag_count.to_string()),
+                                    .child(tag_count.map_or(String::new(), |n| n.to_string())),
                             )
                             .into_any_element()
                     }

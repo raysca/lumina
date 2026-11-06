@@ -179,6 +179,11 @@ impl LuminaApp {
                 self.commit_tag_input(cx);
                 return true;
             }
+            // ↑/↓ walk the suggestions; Enter then adds the highlighted one.
+            if key == "up" || key == "down" {
+                self.step_tag_suggestion(if key == "up" { -1 } else { 1 }, cx);
+                return true;
+            }
             if key == "backspace" {
                 // Token-field behaviour: ⌫ in an empty field (the input
                 // passes it on, see app/text_input.rs) removes the single
@@ -270,6 +275,27 @@ impl LuminaApp {
                     self.commit_modal_tag_rename(cx);
                     return true;
                 }
+                return true;
+            }
+            if self.tag_manager.alias_editing {
+                match key {
+                    "escape" => self.cancel_alias_input(cx),
+                    "enter" | "return" => self.commit_alias_input(cx),
+                    // Reaches here only from an empty field (text_input.rs).
+                    "backspace" => self.remove_last_alias(cx),
+                    _ => {}
+                }
+                return true;
+            }
+
+            // ⇧⌘A alias and ⇧⌘M Move to… for the focused keyword; before
+            // ⌘A / ⌘M, which ignore ⇧.
+            if cmd_or_ctrl && keystroke.modifiers.shift && key == "a" {
+                self.start_alias_input(cx);
+                return true;
+            }
+            if cmd_or_ctrl && keystroke.modifiers.shift && key == "m" {
+                self.start_keyword_move(cx);
                 return true;
             }
 

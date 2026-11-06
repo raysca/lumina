@@ -3,6 +3,8 @@
 use crate::app::text_input::TextTarget;
 use gpui::*;
 
+use crate::i18n::t;
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
@@ -30,16 +32,23 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
             .child("Select a tag to see its details.")
             .into_any_element();
     };
-    let count = app
-        .library_tag_counts
-        .iter()
-        .find(|(t, _)| *t == tag)
-        .map_or(0, |(_, n)| *n);
+    // The keyword and everything below it, loaded on focus.
+    let count = app.tag_manager.focused_count;
     let items_label = format!("{count} item{}", if count == 1 { "" } else { "s" });
 
     panel
         .child(render_header(&tag, &items_label, cx))
         .child(section("NAME", render_name_field(app, &tag, cx)))
+        .children(
+            app.tag_manager
+                .moving
+                .then(|| section("MOVE TO", render_move_field(app))),
+        )
+        .children(
+            (app.tag_manager.editing.as_deref() == Some(tag.as_str()))
+                .then(|| render_touches(&items_label)),
+        )
+        .child(section("ALIASES", render_aliases(app, &tag, cx)))
         .child(section("TAGGED ITEMS", render_items(app)))
         .child(div().flex_1())
         .child({
@@ -53,6 +62,17 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                 .flex_row()
                 .items_center()
                 .gap_3()
+                .child(
+                    theme::control("tag-detail-move-btn")
+                        .debug_selector(|| "tag-detail-move".to_string())
+                        .role(Role::Button)
+                        .aria_label("Move to… (⇧⌘M)")
+                        .tooltip(theme::tooltip_label("Move under another keyword (⇧⌘M)"))
+                        .child("Move to…")
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.start_keyword_move(cx);
+                        })),
+                )
                 .child(
                     theme::control(ElementId::Name(format!("modal-del-btn-{tag}").into()))
                         .debug_selector(move || delete_selector.clone())
@@ -68,9 +88,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                         .debug_selector(|| "tag-manager-delete-note".to_string())
                         .text_xs()
                         .text_color(theme::text_subtle())
-                        .child(format!(
-                            "Removes the tag from {items_label}. The photos stay."
-                        )),
+                        .child(t("tags.delete_note").replace("{items}", &items_label)),
                 )
         })
         .into_any_element()
@@ -141,7 +159,7 @@ fn section(title: &'static str, content: impl IntoElement) -> Div {
 /// Always shown as a field: clicking (or ↵) edits in place, ↵ saves, Esc
 /// cancels. The keymap feeds `editing_buffer`.
 fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let editing = app.tag_manager.editing.as_deref() == Some(tag);
+    let editing = app.tag_manager.editing.as_deref() == Some(tag) && !app.tag_manager.moving;
     let rename_tag = tag.to_string();
     theme::field("tag-manager-rename-field")
         .debug_selector(|| "tag-manager-rename-field".to_string())
@@ -162,6 +180,107 @@ fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) ->
                 this.start_modal_tag_rename(rename_tag.clone(), cx);
             }
         }))
+        .into_any_element()
+}
+
+/// Move to…: the new parent path, typed into the rename's buffer.
+fn render_move_field(app: &LuminaApp) -> AnyElement {
+    theme::field("tag-detail-move-field")
+        .debug_selector(|| "tag-detail-move-field".to_string())
+        .tooltip(theme::tooltip_label(
+            "Parent keyword, empty for the top level (↵ move, Esc cancel)",
+        ))
+        .cursor_text()
+        .border_color(theme::focus_ring())
+        .text_color(theme::text())
+        .children(app.field_input_for(TextTarget::TagManagerRename))
+        .into_any_element()
+}
+
+/// How many items a rename or move changes (`subtree_item_count`, loaded
+/// when the keyword was focused).
+fn render_touches(items_label: &str) -> impl IntoElement {
+    div()
+        .id("tag-detail-touches")
+        .debug_selector(|| "tag-detail-touches".to_string())
+        .text_xs()
+        .text_color(theme::text_muted())
+        .child(format!(
+            "Changes {items_label}, including keywords below it. ↵ saves, Esc cancels."
+        ))
+}
+
+/// Alias chips (× removes) and a field that adds one: typing an alias in a
+/// tag field applies this keyword.
+fn render_aliases(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let editing = app.tag_manager.alias_editing;
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(div().flex().flex_row().flex_wrap().gap_1p5().children(
+            app.aliases_of(tag).into_iter().map(|alias| {
+                let chip_selector = format!("tag-detail-alias-{alias}");
+                let remove_selector = format!("tag-detail-alias-remove-{alias}");
+                let label = format!("Remove alias {alias}");
+                let remove = alias.clone();
+                div()
+                    .id(ElementId::Name(chip_selector.clone().into()))
+                    .debug_selector(move || chip_selector.clone())
+                    .h(px(24.0))
+                    .px(px(9.0))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(theme::border_strong())
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .text_xs()
+                    .text_color(theme::text())
+                    .child(alias)
+                    .child(
+                        div()
+                            .id(ElementId::Name(remove_selector.clone().into()))
+                            .debug_selector(move || remove_selector.clone())
+                            .role(Role::Button)
+                            .aria_label(label.clone())
+                            .tooltip(theme::tooltip_label(label))
+                            .cursor_pointer()
+                            .child(render_icon(Icon::X, px(10.0), theme::text_muted()))
+                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.remove_keyword_alias(remove.clone(), cx);
+                            })),
+                    )
+            }),
+        ))
+        .child(
+            theme::field("tag-detail-alias-input")
+                .debug_selector(|| "tag-detail-alias-input".to_string())
+                .tooltip(theme::tooltip_label(
+                    "Add an alias (⇧⌘A): ↵ adds, ⌫ in an empty field removes the last",
+                ))
+                .cursor_text()
+                .border_color(if editing {
+                    theme::focus_ring()
+                } else {
+                    theme::border()
+                })
+                .text_color(if editing {
+                    theme::text()
+                } else {
+                    theme::text_subtle()
+                })
+                .child(match app.field_input_for(TextTarget::TagManagerAlias) {
+                    Some(input) if editing => input.into_any_element(),
+                    _ => "Add an alias…".into_any_element(),
+                })
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    if !this.tag_manager.alias_editing {
+                        this.start_alias_input(cx);
+                    }
+                })),
+        )
         .into_any_element()
 }
 

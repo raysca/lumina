@@ -23,6 +23,7 @@ pub enum LastView {
     Screenshots,
     Places,
     Trash,
+    Untagged,
     User(i64),
     Tag(String),
 }
@@ -37,6 +38,7 @@ impl LastView {
             LastView::Screenshots => "screenshots".to_string(),
             LastView::Places => "places".to_string(),
             LastView::Trash => "trash".to_string(),
+            LastView::Untagged => "untagged".to_string(),
             LastView::User(id) => format!("user:{id}"),
             LastView::Tag(tag) => format!("tag:{tag}"),
         }
@@ -51,6 +53,7 @@ impl LastView {
             "screenshots" => LastView::Screenshots,
             "places" => LastView::Places,
             "trash" => LastView::Trash,
+            "untagged" => LastView::Untagged,
             other => {
                 if let Some(raw_id) = other.strip_prefix("user:") {
                     return match raw_id.parse::<i64>() {
@@ -83,9 +86,9 @@ impl LastView {
             AlbumSelection::System(_) => LastView::All,
             AlbumSelection::User(id) => LastView::User(*id),
             AlbumSelection::Tag(tag) => LastView::Tag(tag.clone()),
-            // Untagged and Duplicates have no persisted token yet; they restore
-            // as All rather than inventing a session format for a derived view.
-            AlbumSelection::Untagged | AlbumSelection::Duplicates => LastView::All,
+            AlbumSelection::Untagged => LastView::Untagged,
+            // Duplicates has no persisted token; it restores as All.
+            AlbumSelection::Duplicates => LastView::All,
         }
     }
 
@@ -101,6 +104,7 @@ impl LastView {
             LastView::Screenshots => AlbumSelection::System(SystemAlbum::Screenshots),
             LastView::Places => AlbumSelection::System(SystemAlbum::Places),
             LastView::Trash => AlbumSelection::Trash,
+            LastView::Untagged => AlbumSelection::Untagged,
             LastView::User(id) => AlbumSelection::User(*id),
             LastView::Tag(tag) => AlbumSelection::Tag(tag.clone()),
         }

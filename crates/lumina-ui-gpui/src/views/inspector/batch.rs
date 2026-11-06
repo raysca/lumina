@@ -307,6 +307,17 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                     }
                 }),
         )
+        .children(
+            input_active
+                .then(|| {
+                    crate::views::inspector::tabs::tags::render_suggestions(
+                        weak_app.clone(),
+                        &app.tag_input_suggestions(),
+                        app.keywords.suggestion_focus,
+                    )
+                })
+                .flatten(),
+        )
 }
 
 fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize) -> Stateful<Div> {
