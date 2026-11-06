@@ -66,7 +66,10 @@ core handles cataloguing, decoding, and search.
   Sidecars inside the library are hidden in Finder (⇧⌘. shows them) but stay
   next to their media, where other apps look for them. Moving a whole folder
   in Finder takes them along; moving a single file leaves its sidecar behind
-  until Lumina next rewrites it. Exported sidecars stay visible.
+  until Lumina next rewrites it. Exported sidecars stay visible. Lumina never
+  rewrites or deletes a sidecar another app wrote (darktable and digiKam use
+  the same `photo.jpg.xmp` name): it still reads it on import, keeps your edit
+  in the catalog, and the status bar says how many sidecars were left unchanged.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
   item's XMP sidecar automatically; permanent deletion is deliberately not

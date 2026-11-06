@@ -42,7 +42,10 @@ pub use smart_albums::{
 pub use sort::{SortDirection, SortField, SortSpec};
 pub use video_frame::video_preview_strip;
 pub use watcher::LibraryWatcher;
-pub use xmp::{parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, SidecarMetadata};
+pub use xmp::{
+    parse_xmp, read_sidecar, render_xmp, sidecar_path, write_sidecar, SidecarMetadata,
+    SidecarOutcome,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
@@ -244,6 +247,14 @@ pub struct ExportReport {
     pub sidecars: usize,
     pub skipped: usize,
     pub failed: Vec<(PathBuf, String)>,
+}
+
+/// Result of [`LuminaEngine::write_metadata_sidecars`].
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SidecarWriteReport {
+    pub written: usize,
+    /// Sidecars another app wrote (or Lumina cannot read), left untouched.
+    pub skipped_foreign: Vec<PathBuf>,
 }
 
 /// Result of importing XMP sidecars.
@@ -781,8 +792,15 @@ impl LuminaEngine {
 
             match self.sidecar_metadata_for(*id, &captions, &ratings, &labels) {
                 Ok(metadata) => match xmp::write_sidecar(&destination_path, &metadata) {
-                    Ok(Some(_)) => report.sidecars += 1,
-                    Ok(None) => {}
+                    Ok(SidecarOutcome::Written(_)) => report.sidecars += 1,
+                    Ok(SidecarOutcome::Removed | SidecarOutcome::Unchanged) => {}
+                    // The media name is fresh, but a sidecar left in the
+                    // export folder under that name can still be in the way.
+                    Ok(SidecarOutcome::SkippedForeign) => report.failed.push((
+                        item.path.clone(),
+                        "an XMP sidecar from another app is already there and was left unchanged"
+                            .to_string(),
+                    )),
                     Err(err) => report.failed.push((
                         item.path.clone(),
                         format!("could not write XMP sidecar: {err}"),
@@ -798,7 +816,9 @@ impl LuminaEngine {
 
     /// Writes/updates XMP sidecars next to the original files (metadata-only
     /// export). Safe to call from any thread; passes run one at a time.
-    pub fn write_metadata_sidecars(&self, ids: &[MediaId]) -> Result<usize> {
+    /// A sidecar another app wrote is never rewritten or deleted: it is
+    /// listed in `skipped_foreign` and logged once per pass.
+    pub fn write_metadata_sidecars(&self, ids: &[MediaId]) -> Result<SidecarWriteReport> {
         let _pass = self.sidecar_writes.lock();
         let captions = self
             .catalog
@@ -812,17 +832,27 @@ impl LuminaEngine {
             .catalog
             .get_color_labels_map()
             .context("could not read color labels")?;
-        let mut written = 0;
+        let mut report = SidecarWriteReport::default();
         for id in ids {
             let Some(item) = self.catalog.get_item_by_id(*id)? else {
                 continue;
             };
             let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels)?;
-            if xmp::write_library_sidecar(&item.path, &metadata)?.is_some() {
-                written += 1;
+            match xmp::write_library_sidecar(&item.path, &metadata)? {
+                SidecarOutcome::Written(_) => report.written += 1,
+                SidecarOutcome::SkippedForeign => {
+                    report.skipped_foreign.push(xmp::sidecar_path(&item.path))
+                }
+                SidecarOutcome::Removed | SidecarOutcome::Unchanged => {}
             }
         }
-        Ok(written)
+        if let Some(first) = report.skipped_foreign.first() {
+            log::warn!(
+                "left {} XMP sidecar(s) written by another app unchanged, first {first:?}",
+                report.skipped_foreign.len()
+            );
+        }
+        Ok(report)
     }
 
     /// Imports XMP sidecars for the given items. Only values present in the

@@ -2764,7 +2764,10 @@ fn sidecars_are_not_rewritten_when_captions_cannot_be_read() {
     let item = engine.get_item_slice(0..1).remove(0);
     engine.catalog().set_rating(item.id, 3).unwrap();
     engine.catalog().set_caption(item.id, "keep me").unwrap();
-    assert_eq!(engine.write_metadata_sidecars(&[item.id]).unwrap(), 1);
+    assert_eq!(
+        engine.write_metadata_sidecars(&[item.id]).unwrap().written,
+        1
+    );
 
     raw_catalog(&db_path)
         .execute_batch("DROP TABLE media_captions;")
@@ -2819,7 +2822,7 @@ fn a_label_alone_gets_a_sidecar_and_a_labelless_sidecar_keeps_the_label() {
     let item = engine.get_item_slice(0..1).remove(0);
     engine.set_color_label(item.id, 2).unwrap();
     assert_eq!(
-        engine.write_metadata_sidecars(&[item.id]).unwrap(),
+        engine.write_metadata_sidecars(&[item.id]).unwrap().written,
         1,
         "a color label alone is worth a sidecar"
     );
@@ -2851,7 +2854,10 @@ fn keyword_paths_survive_a_sidecar_round_trip() {
     let item = engine.get_item_slice(0..1).remove(0);
     let tags = vec!["europe".to_string(), "places/europe/paris".to_string()];
     engine.add_tags_batch(&[item.id], &tags).unwrap();
-    assert_eq!(engine.write_metadata_sidecars(&[item.id]).unwrap(), 1);
+    assert_eq!(
+        engine.write_metadata_sidecars(&[item.id]).unwrap().written,
+        1
+    );
     let xml = std::fs::read_to_string(lumina_core::sidecar_path(&item.path)).unwrap();
     assert!(
         xml.contains("<rdf:li>places|europe|paris</rdf:li>"),
@@ -4889,4 +4895,58 @@ fn subtree_item_count_skips_trashed_and_hidden() {
         1,
         "trashed and hidden items are not counted, as in the tag manager"
     );
+}
+
+/// darktable keeps its edit history in `photo.jpg.xmp`, the name Lumina uses.
+const DARKTABLE_SIDECAR: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:darktable="http://darktable.sf.net/"
+   xmp:Rating="1"
+   darktable:xmp_version="5"
+   darktable:history_end="1">
+   <darktable:history>
+    <rdf:Seq>
+     <rdf:li darktable:num="0" darktable:operation="exposure" darktable:enabled="1"/>
+    </rdf:Seq>
+   </darktable:history>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+#[test]
+fn foreign_sidecar_is_not_overwritten() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("foreign_sidecar");
+    let item = engine.get_item_slice(0..1).remove(0);
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    std::fs::write(&sidecar, DARKTABLE_SIDECAR).unwrap();
+
+    engine.catalog().set_rating(item.id, 4).unwrap();
+    let report = engine.write_metadata_sidecars(&[item.id]).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&sidecar).unwrap(),
+        DARKTABLE_SIDECAR,
+        "another app's sidecar must be byte-identical after a Lumina edit"
+    );
+    assert_eq!(report.written, 0, "nothing was written");
+    assert_eq!(
+        report.skipped_foreign,
+        vec![sidecar.clone()],
+        "the skipped sidecar is reported"
+    );
+
+    engine.catalog().set_rating(item.id, 0).unwrap();
+    let report = engine.write_metadata_sidecars(&[item.id]).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&sidecar).unwrap(),
+        DARKTABLE_SIDECAR,
+        "blank Lumina fields must not delete another app's sidecar"
+    );
+    assert_eq!(report.skipped_foreign, vec![sidecar]);
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }

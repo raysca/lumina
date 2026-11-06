@@ -207,3 +207,35 @@ fn summary_formats_capture_time_place_and_video_strip() {
         "1000 × 700"
     );
 }
+
+#[core::prelude::v1::test]
+fn rating_beside_another_apps_sidecar_leaves_it_and_says_so() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, engine, item, view, vcx) = docked("inspector_foreign_sidecar", &mut cx);
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    let foreign = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description xmlns:darktable=\"http://darktable.sf.net/\" darktable:history_end=\"3\"/></rdf:RDF></x:xmpmeta>\n";
+    std::fs::write(&sidecar, foreign).unwrap();
+
+    click(vcx, "inspector-star-4");
+    assert_eq!(
+        engine.catalog().get_rating(item.id).unwrap(),
+        4,
+        "the catalog keeps the rating"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&sidecar).unwrap(),
+        foreign,
+        "another app's sidecar must not be rewritten"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.last_action.as_deref(),
+            Some(
+                "1 XMP sidecar was left unchanged: another app wrote it, or Lumina cannot read it"
+            ),
+            "the skipped sidecar must be reported in plain words"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -688,7 +688,8 @@ impl LuminaApp {
 
     /// Keeps XMP sidecars current after metadata edits, off the UI thread:
     /// a large batch writes thousands of files. Failures are logged but do
-    /// not roll back the SQLite write.
+    /// not roll back the SQLite write. Sidecars another app wrote are left
+    /// alone; the status bar says how many (the catalog keeps the edit).
     pub fn sync_metadata_sidecars(&self, ids: &[lumina_core::MediaId], cx: &mut Context<Self>) {
         if ids.is_empty() {
             return;
@@ -697,13 +698,31 @@ impl LuminaApp {
             return;
         };
         let ids = ids.to_vec();
-        cx.background_executor()
-            .spawn(async move {
-                if let Err(err) = engine.write_metadata_sidecars(&ids) {
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.write_metadata_sidecars(&ids) });
+        cx.spawn(async move |this, cx| {
+            let skipped = match task.await {
+                Ok(report) => report.skipped_foreign.len(),
+                Err(err) => {
                     log::warn!("could not update XMP sidecars: {err:?}");
+                    return;
                 }
-            })
-            .detach();
+            };
+            if skipped == 0 {
+                return;
+            }
+            // The app may be gone; then there is no status bar to update.
+            let _ = this.update(cx, |app, cx| {
+                app.set_last_action(if skipped == 1 {
+                    "1 XMP sidecar was left unchanged: another app wrote it, or Lumina cannot read it".to_string()
+                } else {
+                    format!("{skipped} XMP sidecars were left unchanged: another app wrote them, or Lumina cannot read them")
+                });
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Drops keyboard focus from the toolbar search field.
