@@ -137,3 +137,11 @@
 3. **Rail contents.** Should the rail show only the default collections (this plan), or also one Smart Albums button and one Tags button that open a popover list?
 4. **Icon set.** Is the icon table in S4 right? For example, should Screenshots use `camera` or `monitor`, and should Duplicates use `copy` or `layers`?
 5. **Rail width.** Should it stay at 48 px (no grid layout change), or be a little wider (56 px) for easier clicking?
+
+## Owner answers (2026-11-06)
+
+1. Shortcut: ⌃⌘S.
+2. Animation: instant (S6 as written).
+3. Rail contents: default collections only (S5 as written).
+4. Icon set: not changed; the S4 table stands.
+5. Rail width: 48 px.
