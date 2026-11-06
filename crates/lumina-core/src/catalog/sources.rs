@@ -195,7 +195,6 @@ mod tests {
             let catalog = Catalog::open(&db).unwrap();
             catalog.backfill_downloaded_sources(root).unwrap();
             assert_eq!(catalog.schema_version().unwrap(), SCHEMA_VERSION);
-            assert_eq!(SCHEMA_VERSION, 14);
             assert!(
                 catalog
                     .find_prior_download("https://a.example/1")

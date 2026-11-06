@@ -527,6 +527,17 @@ impl Catalog {
             .context("adding the downloaded flag to media sources")?;
         }
 
+        // v15: `color:<label>` under the default date sort seeks the label and
+        // walks it in timeline order (tie-breaker follows the primary
+        // direction) instead of filtering every row of idx_media_timestamp.
+        // Created here, not in the table batch above, because the color_label
+        // column only exists on old catalogs after the ALTER further up.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_color ON media_items(color_label, timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;",
+            [],
+        )
+        .context("creating the colour label index")?;
+
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
         if current < SCHEMA_VERSION {

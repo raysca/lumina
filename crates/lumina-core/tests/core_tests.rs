@@ -3568,3 +3568,67 @@ fn rating_and_color_filter_plans_use_an_index() {
         );
     }
 }
+
+/// v15 adds `idx_media_color` so a colour filter under the default date sort
+/// seeks the label and walks it in order instead of filtering the whole
+/// timeline. Covers a fresh catalog, a second open, and a v14 upgrade.
+#[test]
+fn migration_adds_color_index_idempotently() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_color_index_migration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    // Removes the temp dir even when an assertion below panics.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(tmp_dir.clone());
+    let db_path = tmp_dir.join("catalog.db");
+
+    let check = |catalog: &Catalog, stage: &str| {
+        assert_eq!(
+            catalog.schema_version().unwrap(),
+            SCHEMA_VERSION,
+            "{stage}: user_version must be stamped to the current schema"
+        );
+        let (sql, params) = StructuredQuery::parse("color:red").synthesize_query(50, 450);
+        let plan = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ");
+        assert!(
+            plan.contains("SEARCH m USING INDEX idx_media_color"),
+            "{stage}: color:red must seek idx_media_color, got: {plan}"
+        );
+        assert!(
+            !plan.contains("USE TEMP B-TREE FOR ORDER BY"),
+            "{stage}: the index must satisfy the default date sort, got: {plan}"
+        );
+    };
+
+    {
+        let catalog = Catalog::open(&db_path).expect("open fresh catalog");
+        check(&catalog, "fresh");
+    }
+    {
+        let catalog = Catalog::open(&db_path).expect("reopen catalog");
+        check(&catalog, "reopen");
+    }
+    {
+        // Downgrade to the v14 layout: no colour index.
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch("DROP INDEX idx_media_color; PRAGMA user_version = 14;")
+            .expect("downgrade to v14");
+    }
+    {
+        let catalog = Catalog::open(&db_path).expect("a v14 catalog must open and migrate");
+        check(&catalog, "upgrade from v14");
+    }
+}
