@@ -1344,7 +1344,11 @@ fn test_tag_management_lifecycle() {
     assert_eq!(catalog.query_smart_album_count(&album).unwrap(), 2);
 
     // 3. Rename "nature" -> "landscape"
-    let affected = catalog.rename_tag("nature", "landscape").unwrap();
+    let affected = catalog
+        .rename_tag("nature", "landscape")
+        .unwrap()
+        .removed
+        .len();
     assert_eq!(affected, 2);
 
     // Verify tag counts: "nature" gone, "landscape" exists
@@ -1371,7 +1375,11 @@ fn test_tag_management_lifecycle() {
     assert_eq!(catalog.query_smart_album_count(&reloaded_album).unwrap(), 2);
 
     // 4. Merge "travel" into "landscape"
-    let merged_affected = catalog.merge_tags("travel", "landscape").unwrap();
+    let merged_affected = catalog
+        .merge_tags("travel", "landscape")
+        .unwrap()
+        .removed
+        .len();
     assert_eq!(merged_affected, 2);
 
     // Item 1 had landscape. Item 2 had landscape + travel (now deduplicated landscape). Item 3 had travel (now landscape) + vacation.
@@ -1383,7 +1391,11 @@ fn test_tag_management_lifecycle() {
     assert_eq!(catalog.query_smart_album_count(&reloaded_album).unwrap(), 3);
 
     // 5. Delete "vacation" globally
-    let deleted_count = catalog.delete_tag_globally("vacation").unwrap();
+    let deleted_count = catalog
+        .delete_tag_globally("vacation")
+        .unwrap()
+        .removed
+        .len();
     assert_eq!(deleted_count, 1);
     let counts_final = catalog.query_tag_counts().unwrap();
     assert_eq!(counts_final, vec![("landscape".to_string(), 3)]);
@@ -4207,6 +4219,67 @@ fn an_over_long_sidecar_keyword_is_reported_and_the_rest_import() {
 }
 
 #[test]
+fn a_sidecar_keyword_below_an_alias_is_reported_and_the_rest_import() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("alias_sidecar_keyword");
+    let item = engine.get_item_slice(0..1).remove(0);
+    engine
+        .set_alias("nyc", "places/usa/new york")
+        .expect("set alias");
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            tags: vec![
+                "nyc/soho".to_string(),
+                "kept".to_string(),
+                "NYC".to_string(),
+            ],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report = engine
+        .import_sidecars(&[item.id])
+        .expect("a keyword below an alias must not abort the import");
+    let mut tags = engine.get_tags_for_item(item.id);
+    tags.sort();
+    assert_eq!(
+        tags,
+        vec!["kept".to_string(), "places/usa/new york".to_string()],
+        "the other keywords import, and the alias imports as its keyword"
+    );
+    assert_eq!(
+        report.failed.len(),
+        1,
+        "the keyword below the alias is reported: {:?}",
+        report.failed
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn an_alias_cannot_sit_above_its_keyword_or_point_below_an_alias() {
+    let (catalog, _ids) = catalog_with_tags(&["trip"]);
+    assert!(
+        catalog.set_alias("places", "places/usa").is_err(),
+        "an alias above its own keyword would make the alias a parent in use"
+    );
+    catalog
+        .set_alias("nyc", "places/usa/new york")
+        .expect("alias");
+    assert!(
+        catalog.set_alias("soho", "nyc/soho").is_err(),
+        "an alias cannot point at a keyword below another alias"
+    );
+    assert_eq!(
+        catalog.aliases().expect("aliases"),
+        vec![("nyc".to_string(), "places/usa/new york".to_string())],
+        "refused aliases write nothing"
+    );
+}
+
+#[test]
 fn rename_stores_the_normalized_path_and_its_chip_removes() {
     let (catalog, ids) = catalog_with_tags(&["trip"]);
     catalog
@@ -4339,4 +4412,453 @@ fn a_blank_sidecar_keyword_is_skipped_not_reported() {
     );
     assert_eq!(engine.get_tags_for_item(item.id), vec!["kept".to_string()]);
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+// ---- Task 3: subtree rename/move/delete and aliases ----
+
+/// One item per entry, each carrying the listed tags.
+fn catalog_with_tag_sets(sets: &[&[&str]]) -> (Catalog, Vec<MediaId>) {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..sets.len())
+        .map(|i| {
+            sample_media_item(
+                &format!("/photos/kw3/{i}.jpg"),
+                MediaType::Image,
+                1_000 + i as i64,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .iter()
+        .map(|it| it.id)
+        .collect();
+    for (id, tags) in ids.iter().zip(sets) {
+        let tags: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
+        catalog.add_tags_batch(&[*id], &tags).expect("add tags");
+    }
+    (catalog, ids)
+}
+
+#[test]
+fn rename_parent_moves_subtree_and_merges() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a/x", "b/x"], &["b/x"]]);
+    let change = catalog.rename_tag("a", "b").expect("rename a subtree");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["b/x".to_string()],
+        "the moved child merges into the existing b/x: one row, no a/* left"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[1]).unwrap(),
+        vec!["b/x".to_string()]
+    );
+    assert_eq!(
+        change.removed,
+        vec![(ids[0], "a/x".to_string())],
+        "the change lists exactly the removed row"
+    );
+    assert!(
+        change.added.is_empty(),
+        "b/x already existed: nothing added"
+    );
+    assert_eq!(change.affected_ids(), vec![ids[0]]);
+    let mut found = search_ids(&catalog, "b");
+    found.sort_by_key(|id| id.0);
+    assert_eq!(found, ids, "the search index finds the new parent");
+    assert!(
+        search_ids(&catalog, "a").is_empty(),
+        "the old parent no longer finds the item"
+    );
+}
+
+#[test]
+fn rename_into_own_subtree_is_refused() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a", "a/x"]]);
+    assert!(
+        catalog.rename_tag("a", "a/b").is_err(),
+        "a keyword cannot move inside itself"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a".to_string(), "a/x".to_string()],
+        "a refused rename writes nothing"
+    );
+}
+
+#[test]
+fn rename_onto_alias_is_refused() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["trip"]]);
+    catalog.set_alias("nyc", "places/usa/new york").unwrap();
+    assert!(
+        catalog.rename_tag("trip", "NYC").is_err(),
+        "a keyword cannot take a name that is already an alias"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["trip".to_string()]
+    );
+}
+
+#[test]
+fn rename_rewrites_smart_album_rules_in_subtree() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["a", "a/x/y"], &["ab"]]);
+    let tag_rule = |op: RuleOperator, v: &str| SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: op,
+        value: RuleValue::Text(v.to_string()),
+    };
+    let album = catalog
+        .create_smart_album(
+            "Tagged",
+            "tag",
+            MatchMode::Any,
+            &[
+                tag_rule(RuleOperator::Equals, "a"),
+                tag_rule(RuleOperator::NotEquals, "a/x/y"),
+                tag_rule(RuleOperator::Contains, "ab"),
+                SmartAlbumRule {
+                    field: RuleField::Query,
+                    operator: RuleOperator::Equals,
+                    value: RuleValue::Text("tag:a".to_string()),
+                },
+            ],
+        )
+        .unwrap();
+    let change = catalog.rename_tag("a", "c").expect("rename");
+    let rules = catalog.get_smart_album(album.id).unwrap().unwrap().rules;
+    let values: Vec<_> = rules.iter().map(|r| r.value.clone()).collect();
+    assert_eq!(
+        values,
+        vec![
+            RuleValue::Text("c".to_string()),
+            RuleValue::Text("c/x/y".to_string()),
+            RuleValue::Text("ab".to_string()),
+            RuleValue::Text("tag:a".to_string()),
+        ],
+        "Tag rules on a or below it follow the rename; a sibling and saved searches are untouched"
+    );
+    assert_eq!(
+        change.albums_before.len(),
+        1,
+        "the touched album is recorded"
+    );
+    assert_eq!(change.albums_after.len(), 1);
+    assert_eq!(change.albums_before[0].0, album.id);
+}
+
+#[test]
+fn delete_parent_removes_subtree_only() {
+    let (catalog, ids) =
+        catalog_with_tag_sets(&[&["places", "places/europe/paris", "placesx", "places-old"]]);
+    let change = catalog.delete_tag_globally("places").expect("delete");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["places-old".to_string(), "placesx".to_string()],
+        "deleting a parent removes it and its children, not its siblings"
+    );
+    assert_eq!(change.removed.len(), 2);
+    assert!(search_ids(&catalog, "paris").is_empty(), "index refreshed");
+    assert_eq!(
+        search_ids(&catalog, "placesx"),
+        vec![ids[0]],
+        "the index is rebuilt with the tags that remain"
+    );
+}
+
+#[test]
+fn bulk_delete_returns_one_change() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a", "a/x", "keep"], &["b/y", "a/x"]]);
+    let change = catalog
+        .delete_tags_globally(&["a".to_string(), "b".to_string()])
+        .expect("bulk delete");
+    let mut removed = change.removed.clone();
+    removed.sort_by(|l, r| (l.0 .0, &l.1).cmp(&(r.0 .0, &r.1)));
+    assert_eq!(
+        removed,
+        vec![
+            (ids[0], "a".to_string()),
+            (ids[0], "a/x".to_string()),
+            (ids[1], "a/x".to_string()),
+            (ids[1], "b/y".to_string()),
+        ],
+        "one change lists every removed row of every deleted subtree"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["keep".to_string()]
+    );
+    assert!(catalog.get_tags_for_item(ids[1]).unwrap().is_empty());
+}
+
+#[test]
+fn alias_resolves_on_add() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&[]]);
+    catalog.set_alias("NYC", "Places/USA/New York").unwrap();
+    assert_eq!(
+        catalog.resolve_alias(" nyc ").unwrap(),
+        "places/usa/new york"
+    );
+    assert_eq!(catalog.resolve_alias("paris").unwrap(), "paris");
+    catalog.add_tags_batch(&ids, &["nyc".to_string()]).unwrap();
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["places/usa/new york".to_string()],
+        "typing an alias stores its keyword, never the alias"
+    );
+    assert_eq!(
+        catalog.aliases().unwrap(),
+        vec![("nyc".to_string(), "places/usa/new york".to_string())]
+    );
+    catalog.remove_alias("nyc").unwrap();
+    assert!(catalog.aliases().unwrap().is_empty());
+}
+
+#[test]
+fn alias_cannot_shadow_keyword() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["places/paris"]]);
+    assert!(
+        catalog.set_alias("places/paris", "france").is_err(),
+        "an alias cannot hide a keyword in use"
+    );
+    assert!(
+        catalog.set_alias("places", "france").is_err(),
+        "nor a parent path in use"
+    );
+    assert!(catalog.aliases().unwrap().is_empty());
+}
+
+#[test]
+fn rename_retargets_aliases() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["places/usa/new york"]]);
+    catalog.set_alias("nyc", "places/usa/new york").unwrap();
+    catalog.set_alias("beach", "fun").unwrap();
+    let change = catalog.rename_tag("places", "world").unwrap();
+    assert_eq!(
+        catalog.aliases().unwrap(),
+        vec![
+            ("beach".to_string(), "fun".to_string()),
+            ("nyc".to_string(), "world/usa/new york".to_string()),
+        ],
+        "aliases into the moved subtree follow it"
+    );
+    assert_eq!(
+        change.aliases_before,
+        vec![("nyc".to_string(), "places/usa/new york".to_string())]
+    );
+    assert_eq!(
+        change.aliases_after,
+        vec![("nyc".to_string(), "world/usa/new york".to_string())]
+    );
+}
+
+#[test]
+fn subtree_item_count_is_distinct() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["a/x", "a/y"], &["a"], &["ab"]]);
+    assert_eq!(
+        catalog.subtree_item_count("a").unwrap(),
+        2,
+        "an item with two children counts once; the sibling ab does not count"
+    );
+    assert_eq!(catalog.subtree_item_count("a/x").unwrap(), 1);
+}
+
+#[test]
+fn alias_chain_resolves_to_the_final_keyword_in_either_order() {
+    for order in [["a", "b"], ["b", "a"]] {
+        let (catalog, ids) = catalog_with_tag_sets(&[&[]]);
+        for alias in order {
+            match alias {
+                "a" => catalog.set_alias("a", "b").unwrap(),
+                _ => catalog.set_alias("b", "c").unwrap(),
+            }
+        }
+        assert_eq!(
+            catalog.aliases().unwrap(),
+            vec![
+                ("a".to_string(), "c".to_string()),
+                ("b".to_string(), "c".to_string()),
+            ],
+            "set in order {order:?}: an alias never points at another alias"
+        );
+        catalog.add_tags_batch(&ids, &["a".to_string()]).unwrap();
+        assert_eq!(
+            catalog.get_tags_for_item(ids[0]).unwrap(),
+            vec!["c".to_string()],
+            "set in order {order:?}: an alias is never stored on media"
+        );
+    }
+}
+
+#[test]
+fn moving_up_keeps_a_child_landing_inside_the_old_subtree() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a/b/x", "a/b/b/y"]]);
+    let change = catalog.rename_tag("a/b", "a").expect("move up");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a/b/y".to_string(), "a/x".to_string()],
+        "a/b/b/y lands on a/b/y, inside the old subtree, and must survive"
+    );
+    assert_eq!(search_ids(&catalog, "y"), vec![ids[0]]);
+    assert_eq!(search_ids(&catalog, "x"), vec![ids[0]]);
+    assert!(
+        change.removed.iter().all(|row| !change.added.contains(row)),
+        "a row both removed and re-added is unchanged and listed in neither: {change:?}"
+    );
+    assert_eq!(
+        change.removed,
+        vec![
+            (ids[0], "a/b/b/y".to_string()),
+            (ids[0], "a/b/x".to_string())
+        ]
+    );
+    assert_eq!(
+        change.added,
+        vec![(ids[0], "a/b/y".to_string()), (ids[0], "a/x".to_string())]
+    );
+}
+
+#[test]
+fn moving_up_onto_an_existing_row_lists_it_in_neither() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a/b/x", "a/b/b/x"]]);
+    let change = catalog.rename_tag("a/b", "a").expect("move up");
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a/b/x".to_string(), "a/x".to_string()]
+    );
+    assert_eq!(change.removed, vec![(ids[0], "a/b/b/x".to_string())]);
+    assert_eq!(change.added, vec![(ids[0], "a/x".to_string())]);
+}
+
+#[test]
+fn rename_refuses_an_over_long_moved_child() {
+    let child = format!("a/{}", "c".repeat(95));
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a", child.as_str()]]);
+    assert!(
+        catalog.rename_tag("a", "bbbbbbbb").is_err(),
+        "a child that would pass the length cap is refused, not cut"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a".to_string(), child],
+        "nothing is written"
+    );
+}
+
+#[test]
+fn rename_refuses_a_moved_child_that_is_an_alias() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a", "a/x"]]);
+    catalog.set_alias("b/x", "z").unwrap();
+    assert!(catalog.rename_tag("a", "b").is_err());
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a".to_string(), "a/x".to_string()],
+        "nothing is written"
+    );
+}
+
+#[test]
+fn no_keyword_is_stored_below_an_alias() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a"]]);
+    catalog.set_alias("nyc", "places/usa/new york").unwrap();
+    assert!(
+        catalog
+            .add_tags_batch(&ids, &["nyc/soho".to_string()])
+            .is_err(),
+        "a path below an alias is refused"
+    );
+    assert!(
+        catalog.rename_tag("a", "nyc/m").is_err(),
+        "a rename below an alias is refused"
+    );
+    assert_eq!(
+        catalog.get_tags_for_item(ids[0]).unwrap(),
+        vec!["a".to_string()],
+        "nothing is written"
+    );
+    assert!(
+        catalog.set_alias("places", "places/usa").is_err(),
+        "an alias cannot be an ancestor of its own keyword"
+    );
+    assert!(
+        catalog.set_alias("places", "elsewhere").is_err(),
+        "an alias cannot be an ancestor of another alias's keyword"
+    );
+    assert_eq!(catalog.aliases().unwrap().len(), 1);
+}
+
+#[test]
+fn rename_records_only_the_albums_it_rewrote() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["a"]]);
+    let rule = |v: &str| SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Text(v.to_string()),
+    };
+    let touched = catalog
+        .create_smart_album("A", "tag", MatchMode::All, &[rule(" A ")])
+        .unwrap();
+    let untouched = catalog
+        .create_smart_album("Other", "tag", MatchMode::All, &[rule("other")])
+        .unwrap();
+    let change = catalog.rename_tag("a", "b").unwrap();
+    let parse = |json: &str| serde_json::from_str::<Vec<SmartAlbumRule>>(json).unwrap();
+    assert_eq!(change.albums_before.len(), 1, "only the touched album");
+    assert_eq!(change.albums_before[0].0, touched.id);
+    assert_eq!(parse(&change.albums_before[0].1), vec![rule(" A ")]);
+    assert_eq!(change.albums_after.len(), 1);
+    assert_eq!(change.albums_after[0].0, touched.id);
+    assert_eq!(
+        parse(&change.albums_after[0].1),
+        vec![rule("b")],
+        "a rule value is matched normalized and stored as the new path"
+    );
+    assert_eq!(
+        catalog
+            .get_smart_album(untouched.id)
+            .unwrap()
+            .unwrap()
+            .rules,
+        vec![rule("other")]
+    );
+}
+
+#[test]
+fn bulk_delete_of_overlapping_roots_lists_each_row_once() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["a", "a/x"]]);
+    let change = catalog
+        .delete_tags_globally(&["a".to_string(), "a/x".to_string()])
+        .unwrap();
+    assert_eq!(
+        change.removed,
+        vec![(ids[0], "a".to_string()), (ids[0], "a/x".to_string())]
+    );
+}
+
+#[test]
+fn subtree_item_count_skips_trashed_and_hidden() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let mut hidden = sample_media_item("/photos/kw3/h.jpg", MediaType::Image, 1, None, None);
+    hidden.is_hidden = true;
+    let items = [
+        sample_media_item("/photos/kw3/v.jpg", MediaType::Image, 2, None, None),
+        sample_media_item("/photos/kw3/t.jpg", MediaType::Image, 3, None, None),
+        hidden,
+    ];
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .unwrap()
+        .iter()
+        .map(|it| it.id)
+        .collect();
+    catalog.add_tags_batch(&ids, &["a/x".to_string()]).unwrap();
+    catalog.set_trashed(ids[1], true).unwrap();
+    assert_eq!(
+        catalog.subtree_item_count("a").unwrap(),
+        1,
+        "trashed and hidden items are not counted, as in the tag manager"
+    );
 }

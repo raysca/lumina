@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, SCHEMA_VERSION,
+    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, TagChange, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -926,18 +926,31 @@ impl LuminaEngine {
                             .set_caption(*id, metadata.caption.as_deref().unwrap_or(""))?;
                         changed = true;
                     }
-                    // A keyword the catalog refuses (over the length cap) is
-                    // reported; the item's other keywords still import. A
-                    // blank one (no segment left after cleaning) is skipped.
+                    // A keyword the catalog refuses (over the length cap, or
+                    // at or below an alias) is reported; the item's other
+                    // keywords still import. A blank one (no segment left
+                    // after cleaning) is skipped.
                     let mut tags = Vec::new();
                     for tag in &metadata.tags {
-                        match catalog::keywords::normalize_path(tag) {
-                            Ok(path) => tags.push(path),
-                            Err(_) if catalog::keywords::is_blank_path(tag) => {}
-                            Err(err) => report.failed.push((
+                        // Only an invalid path is a per-keyword failure; a
+                        // database error from the alias lookup aborts.
+                        let path = match catalog::keywords::normalize_path(tag) {
+                            Ok(path) => self.catalog.resolve_alias(&path)?,
+                            Err(_) if catalog::keywords::is_blank_path(tag) => continue,
+                            Err(err) => {
+                                report.failed.push((
+                                    item.path.clone(),
+                                    format!("could not import keyword: {err}"),
+                                ));
+                                continue;
+                            }
+                        };
+                        match self.catalog.keyword_refusal(&path)? {
+                            Some(reason) => report.failed.push((
                                 item.path.clone(),
-                                format!("could not import keyword: {err}"),
+                                format!("could not import keyword: {reason}"),
                             )),
+                            None => tags.push(path),
                         }
                     }
                     if !tags.is_empty() {
@@ -1421,16 +1434,50 @@ impl LuminaEngine {
         self.catalog.get_items_by_tag(tag, limit, 0)
     }
 
-    pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
+    /// Renames a keyword and its subtree; see [`Catalog::rename_tag`].
+    pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<TagChange> {
         self.catalog.rename_tag(old_tag, new_tag)
     }
 
-    pub fn delete_tag_globally(&self, tag: &str) -> Result<usize> {
+    /// Deletes a keyword and its subtree; see [`Catalog::delete_tag_globally`].
+    pub fn delete_tag_globally(&self, tag: &str) -> Result<TagChange> {
         self.catalog.delete_tag_globally(tag)
     }
 
-    pub fn merge_tags(&self, source_tag: &str, target_tag: &str) -> Result<usize> {
+    /// Deletes several keywords in one transaction; see
+    /// [`Catalog::delete_tags_globally`].
+    pub fn delete_tags_globally(&self, tags: &[String]) -> Result<TagChange> {
+        self.catalog.delete_tags_globally(tags)
+    }
+
+    /// Merges a keyword into another; see [`Catalog::merge_tags`].
+    pub fn merge_tags(&self, source_tag: &str, target_tag: &str) -> Result<TagChange> {
         self.catalog.merge_tags(source_tag, target_tag)
+    }
+
+    /// See [`Catalog::set_alias`].
+    pub fn set_alias(&self, alias: &str, tag: &str) -> Result<()> {
+        self.catalog.set_alias(alias, tag)
+    }
+
+    /// See [`Catalog::remove_alias`].
+    pub fn remove_alias(&self, alias: &str) -> Result<()> {
+        self.catalog.remove_alias(alias)
+    }
+
+    /// See [`Catalog::aliases`].
+    pub fn aliases(&self) -> Result<Vec<(String, String)>> {
+        self.catalog.aliases()
+    }
+
+    /// See [`Catalog::resolve_alias`].
+    pub fn resolve_alias(&self, raw: &str) -> Result<String> {
+        self.catalog.resolve_alias(raw)
+    }
+
+    /// See [`Catalog::subtree_item_count`].
+    pub fn subtree_item_count(&self, path: &str) -> Result<usize> {
+        self.catalog.subtree_item_count(path)
     }
 
     pub fn request_thumbnail<F>(&self, id: MediaId, target_size: u32, callback: F)

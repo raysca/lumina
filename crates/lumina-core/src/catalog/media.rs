@@ -1110,6 +1110,36 @@ mod tests {
     }
 
     #[test]
+    fn migration_creates_tag_aliases_idempotently() {
+        let (dir, db) = temp_catalog("tag_aliases_migration");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        // Simulate a catalog from before aliases existed.
+        catalog
+            .conn
+            .lock()
+            .execute_batch("DROP TABLE tag_aliases; PRAGMA user_version = 15;")
+            .expect("pre-migration schema must be reproducible");
+        drop(catalog);
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen and migrate");
+        assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        catalog
+            .set_alias("nyc", "places/usa/new york")
+            .expect("the migrated table takes aliases");
+        drop(catalog);
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen twice");
+        assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        assert_eq!(
+            catalog.aliases().expect("aliases"),
+            vec![("nyc".to_string(), "places/usa/new york".to_string())],
+            "reopening keeps alias rows"
+        );
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn rotation_migration_is_idempotent_and_roundtrips() {
         let (dir, db) = temp_catalog("rotation_migration");
         let catalog = Catalog::open(&db).expect("catalog must open");

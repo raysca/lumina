@@ -77,9 +77,27 @@ pub fn leaf(path: &str) -> &str {
     path.rsplit_once('/').map_or(path, |(_, leaf)| leaf)
 }
 
+/// `path` relative to `root` (`""` or `"/..."`) when it is `root` or below it.
+pub fn subtree_suffix<'a>(path: &'a str, root: &str) -> Option<&'a str> {
+    let rest = path.strip_prefix(root)?;
+    (rest.is_empty() || rest.starts_with('/')).then_some(rest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subtree_suffix_matches_the_root_and_children_not_siblings() {
+        assert_eq!(subtree_suffix("a", "a"), Some(""));
+        assert_eq!(subtree_suffix("a/x", "a"), Some("/x"));
+        assert_eq!(
+            subtree_suffix("ax", "a"),
+            None,
+            "a sibling is not in the subtree"
+        );
+        assert_eq!(subtree_suffix("b/a", "a"), None);
+    }
 
     #[test]
     fn normalize_path_trims_and_drops_empty_segments() {

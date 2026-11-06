@@ -921,3 +921,37 @@ fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn typing_an_alias_tags_and_undoes_its_keyword() {
+    let (temp_dir, engine) = seed_library("alias_add", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine.set_alias("nyc", "places/usa/new york").unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+
+    view.update(vcx, |app, cx| {
+        app.selected_indices = [0].into_iter().collect();
+        app.selection_anchor = Some(0);
+        app.selected_index = Some(0);
+        app.selected_item = Some(item.clone());
+        app.update_batch_summary();
+
+        app.start_tag_input(cx);
+        app.tag_input_buffer = "NYC".to_string();
+        app.commit_tag_input(cx);
+        assert!(app.error_message.is_none());
+        assert_eq!(
+            engine.get_tags_for_item(item.id),
+            vec!["places/usa/new york".to_string()],
+            "typing an alias stores its keyword"
+        );
+        app.undo_last(cx);
+        assert!(
+            engine.get_tags_for_item(item.id).is_empty(),
+            "undo records and removes the keyword row, not the alias"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

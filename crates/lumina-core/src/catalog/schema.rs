@@ -119,6 +119,15 @@ impl Catalog {
             CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags(tag);
             CREATE INDEX IF NOT EXISTS idx_media_tags_media_id ON media_tags(media_id);
 
+            -- v16: keyword aliases, resolved when a tag is typed; the alias
+            -- itself is never stored on media. Both columns hold normalized
+            -- paths, and an alias is never also a keyword path in use.
+            CREATE TABLE IF NOT EXISTS tag_aliases (
+                alias TEXT PRIMARY KEY,
+                tag TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_tag_aliases_tag ON tag_aliases(tag);
+
             CREATE TABLE IF NOT EXISTS app_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL

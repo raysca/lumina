@@ -1,5 +1,5 @@
 use gpui::*;
-use lumina_core::catalog::keywords::normalize_path;
+use lumina_core::catalog::keywords::{normalize_path, subtree_suffix};
 use lumina_core::text::{clean_text, MAX_NAME_CHARS};
 
 use crate::app::types::TagSortOrder;
@@ -31,6 +31,53 @@ impl LuminaApp {
         }
     }
 
+    /// Points everything that names `old` or a keyword below it (sidebar
+    /// selection, a `tag:` search, the tag manager's focus and checks) at
+    /// the same place under `new` after a rename or merge, or drops it after
+    /// a delete (`new` is `None`).
+    pub(crate) fn retarget_tag_refs(
+        &mut self,
+        old: &str,
+        new: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let old = old.trim().to_lowercase();
+        // None: untouched; Some(None): deleted; Some(Some(path)): moved.
+        let map = |path: &str| {
+            subtree_suffix(&path.to_lowercase(), &old)
+                .map(|rest| new.map(|new| format!("{new}{rest}")))
+        };
+        if let AlbumSelection::Tag(ref curr) = self.selection {
+            match map(curr) {
+                Some(Some(path)) => self.selection = AlbumSelection::Tag(path),
+                Some(None) => self.selection = AlbumSelection::AllLibrary,
+                None => {}
+            }
+        }
+        let searched = self
+            .search_query
+            .strip_prefix("tag:")
+            .map(|value| map(value.trim_matches('"')));
+        match searched {
+            Some(Some(Some(path))) if path.contains(' ') => {
+                self.search_query = format!("tag:\"{path}\"")
+            }
+            Some(Some(Some(path))) => self.search_query = format!("tag:{path}"),
+            Some(Some(None)) => self.clear_search(cx),
+            _ => {}
+        }
+        if let Some(moved) = self.tag_manager.focused.as_deref().and_then(map) {
+            if moved.is_none() {
+                self.tag_manager.editing = None;
+            }
+            self.tag_manager.focused = moved;
+        }
+        self.tag_manager.selected = std::mem::take(&mut self.tag_manager.selected)
+            .into_iter()
+            .filter_map(|tag| map(&tag).unwrap_or(Some(tag)))
+            .collect();
+    }
+
     /// Runs a tag mutation and reports failures through the error banner.
     ///
     /// Tag changes are destructive, so a failure must never be swallowed or let
@@ -54,11 +101,14 @@ impl LuminaApp {
     }
 
     pub fn batch_add_tag(&mut self, tag: String, cx: &mut Context<Self>) {
-        // The stored path, so undo and the "already had it" check see the
-        // same row the catalog writes. An empty or over-long path is refused
-        // with an error, never cut.
-        let Some(clean) = self.apply_tag_mutation("Could not add tag", normalize_path(&tag), cx)
-        else {
+        // The stored path (an alias resolved to its keyword), so undo and
+        // the "already had it" check see the same row the catalog writes. An
+        // empty or over-long path is refused with an error, never cut.
+        let resolved = match self.grid_state.as_ref() {
+            Some(state) => state.engine.resolve_alias(&tag),
+            None => normalize_path(&tag),
+        };
+        let Some(clean) = self.apply_tag_mutation("Could not add tag", resolved, cx) else {
             return;
         };
         let ids = self.get_selected_ids();
@@ -210,32 +260,16 @@ impl LuminaApp {
                 return;
             };
             if clean_new != old_tag {
-                let result = if let Some(ref state) = self.grid_state {
-                    state.engine.rename_tag(&old_tag, &clean_new).map(|_| ())
-                } else {
-                    Ok(())
+                let result = match self.grid_state.as_ref() {
+                    Some(state) => state.engine.rename_tag(&old_tag, &clean_new),
+                    None => Ok(Default::default()),
                 };
-                if self
-                    .apply_tag_mutation("Could not rename tag", result, cx)
-                    .is_none()
-                {
+                let Some(change) = self.apply_tag_mutation("Could not rename tag", result, cx)
+                else {
                     return;
-                }
-                if let AlbumSelection::Tag(ref curr) = self.selection {
-                    if curr == &old_tag {
-                        self.selection = AlbumSelection::Tag(clean_new.clone());
-                    }
-                }
-                // If search query is currently filtering on old_tag, update it to clean_new
-                let old_query = format!("tag:{}", old_tag);
-                let old_query_quoted = format!("tag:\"{}\"", old_tag);
-                if self.search_query == old_query || self.search_query == old_query_quoted {
-                    self.search_query = if clean_new.contains(' ') {
-                        format!("tag:\"{}\"", clean_new)
-                    } else {
-                        format!("tag:{}", clean_new)
-                    };
-                }
+                };
+                self.sync_metadata_sidecars(&change.affected_ids(), cx);
+                self.retarget_tag_refs(&old_tag, Some(&clean_new), cx);
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
                 let message = format!("Renamed tag to \"{}\"", clean_new);
@@ -258,39 +292,16 @@ impl LuminaApp {
             return;
         }
         let result = match self.grid_state.as_ref() {
-            Some(state) => state.engine.delete_tag_globally(&clean).map(|_| ()),
-            None => Ok(()),
+            Some(state) => state.engine.delete_tag_globally(&clean),
+            None => Ok(Default::default()),
         };
-        if self
-            .apply_tag_mutation("Could not delete tag", result, cx)
-            .is_none()
-        {
+        let Some(change) = self.apply_tag_mutation("Could not delete tag", result, cx) else {
             return;
-        }
-        if let AlbumSelection::Tag(ref curr) = self.selection {
-            if curr == &clean {
-                self.selection = AlbumSelection::AllLibrary;
-            }
-        }
-        let tag_query = format!("tag:{}", clean);
-        let tag_query_quoted = format!("tag:\"{}\"", clean);
-        if self.search_query == tag_query || self.search_query == tag_query_quoted {
-            self.clear_search(cx);
-        }
-        // The delete succeeded, so the manager must not keep selecting a tag
-        // that no longer exists in the catalog.
-        self.tag_manager
-            .selected
-            .retain(|selected| !selected.eq_ignore_ascii_case(&clean));
-        if self
-            .tag_manager
-            .focused
-            .as_ref()
-            .is_some_and(|focused| focused.eq_ignore_ascii_case(&clean))
-        {
-            self.tag_manager.focused = None;
-            self.tag_manager.editing = None;
-        }
+        };
+        self.sync_metadata_sidecars(&change.affected_ids(), cx);
+        // The delete succeeded, so nothing may keep pointing at a keyword
+        // (or a child of it) that no longer exists in the catalog.
+        self.retarget_tag_refs(&clean, None, cx);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         cx.notify();
@@ -422,25 +433,16 @@ impl LuminaApp {
                 return;
             };
             if new_tag != old_tag.to_lowercase() {
-                let result = if let Some(ref state) = self.grid_state {
-                    state.engine.rename_tag(&old_tag, &new_tag).map(|_| ())
-                } else {
-                    Ok(())
+                let result = match self.grid_state.as_ref() {
+                    Some(state) => state.engine.rename_tag(&old_tag, &new_tag),
+                    None => Ok(Default::default()),
                 };
-                if self
-                    .apply_tag_mutation("Could not rename tag", result, cx)
-                    .is_none()
-                {
+                let Some(change) = self.apply_tag_mutation("Could not rename tag", result, cx)
+                else {
                     return;
-                }
-                let old_query = format!("tag:{}", old_tag);
-                let old_query_quoted = format!("tag:\"{}\"", old_tag);
-                if self.search_query == old_query || self.search_query == old_query_quoted {
-                    self.search_query = format!("tag:{}", new_tag);
-                }
-                if self.tag_manager.focused.as_deref() == Some(old_tag.as_str()) {
-                    self.tag_manager.focused = Some(new_tag.clone());
-                }
+                };
+                self.sync_metadata_sidecars(&change.affected_ids(), cx);
+                self.retarget_tag_refs(&old_tag, Some(&new_tag), cx);
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
                 self.show_toast(format!("Renamed tag to \"{}\"", new_tag), cx);
@@ -481,33 +483,27 @@ impl LuminaApp {
             .collect();
         sources.sort();
         let mut merged = 0;
+        let mut affected = Vec::new();
         for source in &sources {
             let result = match self.grid_state.as_ref() {
-                Some(state) => state.engine.merge_tags(source, &target).map(|_| ()),
-                None => Ok(()),
+                Some(state) => state.engine.merge_tags(source, &target),
+                None => Ok(Default::default()),
             };
             // Stop at the first failure; the merges before it are committed
-            // and the counts below reflect them.
-            if self
-                .apply_tag_mutation("Could not merge tags", result, cx)
-                .is_none()
-            {
+            // and the counts and sidecars below reflect them.
+            let Some(change) = self.apply_tag_mutation("Could not merge tags", result, cx) else {
                 break;
-            }
+            };
+            affected.extend(change.affected_ids());
             merged += 1;
-            self.tag_manager.selected.remove(source);
-            if self.selection == AlbumSelection::Tag(source.clone()) {
-                self.selection = AlbumSelection::Tag(target.clone());
-            }
-            if self.search_query == format!("tag:{source}")
-                || self.search_query == format!("tag:\"{source}\"")
-            {
-                self.search_query = format!("tag:{target}");
-            }
+            self.retarget_tag_refs(source, Some(&target), cx);
         }
         if merged == sources.len() {
             self.tag_manager.selected.clear();
         }
+        // sync_metadata_sidecars rewrites each id from the catalog, so an id
+        // listed twice costs one extra write, never a wrong sidecar.
+        self.sync_metadata_sidecars(&affected, cx);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         self.focus_tag_manager_tag(target.clone(), cx);
@@ -532,77 +528,30 @@ impl LuminaApp {
         };
     }
 
+    /// Deletes every tag in `tags` (and their subtrees) in one transaction:
+    /// all of them or, on an error, none.
     pub fn bulk_delete_tags(&mut self, tags: Vec<String>, cx: &mut Context<Self>) {
-        let engine_opt = self.grid_state.as_ref().map(|s| s.engine.clone());
-        let mut deleted: Vec<String> = Vec::new();
-        let mut failures: Vec<(String, String)> = Vec::new();
-        if let Some(engine) = engine_opt {
-            for tag in &tags {
-                let clean = tag.trim().to_lowercase();
-                if clean.is_empty() {
-                    continue;
-                }
-                match engine.delete_tag_globally(&clean) {
-                    Ok(_) => deleted.push(clean),
-                    Err(err) => {
-                        log::warn!("could not delete tag {clean:?}: {err:?}");
-                        failures.push((clean, err.to_string()));
-                    }
-                }
-            }
-        }
+        let deleted: Vec<String> = tags
+            .iter()
+            .map(|tag| tag.trim().to_lowercase())
+            .filter(|tag| !tag.is_empty())
+            .collect();
+        let result = match self.grid_state.as_ref() {
+            Some(state) => state.engine.delete_tags_globally(&deleted),
+            None => Ok(Default::default()),
+        };
+        // On failure nothing was deleted, so the selection stays for a retry.
+        let Some(change) = self.apply_tag_mutation("Could not delete tags", result, cx) else {
+            cx.notify();
+            return;
+        };
+        self.sync_metadata_sidecars(&change.affected_ids(), cx);
 
-        if !deleted.is_empty() {
-            if let AlbumSelection::Tag(ref curr) = self.selection {
-                if deleted.iter().any(|tag| tag == &curr.to_lowercase()) {
-                    self.selection = AlbumSelection::AllLibrary;
-                }
-            }
-            let mut should_clear = false;
-            for clean in &deleted {
-                let tag_query = format!("tag:{}", clean);
-                let tag_query_quoted = format!("tag:\"{}\"", clean);
-                if self.search_query == tag_query || self.search_query == tag_query_quoted {
-                    should_clear = true;
-                }
-            }
-            if should_clear {
-                self.clear_search(cx);
-            }
-        }
-
-        // Keep tags that failed selected so the retry starts from the same set;
-        // only tags the catalog actually deleted leave the manager selection.
-        self.tag_manager
-            .selected
-            .retain(|selected| !deleted.iter().any(|tag| tag == &selected.to_lowercase()));
-        if self
-            .tag_manager
-            .focused
-            .as_ref()
-            .is_some_and(|focused| deleted.iter().any(|tag| tag == &focused.to_lowercase()))
-        {
-            self.tag_manager.focused = None;
-            self.tag_manager.editing = None;
+        for tag in &deleted {
+            self.retarget_tag_refs(tag, None, cx);
         }
         self.refresh_selected_tags();
         self.refresh_album_counts();
-        if !failures.is_empty() {
-            let details = failures
-                .iter()
-                .take(3)
-                .map(|(tag, err)| format!("{tag}: {err}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-            let suffix = if failures.len() > 3 { "; ..." } else { "" };
-            self.set_error(
-                format!(
-                    "Could not delete {} tag(s): {details}{suffix}",
-                    failures.len()
-                ),
-                cx,
-            );
-        }
         cx.notify();
     }
 }

@@ -2,9 +2,8 @@ use anyhow::Result;
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Transaction};
 
-use super::keywords::{
-    filter_value, is_blank_path, normalize_path, subtree_clause, subtree_params,
-};
+use super::keyword_ops::{refuse_alias_path, resolve_in};
+use super::keywords::{filter_value, normalize_path, subtree_clause, subtree_params};
 use super::Catalog;
 use crate::{MediaId, MediaItem, SortSpec};
 
@@ -64,7 +63,8 @@ impl Catalog {
     }
 
     /// Attaches one or more tags to a batch of media items, each stored as
-    /// its [`normalize_path`] form (exact rows; no ancestor rows are added).
+    /// its [`normalize_path`] form, or the keyword it is an alias of (exact
+    /// rows; no ancestor rows are added). Refuses a path below an alias.
     /// Refuses the whole batch, writing nothing, when any tag is empty or
     /// longer than [`crate::text::MAX_NAME_CHARS`].
     pub fn add_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {
@@ -80,6 +80,15 @@ impl Catalog {
         let raw_ids: Vec<i64> = ids.iter().map(|id| id.0 as i64).collect();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
+        // An alias stores its keyword, never itself.
+        let normalized_tags = normalized_tags
+            .into_iter()
+            .map(|tag| {
+                let tag = resolve_in(&tx, tag)?;
+                refuse_alias_path(&tx, &tag)?;
+                Ok(tag)
+            })
+            .collect::<Result<Vec<String>>>()?;
 
         Self::delete_fts_for_items(&tx, &raw_ids)?;
 
@@ -255,131 +264,6 @@ impl Catalog {
             counts.push(r?);
         }
         Ok(counts)
-    }
-
-    /// Globally renames a tag across all media items (handles collision by
-    /// merging). The new name is stored as its [`normalize_path`] form and
-    /// an over-long one is refused; the old one is only trimmed and
-    /// lowercased, so a tag stored before cleaning still matches.
-    pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<usize> {
-        let old_clean = old_tag.trim().to_lowercase();
-        if old_clean.is_empty() || is_blank_path(new_tag) {
-            return Ok(0);
-        }
-        let new_clean = normalize_path(new_tag)?;
-        if old_clean == new_clean {
-            return Ok(0);
-        }
-
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-
-        let affected_ids: Vec<i64> = {
-            let mut stmt = tx.prepare("SELECT media_id FROM media_tags WHERE tag = ?1;")?;
-            let rows = stmt.query_map(params![old_clean], |row| row.get::<_, i64>(0))?;
-            let mut ids = Vec::new();
-            for r in rows {
-                ids.push(r?);
-            }
-            ids
-        };
-
-        if affected_ids.is_empty() {
-            return Ok(0);
-        }
-
-        Self::delete_fts_for_items(&tx, &affected_ids)?;
-
-        // Insert new tag where not already present, then remove old tag
-        tx.execute(
-            "INSERT OR IGNORE INTO media_tags (media_id, tag) SELECT media_id, ?1 FROM media_tags WHERE tag = ?2;",
-            params![new_clean, old_clean],
-        )?;
-        let count = tx.execute("DELETE FROM media_tags WHERE tag = ?1;", params![old_clean])?;
-
-        // Cascade tag rename to any SmartAlbum rules referencing old_clean
-        let albums_rows: Vec<(i64, String)> = {
-            let mut stmt = tx.prepare("SELECT id, rules_json FROM smart_albums;")?;
-            let rows = stmt.query_map([], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })?;
-            let mut list = Vec::new();
-            for r in rows {
-                list.push(r?);
-            }
-            list
-        };
-
-        for (album_id, rules_json) in albums_rows {
-            if let Ok(mut rules) =
-                serde_json::from_str::<Vec<crate::smart_albums::SmartAlbumRule>>(&rules_json)
-            {
-                let mut modified = false;
-                for rule in &mut rules {
-                    if rule.field == crate::smart_albums::RuleField::Tag {
-                        if let crate::smart_albums::RuleValue::Text(ref val) = rule.value {
-                            if val.trim().to_lowercase() == old_clean {
-                                rule.value =
-                                    crate::smart_albums::RuleValue::Text(new_clean.clone());
-                                modified = true;
-                            }
-                        }
-                    }
-                }
-                if modified {
-                    if let Ok(new_json) = serde_json::to_string(&rules) {
-                        tx.execute(
-                            "UPDATE smart_albums SET rules_json = ?1 WHERE id = ?2;",
-                            params![new_json, album_id],
-                        )?;
-                    }
-                }
-            }
-        }
-
-        Self::insert_fts_for_items(&tx, &affected_ids)?;
-
-        tx.commit()?;
-        Ok(count)
-    }
-
-    /// Globally deletes a tag from all media items.
-    pub fn delete_tag_globally(&self, tag: &str) -> Result<usize> {
-        let clean = tag.trim().to_lowercase();
-        if clean.is_empty() {
-            return Ok(0);
-        }
-
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-
-        let affected_ids: Vec<i64> = {
-            let mut stmt = tx.prepare("SELECT media_id FROM media_tags WHERE tag = ?1;")?;
-            let rows = stmt.query_map(params![clean], |row| row.get::<_, i64>(0))?;
-            let mut ids = Vec::new();
-            for r in rows {
-                ids.push(r?);
-            }
-            ids
-        };
-
-        if affected_ids.is_empty() {
-            return Ok(0);
-        }
-
-        Self::delete_fts_for_items(&tx, &affected_ids)?;
-
-        let count = tx.execute("DELETE FROM media_tags WHERE tag = ?1;", params![clean])?;
-
-        Self::insert_fts_for_items(&tx, &affected_ids)?;
-
-        tx.commit()?;
-        Ok(count)
-    }
-
-    /// Merges `source_tag` into `target_tag` across all media items.
-    pub fn merge_tags(&self, source_tag: &str, target_tag: &str) -> Result<usize> {
-        self.rename_tag(source_tag, target_tag)
     }
 
     /// Counts active media items that have no `media_tags` rows at all.
@@ -856,7 +740,11 @@ mod untagged_media_tests {
         );
 
         assert_eq!(
-            catalog.rename_tag("travel", "journey").expect("rename tag"),
+            catalog
+                .rename_tag("travel", "journey")
+                .expect("rename tag")
+                .removed
+                .len(),
             1
         );
         assert_eq!(
@@ -865,7 +753,14 @@ mod untagged_media_tests {
             "renaming a tag must not change untagged membership"
         );
 
-        assert_eq!(catalog.merge_tags("journey", "trip").expect("merge tag"), 1);
+        assert_eq!(
+            catalog
+                .merge_tags("journey", "trip")
+                .expect("merge tag")
+                .removed
+                .len(),
+            1
+        );
         assert_eq!(
             catalog.query_untagged_count().expect("count after merge"),
             1,
@@ -875,7 +770,9 @@ mod untagged_media_tests {
         assert_eq!(
             catalog
                 .delete_tag_globally("trip")
-                .expect("delete tag globally"),
+                .expect("delete tag globally")
+                .removed
+                .len(),
             1
         );
         assert_eq!(
