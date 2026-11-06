@@ -7,18 +7,24 @@ use crate::{MediaId, MediaItem, SortSpec};
 
 impl Catalog {
     /// Deletes existing FTS5 index rows for a set of media items before tag mutations.
-    fn delete_fts_for_items(tx: &Transaction, ids: &[i64]) -> Result<()> {
+    ///
+    /// `media_search_fts` is contentless, so a 'delete' must pass exactly the
+    /// values that were indexed: the same columns, in the same order, as the
+    /// `media_fts_*` triggers in `schema.rs`. Leaving one out drops a token's
+    /// whole entry for the row wherever else it appears.
+    pub(crate) fn delete_fts_for_items(tx: &Transaction, ids: &[i64]) -> Result<()> {
         for chunk in ids.chunks(500) {
             let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{}", i)).collect();
             let in_clause = placeholders.join(", ");
             let del_sql = format!(
                 r#"
                 INSERT INTO media_search_fts(
-                    media_search_fts, rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags
+                    media_search_fts, rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption
                 )
                 SELECT
                     'delete', m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
-                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '')
+                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''),
+                    COALESCE((SELECT caption FROM media_captions WHERE media_id = m.id), '')
                 FROM media_items m
                 WHERE m.id IN ({});
                 "#,
@@ -29,19 +35,21 @@ impl Catalog {
         Ok(())
     }
 
-    /// Re-inserts updated FTS5 index rows for a set of media items after tag mutations.
-    fn insert_fts_for_items(tx: &Transaction, ids: &[i64]) -> Result<()> {
+    /// Re-inserts updated FTS5 index rows for a set of media items after tag
+    /// mutations, with the same columns as the `media_fts_*` triggers.
+    pub(crate) fn insert_fts_for_items(tx: &Transaction, ids: &[i64]) -> Result<()> {
         for chunk in ids.chunks(500) {
             let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{}", i)).collect();
             let in_clause = placeholders.join(", ");
             let ins_sql = format!(
                 r#"
                 INSERT INTO media_search_fts(
-                    rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags
+                    rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption
                 )
                 SELECT
                     m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
-                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '')
+                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''),
+                    COALESCE((SELECT caption FROM media_captions WHERE media_id = m.id), '')
                 FROM media_items m
                 WHERE m.id IN ({});
                 "#,

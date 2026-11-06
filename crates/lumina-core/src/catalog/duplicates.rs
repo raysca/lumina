@@ -294,33 +294,7 @@ impl Catalog {
         keep_id: MediaId,
         trash_ids: &[MediaId],
     ) -> Result<()> {
-        // 1. Copy missing tags from trash_ids to keep_id
-        {
-            let mut tag_stmt = tx.prepare_cached(
-                r#"
-                INSERT OR IGNORE INTO media_tags (media_id, tag)
-                SELECT ?1, tag FROM media_tags WHERE media_id = ?2;
-                "#,
-            )?;
-            for trash_id in trash_ids {
-                tag_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
-            }
-        }
-
-        // 2. Copy missing caption from trash_ids to keep_id
-        {
-            let mut caption_stmt = tx.prepare_cached(
-                r#"
-                INSERT OR IGNORE INTO media_captions (media_id, caption)
-                SELECT ?1, caption FROM media_captions WHERE media_id = ?2;
-                "#,
-            )?;
-            for trash_id in trash_ids {
-                caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
-            }
-        }
-
-        // 3. Merge favorite, rating, color label, and title onto keep_id
+        // 1. Merge favorite, rating, color label, and title onto keep_id
         {
             let mut read_stmt = tx.prepare_cached(
                 "SELECT is_favorite, rating, color_label, title FROM media_items WHERE id = ?1;",
@@ -380,6 +354,39 @@ impl Catalog {
             }
         }
 
+        // The search index is contentless, so its 'delete' must see the values
+        // that were indexed. The UPDATE above fires `media_fts_au`, which reads
+        // tags and caption from the tables: it ran before the copies, so it
+        // saw the indexed ones. The copies below change only those tables, so
+        // the keeper's row is removed before them and rebuilt after.
+        Self::delete_fts_for_items(tx, &[keep_id.0 as i64])?;
+        // 2. Copy missing tags from trash_ids to keep_id
+        {
+            let mut tag_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_tags (media_id, tag)
+                SELECT ?1, tag FROM media_tags WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                tag_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 3. Copy missing caption from trash_ids to keep_id
+        {
+            let mut caption_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_captions (media_id, caption)
+                SELECT ?1, caption FROM media_captions WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        Self::insert_fts_for_items(tx, &[keep_id.0 as i64])?;
         Ok(())
     }
 

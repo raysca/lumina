@@ -1032,6 +1032,84 @@ mod tests {
     }
 
     #[test]
+    fn fts_repair_migration_runs_once() {
+        let (dir, db) = temp_catalog("fts_repair");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        let id = catalog.insert_or_update_batch(&[sample_item(1)]).unwrap()[0].id;
+        catalog.set_caption(id, "kyoto trip").unwrap();
+        drop(catalog);
+        // Replay "add tag kyoto, remove it" through the pre-v16 helper SQL,
+        // which left the caption column out of the contentless 'delete'.
+        let break_index = |version: i64| {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            let old_delete = format!(
+                "INSERT INTO media_search_fts(media_search_fts, rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags)
+                 SELECT 'delete', m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
+                     COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '')
+                 FROM media_items m WHERE m.id = {};",
+                id.0
+            );
+            let old_insert = format!(
+                "INSERT INTO media_search_fts(rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags)
+                 SELECT m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
+                     COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), '')
+                 FROM media_items m WHERE m.id = {};",
+                id.0
+            );
+            conn.execute_batch(&format!(
+                "{old_delete} INSERT INTO media_tags (media_id, tag) VALUES ({0}, 'kyoto'); {old_insert}
+                 {old_delete} DELETE FROM media_tags WHERE media_id = {0}; {old_insert}
+                 PRAGMA user_version = {1};",
+                id.0, version
+            ))
+            .unwrap();
+        };
+        break_index(15);
+        let ids = |catalog: &Catalog| -> Vec<MediaId> {
+            catalog
+                .search_fts("kyoto", 10)
+                .unwrap()
+                .into_iter()
+                .map(|item| item.id)
+                .collect()
+        };
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen and repair");
+        assert_eq!(
+            ids(&catalog),
+            vec![id],
+            "the repair must reindex caption words lost by the old tag helpers"
+        );
+        assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        drop(catalog);
+
+        let catalog = Catalog::open(&db).expect("catalog must reopen after the repair");
+        assert_eq!(ids(&catalog), vec![id], "the repaired index must persist");
+        assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        assert_eq!(
+            catalog
+                .get_captions_map()
+                .unwrap()
+                .get(&id)
+                .map(String::as_str),
+            Some("kyoto trip"),
+            "the repair must keep catalog rows"
+        );
+        drop(catalog);
+
+        // At the current version the rebuild must not run again: a mismatch
+        // injected now survives a reopen, which proves the repair is one-time.
+        break_index(SCHEMA_VERSION);
+        let catalog = Catalog::open(&db).expect("catalog must reopen at the current version");
+        assert!(
+            ids(&catalog).is_empty(),
+            "the index rebuild must run only below v16, not on every open"
+        );
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn rotation_migration_is_idempotent_and_roundtrips() {
         let (dir, db) = temp_catalog("rotation_migration");
         let catalog = Catalog::open(&db).expect("catalog must open");

@@ -4,6 +4,21 @@ use rusqlite::params;
 use super::{Catalog, SCHEMA_VERSION};
 use crate::{MediaId, TimelineBucket};
 
+/// Empties the contentless search index and rebuilds it from the catalog,
+/// with the same columns as the `media_fts_*` triggers.
+const REBUILD_SEARCH_INDEX_SQL: &str = r#"
+    INSERT INTO media_search_fts(media_search_fts) VALUES('delete-all');
+    INSERT INTO media_search_fts(
+        rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption
+    )
+    SELECT
+        m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
+        COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''),
+        COALESCE(c.caption, '')
+    FROM media_items m
+    LEFT JOIN media_captions c ON c.media_id = m.id;
+"#;
+
 impl Catalog {
     pub(crate) fn init_schema(&self) -> Result<()> {
         let conn = self.conn.lock();
@@ -499,19 +514,11 @@ impl Catalog {
                 DROP TRIGGER IF EXISTS trg_media_insert;
                 DROP TRIGGER IF EXISTS trg_media_update;
                 DROP TRIGGER IF EXISTS trg_media_delete;
-                INSERT INTO media_search_fts(media_search_fts) VALUES('delete-all');
-                INSERT INTO media_search_fts(
-                    rowid, file_name, parent_dir, city, admin1_region, country_code, make, model, lens, year, tags, caption
-                )
-                SELECT
-                    m.id, m.file_name, m.parent_dir, m.city, m.admin1_region, m.country_code, m.make, m.model, m.lens, CAST(m.year AS TEXT),
-                    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM media_tags WHERE media_id = m.id), ''),
-                    COALESCE(c.caption, '')
-                FROM media_items m
-                LEFT JOIN media_captions c ON c.media_id = m.id;
                 "#,
             )
-            .context("rebuilding the search index after dropping legacy triggers")?;
+            .context("dropping legacy search triggers")?;
+            tx.execute_batch(REBUILD_SEARCH_INDEX_SQL)
+                .context("rebuilding the search index after dropping legacy triggers")?;
             tx.commit()?;
         }
 
@@ -540,6 +547,17 @@ impl Catalog {
 
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        // v16: the tag and duplicate-merge paths used to send the contentless
+        // index 'delete's without the caption (or with values that were not
+        // indexed), dropping caption words and keeping stale ones. Rebuild it
+        // once; one transaction so a failure retries on the next open.
+        // A new catalog (version 0) has nothing indexed yet, which is harmless.
+        if current < 16 {
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(REBUILD_SEARCH_INDEX_SQL)
+                .context("repairing the search index")?;
+            tx.commit()?;
+        }
         if current < SCHEMA_VERSION {
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }

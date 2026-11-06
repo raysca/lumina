@@ -3841,3 +3841,99 @@ fn query_rule_plan_uses_fts_index() {
         );
     }
 }
+
+fn search_ids(catalog: &Catalog, query: &str) -> Vec<MediaId> {
+    catalog
+        .search_fts(query, 50)
+        .expect("search must run")
+        .into_iter()
+        .map(|item| item.id)
+        .collect()
+}
+
+#[test]
+fn caption_word_shared_with_tag_survives_tag_removal() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let item = sample_media_item("/photos/fts/a.jpg", MediaType::Image, 1000, None, None);
+    let id = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
+
+    catalog.set_caption(id, "kyoto trip").unwrap();
+    catalog
+        .add_tags_batch(&[id], &["kyoto".to_string()])
+        .unwrap();
+    catalog
+        .remove_tags_batch(&[id], &["kyoto".to_string()])
+        .unwrap();
+
+    assert_eq!(
+        search_ids(&catalog, "kyoto"),
+        vec![id],
+        "a caption word must stay searchable after a tag with the same word is removed"
+    );
+}
+
+#[test]
+fn caption_word_shared_with_tag_survives_global_rename_and_delete() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let item = sample_media_item("/photos/fts/b.jpg", MediaType::Image, 1000, None, None);
+    let id = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
+
+    catalog.set_caption(id, "kyoto trip").unwrap();
+    catalog
+        .add_tags_batch(&[id], &["kyoto".to_string()])
+        .unwrap();
+    catalog.rename_tag("kyoto", "japan").unwrap();
+    assert_eq!(
+        search_ids(&catalog, "kyoto"),
+        vec![id],
+        "a caption word must stay searchable after a tag with the same word is renamed"
+    );
+
+    catalog
+        .add_tags_batch(&[id], &["trip".to_string()])
+        .unwrap();
+    catalog.delete_tag_globally("trip").unwrap();
+    assert_eq!(
+        search_ids(&catalog, "trip"),
+        vec![id],
+        "a caption word must stay searchable after a tag with the same word is deleted"
+    );
+}
+
+#[test]
+fn merge_keeps_search_index_in_sync() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let keep = sample_media_item("/photos/fts/keep.jpg", MediaType::Image, 1000, None, None);
+    let dup = sample_media_item("/photos/fts/dup.jpg", MediaType::Image, 2000, None, None);
+    let inserted = catalog.insert_or_update_batch(&[keep, dup]).unwrap();
+    let (keep_id, dup_id) = (inserted[0].id, inserted[1].id);
+
+    // "sunset" is both a tag and the caption: removing the tag later must not
+    // take the caption word out of the index with it.
+    catalog
+        .add_tags_batch(&[dup_id], &["paris".to_string(), "sunset".to_string()])
+        .unwrap();
+    catalog.set_caption(dup_id, "sunset").unwrap();
+    catalog.merge_duplicate_group(keep_id, &[dup_id]).unwrap();
+
+    assert!(
+        search_ids(&catalog, "paris").contains(&keep_id),
+        "a tag merged onto the keeper must be searchable"
+    );
+    assert!(
+        search_ids(&catalog, "sunset").contains(&keep_id),
+        "a caption merged onto the keeper must be searchable"
+    );
+
+    catalog
+        .remove_tags_batch(&[keep_id], &["paris".to_string(), "sunset".to_string()])
+        .unwrap();
+    assert!(
+        !search_ids(&catalog, "paris").contains(&keep_id),
+        "a tag removed from the keeper after a merge must stop matching"
+    );
+    assert!(
+        search_ids(&catalog, "sunset").contains(&keep_id),
+        "the merged caption must keep matching after the tag edit"
+    );
+}
