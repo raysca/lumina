@@ -31,8 +31,9 @@ core handles cataloguing, decoding, and search.
   ⌘-scroll at the pointer; ⌘0 Fit, ⌘1 100%, ⌘2 200%, ⌘3 Fill, ⌘4 400%),
   pan (scroll or drag) and 1:1 pixel inspection,
   previous/next navigation, keyboard-first shortcuts.
-- **Video playback** — native AVFoundation bridge with scrubbing, frame
-  stepping, speed, mute and looping. Picture-in-Picture (⌥P) is a detached
+- **Video playback** — native AVFoundation bridge with scrubbing (hovering
+  or dragging the scrubber previews real frames; a playing video pauses while
+  you drag), frame stepping, speed, mute and looping. Picture-in-Picture (⌥P) is a detached
   player: it keeps playing while you browse and view photos, and opening
   another video plays it there.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,

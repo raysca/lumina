@@ -249,6 +249,8 @@ impl LuminaApp {
         self.video.scrub_time = None;
         self.video.last_scrub_seek = None;
         self.video.seek_refresh_until = None;
+        self.video.resume_after_scrub = false;
+        self.clear_scrub_strip();
     }
 
     /// Shows a decoded video frame wherever the session is presented.
@@ -325,6 +327,9 @@ impl LuminaApp {
     }
 
     pub fn toggle_video_play(&mut self, cx: &mut Context<Self>) {
+        // A play/pause the user chose (Space mid-drag, PiP controls) wins
+        // over the scrub's own resume on release.
+        self.video.resume_after_scrub = false;
         if let Some(ref mut player) = self.video.player {
             if self.video.is_playing {
                 player.pause();
@@ -437,6 +442,17 @@ impl LuminaApp {
     /// the backend is not loaded (for example while a video is still opening).
     pub fn begin_video_scrub(&mut self, pct: f64, cx: &mut Context<Self>) {
         let target = scrub_target_time(self.video_scrub_duration(), pct);
+        // Scrubbing a playing video pauses it (no audio thrash); release
+        // resumes. Not toggle_video_play: a press is no stopping point to save.
+        if self.video.is_playing {
+            if let Some(ref mut player) = self.video.player {
+                player.pause();
+            }
+            self.video.is_playing = false;
+            self.stop_video_ticker();
+            self.video.resume_after_scrub = true;
+        }
+        self.request_scrub_strip(cx);
         self.video.is_scrubbing = true;
         self.video.scrub_time = Some(target);
         self.video.last_scrub_seek = Some(Instant::now());
@@ -482,6 +498,9 @@ impl LuminaApp {
         self.video.last_scrub_seek = None;
         if let Some(target) = self.video.scrub_time.take() {
             self.seek_video_to_time(target);
+        }
+        if std::mem::take(&mut self.video.resume_after_scrub) && !self.video.is_playing {
+            self.toggle_video_play(cx);
         }
         cx.notify();
     }
@@ -563,6 +582,7 @@ impl LuminaApp {
             let pct_clamped = pct.clamp(0.0, 1.0);
             self.video.hover_pct = Some(pct_clamped);
             self.video.hover_time = Some(duration * (pct_clamped as f64));
+            self.request_scrub_strip(cx);
         } else {
             self.video.hover_pct = None;
             self.video.hover_time = None;

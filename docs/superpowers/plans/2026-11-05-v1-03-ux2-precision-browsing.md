@@ -260,10 +260,10 @@ Steps:
 - Selector: `video-scrub-preview`, with the image keyed by frame time. The card has no `occlude()` and no mouse listeners, so it never steals the drag.
 
 Steps:
-- [ ] Replace `scrubber_feedback_is_a_time_badge_not_a_synthetic_preview` with two tests:
+- [x] Replace `scrubber_feedback_is_a_time_badge_not_a_synthetic_preview` with two tests:
   - `scrubber_without_strip_shows_time_badge_only`.
   - `hover_shows_nearest_strip_frame` (inject a 4-frame strip, hover at 60%: `video-scrub-preview` renders with the frame nearest 0.6 × duration, and the time badge is still there).
-- [ ] Failing tests:
+- [x] Failing tests:
   - `drag_scrub_shows_preview_for_destination`.
   - `stale_scrub_strip_is_discarded_after_media_change` (call the completion handler with item A's strip after opening B: no strip).
   - `media_change_cancels_inflight_strip` (request for A, open B: A's cancel flag is set).
@@ -272,9 +272,10 @@ Steps:
   - `closing_viewer_retires_strip_images` (strip images land in `retired_images`).
   - `scrub_pauses_playing_video_and_resumes_on_release` (the fixture clip loaded in the real player, which is what tests get on macOS; start playback, press the scrubber: `is_playing` false; release: true).
   - `scrub_of_paused_video_stays_paused`.
-- [ ] Implement, test, `make ui-smoke`.
+- [x] Implement, test, `make ui-smoke`.
 - [ ] Manual (record in the commit): on a 4K/HEVC file, while playing, hover the scrubber. The first preview appears in under about 1 s; grid thumbnails keep loading; no frame drops are visible. Activity Monitor shows a short CPU/GPU spike, not a sustained one. Arrow through several videos with the pointer resting on the scrubber: CPU settles (cancelled batches stop). Hover a file the player cannot open: no error, time badge only. These need real hardware.
 - Keyboard path: frame step `,` `.`, J/K/L and arrows already seek and show the frame. The preview is pointer-only by nature, and the keyboard alternative is documented in the shortcut sheet. Docs: README video bullet; ux_audit §5 "Current".
+- Done 2026-11-06: `StripRequest` has no `failed` flag (the kept request alone blocks a retry, and an unread field fails clippy); `scrub_preview_at` returns `(frame_time, image)` so the image selector is keyed by frame time; no `set_scrub_strip_for_test` (tests inject results through `scrub_preview::test_seam`, which drives the real completion path). The pause on press does not go through `toggle_video_play`, so a press does not save config. The manual step above is still open.
 
 ### Task 5b: Remember playback speed and mute (S)
 

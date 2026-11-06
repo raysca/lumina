@@ -6,6 +6,7 @@ use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
+pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;
 pub mod transport;

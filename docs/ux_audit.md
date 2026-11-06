@@ -185,10 +185,13 @@ zoom preset.
 
 **Current**
 
-- The scrubber is a segmented click target. Hover sets a time/percentage; the
-  hover preview is a generated gradient placeholder, not a decoded video frame.
-- Clicking seeks; there is no drag-scrub, no release-to-commit behavior, no
-  buffered range, and no frame preview while dragging.
+- Press, drag and release scrub directly (seeks coalesced while dragging,
+  committed on release). Hovering or dragging shows the time and the nearest
+  frame from a small preview strip, decoded in the background once per open
+  video (up to 48 frames, so long videos preview the nearest strip frame;
+  the main picture shows the exact seek). A file that cannot be previewed
+  stays time-only. A playing video pauses while scrubbing and resumes on
+  release. No buffered range.
 - HUD has explicit controls but no timed auto-hide; resume position is not
   persisted; no chapters, bookmarks, audio tracks, subtitles, loop range, or
   trim.

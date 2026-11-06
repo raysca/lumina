@@ -120,9 +120,7 @@ impl ViewerTransport {
         } else {
             this.video.hover_time
         };
-        // Honest scrub feedback: the native bridge cannot produce a decoded
-        // still for an arbitrary scrub position, so the transport shows a
-        // time-only badge next to the playhead instead of a synthetic image.
+        // Scrub feedback follows the drag destination, else the hover point.
         let time_badge = if is_scrubbing {
             scrub_time.map(|time| (progress_pct as f32, time))
         } else {
@@ -172,8 +170,7 @@ impl ViewerTransport {
                     // Timeline scrubber track: press, drag, and release map
                     // directly to a timeline position. Pointer moves update the
                     // visible destination on every event while seeks are
-                    // coalesced in LuminaApp::update_video_scrub. No thumbnail
-                    // storyboard is fabricated.
+                    // coalesced in LuminaApp::update_video_scrub.
                     .child({
                         // The full-size track surface is the first child, so its
                         // prepaint bounds are the track rect used to map pointer X to a
@@ -298,26 +295,10 @@ impl ViewerTransport {
                                     .bg(theme::accent())
                                     .shadow_md(),
                             )
-                            // Time-only scrub/hover badge anchored directly above the track.
+                            // Time badge, with the nearest strip frame once there
+                            // is one, anchored directly above the track.
                             .children(time_badge.map(|(badge_pct, badge_time)| {
-                                div()
-                                    .id("video-time-badge")
-                                    .debug_selector(|| "video-time-badge".to_string())
-                                    .absolute()
-                                    .top(px(-28.0))
-                                    .left(relative((badge_pct - 0.06).clamp(0.01, 0.85)))
-                                    .px_2()
-                                    .py_0p5()
-                                    .bg(theme::bg_hud())
-                                    .border_1()
-                                    .border_color(theme::border_strong())
-                                    .rounded(theme::RADIUS_SM)
-                                    .shadow_lg()
-                                    .text_xs()
-                                    .font_family(theme::FONT_MONO)
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(theme::text())
-                                    .child(format_time_fractional(badge_time))
+                                super::scrub_preview::render(this, badge_pct, badge_time)
                             }))
                     })
                     .child(time_label(duration)),

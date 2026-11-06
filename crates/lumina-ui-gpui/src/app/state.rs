@@ -118,6 +118,12 @@ pub struct VideoPlaybackState {
     pub ticker_active: Option<Arc<AtomicBool>>,
     pub ticker_handle: Option<std::thread::JoinHandle<()>>,
     pub frame_pending: Arc<AtomicBool>,
+    /// Decoded scrub-preview frames for the open video, once built.
+    pub(crate) preview_strip: Option<crate::app::scrub_preview::ScrubStrip>,
+    /// The open video's one strip request (in flight, done or failed).
+    pub(crate) strip_request: Option<crate::app::scrub_preview::StripRequest>,
+    /// True when a scrub press paused playback, so release resumes it.
+    pub resume_after_scrub: bool,
 }
 
 /// Tag manager modal state.
