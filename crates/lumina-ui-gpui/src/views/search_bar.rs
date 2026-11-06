@@ -210,7 +210,13 @@ impl GridFilter {
 /// Thumbnail size 1–5, smallest to largest, as grid columns.
 pub(crate) const SIZE_COLUMNS: [usize; 5] = [8, 6, 4, 3, 2];
 
-/// Slider level (0-based) closest to a column count from ⌘-/⌘=.
+/// The ladder column count for a saved one: the old 7-step wheel could
+/// save 5 or 7, which the ladder does not have.
+pub(crate) fn ladder_columns(columns: usize) -> usize {
+    SIZE_COLUMNS[size_level(columns)]
+}
+
+/// Ladder level (0-based) closest to a column count.
 pub(crate) fn size_level(columns: usize) -> usize {
     SIZE_COLUMNS
         .iter()

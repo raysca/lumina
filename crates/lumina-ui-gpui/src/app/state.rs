@@ -287,6 +287,17 @@ impl GridDragState {
     }
 }
 
+/// Sub-step progress of a grid density gesture. Trackpad ⌘-scroll and pinch
+/// arrive as many small events; each accumulates here until it passes its
+/// step threshold, so one gesture walks the ladder one level at a time.
+#[derive(Debug, Default)]
+pub struct GridZoomGesture {
+    /// Pinch magnification not yet spent on a level.
+    pub pinch_accum: f32,
+    /// Pixel ⌘-scroll not yet spent on a level.
+    pub wheel_accum_px: f32,
+}
+
 pub struct LuminaApp {
     pub config: AppConfig,
     pub grid_state: Option<GridState>,
@@ -306,6 +317,7 @@ pub struct LuminaApp {
     pub batch_metadata: BatchMetadataSummary,
     /// Live pointer drag-selection over the grid (marquee or additive sweep).
     pub grid_drag: GridDragState,
+    pub grid_zoom: GridZoomGesture,
     pub viewer_image: Option<Arc<RenderImage>>,
     /// The selected item whose full-size viewer decode failed, so the stage
     /// says so instead of waiting. Kept apart from the grid's failure set.
@@ -527,6 +539,7 @@ impl LuminaApp {
             batch_summary: BatchSelectionSummary::default(),
             batch_metadata: BatchMetadataSummary::default(),
             grid_drag: GridDragState::default(),
+            grid_zoom: GridZoomGesture::default(),
             viewer_image: None,
             viewer_failed: None,
             retired_images: Vec::new(),
@@ -571,7 +584,7 @@ impl LuminaApp {
             delete_confirm_state: None,
             viewer_state: ViewerState::default(),
             viewer_shortcuts_open: false,
-            grid_columns: config.grid_columns.clamp(2, 8),
+            grid_columns: crate::views::search_bar::ladder_columns(config.grid_columns),
             sort: config.restored_sort(),
             sort_menu_open: false,
             preferences_open: false,

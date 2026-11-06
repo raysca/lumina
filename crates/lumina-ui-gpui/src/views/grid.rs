@@ -159,6 +159,18 @@ pub struct GridZoomGeometry {
     pub item_count: usize,
 }
 
+impl GridZoomGeometry {
+    /// False before the first prepaint of this layout or with no items.
+    fn is_usable(&self) -> bool {
+        self.item_count > 0
+            && self.row_height > 0.0
+            && self.width > 0.0
+            && self.height > 0.0
+            && self.scroll_y.is_finite()
+            && self.row_height.is_finite()
+    }
+}
+
 /// The item under the pointer when a density change starts.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GridZoomAnchor {
@@ -185,13 +197,7 @@ impl GridZoomAnchor {
     /// derived from the public `offset()` instead of inventing a top item.
     pub fn at_pointer(pointer_x: f32, pointer_y: f32, geometry: GridZoomGeometry) -> Option<Self> {
         let columns = geometry.columns.clamp(2, 8);
-        if geometry.item_count == 0
-            || geometry.row_height <= 0.0
-            || geometry.width <= 0.0
-            || geometry.height <= 0.0
-            || !geometry.scroll_y.is_finite()
-            || !geometry.row_height.is_finite()
-        {
+        if !geometry.is_usable() {
             return None;
         }
 
@@ -212,6 +218,27 @@ impl GridZoomAnchor {
             row,
             fraction_within_row,
         })
+    }
+
+    /// Anchors on `item` (the keyboard selection) rather than the pointer.
+    ///
+    /// Returns the anchor and the window y to hold it at: the centre of the
+    /// item's row, clamped into the viewport, so a selection scrolled out of
+    /// view is brought back in by the same density change.
+    pub fn at_item(item: usize, geometry: GridZoomGeometry) -> Option<(Self, f32)> {
+        if !geometry.is_usable() || item >= geometry.item_count {
+            return None;
+        }
+        let row = item / geometry.columns.clamp(2, 8);
+        let centre = geometry.top + geometry.scroll_y + (row as f32 + 0.5) * geometry.row_height;
+        let half = (geometry.row_height * 0.5).min(geometry.height * 0.5);
+        let y = centre.clamp(geometry.top + half, geometry.top + geometry.height - half);
+        let anchor = Self {
+            item,
+            row,
+            fraction_within_row: 0.5,
+        };
+        Some((anchor, y))
     }
 
     /// Content scroll offset (a positive distance from the content top) that

@@ -114,6 +114,11 @@ impl LuminaApp {
                     }
                 },
             ))
+            // Pinch walks the same density ladder at the pinch centre.
+            .on_pinch(cx.listener(|this, event: &PinchEvent, _window, cx| {
+                this.zoom_grid_with_pinch(event, cx);
+                cx.stop_propagation();
+            }))
             .flex()
             .flex_col()
             // ponytail: the band shows the month recorded by the previous

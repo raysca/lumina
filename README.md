@@ -24,7 +24,9 @@ core handles cataloguing, decoding, and search.
   aperture, ISO, focal length, filename and place, with a live count and
   preview. Albums can be re-edited (⌘K "Edit Smart Album…") and deleted from
   the sidebar row.
-- **Fast grid & viewer** — virtualized grid, 2–8 column density, sort by date,
+- **Fast grid & viewer** — virtualized grid with five densities (8, 6, 4, 3
+  or 2 columns; ⌘= / ⌘-, ⌘-scroll or pinch, anchored at the pointer or the
+  selection), sort by date,
   name, size or rating (ascending/descending, persisted), zoom (pinch or
   ⌘-scroll at the pointer; ⌘0 Fit, ⌘1 100%, ⌘2 200%, ⌘3 Fill, ⌘4 400%),
   pan (scroll or drag) and 1:1 pixel inspection,

@@ -7,6 +7,7 @@ mod duplicates;
 mod editor_handoff;
 mod get_info;
 mod grid_scroll;
+mod grid_zoom;
 mod history;
 mod immersive_hud;
 mod import;

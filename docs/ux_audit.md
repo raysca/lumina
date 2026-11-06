@@ -152,8 +152,12 @@ layout shift or blocks input.
 
 **Current**
 
-- Grid zoom is 2-8 columns via ⌘+/⌘-, the toolbar slider and ⌘-scroll
-  (anchored at the pointer); no pinch, no animated reflow.
+- Grid zoom walks one ladder of five densities (8, 6, 4, 3, 2 columns) from
+  ⌘= / ⌘- and ⌘K, ⌘-scroll and pinch. ⌘-scroll and pinch anchor on the item
+  under the pointer; a mouse-wheel notch is one level, trackpad ⌘-scroll one
+  level per 40px and pinch one level per 12% of magnification. ⌘= / ⌘-
+  anchor on the selected item and keep it on screen (the top-left item with
+  no selection). No animated reflow.
 - Viewer zoom: pinch and ⌘-scroll zoom anchored at the pointer; a plain
   scroll or drag pans while zoomed. Presets: `⌘0` Fit, `⌘1`/`⌘2`/`⌘4`
   100%/200%/400% of actual pixels and `⌘3` Fill, also in ⌘K and (while

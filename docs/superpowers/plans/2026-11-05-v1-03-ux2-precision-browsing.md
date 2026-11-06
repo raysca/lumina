@@ -203,13 +203,13 @@ Steps:
 - Config is written through `schedule_session_save` (debounced) for wheel and pinch. The keyboard path keeps `save_config`.
 
 Steps:
-- [ ] Failing tests:
+- [x] Failing tests:
   - `cmd_wheel_walks_size_ladder` (6 columns + one line of wheel-out gives 8, not 7).
   - `trackpad_cmd_scroll_burst_steps_once_per_threshold` (10 pixel events of 5 px at 4 columns: exactly one step, to 3).
   - `keyboard_grid_zoom_keeps_selection_visible` (select index 40 at 8 columns, ⌘= twice, then the selected card's bounds intersect the viewport).
-  - `grid_pinch_steps_one_level_per_threshold_and_anchors` (5 events of +0.05 give exactly one level, the item under the pinch stays in the anchored row, and the scroll offset is otherwise unchanged).
+  - `grid_pinch_steps_one_level_per_threshold_and_anchors` (5 events of +0.05 give exactly one level (as built: 0.25 would cross 0.12 twice, so the test sends 3 events of +0.05, then a fourth that must not step), the item under the pinch stays in the anchored row, and the scroll offset is otherwise unchanged).
   - Keep `ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer` (4 → 3 still holds on the ladder; if it uses pixel deltas below 40 px, raise its delta rather than the threshold, and say so in the commit).
-- [ ] Implement, test, `make ui-smoke`.
+- [x] Implement, test, `make ui-smoke`.
 - Keyboard path exists (⌘= / ⌘-, palette). Docs: shortcut sheet unchanged; README "grid density" bullet mentions pinch.
 
 ## Part B: Video scrub previews
