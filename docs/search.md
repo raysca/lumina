@@ -93,13 +93,17 @@ nothing is dimmed.
 - Clear Filters removes every filter token, negated and not-understood ones
   included, and keeps free text and `-word` exclusions. It is listed only
   when the query has a filter.
+- The palette shows 8 rows, so typing "filter" alone does not list the color
+  filters or Clear Filters; type "color red" or "clear filters".
 
 ## Explanation
 
 While the search field is focused, the bottom of the suggestion list says in
 plain words what the query searches for, for example
 `Favorites · Camera contains “Sony” · ISO 801 or higher`. It stays visible
-after Escape hides the suggestions, until the field loses focus.
+after Escape hides the suggestions, until the field loses focus. The phrases
+are English only, and a country code or tag is shown the way it is matched
+(country upper case, tags lower case), not as typed.
 
 ## Recent searches
 
@@ -128,3 +132,11 @@ in its footer:
 Limitation: renaming a tag updates smart album Tag rules, but not a `tag:`
 filter inside a saved search's text. Edit the saved search after renaming a
 tag it uses.
+
+Limitation: an older Lumina build does not know the saved-search rule. It
+shows such an album as the whole library, and editing the album there
+replaces the saved search.
+
+Limitation: a saved search for a rare word finds its first page by walking the
+timeline, so it slows with library size (under 1 ms at 25,000 items, about
+8 ms near 240,000). Counts are not affected.

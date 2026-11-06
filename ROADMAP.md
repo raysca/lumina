@@ -285,9 +285,17 @@ undo restores every touched item in one step; large selections stay responsive.
 
 ## 7. Video player
 
-**Current:** AVFoundation playback with play/pause, scrubbing, frame stepping,
-speed menu, mute/volume, loop, PiP, fullscreen, and hover seek. No resume,
-scrub thumbnails, chapters, subtitle/audio track selection, or loop range.
+**Current:** AVFoundation playback with play/pause, drag-scrub (press, drag,
+release), frame stepping, speed menu, mute, loop, PiP and fullscreen. Hovering
+or dragging the scrubber shows the time and the nearest frame from a preview
+strip decoded in the background once per open video (up to 48 frames, so a
+long video previews the nearest strip frame; the main picture shows the exact
+seek). A file that cannot be previewed stays time-only. A playing video pauses
+while scrubbing and resumes on release. Resume position is saved per video;
+playback speed and mute are remembered across sessions. The immersive
+fullscreen HUD hides after 2 s idle. Volume is fixed (there is no volume
+control). No buffered range, chapters, subtitle/audio track selection, or loop
+range. Not checked by hand: scrub previews on a 4K/HEVC file while playing.
 
 **Target:**
 
@@ -308,9 +316,23 @@ and tested.
 
 ## 8. Browsing, search, and viewer
 
-**Current:** structured query grammar, FTS5 search, timeline buckets, sorting,
-grid density, zoom/pan, viewer previous/next, keyboard navigation. No saved searches,
-search history, quick rating/color filters, compare, slideshow, or map.
+**Current:** structured query grammar with negation (`-word`, `-tag:`,
+`-is:favorite`, `-has:`), aliases (`is:untagged`, `is:unrated`,
+`is:unlabeled`, `is:favourite`), and misspelled or unknown filters reported
+as "Not understood" instead of being ignored; typed text never reaches FTS5 as
+syntax ([docs/search.md](docs/search.md)). Search always covers the whole
+library and moves the sidebar to Library; Back returns to the album. While the
+field is focused, a footer explains the query in plain words. Suggestions
+cover operators and tags; recent searches (10, per machine) are marked and
+can be cleared from ⌘K. Quick filters in ⌘K (favorites, videos, rating,
+colour, unrated, unlabeled, Clear Filters) edit the search text; nothing is
+dimmed. ⌘K Save Search as Smart Album… keeps a search as a smart album. A
+colour-label index (schema v15) keeps colour filters fast. Timeline buckets,
+sorting, grid density, viewer zoom/pan and keyboard navigation as before.
+Known limits: no value suggestions for cameras, lenses or cities; renaming a
+tag does not rewrite `tag:` inside a saved search; an older app build reads a
+saved search as an album with no rules (the whole library). No compare,
+slideshow, map or jump-to-date.
 
 **Target:**
 
@@ -346,8 +368,7 @@ frame decodes; menus, dialogs and the palette fade in. Export and Import XMP
 Metadata run off the UI thread with a status-bar line and a final toast.
 Still missing: a background job center, per-item export progress and cancel,
 a watcher summary (watcher changes are silent), shared-element viewer
-open/close, item crossfade, animated grid reflow, and real video scrub
-previews.
+open/close, item crossfade and animated grid reflow.
 
 **Target:**
 
@@ -359,7 +380,9 @@ previews.
 - **Navigation:** back/forward, clickable breadcrumbs, restored last
   album/search/selection/scroll, recent libraries and recent views.
 - **Zoom:** pointer/keyboard-anchored grid zoom with animated reflow;
-  cursor-anchored viewer zoom, pinch, fit/100/200 presets, zoom HUD.
+  cursor-anchored viewer zoom, pinch, fit/100/200 presets, zoom HUD. Shipped in
+  0.4 (UX-2) except animated reflow; trackpad pinch not checked by hand, and
+  momentum scroll and the month band still have known zoom issues.
 - **Video:** drag-scrub with real frame previews, buffered range, resume
   position, auto-hide HUD, persisted speed/volume.
 - **Feedback:** skeleton/error states, actionable empty states, toasts with
@@ -542,9 +565,9 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P0 | Top | Selection/open/hover states + motion foundation | 0.3 | UX-1; single click selects, double click opens. Shipped: selection/open semantics, motion tokens, overlay/toast/thumbnail fades. Missing: shared-element viewer motion, item crossfade. |
 | P0 | Top | Back/forward, restore last view/selection/scroll | 0.3 | UX-1 navigation continuity. Shipped (Go menu, ⌘[ / ⌘], ⌘K; restore on relaunch). Missing: recent views, clickable breadcrumbs. |
 | P0 | Top | Skeletons, actionable empty states, toasts/undo, background jobs | 0.3 | UX-1 feedback and orientation. Shipped: skeletons, "No preview" cards, actionable empty states, toast with Undo, export and XMP import off the UI thread. Missing: job center, per-item progress/cancel, watcher summary. |
-| P0 | Top | Grid/viewer zoom anchoring + pinch/presets | 0.4 | UX-2 precision browsing. |
-| P0 | Top | Video drag-scrub with real previews + resume | 0.4 | UX-2 everyday media controls. |
-| P0 | Top | Search/filter/tag/smart-album polish | 0.4 | UX-2 correctness and discoverability. |
+| P0 | Top | Grid/viewer zoom anchoring + pinch/presets | 0.4 | UX-2 precision browsing. Shipped: pinch, ⌘-scroll zoom and scroll-to-pan in the viewer; ⌘0–⌘4 presets with Fill and preset buttons; one anchored grid ladder for wheel, pinch and keys. Missing: animated grid reflow. Not checked on a real trackpad. |
+| P0 | Top | Video drag-scrub with real previews + resume | 0.4 | UX-2 everyday media controls. Shipped: drag-scrub, strip frame previews, pause while scrubbing, resume position, remembered speed and mute. Missing: buffered range. Not checked by hand on a 4K/HEVC file. |
+| P0 | Top | Search/filter/tag/smart-album polish | 0.4 | UX-2 correctness and discoverability. Shipped (search): negation, aliases, reported unknown filters, query explanation, recent-search markers and clearing, quick filters as query tokens, whole-library scope, Save Search as Smart Album, colour-label index. Missing: value suggestions (cameras, lenses, cities), tag and smart-album polish, jump-to-date. |
 | P0 | Top | Hierarchical keywords + IPTC/XMP metadata templates | 0.4 | Creator/rights/contact/keywords; sidecar round-trip. |
 | P0 | Top | Quick non-destructive edits + external editor handoff | 0.4 | Crop/rotate/auto-enhance; version history. |
 | P0 | Top | Batch metadata + grouped undo | 0.4 | Apply templates/keywords to a selection. |

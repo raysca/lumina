@@ -157,7 +157,10 @@ layout shift or blocks input.
   under the pointer; a mouse-wheel notch is one level, trackpad ⌘-scroll one
   level per 40px and pinch one level per 12% of magnification. ⌘= / ⌘-
   anchor on the selected item and keep it on screen (the top-left item with
-  no selection). No animated reflow.
+  no selection). A column count saved by the older wheel (5 or 7) snaps
+  onto the ladder. No animated reflow. Known: momentum scrolling after the
+  fingers lift can step again while ⌘ is held, and zooming over the month
+  band changes density without an anchor.
 - Viewer zoom: pinch and ⌘-scroll zoom anchored at the pointer; a plain
   scroll or drag pans while zoomed. Presets: `⌘0` Fit, `⌘1`/`⌘2`/`⌘4`
   100%/200%/400% of actual pixels and `⌘3` Fill, also in ⌘K and (while
@@ -165,8 +168,13 @@ layout shift or blocks input.
   double-click toggle Fit/100%; pan stops at the media edges. Plain digits do
   not zoom (they are reserved for ratings). Stills decode at most 2048px, so
   100% of larger photos is an enlarged decode.
-- While zoomed the HUD shows a navigator with the percentage and a Fit
-  button. No animated reset, no pan inertia, no smart zoom.
+- While zoomed the HUD shows a navigator with the percentage, a Fit button
+  and the Fit · Fill · 1:1 preset buttons. Video does not zoom from pinch or
+  scroll, but the zoom keys still change zoom on a video. Fill keeps the
+  current pan instead of recentring. No animated reset, no pan inertia, no
+  smart zoom (two-finger double-tap).
+- Not checked by hand: pinch and scroll on a real trackpad (the tests inject
+  synthetic events).
 
 **Target**
 
@@ -192,11 +200,15 @@ zoom preset.
   the main picture shows the exact seek). A file that cannot be previewed
   stays time-only. A playing video pauses while scrubbing and resumes on
   release. No buffered range.
-- HUD has explicit controls but no timed auto-hide; resume position is not
-  persisted; no chapters, bookmarks, audio tracks, subtitles, loop range, or
-  trim.
-- Playback speed/volume are stateful for the session but not persisted; frame
-  stepping exists via `,`/`.`; J/K/L and arrows seek.
+- Resume position is saved per video. In immersive fullscreen the HUD hides
+  after 2 s without activity; elsewhere it stays. No chapters, bookmarks,
+  audio tracks, subtitles, loop range, or trim.
+- Playback speed and mute are remembered across sessions. Volume is fixed;
+  there is no volume control. Frame stepping exists via `,`/`.`; J/K/L and
+  arrows seek. The scrub preview is pointer-only; the keyboard seeks show the
+  frame itself.
+- Not checked by hand: the first preview on a 4K/HEVC file while playing,
+  CPU while arrowing through videos, and the feel of pause/resume.
 
 **Target**
 
@@ -260,16 +272,29 @@ UI thread.
 
 **Current**
 
-- No quick-filter chips: filtering runs through the search field and its
-  operator suggestions (is:favorite, is:video, is:raw, has:location, has:tag,
-  has:color, rating:>=4).
-- Search suggestions and recent searches exist; saved searches, query
-  explanation and date operators do not.
-- Tags list in the sidebar, but no Untagged node, no right-click rename/delete,
-  and rename is only in the tag-manager modal.
-- Smart albums: no cover preview, pinning, reordering, descriptions, duplicate,
-  rule import/export; deletion is immediate without confirmation/undo.
-- No date section headers or timeline scrubber in the grid.
+- Quick filters are ⌘K commands that add or remove a token in the search
+  text (Show Favorites, Show Videos, Show Rated ★ N+, Show Unrated, Show
+  Color: …, Show Unlabeled, Clear Filters), so the grid always matches the
+  query. The old dimming filter is gone. There is no chip bar or toolbar
+  filter menu (owner decision). The palette lists 8 rows, so typing "filter"
+  alone does not show the colour filters or Clear Filters.
+- Search covers the whole library: a non-empty query moves the sidebar to
+  Library, and Back returns to the album with an empty search.
+- The grammar supports negation (`-word`, `-tag:`, `-is:favorite`, `-has:`),
+  aliases and date operators (`year:`, `month:`, `date:`). A misspelled or
+  unknown filter is reported as "Not understood" and has no effect.
+- While the field is focused, a footer explains the query in plain words
+  (English only). Suggestions cover operators and tags, not cameras, lenses
+  or cities. Recent searches are marked with a history icon and can be
+  cleared from ⌘K.
+- Save Search as Smart Album… (⌘K) keeps a search as a smart album. Renaming
+  a tag does not rewrite `tag:` inside a saved search.
+- Tags list in the sidebar with an Untagged node, but no right-click
+  rename/delete; rename is only in the tag-manager modal.
+- Smart albums: deletion asks for confirmation (no undo). No cover preview,
+  pinning, reordering, descriptions, duplicate, or rule import/export.
+- A sticky month band over the date-sorted grid; no jump-to-date or timeline
+  scrubber.
 
 **Target**
 
@@ -343,8 +368,11 @@ canceling import leaves no corruption; every failure has a recovery action.
 - Dark-only theme; no accent choice; no motion settings; no shortcut customization.
 - Preferences: General, Storage, About only.
 - No tabs, multi-window, recent views or in-app updates.
-- GPUI exposes no NSAccessibility tree; VoiceOver sees only the window. Keyboard
-  coverage is good but tab order and focus rings are incomplete. English only.
+- GPUI reports elements to VoiceOver through AccessKit only when they set an id
+  and a role; only the text fields, the welcome screen, the viewer zoom presets
+  and the search explanation do so far, none of them checked with VoiceOver
+  (see `docs/accessibility.md`). Keyboard coverage is good but tab order and
+  focus rings are incomplete. English only.
 
 **Target**
 

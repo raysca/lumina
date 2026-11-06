@@ -7,7 +7,8 @@ Lumina is designed to be usable without a mouse:
 - **Command palette** (`⌘K`) searches and runs every major command: open
   library, rescan, preferences, layouts, sorting, export, XMP import, sidebar
   and inspector toggles, grid zoom, viewer zoom presets (in the photo
-  viewer, also on `⌘0`–`⌘4`) and more. Its GO TO group reaches every
+  viewer, also on `⌘0`–`⌘4`), quick search filters, Clear Recent Searches,
+  Save Search as Smart Album… and more. Its GO TO group reaches every
   sidebar destination (views, years, tags, smart albums). Type to filter (each
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
@@ -40,13 +41,28 @@ launch, so relaunch after changing it.
 GPUI (through GPUI Kit) reports an accessibility tree via AccessKit, but only
 for elements that have an `id` and a `.role(...)`, with labels from
 `aria_label`. Apart from the one-line text fields (GPUI Kit inputs with the
-text-input role and a label, not yet checked with VoiceOver), Lumina's
-controls do not set roles yet, so VoiceOver currently sees little beyond the
-window frame. Mitigations:
+text-input role and a label, not yet checked with VoiceOver) and the few
+controls listed below, Lumina's controls do not set roles yet, so VoiceOver
+currently sees little beyond the window frame. Mitigations:
 
 - every operation is reachable from the native menu bar or command palette;
 - the shortcut sheet documents all keyboard paths;
+- the video scrub preview is pointer-only; `,` `.`, J/K/L and the arrows
+  seek and show the frame itself;
 - file dialogs, Preferences content and menus are native/accessible.
+
+Controls that do set a role and a label (none checked with VoiceOver yet):
+
+- the welcome screen's open, import and sample buttons, the Pictures link,
+  the missing-library notice (alert), and the recent-library rows with their
+  × buttons;
+- added with the 0.4 precision-browsing work: the viewer's Fit, Fill and
+  1:1 preset buttons under the navigator (button, labelled "Fit (⌘0)",
+  "Fill (⌘3)", "Actual size (⌘1)");
+- also from that work: the search explanation footer (status, labelled with
+  the explanation text).
+
+The recent-search history icon and the scrub preview card have no role.
 
 Removing this limitation is now Lumina's own work: give each control a role
 and label, then check the result with VoiceOver before claiming support.
