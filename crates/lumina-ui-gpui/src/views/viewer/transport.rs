@@ -548,7 +548,7 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
         .py_1()
         .flex()
         .flex_col()
-        .children([0.25, 0.5, 1.0, 1.5, 2.0, 4.0].into_iter().map(|rate| {
+        .children(crate::config::VIDEO_SPEEDS.into_iter().map(|rate| {
             let is_cur = (this.video.playback_speed - rate).abs() < 0.05;
             div()
                 .id(ElementId::NamedInteger(

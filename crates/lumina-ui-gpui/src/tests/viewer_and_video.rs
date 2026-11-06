@@ -2296,3 +2296,71 @@ fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// Speed and mute are restored from the config into the viewer state and the
+/// player each video opens with, and changing them updates the config.
+#[cfg(target_os = "macos")]
+#[core::prelude::v1::test]
+fn video_speed_and_mute_come_from_config() {
+    use crate::player::VideoPlayerBackend;
+    crate::app::state::TEST_CONFIG.with(|c| {
+        *c.borrow_mut() = Some(crate::config::AppConfig {
+            video_speed: Some(1.3),
+            video_muted: true,
+            ..Default::default()
+        })
+    });
+    let mut cx = gpui::TestAppContext::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    view.update(vcx, |app, cx| {
+        app.grid_state = None;
+        assert_eq!(
+            app.video.playback_speed, 1.5,
+            "a saved 1.3x must snap to the menu's 1.5x"
+        );
+        assert!(app.video.is_muted, "a saved mute must be restored");
+
+        let mut video = get_sample_items()
+            .into_iter()
+            .find(|item| item.media_type == lumina_core::MediaType::Video)
+            .expect("the sample set must contain a video");
+        video.path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clip.mp4");
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        let player = app
+            .video
+            .player
+            .as_ref()
+            .expect("test premise: the real player loads the fixture");
+        assert_eq!(
+            player.rate(),
+            1.5,
+            "the new player must get the saved speed"
+        );
+        assert!(player.is_muted(), "the new player must start muted");
+
+        app.set_video_speed(2.0, cx);
+        app.toggle_video_mute(cx);
+        assert_eq!(app.config.video_speed, Some(2.0), "speed changes are saved");
+        assert!(!app.config.video_muted, "mute changes are saved");
+
+        // A media change creates a new player, which gets the current values.
+        let mut other = video.clone();
+        other.id = lumina_core::MediaId(other.id.0 + 1000);
+        app.load_video_player(&other, cx);
+        let player = app.video.player.as_ref().expect("the second video loads");
+        assert_eq!(player.rate(), 2.0, "the next player keeps the chosen speed");
+        assert!(!player.is_muted(), "the next player keeps the chosen mute");
+
+        // A failed write is reported, not swallowed.
+        crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+        app.toggle_video_mute(cx);
+        crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+        assert!(
+            app.error_message.is_some(),
+            "a failed mute save must reach the error banner"
+        );
+        app.close_viewer(cx);
+    });
+}

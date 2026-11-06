@@ -479,7 +479,7 @@ impl LuminaApp {
 
     pub fn new(cx: &mut Context<Self>) -> Self {
         #[cfg(test)]
-        let mut config = AppConfig::default();
+        let mut config = TEST_CONFIG.with(|c| c.take()).unwrap_or_default();
         #[cfg(not(test))]
         let mut config = AppConfig::load();
         // Keep stale or hand-edited config files from unbounded history growth.
@@ -605,7 +605,8 @@ impl LuminaApp {
             command_scroll: ScrollHandle::new(),
             shortcuts_scroll: ScrollHandle::new(),
             video: VideoPlaybackState {
-                playback_speed: 1.0,
+                playback_speed: config.restored_video_speed(),
+                is_muted: config.video_muted,
                 is_looping: true,
                 volume: 0.85,
                 frame_pending: Arc::new(AtomicBool::new(false)),
@@ -961,4 +962,8 @@ thread_local! {
     /// Makes [`LuminaApp::try_save_config`] fail on this test thread, so the
     /// revert-on-failure paths can be tested without a real config file.
     pub(crate) static SAVE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// A config for the next [`LuminaApp::new`] on this test thread, which
+    /// otherwise starts from `AppConfig::default()`. Taken once, never saved.
+    pub(crate) static TEST_CONFIG: std::cell::RefCell<Option<AppConfig>> =
+        const { std::cell::RefCell::new(None) };
 }

@@ -282,8 +282,8 @@ Steps:
 ROADMAP §7 and the UX-2 list ask for persisted speed/volume. There is no volume control in the UI (volume is fixed at 0.85), so only speed and mute are persisted.
 
 **Files:** `config.rs` (`video_speed: Option<f32>`, `video_muted: bool`, both `#[serde(default)]`), `app/state.rs` (initial values from config, clamped to the speed menu's values), `app/video_actions.rs` (`set_video_speed`, `toggle_video_mute` call `save_config`)
-- [ ] Failing tests: `config_video_speed_and_mute_roundtrip_and_default` (config unit, temp path); `video_speed_and_mute_come_from_config` (UI test with an injected config; nothing persisted under `cfg(test)`).
-- [ ] Implement, test. Docs: README video bullet.
+- [x] Failing tests: `config_video_speed_and_mute_roundtrip_and_default` (config unit, temp path); `video_speed_and_mute_come_from_config` (UI test with an injected config; nothing persisted under `cfg(test)`).
+- [x] Implement, test. Docs: README video bullet.
 
 ## Part C: Search and filters
 

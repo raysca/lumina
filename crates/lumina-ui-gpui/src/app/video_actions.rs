@@ -525,18 +525,16 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Test helper: the next speed, through the real (saving) path.
     #[cfg(test)]
     pub fn cycle_video_speed(&mut self, cx: &mut Context<Self>) {
-        self.video.playback_speed = match self.video.playback_speed {
+        let next = match self.video.playback_speed {
             s if s < 0.75 => 1.0,
             s if s < 1.25 => 1.5,
             s if s < 1.75 => 2.0,
             _ => 0.5,
         };
-        if let Some(ref mut player) = self.video.player {
-            player.set_rate(self.video.playback_speed);
-        }
-        cx.notify();
+        self.set_video_speed(next, cx);
     }
 
     pub fn toggle_video_mute(&mut self, cx: &mut Context<Self>) {
@@ -544,6 +542,8 @@ impl LuminaApp {
         if let Some(ref mut player) = self.video.player {
             player.set_muted(self.video.is_muted);
         }
+        self.config.video_muted = self.video.is_muted;
+        self.save_config();
         cx.notify();
     }
 
@@ -561,6 +561,8 @@ impl LuminaApp {
         if let Some(ref mut player) = self.video.player {
             player.set_rate(speed);
         }
+        self.config.video_speed = Some(speed);
+        self.save_config();
         cx.notify();
     }
 

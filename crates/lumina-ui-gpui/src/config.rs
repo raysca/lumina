@@ -387,7 +387,17 @@ pub struct AppConfig {
     /// or stale config can never launch an unexpected process.
     #[serde(default)]
     pub external_editor: Option<String>,
+    /// Last chosen video playback speed. `None` means 1x; off-menu values
+    /// snap to [`VIDEO_SPEEDS`] on load (see [`AppConfig::restored_video_speed`]).
+    #[serde(default)]
+    pub video_speed: Option<f32>,
+    /// Whether video sound was last muted.
+    #[serde(default)]
+    pub video_muted: bool,
 }
+
+/// Playback speeds the video speed menu offers.
+pub const VIDEO_SPEEDS: [f32; 6] = [0.25, 0.5, 1.0, 1.5, 2.0, 4.0];
 
 /// Validates an external editor setting at use time.
 ///
@@ -465,6 +475,8 @@ impl Default for AppConfig {
             recent_libraries: Vec::new(),
             resume_positions: ResumePositions::default(),
             external_editor: None,
+            video_speed: None,
+            video_muted: false,
         }
     }
 }
@@ -524,6 +536,18 @@ impl AppConfig {
             Some((x, y, width, height))
         } else {
             None
+        }
+    }
+
+    /// The saved video speed snapped to the nearest menu value; 1x when unset
+    /// or not a usable positive number (a hand-edited config).
+    pub fn restored_video_speed(&self) -> f32 {
+        match self.video_speed {
+            Some(saved) if saved.is_finite() && saved > 0.0 => VIDEO_SPEEDS
+                .into_iter()
+                .min_by(|a, b| (a - saved).abs().total_cmp(&(b - saved).abs()))
+                .unwrap_or(1.0),
+            _ => 1.0,
         }
     }
 
@@ -1050,5 +1074,52 @@ mod tests {
             LastView::from_selection(&AlbumSelection::AllLibrary),
             LastView::All
         );
+    }
+    #[test]
+    fn config_video_speed_and_mute_roundtrip_and_default() {
+        let path = temp_config_path("video_speed_mute");
+        let cfg = AppConfig {
+            video_speed: Some(2.0),
+            video_muted: true,
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(loaded.video_speed, Some(2.0), "speed must round-trip");
+        assert!(loaded.video_muted, "mute must round-trip");
+        assert_eq!(loaded.restored_video_speed(), 2.0);
+
+        // Older config files predate the fields and must load with defaults.
+        std::fs::write(&path, br#"{"last_view":"all"}"#).unwrap();
+        let old = AppConfig::load_from(&path);
+        assert_eq!(old.video_speed, None, "a missing speed key must be unset");
+        assert!(!old.video_muted, "a missing mute key must mean unmuted");
+        assert_eq!(
+            old.restored_video_speed(),
+            1.0,
+            "unset speed restores as 1x"
+        );
+
+        // Hand-edited values snap to a speed the menu offers.
+        for (saved, want) in [
+            (1.3, 1.5),
+            (0.1, 0.25),
+            (9.0, 4.0),
+            (f32::NAN, 1.0),
+            (f32::INFINITY, 1.0),
+            (-2.0, 1.0),
+        ] {
+            let cfg = AppConfig {
+                video_speed: Some(saved),
+                ..AppConfig::default()
+            };
+            assert_eq!(
+                cfg.restored_video_speed(),
+                want,
+                "saved speed {saved} must restore as the menu value {want}"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }
