@@ -152,7 +152,8 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("+ / -", "Zoom in / out"),
             ("Pinch / ⌘ scroll", "Zoom at pointer"),
             ("Scroll / drag", "Pan when zoomed"),
-            ("0 / 1 / 2 / 4", "Fit / 100% / 200% / 400%"),
+            ("⌘0 / ⌘1 / ⌘2 / ⌘4", "Fit / 100% / 200% / 400%"),
+            ("⌘3", "Fill"),
             ("Z", "Toggle 1:1 zoom"),
             ("O", "Open in default app"),
         ],
@@ -690,6 +691,18 @@ mod tests {
             Some("Open in default app"),
             "O opens the default app, it does not zoom"
         );
+    }
+
+    /// Zoom presets moved to ⌘digits; plain digits are reserved for ratings.
+    #[core::prelude::v1::test]
+    fn the_sheet_lists_zoom_presets_on_command_digits() {
+        assert_eq!(says("⌘3"), Some("Fill"), "⌘3 is Fill");
+        assert_eq!(
+            says("⌘0 / ⌘1 / ⌘2 / ⌘4"),
+            Some("Fit / 100% / 200% / 400%"),
+            "the presets are on ⌘digits"
+        );
+        assert_eq!(says("0 / 1 / 2 / 4"), None, "plain digits no longer zoom");
     }
 
     /// The sheet described Quick Look (there is none), and ← / → as

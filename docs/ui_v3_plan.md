@@ -35,10 +35,11 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Not yet designed: context menu, scan/import progress, shortcut sheet.
 - Inspector summary has no histogram (no luminance data in the catalog) and
   no map (no network); location shows as text only.
-- Rating has no direct key binding (in the viewer 1/2/4 are zoom presets);
+- Rating has no direct key binding (plain digits are reserved for it; the
+  viewer zoom presets moved to ⌘0–⌘4);
   the ⌘K palette has Rate 1–5 Stars and Clear Rating.
-- Viewer pinch-to-zoom: not wired up yet (GPUI now delivers `PinchEvent`);
-  the wheel, +/−, 0/1/2/4 and Z zoom.
+- Viewer zoom: pinch and ⌘-scroll at the pointer, +/−, ⌘0–⌘4 presets
+  (⌘3 Fill) and Z.
 - Inspector: Modified/Created/Added rows keep the short date format; only
   the capture time reads "Mon 13 Jun 2022 · 10:03". Overflow scroll and the
   video strip have no dedicated UI test yet.
@@ -59,7 +60,7 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
   LSCopyApplicationURLsForURL bridge); both offer Open in Default App.
 - Video scrubber (agreed deviation): no frame strip and a time-only hover
   preview; the AVFoundation bridge cannot decode arbitrary frames on demand.
-- Video zoom has no on-screen control now; Z, scroll and the 0/1/2/4 keys
+- Video zoom has no on-screen control now; Z, +/− and the ⌘0–⌘4 keys
   still work.
 - Multi-select dock has no Rate ▾ menu (rating is in the batch inspector)
   and no Add to Album: there are no manual albums to add to.

@@ -38,3 +38,4 @@ mod viewer_and_video;
 mod viewer_stage;
 mod welcome;
 mod windows_and_layout;
+mod zoom_presets;

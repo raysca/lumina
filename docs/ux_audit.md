@@ -152,16 +152,17 @@ layout shift or blocks input.
 
 **Current**
 
-- Grid zoom is discrete 2-8 columns via Cmd+plus/minus and the toolbar control;
-  no pinch, no cursor anchoring, no animated reflow.
-- Viewer zoom: Fit fills the canvas; wheel/trackpad zoom is smooth,
-  multiplicative and cursor-anchored; `0` Fit, `1`/`2`/`4` are 100%/200%/400%
-  of actual pixels, `Z` and double-click toggle Fit/100%; pan stops at the
-  media edges. Stills decode at most 2048px, so 100% of larger photos is an
-  enlarged decode.
-- No pinch gesture, no double-click-to-100%, no fit/100/200 presets, no
-  cursor-anchored zoom, no animated reset, no pan inertia.
-- Zoom level is not visible except implicitly by the image size.
+- Grid zoom is 2-8 columns via ⌘+/⌘-, the toolbar slider and ⌘-scroll
+  (anchored at the pointer); no pinch, no animated reflow.
+- Viewer zoom: pinch and ⌘-scroll zoom anchored at the pointer; a plain
+  scroll or drag pans while zoomed. Presets: `⌘0` Fit, `⌘1`/`⌘2`/`⌘4`
+  100%/200%/400% of actual pixels and `⌘3` Fill, also in ⌘K and (while
+  zoomed) as Fit · Fill · 1:1 buttons under the navigator. `Z` and
+  double-click toggle Fit/100%; pan stops at the media edges. Plain digits do
+  not zoom (they are reserved for ratings). Stills decode at most 2048px, so
+  100% of larger photos is an enlarged decode.
+- While zoomed the HUD shows a navigator with the percentage and a Fit
+  button. No animated reset, no pan inertia, no smart zoom.
 
 **Target**
 

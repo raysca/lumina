@@ -177,15 +177,15 @@ Blocked on the owner's answer to plan 5 Open question 5 (see "Depends on"). The 
 - Fallback (owner keeps plain digits): keymap and sheet unchanged, Fill has no key, tooltips "Fit (0)", "Fill", "Actual size (1)", and the two keyboard tests below become `plain_digit_zoom_presets_unchanged`.
 
 Steps:
-- [ ] Failing tests:
+- [x] Failing tests:
   - `fill_preset_covers_canvas_on_both_axes` (wide photo in a tall canvas gives scale `size.h / fitted.h`; square-on-square gives 1.0; no canvas gives 1.0).
   - `cmd_digit_zoom_presets_in_viewer` (`⌘1`, `⌘2`, `⌘3`, `⌘4`, `⌘0` through the real keymap with `secondary-` keystrokes: each sets the expected scale and `zoom_label`).
   - `plain_digits_do_not_zoom_viewer` (`1`, `2`, `4`, `0` leave scale at Fit; this is the contract plan 5 builds on).
   - `navigator_preset_buttons_apply_presets` (zoom to 2x first so the navigator renders, then click each selector at rendered bounds, assert `zoom_label`).
   - `palette_zoom_commands_only_in_photo_viewer` (absent in the grid and for video; "Zoom to Fill" via ⌘K + typing + Enter changes the scale).
   - Shortcut sheet test: `says("⌘3") == Some("Fill")` and no row for plain "0 / 1 / 2 / 4".
-- [ ] Update `test_viewer_zoom_presets_hud_label_and_shortcuts` to press `secondary-1` etc.
-- [ ] Implement, test, then run `make ui-smoke` (the layout changes).
+- [x] Update `test_viewer_zoom_presets_hud_label_and_shortcuts` to press `secondary-1` etc.
+- [x] Implement, test, then run `make ui-smoke` (the layout changes).
 - Docs: README viewer bullet (new keys); ux_audit §4 "Current" rewritten from the verified state. Tell plan 5's owner that the key move landed.
 
 ### Task 3: One grid ladder, anchored keyboard zoom, grid pinch (M)

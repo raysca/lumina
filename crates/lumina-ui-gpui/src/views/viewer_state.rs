@@ -94,7 +94,7 @@ pub const ZOOM_MAX_SCALE: f32 = 16.0;
 /// Wheel and +/- keyboard step.
 pub const ZOOM_STEP: f32 = 0.25;
 
-/// Explicit zoom presets on the 0/1/2/4 keys.
+/// Explicit zoom presets: ⌘0 Fit, ⌘1 100%, ⌘2 200%, ⌘3 Fill, ⌘4 400%.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewerZoomPreset {
     /// Fit the media to the viewport (1.0x).
@@ -105,6 +105,8 @@ pub enum ViewerZoomPreset {
     TwoX,
     /// 400% of actual pixels (Lightroom's 4:1).
     FourX,
+    /// Fill the canvas on both axes (crops the overflowing edges).
+    Fill,
 }
 
 impl ViewerZoomPreset {
@@ -130,6 +132,11 @@ impl ViewerZoomPreset {
             Self::Actual => actual,
             Self::TwoX => of_actual(2.0),
             Self::FourX => of_actual(4.0),
+            Self::Fill => canvas
+                .map_or(ZOOM_MIN_SCALE, |c| {
+                    (c.size.0 / c.fitted.0).max(c.size.1 / c.fitted.1)
+                })
+                .clamp(ZOOM_MIN_SCALE, ZOOM_MAX_SCALE),
         }
     }
 }
@@ -242,7 +249,7 @@ impl ViewerState {
         }
     }
 
-    /// Applies an explicit zoom preset (the 0/1/2/4 shortcuts).
+    /// Applies an explicit zoom preset (the ⌘0–⌘4 shortcuts).
     /// Fit clears pan through `set_zoom`, matching the existing reset-on-fit rule.
     pub fn apply_preset(&mut self, preset: ViewerZoomPreset) {
         self.set_zoom(preset.scale(self.canvas));
@@ -446,6 +453,32 @@ mod tests {
         assert_eq!(state.zoom_scale, ZOOM_MAX_SCALE);
         state.set_zoom(f32::NEG_INFINITY);
         assert_eq!(state.zoom_scale, ZOOM_MIN_SCALE);
+    }
+
+    #[test]
+    fn fill_preset_covers_canvas_on_both_axes() {
+        // A 3:2 photo in a tall 600x1000 canvas fits by width (600x400), so
+        // Fill must scale by height: 1000 / 400.
+        let tall = ViewerCanvas::new((600.0, 1000.0), (300.0, 500.0), 1.5, 3000.0, 2.0);
+        let fill = ViewerZoomPreset::Fill.scale(tall);
+        assert!(
+            (fill - 2.5).abs() < 1e-4,
+            "Fill must cover the height, got {fill}"
+        );
+        let c = tall.expect("valid canvas");
+        assert!(c.fitted.0 * fill >= c.size.0 - 1e-3 && c.fitted.1 * fill >= c.size.1 - 1e-3);
+
+        let square = ViewerCanvas::new((800.0, 800.0), (400.0, 400.0), 1.0, 3000.0, 2.0);
+        assert_eq!(
+            ViewerZoomPreset::Fill.scale(square),
+            ZOOM_MIN_SCALE,
+            "square media in a square canvas already fills it"
+        );
+        assert_eq!(
+            ViewerZoomPreset::Fill.scale(None),
+            ZOOM_MIN_SCALE,
+            "no canvas: Fit"
+        );
     }
 
     #[test]

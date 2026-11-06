@@ -4,13 +4,15 @@
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::viewer_state::ZOOM_MIN_SCALE;
+use crate::views::viewer_state::{ViewerZoomPreset, ZOOM_MIN_SCALE};
 
 /// While zoomed (v3): a round "Fit to window" button at the bottom and the
-/// navigator at the top right. At Fit the stage shows no zoom chrome; pinch,
-/// ⌘-scroll, +/−, 0/1/2/4 and Z zoom (a plain scroll only pans when zoomed).
+/// navigator (with Fit · Fill · 1:1 buttons) at the top right. At Fit the
+/// stage shows no zoom chrome; pinch, ⌘-scroll, +/−, ⌘0–⌘4, ⌘K and Z zoom
+/// (a plain scroll only pans when zoomed).
 pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
     let state = this.viewer_state;
     if state.zoom_scale <= ZOOM_MIN_SCALE {
@@ -27,7 +29,7 @@ pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Op
             div()
                 .id("viewer-zoom-fit")
                 .debug_selector(|| "viewer-zoom-fit".to_string())
-                .tooltip(theme::tooltip_label("Fit to window (0)"))
+                .tooltip(theme::tooltip_label("Fit to window (⌘0)"))
                 // Clicks on the button must not start a pan.
                 .occlude()
                 .size(px(40.0))
@@ -51,15 +53,16 @@ pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Op
             .absolute()
             .inset_0()
             .child(fit)
-            .children(render_navigator(this))
+            .children(render_navigator(this, cx))
             .into_any_element(),
     )
 }
 
 const NAVIGATOR_EDGE: f32 = 180.0;
 
-/// Overview (long edge 180px) of the picture with an amber rect on the visible region.
-fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
+/// Overview (long edge 180px) of the picture with an amber rect on the
+/// visible region, and the Fit · Fill · 1:1 preset buttons below it.
+fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
     let (x, y, w, h) = this.viewer_state.visible_region()?;
     let canvas = this.viewer_state.canvas?;
     let image = this.viewer_image.clone()?;
@@ -76,48 +79,75 @@ fn render_navigator(this: &LuminaApp) -> Option<AnyElement> {
     } else {
         super::DRAWER_INSET
     };
+    let presets = [
+        (ViewerZoomPreset::Fit, "fit", "zoom.preset_fit"),
+        (ViewerZoomPreset::Fill, "fill", "zoom.preset_fill"),
+        (ViewerZoomPreset::Actual, "actual", "zoom.preset_actual"),
+    ];
+    let buttons = presets.map(|(preset, slug, key)| {
+        let id = format!("viewer-zoom-preset-{slug}");
+        let hint = t(&format!("{key}_hint"));
+        let active = (this.viewer_state.zoom_scale - preset.scale(Some(canvas))).abs() < 0.005;
+        theme::segmented_item(SharedString::from(id.clone()), active)
+            .debug_selector(move || id.clone())
+            .role(Role::Button)
+            .aria_label(hint.clone())
+            .tooltip(theme::tooltip_label(hint))
+            .child(t(key))
+            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                this.apply_viewer_zoom_preset(preset, cx);
+            }))
+    });
+    let overview = div()
+        .id("viewer-navigator")
+        .debug_selector(|| "viewer-navigator".to_string())
+        .w(px(width))
+        .h(px(height))
+        .overflow_hidden()
+        .border_1()
+        .border_color(theme::border_strong())
+        .bg(theme::bg_hud())
+        .shadow_lg()
+        .child(img(image).size_full().object_fit(ObjectFit::Fill))
+        .child(
+            div()
+                .debug_selector(|| "viewer-navigator-region".to_string())
+                .absolute()
+                .left(relative(x))
+                .top(relative(y))
+                .w(relative(w))
+                .h(relative(h))
+                .border_2()
+                .border_color(theme::accent()),
+        )
+        .child(
+            div()
+                .id("viewer-zoom-label")
+                .debug_selector(|| "viewer-zoom-label".to_string())
+                .absolute()
+                .right(px(4.0))
+                .bottom(px(4.0))
+                .px(px(4.0))
+                .rounded(theme::RADIUS_SM)
+                .bg(theme::scrim())
+                .font_family(theme::FONT_MONO)
+                .text_size(px(11.0))
+                .text_color(theme::text())
+                .child(this.viewer_state.zoom_label()),
+        );
     Some(
         div()
-            .id("viewer-navigator")
-            .debug_selector(|| "viewer-navigator".to_string())
+            // Clicks on the navigator or its buttons must not start a pan.
             .occlude()
             .absolute()
             .top(px(16.0))
             .right(px(right))
-            .w(px(width))
-            .h(px(height))
-            .overflow_hidden()
-            .border_1()
-            .border_color(theme::border_strong())
-            .bg(theme::bg_hud())
-            .shadow_lg()
-            .child(img(image).size_full().object_fit(ObjectFit::Fill))
-            .child(
-                div()
-                    .debug_selector(|| "viewer-navigator-region".to_string())
-                    .absolute()
-                    .left(relative(x))
-                    .top(relative(y))
-                    .w(relative(w))
-                    .h(relative(h))
-                    .border_2()
-                    .border_color(theme::accent()),
-            )
-            .child(
-                div()
-                    .id("viewer-zoom-label")
-                    .debug_selector(|| "viewer-zoom-label".to_string())
-                    .absolute()
-                    .right(px(4.0))
-                    .bottom(px(4.0))
-                    .px(px(4.0))
-                    .rounded(theme::RADIUS_SM)
-                    .bg(theme::scrim())
-                    .font_family(theme::FONT_MONO)
-                    .text_size(px(11.0))
-                    .text_color(theme::text())
-                    .child(this.viewer_state.zoom_label()),
-            )
+            .flex()
+            .flex_col()
+            .items_end()
+            .gap_2()
+            .child(overview)
+            .child(theme::segmented("viewer-zoom-presets").children(buttons))
             .into_any_element(),
     )
 }

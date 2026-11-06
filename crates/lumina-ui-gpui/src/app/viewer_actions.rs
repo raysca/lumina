@@ -460,13 +460,13 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Applies an explicit zoom preset from the 0/1/2/4 keys.
+    /// Applies an explicit zoom preset (⌘0–⌘4, the navigator buttons, ⌘K).
     pub fn apply_viewer_zoom_preset(&mut self, preset: ViewerZoomPreset, cx: &mut Context<Self>) {
         self.viewer_state.apply_preset(preset);
         cx.notify();
     }
 
-    /// Resets zoom and pan to fit (the Fit to window button and 0).
+    /// Resets zoom and pan to fit (the Fit to window button).
     pub fn reset_viewer_zoom(&mut self, cx: &mut Context<Self>) {
         self.viewer_state.reset();
         cx.notify();

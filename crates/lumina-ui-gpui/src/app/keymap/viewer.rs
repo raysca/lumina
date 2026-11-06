@@ -7,8 +7,10 @@ use crate::views::viewer_state::ViewerZoomPreset;
 impl LuminaApp {
     /// Handles shortcuts when fullscreen viewer is open.
     ///
-    /// Zoom: `+`/`-` step by 0.25, `0` is Fit, `1`/`2`/`4` are 100%/200%/400%
-    /// of actual pixels, and `Z` toggles Fit/100%. Returns `true` if handled.
+    /// Zoom: `+`/`-` step by 0.25, `⌘0` is Fit, `⌘1`/`⌘2`/`⌘4` are
+    /// 100%/200%/400% of actual pixels, `⌘3` is Fill, and `Z` toggles
+    /// Fit/100%. Plain digits do nothing here (reserved for ratings).
+    /// Returns `true` if handled.
     pub fn handle_viewer_key_down(
         &mut self,
         key: &str,
@@ -36,7 +38,7 @@ impl LuminaApp {
             return true;
         }
 
-        // Viewer Zoom Shortcuts: + / - / 0 / 1 / 2 / 4 / Z (images and video)
+        // Viewer Zoom Shortcuts: + / - / ⌘0–⌘4 / Z (images and video)
         if key == "=" || key == "+" {
             self.zoom_in_viewer(cx);
             return true;
@@ -45,12 +47,16 @@ impl LuminaApp {
             self.zoom_out_viewer(cx);
             return true;
         }
-        // Zoom presets: 0 = Fit, 1 = actual pixels, 2 = 2x, 4 = 4x.
-        if !cmd_or_ctrl {
+        // Zoom presets: ⌘0 = Fit, ⌘1 = actual pixels, ⌘2 = 2x, ⌘3 = Fill,
+        // ⌘4 = 4x. Exactly ⌘: ⌃1-4 is macOS "Switch to Desktop N", and ⌃⌘
+        // chords belong to the window (⌃⌘F).
+        let m = &keystroke.modifiers;
+        if m.secondary(cx) && !m.control && !m.shift && !m.alt {
             let preset = match key {
                 "0" => Some(ViewerZoomPreset::Fit),
                 "1" => Some(ViewerZoomPreset::Actual),
                 "2" => Some(ViewerZoomPreset::TwoX),
+                "3" => Some(ViewerZoomPreset::Fill),
                 "4" => Some(ViewerZoomPreset::FourX),
                 _ => None,
             };

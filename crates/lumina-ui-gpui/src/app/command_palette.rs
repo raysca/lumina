@@ -6,6 +6,7 @@ use lumina_core::{SortDirection, SortField};
 use crate::icons::Icon;
 use crate::views::inspector::InspectorTab;
 use crate::views::sidebar::AlbumSelection;
+use crate::views::viewer_state::ViewerZoomPreset;
 
 use crate::app::LuminaApp;
 use crate::i18n::t;
@@ -40,6 +41,8 @@ pub enum CommandId {
     ToggleFit,
     ZoomInGrid,
     ZoomOutGrid,
+    /// Viewer zoom preset; offered only while a still is open in the viewer.
+    ViewerZoom(ViewerZoomPreset),
     /// Filter-bar chip (dims non-matching items).
     Filter(crate::views::search_bar::GridFilter),
     /// Sets the selection's rating; 0 clears it.
@@ -95,6 +98,8 @@ impl Command {
             ToggleFit => Icon::Maximize,
             ZoomInGrid => Icon::Plus,
             ZoomOutGrid => Icon::Minus,
+            ViewerZoom(ViewerZoomPreset::Fit) => Icon::Minimize,
+            ViewerZoom(_) => Icon::Maximize,
             Filter(_) => Icon::Search,
             Rate(0) => Icon::Star,
             Rate(_) => Icon::StarFilled,
@@ -330,6 +335,36 @@ pub fn commands() -> &'static [Command] {
             keywords: "columns density smaller",
         },
         Command {
+            id: CommandId::ViewerZoom(ViewerZoomPreset::Fit),
+            key: "command.zoom_fit",
+            shortcut: "⌘0",
+            keywords: "zoom viewer fit window whole reset",
+        },
+        Command {
+            id: CommandId::ViewerZoom(ViewerZoomPreset::Actual),
+            key: "command.zoom_actual",
+            shortcut: "⌘1",
+            keywords: "zoom viewer 100% 1:1 pixels actual",
+        },
+        Command {
+            id: CommandId::ViewerZoom(ViewerZoomPreset::TwoX),
+            key: "command.zoom_200",
+            shortcut: "⌘2",
+            keywords: "zoom viewer 200% 2x magnify",
+        },
+        Command {
+            id: CommandId::ViewerZoom(ViewerZoomPreset::Fill),
+            key: "command.zoom_fill",
+            shortcut: "⌘3",
+            keywords: "zoom viewer fill crop cover",
+        },
+        Command {
+            id: CommandId::ViewerZoom(ViewerZoomPreset::FourX),
+            key: "command.zoom_400",
+            shortcut: "⌘4",
+            keywords: "zoom viewer 400% 4x magnify",
+        },
+        Command {
             id: CommandId::Filter(crate::views::search_bar::GridFilter::All),
             key: "command.filter_all",
             shortcut: "",
@@ -512,6 +547,13 @@ impl LuminaApp {
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
+            CommandId::ViewerZoom(_) => {
+                self.is_fullscreen_viewer
+                    && self
+                        .selected_item
+                        .as_ref()
+                        .is_some_and(|item| item.media_type != lumina_core::MediaType::Video)
+            }
             _ => true,
         }
     }
@@ -723,6 +765,7 @@ impl LuminaApp {
             }
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
+            CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),
             CommandId::Filter(filter) => {
                 self.grid_filter = filter;
                 cx.notify();

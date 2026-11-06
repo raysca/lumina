@@ -555,7 +555,7 @@ fn press_viewer_key(
     );
 }
 
-fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
+pub(crate) fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
         window.draw(cx).clear(cx);
@@ -611,7 +611,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
     });
     cx.run_until_parked();
 
-    // Keyboard: added 1/2/4 presets plus preserved +, -, 0 and Z paths.
+    // Keyboard: ⌘1/⌘2/⌘4 presets plus preserved +, -, ⌘0 and Z paths.
     cx.update(|window, app_cx| {
         view.update(app_cx, |app, cx| {
             app.select_item_at(photo.clone(), 0, cx);
@@ -626,27 +626,27 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
                 2.0,
             );
             let actual = 1500.0 / 900.0;
-            press_viewer_key(app, "1", window, cx);
+            press_viewer_key(app, "cmd-1", window, cx);
             assert!(
                 (app.viewer_state.zoom_scale - actual).abs() < 1e-4,
-                "1 must select actual pixels"
+                "⌘1 must select actual pixels"
             );
             assert_eq!(app.viewer_state.zoom_label(), "100%");
-            press_viewer_key(app, "2", window, cx);
+            press_viewer_key(app, "cmd-2", window, cx);
             assert!(
                 (app.viewer_state.zoom_scale - 2.0 * actual).abs() < 1e-4,
-                "2 must select 200% of actual pixels"
+                "⌘2 must select 200% of actual pixels"
             );
             assert_eq!(app.viewer_state.zoom_label(), "200%");
-            press_viewer_key(app, "4", window, cx);
-            assert_eq!(app.viewer_state.zoom_label(), "400%", "4 must select 400%");
-            press_viewer_key(app, "0", window, cx);
-            assert_eq!(app.viewer_state.zoom_scale, 1.0, "0 must select Fit");
+            press_viewer_key(app, "cmd-4", window, cx);
+            assert_eq!(app.viewer_state.zoom_label(), "400%", "⌘4 must select 400%");
+            press_viewer_key(app, "cmd-0", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.0, "⌘0 must select Fit");
 
             press_viewer_key(app, "=", window, cx);
             assert_eq!(app.viewer_state.zoom_scale, 1.25, "+ must still step in");
-            press_viewer_key(app, "0", window, cx);
-            assert_eq!(app.viewer_state.zoom_scale, 1.0, "0 must still reset");
+            press_viewer_key(app, "cmd-0", window, cx);
+            assert_eq!(app.viewer_state.zoom_scale, 1.0, "⌘0 must still reset");
             press_viewer_key(app, "z", window, cx);
             assert!(
                 (app.viewer_state.zoom_scale - actual).abs() < 1e-4,
@@ -1466,7 +1466,7 @@ fn double_click_at(cx: &mut gpui::VisualTestContext, position: gpui::Point<gpui:
 
 /// Opens the overlay viewer with a known gradient texture so the painted media
 /// element has deterministic bounds independent of real decoder output.
-fn viewer_with_gradient<'a>(
+pub(crate) fn viewer_with_gradient<'a>(
     cx: &'a mut gpui::TestAppContext,
     prefix: &str,
     width: f32,
@@ -1521,9 +1521,9 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
         "the navigator only shows while zoomed"
     );
     focus_app(vcx, &view);
-    keystrokes(vcx, "2");
+    keystrokes(vcx, "secondary-2");
     view.update(vcx, |app, _| {
-        assert!(app.viewer_state.zoom_scale > 1.0, "2 must zoom in");
+        assert!(app.viewer_state.zoom_scale > 1.0, "⌘2 must zoom in");
     });
 
     // Navigator: 180px, top right of the stage, amber rect on the visible part.

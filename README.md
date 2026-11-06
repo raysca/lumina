@@ -26,7 +26,8 @@ core handles cataloguing, decoding, and search.
   the sidebar row.
 - **Fast grid & viewer** — virtualized grid, 2–8 column density, sort by date,
   name, size or rating (ascending/descending, persisted), zoom (pinch or
-  ⌘-scroll at the pointer), pan (scroll or drag) and 1:1 pixel inspection,
+  ⌘-scroll at the pointer; ⌘0 Fit, ⌘1 100%, ⌘2 200%, ⌘3 Fill, ⌘4 400%),
+  pan (scroll or drag) and 1:1 pixel inspection,
   previous/next navigation, keyboard-first shortcuts.
 - **Video playback** — native AVFoundation bridge with scrubbing, frame
   stepping, speed, mute and looping. Picture-in-Picture (⌥P) is a detached
