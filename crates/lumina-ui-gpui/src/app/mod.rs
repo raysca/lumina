@@ -26,6 +26,7 @@ pub mod smart_draft;
 pub mod sort;
 pub mod state;
 pub mod tags;
+pub mod templates;
 pub mod text_input;
 pub mod types;
 pub mod undo;

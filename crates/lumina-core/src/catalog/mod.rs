@@ -14,6 +14,8 @@ mod rights;
 pub use rights::Rights;
 mod schema;
 mod tags;
+mod templates;
+pub use templates::TemplateChange;
 mod trash;
 
 use anyhow::{bail, Result};

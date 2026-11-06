@@ -24,6 +24,7 @@ use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
 
 use crate::app::smart_draft::DraftFocus;
+use crate::app::templates::TemplateField;
 use crate::app::LuminaApp;
 
 /// The field typed text goes to.
@@ -42,6 +43,8 @@ pub(crate) enum TextTarget {
     TagManagerSearch,
     Search,
     NetworkImportUrl,
+    /// A metadata template editor field.
+    Template(TemplateField),
 }
 
 impl TextTarget {
@@ -76,7 +79,21 @@ impl TextTarget {
             TagManagerSearch => ("Filter tags by name…", "Filter tags"),
             Search => ("", "Search"),
             NetworkImportUrl => ("Paste a video link (⌘V)", "Video link"),
+            Template(field) => template_placeholder_and_label(field),
         }
+    }
+}
+
+/// Template editor fields: the label is the field's name.
+fn template_placeholder_and_label(field: TemplateField) -> (&'static str, &'static str) {
+    match field {
+        TemplateField::Name => ("Name this template", "Template name"),
+        TemplateField::Creator => ("Your name", "Creator"),
+        TemplateField::Copyright => ("© 2026 Your Name", "Copyright"),
+        TemplateField::UsageTerms => ("All rights reserved", "Usage terms"),
+        TemplateField::ContactEmail => ("name@example.com", "Contact email"),
+        TemplateField::ContactUrl => ("https://example.com", "Contact website"),
+        TemplateField::Keywords => ("Keywords, separated by commas", "Keywords"),
     }
 }
 
@@ -481,6 +498,9 @@ impl LuminaApp {
             )
             .then_some(NetworkImportUrl);
         }
+        if let Some(ref editor) = self.templates.editor {
+            return Some(Template(editor.focus));
+        }
         if self.downloads.open {
             return None;
         }
@@ -546,6 +566,7 @@ impl LuminaApp {
                     return None;
                 }
             }
+            Template(field) => self.templates.editor.as_mut()?.value_mut(field),
         })
     }
 
@@ -555,6 +576,7 @@ impl LuminaApp {
         use TextTarget::*;
         match target {
             Tag | TagRename | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
+            Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             _ => MAX_TEXT_CHARS,
         }

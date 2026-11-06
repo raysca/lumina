@@ -30,6 +30,7 @@ mod smart_album_builder;
 mod states;
 mod tag_manager;
 mod tags_and_albums;
+mod templates;
 mod text_input;
 mod thumbnails;
 mod toasts;

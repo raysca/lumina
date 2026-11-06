@@ -21,11 +21,11 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
     let mut list: Vec<AnyElement> = Vec::new();
     let mut group = None;
     for (index, row) in rows.into_iter().enumerate() {
-        let go_to = row.is_go_to();
-        if group != Some(go_to) {
-            group = Some(go_to);
+        let heading = row.group();
+        if group != Some(heading) {
+            group = Some(heading);
             list.push(
-                theme::section_label(if go_to { "GO TO" } else { "COMMANDS" })
+                theme::section_label(heading)
                     .px(px(12.0))
                     .pt(px(6.0))
                     .pb(px(4.0))

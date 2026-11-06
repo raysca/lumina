@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{
     Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, Rights, TagChange,
-    SCHEMA_VERSION,
+    TemplateChange, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -1207,6 +1207,23 @@ impl LuminaEngine {
 
     pub fn remove_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {
         self.catalog.remove_tags_batch(ids, tags)
+    }
+
+    /// Applies a metadata template's rights and keywords to `ids` in one
+    /// transaction; see [`Catalog::apply_template`].
+    pub fn apply_template(
+        &self,
+        ids: &[MediaId],
+        rights: &Rights,
+        keywords: &[String],
+    ) -> Result<TemplateChange> {
+        self.catalog.apply_template(ids, rights, keywords)
+    }
+
+    /// Undoes (`before = true`) or redoes a template apply; see
+    /// [`Catalog::replay_template_change`].
+    pub fn replay_template_change(&self, change: &TemplateChange, before: bool) -> Result<()> {
+        self.catalog.replay_template_change(change, before)
     }
 
     /// The subset of `ids` that carry `tag`; see [`Catalog::ids_with_tag`].

@@ -1,13 +1,13 @@
 //! Undo/redo for catalog mutations.
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
-//! ratings, color labels, favorites, captions, tags, trash/restore, and
-//! smart album deletion.
+//! ratings, color labels, favorites, captions, tags, trash/restore, metadata
+//! template applies, and smart album deletion.
 //! Permanent deletion and global tag rename/merge are intentionally excluded.
 
 use anyhow::Result;
 use gpui::*;
-use lumina_core::{LuminaEngine, MediaId, SmartAlbum};
+use lumina_core::{LuminaEngine, MediaId, SmartAlbum, TemplateChange};
 
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
@@ -76,6 +76,15 @@ pub enum UndoAction {
     BatchLocation { changes: Vec<BatchLocationChange> },
     /// A deleted smart album; undo restores it under the same id.
     SmartAlbumDeleted { album: SmartAlbum },
+    /// One metadata template apply: undo restores every item's rights and
+    /// removes only the keywords the apply added.
+    Template { change: TemplateChange },
+    /// A deleted metadata template (user config, not the catalog); undo
+    /// puts it back at `index`.
+    TemplateDeleted {
+        index: usize,
+        template: crate::app::templates::MetadataTemplate,
+    },
 }
 
 #[derive(Default)]
@@ -104,7 +113,8 @@ impl UndoAction {
             UndoAction::BatchDate { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::BatchLocation { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::Tags { ids, .. } => ids.clone(),
-            UndoAction::SmartAlbumDeleted { .. } => Vec::new(),
+            UndoAction::SmartAlbumDeleted { .. } | UndoAction::TemplateDeleted { .. } => Vec::new(),
+            UndoAction::Template { change } => change.affected_ids(),
         }
     }
 
@@ -126,6 +136,8 @@ impl UndoAction {
             UndoAction::BatchDate { .. } => "batch date",
             UndoAction::BatchLocation { .. } => "batch location",
             UndoAction::SmartAlbumDeleted { .. } => "smart album delete",
+            UndoAction::Template { .. } => "template",
+            UndoAction::TemplateDeleted { .. } => "template delete",
         }
     }
 
@@ -209,6 +221,9 @@ impl UndoAction {
                     engine.delete_smart_album(album.id).map(|_| ())
                 }
             }
+            UndoAction::Template { change } => engine.replay_template_change(change, before),
+            // Config, not the catalog: `apply_history_action` handles it.
+            UndoAction::TemplateDeleted { .. } => Ok(()),
         }
     }
 }
@@ -312,6 +327,9 @@ impl LuminaApp {
         before: bool,
         cx: &mut Context<Self>,
     ) -> bool {
+        if let UndoAction::TemplateDeleted { index, template } = action {
+            return self.replay_template_delete(*index, template, before, cx);
+        }
         let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
             self.set_error("Open a library before undoing", cx);
             return false;
@@ -329,6 +347,10 @@ impl LuminaApp {
                         self.selection = AlbumSelection::AllLibrary;
                         self.clear_selection(cx);
                     }
+                }
+                // Get Info caches rights per item; reload them.
+                if matches!(action, UndoAction::Template { .. }) {
+                    self.info_details = None;
                 }
                 true
             }

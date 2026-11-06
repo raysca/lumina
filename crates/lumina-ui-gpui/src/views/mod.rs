@@ -19,6 +19,7 @@ pub mod sidebar;
 pub mod smart_album_delete;
 pub mod sort_menu;
 pub mod tag_manager;
+pub mod template_editor;
 pub mod toast;
 pub mod viewer;
 pub mod viewer_state;

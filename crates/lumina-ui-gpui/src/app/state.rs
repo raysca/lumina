@@ -464,6 +464,8 @@ pub struct LuminaApp {
     pub editing_tag_buffer: String,
     pub context_menu_state: Option<ContextMenuState>,
     pub tag_manager: TagManagerState,
+    /// Metadata template editor and pickers.
+    pub templates: crate::app::templates::TemplateState,
     pub timeline_year_buckets: Vec<(i32, usize)>,
     pub month_header: MonthHeader,
     pub item_ratings: HashMap<MediaId, u8>,
@@ -648,6 +650,7 @@ impl LuminaApp {
             editing_tag_buffer: String::new(),
             context_menu_state: None,
             tag_manager: TagManagerState::default(),
+            templates: Default::default(),
             timeline_year_buckets: Vec::new(),
             month_header: MonthHeader::default(),
             item_ratings: HashMap::new(),

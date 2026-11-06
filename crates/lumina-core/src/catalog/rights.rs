@@ -3,7 +3,7 @@
 //! search index and its triggers stay as they are.
 
 use anyhow::Result;
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -76,28 +76,7 @@ impl Rights {
 impl Catalog {
     /// The rights of each of `ids` that has any; items without are absent.
     pub fn get_rights(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, Rights>> {
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            "SELECT creator, copyright, usage_terms, contact_email, contact_url
-             FROM media_rights WHERE media_id = ?1;",
-        )?;
-        let mut rights = HashMap::new();
-        for &id in ids {
-            let mut rows = stmt.query(params![id.0 as i64])?;
-            if let Some(row) = rows.next()? {
-                rights.insert(
-                    id,
-                    Rights {
-                        creator: row.get(0)?,
-                        copyright: row.get(1)?,
-                        usage_terms: row.get(2)?,
-                        contact_email: row.get(3)?,
-                        contact_url: row.get(4)?,
-                    },
-                );
-            }
-        }
-        Ok(rights)
+        rights_in(&self.conn.lock(), ids)
     }
 
     /// Replaces the rights of each item, in one transaction. Values are
@@ -106,32 +85,62 @@ impl Catalog {
     pub fn set_rights(&self, rights: &[(MediaId, Rights)]) -> Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        {
-            let mut delete = tx.prepare_cached("DELETE FROM media_rights WHERE media_id = ?1;")?;
-            let mut upsert = tx.prepare_cached(
-                "INSERT OR REPLACE INTO media_rights
-                 (media_id, creator, copyright, usage_terms, contact_email, contact_url)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
-            )?;
-            for (id, value) in rights {
-                let value = value.cleaned();
-                if value.is_empty() {
-                    delete.execute(params![id.0 as i64])?;
-                } else {
-                    upsert.execute(params![
-                        id.0 as i64,
-                        value.creator,
-                        value.copyright,
-                        value.usage_terms,
-                        value.contact_email,
-                        value.contact_url
-                    ])?;
-                }
-            }
-        }
+        write_rights_in(&tx, rights)?;
         tx.commit()?;
         Ok(())
     }
+}
+
+/// The rights rows of `ids` that have any, read inside `conn` (a
+/// transaction, so a template apply sees what it overwrites).
+pub(super) fn rights_in(conn: &Connection, ids: &[MediaId]) -> Result<HashMap<MediaId, Rights>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT creator, copyright, usage_terms, contact_email, contact_url
+         FROM media_rights WHERE media_id = ?1;",
+    )?;
+    let mut rights = HashMap::new();
+    for &id in ids {
+        let mut rows = stmt.query(params![id.0 as i64])?;
+        if let Some(row) = rows.next()? {
+            rights.insert(
+                id,
+                Rights {
+                    creator: row.get(0)?,
+                    copyright: row.get(1)?,
+                    usage_terms: row.get(2)?,
+                    contact_email: row.get(3)?,
+                    contact_url: row.get(4)?,
+                },
+            );
+        }
+    }
+    Ok(rights)
+}
+
+/// [`Catalog::set_rights`] inside a caller's transaction.
+pub(super) fn write_rights_in(conn: &Connection, rights: &[(MediaId, Rights)]) -> Result<()> {
+    let mut delete = conn.prepare_cached("DELETE FROM media_rights WHERE media_id = ?1;")?;
+    let mut upsert = conn.prepare_cached(
+        "INSERT OR REPLACE INTO media_rights
+         (media_id, creator, copyright, usage_terms, contact_email, contact_url)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+    )?;
+    for (id, value) in rights {
+        let value = value.cleaned();
+        if value.is_empty() {
+            delete.execute(params![id.0 as i64])?;
+        } else {
+            upsert.execute(params![
+                id.0 as i64,
+                value.creator,
+                value.copyright,
+                value.usage_terms,
+                value.contact_email,
+                value.contact_url
+            ])?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

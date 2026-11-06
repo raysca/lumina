@@ -104,7 +104,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 5] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
     (
         "GENERAL",
         &[
@@ -175,6 +175,16 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 5] = [
         &[
             ("⇧⌘A", "Add an alias for the keyword"),
             ("⇧⌘M", "Move the keyword to another parent"),
+        ],
+    ),
+    (
+        "IN METADATA TEMPLATES",
+        &[
+            ("Tab / ⇧Tab", "Next / previous field"),
+            ("↑ / ↓", "Previous / next template"),
+            ("Enter", "Save the template"),
+            ("⇧⌘⌫", "Delete the template (⌘Z undoes)"),
+            ("Esc", "Close without saving"),
         ],
     ),
 ];
@@ -443,6 +453,9 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                 this.import_sidecars_selected(cx);
             }))
+            .on_action(cx.listener(|this, _: &ManageTemplates, _w, cx| {
+                this.open_template_editor(cx);
+            }))
             .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                 this.open_album_builder(cx);
             }))
@@ -618,6 +631,12 @@ impl Render for LuminaApp {
                 self.network_import.stage.is_some(),
                 crate::views::network_import_dialog::render(self, cx),
                 "network-import-dialog-in",
+            ))
+            // 8d2. Metadata template editor
+            .child(motion::overlay_in(
+                self.templates.editor.is_some(),
+                crate::views::template_editor::render(self, cx),
+                "template-editor-in",
             ))
             // 8e. Downloads dropdown
             .child(motion::overlay_in(

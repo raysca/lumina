@@ -131,6 +131,24 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d2. Metadata template editor: Tab/⇧Tab move between fields, ↑/↓
+        // between templates, ↵ saves, ⇧⌘⌫ deletes (⌘⌫ edits the field).
+        if self.templates.editor.is_some() {
+            let shift = keystroke.modifiers.shift;
+            match key {
+                "escape" => self.close_template_editor(cx),
+                "enter" | "return" => self.save_template_editor(cx),
+                "tab" => self.cycle_template_field(if shift { -1 } else { 1 }, cx),
+                "up" if !cmd_or_ctrl => self.step_template_in_editor(-1, cx),
+                "down" if !cmd_or_ctrl => self.step_template_in_editor(1, cx),
+                "backspace" | "delete" if cmd_or_ctrl && shift => {
+                    self.delete_template_in_editor(cx)
+                }
+                _ => {}
+            }
+            return true;
+        }
+
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {

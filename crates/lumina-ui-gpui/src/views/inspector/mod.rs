@@ -1,4 +1,5 @@
 pub mod batch;
+pub mod batch_template;
 pub mod body;
 pub mod summary;
 pub mod tabs;

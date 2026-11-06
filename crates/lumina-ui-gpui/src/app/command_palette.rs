@@ -78,6 +78,11 @@ pub enum CommandId {
     ClearRecents,
     /// Forgets the recent-search history; shown only when there is some.
     ClearRecentSearches,
+    /// Lists template names to apply to the selection; shown only when
+    /// there are templates and a selection.
+    ApplyTemplate,
+    /// Opens the metadata template editor.
+    ManageTemplates,
 }
 
 pub struct Command {
@@ -127,8 +132,8 @@ impl Command {
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
-            OpenTagManager | AddKeywordAlias => Icon::Tag,
-            MoveKeyword => Icon::Pencil,
+            OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
+            MoveKeyword | ManageTemplates => Icon::Pencil,
             ClearRecents | ClearRecentSearches => Icon::X,
             Back => Icon::ChevronLeft,
             Forward => Icon::ChevronRight,
@@ -144,6 +149,8 @@ pub enum PaletteTarget {
     Year(i32),
     /// Open Recent Library: switches to that library.
     Library(std::path::PathBuf),
+    /// Apply Metadata Template…: applies template `index` to the selection.
+    Template(usize),
 }
 
 /// One rendered palette row: a command, or a GO TO destination.
@@ -159,7 +166,19 @@ pub struct PaletteRow {
 
 impl PaletteRow {
     pub fn is_go_to(&self) -> bool {
-        !matches!(self.target, PaletteTarget::Command(_))
+        matches!(
+            self.target,
+            PaletteTarget::Go(_) | PaletteTarget::Year(_) | PaletteTarget::Library(_)
+        )
+    }
+
+    /// The heading the row is listed under.
+    pub fn group(&self) -> &'static str {
+        match self.target {
+            PaletteTarget::Command(_) => "COMMANDS",
+            PaletteTarget::Template(_) => "TEMPLATES",
+            _ => "GO TO",
+        }
     }
 }
 
@@ -606,6 +625,18 @@ pub fn commands() -> &'static [Command] {
             keywords: "history next go redo",
         },
         Command {
+            id: CommandId::ApplyTemplate,
+            key: "command.apply_template",
+            shortcut: "",
+            keywords: "metadata template preset rights creator copyright apply",
+        },
+        Command {
+            id: CommandId::ManageTemplates,
+            key: "command.manage_templates",
+            shortcut: "",
+            keywords: "metadata template preset rights creator copyright edit new delete",
+        },
+        Command {
             id: CommandId::ClearRecents,
             key: "command.clear_recents",
             shortcut: "",
@@ -622,12 +653,14 @@ pub fn commands() -> &'static [Command] {
 
 impl LuminaApp {
     pub fn open_command_palette(&mut self, cx: &mut Context<Self>) {
-        // Commands act on the grid; over the tag manager they would change
-        // media behind the sheet (the menu item reaches here, not the keymap).
-        if self.tag_manager.open {
+        // Commands act on the grid; over the tag manager or the template
+        // editor they would change media behind the sheet (the menu item
+        // reaches here, not the keymap).
+        if self.tag_manager.open || self.templates.editor.is_some() {
             return;
         }
         self.command_palette_open = true;
+        self.templates.palette_pick = false;
         self.command_query.clear();
         self.command_selected = 0;
         self.command_scroll.scroll_to_item(1);
@@ -636,6 +669,7 @@ impl LuminaApp {
 
     pub fn close_command_palette(&mut self, cx: &mut Context<Self>) {
         self.command_palette_open = false;
+        self.templates.palette_pick = false;
         self.command_query.clear();
         cx.notify();
     }
@@ -659,6 +693,10 @@ impl LuminaApp {
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
+            CommandId::ApplyTemplate => {
+                !self.config.templates.is_empty()
+                    && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            }
             CommandId::ViewerZoom(_) => {
                 self.is_fullscreen_viewer
                     && self
@@ -678,6 +716,22 @@ impl LuminaApp {
             .split_whitespace()
             .map(str::to_string)
             .collect();
+        if self.templates.palette_pick {
+            return self
+                .config
+                .templates
+                .iter()
+                .enumerate()
+                .filter(|(_, template)| matches(&words, &template.name, "template"))
+                .map(|(index, template)| PaletteRow {
+                    target: PaletteTarget::Template(index),
+                    title: template.name.clone(),
+                    shortcut: "",
+                    icon: Icon::Tag,
+                    selector: format!("palette-template-{}", template.name),
+                })
+                .collect();
+        }
         let mut rows: Vec<PaletteRow> = commands()
             .iter()
             .filter(|c| self.command_applies(c.id) && matches(&words, &c.title(), c.keywords))
@@ -830,6 +884,10 @@ impl LuminaApp {
                 self.close_command_palette(cx);
                 self.open_recent_library(path, cx);
             }
+            PaletteTarget::Template(index) => {
+                self.close_command_palette(cx);
+                self.apply_template(index, cx);
+            }
             PaletteTarget::Year(year) => {
                 self.close_command_palette(cx);
                 // One history entry: Back returns to where the jump started.
@@ -918,6 +976,8 @@ impl LuminaApp {
             CommandId::Forward => self.navigate_forward(cx),
             CommandId::ClearRecents => self.clear_recents(cx),
             CommandId::ClearRecentSearches => self.clear_recent_searches(cx),
+            CommandId::ApplyTemplate => self.start_template_pick(cx),
+            CommandId::ManageTemplates => self.open_template_editor(cx),
         }
     }
 }

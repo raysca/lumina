@@ -76,6 +76,14 @@ core handles cataloguing, decoding, and search.
   Lightroom's attribute form). Get Info shows the ones an item has, read-only;
   they are not searchable. Importing a sidecar sets the rights fields it names
   and never clears the others, and merging duplicates keeps them.
+- **Metadata templates** — save a creator, copyright, usage terms, contact
+  email and website plus keywords as a named template (File > Metadata
+  Templates…, or ⌘K Metadata Templates…). Apply one to the selection with ⌘K
+  Apply Metadata Template… (then pick the name) or the batch inspector's
+  TEMPLATE section. Applying overwrites only the fields the template sets,
+  adds its keywords (aliases resolve as when typing), rewrites the XMP
+  sidecars, and is one `⌘Z`. Templates live in your settings, not the
+  library, so every library sees them.
   A date taken or position you edited (or imported from a sidecar) is written
   as `exif:DateTimeOriginal` and `photoshop:DateCreated` (wall time, no time
   zone) and `exif:GPSLatitude` / `exif:GPSLongitude`; one read from the file
@@ -84,9 +92,9 @@ core handles cataloguing, decoding, and search.
   day), and an imported date or place survives
   a rescan like an edit.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
-  titles, tag add/remove, and trash/restore. Metadata edits also refresh the
-  item's XMP sidecar automatically; permanent deletion is deliberately not
-  undoable.
+  titles, tag add/remove, metadata templates, and trash/restore. Metadata
+  edits also refresh the item's XMP sidecar automatically; permanent deletion
+  is deliberately not undoable.
 - **Editable metadata & XMP import** — click the title, date-taken or coordinate
   row in the inspector to edit it (SQLite, undoable; titles also go to
   `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the

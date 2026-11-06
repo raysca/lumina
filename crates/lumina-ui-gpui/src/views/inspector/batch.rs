@@ -86,8 +86,14 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                             &caption.location_input_buffer,
                             caption.location_input_active,
                             app.field_input_for(TextTarget::Location),
-                            weak_app,
+                            weak_app.clone(),
                         )),
+                ))
+                .child(section(
+                    crate::i18n::t("template.section"),
+                    crate::views::inspector::batch_template::render_template_section(
+                        app, weak_app,
+                    ),
                 )),
         )
         .child(
@@ -108,7 +114,7 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
         .into_any_element()
 }
 
-fn section(title: &'static str, content: impl IntoElement) -> Div {
+fn section(title: impl Into<SharedString>, content: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()

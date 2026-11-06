@@ -32,10 +32,23 @@ Lumina is designed to be usable without a mouse:
   Keyword… and Move Keyword… open the Tag Manager on it. The alias
   chips' × buttons and the suggestion chips carry a button role and a label,
   not yet checked with VoiceOver.
+- **Metadata templates**: ⌘K Metadata Templates… (or File > Metadata
+  Templates…) opens the editor; `Tab`/`⇧Tab` move between its fields,
+  `↑`/`↓` show the previous or next template (past the last is a new one;
+  with unsaved typing they stay in the field, and a list row or a click
+  outside the sheet asks to save or discard instead), `↵` saves, `⇧⌘⌫`
+  deletes the shown template and closes the editor (the toast's Undo or
+  `⌘Z` brings it back) and `Esc` closes without saving. The editor absorbs
+  every other key, so nothing reaches the library behind it, and it does
+  not open over another sheet or dialog. ⌘K Apply Metadata Template… lists
+  the template names; `↑`/`↓` and `↵` apply one to the selection. The
+  editor's fields, list rows and buttons, and the batch inspector's template
+  picker and Apply button, carry roles and labels, not yet checked with
+  VoiceOver.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
-- **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video and Tag
-  Manager keys;
+- **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video, Tag
+  Manager and metadata template keys;
   `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` and `Space` scroll it.
 - **Native menu bar** exposes File, View and Help commands; macOS treats these
   as accessible menu items for VoiceOver.

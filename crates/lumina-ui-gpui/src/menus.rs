@@ -22,6 +22,7 @@ pub fn build_menus() -> Vec<Menu> {
             MenuItem::action("New Smart Album…", NewSmartAlbum),
             MenuItem::separator(),
             MenuItem::action("Import XMP Metadata", ImportXmp),
+            MenuItem::action("Metadata Templates…", ManageTemplates),
         ]),
         Menu::new("View").items([
             MenuItem::action("Command Palette…", ShowCommandPalette),
@@ -61,6 +62,12 @@ mod tests {
             .items
             .iter()
             .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Open Library…")));
+        assert!(
+            menus[1].items.iter().any(
+                |item| matches!(item, MenuItem::Action { name, .. } if name == "Metadata Templates…")
+            ),
+            "File offers the template editor"
+        );
     }
 
     #[test]

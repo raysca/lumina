@@ -398,6 +398,10 @@ pub struct AppConfig {
     /// Whether video sound was last muted.
     #[serde(default)]
     pub video_muted: bool,
+    /// Metadata templates (rights and keywords), in the order the user made
+    /// them. They belong to the person, not a library, so they live here.
+    #[serde(default)]
+    pub templates: Vec<crate::app::templates::MetadataTemplate>,
 }
 
 /// Playback speeds the video speed menu offers.
@@ -481,6 +485,7 @@ impl Default for AppConfig {
             external_editor: None,
             video_speed: None,
             video_muted: false,
+            templates: Vec::new(),
         }
     }
 }
