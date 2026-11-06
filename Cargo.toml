@@ -4,3 +4,8 @@ members = [
     "crates/lumina-core",
     "crates/lumina-ui-gpui",
 ]
+
+# Full debug info on macOS lives in per-build object files that cargo never
+# prunes, so target/ grew past 10 GB. Line tables keep file:line backtraces.
+[profile.dev]
+debug = "line-tables-only"
