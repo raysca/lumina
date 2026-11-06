@@ -567,6 +567,7 @@ impl LuminaApp {
             }
             TextTarget::Search => {
                 self.reset_search_suggestions();
+                self.scope_search_to_library();
                 self.clear_selection(cx);
             }
             TextTarget::NetworkImportUrl => {

@@ -61,6 +61,39 @@ effect: an unknown value (`is:fovorite`, `color:pink`, `color:grey`,
 collected in `StructuredQuery::unrecognized`, and the explanation under the
 search field lists them as "Not understood: …".
 
+## Scope
+
+Search always covers the whole library. When a query becomes non-empty,
+whether typed, picked from the suggestions, run as a quick filter or set by a
+link in Get Info, the sidebar moves to Library. Back (⌘[) returns to the album
+you were in, with an empty search.
+
+## Quick filters
+
+The command palette (⌘K) has quick filters that edit the search text, so the
+grid shows exactly what the query says. There is no separate filter state and
+nothing is dimmed.
+
+| Command | Token |
+| --- | --- |
+| Show Favorites | `is:favorite` |
+| Show Videos | `is:video` |
+| Show Rated ★ 1+ … ★ 5+ | `rating:>=1` … `rating:>=5` |
+| Show Unrated | `is:unrated` |
+| Show Color: Red … Purple | `color:red` … `color:purple` |
+| Show Unlabeled | `is:unlabeled` |
+
+- Running a quick filter whose token is already in the query (or one with the
+  same effect, such as `is:fav`) removes it.
+- Tokens of one kind replace each other: favorites (`is:favorite`,
+  `-is:favorite`), ratings (`rating:`, `stars:`,
+  `is:unrated`, `has:rating`), color labels (`color:`, `is:unlabeled`,
+  `has:color`) and media types (`is:video`, `is:photo`, `is:raw`). Show Rated
+  ★ 3+ replaces `is:unrated`.
+- Clear Filters removes every filter token, negated and not-understood ones
+  included, and keeps free text and `-word` exclusions. It is listed only
+  when the query has a filter.
+
 ## Explanation
 
 While the search field is focused, the bottom of the suggestion list says in

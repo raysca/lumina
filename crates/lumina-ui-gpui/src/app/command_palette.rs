@@ -43,8 +43,10 @@ pub enum CommandId {
     ZoomOutGrid,
     /// Viewer zoom preset; offered only while a still is open in the viewer.
     ViewerZoom(ViewerZoomPreset),
-    /// Filter-bar chip (dims non-matching items).
-    Filter(crate::views::search_bar::GridFilter),
+    /// Quick filter: toggles this query token in the search (D8).
+    QuickFilter(&'static str),
+    /// Removes every filter token from the search, keeping its text.
+    ClearFilters,
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
     ToggleFavorite,
@@ -102,7 +104,8 @@ impl Command {
             ZoomOutGrid => Icon::Minus,
             ViewerZoom(ViewerZoomPreset::Fit) => Icon::Minimize,
             ViewerZoom(_) => Icon::Maximize,
-            Filter(_) => Icon::Search,
+            QuickFilter(_) => Icon::Search,
+            ClearFilters => Icon::X,
             Rate(0) => Icon::Star,
             Rate(_) => Icon::StarFilled,
             ToggleFavorite => Icon::Heart,
@@ -367,36 +370,6 @@ pub fn commands() -> &'static [Command] {
             keywords: "zoom viewer 400% 4x magnify",
         },
         Command {
-            id: CommandId::Filter(crate::views::search_bar::GridFilter::All),
-            key: "command.filter_all",
-            shortcut: "",
-            keywords: "filter show everything clear",
-        },
-        Command {
-            id: CommandId::Filter(crate::views::search_bar::GridFilter::Favorites),
-            key: "command.filter_favorites",
-            shortcut: "",
-            keywords: "filter hearts loved",
-        },
-        Command {
-            id: CommandId::Filter(crate::views::search_bar::GridFilter::Videos),
-            key: "command.filter_videos",
-            shortcut: "",
-            keywords: "filter movies clips",
-        },
-        Command {
-            id: CommandId::Filter(crate::views::search_bar::GridFilter::ThreeStars),
-            key: "command.filter_three_stars",
-            shortcut: "",
-            keywords: "filter rating 3 stars best",
-        },
-        Command {
-            id: CommandId::Filter(crate::views::search_bar::GridFilter::Labeled),
-            key: "command.filter_labeled",
-            shortcut: "",
-            keywords: "filter colour color label",
-        },
-        Command {
             id: CommandId::Rate(1),
             key: "command.rate_1",
             shortcut: "",
@@ -437,6 +410,103 @@ pub fn commands() -> &'static [Command] {
             key: "command.toggle_favorite",
             shortcut: "F",
             keywords: "heart star like",
+        },
+        // After the Rate commands: "rate 3" also matches "Show Rated ★ 3+".
+        Command {
+            id: CommandId::QuickFilter("is:favorite"),
+            key: "command.filter_favorites",
+            shortcut: "",
+            keywords: "filter hearts loved favourites",
+        },
+        Command {
+            id: CommandId::QuickFilter("is:video"),
+            key: "command.filter_videos",
+            shortcut: "",
+            keywords: "filter movies clips",
+        },
+        Command {
+            id: CommandId::QuickFilter("rating:>=1"),
+            key: "command.filter_rating_1",
+            shortcut: "",
+            keywords: "filter rating stars 1",
+        },
+        Command {
+            id: CommandId::QuickFilter("rating:>=2"),
+            key: "command.filter_rating_2",
+            shortcut: "",
+            keywords: "filter rating stars 2",
+        },
+        Command {
+            id: CommandId::QuickFilter("rating:>=3"),
+            key: "command.filter_rating_3",
+            shortcut: "",
+            keywords: "filter rating stars 3",
+        },
+        Command {
+            id: CommandId::QuickFilter("rating:>=4"),
+            key: "command.filter_rating_4",
+            shortcut: "",
+            keywords: "filter rating stars 4",
+        },
+        Command {
+            id: CommandId::QuickFilter("rating:>=5"),
+            key: "command.filter_rating_5",
+            shortcut: "",
+            keywords: "filter rating stars 5",
+        },
+        Command {
+            id: CommandId::QuickFilter("is:unrated"),
+            key: "command.filter_unrated",
+            shortcut: "",
+            keywords: "filter rating stars none no",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:red"),
+            key: "command.filter_color_red",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:orange"),
+            key: "command.filter_color_orange",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:yellow"),
+            key: "command.filter_color_yellow",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:green"),
+            key: "command.filter_color_green",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:blue"),
+            key: "command.filter_color_blue",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("color:purple"),
+            key: "command.filter_color_purple",
+            shortcut: "",
+            keywords: "filter colour color label",
+        },
+        Command {
+            id: CommandId::QuickFilter("is:unlabeled"),
+            key: "command.filter_unlabeled",
+            shortcut: "",
+            keywords: "filter colour color label none no",
+        },
+        Command {
+            id: CommandId::ClearFilters,
+            key: "command.filter_clear",
+            shortcut: "",
+            keywords: "filter remove reset show everything all",
         },
         Command {
             id: CommandId::TogglePip,
@@ -548,6 +618,7 @@ impl LuminaApp {
             CommandId::Forward => self.can_navigate_forward(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
+            CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
@@ -775,10 +846,8 @@ impl LuminaApp {
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
             CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),
-            CommandId::Filter(filter) => {
-                self.grid_filter = filter;
-                cx.notify();
-            }
+            CommandId::QuickFilter(token) => self.toggle_quick_filter(token, cx),
+            CommandId::ClearFilters => self.clear_quick_filters(cx),
             CommandId::Rate(rating) => self.set_rating_selected(rating, cx),
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)

@@ -211,31 +211,6 @@ impl SearchBarView {
     }
 }
 
-/// Grid filter chips. A filter dims non-matching items instead of hiding
-/// them, so positions and selection stay put.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum GridFilter {
-    #[default]
-    All,
-    Favorites,
-    Videos,
-    ThreeStars,
-    Labeled,
-}
-
-impl GridFilter {
-    /// Whether an item with these facts stays at full opacity.
-    pub fn matches(self, favorite: bool, video: bool, rating: u8, labeled: bool) -> bool {
-        match self {
-            GridFilter::All => true,
-            GridFilter::Favorites => favorite,
-            GridFilter::Videos => video,
-            GridFilter::ThreeStars => rating >= 3,
-            GridFilter::Labeled => labeled,
-        }
-    }
-}
-
 /// Thumbnail size 1–5, smallest to largest, as grid columns.
 pub(crate) const SIZE_COLUMNS: [usize; 5] = [8, 6, 4, 3, 2];
 

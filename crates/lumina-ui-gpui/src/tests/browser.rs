@@ -2,9 +2,10 @@
 //! context menu against the v3 grid design.
 
 use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library, type_text,
+    app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
+    type_text,
 };
-use crate::views::search_bar::GridFilter;
+use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]
 fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
@@ -107,56 +108,232 @@ fn sidebar_runs_full_height_beside_the_status_bar() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+const FAVORITES: AlbumSelection = AlbumSelection::System(lumina_core::SystemAlbum::Favorites);
+
 #[core::prelude::v1::test]
-fn filter_chips_select_a_filter_that_dims_rather_than_hides() {
-    let (dir, engine) = seed_library("br_filter", 4);
+fn palette_filter_toggles_query_token() {
+    let (dir, engine) = seed_library("br_quick_filter", 4);
+    let rated = engine.get_item_slice(0..1)[0].id;
+    engine.set_rating(rated, 4).expect("seed a rating");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
-    keystrokes(vcx, "home f");
-    let (fav, count) = view.update(vcx, |app, _| {
-        (
-            app.selected_item.clone().unwrap().id,
-            app.get_active_count(),
-        )
-    });
-    let other = engine
-        .get_item_slice(0..count)
-        .into_iter()
-        .find(|item| item.id != fav)
-        .unwrap()
-        .id;
-    // Keyboard path: the palette has every filter.
-    keystrokes(vcx, "secondary-k f a v o r i t e s enter");
+
+    keystrokes(vcx, "secondary-k s h o w space r a t e d space 4 enter");
     render_ui(vcx);
     view.update(vcx, |app, _| {
-        assert_eq!(app.grid_filter, GridFilter::Favorites);
-        assert_eq!(app.get_active_count(), count, "filters dim, never hide");
+        assert!(
+            app.search_query.contains("rating:>=4"),
+            "the palette quick filter writes a query token, got {:?}",
+            app.search_query
+        );
+        let expected = engine.search_query_count("rating:>=4");
+        assert_eq!(expected, 1, "one item is rated 4");
+        assert_eq!(
+            app.get_active_count(),
+            expected,
+            "the grid shows exactly what the query matches (no dimming)"
+        );
     });
-    assert!(
-        vcx.debug_bounds(leak(format!("media-card-dimmed-{}", other.0)))
-            .is_some(),
-        "a non-favorite is dimmed"
-    );
-    assert!(
-        vcx.debug_bounds(leak(format!("media-card-dimmed-{}", fav.0)))
-            .is_none(),
-        "the favorite stays at full opacity"
-    );
 
-    keystrokes(vcx, "secondary-k v i d e o s enter");
+    keystrokes(vcx, "secondary-k s h o w space r a t e d space 4 enter");
     view.update(vcx, |app, _| {
-        assert_eq!(app.grid_filter, GridFilter::Videos)
+        assert!(
+            !app.search_query.contains("rating:>=4"),
+            "running the same quick filter again removes its token, got {:?}",
+            app.search_query
+        );
     });
-    keystrokes(vcx, "secondary-k f i l t e r space a l l enter");
-    view.update(vcx, |app, _| assert_eq!(app.grid_filter, GridFilter::All));
+    let _ = std::fs::remove_dir_all(&dir);
+}
 
-    assert!(GridFilter::All.matches(false, false, 0, false));
-    assert!(GridFilter::Favorites.matches(true, false, 0, false));
-    assert!(!GridFilter::Favorites.matches(false, true, 5, true));
-    assert!(GridFilter::Videos.matches(false, true, 0, false));
-    assert!(GridFilter::ThreeStars.matches(false, false, 3, false));
-    assert!(!GridFilter::ThreeStars.matches(false, false, 2, false));
-    assert!(GridFilter::Labeled.matches(false, false, 0, true));
+#[core::prelude::v1::test]
+fn no_dimmed_cards_after_filter() {
+    let (dir, engine) = seed_library("br_no_dim", 4);
+    let ids: Vec<_> = engine.get_item_slice(0..4).iter().map(|i| i.id).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let filters: Vec<_> = crate::app::command_palette::commands()
+        .iter()
+        .filter(|c| c.key.starts_with("command.filter_"))
+        .map(|c| c.id)
+        .collect();
+    assert!(!filters.is_empty(), "the palette offers quick filters");
+    for id in filters {
+        view.update(vcx, |app, cx| {
+            app.set_search_query("", cx);
+            app.execute_command(id, cx);
+        });
+        render_ui(vcx);
+        for item in &ids {
+            assert!(
+                vcx.debug_bounds(leak(format!("media-card-dimmed-{}", item.0)))
+                    .is_none(),
+                "{id:?} must filter through the query, never dim card {item:?}"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn typing_a_query_moves_sidebar_to_library() {
+    let (dir, engine) = seed_library("br_type_scope", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.select_album(FAVORITES, cx));
+    render_ui(vcx);
+
+    click(vcx, "search-input");
+    type_text(vcx, "kyoto");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "kyoto");
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "a typed query searches the whole library, so the sidebar says Library"
+        );
+    });
+    for _ in 0..2 {
+        if view.update(vcx, |app, _| app.search_focused) {
+            keystrokes(vcx, "escape");
+        }
+    }
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-[");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, FAVORITES, "Back restores the album");
+        assert_eq!(app.search_query, "", "Back restores the empty query");
+    });
+    keystrokes(vcx, "secondary-[");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "the second Back leaves the album: the trail holds it once"
+        );
+        assert!(
+            !app.can_navigate_back(),
+            "the trail is Library → Favorites → query"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn suggestion_and_command_queries_move_sidebar_to_library() {
+    let (dir, engine) = seed_library("br_cmd_scope", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // The inspector's tag and location links call set_search_query.
+    view.update(vcx, |app, cx| {
+        app.select_album(FAVORITES, cx);
+        app.set_search_query("tag:kyoto", cx);
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "set_search_query searches the whole library"
+        );
+    });
+    keystrokes(vcx, "secondary-[");
+    view.update(vcx, |app, cx| {
+        assert_eq!(app.selection, FAVORITES, "Back restores the album");
+        assert_eq!(app.search_query, "");
+
+        app.apply_search_suggestion_at(0, cx);
+        assert!(!app.search_query.is_empty(), "a suggestion was applied");
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "a suggestion searches the whole library"
+        );
+    });
+    keystrokes(vcx, "secondary-[");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, FAVORITES, "Back restores the album");
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn search_from_an_album_year_goes_back_to_that_year() {
+    let (dir, engine) = seed_library("br_year_scope", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let year = view.update(vcx, |app, _| app.timeline_year_buckets[0].0);
+    for suggestion in [false, true] {
+        view.update(vcx, |app, cx| {
+            app.select_album(AlbumSelection::AllLibrary, cx);
+            app.reset_navigation_history();
+            app.select_album(FAVORITES, cx);
+            app.set_active_year(Some(year), cx);
+            if suggestion {
+                app.apply_search_suggestion_at(0, cx);
+            } else {
+                app.set_search_query("tag:kyoto", cx);
+            }
+            assert_eq!(app.selection, AlbumSelection::AllLibrary);
+        });
+        focus_app(vcx, &view);
+        keystrokes(vcx, "secondary-[");
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                (
+                    app.selection.clone(),
+                    app.active_year,
+                    app.search_query.as_str()
+                ),
+                (FAVORITES, Some(year), ""),
+                "Back (suggestion: {suggestion}) lands on the album and year that were left"
+            );
+        });
+        keystrokes(vcx, "secondary-[ secondary-[");
+        view.update(vcx, |app, _| {
+            assert_eq!(app.selection, AlbumSelection::AllLibrary);
+            assert!(
+                !app.can_navigate_back(),
+                "no phantom album-without-year step (suggestion: {suggestion})"
+            );
+        });
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn palette_clear_filters_keeps_free_text() {
+    let (dir, engine) = seed_library("br_clear_filters", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let offered = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, _| {
+            app.command_query = "clear filters".into();
+            let listed = app.palette_rows().iter().any(|row| {
+                row.target
+                    == crate::app::command_palette::PaletteTarget::Command(
+                        crate::app::command_palette::CommandId::ClearFilters,
+                    )
+            });
+            app.command_query.clear();
+            listed
+        })
+    };
+    assert!(
+        !offered(&view, vcx),
+        "Clear Filters is hidden with no filter"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.set_search_query("kyoto is:video -tag:work rating:>=2", cx)
+    });
+    assert!(offered(&view, vcx), "Clear Filters is listed with a filter");
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k c l e a r space f i l t e r s enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "kyoto",
+            "Clear Filters drops the filter tokens and keeps the text"
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -221,12 +221,6 @@ impl LuminaApp {
                                 let item_color = this.get_item_color_label(item);
                                 let is_video = item.media_type == MediaType::Video;
                                 let is_missing = this.missing_items.contains(&item.id);
-                                let dimmed = !this.grid_filter.matches(
-                                    is_fav,
-                                    is_video,
-                                    item_rating,
-                                    item_color.is_some(),
-                                );
 
                                 let texture = row_textures.get(offset_in_row).cloned().flatten();
 
@@ -379,25 +373,7 @@ impl LuminaApp {
                                                 // has no background around it.
                                                 .bg(photo_background)
                                                 // Recently Deleted reads as set aside.
-                                                .when(in_trash && !dimmed, |well| {
-                                                    well.opacity(0.6)
-                                                })
-                                                // Filter chips dim, never hide.
-                                                // (The marker child carries the automation
-                                                // selector; the well already has one.)
-                                                .when(dimmed, |well| {
-                                                    well.opacity(0.22).child(
-                                                        div()
-                                                            .debug_selector(move || {
-                                                                format!(
-                                                                    "media-card-dimmed-{}",
-                                                                    item_id_num
-                                                                )
-                                                            })
-                                                            .absolute()
-                                                            .inset_0(),
-                                                    )
-                                                })
+                                                .when(in_trash, |well| well.opacity(0.6))
                                                 // Square well and square highlight: no
                                                 // corner radius on the thumbnail (FIXES.md).
                                                 .overflow_hidden()

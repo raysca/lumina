@@ -368,8 +368,6 @@ pub struct LuminaApp {
     pub(crate) hud_idle: crate::app::viewer_actions::HudIdle,
     pub(crate) mark_pop: crate::motion::MarkPop,
     pub card_fit_mode: bool,
-    /// Filter-bar chip; non-matching cards dim instead of hiding.
-    pub grid_filter: crate::views::search_bar::GridFilter,
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
     /// What the banner's Retry runs; None hides Retry.
@@ -576,7 +574,6 @@ impl LuminaApp {
             hud_idle: Default::default(),
             mark_pop: Default::default(),
             card_fit_mode: config.card_fit_mode,
-            grid_filter: Default::default(),
             error_message: None,
             error_retry: None,
             last_action: None,

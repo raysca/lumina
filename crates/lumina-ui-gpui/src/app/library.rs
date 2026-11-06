@@ -731,6 +731,8 @@ impl LuminaApp {
     pub fn set_search_query(&mut self, query: &str, cx: &mut Context<Self>) {
         let departing = self.navigation_snapshot();
         self.search_query = query.to_string();
+        // Before clearing the year: the helper snapshots the album as left.
+        self.scope_search_to_library();
         self.active_year = None;
         self.clear_selection(cx);
         self.record_navigation_change(departing);
@@ -775,6 +777,11 @@ impl LuminaApp {
 
         self.selection = resolve_restored_view(restored.view, &self.user_smart_albums);
         self.search_query = restored.search_query;
+        // A session saved before D11 can hold an album with a query. The
+        // trail is reset below, so no Back step is needed.
+        if !self.search_query.trim().is_empty() {
+            self.selection = AlbumSelection::AllLibrary;
+        }
         self.search_focused = false;
         self.active_year = restored.active_year;
 

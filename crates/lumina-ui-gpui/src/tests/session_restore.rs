@@ -335,3 +335,23 @@ fn request_quit_still_quits_after_saving() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_restored_album_with_a_query_comes_back_as_library() {
+    let (dir, engine) = seed_library("restore_scope", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let mut saved = session(LastView::Favorites, None, None);
+    saved.search_query = "kyoto".into();
+    start_with_pending(&view, vcx, saved);
+    finish_scan(&view, vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "kyoto");
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "a restored query searches the whole library, so the sidebar says Library"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

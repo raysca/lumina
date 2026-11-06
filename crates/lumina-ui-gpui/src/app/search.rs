@@ -4,6 +4,7 @@ use gpui::Context;
 use std::collections::HashSet;
 
 use crate::app::LuminaApp;
+use crate::views::sidebar::AlbumSelection;
 
 /// Maximum number of committed queries kept in recent-search history.
 pub(crate) const MAX_RECENT_SEARCHES: usize = 10;
@@ -167,6 +168,82 @@ pub(crate) fn apply_search_suggestion_text(query: &str, suggestion: &str) -> Str
     parts.join(" ")
 }
 
+/// Quick-filter families: a new token replaces the one already there.
+#[derive(PartialEq)]
+enum FilterFamily {
+    Favorite,
+    Rating,
+    Colour,
+    MediaType,
+}
+
+/// The family of one parsed token, read from the fields the core parser set
+/// (no second grammar here).
+fn filter_family(parsed: &lumina_core::StructuredQuery) -> Option<FilterFamily> {
+    if parsed.is_favorite.is_some() {
+        Some(FilterFamily::Favorite)
+    } else if parsed.min_rating.is_some() || parsed.max_rating.is_some() {
+        Some(FilterFamily::Rating)
+    } else if parsed.color_label.is_some() || parsed.has_color_label.is_some() {
+        Some(FilterFamily::Colour)
+    } else if parsed.media_type.is_some() {
+        Some(FilterFamily::MediaType)
+    } else {
+        None
+    }
+}
+
+/// Whether the parser treats `token` as a filter rather than text: it adds
+/// no free-text term or exclusion. Misspelled filters count (they are not
+/// searched); `-word` does not.
+fn is_filter_token(token: &str) -> bool {
+    let parsed = lumina_core::StructuredQuery::parse(token);
+    parsed.fts_terms.is_empty() && parsed.fts_exclude.is_empty()
+}
+
+/// Toggles a quick-filter `token` in `query` (D8). A token with the same
+/// parsed effect is removed; otherwise tokens of the same family (favorite,
+/// rating, colour, media type) are replaced and `token` is appended. Quoted phrases
+/// and free text are kept.
+pub(crate) fn toggle_query_token(query: &str, token: &str) -> String {
+    use lumina_core::StructuredQuery;
+    let wanted = StructuredQuery::parse(token);
+    let family = filter_family(&wanted);
+    // Close an unclosed quote so the appended token stays outside it.
+    let closed;
+    let query = if query.matches('"').count() % 2 == 1 {
+        closed = format!("{query}\"");
+        closed.as_str()
+    } else {
+        query
+    };
+    let mut tokens = lumina_core::search::tokenize_query(query);
+    let before = tokens.len();
+    tokens.retain(|existing| StructuredQuery::parse(existing) != wanted);
+    if tokens.len() == before {
+        if family.is_some() {
+            tokens.retain(|existing| filter_family(&StructuredQuery::parse(existing)) != family);
+        }
+        tokens.push(token.to_string());
+    }
+    tokens.join(" ")
+}
+
+/// Clear Filters: drops every filter token, negated and misspelled ones
+/// included, and keeps free text and `-word` exclusions.
+pub(crate) fn clear_query_filters(query: &str) -> String {
+    let mut tokens = lumina_core::search::tokenize_query(query);
+    tokens.retain(|token| !is_filter_token(token));
+    tokens.join(" ")
+}
+
+/// Whether Clear Filters would change `query`.
+pub(crate) fn query_has_filters(query: &str) -> bool {
+    lumina_core::search::tokenize_query(query)
+        .iter()
+        .any(|token| is_filter_token(token))
+}
+
 impl LuminaApp {
     ///
     /// Reads only cached recent searches and cached tag counts, never SQL.
@@ -222,11 +299,41 @@ impl LuminaApp {
         };
         let departing = self.navigation_snapshot();
         self.search_query = apply_search_suggestion_text(&self.search_query, &suggestion);
+        // Before clearing the year: the helper snapshots the album as left.
+        self.scope_search_to_library();
         self.active_year = None;
         self.clear_selection(cx);
         self.record_navigation_change(departing);
         self.dismiss_search_suggestions();
         cx.notify();
+    }
+
+    /// D11: a non-empty query searches the whole library, so the sidebar
+    /// moves to Library. The album being left stays one Back step away even
+    /// for a typed query, which records no arrival: syncing the album makes
+    /// it the trail's current entry, and Back's own sync adds the query.
+    pub(crate) fn scope_search_to_library(&mut self) {
+        if self.selection == AlbumSelection::AllLibrary || self.search_query.trim().is_empty() {
+            return;
+        }
+        let mut album = self.navigation_snapshot();
+        // Only an empty query can sit under an album (this helper and
+        // `select_album` keep it so), so the album was left with none.
+        album.search_query.clear();
+        self.navigation_history.sync_pending(album);
+        self.selection = AlbumSelection::AllLibrary;
+    }
+
+    /// Runs a quick filter: toggles its token in the query (D8).
+    pub(crate) fn toggle_quick_filter(&mut self, token: &str, cx: &mut Context<Self>) {
+        let query = toggle_query_token(&self.search_query, token);
+        self.set_search_query(&query, cx);
+    }
+
+    /// Removes every filter token from the query, keeping its text.
+    pub(crate) fn clear_quick_filters(&mut self, cx: &mut Context<Self>) {
+        let query = clear_query_filters(&self.search_query);
+        self.set_search_query(&query, cx);
     }
 
     /// The explanation footer text: the parsed query's phrases joined, or
@@ -395,6 +502,63 @@ mod search_suggestion_tests {
         }
         assert!(search_suggestion_items(&[], &[], "mon").contains(&"month:".to_string()));
         assert!(search_suggestion_items(&[], &[], "f:").contains(&"f:".to_string()));
+    }
+
+    #[core::prelude::v1::test]
+    fn toggle_query_token_adds_removes_and_replaces() {
+        assert_eq!(toggle_query_token("", "is:favorite"), "is:favorite");
+        assert_eq!(
+            toggle_query_token("kyoto is:favorite", "is:favorite"),
+            "kyoto",
+            "a token already present toggles off"
+        );
+        assert_eq!(
+            toggle_query_token("kyoto is:fav", "is:favorite"),
+            "kyoto",
+            "an alias with the same parsed effect toggles off"
+        );
+        assert_eq!(
+            toggle_query_token("kyoto is:unrated", "rating:>=3"),
+            "kyoto rating:>=3",
+            "rating:>=3 replaces is:unrated (one rating family)"
+        );
+        assert_eq!(
+            toggle_query_token("stars:>=2 kyoto", "rating:>=4"),
+            "kyoto rating:>=4",
+            "a rating replaces another rating"
+        );
+        assert_eq!(
+            toggle_query_token("is:unlabeled", "color:red"),
+            "color:red",
+            "color:red replaces is:unlabeled (one colour family)"
+        );
+        assert_eq!(
+            toggle_query_token("is:video", "is:photo"),
+            "is:photo",
+            "media types replace each other"
+        );
+        assert_eq!(
+            toggle_query_token("\"red door\" -beach is:video", "color:red"),
+            "\"red door\" -beach is:video color:red",
+            "quoted phrases, exclusions and other families survive"
+        );
+        assert_eq!(
+            clear_query_filters("\"red door\" -beach is:video -tag:x rating:>=2 is:fovorite"),
+            "\"red door\" -beach",
+            "Clear Filters drops every filter, negated and misspelled ones too, and keeps text"
+        );
+        assert_eq!(
+            toggle_query_token("-is:favorite kyoto", "is:favorite"),
+            "kyoto is:favorite",
+            "Show Favorites replaces a negated favorite (one favorite family)"
+        );
+        assert_eq!(
+            toggle_query_token("\"red door", "is:video"),
+            "\"red door\" is:video",
+            "an unclosed quote is closed so the token stays outside it"
+        );
+        assert!(query_has_filters("kyoto -is:favorite"));
+        assert!(!query_has_filters("kyoto -beach \"a b\""));
     }
 
     #[core::prelude::v1::test]
