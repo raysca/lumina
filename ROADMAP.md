@@ -430,12 +430,13 @@ view, and export without a mouse; no keyboard trap; documented limitations.
 ## 11. Data safety, portability, and diagnostics
 
 **Current:** SQLite migrations and backups, sidecars for title/rating/tags/caption,
-undo, single-instance lock, logging, cache eviction. Date/location are not in
-sidecars; no backup/restore UI; global tag operations are outside undo.
+rights, and edited date/location (written and imported), undo, single-instance
+lock, logging, cache eviction. No backup/restore UI; global tag operations are
+outside undo.
 
 **Target:**
 
-- XMP date/GPS write and import; auto-import/export on scan as a preference.
+- Auto-import/export of XMP sidecars on scan as a preference.
 - Catalog backup/restore UI and an integrity report.
 - Library health check: missing files, unreadable sidecars, FTS consistency,
   stale cache.

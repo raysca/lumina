@@ -773,6 +773,10 @@ impl LuminaEngine {
             .catalog
             .get_rights(ids)
             .context("could not read rights")?;
+        let edited = self
+            .catalog
+            .edited_flags(ids)
+            .context("could not read edited dates and places")?;
         let mut report = ExportReport::default();
 
         for id in ids {
@@ -795,7 +799,7 @@ impl LuminaEngine {
             }
             report.exported += 1;
 
-            match self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights) {
+            match self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights, &edited) {
                 Ok(metadata) => match xmp::write_sidecar(&destination_path, &metadata) {
                     Ok(SidecarOutcome::Written(_)) => report.sidecars += 1,
                     Ok(SidecarOutcome::Removed | SidecarOutcome::Unchanged) => {}
@@ -841,12 +845,17 @@ impl LuminaEngine {
             .catalog
             .get_rights(ids)
             .context("could not read rights")?;
+        let edited = self
+            .catalog
+            .edited_flags(ids)
+            .context("could not read edited dates and places")?;
         let mut report = SidecarWriteReport::default();
         for id in ids {
             let Some(item) = self.catalog.get_item_by_id(*id)? else {
                 continue;
             };
-            let metadata = self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights)?;
+            let metadata =
+                self.sidecar_metadata_for(*id, &captions, &ratings, &labels, &rights, &edited)?;
             match xmp::write_library_sidecar(&item.path, &metadata)? {
                 SidecarOutcome::Written(_) => report.written += 1,
                 SidecarOutcome::SkippedForeign => {
@@ -865,8 +874,8 @@ impl LuminaEngine {
     }
 
     /// Imports XMP sidecars for the given items. Only values present in the
-    /// sidecar are applied (ratings always, title/caption/color label and each
-    /// rights field when set, tags merged),
+    /// sidecar are applied (ratings always, title/caption/color label, each
+    /// rights field, the date and the GPS position when set, tags merged),
     /// so importing never clears metadata that the sidecar does not mention.
     pub fn import_sidecars(&self, ids: &[MediaId]) -> Result<ImportReport> {
         let before = self.edits_snapshot(ids)?;
@@ -906,6 +915,8 @@ impl LuminaEngine {
                 .context("could not read rights")?
                 .remove(&item.id)
                 .unwrap_or_default(),
+            timestamp_epoch_ms: item.timestamp_epoch_ms,
+            location: (item.latitude, item.longitude),
         })
     }
 
@@ -978,6 +989,41 @@ impl LuminaEngine {
                         self.catalog.set_rights(&[(*id, rights)])?;
                         changed = true;
                     }
+                    // Dates compare by the second (sidecars carry no
+                    // milliseconds), places within 1e-5°, so a re-import
+                    // of Lumina's own sidecar changes nothing. Both writes
+                    // mark the edited flags, so a rescan keeps them.
+                    if let Some(mut date) = metadata.date_taken {
+                        // A date alone changes the day and keeps the time of
+                        // day, as the date field in Get Info does.
+                        if metadata.date_only {
+                            if let Some(now) =
+                                chrono::DateTime::from_timestamp_millis(now.timestamp_epoch_ms)
+                            {
+                                date = date.date().and_time(now.time());
+                            }
+                        }
+                        let epoch_ms = date.and_utc().timestamp_millis();
+                        if epoch_ms.div_euclid(1000) != now.timestamp_epoch_ms.div_euclid(1000)
+                            && now.timestamp_epoch_ms == then.timestamp_epoch_ms
+                        {
+                            self.catalog.set_timestamps(&[(*id, epoch_ms)])?;
+                            changed = true;
+                        }
+                    }
+                    if let Some((lat, lon)) = metadata.location {
+                        let same = match now.location {
+                            (Some(now_lat), Some(now_lon)) => {
+                                (now_lat - lat).abs() <= 1e-5 && (now_lon - lon).abs() <= 1e-5
+                            }
+                            _ => false,
+                        };
+                        if !same && now.location == then.location {
+                            self.catalog
+                                .set_locations(&[(*id, (Some(lat), Some(lon)))])?;
+                            changed = true;
+                        }
+                    }
                     // A keyword the catalog refuses (over the length cap, or
                     // at or below an alias) is reported; the item's other
                     // keywords still import. A blank one (no segment left
@@ -1041,9 +1087,23 @@ impl LuminaEngine {
         ratings: &HashMap<MediaId, u8>,
         labels: &HashMap<MediaId, u8>,
         rights: &HashMap<MediaId, Rights>,
+        edited: &HashMap<MediaId, (bool, bool)>,
     ) -> Result<SidecarMetadata> {
         let tags = self.catalog.get_tags_for_item(id)?;
-        let title = self.catalog.get_item_by_id(id)?.and_then(|item| item.title);
+        let item = self.catalog.get_item_by_id(id)?;
+        // Decision: only an edited date or place is written; file EXIF stays
+        // the source otherwise. The catalog keeps wall time as UTC.
+        let (date_edited, place_edited) = edited.get(&id).copied().unwrap_or_default();
+        let date_taken = item
+            .as_ref()
+            .filter(|_| date_edited)
+            .and_then(|item| chrono::DateTime::from_timestamp_millis(item.timestamp_epoch_ms))
+            .map(|date| date.naive_utc());
+        let location = item
+            .as_ref()
+            .filter(|_| place_edited)
+            .and_then(|item| item.latitude.zip(item.longitude));
+        let title = item.and_then(|item| item.title);
         let (source_url, credit) = match self.catalog.get_media_source(id)? {
             Some((url, uploader, _)) => (Some(url), uploader),
             None => (None, None),
@@ -1057,6 +1117,9 @@ impl LuminaEngine {
             source_url,
             credit,
             rights: rights.get(&id).cloned().unwrap_or_default(),
+            date_taken,
+            date_only: false,
+            location,
         })
     }
 
@@ -1754,6 +1817,8 @@ struct ItemEdits {
     label: u8,
     caption: Option<String>,
     rights: Rights,
+    timestamp_epoch_ms: i64,
+    location: Coordinates,
 }
 
 #[cfg(test)]
@@ -1809,12 +1874,23 @@ mod tests {
                     creator: Some("Sidecar creator".into()),
                     ..Default::default()
                 },
+                date_taken: chrono::DateTime::from_timestamp(1_500_000_000, 0)
+                    .map(|date| date.naive_utc()),
+                location: Some((48.8566, 2.3522)),
                 ..Default::default()
             },
         )
         .expect("sidecar writes");
 
         let before = engine.edits_snapshot(&[item.id]).expect("snapshot");
+        engine
+            .catalog
+            .set_timestamp(item.id, 1_600_000_000_000)
+            .expect("date");
+        engine
+            .catalog
+            .set_location(item.id, Some(-33.8688), Some(151.2093))
+            .expect("place");
         let mine = crate::catalog::Rights {
             creator: Some("My name".into()),
             ..Default::default()
@@ -1859,6 +1935,16 @@ mod tests {
             engine.catalog.get_caption(item.id).unwrap().as_deref(),
             Some("Sidecar caption"),
             "an untouched caption still imports"
+        );
+        let after = engine.catalog.get_item_by_id(item.id).unwrap().unwrap();
+        assert_eq!(
+            after.timestamp_epoch_ms, 1_600_000_000_000,
+            "a date set during the import must not be overwritten by the sidecar"
+        );
+        assert_eq!(
+            (after.latitude, after.longitude),
+            (Some(-33.8688), Some(151.2093)),
+            "a place set during the import must not be overwritten by the sidecar"
         );
         drop(engine);
         let _ = fs::remove_dir_all(&dir);

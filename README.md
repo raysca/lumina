@@ -76,6 +76,13 @@ core handles cataloguing, decoding, and search.
   Lightroom's attribute form). Get Info shows the ones an item has, read-only;
   they are not searchable. Importing a sidecar sets the rights fields it names
   and never clears the others, and merging duplicates keeps them.
+  A date taken or position you edited (or imported from a sidecar) is written
+  as `exif:DateTimeOriginal` and `photoshop:DateCreated` (wall time, no time
+  zone) and `exif:GPSLatitude` / `exif:GPSLongitude`; one read from the file
+  itself is not, so the file stays the source. Importing a sidecar date drops
+  its time zone and keeps the wall time (a date with no time changes only the
+  day), and an imported date or place survives
+  a rescan like an edit.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, and trash/restore. Metadata edits also refresh the
   item's XMP sidecar automatically; permanent deletion is deliberately not

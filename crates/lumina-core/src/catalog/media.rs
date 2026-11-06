@@ -628,6 +628,22 @@ impl Catalog {
         Ok(())
     }
 
+    /// `(date_edited, place_edited)` for each id that has a row: whether the
+    /// user (or an XMP import) set the date or place, so sidecars carry them.
+    pub fn edited_flags(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, (bool, bool)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare_cached("SELECT date_edited, place_edited FROM media_items WHERE id = ?1;")?;
+        let mut flags = HashMap::with_capacity(ids.len());
+        for &id in ids {
+            let mut rows = stmt.query(params![id.0 as i64])?;
+            if let Some(row) = rows.next()? {
+                flags.insert(id, (row.get(0)?, row.get(1)?));
+            }
+        }
+        Ok(flags)
+    }
+
     pub fn set_caption(&self, id: MediaId, caption: &str) -> Result<()> {
         self.set_captions(&[(id, caption)])
     }

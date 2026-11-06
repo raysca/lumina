@@ -101,6 +101,10 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .map(|s| unescape_xml(s.trim()))
         .filter(|s| !s.is_empty());
 
+    let date = ["exif:DateTimeOriginal", "photoshop:DateCreated"]
+        .into_iter()
+        .find_map(|name| property(xml, name).and_then(|value| parse_date(&value)));
+
     SidecarMetadata {
         title,
         caption,
@@ -110,7 +114,69 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         source_url,
         credit,
         rights: parse_rights(xml),
+        date_taken: date.map(|(date, _)| date),
+        date_only: date.is_some_and(|(_, date_only)| date_only),
+        location: property(xml, "exif:GPSLatitude")
+            .and_then(|lat| parse_gps(&lat, 'N', 'S', 90.0))
+            .zip(
+                property(xml, "exif:GPSLongitude").and_then(|lon| parse_gps(&lon, 'E', 'W', 180.0)),
+            ),
     }
+}
+
+/// A simple property written as an attribute (`name="v"`) or element.
+fn property(xml: &str, name: &str) -> Option<String> {
+    between(xml, &format!("{name}=\""), "\"")
+        .or_else(|| between(xml, &format!("<{name}>"), &format!("</{name}>")))
+        .map(|value| unescape_xml(value.trim()))
+}
+
+/// An XMP date as wall time, and whether it was a date alone (then
+/// midnight). A `Z` or `±HH:MM` offset and fractional seconds are dropped
+/// (the catalog keeps wall time). EXIF's `2024:05:01 10:00:00`, which
+/// darktable writes, is accepted too.
+fn parse_date(value: &str) -> Option<(chrono::NaiveDateTime, bool)> {
+    use chrono::{NaiveDate, NaiveDateTime};
+    if let Ok(date) = NaiveDateTime::parse_from_str(value, "%Y:%m:%d %H:%M:%S") {
+        return Some((date, false));
+    }
+    let (day, time) = value.split_once('T').unwrap_or((value, ""));
+    let time = time
+        .find(['Z', '+', '-'])
+        .map_or(time, |offset| &time[..offset]);
+    let time = time.split('.').next().unwrap_or("");
+    let day = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
+    if time.is_empty() {
+        return day.and_hms_opt(0, 0, 0).map(|date| (date, true));
+    }
+    ["%H:%M:%S", "%H:%M"].into_iter().find_map(|format| {
+        chrono::NaiveTime::parse_from_str(time, format)
+            .ok()
+            .map(|time| (NaiveDateTime::new(day, time), false))
+    })
+}
+
+/// XMP's GPSCoordinate, `DDD,MM.mmK` or `DDD,MM,SSK`, as signed degrees.
+fn parse_gps(value: &str, positive: char, negative: char, limit: f64) -> Option<f64> {
+    let hemisphere = value.chars().last()?.to_ascii_uppercase();
+    let sign = match hemisphere {
+        c if c == positive => 1.0,
+        c if c == negative => -1.0,
+        _ => return None,
+    };
+    let parts: Vec<f64> = value[..value.len() - 1]
+        .split(',')
+        .map(|part| part.trim().parse::<f64>().ok())
+        .collect::<Option<_>>()?;
+    let sexagesimal = |part: f64| (0.0..60.0).contains(&part);
+    let degrees = match parts[..] {
+        [degrees, minutes] if sexagesimal(minutes) => degrees + minutes / 60.0,
+        [degrees, minutes, seconds] if sexagesimal(minutes) && sexagesimal(seconds) => {
+            degrees + minutes / 60.0 + seconds / 3600.0
+        }
+        _ => return None,
+    };
+    (degrees.is_finite() && (0.0..=limit).contains(&degrees)).then_some(sign * degrees)
 }
 
 /// dc:creator (every name, joined with `; `), dc:rights,

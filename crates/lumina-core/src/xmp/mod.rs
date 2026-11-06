@@ -5,7 +5,9 @@
 //! sidecar (photo.jpg.xmp) compatible with Adobe conventions for
 //! xmp:Rating, xmp:Label, dc:description, dc:subject, lr:hierarchicalSubject
 //! (keyword paths) and the rights fields (dc:creator, dc:rights,
-//! xmpRights:UsageTerms, Iptc4xmpCore:CreatorContactInfo), and can read it back.
+//! xmpRights:UsageTerms, Iptc4xmpCore:CreatorContactInfo), plus the capture
+//! date and GPS position when the user edited them (exif:DateTimeOriginal,
+//! photoshop:DateCreated, exif:GPSLatitude/GPSLongitude), and can read it back.
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -20,7 +22,7 @@ mod render;
 pub use parse::parse_xmp;
 pub use render::render_xmp;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct SidecarMetadata {
     pub title: Option<String>,
     pub caption: Option<String>,
@@ -31,6 +33,15 @@ pub struct SidecarMetadata {
     pub source_url: Option<String>,
     pub credit: Option<String>,
     pub rights: Rights,
+    /// Capture date as wall time (no offset). Written only when the user
+    /// edited it; file EXIF stays the source otherwise.
+    pub date_taken: Option<chrono::NaiveDateTime>,
+    /// The sidecar's date had no time of day (`2024-05-01`): `date_taken`
+    /// is midnight, and import keeps the catalog's time instead. Only
+    /// [`parse_xmp`] sets it; Lumina always writes the time.
+    pub date_only: bool,
+    /// (latitude, longitude) in degrees. Written only when the user edited it.
+    pub location: Option<(f64, f64)>,
 }
 
 /// xmp:Label values for color labels 1..=6, the names Lightroom and Bridge use.
@@ -46,6 +57,8 @@ impl SidecarMetadata {
             && self.color_label == 0
             && self.tags.is_empty()
             && self.rights.is_empty()
+            && self.date_taken.is_none()
+            && self.location.is_none()
     }
 }
 
@@ -190,7 +203,7 @@ mod tests {
             tags: vec!["travel".to_string(), "japan & kyoto".to_string()],
             source_url: Some("https://example.com/video.mp4?a=1&b=2".to_string()),
             credit: Some("Channel & Artist".to_string()),
-            rights: Rights::default(),
+            ..Default::default()
         };
         let xml = render_xmp(&metadata);
         assert!(xml.contains("xmp:Rating=\"4\""));
@@ -353,6 +366,185 @@ mod tests {
             "a sidecar holding only a creator must not be deleted as empty"
         );
         assert_eq!(read_sidecar(&media).unwrap(), Some(creator_only));
+        let _ = fs::remove_file(&sidecar);
+        let _ = fs::remove_file(&media);
+    }
+
+    fn wall_time(text: &str) -> chrono::NaiveDateTime {
+        chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    #[test]
+    fn edited_date_roundtrips_through_xmp() {
+        let metadata = SidecarMetadata {
+            rating: 1,
+            date_taken: Some(wall_time("2024-05-01 10:00:07")),
+            ..Default::default()
+        };
+        let xml = render_xmp(&metadata);
+        for expected in [
+            "exif:DateTimeOriginal=\"2024-05-01T10:00:07\"",
+            "photoshop:DateCreated=\"2024-05-01T10:00:07\"",
+            "xmlns:exif=\"http://ns.adobe.com/exif/1.0/\"",
+        ] {
+            assert!(xml.contains(expected), "missing {expected:?} in {xml}");
+        }
+        assert_eq!(parse_xmp(&xml), metadata, "the date reads back as written");
+        let plain = render_xmp(&SidecarMetadata {
+            rating: 1,
+            ..Default::default()
+        });
+        assert!(
+            !plain.contains("exif:") && !plain.contains("DateCreated"),
+            "no date, no date names: {plain}"
+        );
+    }
+
+    #[test]
+    fn offset_dates_import_as_wall_time() {
+        for (xml, expected) in [
+            (
+                r#"<x exif:DateTimeOriginal="2024-05-01T10:00:00+02:00"/>"#,
+                "2024-05-01 10:00:00",
+            ),
+            (
+                r#"<x exif:DateTimeOriginal="2024-05-01T10:00:00.250Z"/>"#,
+                "2024-05-01 10:00:00",
+            ),
+            (
+                "<x><exif:DateTimeOriginal>2024-05-01T10:00-05:00</exif:DateTimeOriginal></x>",
+                "2024-05-01 10:00:00",
+            ),
+            (
+                r#"<x photoshop:DateCreated="2024-05-01"/>"#,
+                "2024-05-01 00:00:00",
+            ),
+            (
+                r#"<x photoshop:DateCreated="2020-01-01" exif:DateTimeOriginal="2024-05-01T10:00:00"/>"#,
+                "2024-05-01 10:00:00",
+            ),
+        ] {
+            assert_eq!(
+                parse_xmp(xml).date_taken,
+                Some(wall_time(expected)),
+                "an offset is dropped and exif:DateTimeOriginal wins: {xml}"
+            );
+        }
+        assert_eq!(
+            parse_xmp(r#"<x exif:DateTimeOriginal="soon"/>"#).date_taken,
+            None
+        );
+        assert!(
+            parse_xmp(r#"<x photoshop:DateCreated="2024-05-01"/>"#).date_only,
+            "a date without a time is reported as date-only"
+        );
+        assert!(
+            !parse_xmp(r#"<x photoshop:DateCreated="2024-05-01T00:00:00"/>"#).date_only,
+            "an explicit midnight is a time"
+        );
+    }
+
+    #[test]
+    fn exif_format_dates_parse() {
+        // darktable writes exif:DateTimeOriginal in EXIF's own format.
+        assert_eq!(
+            parse_xmp(
+                r#"<x exif:DateTimeOriginal="2024:05:01 10:00:00" photoshop:DateCreated="2020-01-01"/>"#
+            )
+            .date_taken,
+            Some(wall_time("2024-05-01 10:00:00")),
+            "an EXIF-format date parses and wins over photoshop:DateCreated"
+        );
+    }
+
+    #[test]
+    fn gps_minutes_and_seconds_out_of_range_are_refused() {
+        for lat in [
+            "48,60.0N",
+            "48,-1.0N",
+            "48,10,60N",
+            "48,10,-1N",
+            "-48,10.0N",
+        ] {
+            assert_eq!(
+                parse_xmp(&format!(
+                    r#"<x exif:GPSLatitude="{lat}" exif:GPSLongitude="2,21.1E"/>"#
+                ))
+                .location,
+                None,
+                "{lat} is not a valid GPS coordinate"
+            );
+        }
+    }
+
+    #[test]
+    fn gps_roundtrip_within_tolerance() {
+        for (lat, lon) in [
+            (48.856667, 2.352222),
+            (-33.868820, 151.209296),
+            (40.712776, -74.005974),
+            (-22.906847, -43.172897),
+            (0.0, 0.0),
+            (89.9999999, -179.9999999),
+        ] {
+            let xml = render_xmp(&SidecarMetadata {
+                location: Some((lat, lon)),
+                ..Default::default()
+            });
+            let (read_lat, read_lon) = parse_xmp(&xml).location.expect("GPS reads back");
+            assert!(
+                (read_lat - lat).abs() < 1e-6 && (read_lon - lon).abs() < 1e-6,
+                "({lat}, {lon}) came back as ({read_lat}, {read_lon}): {xml}"
+            );
+        }
+        let paris = render_xmp(&SidecarMetadata {
+            location: Some((48.856667, 2.352222)),
+            ..Default::default()
+        });
+        assert!(
+            paris.contains("exif:GPSLatitude=\"48,51.400020N\"")
+                && paris.contains("exif:GPSLongitude=\"2,21.133320E\""),
+            "XMP writes DDD,MM.mmmmmmK: {paris}"
+        );
+        let south_west = parse_xmp(
+            r#"<x exif:GPSLatitude="33,52,7.75S"><exif:GPSLongitude>70,30.5W</exif:GPSLongitude></x>"#,
+        )
+        .location
+        .expect("DDD,MM,SSK and element form parse");
+        assert!((south_west.0 + (33.0 + 52.0 / 60.0 + 7.75 / 3600.0)).abs() < 1e-9);
+        assert!((south_west.1 + (70.0 + 30.5 / 60.0)).abs() < 1e-9);
+        assert_eq!(
+            parse_xmp(r#"<x exif:GPSLatitude="48,51.4N"/>"#).location,
+            None,
+            "a latitude without a longitude is no position"
+        );
+        assert_eq!(
+            parse_xmp(r#"<x exif:GPSLatitude="95,0.0N" exif:GPSLongitude="2,0.0E"/>"#).location,
+            None,
+            "an out-of-range latitude is refused"
+        );
+    }
+
+    #[test]
+    fn date_only_sidecar_is_kept() {
+        let media = temp_media("date_only");
+        fs::write(&media, b"jpeg").unwrap();
+        let date_only = SidecarMetadata {
+            date_taken: Some(wall_time("2019-07-04 18:30:00")),
+            ..Default::default()
+        };
+        assert!(!date_only.is_empty(), "an edited date alone is metadata");
+        let place_only = SidecarMetadata {
+            location: Some((1.0, 2.0)),
+            ..Default::default()
+        };
+        assert!(!place_only.is_empty(), "an edited place alone is metadata");
+        let sidecar = written(write_sidecar(&media, &date_only));
+        assert!(
+            sidecar.exists(),
+            "a sidecar holding only an edited date must not be deleted as empty"
+        );
+        assert_eq!(read_sidecar(&media).unwrap(), Some(date_only));
         let _ = fs::remove_file(&sidecar);
         let _ = fs::remove_file(&media);
     }

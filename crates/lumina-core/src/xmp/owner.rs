@@ -4,7 +4,8 @@
 
 /// Every qualified element and attribute name any released Lumina version
 /// has written (git `4a94c34`, `73480ad`, `c76f15e`, `0147095`, the `lr:`
-/// names since keyword paths, and the rights names since schema v17). A name
+/// names since keyword paths, the rights names since schema v17, and the
+/// edited date and GPS names). A name
 /// allow-list, so sidecars from older versions need no marker. Extend it
 /// when the renderer gains a name.
 const KNOWN_NAMES: &[&str] = &[
@@ -34,6 +35,11 @@ const KNOWN_NAMES: &[&str] = &[
     "Iptc4xmpCore:CreatorContactInfo",
     "Iptc4xmpCore:CiEmailWork",
     "Iptc4xmpCore:CiUrlWork",
+    "xmlns:exif",
+    "exif:DateTimeOriginal",
+    "exif:GPSLatitude",
+    "exif:GPSLongitude",
+    "photoshop:DateCreated",
     "rdf:parseType",
     "rdf:Seq",
     "rdf:Alt",
@@ -190,8 +196,16 @@ mod tests {
                 contact_email: Some("ada@example.com".into()),
                 contact_url: Some("https://ada.example".into()),
             },
+            date_taken: chrono::NaiveDate::from_ymd_opt(2024, 5, 1)
+                .and_then(|day| day.and_hms_opt(10, 0, 0)),
+            location: Some((-33.86882, 151.209296)),
+            date_only: false,
         };
         let today = render_xmp(&full);
+        assert!(
+            today.contains("exif:GPSLatitude") && today.contains("photoshop:DateCreated"),
+            "the full render carries date and GPS: {today}"
+        );
         // One packet per released render version, as each one wrote it.
         let legacy = [
             // 4a94c34
@@ -380,6 +394,63 @@ mod tests {
             !owned_by_lumina("just some notes"),
             "a non-blank file with no XMP packet is not Lumina's"
         );
+    }
+
+    #[test]
+    fn foreign_sidecars_with_exif_names_stay_foreign() {
+        // darktable and digiKam write the same exif: date and GPS names
+        // Lumina does, next to names of their own.
+        let darktable = r#"<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:exif="http://ns.adobe.com/exif/1.0/"
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:darktable="http://darktable.sf.net/"
+   exif:DateTimeOriginal="2024:05:01 10:00:00"
+   exif:GPSLatitude="48,51.400020N"
+   exif:GPSLongitude="2,21.133320E"
+   xmp:Rating="1"
+   darktable:xmp_version="5">
+   <darktable:history>
+    <rdf:Seq>
+     <rdf:li darktable:operation="exposure" darktable:enabled="1"/>
+    </rdf:Seq>
+   </darktable:history>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+        let digikam = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:exif="http://ns.adobe.com/exif/1.0/"
+    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+    xmlns:digiKam="http://www.digikam.org/ns/1.0/"
+   exif:DateTimeOriginal="2024-05-01T10:00:00"
+   exif:GPSLatitude="48,51.400020N"
+   exif:GPSLongitude="2,21.133320E"
+   photoshop:DateCreated="2024-05-01T10:00:00">
+   <digiKam:TagsList>
+    <rdf:Seq>
+     <rdf:li>Places/Paris</rdf:li>
+    </rdf:Seq>
+   </digiKam:TagsList>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>
+"#;
+        for (name, xml) in [("darktable", darktable), ("digiKam", digikam)] {
+            assert!(
+                !owned_by_lumina(xml),
+                "a {name} sidecar with exif: names must stay foreign"
+            );
+            let (outcome, after) = write_over(name, xml.as_bytes(), &rated());
+            assert_eq!(outcome, SidecarOutcome::SkippedForeign, "{name}");
+            assert_eq!(after.as_deref(), Some(xml.as_bytes()), "{name} untouched");
+        }
     }
 
     #[test]

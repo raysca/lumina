@@ -2086,6 +2086,175 @@ fn import_never_clears_rights() {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
+/// One scanned `photo.jpg` in a fresh temp library.
+fn one_photo_library(
+    prefix: &str,
+) -> (
+    PathBuf,
+    std::sync::Arc<LuminaEngine>,
+    crossbeam_channel::Receiver<EngineEvent>,
+) {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_{prefix}_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    std::fs::write(tmp_dir.join("photo.jpg"), b"test-jpeg-content").unwrap();
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        tmp_dir.clone(),
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    (tmp_dir, engine, rx)
+}
+
+#[test]
+fn unedited_date_is_not_written() {
+    let (tmp_dir, engine, _rx) = one_photo_library("xmp_unedited_date");
+    let item = engine.get_item_slice(0..1).remove(0);
+    engine.catalog().set_rating(item.id, 3).unwrap();
+    engine.write_metadata_sidecars(&[item.id]).unwrap();
+    let sidecar = read_sidecar(&item.path)
+        .unwrap()
+        .expect("a rating writes a sidecar");
+    assert_eq!(
+        (sidecar.date_taken, sidecar.location),
+        (None, None),
+        "a date and place read from the file are not written; file EXIF stays the source"
+    );
+    // Coordinates from the scan (place_edited unset) stay out too.
+    raw_catalog(&tmp_dir.join("catalog.db"))
+        .execute(
+            "UPDATE media_items SET latitude = 1.5, longitude = 2.5 WHERE id = ?1",
+            [item.id.0 as i64],
+        )
+        .unwrap();
+    engine.write_metadata_sidecars(&[item.id]).unwrap();
+    assert_eq!(
+        read_sidecar(&item.path).unwrap().unwrap().location,
+        None,
+        "an unedited place is not written, even when the item has coordinates"
+    );
+
+    engine.set_timestamp(item.id, 1_700_000_000_000).unwrap();
+    engine
+        .set_location(item.id, Some(-33.8688), Some(151.2093))
+        .unwrap();
+    engine.write_metadata_sidecars(&[item.id]).unwrap();
+    let sidecar = read_sidecar(&item.path).unwrap().unwrap();
+    assert_eq!(
+        sidecar
+            .date_taken
+            .map(|date| date.and_utc().timestamp_millis()),
+        Some(1_700_000_000_000),
+        "an edited date is written as the catalog's wall time"
+    );
+    let (lat, lon) = sidecar.location.expect("an edited place is written");
+    assert!((lat + 33.8688).abs() < 1e-6 && (lon - 151.2093).abs() < 1e-6);
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn date_only_sidecar_keeps_the_time_of_day() {
+    let (tmp_dir, engine, _rx) = one_photo_library("xmp_date_only");
+    let item = engine.get_item_slice(0..1).remove(0);
+    let time_of_day = chrono::DateTime::from_timestamp_millis(item.timestamp_epoch_ms)
+        .unwrap()
+        .time();
+    let sidecar = |day: &str| {
+        std::fs::write(
+            lumina_core::sidecar_path(&item.path),
+            format!(
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/" photoshop:DateCreated="{day}"/></rdf:RDF></x:xmpmeta>"#
+            ),
+        )
+        .unwrap();
+    };
+    sidecar("2020-02-03");
+    let report = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(report.updated, 1, "a new day is an update");
+    let expected = chrono::NaiveDate::from_ymd_opt(2020, 2, 3)
+        .unwrap()
+        .and_time(time_of_day)
+        .and_utc()
+        .timestamp_millis();
+    assert_eq!(
+        engine.get_item_by_id(item.id).unwrap().timestamp_epoch_ms,
+        expected,
+        "a date without a time changes the day and keeps the catalog's time of day"
+    );
+    let again = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(again.updated, 0, "the same day again is not an update");
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn import_sets_edited_flags_so_rescan_keeps_date() {
+    let (tmp_dir, engine, rx) = one_photo_library("xmp_import_date");
+    let item = engine.get_item_slice(0..1).remove(0);
+    let date = chrono::DateTime::from_timestamp(1_400_000_000, 0)
+        .unwrap()
+        .naive_utc();
+    write_sidecar(
+        &item.path,
+        &SidecarMetadata {
+            date_taken: Some(date),
+            location: Some((40.712776, -74.005974)),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(report.updated, 1, "a new date and place count as an update");
+    assert_eq!(
+        engine.catalog().edited_flags(&[item.id]).unwrap()[&item.id],
+        (true, true),
+        "imported dates and places are marked edited"
+    );
+    let again = engine.import_sidecars(&[item.id]).unwrap();
+    assert_eq!(again.updated, 0, "an unchanged sidecar is not an update");
+
+    // A changed file is re-read by the rescan; the imported values win.
+    std::fs::write(&item.path, b"test-jpeg-content, edited elsewhere").unwrap();
+    engine.rescan();
+    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        if let EngineEvent::ScanComplete { .. } = event {
+            break;
+        }
+    }
+    let after = engine.get_item_by_id(item.id).unwrap();
+    assert_ne!(
+        after.file_size, item.file_size,
+        "the rescan read the new file"
+    );
+    assert_eq!(
+        after.timestamp_epoch_ms, 1_400_000_000_000,
+        "a rescan keeps the imported date"
+    );
+    assert_eq!(
+        (after.latitude, after.longitude),
+        (Some(40.712776), Some(-74.005974)),
+        "a rescan keeps the imported place"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
 #[test]
 fn test_export_items_copies_files_and_writes_xmp_sidecars() {
     let tmp_dir = std::env::temp_dir().join(format!(

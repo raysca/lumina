@@ -126,12 +126,33 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
             .push_str("    xmlns:Iptc4xmpCore=\"http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/\"\n");
     }
 
+    // Only an edited date or place reaches the sidecar (the engine leaves
+    // them `None` otherwise), as wall time without an offset.
+    let mut exif = String::new();
+    if let Some(date) = metadata.date_taken {
+        let date = date.format("%Y-%m-%dT%H:%M:%S");
+        exif.push_str(&format!(
+            "    exif:DateTimeOriginal=\"{date}\"\n    photoshop:DateCreated=\"{date}\"\n"
+        ));
+    }
+    if let Some((lat, lon)) = metadata.location {
+        exif.push_str(&format!(
+            "    exif:GPSLatitude=\"{}\"\n    exif:GPSLongitude=\"{}\"\n",
+            gps_coordinate(lat, 'N', 'S'),
+            gps_coordinate(lon, 'E', 'W')
+        ));
+    }
+    if !exif.is_empty() {
+        rights_namespaces.push_str("    xmlns:exif=\"http://ns.adobe.com/exif/1.0/\"\n");
+    }
+
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n{}{}    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n{}{}    xmp:Rating=\"{}\"\n{}{}  >\n{}{}{}{}{}{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
         lr_namespace,
         rights_namespaces,
         metadata.rating,
         label,
+        exif,
         title,
         subject,
         hierarchical,
@@ -142,6 +163,20 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
         copyright,
         usage_terms,
         contact
+    )
+}
+
+/// XMP's GPSCoordinate `DDD,MM.mmmmmmK`: six decimals of a minute is about
+/// 2 mm. Rounded once in whole micro-minutes, so 59.9999999' carries into
+/// the degree instead of printing 60.000000.
+fn gps_coordinate(degrees: f64, positive: char, negative: char) -> String {
+    let hemisphere = if degrees < 0.0 { negative } else { positive };
+    let micro_minutes = (degrees.abs() * 60_000_000.0).round() as u64;
+    format!(
+        "{},{:02}.{:06}{hemisphere}",
+        micro_minutes / 60_000_000,
+        micro_minutes % 60_000_000 / 1_000_000,
+        micro_minutes % 1_000_000
     )
 }
 

@@ -674,6 +674,7 @@ impl LuminaApp {
             before: item.timestamp_epoch_ms,
             after: epoch_ms,
         });
+        self.sync_metadata_sidecars(&[item.id], cx);
         if let Some(updated) = self
             .grid_state
             .as_ref()
@@ -759,6 +760,7 @@ impl LuminaApp {
             before: (item.latitude, item.longitude),
             after: (lat, lon),
         });
+        self.sync_metadata_sidecars(&[item.id], cx);
         self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
         if let Some(updated) = self
             .grid_state

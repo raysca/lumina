@@ -1015,6 +1015,7 @@ impl LuminaApp {
 
         let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
         self.push_undo(UndoAction::BatchDate { changes });
+        self.sync_metadata_sidecars(&ids, cx);
         self.refresh_selected_item_from_engine();
         self.refresh_album_counts();
         self.update_batch_summary();
@@ -1077,6 +1078,7 @@ impl LuminaApp {
 
         let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
         self.push_undo(UndoAction::BatchLocation { changes });
+        self.sync_metadata_sidecars(&ids, cx);
         self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
         self.refresh_selected_item_from_engine();
         self.update_batch_summary();

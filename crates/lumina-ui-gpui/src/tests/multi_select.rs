@@ -384,3 +384,74 @@ fn a_failed_batch_rating_changes_nothing_and_says_so() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn batch_date_rewrites_sidecars() {
+    let (dir, engine) = seed_library("batch_date_sidecar", 2);
+    let items = engine.get_item_slice(0..2);
+    let ids: Vec<_> = items.iter().map(|item| item.id).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    let sidecar = |item: &lumina_core::MediaItem| {
+        lumina_core::read_sidecar(&item.path)
+            .unwrap()
+            .expect("an edited date or place writes a sidecar")
+    };
+    let expected = chrono::NaiveDate::from_ymd_opt(2021, 3, 4)
+        .and_then(|day| day.and_hms_opt(5, 6, 7))
+        .unwrap();
+
+    view.update(vcx, |app, cx| {
+        app.select_all(cx);
+        app.apply_batch_date("2021-03-04 05:06:07", cx);
+    });
+    // The sidecar pass runs on the background executor.
+    vcx.run_until_parked();
+    for item in &items {
+        assert_eq!(
+            sidecar(item).date_taken,
+            Some(expected),
+            "a batch date edit rewrites every changed item's sidecar"
+        );
+    }
+
+    view.update(vcx, |app, cx| {
+        app.apply_batch_location("48.8566, 2.3522", cx);
+    });
+    vcx.run_until_parked();
+    let (lat, lon) = sidecar(&items[1])
+        .location
+        .expect("a batch location edit rewrites the sidecar");
+    assert!((lat - 48.8566).abs() < 1e-6 && (lon - 2.3522).abs() < 1e-6);
+
+    // The single-item paths sync too.
+    view.update(vcx, |app, cx| {
+        app.selected_indices.clear();
+        app.selected_item = engine.get_item_by_id(ids[0]);
+        app.start_date_input(cx);
+        app.caption.date_input_buffer = "2022-01-02 03:04:05".into();
+        app.commit_date_input(cx);
+    });
+    // Parked after each commit, so each path's own sync is what is checked.
+    vcx.run_until_parked();
+    assert_eq!(
+        sidecar(&items[0]).date_taken.map(|date| date.to_string()),
+        Some("2022-01-02 03:04:05".to_string()),
+        "a single-item date edit rewrites the sidecar"
+    );
+    view.update(vcx, |app, cx| {
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "-33.8688, 151.2093".into();
+        app.commit_location_input(cx);
+    });
+    vcx.run_until_parked();
+    assert!(
+        sidecar(&items[0])
+            .location
+            .is_some_and(|(lat, _)| (lat + 33.8688).abs() < 1e-6),
+        "a single-item location edit rewrites the sidecar"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
