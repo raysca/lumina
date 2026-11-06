@@ -150,6 +150,8 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 4] = [
             ("⌃⌘F", "Full screen"),
             ("H", "Hide / show controls"),
             ("+ / -", "Zoom in / out"),
+            ("Pinch / ⌘ scroll", "Zoom at pointer"),
+            ("Scroll / drag", "Pan when zoomed"),
             ("0 / 1 / 2 / 4", "Fit / 100% / 200% / 400%"),
             ("Z", "Toggle 1:1 zoom"),
             ("O", "Open in default app"),

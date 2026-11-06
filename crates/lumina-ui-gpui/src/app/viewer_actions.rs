@@ -169,23 +169,21 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Zoom by `delta` anchored to the content point under the wheel cursor.
+    /// Zoom by `delta` anchored to the content point under the ⌘-wheel cursor
+    /// or the trackpad pinch centre.
     ///
-    /// `cursor` is the wheel position in window-content pixels
-    /// (`ScrollEvent::position`) and `window_viewport` is the drawable
+    /// `cursor` is that position in window-content pixels
+    /// (`ScrollEvent::position` / `PinchEvent::position`) and `window_viewport` is the drawable
     /// window size (`Window::viewport_size()`). Both are supplied by the
-    /// viewport's scroll handler.
+    /// viewport's scroll and pinch handlers.
     ///
-    /// Approximation: GPUI does not expose the laid-out
-    /// `media-canvas-fit` bounds to a scroll listener, so the viewer canvas
-    /// center is taken as the center of the window content area. In the
-    /// fullscreen viewer the canvas spans the window width and is inset only by
-    /// the top bar and bottom tray, so the anchor lands within a few pixels; in
-    /// Split/Viewer pane layouts the canvas is offset by the sidebar and year
-    /// rail, so the anchor is directionally correct rather than pixel-exact.
+    /// The anchor uses the canvas center captured when `media-canvas-fit`
+    /// last painted (the window center before the first paint), so it is
+    /// exact in the full-screen viewer, the only place the viewer shows.
     ///
-    /// The wheel step, 1.0..5.0 clamp, and Fit-recenters rule all come from
-    /// `ViewerState::zoom_at`, so keyboard zoom is unchanged.
+    /// The 1..16 clamp (`ZOOM_MIN_SCALE..=ZOOM_MAX_SCALE`) and the
+    /// Fit-recenters rule come from `ViewerState::zoom_at`, so keyboard zoom
+    /// is unchanged.
     ///
     /// When geometry is unusable (zero-sized or non-finite viewport, non-finite
     /// cursor) it falls back to center-anchored zoom rather than inventing an
@@ -543,6 +541,19 @@ impl LuminaApp {
     pub fn drag_viewer_to(&mut self, x: f32, y: f32, cx: &mut Context<Self>) {
         self.viewer_state.drag_to(x, y);
         cx.notify();
+    }
+
+    /// Scroll-pan: pans a zoomed photo by the scroll delta (window pixels).
+    /// Nothing at Fit or on a video.
+    pub fn pan_viewer_by(&mut self, dx: f32, dy: f32, cx: &mut Context<Self>) {
+        if self.viewer_zoom_disabled_for_video() || !dx.is_finite() || !dy.is_finite() {
+            return;
+        }
+        let before = self.viewer_state.pan_offset;
+        self.viewer_state.pan_by(dx, dy);
+        if self.viewer_state.pan_offset != before {
+            cx.notify();
+        }
     }
 
     pub fn end_viewer_drag(&mut self, cx: &mut Context<Self>) {

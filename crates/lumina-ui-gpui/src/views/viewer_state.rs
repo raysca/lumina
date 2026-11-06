@@ -285,7 +285,7 @@ impl ViewerState {
         self.is_dragging = false;
     }
 
-    #[cfg(test)]
+    /// Pans by a delta (scroll-pan), clamped like drag-pan. No-op at Fit.
     pub fn pan_by(&mut self, dx: f32, dy: f32) {
         if self.zoom_scale > ZOOM_MIN_SCALE {
             self.pan_offset.0 += dx;

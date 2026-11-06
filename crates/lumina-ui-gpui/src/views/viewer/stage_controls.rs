@@ -9,8 +9,8 @@ use crate::theme;
 use crate::views::viewer_state::ZOOM_MIN_SCALE;
 
 /// While zoomed (v3): a round "Fit to window" button at the bottom and the
-/// navigator at the top right. At Fit the stage shows no zoom chrome; the
-/// wheel, +/−, 0/1/2/4 and Z zoom.
+/// navigator at the top right. At Fit the stage shows no zoom chrome; pinch,
+/// ⌘-scroll, +/−, 0/1/2/4 and Z zoom (a plain scroll only pans when zoomed).
 pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
     let state = this.viewer_state;
     if state.zoom_scale <= ZOOM_MIN_SCALE {

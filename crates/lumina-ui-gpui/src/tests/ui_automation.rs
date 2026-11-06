@@ -2012,7 +2012,7 @@ fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
 
 /// Sends a wheel event at `position` after moving the pointer there, because
 /// GPUI hit-tests scroll events against the last mouse position.
-fn wheel(
+pub(crate) fn wheel(
     cx: &mut VisualTestContext,
     position: gpui::Point<gpui::Pixels>,
     delta: gpui::ScrollDelta,
@@ -2052,18 +2052,18 @@ fn ui_automation_viewer_wheel_zoom_is_smooth() {
         vcx,
         center,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
-        gpui::Modifiers::default(),
+        gpui::Modifiers::command(),
     );
     let one = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     assert!(
         (one - 0.1_f32.exp()).abs() < 0.02,
-        "40px of wheel must zoom smoothly by ~10%, got {one}"
+        "40px of ⌘-wheel must zoom smoothly by ~10%, got {one}"
     );
     wheel(
         vcx,
         center,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
-        gpui::Modifiers::default(),
+        gpui::Modifiers::command(),
     );
     let two = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     assert!(

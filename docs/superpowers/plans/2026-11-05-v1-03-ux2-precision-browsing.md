@@ -147,12 +147,12 @@ Several "current" claims in ROADMAP.md §7–§8 and ux_audit.md §4/§5/§7 are
 - The listener calls `this.zoom_viewer_at(pinch_zoom_delta(e.delta, scale), (pos.x, pos.y), viewport, cx)` and `cx.stop_propagation()`. Phase is ignored (each event is an increment).
 
 Steps:
-- [ ] Failing tests:
+- [x] Failing tests:
   - `pinch_zoom_delta_is_multiplicative_and_finite` (unit: same `delta` at 1x and 8x gives proportional changes; NaN/inf give 0).
   - `viewer_pinch_keeps_content_under_pinch_center`: fullscreen viewer (where the anchor is exact), `render_ui`, then `vcx.simulate_event(PinchEvent{position, delta: 0.2, phase: Moved, ..})` at an off-centre point inside `viewer-media` bounds. Check that the scale grows by 20% and that the content point under the pinch maps to the same window point (same formula as `test_viewer_cursor_anchored_zoom_action`, `tests/viewer_and_video.rs:773`).
   - `viewer_pinch_ignored_for_video` (scale and pan unchanged).
   - `pinch_out_to_fit_recenters` (pinch in, pan, pinch out past Fit: scale 1.0, pan (0,0)).
-- [ ] Implement, then run `cargo test -p lumina-ui-gpui pinch`.
+- [x] Implement, then run `cargo test -p lumina-ui-gpui pinch`.
 - [ ] Manual: pinch on a real trackpad (cannot be automated; record the result in the commit body).
 - Keyboard path: unchanged (`+ -`, presets per Task 2, `Z`). Docs: README viewer bullet ("pinch to zoom").
 

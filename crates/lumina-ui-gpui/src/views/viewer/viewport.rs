@@ -20,6 +20,16 @@ fn scroll_zoom_delta(raw_delta: f32, scale: f32) -> f32 {
     scale * ((raw_delta * SCROLL_ZOOM_SENSITIVITY).clamp(-0.6, 0.6).exp() - 1.0)
 }
 
+/// Additive zoom change for a trackpad pinch at `scale`. GPUI's `delta` is the
+/// magnification change of one event (0.1 = +10%), so the change is
+/// `scale * delta`; one event is bounded and non-finite input is ignored.
+fn pinch_zoom_delta(pinch_delta: f32, scale: f32) -> f32 {
+    if !pinch_delta.is_finite() || !scale.is_finite() {
+        return 0.0;
+    }
+    scale * pinch_delta.clamp(-0.5, 0.5)
+}
+
 /// V3Video frame width; the transport card shares it.
 pub(super) const VIDEO_FRAME_MAX_WIDTH: f32 = 1040.0;
 
@@ -177,7 +187,27 @@ impl ViewerViewport {
                     .flex()
                     .items_center()
                     .justify_center()
+                    // Pinch zooms at the pinch centre; each event is an
+                    // increment, so the phase is ignored.
+                    .on_pinch(cx.listener(|this, e: &PinchEvent, w, cx| {
+                        let viewport_size = w.viewport_size();
+                        let viewport = (
+                            f32::from(viewport_size.width),
+                            f32::from(viewport_size.height),
+                        );
+                        let centre = (f32::from(e.position.x), f32::from(e.position.y));
+                        let delta = pinch_zoom_delta(e.delta, this.viewer_state.zoom_scale);
+                        this.zoom_viewer_at(delta, centre, viewport, cx);
+                        cx.stop_propagation();
+                    }))
+                    // Scroll pans while zoomed (nothing at Fit), like Photos;
+                    // ⌘-scroll zooms at the pointer so a mouse wheel can zoom.
                     .on_scroll(cx.listener(|this, e: &ScrollEvent, w, cx| {
+                        if !e.modifiers.secondary(cx) {
+                            let d = e.delta.pixel_delta(w.line_height());
+                            this.pan_viewer_by(f32::from(d.x), f32::from(d.y), cx);
+                            return;
+                        }
                         let dy = match e.delta {
                             ScrollDelta::Pixels(p) => f32::from(p.y),
                             // A wheel notch is one line: ~50px zooms ~13%.
@@ -398,7 +428,30 @@ impl ViewerViewport {
 
 #[cfg(test)]
 mod tests {
-    use super::scroll_zoom_delta;
+    use super::{pinch_zoom_delta, scroll_zoom_delta};
+
+    #[core::prelude::v1::test]
+    fn pinch_zoom_delta_is_multiplicative_and_finite() {
+        assert!((pinch_zoom_delta(0.1, 1.0) - 0.1).abs() < 1e-6);
+        assert!(
+            (pinch_zoom_delta(0.1, 8.0) / pinch_zoom_delta(0.1, 1.0) - 8.0).abs() < 1e-4,
+            "the same pinch must change zoom by the same ratio at any scale"
+        );
+        assert!(pinch_zoom_delta(-0.1, 2.0) < 0.0, "pinching in zooms out");
+        assert_eq!(pinch_zoom_delta(5.0, 1.0), 0.5, "one event stays bounded");
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                pinch_zoom_delta(bad, 1.0),
+                0.0,
+                "non-finite pinch must not zoom"
+            );
+            assert_eq!(
+                pinch_zoom_delta(0.1, bad),
+                0.0,
+                "non-finite scale must not zoom"
+            );
+        }
+    }
 
     #[core::prelude::v1::test]
     fn scroll_zoom_is_proportional_and_signed() {
