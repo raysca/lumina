@@ -92,6 +92,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.forward" => "Forward",
         "command.open_recent" => "Open Recent Library: {name}",
         "command.clear_recents" => "Clear Recent Libraries",
+        "command.clear_recent_searches" => "Clear Recent Searches",
         "welcome.title" => "Welcome to Lumina",
         "welcome.intro" => {
             "A fast, private browser for the photos and videos on your Mac: \

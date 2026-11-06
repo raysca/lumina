@@ -203,6 +203,7 @@ docs/                Roadmap, system design, technical notes
 - [v0.2 implementation plan (historical)](docs/roadmap_v2.md)
 - [System design](docs/system_design_v2.md)
 - [Technical notes](docs/tech.md)
+- [Search syntax](docs/search.md)
 - [Implementation plan](docs/implementation_plan.md)
 - [Releasing & notarization](RELEASING.md)
 - [Accessibility & localization](docs/accessibility.md)

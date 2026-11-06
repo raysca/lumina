@@ -68,6 +68,8 @@ pub enum CommandId {
     Forward,
     /// Forgets every recent library; shown only when there are some.
     ClearRecents,
+    /// Forgets the recent-search history; shown only when there is some.
+    ClearRecentSearches,
 }
 
 pub struct Command {
@@ -117,7 +119,7 @@ impl Command {
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager => Icon::Tag,
-            ClearRecents => Icon::X,
+            ClearRecents | ClearRecentSearches => Icon::X,
             Back => Icon::ChevronLeft,
             Forward => Icon::ChevronRight,
         }
@@ -514,6 +516,12 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "forget remove history libraries",
         },
+        Command {
+            id: CommandId::ClearRecentSearches,
+            key: "command.clear_recent_searches",
+            shortcut: "",
+            keywords: "forget remove history search queries",
+        },
     ]
 }
 
@@ -539,6 +547,7 @@ impl LuminaApp {
             CommandId::Back => self.can_navigate_back(),
             CommandId::Forward => self.can_navigate_forward(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
+            CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
@@ -804,6 +813,7 @@ impl LuminaApp {
             CommandId::Back => self.navigate_back(cx),
             CommandId::Forward => self.navigate_forward(cx),
             CommandId::ClearRecents => self.clear_recents(cx),
+            CommandId::ClearRecentSearches => self.clear_recent_searches(cx),
         }
     }
 }

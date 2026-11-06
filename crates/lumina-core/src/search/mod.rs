@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+mod explain;
 mod parse;
 
 pub use parse::tokenize_query;

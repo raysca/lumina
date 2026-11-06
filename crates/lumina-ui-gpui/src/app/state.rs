@@ -652,11 +652,15 @@ impl LuminaApp {
         app
     }
 
-    /// Writes the config, putting a failure in the error banner. Callers that
-    /// must revert an optimistic change on failure use [`Self::try_save_config`].
-    pub fn save_config(&mut self) {
-        if let Err(err) = self.try_save_config() {
-            self.error_message = Some(format!("Could not save settings: {err}"));
+    /// Writes the config, putting a failure in the error banner. Returns
+    /// false on failure so callers can revert an optimistic change.
+    pub fn save_config(&mut self) -> bool {
+        match self.try_save_config() {
+            Ok(()) => true,
+            Err(err) => {
+                self.error_message = Some(format!("Could not save settings: {err}"));
+                false
+            }
         }
     }
 

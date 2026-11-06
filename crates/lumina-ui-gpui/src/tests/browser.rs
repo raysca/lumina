@@ -2,14 +2,14 @@
 //! context menu against the v3 grid design.
 
 use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library,
+    app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library, type_text,
 };
 use crate::views::search_bar::GridFilter;
 
 #[core::prelude::v1::test]
 fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
     let (dir, engine) = seed_library("br_topbar", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     for selector in ["sort-menu-button", "tags-toolbar-btn", "inspector-toggle"] {
@@ -37,7 +37,7 @@ fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
 #[core::prelude::v1::test]
 fn a_long_title_truncates_and_keeps_the_toolbar_buttons_on_screen() {
     let (dir, engine) = seed_library("br_long_title", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.selection = crate::views::sidebar::AlbumSelection::Tag("a".repeat(300));
@@ -61,7 +61,7 @@ fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
     use crate::app::library::FOLDER_PICKS;
     let picks = || FOLDER_PICKS.with(|n| n.get());
     let (dir, engine) = seed_library("br_open_library", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
 
@@ -86,7 +86,7 @@ fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
 #[core::prelude::v1::test]
 fn sidebar_runs_full_height_beside_the_status_bar() {
     let (dir, engine) = seed_library("br_layout", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
@@ -110,7 +110,7 @@ fn sidebar_runs_full_height_beside_the_status_bar() {
 #[core::prelude::v1::test]
 fn filter_chips_select_a_filter_that_dims_rather_than_hides() {
     let (dir, engine) = seed_library("br_filter", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home f");
     let (fav, count) = view.update(vcx, |app, _| {
@@ -163,7 +163,7 @@ fn filter_chips_select_a_filter_that_dims_rather_than_hides() {
 #[core::prelude::v1::test]
 fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
     let (dir, engine) = seed_library("br_sidebar", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     let years = view.update(vcx, |app, _| app.timeline_year_buckets.clone());
@@ -189,7 +189,7 @@ fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
 #[core::prelude::v1::test]
 fn context_menu_sets_label_and_rating_with_20px_targets() {
     let (dir, engine) = seed_library("br_menu", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
     let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
@@ -219,7 +219,7 @@ fn context_menu_sets_label_and_rating_with_20px_targets() {
 #[core::prelude::v1::test]
 fn size_slider_follows_a_layout_change_and_keys_step_its_levels() {
     let (dir, engine) = seed_library("br_slider", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| app.inspector_open = false);
     render_ui(vcx);
@@ -252,7 +252,7 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
         .iter()
         .filter(|i| (i.year, i.month) == (first.year, first.month))
         .count();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| app.refresh_album_counts());
     render_ui(vcx);
@@ -308,7 +308,7 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
 fn a_wide_thumbnail_never_widens_its_card() {
     let (dir, engine) = seed_library("br_wide_thumb", 4);
     let items = engine.get_item_slice(0..4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     let column = vcx
@@ -340,5 +340,131 @@ fn a_wide_thumbnail_never_widens_its_card() {
         );
     }
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---- Query explanation and recent searches (UX-2 Task 8) ----
+
+#[core::prelude::v1::test]
+fn explanation_lists_not_understood_tokens() {
+    let (dir, engine) = seed_library("br_explain", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    click(vcx, "search-input");
+    assert!(
+        vcx.debug_bounds("search-explanation").is_none(),
+        "an empty query has nothing to explain"
+    );
+    type_text(vcx, "is:fovorite sunset");
+    assert!(
+        vcx.debug_bounds("search-explanation").is_some(),
+        "the focused field explains a non-empty query"
+    );
+    view.update(vcx, |app, _| {
+        let text = app.search_explanation().unwrap_or_default();
+        assert!(
+            text.contains("Not understood: is:fovorite"),
+            "a misspelled filter is reported, got {text:?}"
+        );
+        assert!(
+            text.contains("Matches “sunset”"),
+            "free text is explained too, got {text:?}"
+        );
+    });
+    type_text(vcx, " is:f");
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "a partial is: token offers suggestion rows"
+    );
+    keystrokes(vcx, "escape");
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_none()
+            && vcx.debug_bounds("search-explanation").is_some(),
+        "the first Escape hides the suggestion rows but keeps the explanation"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn recent_rows_are_marked_and_clearable() {
+    let (dir, engine) = seed_library("br_recent_clear", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        app.config.recent_searches = vec!["camera:sony".into(), "kyoto".into()];
+    });
+    click(vcx, "search-input");
+    for i in 0..2 {
+        assert!(
+            vcx.debug_bounds(leak(format!("search-suggestion-recent-{i}")))
+                .is_some(),
+            "recent row {i} is marked as recent"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("search-suggestion-2").is_some()
+            && vcx.debug_bounds("search-suggestion-recent-2").is_none(),
+        "operator rows are not marked as recent"
+    );
+
+    // Escape hides the rows, a second Escape leaves the field.
+    keystrokes(vcx, "escape escape");
+    view.update(vcx, |app, _| assert!(!app.search_focused));
+    keystrokes(
+        vcx,
+        "secondary-k c l e a r space r e c e n t space s e a r c h e s enter",
+    );
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open, "the command ran");
+        assert!(
+            app.config.recent_searches.is_empty(),
+            "Clear Recent Searches empties the history in memory"
+        );
+    });
+    click(vcx, "search-input");
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "the dropdown is open again, so the next check is not vacuous"
+    );
+    assert!(
+        vcx.debug_bounds("search-suggestion-recent-0").is_none(),
+        "no recent rows are left in the dropdown"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn clear_recent_searches_is_hidden_when_empty_and_reverts_a_failed_save() {
+    use crate::app::command_palette::{CommandId, PaletteTarget};
+    let (dir, engine) = seed_library("br_recent_revert", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let listed = |app: &crate::LuminaApp| {
+        app.palette_rows()
+            .iter()
+            .any(|row| row.target == PaletteTarget::Command(CommandId::ClearRecentSearches))
+    };
+    view.update(vcx, |app, cx| {
+        app.command_query = "clear recent searches".into();
+        assert!(!listed(app), "nothing to clear: the command is hidden");
+        let recents = vec!["camera:sony".to_string(), "kyoto".to_string()];
+        app.config.recent_searches = recents.clone();
+        assert!(listed(app), "⌘K offers Clear Recent Searches");
+
+        crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+        app.execute_command(CommandId::ClearRecentSearches, cx);
+        crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+        assert_eq!(
+            app.config.recent_searches, recents,
+            "a failed save puts the cleared history back"
+        );
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not save settings")),
+            "and the banner says why, got {:?}",
+            app.error_message
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }

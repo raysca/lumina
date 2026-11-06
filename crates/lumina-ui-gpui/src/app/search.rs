@@ -18,6 +18,10 @@ const SEARCH_FIELD_SUGGESTIONS: &[&str] = &[
     "is:video",
     "is:raw",
     "is:trashed",
+    "is:photo",
+    "is:unrated",
+    "is:untagged",
+    "is:unlabeled",
     "has:location",
     "has:tag",
     "has:color",
@@ -29,7 +33,15 @@ const SEARCH_FIELD_SUGGESTIONS: &[&str] = &[
     "country:",
     "iso:",
     "year:",
+    "month:",
     "date:",
+    "f:",
+    "color:red",
+    "color:orange",
+    "color:yellow",
+    "color:green",
+    "color:blue",
+    "color:purple",
 ];
 
 /// The token currently being typed: the last whitespace-separated word.
@@ -217,6 +229,32 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// The explanation footer text: the parsed query's phrases joined, or
+    /// None for an empty query.
+    pub(crate) fn search_explanation(&self) -> Option<String> {
+        let phrases = lumina_core::StructuredQuery::parse(&self.search_query).explain();
+        (!phrases.is_empty()).then(|| phrases.join(" · "))
+    }
+
+    /// Whether a suggestion row came from the recent-search history.
+    pub(crate) fn is_recent_search(&self, suggestion: &str) -> bool {
+        self.config
+            .recent_searches
+            .iter()
+            .any(|recent| recent.trim().eq_ignore_ascii_case(suggestion))
+    }
+
+    /// Forgets the recent-search history. A failed save restores it (the
+    /// banner is set by `save_config`).
+    pub(crate) fn clear_recent_searches(&mut self, cx: &mut Context<Self>) {
+        let before = std::mem::take(&mut self.config.recent_searches);
+        if !self.save_config() {
+            self.config.recent_searches = before;
+        }
+        self.search_suggestions.selected = None;
+        cx.notify();
+    }
+
     /// Records the current query as a committed recent search when non-empty.
     pub(crate) fn record_current_search(&mut self) {
         let query = self.search_query.clone();
@@ -338,6 +376,25 @@ mod search_suggestion_tests {
             apply_search_suggestion_text("camera:sony ", "tag:travel"),
             "camera:sony tag:travel"
         );
+    }
+
+    #[core::prelude::v1::test]
+    fn color_suggestions_offered_for_color_prefix() {
+        let items = search_suggestion_items(&[], &[], "color:");
+        for color in ["red", "orange", "yellow", "green", "blue", "purple"] {
+            assert!(
+                items.contains(&format!("color:{color}")),
+                "typing color: must offer color:{color}, got {items:?}"
+            );
+        }
+        for token in ["is:photo", "is:unrated", "is:untagged", "is:unlabeled"] {
+            assert!(
+                search_suggestion_items(&[], &[], token).contains(&token.to_string()),
+                "{token} must be suggested when typed"
+            );
+        }
+        assert!(search_suggestion_items(&[], &[], "mon").contains(&"month:".to_string()));
+        assert!(search_suggestion_items(&[], &[], "f:").contains(&"f:".to_string()));
     }
 
     #[core::prelude::v1::test]

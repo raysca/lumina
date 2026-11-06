@@ -116,14 +116,21 @@ impl SearchBarView {
     /// a toolbar child; the occluding card keeps pointer events off the grid
     /// beneath it.
     fn render_suggestions(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
-        if !this.search_focused || this.search_suggestions.dismissed {
+        if !this.search_focused {
             return None;
         }
-        let items = this.search_suggestion_items();
-        if items.is_empty() {
+        // Escape hides the rows but keeps the explanation while focused.
+        let items = if this.search_suggestions.dismissed {
+            Vec::new()
+        } else {
+            this.search_suggestion_items()
+        };
+        let explanation = this.search_explanation();
+        if items.is_empty() && explanation.is_none() {
             return None;
         }
         let selected = this.search_suggestions.selected;
+        let recent: Vec<bool> = items.iter().map(|s| this.is_recent_search(s)).collect();
 
         let panel = div()
             .id("search-suggestions-panel")
@@ -170,12 +177,34 @@ impl SearchBarView {
                     row.text_color(theme::text())
                         .hover(|style| style.bg(theme::bg_control_hover()))
                 };
+                let row = row.gap_1p5().children(recent[index].then(|| {
+                    // ponytail: no clock icon in the set; rotate-ccw reads as history.
+                    div()
+                        .debug_selector(move || format!("search-suggestion-recent-{index}"))
+                        .child(crate::icons::render_icon(
+                            crate::icons::Icon::RotateCcw,
+                            px(11.0),
+                            theme::text_subtle(),
+                        ))
+                }));
                 row.child(suggestion).on_click(cx.listener(
                     move |this, _event: &ClickEvent, _window, cx| {
                         cx.stop_propagation();
                         this.apply_search_suggestion_at(index, cx);
                     },
                 ))
+            }))
+            .children(explanation.map(|text| {
+                div()
+                    .id("search-explanation")
+                    .debug_selector(|| "search-explanation".to_string())
+                    .role(Role::Status)
+                    .aria_label(text.clone())
+                    .px_2()
+                    .py_1()
+                    .text_xs()
+                    .text_color(theme::text_muted())
+                    .child(text)
             }));
 
         Some(gpui::deferred(panel).with_priority(1).into_any_element())

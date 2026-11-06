@@ -58,4 +58,20 @@ effect: an unknown value (`is:fovorite`, `color:pink`, `color:grey`,
 `has:wings`), a value that does not parse (`rating:abc`, `year:20x6`,
 `iso:lots`, `month:smarch`, `date:yesterday`), or an unsupported negation
 (`-is:video`). These tokens are not searched as text either. In code they are
-collected in `StructuredQuery::unrecognized`.
+collected in `StructuredQuery::unrecognized`, and the explanation under the
+search field lists them as "Not understood: …".
+
+## Explanation
+
+While the search field is focused, the bottom of the suggestion list says in
+plain words what the query searches for, for example
+`Favorites · Camera contains “Sony” · ISO 801 or higher`. It stays visible
+after Escape hides the suggestions, until the field loses focus.
+
+## Recent searches
+
+Pressing Enter in the search field records the query as a recent search (up
+to 10, newest first, duplicates merged regardless of case). They are kept per
+machine in the app settings and shown first in the suggestion list, marked
+with a history icon. Command palette (⌘K) > Clear Recent Searches forgets
+them; it is listed only when there are some.
