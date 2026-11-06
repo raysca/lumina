@@ -279,6 +279,15 @@ fn benchmark_scale_and_gates() {
         .expect("compute timeline buckets");
 
     // Gate 1: Check Database Size on Disk
+    // In WAL mode recent pages live in catalog.db-wal until a checkpoint, so
+    // the main file alone underreports; fold the WAL in before measuring.
+    let busy: i64 = rusqlite::Connection::open(&temp_db)
+        .and_then(|c| c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| r.get(0)))
+        .expect("checkpoint the WAL before measuring the catalog size");
+    assert_eq!(
+        busy, 0,
+        "WAL checkpoint was blocked; the size gate would underreport"
+    );
     let db_metadata = std::fs::metadata(&temp_db).expect("metadata db");
     let db_size_bytes = db_metadata.len();
     let bytes_per_record = db_size_bytes as f64 / count as f64;
