@@ -376,6 +376,19 @@ Rotation stays in `media_items.rotation_quarters`.
 7. **Edit a Copy vs in place as the default** for `⌘E`. The plan makes in-place the default (current behaviour) and the copy `⌥⌘E`.
 8. **Roadmap §3 acceptance: "a selection can receive keywords and a preset without opening each item."** This plan reads "preset" as a metadata template (Task 9). If it means an edit preset (e.g. Auto-Enhance or an exposure applied to a selection), that is a small extra task on `set_edits` + `UndoAction::Edits`; say so.
 
+## Owner answers (2026-11-06)
+
+1. Separator: `/`. The owner's library has no tag containing `/`, `|` or `>`, so no existing tag is reinterpreted.
+2. Foreign sidecars: skip and report (Task 6 as written). No XML crate.
+3. Rights are not searchable in 0.4: no FTS or smart-album field.
+4. Shortcuts as proposed: `R`/`⇧R` rotate, `E` edit (viewer), `⌘E` external editor in place, `⌥⌘E` Edit a Copy, no template shortcut.
+5. Task 10 is dropped. Rights are set through templates only.
+6. Export: the export report notes that edits are not included. No "Export Edited JPEG" in 0.4.
+7. `⌘E` edits in place; `⌥⌘E` edits a copy.
+8. "Preset" in the roadmap means a metadata template (Task 9). No edit-preset task.
+
+Schema note: plan 3 already took v15, so Part A takes v16, and Parts B and D take the next versions after it.
+
 ## Out of scope
 
 - Straighten, white balance, contrast, filters/presets, red-eye, RAW develop, per-item version history and version stacks (stacks: 0.6).
