@@ -485,7 +485,7 @@ impl LuminaApp {
         // Keep stale or hand-edited config files from unbounded history growth.
         config
             .recent_searches
-            .truncate(crate::app::library::MAX_RECENT_SEARCHES);
+            .truncate(crate::app::search::MAX_RECENT_SEARCHES);
         let default_pics =
             dirs::picture_dir().or_else(|| dirs::home_dir().map(|h| h.join("Pictures")));
         let has_desktop_pics = default_pics

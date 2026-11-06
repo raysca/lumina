@@ -20,6 +20,7 @@ pub mod recents;
 pub mod render;
 pub mod sample;
 pub mod scrub_preview;
+pub mod search;
 pub mod smart_draft;
 pub mod sort;
 pub mod state;
