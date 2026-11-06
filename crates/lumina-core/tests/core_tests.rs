@@ -2846,6 +2846,34 @@ fn a_label_alone_gets_a_sidecar_and_a_labelless_sidecar_keeps_the_label() {
 }
 
 #[test]
+fn keyword_paths_survive_a_sidecar_round_trip() {
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("keyword_sidecar");
+    let item = engine.get_item_slice(0..1).remove(0);
+    let tags = vec!["europe".to_string(), "places/europe/paris".to_string()];
+    engine.add_tags_batch(&[item.id], &tags).unwrap();
+    assert_eq!(engine.write_metadata_sidecars(&[item.id]).unwrap(), 1);
+    let xml = std::fs::read_to_string(lumina_core::sidecar_path(&item.path)).unwrap();
+    assert!(
+        xml.contains("<rdf:li>places|europe|paris</rdf:li>"),
+        "the sidecar carries the path in Lightroom's hierarchy: {xml}"
+    );
+
+    engine.remove_tags_batch(&[item.id], &tags).unwrap();
+    assert!(engine.get_tags_for_item(item.id).is_empty());
+    let report = engine.import_sidecars(&[item.id]).unwrap();
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    let mut back = engine.get_tags_for_item(item.id);
+    back.sort();
+    assert_eq!(
+        back, tags,
+        "import restores the path and the flat tag, and no segment becomes a tag"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
 fn a_changed_file_keeps_its_edited_date_and_place() {
     let catalog = Catalog::open_in_memory().unwrap();
     let edited = sample_media_item("/photos/edited.jpg", MediaType::Image, 1_000, None, None);

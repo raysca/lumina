@@ -3,7 +3,8 @@
 //! Ratings, color labels, captions and tags live in SQLite, but that data is trapped in
 //! Lumina unless it is also written next to the media. We emit a small RDF/XML
 //! sidecar (photo.jpg.xmp) compatible with Adobe conventions for
-//! xmp:Rating, xmp:Label, dc:description and dc:subject, and can read it back.
+//! xmp:Rating, xmp:Label, dc:description, dc:subject and lr:hierarchicalSubject
+//! (keyword paths), and can read it back.
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -67,14 +68,37 @@ fn unescape_xml(value: &str) -> String {
 
 /// Builds the RDF/XML sidecar body for the metadata.
 pub fn render_xmp(metadata: &SidecarMetadata) -> String {
-    let mut subject = String::new();
-    if !metadata.tags.is_empty() {
-        subject.push_str("   <dc:subject>\n    <rdf:Bag>\n");
-        for tag in &metadata.tags {
-            subject.push_str(&format!("     <rdf:li>{}</rdf:li>\n", escape_xml(tag)));
+    // dc:subject holds every path segment once (the flat keywords Lightroom
+    // and Bridge show); lr:hierarchicalSubject holds every tag, flat ones too,
+    // so a flat `europe` beside `places/europe` is not taken for a segment on
+    // re-import. A tag with `|` cannot be written in Lightroom's syntax and
+    // stays flat in dc:subject only.
+    let mut segments: Vec<&str> = Vec::new();
+    let mut hierarchy = Vec::new();
+    for tag in &metadata.tags {
+        if tag.contains('|') {
+            if !segments.contains(&tag.as_str()) {
+                segments.push(tag);
+            }
+            continue;
         }
-        subject.push_str("    </rdf:Bag>\n   </dc:subject>\n");
+        hierarchy.push(tag.replace('/', "|"));
+        for segment in tag.split('/').filter(|segment| !segment.is_empty()) {
+            if !segments.contains(&segment) {
+                segments.push(segment);
+            }
+        }
     }
+    let subject = bag("dc:subject", segments);
+    let hierarchical = bag(
+        "lr:hierarchicalSubject",
+        hierarchy.iter().map(String::as_str),
+    );
+    let lr_namespace = if hierarchy.is_empty() {
+        ""
+    } else {
+        "    xmlns:lr=\"http://ns.adobe.com/lightroom/1.0/\"\n"
+    };
 
     let title = match metadata.title.as_deref() {
         Some(title) if !title.trim().is_empty() => format!(
@@ -113,9 +137,21 @@ pub fn render_xmp(metadata: &SidecarMetadata) -> String {
     };
 
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
-        metadata.rating, label, title, subject, description, source, credit
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\"\n    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n    xmlns:photoshop=\"http://ns.adobe.com/photoshop/1.0/\"\n    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n{}    xmp:Rating=\"{}\"\n{}  >\n{}{}{}{}{}{}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n",
+        lr_namespace, metadata.rating, label, title, subject, hierarchical, description, source, credit
     )
+}
+
+/// An `rdf:Bag` element named `name`, or nothing when `values` is empty.
+fn bag<'a>(name: &str, values: impl IntoIterator<Item = &'a str>) -> String {
+    let items: String = values
+        .into_iter()
+        .map(|value| format!("     <rdf:li>{}</rdf:li>\n", escape_xml(value)))
+        .collect();
+    if items.is_empty() {
+        return String::new();
+    }
+    format!("   <{name}>\n    <rdf:Bag>\n{items}    </rdf:Bag>\n   </{name}>\n")
 }
 
 fn between<'a>(haystack: &'a str, start: &str, end: &str) -> Option<&'a str> {
@@ -167,9 +203,37 @@ pub fn parse_xmp(xml: &str) -> SidecarMetadata {
         .and_then(|section| extract_li_values(section).into_iter().next())
         .filter(|value| !value.trim().is_empty());
 
-    let tags = between(xml, "<dc:subject>", "</dc:subject>")
+    let subject = between(xml, "<dc:subject>", "</dc:subject>")
         .map(extract_li_values)
         .unwrap_or_default();
+    let tags = match between(xml, "<lr:hierarchicalSubject>", "</lr:hierarchicalSubject>") {
+        // Paths, plus the dc:subject values that are not a segment of one
+        // (Lightroom lists every leaf and parent name there too).
+        Some(section) => {
+            let entries = extract_li_values(section);
+            // Segments split on Lightroom's `|`, so a keyword such as
+            // `AC/DC` in `Music|AC/DC` is still one segment.
+            let segments: Vec<String> = entries
+                .iter()
+                .flat_map(|entry| entry.split('|'))
+                .map(str::to_lowercase)
+                .collect();
+            let mut tags: Vec<String> = Vec::new();
+            for entry in &entries {
+                let path = entry.replace('|', "/");
+                if !tags.contains(&path) {
+                    tags.push(path);
+                }
+            }
+            for value in subject {
+                if !segments.contains(&value.to_lowercase()) && !tags.contains(&value) {
+                    tags.push(value);
+                }
+            }
+            tags
+        }
+        None => subject,
+    };
 
     let source_url = between(xml, "<dc:source>", "</dc:source>")
         .map(|s| unescape_xml(s.trim()))
@@ -402,6 +466,130 @@ mod tests {
     fn missing_sidecar_is_none() {
         let media = temp_media("missing");
         assert_eq!(read_sidecar(&media).unwrap(), None);
+    }
+
+    fn tags_of(xml: &str) -> Vec<String> {
+        let mut tags = parse_xmp(xml).tags;
+        tags.sort();
+        tags
+    }
+
+    fn with_tags(tags: &[&str]) -> SidecarMetadata {
+        SidecarMetadata {
+            tags: tags.iter().map(|tag| tag.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn hierarchy_roundtrips_through_xmp() {
+        let xml = render_xmp(&with_tags(&["places/europe/paris", "places/europe/lyon"]));
+        assert!(
+            xml.contains("xmlns:lr=\"http://ns.adobe.com/lightroom/1.0/\""),
+            "the hierarchy needs the Lightroom namespace"
+        );
+        assert!(
+            xml.contains("<rdf:li>places|europe|paris</rdf:li>"),
+            "lr:hierarchicalSubject writes paths with |: {xml}"
+        );
+        let subject = between(&xml, "<dc:subject>", "</dc:subject>").unwrap();
+        assert_eq!(
+            extract_li_values(subject),
+            vec!["places", "europe", "paris", "lyon"],
+            "dc:subject holds each segment once, as Lightroom shows flat keywords"
+        );
+        assert_eq!(
+            tags_of(&xml),
+            vec!["places/europe/lyon", "places/europe/paris"],
+            "paths come back as paths, segments are not extra tags"
+        );
+    }
+
+    #[test]
+    fn flat_tag_equal_to_a_segment_roundtrips() {
+        let xml = render_xmp(&with_tags(&["europe", "places/europe"]));
+        assert_eq!(
+            tags_of(&xml),
+            vec!["europe", "places/europe"],
+            "a flat tag that is also a segment must not be dropped on re-import"
+        );
+    }
+
+    #[test]
+    fn flat_subject_without_hierarchy_imports_flat() {
+        let xml = r#"<rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <dc:subject><rdf:Bag><rdf:li>travel</rdf:li><rdf:li>a/b</rdf:li></rdf:Bag></dc:subject>
+          </rdf:Description>"#;
+        assert_eq!(
+            tags_of(xml),
+            vec!["a/b", "travel"],
+            "without lr:hierarchicalSubject every dc:subject value is a tag"
+        );
+    }
+
+    #[test]
+    fn lightroom_style_sidecar_imports_paths() {
+        let xml = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000 1.000000, 0000/00/00-00:00:00        ">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:lr="http://ns.adobe.com/lightroom/1.0/"
+   xmp:Rating="3">
+   <dc:subject>
+    <rdf:Bag>
+     <rdf:li>Paris</rdf:li>
+     <rdf:li>Europe</rdf:li>
+     <rdf:li>Places</rdf:li>
+     <rdf:li>Lyon</rdf:li>
+     <rdf:li>Europe</rdf:li>
+     <rdf:li>sunset</rdf:li>
+    </rdf:Bag>
+   </dc:subject>
+   <lr:hierarchicalSubject>
+    <rdf:Bag>
+     <rdf:li>Places|Europe|Paris</rdf:li>
+     <rdf:li>Places|Europe|Lyon</rdf:li>
+     <rdf:li>sunset</rdf:li>
+    </rdf:Bag>
+   </lr:hierarchicalSubject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+        assert_eq!(
+            tags_of(xml),
+            vec!["Places/Europe/Lyon", "Places/Europe/Paris", "sunset"],
+            "leaf and parent names in dc:subject must not become duplicate flat tags"
+        );
+    }
+
+    #[test]
+    fn lightroom_keyword_with_a_slash_adds_no_flat_tag() {
+        let xml = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:lr="http://ns.adobe.com/lightroom/1.0/"><dc:subject><rdf:Bag><rdf:li>Music</rdf:li><rdf:li>AC/DC</rdf:li></rdf:Bag></dc:subject><lr:hierarchicalSubject><rdf:Bag><rdf:li>Music|AC/DC</rdf:li></rdf:Bag></lr:hierarchicalSubject></rdf:Description></rdf:RDF></x:xmpmeta>"#;
+        assert_eq!(
+            parse_xmp(xml).tags,
+            vec!["Music/AC/DC".to_string()],
+            "a dc:subject leaf that is a Lightroom segment must not import again as a flat tag"
+        );
+    }
+
+    #[test]
+    fn pipe_in_tag_stays_flat() {
+        let xml = render_xmp(&with_tags(&["a|b", "x/y"]));
+        let hierarchy = between(
+            &xml,
+            "<lr:hierarchicalSubject>",
+            "</lr:hierarchicalSubject>",
+        )
+        .expect("x/y is written to the hierarchy");
+        assert_eq!(
+            extract_li_values(hierarchy),
+            vec!["x|y"],
+            "a tag with | cannot be expressed in Lightroom's syntax"
+        );
+        assert_eq!(tags_of(&xml), vec!["a|b", "x/y"], "the | tag stays flat");
     }
 
     #[test]

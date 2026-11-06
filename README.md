@@ -55,8 +55,13 @@ core handles cataloguing, decoding, and search.
   that matches an alias is stored as the keyword the alias points to.
 - **Metadata portability** — exporting a selection copies the originals and
   writes Adobe-compatible XMP sidecars (`xmp:Rating`, `xmp:Label`, `dc:subject`,
-  `dc:description`) so ratings, color labels, tags, and captions survive outside
-  the catalog (Lightroom has no Orange label and shows it as a custom one);
+  `lr:hierarchicalSubject`, `dc:description`) so ratings, color labels, tags, and
+  captions survive outside the catalog (Lightroom has no Orange label and shows
+  it as a custom one). Keyword paths go to `lr:hierarchicalSubject` as
+  `places|europe|paris`, and `dc:subject` lists each name once (`places`,
+  `europe`, `paris`), as Lightroom and Bridge expect; importing a sidecar with a
+  hierarchy (Lightroom's included) brings back the paths, not the loose names.
+  A keyword containing `|` stays flat in `dc:subject`;
   the same sidecars can be generated in place via `write_metadata_sidecars`.
   Sidecars inside the library are hidden in Finder (⇧⌘. shows them) but stay
   next to their media, where other apps look for them. Moving a whole folder
