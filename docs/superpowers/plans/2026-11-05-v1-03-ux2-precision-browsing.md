@@ -426,6 +426,15 @@ Steps:
 5. **Dimming removal.** Removing `GridFilter` dimming changes a behaviour you designed ("positions and selection stay put"), and with D11 a quick filter picked inside an album now shows library-wide results. Is that acceptable?
 6. **Jump-to-date.** It is on the ux_audit UX-2 list, but no plan covers it (plan 2 defers it to UX-2). Today's paths are the year rail and `year:`/`date:`. Should it get its own task here or a separate plan?
 
+## Owner answers (2026-11-06)
+
+1. **Quick filter UI:** no toolbar Filter button (default; D8 as written).
+2. **Zoomed scroll:** scroll pans. This replaces D2: in the viewer, two-finger scroll (and a mouse wheel) pans while zoomed in and does nothing at Fit; pinch zooms (Task 1), ⌘-scroll zooms anchored at the pointer (so a mouse wheel can still zoom), and `+ -`/presets stay. Task 1 does this together with pinch.
+3. **Search scope:** whole library (D11 as written).
+4. **Digit keys:** presets move to ⌘0/⌘1/⌘2/⌘4 with Fill on ⌘3 (D3 as written).
+5. **Dimming:** replace it with query tokens (D8 as written).
+6. **Jump-to-date:** not in this plan (default); a later plan.
+
 ## Out of scope
 
 - Animated grid reflow (D5); pan inertia; smart zoom (two-finger double-tap, not delivered by GPUI); tiled or full-resolution 1:1 decodes (the 2048 px viewer decode stays).
