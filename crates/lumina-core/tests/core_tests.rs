@@ -3519,3 +3519,52 @@ fn exclusion_plan_uses_fts_index() {
         }
     }
 }
+
+#[test]
+fn rating_and_color_filter_plans_use_an_index() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..20)
+        .map(|i| sample_media_item(&format!("/p/{i}.jpg"), MediaType::Image, i, None, None))
+        .collect();
+    catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items");
+    let ids: Vec<_> = catalog
+        .get_item_slice(0, 20)
+        .expect("slice")
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    catalog
+        .set_ratings(&[(ids[0], 5), (ids[1], 4), (ids[2], 2)])
+        .expect("seed ratings");
+    catalog
+        .set_color_labels(&[(ids[0], 1), (ids[3], 3)])
+        .expect("seed labels");
+
+    for text in ["rating:>=4", "color:red", "is:unrated", "is:unlabeled"] {
+        let q = StructuredQuery::parse(text);
+        assert!(
+            !catalog
+                .search_structured(&q, 50, 0)
+                .expect("search")
+                .is_empty(),
+            "{text:?} must match a seeded row"
+        );
+        let (sql, params) = q.synthesize_query(50, 0);
+        let plan = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ");
+        assert!(
+            plan.contains("idx_media_"),
+            "{text:?}: the default-sort plan must use an idx_media_ index, got: {plan}"
+        );
+        assert!(
+            !plan
+                .split(" | ")
+                .any(|row| row.contains("SCAN m") && !row.contains("INDEX")),
+            "{text:?}: media_items must not be scanned without an index, got: {plan}"
+        );
+    }
+}

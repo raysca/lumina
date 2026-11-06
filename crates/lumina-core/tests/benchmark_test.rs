@@ -273,6 +273,34 @@ fn benchmark_scale_and_gates() {
         count as f64 / insert_elapsed.as_secs_f64()
     );
 
+    // Realistic rating/label spreads so the rating and color gates measure
+    // real matches: ratings 1-5 on 30% of rows, red on 2%, other labels on 8%.
+    let ids: Vec<MediaId> = catalog
+        .get_item_slice(0, count)
+        .expect("list bench ids")
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    let ratings: Vec<(MediaId, u8)> = ids
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| i % 10 < 3)
+        .map(|(i, &id)| (id, (i / 10 % 5) as u8 + 1))
+        .collect();
+    let labels: Vec<(MediaId, u8)> = ids
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &id)| match i % 50 {
+            0 => Some((id, 1)),
+            1..=4 => Some((id, (i / 50 % 5) as u8 + 2)),
+            _ => None,
+        })
+        .collect();
+    catalog.set_ratings(&ratings).expect("seed bench ratings");
+    catalog
+        .set_color_labels(&labels)
+        .expect("seed bench labels");
+
     // Recompute timeline buckets
     catalog
         .compute_timeline_buckets()
@@ -332,21 +360,36 @@ fn benchmark_scale_and_gates() {
     );
 
     // Gate 2: Structured Query Latency (< 5ms)
-    for text in ["camera:Sony is:favorite iso:>800", "-beach is:favorite"] {
+    // (query, offset). Offset 450 on `color:red` is nearly the last page of
+    // the ~495 red rows, so the date-index walk covers almost the whole
+    // timeline: the worst case for a rare filter without its own index.
+    for (text, offset) in [
+        ("camera:Sony is:favorite iso:>800", 0),
+        ("-beach is:favorite", 0),
+        ("rating:>=4", 0),
+        ("color:red", 0),
+        ("color:red", 450),
+        ("is:unrated", 0),
+        ("is:unlabeled", 0),
+    ] {
         let q = StructuredQuery::parse(text);
-        catalog
-            .search_structured(&q, 50, 0)
+        let first = catalog
+            .search_structured(&q, 50, offset)
             .unwrap_or_else(|e| panic!("bench query `{text}` must run: {e:#}"));
+        assert!(
+            !first.is_empty(),
+            "bench query `{text}` must match rows so the gate measures real work"
+        );
         let search_start = Instant::now();
         for _ in 0..iterations {
             catalog
-                .search_structured(&q, 50, 0)
+                .search_structured(&q, 50, offset)
                 .expect("bench query must keep running");
         }
         let search_elapsed = search_start.elapsed();
         let search_per_query_ms = (search_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
         println!(
-            "Gate 2 - Structured Query Latency `{text}`: {:.3} ms/query (< {:.1} ms target)",
+            "Gate 2 - Structured Query Latency `{text}` @{offset}: {:.3} ms/query (< {:.1} ms target)",
             search_per_query_ms, query_budget
         );
         assert!(
