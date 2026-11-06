@@ -7,7 +7,7 @@ use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui
 fn clicking_an_inspector_star_pops_that_star_only() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
     let (dir, engine) = seed_library("motion_star", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     view.update(vcx, |app, cx| {
@@ -30,7 +30,7 @@ fn clicking_an_inspector_star_pops_that_star_only() {
 #[core::prelude::v1::test]
 fn only_a_just_decoded_thumbnail_fades_in() {
     let (dir, engine) = seed_library("motion_thumb", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let (fresh, cached) = (lumina_core::MediaId(1), lumina_core::MediaId(2));
     view.update(vcx, |app, cx| {
@@ -66,7 +66,7 @@ fn only_a_just_decoded_thumbnail_fades_in() {
 fn a_fading_palette_and_toast_work_mid_animation() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
     let (dir, engine) = seed_library("motion_overlays", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-k");
     assert!(
@@ -88,7 +88,7 @@ fn viewer_fades_in_under_reduce_motion_too() {
     for reduce in [true, false] {
         crate::motion::REDUCE_MOTION.with(|on| on.set(reduce));
         let (dir, engine) = seed_library("motion_viewer", 2);
-        let mut cx = gpui::TestAppContext::single();
+        let mut cx = crate::tests::TestApp::single();
         let (view, vcx) = app_with_library(&mut cx, engine);
         keystrokes(vcx, "home enter");
         assert!(

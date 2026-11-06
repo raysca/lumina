@@ -44,7 +44,7 @@ fn open_sheet(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
 #[core::prelude::v1::test]
 fn builder_creates_album_from_clicks_and_shows_a_live_preview() {
     let (dir, engine, ids) = library("sab_clicks");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
 
@@ -122,7 +122,7 @@ fn builder_creates_album_from_clicks_and_shows_a_live_preview() {
 #[core::prelude::v1::test]
 fn builder_is_fully_keyboard_driven() {
     let (dir, engine, _ids) = library("sab_keys");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // ⌘K → "New Smart Album…"
@@ -199,7 +199,7 @@ fn builder_is_fully_keyboard_driven() {
 #[core::prelude::v1::test]
 fn invalid_typed_value_blocks_enter_and_says_why() {
     let (dir, engine, _ids) = library("sab_invalid");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Edit Smart Album… with no smart album shown says why instead of nothing.
@@ -245,7 +245,7 @@ fn editing_restores_rows_and_updates_the_album() {
             }],
         )
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
@@ -296,7 +296,7 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
             }],
         )
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.open_album_builder_for_edit(album.clone(), cx)
@@ -325,7 +325,7 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
 #[core::prelude::v1::test]
 fn focused_text_fields_give_the_input_the_whole_field() {
     let (dir, engine, _ids) = library("sab_caret");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
     keystrokes(vcx, "b e a c h");
@@ -352,7 +352,7 @@ fn focused_text_fields_give_the_input_the_whole_field() {
 #[core::prelude::v1::test]
 fn v3_sheet_layout_matches_the_design() {
     let (dir, engine, ids) = library("sab_v3_layout");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
     render_ui(vcx);
@@ -394,7 +394,7 @@ fn v3_sheet_layout_matches_the_design() {
 #[core::prelude::v1::test]
 fn removing_the_last_condition_matches_everything() {
     let (dir, engine, _ids) = library("sab_v3_empty");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
     render_ui(vcx);

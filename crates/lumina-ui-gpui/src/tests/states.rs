@@ -12,7 +12,7 @@ use crate::views::toast::TOAST_DURATION;
 fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
     let (dir, engine) = seed_library("states_toast", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     view.update(vcx, |app, cx| app.show_undo_toast("Rated 1 item", cx));
@@ -78,7 +78,7 @@ fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
 #[core::prelude::v1::test]
 fn error_banner_splits_title_retries_and_esc_dismisses() {
     let (dir, engine) = seed_library("states_error", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.set_error_with_retry(
@@ -130,7 +130,7 @@ fn error_banner_splits_title_retries_and_esc_dismisses() {
 fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
     let (dir, engine) = seed_library("states_trash", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Empty: no bulk buttons, no "Show all photos", new copy.
@@ -186,7 +186,7 @@ fn restore_all_reports_what_it_did() {
     let (dir, engine) = seed_library("states_restore_all", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine.set_trashed(item.id, true).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| app.restore_all_trash(cx));
     view.update(vcx, |app, _| {
@@ -212,7 +212,7 @@ fn empty_smart_album_offers_only_edit_rules_and_library_path_is_mono() {
     let album = engine
         .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::User(album.id), cx)
@@ -229,7 +229,7 @@ fn empty_smart_album_offers_only_edit_rules_and_library_path_is_mono() {
     let _ = std::fs::remove_dir_all(&dir);
 
     let (empty_dir, empty) = seed_library("states_empty_lib", 0);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, empty);
     view.update(vcx, |app, _| {
         if let Some(state) = app.grid_state.as_mut() {

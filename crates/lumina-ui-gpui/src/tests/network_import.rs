@@ -17,7 +17,7 @@ fn without_yt_dlp() {
 #[core::prelude::v1::test]
 fn network_import_dialog_open_and_dismiss_via_cancel() {
     let (_library, engine) = seed_library("net_import_open", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -51,7 +51,7 @@ fn network_import_dialog_open_and_dismiss_via_cancel() {
 #[core::prelude::v1::test]
 fn network_import_dismiss_via_escape() {
     let (_library, engine) = seed_library("net_import_esc", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -71,7 +71,7 @@ fn network_import_dismiss_via_escape() {
 #[core::prelude::v1::test]
 fn network_import_input_validation() {
     let (_library, engine) = seed_library("net_import_val", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -112,7 +112,7 @@ fn network_import_input_validation() {
 #[core::prelude::v1::test]
 fn network_import_command_palette_trigger() {
     let (_library, engine) = seed_library("net_import_palette", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -143,7 +143,7 @@ fn network_import_command_palette_trigger() {
 #[core::prelude::v1::test]
 fn network_import_url_typing_and_backspace() {
     let (_library, engine) = seed_library("net_import_typing", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -188,7 +188,7 @@ fn network_import_url_typing_and_backspace() {
 #[core::prelude::v1::test]
 fn network_import_shortcut_alt_cmd_u() {
     let (_library, engine) = seed_library("net_import_shortcut", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -206,7 +206,7 @@ fn network_import_shortcut_alt_cmd_u() {
 #[core::prelude::v1::test]
 fn network_import_long_url_and_clear_button() {
     let (_library, engine) = seed_library("net_import_long", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 

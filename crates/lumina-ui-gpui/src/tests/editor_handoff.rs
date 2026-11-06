@@ -345,7 +345,7 @@ fn editor_handoff_context_menu_without_editor_shows_error() {
     let (temp_dir, engine) = seed_library("menu", 3);
     let card = media_card(&engine);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     right_click(vcx, card);
@@ -384,7 +384,7 @@ fn editor_handoff_viewer_button_reports_unset_and_invalid_editor() {
     let (temp_dir, engine) = seed_library("viewer", 2);
     let card = media_card(&engine);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -440,7 +440,7 @@ fn editor_handoff_viewer_button_reports_unset_and_invalid_editor() {
 fn editor_handoff_preferences_shows_current_editor_and_choice() {
     let (temp_dir, engine) = seed_library("prefs", 1);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.open_preferences(cx));
@@ -567,7 +567,7 @@ fn launch_failures_reach_the_banner() {
 fn context_menu_get_info_opens_the_get_info_window() {
     let (temp_dir, engine) = seed_library("menu_get_info", 3);
     let card = media_card(&engine);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
         app.inspector_tab = crate::views::inspector::InspectorTab::Location
@@ -594,7 +594,7 @@ fn context_menu_get_info_opens_the_get_info_window() {
 #[core::prelude::v1::test]
 fn cmd_i_opens_get_info_and_i_toggles_the_inspector() {
     let (temp_dir, engine) = seed_library("cmd_i", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let docked = view.update(vcx, |app, _| app.inspector_open);
     crate::tests::ui_automation::keystrokes(vcx, "secondary-i");

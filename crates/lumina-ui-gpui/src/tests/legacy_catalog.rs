@@ -50,7 +50,7 @@ fn legacy_library() -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
 #[core::prelude::v1::test]
 fn upgraded_legacy_catalog_accepts_every_everyday_write() {
     let (dir, engine) = legacy_library();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let no_error = |app: &crate::LuminaApp, step: &str| {
         assert_eq!(

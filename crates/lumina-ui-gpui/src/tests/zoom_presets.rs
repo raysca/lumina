@@ -37,7 +37,7 @@ fn expected(app: &LuminaApp, preset: ViewerZoomPreset) -> f32 {
 
 #[core::prelude::v1::test]
 fn cmd_digit_zoom_presets_in_viewer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "cmd_digit_presets");
     let actual = view.update(vcx, |app, _| expected(app, ViewerZoomPreset::Actual));
     assert!(
@@ -74,7 +74,7 @@ fn cmd_digit_zoom_presets_in_viewer() {
 
 #[core::prelude::v1::test]
 fn plain_digits_do_not_zoom_viewer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "plain_digits");
     for key in ["1", "2", "3", "4", "0"] {
         keystrokes(vcx, key);
@@ -103,7 +103,7 @@ fn plain_digits_do_not_zoom_viewer() {
 #[core::prelude::v1::test]
 fn cmd_digits_do_nothing_in_the_grid() {
     let (dir, engine) = seed_library("cmd_digits_grid", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let card = leak(format!(
         "media-card-{}",
@@ -145,7 +145,7 @@ fn cmd_digits_do_nothing_in_the_grid() {
 
 #[core::prelude::v1::test]
 fn navigator_preset_buttons_apply_presets() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "navigator_presets");
     // The navigator renders only while zoomed.
     keystrokes(vcx, "secondary-2");
@@ -189,7 +189,7 @@ fn zoom_rows(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTestContext) 
 
 #[core::prelude::v1::test]
 fn palette_zoom_commands_only_in_photo_viewer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "palette_zoom");
 
     let shown = zoom_rows(&view, vcx);
@@ -243,7 +243,7 @@ fn palette_zoom_commands_only_in_photo_viewer() {
 
 #[core::prelude::v1::test]
 fn ctrl_digits_do_not_zoom_viewer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "ctrl_digit_presets");
     let before = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     keystrokes(vcx, "ctrl-1 ctrl-2 ctrl-cmd-4");

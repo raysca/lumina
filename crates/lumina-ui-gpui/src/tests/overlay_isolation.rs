@@ -48,7 +48,7 @@ fn selected_id(
 #[core::prelude::v1::test]
 fn viewer_info_click_does_not_open_toolbar_sort() {
     let (temp_dir, engine) = seed_library("overlay_info", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
 
@@ -79,7 +79,7 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
 #[core::prelude::v1::test]
 fn viewer_open_click_does_not_open_tag_manager() {
     let (temp_dir, engine) = seed_library("overlay_open", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
 
@@ -106,7 +106,7 @@ fn viewer_open_click_does_not_open_tag_manager() {
 #[core::prelude::v1::test]
 fn viewer_play_badge_does_not_change_the_selected_media() {
     let (temp_dir, engine) = seed_library("overlay_play", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     let video = get_sample_items()
@@ -152,7 +152,7 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
 #[core::prelude::v1::test]
 fn info_drawer_click_does_not_change_the_selected_media() {
     let (temp_dir, engine) = seed_library("overlay_drawer", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let item = view.update(vcx, |app, _| {
         app.get_active_slice(0..1)
@@ -192,7 +192,7 @@ fn info_drawer_click_does_not_change_the_selected_media() {
 #[core::prelude::v1::test]
 fn tag_manager_scrim_click_does_not_select_a_grid_card() {
     let (temp_dir, engine) = seed_library("overlay_tags", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_tag_manager(cx));
     render_ui(vcx);
@@ -242,7 +242,7 @@ fn select_first(
 #[core::prelude::v1::test]
 fn action_dock_favorite_keeps_the_multi_selection() {
     let (temp_dir, engine) = seed_library("overlay_dock_fav", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     select_first(&view, vcx, 3);
 
@@ -272,7 +272,7 @@ fn action_dock_add_tags_keeps_the_multi_selection_and_starts_input() {
         .iter()
         .map(|item| item.id)
         .collect();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     select_first(&view, vcx, 3);
 

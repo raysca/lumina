@@ -22,7 +22,7 @@ fn target(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Option<Delet
 #[core::prelude::v1::test]
 fn backspace_asks_first_then_enter_moves_to_recently_deleted() {
     let (dir, engine) = seed_library("del_backspace", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
 
@@ -85,7 +85,7 @@ fn backspace_asks_first_then_enter_moves_to_recently_deleted() {
 #[core::prelude::v1::test]
 fn escape_and_cancel_close_without_changes() {
     let (dir, engine) = seed_library("del_cancel", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
 
@@ -103,7 +103,7 @@ fn escape_and_cancel_close_without_changes() {
 #[core::prelude::v1::test]
 fn context_menu_opens_dialog_and_remove_from_library_keeps_the_file() {
     let (dir, engine) = seed_library("del_menu", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
 
@@ -141,7 +141,7 @@ fn context_menu_opens_dialog_and_remove_from_library_keeps_the_file() {
 #[core::prelude::v1::test]
 fn permanent_delete_needs_the_acknowledgement() {
     let (dir, engine) = seed_library("del_permanent", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
 
@@ -168,7 +168,7 @@ fn permanent_delete_needs_the_acknowledgement() {
 #[core::prelude::v1::test]
 fn dock_delete_asks_for_the_whole_selection() {
     let (dir, engine) = seed_library("del_dock", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home secondary-a");
     render_ui(vcx);
@@ -191,7 +191,7 @@ fn dock_delete_asks_for_the_whole_selection() {
 #[core::prelude::v1::test]
 fn single_delete_moves_to_the_next_item_and_undoes() {
     let (dir, engine) = seed_library("del_next", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
 
@@ -216,7 +216,7 @@ fn single_delete_moves_to_the_next_item_and_undoes() {
 #[core::prelude::v1::test]
 fn trash_view_keeps_the_macos_trash_meaning() {
     let (dir, engine) = seed_library("del_trash_view", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
     engine.set_trashed(item.id, true).unwrap();

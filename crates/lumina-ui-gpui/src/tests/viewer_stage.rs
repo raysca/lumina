@@ -8,7 +8,7 @@ use super::ui_automation::{
 fn viewer_stage_rates_navigates_and_steps_zoom() {
     let (temp_dir, engine) = seed_library("viewer_stage", 3);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     let first = view.update(vcx, |app, cx| {
@@ -141,7 +141,7 @@ fn open_at(app: &mut LuminaApp, index: usize, cx: &mut gpui::Context<LuminaApp>)
 #[core::prelude::v1::test]
 fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
     let (dir, engine) = seed_library("viewer_cached", 2);
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     view.update(vcx, |app, cx| {
         let id = app.get_active_slice(0..1)[0].id;
@@ -170,7 +170,7 @@ fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
 #[core::prelude::v1::test]
 fn viewer_step_without_cache_keeps_stage_size() {
     let (dir, engine) = seed_library("viewer_step_stage", 2);
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     view.update(vcx, |app, cx| {
         let id = app.get_active_slice(0..1)[0].id;
@@ -211,7 +211,7 @@ fn viewer_step_without_cache_keeps_stage_size() {
 #[core::prelude::v1::test]
 fn viewer_neighbour_ids_are_the_adjacent_items() {
     let (dir, engine) = seed_library("viewer_neighbours", 6);
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         let ids: Vec<MediaId> = app.get_active_slice(0..6).iter().map(|i| i.id).collect();
@@ -261,7 +261,7 @@ fn viewer_on_failed_item_shows_failed_stage() {
     let (dir, engine) = seed_library("viewer_failed", 2);
     let first = engine.get_item_slice(0..2);
     let failed: Vec<MediaId> = first.iter().map(|i| i.id).collect();
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &failed);
     let path = view.update(vcx, |app, cx| {
         open_at(app, 0, cx);
@@ -307,7 +307,7 @@ fn viewer_on_failed_item_shows_failed_stage() {
 #[core::prelude::v1::test]
 fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
     let (dir, engine) = seed_library("viewer_decode_failed", 2);
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     let id = view.update(vcx, |app, cx| {
         let id = open_at(app, 0, cx);

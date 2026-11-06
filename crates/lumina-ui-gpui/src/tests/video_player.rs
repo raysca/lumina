@@ -58,7 +58,7 @@ fn center_y(b: Bounds<Pixels>) -> f32 {
 
 #[core::prelude::v1::test]
 fn transport_is_a_three_zone_card_with_32px_controls_and_a_40px_play() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, _view, vcx) = open_video(&mut cx);
 
     let card = bounds(vcx, "video-transport");
@@ -119,7 +119,7 @@ fn transport_is_a_three_zone_card_with_32px_controls_and_a_40px_play() {
 
 #[core::prelude::v1::test]
 fn played_fill_tracks_the_playhead() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
         app.video.playback_time = 15.0;
@@ -137,7 +137,7 @@ fn played_fill_tracks_the_playhead() {
 
 #[core::prelude::v1::test]
 fn l_toggles_loop_and_speed_menu_opens_above_its_button() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
     focus_app(vcx, &view);
 
@@ -167,7 +167,7 @@ fn l_toggles_loop_and_speed_menu_opens_above_its_button() {
 
 #[core::prelude::v1::test]
 fn top_bar_has_only_favorite_and_info_and_actions_live_in_the_right_click_menu() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
 
     for selector in ["viewer-fav-btn", "viewer-info-btn"] {
@@ -207,7 +207,7 @@ fn top_bar_has_only_favorite_and_info_and_actions_live_in_the_right_click_menu()
 
 #[core::prelude::v1::test]
 fn prev_next_sit_40px_inside_the_frame_and_centred_on_it() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, _view, vcx) = open_video(&mut cx);
 
     // V3Video: 40px from the window edges, centred on the (narrower) frame.
@@ -227,7 +227,7 @@ fn prev_next_sit_40px_inside_the_frame_and_centred_on_it() {
 
 #[core::prelude::v1::test]
 fn viewer_menu_owns_the_keyboard_and_acts_on_the_shown_item_only() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, _| {
         // Viewer opened from a grid multi-selection.
@@ -290,7 +290,7 @@ fn viewer_menu_owns_the_keyboard_and_acts_on_the_shown_item_only() {
 
 #[core::prelude::v1::test]
 fn open_info_drawer_never_covers_the_transport() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
@@ -310,7 +310,7 @@ fn open_info_drawer_never_covers_the_transport() {
 
 #[core::prelude::v1::test]
 fn video_frame_is_1040_wide_with_the_transport_right_below() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
         app.viewer_image = Some(crate::app::types::generate_gradient_image(
@@ -375,7 +375,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
         ((1080, 1920), (1440.0, 900.0)),
         ((1920, 1080), (1440.0, 640.0)),
     ] {
-        let mut cx = gpui::TestAppContext::single();
+        let mut cx = crate::tests::TestApp::single();
         let (_fixture, vcx) = framed_video(&mut cx, frame, window);
         let media = bounds(vcx, "viewer-media");
         let transport = bounds(vcx, "video-transport");
@@ -396,7 +396,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
 
 #[core::prelude::v1::test]
 fn transport_matches_a_frame_narrowed_by_the_info_drawer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
         app.viewer_image = Some(crate::app::types::generate_gradient_image(
@@ -422,7 +422,7 @@ fn transport_matches_a_frame_narrowed_by_the_info_drawer() {
 
 #[core::prelude::v1::test]
 fn a_catalog_refresh_keeps_the_players_video_dimensions() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, _| {
         let mut played = app.selected_item.clone().expect("the video is shown");

@@ -11,7 +11,7 @@ use super::ui_automation::{app_with_library, render_ui, seed_library};
 #[core::prelude::v1::test]
 fn deep_scroll_settles_and_keeps_the_visible_rows() {
     let (dir, engine) = seed_library("grid_deep_scroll", 200);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.grid_columns = 4;

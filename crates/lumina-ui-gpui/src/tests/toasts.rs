@@ -90,7 +90,7 @@ fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
 #[core::prelude::v1::test]
 fn toast_renders_with_message_and_dismiss_control() {
     let (temp_dir, engine) = seed_library("render", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.show_toast("Exported 4 item(s)", cx));
@@ -148,7 +148,7 @@ fn toast_renders_with_message_and_dismiss_control() {
 fn toast_undo_invokes_undo_last() {
     let (temp_dir, engine) = seed_library("undo", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -199,7 +199,7 @@ fn toast_undo_invokes_undo_last() {
 fn toast_rating_and_tag_hooks_offer_undo() {
     let (temp_dir, engine) = seed_library("hooks", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -255,7 +255,7 @@ fn toast_rating_and_tag_hooks_offer_undo() {
 fn escape_dismisses_toast_without_stealing_modal_or_viewer_escape() {
     let (temp_dir, engine) = seed_library("escape_toast", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     // Grid: Escape dismisses the toast before the grid's own Escape chain.
@@ -337,7 +337,7 @@ fn escape_dismisses_toast_without_stealing_modal_or_viewer_escape() {
 #[core::prelude::v1::test]
 fn toast_auto_dismisses_and_a_replaced_timer_is_stale() {
     let (temp_dir, engine) = seed_library("timer", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.show_toast("First", cx));
@@ -381,7 +381,7 @@ fn toast_export_and_import_success_are_hooked() {
     let (temp_dir, engine) = seed_library("actions", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let destination = temp_dir.join("exported");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {

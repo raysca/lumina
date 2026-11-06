@@ -28,7 +28,7 @@ fn palette_rates_clears_and_favorites_the_selection() {
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
     click(vcx, card);
@@ -70,7 +70,7 @@ fn palette_rates_clears_and_favorites_the_selection() {
 #[core::prelude::v1::test]
 fn empty_search_offers_chips_that_remove_one_term() {
     let (temp_dir, engine) = seed_library("empty_terms", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.set_search_query("nosuch alsonot", cx));
@@ -94,7 +94,7 @@ fn empty_search_offers_chips_that_remove_one_term() {
 #[core::prelude::v1::test]
 fn empty_library_offers_rescan() {
     let (temp_dir, engine) = seed_library("empty_library", 0);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, _| {
@@ -125,7 +125,7 @@ fn palette_rating_a_mixed_selection_sets_every_item() {
     let items = engine.get_item_slice(0..2);
     let (a, b) = (items[0].clone(), items[1].clone());
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", a.id.0)));
@@ -149,7 +149,7 @@ fn palette_rating_a_mixed_selection_sets_every_item() {
 #[core::prelude::v1::test]
 fn empty_search_chips_keep_quoted_terms_whole() {
     let (temp_dir, engine) = seed_library("empty_quoted", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -175,7 +175,7 @@ fn empty_search_chips_keep_quoted_terms_whole() {
 #[core::prelude::v1::test]
 fn empty_library_while_scanning_says_so_without_rescan() {
     let (temp_dir, engine) = seed_library("empty_scanning", 0);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, _| {
@@ -197,7 +197,7 @@ fn empty_library_while_scanning_says_so_without_rescan() {
 fn palette_matches_each_word_caps_commands_and_clamps() {
     use crate::app::command_palette::MAX_COMMANDS;
     let (dir, engine) = seed_library("palette_v3_words", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     focus_app(vcx, &view);
@@ -252,7 +252,7 @@ fn palette_go_to_opens_views_tags_and_years() {
         .catalog()
         .add_tags_batch(&[item.id], &["trip".to_string()])
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     focus_app(vcx, &view);
@@ -313,7 +313,7 @@ fn palette_go_to_opens_views_tags_and_years() {
 fn palette_hides_trash_and_retry_commands_that_cannot_act() {
     let (dir, engine) = seed_library("palette_applies", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     // Narrow the list so the three commands are not cut by MAX_COMMANDS.
     let shown =

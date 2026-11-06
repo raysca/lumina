@@ -34,7 +34,7 @@ fn grid_pointer(vcx: &mut VisualTestContext) -> gpui::Point<gpui::Pixels> {
 #[core::prelude::v1::test]
 fn cmd_wheel_walks_size_ladder() {
     let (dir, engine) = seed_library("gz_ladder", 40);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 6);
     let pointer = grid_pointer(vcx);
@@ -64,7 +64,7 @@ fn cmd_wheel_walks_size_ladder() {
 #[core::prelude::v1::test]
 fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
     let (dir, engine) = seed_library("gz_burst", 40);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 4);
     let pointer = grid_pointer(vcx);
@@ -88,7 +88,7 @@ fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
 #[core::prelude::v1::test]
 fn keyboard_grid_zoom_keeps_selection_visible() {
     let (dir, engine) = seed_library("gz_keyboard", 120);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 8);
     let id = view.update(vcx, |app, cx| {
@@ -137,7 +137,7 @@ fn grid_pinch_steps_one_level_per_threshold_and_anchors() {
     use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
 
     let (dir, engine) = seed_library("gz_pinch", 40);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 4);
     let pointer = grid_pointer(vcx);
@@ -228,7 +228,7 @@ fn saved_off_ladder_columns_snap_and_small_scrolls_keep_them() {
     assert_eq!(ladder_columns(3), 3, "a ladder value is kept");
 
     let (dir, engine) = seed_library("gz_off_ladder", 40);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 7);
     let pointer = grid_pointer(vcx);

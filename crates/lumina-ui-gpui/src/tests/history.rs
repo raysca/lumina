@@ -52,7 +52,7 @@ fn palette_offers(
 #[core::prelude::v1::test]
 fn navigation_forward_redoes_back() {
     let (dir, engine) = seed_library("hist_fwd", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.select_album(FAVORITES, cx));
@@ -75,7 +75,7 @@ fn navigation_forward_redoes_back() {
 #[core::prelude::v1::test]
 fn go_menu_actions_go_back_and_forward() {
     let (dir, engine) = seed_library("hist_menu", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.select_album(FAVORITES, cx));
@@ -100,7 +100,7 @@ fn forward_after_viewer_back_reopens_viewer() {
     let (dir, engine) = seed_library("hist_viewer", 4);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -130,7 +130,7 @@ fn forward_to_deleted_item_opens_no_viewer() {
     let (dir, engine) = seed_library("hist_gone", 4);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     click(vcx, card);
@@ -163,7 +163,7 @@ fn forward_to_deleted_album_falls_back_to_all() {
     let (dir, engine) = seed_library("hist_tag", 4);
     let id = engine.get_item_slice(0..1)[0].id;
     engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // All -> Favorites -> tag, so Back from the fallback has somewhere real to go.
     view.update(vcx, |app, cx| {
@@ -205,7 +205,7 @@ fn forward_to_deleted_album_falls_back_to_all() {
 #[core::prelude::v1::test]
 fn typed_search_then_back_then_forward() {
     let (dir, engine) = seed_library("hist_typed", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     type_search(&view, vcx, "cat");
@@ -226,7 +226,7 @@ fn cmd_bracket_in_viewer_navigates_history_not_items() {
     let (dir, engine) = seed_library("hist_bracket", 4);
     let items = engine.get_item_slice(0..3);
     let card = leak(format!("media-card-{}", items[1].id.0));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -263,7 +263,7 @@ fn cmd_bracket_in_viewer_navigates_history_not_items() {
 #[core::prelude::v1::test]
 fn palette_shows_back_forward_only_when_available() {
     let (dir, engine) = seed_library("hist_palette", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     assert!(!palette_offers(&view, vcx, CommandId::Back, "back"));
@@ -307,7 +307,7 @@ fn palette_shows_back_forward_only_when_available() {
 fn library_switch_clears_forward() {
     let (dir, engine) = seed_library("hist_switch", 2);
     let (other, _) = seed_library("hist_switch_other", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.select_album(FAVORITES, cx));

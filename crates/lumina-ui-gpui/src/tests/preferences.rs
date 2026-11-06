@@ -6,7 +6,7 @@ use crate::app::preferences::{thumbnail_cache_dir, CacheUsage};
 #[core::prelude::v1::test]
 fn preferences_tabs_group_actions_and_fit_a_small_window() {
     let (temp_dir, engine) = seed_library("prefs_v3", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
     view.update(vcx, |app, cx| app.open_preferences(cx));
@@ -69,7 +69,7 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
 #[core::prelude::v1::test]
 fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     let (temp_dir, engine) = seed_library("prefs_v3_details", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.handle_ui_message(
@@ -171,7 +171,7 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
 
 #[core::prelude::v1::test]
 fn library_folder_reads_from_home() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     let home = dirs::home_dir().expect("tests run with a home directory");
     view.update(vcx, |app, _| {

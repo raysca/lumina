@@ -7,7 +7,7 @@ use lumina_core::*;
 
 #[core::prelude::v1::test]
 fn test_e2e_tag_workflow() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     // Create test photo on disk
@@ -111,7 +111,7 @@ fn test_e2e_tag_workflow() {
 
 #[core::prelude::v1::test]
 fn test_tag_manager_modal_lifecycle() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let temp_dir = std::env::temp_dir().join(format!(
@@ -255,7 +255,7 @@ fn test_tag_manager_modal_lifecycle() {
 
 #[core::prelude::v1::test]
 fn test_smart_album_and_tag_sidebar_selection_are_exclusive() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let temp_dir = std::env::temp_dir().join(format!(
@@ -303,7 +303,7 @@ fn test_smart_album_and_tag_sidebar_selection_are_exclusive() {
 
 #[core::prelude::v1::test]
 fn test_tag_manager_modular_flow() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -352,7 +352,7 @@ fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
     assert_eq!(items.len(), 2, "the fixture must create two media items");
     let first_item = items[0].clone();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
@@ -442,7 +442,7 @@ fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
         .add_tags_batch(&[item.id], &["travel".to_string()])
         .unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
@@ -529,7 +529,7 @@ fn tag_selector(control: &str, tag: &str) -> &'static str {
 #[core::prelude::v1::test]
 fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
     let (temp_dir, engine) = tagged_library("tag_row_click", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
@@ -557,7 +557,7 @@ fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
 #[core::prelude::v1::test]
 fn rendered_checkbox_click_toggles_selection_exactly_once() {
     let (temp_dir, engine) = tagged_library("tag_checkbox_click", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
@@ -588,7 +588,7 @@ fn rendered_checkbox_click_toggles_selection_exactly_once() {
 #[core::prelude::v1::test]
 fn rendered_rename_click_starts_editing_without_toggling_the_row() {
     let (temp_dir, engine) = tagged_library("tag_rename_click", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
@@ -612,7 +612,7 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
 #[core::prelude::v1::test]
 fn rendered_show_in_library_filters_and_closes_the_manager() {
     let (temp_dir, engine) = tagged_library("tag_name_click", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
@@ -639,7 +639,7 @@ fn rendered_show_in_library_filters_and_closes_the_manager() {
 #[core::prelude::v1::test]
 fn rendered_search_box_click_focuses_and_typing_filters() {
     let (temp_dir, engine) = tagged_library("tag_search_click", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
 
@@ -677,7 +677,7 @@ fn rendered_search_box_click_focuses_and_typing_filters() {
 #[core::prelude::v1::test]
 fn keyboard_browses_tags_and_renames_the_focused_one() {
     let (temp_dir, engine) = tagged_library("tag_keyboard", &["alpha", "beta"]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_tag_manager(&view, vcx);
     focus_app(vcx, &view);
@@ -726,7 +726,7 @@ fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
     let names: Vec<String> = (0..40).map(|i| format!("tag{i:02}")).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let (temp_dir, engine) = tagged_library("tag_scroll", &refs);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(640.0)));
     open_tag_manager(&view, vcx);
@@ -765,7 +765,7 @@ fn a_long_name_keeps_the_sidebar_rename_buttons_in_the_row() {
     let (dir, engine) = seed_library("rename_overflow", 2);
     let id = engine.get_item_slice(0..1)[0].id;
     engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.refresh_album_counts();
@@ -802,7 +802,7 @@ fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
     let album = engine
         .create_smart_album(&long, "folder", MatchMode::All, &[])
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.refresh_album_counts();

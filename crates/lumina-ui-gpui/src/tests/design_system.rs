@@ -20,7 +20,7 @@ fn assert_hangs_from_toolbar(vcx: &mut gpui::VisualTestContext, selector: &'stat
 #[core::prelude::v1::test]
 fn tag_manager_is_a_sheet_under_the_toolbar() {
     let (dir, engine) = seed_library("ds_tag_sheet", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_tag_manager(cx));
     assert_hangs_from_toolbar(vcx, "tag-manager-dialog");
@@ -30,7 +30,7 @@ fn tag_manager_is_a_sheet_under_the_toolbar() {
 #[core::prelude::v1::test]
 fn smart_album_builder_is_a_760px_sheet_under_the_toolbar() {
     let (dir, engine) = seed_library("ds_album_sheet", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     click(vcx, "new-smart-album");
     assert_hangs_from_toolbar(vcx, "album-builder-card");
@@ -46,7 +46,7 @@ fn smart_album_builder_is_a_760px_sheet_under_the_toolbar() {
 #[core::prelude::v1::test]
 fn hovered_menu_row_is_tracked_for_dark_on_amber_text() {
     let (dir, engine) = seed_library("ds_menu_hover", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
@@ -67,7 +67,7 @@ fn hovered_menu_row_is_tracked_for_dark_on_amber_text() {
 #[core::prelude::v1::test]
 fn sidebar_rows_are_26px() {
     let (dir, engine) = seed_library("ds_rows", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     let row = vcx

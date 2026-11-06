@@ -8,7 +8,7 @@ fn docked_inspector_summary_rates_labels_and_opens_get_info() {
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     render_ui(vcx);
@@ -83,7 +83,7 @@ fn docked<'a>(
 
 #[core::prelude::v1::test]
 fn tags_field_adds_and_removes_plain_chips() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, engine, item, view, vcx) = docked("inspector_tags", &mut cx);
 
     click(vcx, "tag-add");
@@ -134,7 +134,7 @@ fn tags_field_adds_and_removes_plain_chips() {
 
 #[core::prelude::v1::test]
 fn footer_is_pinned_and_rating_targets_are_22px() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, engine, item, view, vcx) = docked("inspector_footer", &mut cx);
 
     let summary = vcx.debug_bounds("inspector-summary").unwrap();
@@ -170,7 +170,7 @@ fn footer_is_pinned_and_rating_targets_are_22px() {
 
 #[core::prelude::v1::test]
 fn info_with_nothing_selected_keeps_the_panel() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, _engine, _item, view, vcx) = docked("inspector_empty", &mut cx);
     view.update(vcx, |app, cx| app.clear_selection(cx));
     render_ui(vcx);

@@ -2,7 +2,7 @@ use crate::*;
 
 #[core::prelude::v1::test]
 fn test_floating_windows_lifecycle() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     // 1. Open floating inspector via open_floating_inspector_window
@@ -63,7 +63,7 @@ fn test_floating_windows_lifecycle() {
 
 #[core::prelude::v1::test]
 fn test_card_context_menu_lifecycle() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let temp_dir = std::env::temp_dir().join(format!(
@@ -154,7 +154,7 @@ fn test_card_context_menu_lifecycle() {
 
 #[core::prelude::v1::test]
 fn test_resizable_panes_and_viewer_open_close() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -202,7 +202,7 @@ fn test_resizable_panes_and_viewer_open_close() {
 
 #[core::prelude::v1::test]
 fn test_inspector_tabs_and_selection_marks() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -266,7 +266,7 @@ fn test_inspector_tabs_and_selection_marks() {
 
 #[core::prelude::v1::test]
 fn test_card_click_selection_and_clean_startup() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -311,7 +311,7 @@ fn test_card_click_selection_and_clean_startup() {
 fn test_grid_row_height_tracks_window_and_panel_chrome() {
     use crate::views::grid::grid_metrics;
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, _cx| {
@@ -371,7 +371,7 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
 
 #[core::prelude::v1::test]
 fn test_error_banner_lifecycle() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -404,7 +404,7 @@ fn frameless_windows_get_their_own_window_controls() {
     let _reset = Reset;
 
     let (temp_dir, engine) = seed_library("window_controls", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     assert!(
         vcx.debug_bounds("toolbar-drag-area").is_some(),

@@ -28,7 +28,7 @@ fn info_window<'a>(
 #[core::prelude::v1::test]
 fn a_title_keeps_capitals_and_punctuation() {
     let (dir, engine) = seed_library("text_caps", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home");
@@ -49,7 +49,7 @@ fn a_title_keeps_capitals_and_punctuation() {
 #[core::prelude::v1::test]
 fn a_composed_accent_lands_once_in_the_title() {
     let (dir, engine) = seed_library("text_ime", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
@@ -102,7 +102,7 @@ fn field_bounds(
 #[core::prelude::v1::test]
 fn cmd_v_pastes_into_the_search_field_as_one_line() {
     let (dir, engine) = seed_library("text_paste", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -142,7 +142,7 @@ fn focused_search<'a>(
 
 #[core::prelude::v1::test]
 fn search_inserts_typed_text_at_the_caret() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_mid_insert", &mut cx);
     vcx.simulate_input("Lisbn");
     keystrokes(vcx, "left");
@@ -170,7 +170,7 @@ fn search_inserts_typed_text_at_the_caret() {
 
 #[core::prelude::v1::test]
 fn search_typing_replaces_the_selection_and_cut_copies_it() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_select", &mut cx);
     vcx.simulate_input("Lisbon");
     keystrokes(vcx, "shift-left shift-left shift-left");
@@ -201,7 +201,7 @@ fn search_typing_replaces_the_selection_and_cut_copies_it() {
 
 #[core::prelude::v1::test]
 fn search_paste_replaces_the_selection_and_stops_at_the_cap() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_paste_cap", &mut cx);
     vcx.simulate_input("ab");
     let cap = lumina_core::text::MAX_TEXT_CHARS;
@@ -224,7 +224,7 @@ fn search_paste_replaces_the_selection_and_stops_at_the_cap() {
 
 #[core::prelude::v1::test]
 fn a_dialog_over_search_takes_its_keys() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_modal_focus", &mut cx);
     vcx.simulate_input("Rio");
     view.update(vcx, |app, cx| {
@@ -246,7 +246,7 @@ fn a_dialog_over_search_takes_its_keys() {
 #[core::prelude::v1::test]
 fn the_main_window_takes_typed_text_without_a_test_focus() {
     let (dir, engine) = seed_library("text_focus", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     // Built the way main.rs builds it, with no focus_app() helper.
     let (view, vcx) = cx.add_window_view(LuminaApp::new_in_window);
     view.update(vcx, |app, cx| {
@@ -268,7 +268,7 @@ fn the_main_window_takes_typed_text_without_a_test_focus() {
 #[core::prelude::v1::test]
 fn a_composition_left_in_one_field_never_edits_the_next() {
     let (dir, engine) = seed_library("text_stale_mark", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
@@ -311,7 +311,7 @@ fn a_composition_left_in_one_field_never_edits_the_next() {
 #[core::prelude::v1::test]
 fn the_floating_inspector_takes_typed_text_without_a_click() {
     let (dir, engine) = seed_library("text_floating", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     let tx = view.update(vcx, |app, cx| {
@@ -337,7 +337,7 @@ fn the_floating_inspector_takes_typed_text_without_a_click() {
 #[core::prelude::v1::test]
 fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
     let (dir, engine) = seed_library("text_stale_same", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
@@ -380,7 +380,7 @@ fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
 #[core::prelude::v1::test]
 fn a_tag_field_drops_disguising_characters_and_stops_at_the_name_cap() {
     let (dir, engine) = seed_library("text_clean", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home");
@@ -421,7 +421,7 @@ fn a_tag_field_drops_disguising_characters_and_stops_at_the_name_cap() {
 #[core::prelude::v1::test]
 fn confirming_an_untouched_legacy_tag_rename_keeps_it() {
     let (dir, engine) = seed_library("text_legacy_tag", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     // A tag saved before input was cleaned: longer than the name cap.
     let legacy = "y".repeat(lumina_core::text::MAX_NAME_CHARS + 50);
@@ -496,7 +496,7 @@ fn edits_mid_text(
     engine
         .add_tags_batch(&[first], &["beach".to_string()])
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     view.update(vcx, |app, cx| {
@@ -559,7 +559,7 @@ fn every_field_edits_at_its_caret() {
 #[core::prelude::v1::test]
 fn a_caption_keeps_its_line_breaks_and_shift_enter_adds_one() {
     let (dir, engine) = seed_library("text_caption_lines", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
     view.update(vcx, |app, cx| {
@@ -589,7 +589,7 @@ fn a_caption_keeps_its_line_breaks_and_shift_enter_adds_one() {
 
 #[core::prelude::v1::test]
 fn a_stored_value_past_the_cap_still_loads_into_its_field() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_legacy_load", &mut cx);
     vcx.simulate_input("beach");
     // Text the app sets can be longer than typing allows (a legacy value).
@@ -618,7 +618,7 @@ fn a_stored_value_past_the_cap_still_loads_into_its_field() {
 
 #[core::prelude::v1::test]
 fn the_link_dialog_takes_keys_while_it_checks() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = focused_search("text_checking_focus", &mut cx);
     vcx.simulate_input("Rio");
     view.update(vcx, |app, cx| {
@@ -642,7 +642,7 @@ fn the_link_dialog_takes_keys_while_it_checks() {
 #[core::prelude::v1::test]
 fn tagging_from_the_floating_inspector_shows_the_tag_field() {
     let (dir, engine) = seed_library("text_float_tag", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     let icx = info_window(&mut cx, &view);
@@ -661,7 +661,7 @@ fn tagging_from_the_floating_inspector_shows_the_tag_field() {
 #[core::prelude::v1::test]
 fn shift_arrows_still_move_the_palette_selection() {
     let (dir, engine) = seed_library("text_shift_arrows", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-k");
     render_ui(vcx);
@@ -682,7 +682,7 @@ fn shift_arrows_still_move_the_palette_selection() {
 #[core::prelude::v1::test]
 fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
     let (dir, engine) = seed_library("text_caption_full", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     let full = format!("{}Z", "a".repeat(lumina_core::text::MAX_TEXT_CHARS - 1));
@@ -714,7 +714,7 @@ fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
 #[core::prelude::v1::test]
 fn a_caption_stored_past_the_cap_keeps_its_end_when_edited() {
     let (dir, engine) = seed_library("text_caption_long", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
     let long = format!("{}Z!", "a".repeat(lumina_core::text::MAX_TEXT_CHARS + 3));
@@ -736,7 +736,7 @@ fn a_caption_stored_past_the_cap_keeps_its_end_when_edited() {
 #[core::prelude::v1::test]
 fn tagging_from_the_viewer_shows_the_tag_field() {
     let (dir, engine) = seed_library("text_viewer_tag", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
     view.update(vcx, |app, cx| {
@@ -761,7 +761,7 @@ fn tagging_from_the_viewer_shows_the_tag_field() {
 #[core::prelude::v1::test]
 fn leaving_a_fields_tab_ends_its_edit_unsaved() {
     let (dir, engine) = seed_library("text_tab_away", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
     view.update(vcx, |app, cx| app.start_caption_input(cx));

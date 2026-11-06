@@ -119,14 +119,14 @@ pub(crate) fn queue_app(
     TempLibrary,
     Arc<LuminaEngine>,
     FakeJobs,
-    gpui::TestAppContext,
+    crate::tests::TestApp,
 ) {
     let (dir, engine) = seed_library(name, 1);
     (
         TempLibrary(dir),
         engine,
         FakeJobs::default(),
-        gpui::TestAppContext::single(),
+        crate::tests::TestApp::single(),
     )
 }
 

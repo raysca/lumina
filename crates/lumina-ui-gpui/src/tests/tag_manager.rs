@@ -50,7 +50,7 @@ fn count(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, tag: &str) -> Op
 #[core::prelude::v1::test]
 fn bar_shows_at_two_and_merge_folds_into_the_most_used() {
     let (dir, engine) = tag_library("tm_merge");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
@@ -97,7 +97,7 @@ fn bar_shows_at_two_and_merge_folds_into_the_most_used() {
 #[core::prelude::v1::test]
 fn select_all_only_touches_shown_rows_and_esc_deselects_then_closes() {
     let (dir, engine) = tag_library("tm_select_all");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
@@ -133,7 +133,7 @@ fn select_all_only_touches_shown_rows_and_esc_deselects_then_closes() {
 #[core::prelude::v1::test]
 fn keyboard_checks_and_merges_and_trash_deletes() {
     let (dir, engine) = tag_library("tm_keys");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
@@ -159,7 +159,7 @@ fn keyboard_checks_and_merges_and_trash_deletes() {
 #[core::prelude::v1::test]
 fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
     let (dir, engine) = tag_library("tm_detail");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
@@ -214,7 +214,7 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
 #[core::prelude::v1::test]
 fn cmd_backspace_edits_the_filter_and_only_deletes_with_the_bar_showing() {
     let (dir, engine) = tag_library("tm_cmd_backspace");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
@@ -249,7 +249,7 @@ fn cmd_backspace_edits_the_filter_and_only_deletes_with_the_bar_showing() {
 #[core::prelude::v1::test]
 fn moving_focus_cancels_a_rename_in_progress() {
     let (dir, engine) = tag_library("tm_rename_focus");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 

@@ -5,7 +5,7 @@ use crate::*;
 
 #[core::prelude::v1::test]
 fn test_viewer_shortcuts_and_delete_acknowledgement() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -54,7 +54,7 @@ fn test_viewer_shortcuts_and_delete_acknowledgement() {
 
 #[core::prelude::v1::test]
 fn test_immersive_fullscreen_mode_lifecycle() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -99,7 +99,7 @@ fn test_e2e_fullscreen_viewer_journey() {
     // Keys reach the viewer only with a library open (the welcome screen
     // gates every key it does not handle).
     let (dir, engine) = seed_library("viewer_journey", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = app_with_library(&mut cx, engine);
 
     let sample = get_sample_items();
@@ -331,7 +331,7 @@ fn test_time_fractional_and_bytes_formatting_safety() {
 
 #[core::prelude::v1::test]
 fn test_viewer_bottom_filmstrip_selection_transition() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let sample = get_sample_items();
@@ -375,7 +375,7 @@ fn test_viewer_bottom_filmstrip_selection_transition() {
 fn test_viewer_player_ux_and_navigation_controls() {
     use crate::views::viewer::MediaViewer;
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     // Deterministic library: navigation must not depend on the developer's real config.
@@ -570,7 +570,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
     // Keys reach the viewer only with a library open (the welcome screen
     // gates every key it does not handle).
     let (dir, engine) = seed_library("viewer_zoom_keys", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = app_with_library(&mut cx, engine);
     let sample = get_sample_items();
     let photo = sample[0].clone();
@@ -693,7 +693,7 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
     }
     assert!(engine.total_count() >= 2);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let photo = get_sample_items()[0].clone();
 
@@ -779,7 +779,7 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
 fn test_viewer_cursor_anchored_zoom_action() {
     use crate::views::viewer_state::{ViewerZoomPreset, ZOOM_MAX_SCALE, ZOOM_MIN_SCALE, ZOOM_STEP};
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let sample = get_sample_items();
     let photo = sample[0].clone();
@@ -884,7 +884,7 @@ fn test_viewer_cursor_anchored_zoom_action() {
 
 #[core::prelude::v1::test]
 fn test_video_scrub_state_transitions_and_commit() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
 
@@ -935,7 +935,7 @@ fn test_video_scrub_state_transitions_and_commit() {
 
 #[core::prelude::v1::test]
 fn test_video_scrub_clamps_to_duration_and_catalog_fallback() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
 
@@ -978,7 +978,7 @@ fn test_video_scrub_clamps_to_duration_and_catalog_fallback() {
 
 #[core::prelude::v1::test]
 fn test_video_scrub_resets_on_viewer_close_and_media_change() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let sample = get_sample_items();
     let video = sample[1].clone();
@@ -1048,7 +1048,7 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
     }
     assert!(engine.total_count() >= 2);
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
 
@@ -1177,7 +1177,7 @@ fn test_video_resume_start_selection_is_bounded() {
 
 #[core::prelude::v1::test]
 fn test_video_resume_progress_throttle_and_close() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
     let video_id = video.id;
@@ -1291,7 +1291,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
         .expect("scanned photo must be cataloged");
     let item_id = item.id;
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
@@ -1423,7 +1423,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
 fn test_viewer_rotate_video_is_a_clear_no_op() {
     use crate::views::viewer_state::ViewerRotation;
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
 
@@ -1505,7 +1505,7 @@ pub(crate) fn viewer_with_gradient<'a>(
 
 #[core::prelude::v1::test]
 fn test_viewer_zoom_changes_painted_media_bounds() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_zoom_paint", 1440.0, 900.0);
 
     let fit = vcx
@@ -1584,7 +1584,7 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
 
 #[core::prelude::v1::test]
 fn test_viewer_double_click_zoom_is_media_bounded() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_double_click", 1440.0, 900.0);
 
     let viewport = vcx
@@ -1629,7 +1629,7 @@ fn test_viewer_double_click_zoom_is_media_bounded() {
 #[core::prelude::v1::test]
 fn test_inspector_filename_wraps_inside_the_open_drawer() {
     let (temp_dir, engine) = seed_library("inspector_filename_wrap", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let photo = view.update(vcx, |app, _| {
         app.get_active_slice(0..1)
@@ -1680,7 +1680,7 @@ fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
         height: 2,
         data: vec![0; 16],
     };
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     let cached = crate::bridge::video_frame_to_gpui_image(frame()).expect("2x2 BGRA frame");
@@ -1712,7 +1712,7 @@ fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
 #[core::prelude::v1::test]
 fn scrub_drag_keeps_tracking_after_leaving_the_control() {
     let (temp_dir, engine) = crate::tests::ui_automation::seed_library("drag_off_control", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
     view.update(vcx, |app, cx| {
@@ -1763,7 +1763,7 @@ fn scrub_drag_keeps_tracking_after_leaving_the_control() {
 
 #[core::prelude::v1::test]
 fn test_viewer_fills_canvas_and_offers_actual_pixels() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_actual", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         // A 4000x3000 original shown through the 800x600 gradient decode.
@@ -1819,11 +1819,11 @@ fn pip_window_evicts_retired_frames_while_the_main_window_is_not_drawing() {
         })
         .expect("2x2 BGRA frame")
     };
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     // The main app has no window here, standing in for an occluded main
     // window whose display link has stopped.
     let app = cx.new(LuminaApp::new);
-    let ui_tx = app.read_with(&cx, |app, _| app.ui_tx.clone());
+    let ui_tx = app.read_with(&*cx, |app, _| app.ui_tx.clone());
     let (_pip, vcx) = cx.add_window_view(|window, cx| {
         crate::views::floating_pip::FloatingPipPlayerView::new(app.downgrade(), ui_tx, window, cx)
     });
@@ -1856,10 +1856,10 @@ pub(super) fn tiny_decoded_frame(id: lumina_core::MediaId) -> lumina_core::Decod
 /// but only a render drained the queue, so memory grew ~270 MB/s.
 #[core::prelude::v1::test]
 fn retired_frames_are_evicted_without_any_window_drawing() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let app = cx.new(LuminaApp::new);
     let item = get_sample_items()[0].clone();
-    let ui_tx = app.update(&mut cx, |app, _| {
+    let ui_tx = app.update(&mut *cx, |app, _| {
         app.selected_item = Some(item.clone());
         app.ui_tx.clone()
     });
@@ -1872,7 +1872,7 @@ fn retired_frames_are_evicted_without_any_window_drawing() {
             .unwrap();
     }
     cx.run_until_parked();
-    app.read_with(&cx, |app, _| {
+    app.read_with(&*cx, |app, _| {
         assert!(app.viewer_image.is_some(), "the latest frame must be shown");
         assert!(
             app.retired_images.is_empty(),
@@ -1898,9 +1898,9 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
         }
     }
     let _cleanup = Cleanup(vec![temp_dir.clone(), other_dir.clone()]);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let app = cx.new(LuminaApp::new);
-    app.update(&mut cx, |app, cx| {
+    app.update(&mut *cx, |app, cx| {
         let state = crate::views::grid::GridState::new(engine.clone());
         state
             .texture_cache
@@ -1976,7 +1976,7 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
 
 #[core::prelude::v1::test]
 fn test_viewer_fits_a_photo_inside_the_stage_margins() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_fit_tall", 1440.0, 900.0);
     // V3Photo fits into at most 1200x760 of the 1440x848 stage, clear of the
     // prev/next buttons, instead of running edge to edge.
@@ -2016,7 +2016,7 @@ fn test_viewer_fits_a_photo_inside_the_stage_margins() {
 
 #[core::prelude::v1::test]
 fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_drawer_clear", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
@@ -2088,7 +2088,7 @@ fn off_centre_media_point(vcx: &mut gpui::VisualTestContext) -> gpui::Point<gpui
 
 #[core::prelude::v1::test]
 fn viewer_pinch_keeps_content_under_pinch_center() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_anchor", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
@@ -2115,7 +2115,7 @@ fn viewer_pinch_keeps_content_under_pinch_center() {
 
 #[core::prelude::v1::test]
 fn viewer_pinch_ignored_for_video() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_video", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         app.selected_item
@@ -2148,7 +2148,7 @@ fn viewer_pinch_ignored_for_video() {
 
 #[core::prelude::v1::test]
 fn pinch_out_to_fit_recenters() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_fit", 1440.0, 900.0);
     let at = off_centre_media_point(vcx);
 
@@ -2183,7 +2183,7 @@ fn pinch_out_to_fit_recenters() {
 
 #[core::prelude::v1::test]
 fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_pan", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
@@ -2242,7 +2242,7 @@ fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
 
 #[core::prelude::v1::test]
 fn viewer_scroll_at_fit_does_nothing() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_fit", 1440.0, 900.0);
     let at = off_centre_media_point(vcx);
     crate::tests::ui_automation::wheel(vcx, at, scroll_px(30.0, 80.0), gpui::Modifiers::default());
@@ -2266,7 +2266,7 @@ fn viewer_scroll_at_fit_does_nothing() {
 
 #[core::prelude::v1::test]
 fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_cmd_scroll", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
@@ -2310,7 +2310,7 @@ fn video_speed_and_mute_come_from_config() {
             ..Default::default()
         })
     });
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.grid_state = None;

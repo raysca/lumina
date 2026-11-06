@@ -43,7 +43,7 @@ fn bounds(icx: &mut VisualTestContext, selector: &'static str) -> gpui::Bounds<g
 
 #[core::prelude::v1::test]
 fn title_bar_and_header_follow_v3() {
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_header");
 
     let bar = bounds(icx, "floating-inspector-titlebar");
@@ -102,7 +102,7 @@ fn title_bar_and_header_follow_v3() {
 
 #[core::prelude::v1::test]
 fn general_tab_shows_dates_and_adjusts_date_taken() {
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_general");
 
     view.update(icx, |app, _| {
@@ -147,7 +147,7 @@ fn general_tab_shows_dates_and_adjusts_date_taken() {
 
 #[core::prelude::v1::test]
 fn camera_tab_has_summary_strip_and_only_known_rows() {
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_camera");
     view.update(icx, |app, cx| {
         if let Some(item) = app.selected_item.as_mut() {
@@ -193,7 +193,7 @@ fn camera_tab_has_summary_strip_and_only_known_rows() {
 
 #[core::prelude::v1::test]
 fn location_tab_formats_and_removes_the_location() {
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_location");
     let id = view.update(icx, |app, cx| {
         let id = app.selected_item.as_ref().unwrap().id;
@@ -252,7 +252,7 @@ fn location_tab_formats_and_removes_the_location() {
 
 #[core::prelude::v1::test]
 fn tags_tab_adds_with_enter_and_suggests_library_tags() {
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_tags");
     view.update(icx, |app, cx| {
         app.library_tag_counts = vec![("travel".into(), 3), ("trees".into(), 1)];
@@ -300,7 +300,7 @@ fn get_info_actions_have_a_keyboard_path() {
     use crate::app::command_palette::CommandId;
     use crate::views::inspector::InspectorTab;
 
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_palette");
     let id = view.update(icx, |app, cx| {
         app.execute_command(CommandId::AdjustDate, cx);
@@ -365,7 +365,7 @@ fn cached_details_never_cross_libraries() {
 #[core::prelude::v1::test]
 fn get_info_stars_match_the_inspector_and_pop() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, view, icx) = get_info(&mut cx, "get_info_stars");
 
     for star in 1..=5u8 {

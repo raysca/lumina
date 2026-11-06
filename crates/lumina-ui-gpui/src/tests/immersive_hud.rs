@@ -39,7 +39,7 @@ fn open_viewer<'a>(
 
 #[core::prelude::v1::test]
 fn the_immersive_hud_hides_after_two_idle_seconds_and_wakes_on_input() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_idle", &mut cx);
     view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
     render_ui(vcx);
@@ -78,7 +78,7 @@ fn the_immersive_hud_hides_after_two_idle_seconds_and_wakes_on_input() {
 
 #[core::prelude::v1::test]
 fn the_windowed_viewer_never_hides_its_chrome() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_windowed", &mut cx);
     let stage = vcx
         .debug_bounds("viewer-viewport")
@@ -92,7 +92,7 @@ fn the_windowed_viewer_never_hides_its_chrome() {
 
 #[core::prelude::v1::test]
 fn the_hud_stays_under_the_pointer_and_over_an_open_menu() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_stays", &mut cx);
     view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
     render_ui(vcx);
@@ -111,7 +111,7 @@ fn the_hud_stays_under_the_pointer_and_over_an_open_menu() {
 
 #[core::prelude::v1::test]
 fn a_scrub_or_the_speed_menu_holds_the_hud_and_it_hides_once_they_end() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_scrub", &mut cx);
     view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
     render_ui(vcx);
@@ -145,7 +145,7 @@ fn a_scrub_or_the_speed_menu_holds_the_hud_and_it_hides_once_they_end() {
 
 #[core::prelude::v1::test]
 fn a_menu_closed_by_escape_lets_the_hud_hide() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_escape_menu", &mut cx);
     view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
     render_ui(vcx);
@@ -163,7 +163,7 @@ fn a_menu_closed_by_escape_lets_the_hud_hide() {
 
 #[core::prelude::v1::test]
 fn the_hud_never_hides_under_a_pointer_resting_on_it_after_reentering() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_reenter", &mut cx);
     let bar = vcx.debug_bounds("viewer-top-bar").expect("viewer-top-bar");
     vcx.simulate_mouse_move(bar.center(), None, Modifiers::none());
@@ -182,7 +182,7 @@ fn the_hud_never_hides_under_a_pointer_resting_on_it_after_reentering() {
 
 #[core::prelude::v1::test]
 fn i_brings_the_hud_back_with_the_info_drawer() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = open_viewer("hud_info_key", &mut cx);
     view.update(vcx, |app, cx| app.enter_immersive_fullscreen(None, cx));
     idle(vcx, HUD_IDLE * 2);

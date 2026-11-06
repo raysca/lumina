@@ -61,7 +61,7 @@ fn is_failed(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: MediaId)
 fn failed_decode_is_marked_once_and_not_rerequested() {
     let (dir, engine) = seed_library("thumb_failed", 1);
     let id = engine.get_item_slice(0..1)[0].id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     reset_requests();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
 
@@ -106,7 +106,7 @@ fn failed_decode_is_marked_once_and_not_rerequested() {
 fn failure_callback_notifies() {
     let (dir, engine) = seed_library("thumb_notify", 1);
     let id = engine.get_item_slice(0..1)[0].id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
 
     let notified = std::rc::Rc::new(std::cell::Cell::new(0));
@@ -165,7 +165,7 @@ fn thumbnail_callback_marks_and_messages_on_none() {
 fn conversion_failure_is_marked() {
     let (dir, engine) = seed_library("thumb_convert", 1);
     let id = engine.get_item_slice(0..1)[0].id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
 
     // 2x2 RGBA needs 16 bytes; 3 cannot become an image.
@@ -195,7 +195,7 @@ fn conversion_failure_is_marked() {
 fn rescan_clears_failures() {
     let (dir, engine) = seed_library("thumb_rescan", 1);
     let id = engine.get_item_slice(0..1)[0].id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
 
     keystrokes(vcx, "secondary-r");
@@ -220,7 +220,7 @@ fn reupserted_item_is_retried() {
     let (dir, engine) = seed_library("thumb_reupsert", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let id = item.id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
     assert!(is_failed(&view, vcx, id));
 
@@ -243,7 +243,7 @@ fn failed_card_keeps_card_size() {
     let (dir, engine) = seed_library("thumb_size", 2);
     let items = engine.get_item_slice(0..2);
     let (failed, pending) = (items[0].id, items[1].id);
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_failed(&mut cx, engine, &[failed]);
 
     let failed_bounds = vcx
@@ -265,7 +265,7 @@ fn library_switch_starts_with_no_failures() {
     let (dir, engine) = seed_library("thumb_switch", 1);
     let (other, _) = seed_library("thumb_switch_other", 1);
     let id = engine.get_item_slice(0..1)[0].id;
-    let mut cx = TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
 
     view.update(vcx, |app, cx| {

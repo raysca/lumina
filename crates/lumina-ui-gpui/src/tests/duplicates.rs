@@ -27,7 +27,7 @@ fn run_palette_command(
 fn duplicates_navigation_and_empty_state() {
     // 1 item means 0 duplicates in library
     let (temp_dir, engine) = seed_library("dup_empty", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
 
@@ -52,7 +52,7 @@ fn duplicates_navigation_and_empty_state() {
 fn duplicates_view_renders_group_and_merges() {
     // 2 items seeded with same content are duplicates
     let (temp_dir, engine) = seed_library("dup_merge", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
 
@@ -99,7 +99,7 @@ fn duplicates_view_renders_group_and_merges() {
 #[core::prelude::v1::test]
 fn command_palette_navigates_to_duplicates() {
     let (temp_dir, engine) = seed_library("dup_palette", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
 
@@ -121,7 +121,7 @@ fn command_palette_navigates_to_duplicates() {
 #[core::prelude::v1::test]
 fn command_palette_merges_all_duplicates() {
     let (temp_dir, engine) = seed_library("dup_pal_merge", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
 

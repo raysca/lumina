@@ -1137,7 +1137,7 @@ mod restore_tests {
         use crate::config::RestoredSession;
 
         let (temp_dir, engine) = scanned_engine("selection");
-        let mut cx = gpui::TestAppContext::single();
+        let mut cx = crate::tests::TestApp::single();
         let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
         view.update(cx, |app, cx| {

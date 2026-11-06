@@ -13,7 +13,7 @@ use lumina_core::DeletionTarget;
 #[core::prelude::v1::test]
 fn shift_cmd_r_reveals_the_selection_instead_of_rescanning() {
     let (dir, engine) = seed_library("reg_reveal", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     REVEALED_PATHS.with(|p| p.borrow_mut().clear());
     view.update(vcx, |app, _| {
@@ -43,7 +43,7 @@ fn shift_cmd_r_reveals_the_selection_instead_of_rescanning() {
 #[core::prelude::v1::test]
 fn alt_cmd_c_copies_the_selected_file_path() {
     let (dir, engine) = seed_library("reg_copy", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home alt-secondary-c");
@@ -59,7 +59,7 @@ fn alt_cmd_c_copies_the_selected_file_path() {
 #[core::prelude::v1::test]
 fn t_opens_the_tag_field_for_the_selection() {
     let (dir, engine) = seed_library("reg_tag_key", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home t");
@@ -76,7 +76,7 @@ fn t_opens_the_tag_field_for_the_selection() {
 #[core::prelude::v1::test]
 fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
     let (dir, engine) = seed_library("reg_tag_menu", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
@@ -96,7 +96,7 @@ fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
 #[core::prelude::v1::test]
 fn cmd_backspace_deletes_like_backspace() {
     let (dir, engine) = seed_library("reg_cmd_bs", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home");
@@ -117,7 +117,7 @@ fn cmd_backspace_deletes_like_backspace() {
 #[core::prelude::v1::test]
 fn viewer_f_favorites_and_ctrl_cmd_f_goes_full_screen() {
     let (dir, engine) = seed_library("reg_viewer_f", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home enter");
@@ -151,7 +151,7 @@ fn viewer_f_favorites_and_ctrl_cmd_f_goes_full_screen() {
 #[core::prelude::v1::test]
 fn enter_without_the_permanent_acknowledgement_keeps_the_dialog_open() {
     let (dir, engine) = seed_library("reg_perm_ack", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     keystrokes(vcx, "home");
@@ -185,7 +185,7 @@ fn enter_without_the_permanent_acknowledgement_keeps_the_dialog_open() {
 #[core::prelude::v1::test]
 fn viewer_next_button_moves_exactly_one_item() {
     let (dir, engine) = seed_library("reg_viewer_nav", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home enter");
@@ -207,7 +207,7 @@ fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
     let album = engine
         .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     click(vcx, leak(format!("smart-album-delete-{}", album.id)));
@@ -249,7 +249,7 @@ fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
 #[core::prelude::v1::test]
 fn info_toggle_keeps_its_selector_and_the_inspector_stays_with_no_selection() {
     let (dir, engine) = seed_library("reg_inspector", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, "inspector-toggle");
@@ -274,7 +274,7 @@ fn info_toggle_keeps_its_selector_and_the_inspector_stays_with_no_selection() {
 #[core::prelude::v1::test]
 fn palette_keyboard_selection_stays_in_view() {
     let (dir, engine) = seed_library("reg_palette_scroll", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "secondary-k");
@@ -327,7 +327,7 @@ fn a_frame_step_accepts_the_frame_it_lands_on() {
         .into_iter()
         .find(|item| item.media_type == lumina_core::MediaType::Video)
         .expect("sample video");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.grid_state = None;
@@ -359,7 +359,7 @@ fn a_frame_step_accepts_the_frame_it_lands_on() {
 #[core::prelude::v1::test]
 fn reveal_in_finder_reports_a_missing_file() {
     let (dir, engine) = seed_library("reg_reveal_missing", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     REVEALED_PATHS.with(|p| p.borrow_mut().clear());
     keystrokes(vcx, "home");
@@ -389,7 +389,7 @@ fn deleting_a_smart_album_asks_first() {
     let album = engine
         .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let delete = leak(format!("smart-album-delete-{}", album.id));
     let items = engine.total_count();
@@ -494,7 +494,7 @@ fn opening_another_library_drops_a_pending_smart_album_delete() {
     let album = engine
         .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, leak(format!("smart-album-delete-{}", album.id)));

@@ -10,7 +10,7 @@ use lumina_core::EngineEvent;
 
 #[core::prelude::v1::test]
 fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         assert!(app.grid_state.is_none(), "a fresh app shows the welcome");
@@ -98,7 +98,7 @@ fn progress(found: usize, total: usize, skipped: usize, file: &str, done: bool) 
 fn first_scan_shows_progress_counts_and_opens_the_library_when_done() {
     let (dir, engine) = seed_library("welcome_progress", 3);
     let items = engine.get_item_slice(0..3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.first_scan = Some(FirstScanState::new());
@@ -162,7 +162,7 @@ fn first_scan_shows_progress_counts_and_opens_the_library_when_done() {
 #[core::prelude::v1::test]
 fn enter_opens_the_library_and_cmd_period_stops_the_scan() {
     let (dir, engine) = seed_library("welcome_keys", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let start = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext| {
         view.update(vcx, |app, cx| {
@@ -215,7 +215,7 @@ fn only_an_empty_catalog_gets_the_scan_screen() {
         std::process::id()
     ));
     std::fs::create_dir_all(&empty).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(vcx, |app, cx| {
@@ -238,7 +238,7 @@ fn only_an_empty_catalog_gets_the_scan_screen() {
 #[core::prelude::v1::test]
 fn a_replaced_librarys_late_scan_complete_is_ignored() {
     let (dir, engine) = seed_library("welcome_stale", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.library_generation = 2;
@@ -320,7 +320,7 @@ fn open_root(app: &LuminaApp) -> Option<PathBuf> {
 #[core::prelude::v1::test]
 fn welcome_lists_recents_and_enter_opens_focused() {
     let (a, b) = (temp_folder("list_a"), temp_folder("list_b"));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, vec![a.to_path_buf(), b.to_path_buf()]);
     for selector in ["welcome-recent-0", "welcome-recent-1"] {
         assert!(
@@ -352,7 +352,7 @@ fn welcome_lists_recents_and_enter_opens_focused() {
 #[core::prelude::v1::test]
 fn welcome_click_opens_a_recent() {
     let a = temp_folder("click_a");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, vec![a.to_path_buf()]);
     click(vcx, "welcome-recent-0");
     view.update(vcx, |app, _| {
@@ -371,7 +371,7 @@ fn welcome_backspace_removes_focused_recent() {
         temp_folder("rm_b"),
         temp_folder("rm_c"),
     );
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(
         &mut cx,
         vec![a.to_path_buf(), b.to_path_buf(), c.to_path_buf()],
@@ -407,7 +407,7 @@ fn welcome_backspace_removes_focused_recent() {
 #[core::prelude::v1::test]
 fn failed_recents_save_reverts_and_shows_banner() {
     let (a, b) = (temp_folder("save_a"), temp_folder("save_b"));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let recents = vec![a.to_path_buf(), b.to_path_buf()];
     let (view, vcx) = welcome_with_recents(&mut cx, recents.clone());
     view.update(vcx, |app, _| {
@@ -439,7 +439,7 @@ fn failed_recents_save_reverts_and_shows_banner() {
 #[core::prelude::v1::test]
 fn missing_last_library_shows_notice() {
     let gone = temp_folder("gone").to_path_buf(); // deleted at once
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     view.update(vcx, |app, cx| {
         app.config.last_library_path = Some(gone.clone());
@@ -470,7 +470,7 @@ fn missing_last_library_shows_notice() {
 fn enter_on_unavailable_recent_shows_notice_not_open() {
     let gone = temp_folder("unavail").to_path_buf();
     let here = temp_folder("avail");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, vec![gone.clone(), here.to_path_buf()]);
     // The off-thread check has answered; draw what it found.
     render_ui(vcx);
@@ -514,7 +514,7 @@ fn palette_opens_a_recent_library() {
     let current = TempLibrary(dir);
     let other = temp_folder("palette_other");
     let gone = temp_folder("palette_gone").to_path_buf();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
         // While a library is open it is the first recent (open_library_inner).
@@ -586,7 +586,7 @@ fn clear_recents_empties_the_list_only() {
     let (dir, engine) = seed_library("recent_clear", 1);
     let current = TempLibrary(dir);
     let other = temp_folder("clear_other");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let clear_listed = |app: &LuminaApp| {
         app.palette_rows()
@@ -619,7 +619,7 @@ fn failed_open_does_not_become_last_library() {
     let folder = temp_folder("not_a_dir");
     let file = folder.join("photo.jpg");
     std::fs::write(&file, b"not a folder").unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.open_library_inner(file.clone(), cx);
@@ -637,7 +637,7 @@ fn failed_open_does_not_become_last_library() {
 
 #[core::prelude::v1::test]
 fn welcome_cmd_k_does_not_open_an_invisible_palette() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     keystrokes(vcx, "secondary-k secondary-/");
     view.update(vcx, |app, _| {
@@ -661,7 +661,7 @@ fn welcome_cmd_k_does_not_open_an_invisible_palette() {
 
 #[core::prelude::v1::test]
 fn welcome_menu_actions_reach_the_app() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = picks();
     vcx.dispatch_action(crate::actions::OpenLibrary);
@@ -682,7 +682,7 @@ fn welcome_menu_actions_reach_the_app() {
 #[core::prelude::v1::test]
 fn first_scan_quit_reaches_the_app() {
     let (dir, engine) = seed_library("first_scan_quit", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.first_scan = Some(FirstScanState::new());
@@ -709,7 +709,7 @@ fn first_scan_quit_reaches_the_app() {
 
 #[core::prelude::v1::test]
 fn welcome_preferences_paint_and_escape_closes() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
 
     vcx.dispatch_action(crate::actions::OpenPreferences);
@@ -751,7 +751,7 @@ fn welcome_preferences_paint_and_escape_closes() {
 
 #[core::prelude::v1::test]
 fn welcome_cmd_o_and_escape_work_and_modified_enter_is_gated() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = picks();
     keystrokes(vcx, "secondary-o");
@@ -790,7 +790,7 @@ fn picture_opens() -> usize {
 #[core::prelude::v1::test]
 fn import_into_new_library_opens_then_asks_for_sources() {
     let folder = temp_folder("new_library");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
     // Checked in the same update: the real scan's own ScanComplete may
@@ -833,7 +833,7 @@ fn new_library_open_failure_asks_nothing() {
     let folder = temp_folder("new_library_fail");
     let file = folder.join("photo.jpg");
     std::fs::write(&file, b"not a folder").unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
     view.update(vcx, |app, cx| {
@@ -854,7 +854,7 @@ fn new_library_open_failure_asks_nothing() {
 
 #[core::prelude::v1::test]
 fn welcome_keyboard_paths() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     view.update(vcx, |app, cx| {
         app.has_desktop_pics = true;
@@ -907,7 +907,7 @@ fn welcome_keyboard_paths() {
 #[core::prelude::v1::test]
 fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
     let folder = temp_folder("new_library_rescan");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
     view.update(vcx, |app, cx| {
@@ -950,7 +950,7 @@ fn sample_button_opens_the_sample_library() {
     let folder = temp_folder("sample");
     let dest = folder.join("Sample Library");
     let other = folder.join("Second Request");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
 
     let before = sample_opens();
@@ -997,7 +997,7 @@ fn sample_generation_failure_reaches_the_banner() {
     let folder = temp_folder("sample_fail");
     let file = folder.join("Sample Library");
     std::fs::write(&file, b"not a folder").unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     view.update(vcx, |app, cx| app.open_sample_library_at(file.clone(), cx));
     vcx.run_until_parked();
@@ -1017,7 +1017,7 @@ fn sample_generation_failure_reaches_the_banner() {
 
 #[core::prelude::v1::test]
 fn welcome_alt_enter_explores_the_sample_library() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     view.update(vcx, |app, cx| {
         app.has_desktop_pics = true;
@@ -1043,7 +1043,7 @@ fn sample_ready_after_another_library_opened_keeps_that_library() {
     let dest = folder.join("Sample Library");
     let chosen = folder.join("Chosen");
     std::fs::create_dir_all(&chosen).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     view.update(vcx, |app, cx| {
         app.open_sample_library_at(dest.clone(), cx);

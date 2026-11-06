@@ -51,7 +51,7 @@ fn start_with_pending(
 #[core::prelude::v1::test]
 fn user_navigation_before_scan_complete_cancels_restore() {
     let (dir, engine) = seed_library("restore_nav", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
 
@@ -81,7 +81,7 @@ fn user_navigation_before_scan_complete_cancels_restore() {
 #[core::prelude::v1::test]
 fn typing_a_search_before_scan_complete_cancels_restore() {
     let (dir, engine) = seed_library("restore_type", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
 
@@ -105,7 +105,7 @@ fn selecting_a_card_before_scan_complete_cancels_restore() {
     let (dir, engine) = seed_library("restore_card", 4);
     let items = engine.get_item_slice(0..2);
     let card = leak(format!("media-card-{}", items[1].id.0));
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(
         &view,
@@ -144,7 +144,7 @@ fn selecting_a_card_before_scan_complete_cancels_restore() {
 #[core::prelude::v1::test]
 fn untouched_startup_still_restores() {
     let (dir, engine) = seed_library("restore_idle", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
 
@@ -201,7 +201,7 @@ fn big_library<'a>(
 
 #[core::prelude::v1::test]
 fn restore_scrolls_to_saved_anchor_item() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx, ids) = big_library("restore_anchor", &mut cx);
     start_with_pending(
         &view,
@@ -223,7 +223,7 @@ fn restore_scrolls_to_saved_anchor_item() {
 
 #[core::prelude::v1::test]
 fn restore_reveals_selection_outside_the_anchored_view() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx, ids) = big_library("restore_far", &mut cx);
     start_with_pending(
         &view,
@@ -243,7 +243,7 @@ fn restore_reveals_selection_outside_the_anchored_view() {
 
 #[core::prelude::v1::test]
 fn restore_with_missing_anchor_reveals_selection() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx, ids) = big_library("restore_noanchor", &mut cx);
     start_with_pending(
         &view,
@@ -263,7 +263,7 @@ fn restore_with_missing_anchor_reveals_selection() {
 
 #[core::prelude::v1::test]
 fn grid_top_item_id_reads_the_first_visible_row() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx, ids) = big_library("restore_top", &mut cx);
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -291,7 +291,7 @@ fn grid_top_item_id_reads_the_first_visible_row() {
 
 #[core::prelude::v1::test]
 fn viewer_escape_keeps_grid_scroll() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx, ids) = big_library("restore_viewer", &mut cx);
     view.update(vcx, |app, _| {
         app.grid_state
@@ -323,7 +323,7 @@ fn viewer_escape_keeps_grid_scroll() {
 #[core::prelude::v1::test]
 fn request_quit_still_quits_after_saving() {
     let (dir, engine) = seed_library("restore_quit", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.request_quit(cx));
     view.update(vcx, |app, _| {

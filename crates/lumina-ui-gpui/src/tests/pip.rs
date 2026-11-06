@@ -93,7 +93,7 @@ fn open_pip_for(
 #[core::prelude::v1::test]
 fn viewer_video_moves_into_pip_and_survives_browsing_photos() {
     let lib = pip_library("survive");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     click(vcx, card(&lib.video_a));
@@ -160,7 +160,7 @@ fn viewer_video_moves_into_pip_and_survives_browsing_photos() {
 #[core::prelude::v1::test]
 fn opening_another_video_replaces_the_pip_video_without_the_viewer() {
     let lib = pip_library("replace");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -187,7 +187,7 @@ fn opening_another_video_replaces_the_pip_video_without_the_viewer() {
 #[core::prelude::v1::test]
 fn expand_returns_the_pip_video_to_the_viewer_at_the_same_position() {
     let lib = pip_library("expand");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -229,7 +229,7 @@ fn expand_returns_the_pip_video_to_the_viewer_at_the_same_position() {
 #[core::prelude::v1::test]
 fn toggling_pip_off_stops_playback_and_palette_reaches_it() {
     let lib = pip_library("toggle");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     click(vcx, card(&lib.video_a));
@@ -261,7 +261,7 @@ fn toggling_pip_off_stops_playback_and_palette_reaches_it() {
 #[core::prelude::v1::test]
 fn trashing_the_pip_video_closes_pip() {
     let lib = pip_library("trash");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -284,7 +284,7 @@ fn trashing_the_pip_video_closes_pip() {
 #[core::prelude::v1::test]
 fn context_menu_offers_pip_only_for_videos_and_plays_the_clicked_item() {
     let lib = pip_library("menu");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     right_click(vcx, card(&lib.photo));
@@ -310,7 +310,7 @@ fn context_menu_offers_pip_only_for_videos_and_plays_the_clicked_item() {
 #[core::prelude::v1::test]
 fn viewer_shows_a_handoff_for_videos_while_pip_plays() {
     let lib = pip_library("handoff");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -346,7 +346,7 @@ fn viewer_shows_a_handoff_for_videos_while_pip_plays() {
 #[core::prelude::v1::test]
 fn expand_moves_position_based_selection_to_the_pip_video() {
     let lib = pip_library("expand_selection");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -372,7 +372,7 @@ fn expand_moves_position_based_selection_to_the_pip_video() {
 #[core::prelude::v1::test]
 fn a_late_close_message_from_an_old_pip_window_keeps_the_new_session() {
     let lib = pip_library("stale_close");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -393,7 +393,7 @@ fn a_late_close_message_from_an_old_pip_window_keeps_the_new_session() {
 #[core::prelude::v1::test]
 fn permanently_deleting_the_pip_video_closes_pip_and_says_so() {
     let lib = pip_library("perm_delete");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -423,7 +423,7 @@ fn permanently_deleting_the_pip_video_closes_pip_and_says_so() {
 #[core::prelude::v1::test]
 fn the_pip_window_close_button_ends_the_session() {
     let lib = pip_library("window_close");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
@@ -453,7 +453,7 @@ fn the_pip_window_close_button_ends_the_session() {
 #[core::prelude::v1::test]
 fn the_pip_window_expand_button_returns_the_video_to_the_viewer() {
     let lib = pip_library("window_expand");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);

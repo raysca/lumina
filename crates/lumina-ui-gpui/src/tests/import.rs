@@ -38,7 +38,7 @@ fn imported_files(library: &Path) -> usize {
 fn import_dialog_flow() {
     let (library, engine) = seed_library("import_flow", 1);
     let source = source_folder("flow", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -97,7 +97,7 @@ fn import_dialog_flow() {
 fn import_dialog_backdrop_and_cancel_close() {
     let (library, engine) = seed_library("import_close", 1);
     let source = source_folder("close", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
@@ -128,7 +128,7 @@ fn import_dialog_backdrop_and_cancel_close() {
 fn import_dialog_absorbs_keys_and_text() {
     let (library, engine) = seed_library("import_keys", 2);
     let source = source_folder("keys", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
     keystrokes(vcx, "right");
@@ -157,7 +157,7 @@ fn import_dialog_absorbs_keys_and_text() {
 fn shift_cmd_i_opens_import_not_get_info() {
     use crate::app::import::IMPORT_PICKS;
     let (library, engine) = seed_library("import_shortcut", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
     keystrokes(vcx, "right");
@@ -186,7 +186,7 @@ fn library_switch_clears_import_dialog() {
     let (library, engine) = seed_library("import_switch", 1);
     let (other, _other_engine) = seed_library("import_switch_other", 1);
     let source = source_folder("switch", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
@@ -210,7 +210,7 @@ fn nothing_new_shows_ok_only() {
     let (library, engine) = seed_library("import_nothing", 1);
     let source = source_folder("nothing", 0);
     std::fs::write(source.join("notes.txt"), b"not media").unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
@@ -237,7 +237,7 @@ fn nothing_new_shows_ok_only() {
 
 #[core::prelude::v1::test]
 fn import_needs_a_library() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_, cx| crate::LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.begin_import(vec![std::env::temp_dir()], cx);
@@ -254,7 +254,7 @@ fn library_switch_stops_a_running_copy() {
     let (library, engine) = seed_library("import_switch_copy", 1);
     let (other, _other_engine) = seed_library("import_switch_copy_other", 1);
     let source = source_folder("switch_copy", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
@@ -290,7 +290,7 @@ fn library_switch_stops_a_running_copy() {
 fn import_waits_while_a_delete_confirmation_is_open() {
     let (library, engine) = seed_library("import_vs_delete", 2);
     let source = source_folder("vs_delete", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
     keystrokes(vcx, "right");
@@ -318,7 +318,7 @@ fn import_waits_while_a_delete_confirmation_is_open() {
 fn checking_shows_a_live_count() {
     let (library, engine) = seed_library("import_checking", 1);
     let source = source_folder("checking", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -358,7 +358,7 @@ fn checking_shows_a_live_count() {
 #[core::prelude::v1::test]
 fn status_bar_shows_progress_and_cancels() {
     let (library, engine) = seed_library("import_status", 1);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {

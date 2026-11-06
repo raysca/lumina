@@ -35,7 +35,7 @@ fn scanned_engine(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEng
 
 #[core::prelude::v1::test]
 fn test_filter_changes_clear_multi_selection() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let sample = get_sample_items();
 
@@ -66,7 +66,7 @@ fn test_filter_changes_clear_multi_selection() {
 
 #[core::prelude::v1::test]
 fn test_search_focus_blur() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -79,7 +79,7 @@ fn test_search_focus_blur() {
 #[core::prelude::v1::test]
 fn test_watcher_batch_clears_selection_and_refreshes_counts() {
     let (temp_dir, engine) = scanned_engine("counts");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -119,7 +119,7 @@ fn test_watcher_batch_clears_selection_and_refreshes_counts() {
 
 #[core::prelude::v1::test]
 fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let sample = get_sample_items();
 
@@ -148,7 +148,7 @@ fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
 
 #[core::prelude::v1::test]
 fn test_shortcuts_overlay_toggles() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -163,7 +163,7 @@ fn test_shortcuts_overlay_toggles() {
 #[core::prelude::v1::test]
 fn test_keyboard_selection_reveals_grid_row() {
     let (temp_dir, engine) = scanned_engine("reveal");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {
@@ -187,7 +187,7 @@ fn test_keyboard_selection_reveals_grid_row() {
 #[core::prelude::v1::test]
 fn engine_errors_show_in_the_error_banner() {
     let (temp_dir, engine) = scanned_engine("engine_error");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(cx, |app, cx| {

@@ -43,7 +43,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
         .add_tags_batch(&[a.id], &["street".to_string()])
         .unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     render_ui(vcx);
@@ -144,7 +144,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
         .add_tags_batch(&[a.id], &["street".to_string()])
         .unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     render_ui(vcx);
@@ -186,7 +186,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
 
 #[core::prelude::v1::test]
 fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (dir, engine, [a, b], view, vcx) = select_two("batch_v3_panel", &mut cx);
 
     for selector in [
@@ -255,7 +255,7 @@ fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
 fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
     let (dir, engine) = seed_library("batch_v3_dock", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     render_ui(vcx);
@@ -307,7 +307,7 @@ fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
 
 #[core::prelude::v1::test]
 fn a_batch_rating_or_label_is_one_undo_step() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, engine, [a, b], view, vcx) = select_two("multi_undo_step", &mut cx);
     let catalog = engine.catalog();
 
@@ -347,7 +347,7 @@ fn a_batch_rating_or_label_is_one_undo_step() {
 
 #[core::prelude::v1::test]
 fn a_failed_batch_rating_changes_nothing_and_says_so() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (temp_dir, engine, [a, b], view, vcx) = select_two("multi_failed_rating", &mut cx);
     rusqlite::Connection::open(temp_dir.join("catalog.db"))
         .unwrap()

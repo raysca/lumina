@@ -42,7 +42,7 @@ fn open_video_in_plain_app(
 
 #[core::prelude::v1::test]
 fn seek_arms_bounded_refresh_without_corrupting_the_scrub_drag() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     open_video_in_plain_app(&view, vcx, video_sample(), 60.0);
 
@@ -93,7 +93,7 @@ fn seek_arms_bounded_refresh_without_corrupting_the_scrub_drag() {
 
 #[core::prelude::v1::test]
 fn expired_seek_refresh_clears_the_deadline_and_stops_the_ticker() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     open_video_in_plain_app(&view, vcx, video_sample(), 30.0);
 
@@ -123,7 +123,7 @@ fn expired_seek_refresh_clears_the_deadline_and_stops_the_ticker() {
 #[core::prelude::v1::test]
 fn overlay_scrub_drag_leaves_the_selected_media_unchanged() {
     let (temp_dir, engine) = seed_library("video_scrub_overlay", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let video = video_sample();
     let expected = video.id.0;
@@ -250,7 +250,7 @@ fn track_point(track: gpui::Bounds<gpui::Pixels>, pct: f32) -> gpui::Point<gpui:
 #[core::prelude::v1::test]
 fn scrubber_without_strip_shows_time_badge_only() {
     let (temp_dir, engine) = seed_library("video_scrub_badge", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let video = video_sample();
 
@@ -316,7 +316,7 @@ fn scrubber_without_strip_shows_time_badge_only() {
 #[core::prelude::v1::test]
 fn hover_shows_nearest_strip_frame() {
     let (temp_dir, engine) = seed_library("video_scrub_hover_preview", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
@@ -348,7 +348,7 @@ fn hover_shows_nearest_strip_frame() {
 #[core::prelude::v1::test]
 fn drag_scrub_shows_preview_for_destination() {
     let (temp_dir, engine) = seed_library("video_scrub_drag_preview", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
@@ -387,7 +387,7 @@ fn drag_scrub_shows_preview_for_destination() {
 
 #[core::prelude::v1::test]
 fn stale_scrub_strip_is_discarded_after_media_change() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     let (video_a, video_b) = two_videos();
     open_video_in_plain_app(&view, vcx, video_a.clone(), 60.0);
@@ -423,7 +423,7 @@ fn stale_scrub_strip_is_discarded_after_media_change() {
 
 #[core::prelude::v1::test]
 fn media_change_cancels_inflight_strip() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     let (video_a, video_b) = two_videos();
     open_video_in_plain_app(&view, vcx, video_a, 60.0);
@@ -454,7 +454,7 @@ fn media_change_cancels_inflight_strip() {
 
 #[core::prelude::v1::test]
 fn scrub_strip_requested_once_per_video_on_first_hover() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     let video = video_sample();
     open_video_in_plain_app(&view, vcx, video.clone(), 60.0);
@@ -499,7 +499,7 @@ fn scrub_strip_requested_once_per_video_on_first_hover() {
 #[core::prelude::v1::test]
 fn undecodable_video_stays_time_only_and_is_not_retried() {
     let (temp_dir, engine) = seed_library("video_scrub_undecodable", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Err(anyhow::anyhow!("no frames")));
@@ -540,7 +540,7 @@ fn undecodable_video_stays_time_only_and_is_not_retried() {
 
 #[core::prelude::v1::test]
 fn closing_viewer_retires_strip_images() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     open_video_in_plain_app(&view, vcx, video_sample(), 60.0);
 
@@ -578,7 +578,7 @@ fn fixture_video() -> MediaItem {
 #[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
 fn scrub_pauses_playing_video_and_resumes_on_release() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.grid_state = None;
@@ -606,7 +606,7 @@ fn scrub_pauses_playing_video_and_resumes_on_release() {
 
 #[core::prelude::v1::test]
 fn scrub_of_paused_video_stays_paused() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     open_video_in_plain_app(&view, vcx, video_sample(), 60.0);
 
@@ -624,7 +624,7 @@ fn scrub_of_paused_video_stays_paused() {
 
 #[core::prelude::v1::test]
 fn pausing_during_a_scrub_is_not_undone_on_release() {
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.grid_state = None;

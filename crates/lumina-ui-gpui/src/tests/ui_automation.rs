@@ -170,7 +170,7 @@ pub(crate) fn app_with_library(
 #[core::prelude::v1::test]
 fn ui_automation_renders_all_core_controls() {
     let (temp_dir, engine) = seed_library("render", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
 
     assert!(vcx.debug_bounds("app-root").is_some());
@@ -195,7 +195,7 @@ fn ui_automation_renders_all_core_controls() {
 #[core::prelude::v1::test]
 fn ui_automation_toolbar_buttons_by_mouse() {
     let (temp_dir, engine) = seed_library("toolbar", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, "sidebar-toggle");
@@ -215,7 +215,7 @@ fn ui_automation_toolbar_buttons_by_mouse() {
 #[core::prelude::v1::test]
 fn ui_automation_search_click_type_clear() {
     let (temp_dir, engine) = seed_library("search", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, "search-input");
@@ -259,7 +259,7 @@ fn ui_automation_grid_and_viewer_journey() {
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -295,7 +295,7 @@ fn ui_automation_viewer_back_button_returns_to_grid() {
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     double_click(vcx, card);
@@ -349,7 +349,7 @@ fn ui_automation_selection_contract_and_empty_space_click() {
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -409,7 +409,7 @@ fn ui_automation_tag_double_click_starts_rename() {
         .add_tags_batch(&[item.id], &["travel".to_string()])
         .unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.refresh_album_counts();
@@ -444,7 +444,7 @@ fn ui_automation_card_skeleton_selection_and_open() {
     let skeleton = leak(format!("media-card-skeleton-{}", first_id));
     let selected = leak(format!("media-card-selected-{}", first_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     assert!(
@@ -498,7 +498,7 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
     let card = leak(format!("media-card-{}", first_id));
     let selected = leak(format!("media-card-selected-{}", first_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     // Fix the window so the rendered card width and the production row-height
@@ -565,7 +565,7 @@ fn ui_automation_card_texture_replaces_skeleton() {
     let skeleton = leak(format!("media-card-skeleton-{}", card_id));
     let thumb = leak(format!("media-card-thumb-{}", card_id));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     assert!(vcx.debug_bounds(skeleton).is_some());
     assert!(vcx.debug_bounds(thumb).is_none());
@@ -616,7 +616,7 @@ fn ui_automation_card_photo_well_is_square_at_all_densities() {
         engine.get_item_slice(1..2)[0].id.0
     ));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     // Fix the window so the rendered card width and the production formula use
@@ -709,7 +709,7 @@ fn ui_automation_card_tooltip_carries_the_filename() {
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
 
     let center = bounds_center(vcx, card);
@@ -731,7 +731,7 @@ fn ui_automation_card_tooltip_carries_the_filename() {
 #[core::prelude::v1::test]
 fn ui_automation_empty_search_state_offers_a_clear_action() {
     let (temp_dir, engine) = seed_library("empty_search", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -759,7 +759,7 @@ fn ui_automation_empty_search_state_offers_a_clear_action() {
 #[core::prelude::v1::test]
 fn ui_automation_modals_dismiss_on_backdrop() {
     let (temp_dir, engine) = seed_library("modals", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, "tags-toolbar-btn");
@@ -780,7 +780,7 @@ fn ui_automation_modals_dismiss_on_backdrop() {
 #[core::prelude::v1::test]
 fn ui_automation_shortcut_cheat_sheet() {
     let (temp_dir, engine) = seed_library("shortcuts", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "secondary-/");
@@ -806,7 +806,7 @@ fn ui_automation_shortcut_cheat_sheet() {
 #[core::prelude::v1::test]
 fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
     let (temp_dir, engine) = seed_library("shortcuts_scroll", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-/");
     render_ui(vcx);
@@ -849,7 +849,7 @@ fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
 #[core::prelude::v1::test]
 fn ui_automation_open_in_default_app_reports_a_missing_file() {
     let (temp_dir, engine) = seed_library("open_default_missing", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home enter");
     let path = view.update(vcx, |app, _| {
@@ -887,7 +887,7 @@ fn ui_automation_export_writes_originals_and_sidecars() {
         .unwrap();
 
     let destination = temp_dir.join("exported");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
@@ -923,7 +923,7 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
     let (temp_dir, engine) = seed_library("undo", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let sidecar = lumina_core::sidecar_path(&item.path);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -966,7 +966,7 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
 fn ui_automation_undo_tag_and_caption() {
     let (temp_dir, engine) = seed_library("undo_meta", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
@@ -1015,7 +1015,7 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
     let (temp_dir, engine) = seed_library("title_import", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let sidecar = lumina_core::sidecar_path(&item.path);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -1089,7 +1089,7 @@ fn ui_automation_date_and_location_edit_undo() {
     let (temp_dir, engine) = seed_library("edit_time_place", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let original_timestamp = item.timestamp_epoch_ms;
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
@@ -1160,7 +1160,7 @@ fn ui_automation_date_and_location_edit_undo() {
 #[core::prelude::v1::test]
 fn ui_automation_command_palette() {
     let (temp_dir, engine) = seed_library("command_palette", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     render_ui(vcx);
@@ -1214,7 +1214,7 @@ fn ui_automation_command_palette() {
 #[core::prelude::v1::test]
 fn ui_automation_preferences_modal() {
     let (temp_dir, engine) = seed_library("preferences", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     render_ui(vcx);
@@ -1256,7 +1256,7 @@ fn ui_automation_preferences_modal() {
 #[core::prelude::v1::test]
 fn ui_automation_sort_menu_orders_grid() {
     let (temp_dir, engine) = seed_library("sorting", 5);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     render_ui(vcx);
@@ -1291,7 +1291,7 @@ fn ui_automation_sort_menu_orders_grid() {
 #[core::prelude::v1::test]
 fn ui_automation_smart_album_edit_and_delete() {
     let (temp_dir, engine) = seed_library("smart_album_mgmt", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -1351,7 +1351,7 @@ fn ui_automation_smart_album_edit_and_delete() {
 #[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
     let (temp_dir, engine) = seed_library("resize", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     vcx.simulate_resize(gpui::size(gpui::px(1100.0), gpui::px(720.0)));
@@ -1368,7 +1368,7 @@ fn ui_automation_resize_updates_persisted_bounds() {
 #[core::prelude::v1::test]
 fn ui_automation_navigation_album_back() {
     let (temp_dir, engine) = seed_library("nav_album", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -1411,7 +1411,7 @@ fn ui_automation_navigation_album_back() {
 #[core::prelude::v1::test]
 fn ui_automation_navigation_search_back() {
     let (temp_dir, engine) = seed_library("nav_search", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| app.set_search_query("is:video", cx));
@@ -1438,7 +1438,7 @@ fn ui_automation_navigation_viewer_back_closes() {
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, card);
@@ -1480,7 +1480,7 @@ fn ui_automation_navigation_viewer_back_closes() {
 #[core::prelude::v1::test]
 fn ui_automation_navigation_edge_no_ops() {
     let (temp_dir, engine) = seed_library("nav_edges", 8);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     render_ui(vcx);
@@ -1538,7 +1538,7 @@ fn ui_automation_navigation_edge_no_ops() {
 #[core::prelude::v1::test]
 fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
     let (temp_dir, engine) = seed_library("search_suggestions", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, "search-input");
@@ -1655,7 +1655,7 @@ fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
 #[core::prelude::v1::test]
 fn ui_automation_search_suggestion_click_applies_without_blurring() {
     let (temp_dir, engine) = seed_library("search_suggestion_click", 3);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
         app.config.recent_searches = vec!["camera:sony".to_string(), "is:video".to_string()];
@@ -1701,7 +1701,7 @@ fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
         .map(|item| leak(format!("media-card-{}", item.id.0)))
         .collect();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     let start = bounds_center(vcx, cards[0]);
@@ -1776,7 +1776,7 @@ fn ui_automation_grid_drag_across_rows_selects_a_rectangle() {
 
     let (temp_dir, engine) = seed_library("grid_drag_rect", 12);
     let items = engine.get_item_slice(0..12);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.grid_columns = 4;
@@ -1820,7 +1820,7 @@ fn ui_automation_grid_drag_from_selected_card_preserves_multi_selection() {
         .map(|item| leak(format!("media-card-{}", item.id.0)))
         .collect();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     // Build {0,1,2} the keyboard-equivalent way: click then Shift+click.
@@ -1890,7 +1890,7 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
         .map(|item| leak(format!("media-card-{}", item.id.0)))
         .collect();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     click(vcx, cards[0]);
@@ -1940,7 +1940,7 @@ fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
         .map(|item| leak(format!("media-card-{}", item.id.0)))
         .collect();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     let surface = vcx
@@ -2032,7 +2032,7 @@ pub(crate) fn wheel(
 #[core::prelude::v1::test]
 fn ui_automation_viewer_wheel_zoom_is_smooth() {
     let (temp_dir, engine) = seed_library("wheel_smooth", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let item = view.update(vcx, |app, _| {
         app.get_active_slice(0..1)
@@ -2188,7 +2188,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
     use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
 
     let (temp_dir, engine) = seed_library("grid_wheel_zoom", 40);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, cx| {
@@ -2374,7 +2374,7 @@ fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
     engine.set_title(first.id, Some("First")).unwrap();
     engine.set_caption(first.id, "First caption").unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
@@ -2509,7 +2509,7 @@ fn ui_automation_batch_date_mixed_apply_validation_and_grouped_undo() {
         engine.set_timestamp(item.id, date).unwrap();
     }
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Derive the selection from the app's own sorted view: changing timestamps
@@ -2658,7 +2658,7 @@ fn ui_automation_batch_location_mixed_apply_validation_and_grouped_undo() {
         engine.set_location(item.id, lat, lon).unwrap();
     }
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Read the selection from the rendered (sorted) view so the assertions do
@@ -2807,7 +2807,7 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
         .set_location(annotated.id, Some(48.8566), Some(2.3522))
         .unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     // Only the annotated item differs from its neighbour, so the title, date
@@ -2973,7 +2973,7 @@ fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
     let untagged_item = items[2].clone();
     let card = leak(format!("media-card-{}", untagged_item.id.0));
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     view.update(vcx, |app, _| {

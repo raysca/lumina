@@ -18,7 +18,7 @@ fn missing_item_shows_badge_and_view() {
         .unwrap()
         .id;
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
 
@@ -59,7 +59,7 @@ fn missing_item_shows_badge_and_view() {
 #[core::prelude::v1::test]
 fn missing_row_hidden_when_nothing_is_missing() {
     let (temp_dir, engine) = seed_library("missing_none", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     assert!(
@@ -76,7 +76,7 @@ fn viewer_says_the_original_is_missing() {
     let gone = temp_dir.join("photo_00.jpg");
     std::fs::remove_file(&gone).unwrap();
     engine.catalog().mark_missing_under(&gone).unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let item = engine_item(&view, vcx);
     view.update(vcx, |app, cx| app.open_viewer(item, cx));
@@ -108,7 +108,7 @@ fn locate_outside_library_shows_banner() {
     let outside = std::env::temp_dir().join(format!("lumina_outside_{}.jpg", std::process::id()));
     std::fs::write(&outside, b"elsewhere").unwrap();
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.apply_locate(id, outside.clone(), cx));
     vcx.run_until_parked();
@@ -129,7 +129,7 @@ fn locate_outside_library_shows_banner() {
 #[core::prelude::v1::test]
 fn locate_needs_one_missing_item_selected() {
     let (temp_dir, engine) = seed_library("missing_locate_none", 2);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.execute_command(crate::app::command_palette::CommandId::LocateMissing, cx);
@@ -155,7 +155,7 @@ fn context_menu_offers_locate_only_for_missing_items() {
         .find(|item| item.id != missing_id)
         .unwrap()
         .id;
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
 
@@ -190,7 +190,7 @@ fn locate_reconnects_a_moved_file() {
     std::fs::remove_file(&gone).unwrap();
     let id = engine.catalog().mark_missing_under(&gone).unwrap().missing[0];
 
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.apply_locate(id, moved.clone(), cx));
     vcx.run_until_parked();

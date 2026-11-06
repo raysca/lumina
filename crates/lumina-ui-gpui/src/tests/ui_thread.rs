@@ -57,7 +57,7 @@ fn draw(vcx: &mut VisualTestContext) {
 #[core::prelude::v1::test]
 fn a_frame_never_waits_on_the_catalog_lock() {
     let (dir, engine) = seed_library("ui_thread_frame", 24);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.search_query = "photo".to_string();
@@ -95,7 +95,7 @@ fn a_frame_never_waits_on_the_catalog_lock() {
 #[core::prelude::v1::test]
 fn viewer_arrows_never_wait_on_the_catalog_lock() {
     let (dir, engine) = seed_library("ui_thread_viewer", 24);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.select_index(0, cx);
@@ -130,7 +130,7 @@ fn tags_follow_the_latest_selection_even_when_loads_land_late() {
     engine
         .add_tags_batch(&[items[1].id], &["second".to_string()])
         .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     let first_request = view.update(vcx, |app, cx| {
@@ -157,7 +157,7 @@ fn tags_follow_the_latest_selection_even_when_loads_land_late() {
 /// test draws those frames itself.
 fn after_a_catalog_change_the_next_frames_show_it() {
     let (dir, engine) = seed_library("ui_thread_revision", 4);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.search_query = "tag:fresh".to_string();
@@ -191,7 +191,7 @@ fn after_a_catalog_change_the_next_frames_show_it() {
 fn opening_another_library_never_shows_the_last_ones_rows() {
     let (dir_a, engine_a) = seed_library("ui_thread_lib_a", 3);
     let (dir_b, _engine_b) = seed_library("ui_thread_lib_b", 5);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine_a);
     render_ui(vcx);
     render_ui(vcx);
@@ -225,7 +225,7 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
 #[core::prelude::v1::test]
 fn viewer_arrows_during_a_scan_never_wait_on_the_catalog_lock() {
     let (dir, engine) = seed_library("ui_thread_scan", 24);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.search_query = "photo".to_string();
@@ -262,7 +262,7 @@ fn viewer_arrows_during_a_scan_never_wait_on_the_catalog_lock() {
 #[core::prelude::v1::test]
 fn trashing_in_the_viewer_moves_on_to_the_next_photo() {
     let (dir, engine) = seed_library("ui_thread_trash", 6);
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let next = view.update(vcx, |app, cx| {
         app.select_index(0, cx);
@@ -296,7 +296,7 @@ fn select_all(view: &gpui::Entity<crate::app::LuminaApp>, vcx: &mut VisualTestCo
 fn export_runs_in_background_and_refuses_a_second() {
     let (dir, engine) = seed_library("ui_thread_export", 3);
     let destination = dir.join("exported");
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     select_all(&view, vcx);
 
@@ -379,7 +379,7 @@ fn export_failure_still_reaches_the_banner() {
     let (dir, engine) = seed_library("ui_thread_export_fail", 2);
     let destination = dir.join("not_a_folder");
     std::fs::write(&destination, b"a file").unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     select_all(&view, vcx);
 
@@ -410,7 +410,7 @@ fn xmp_import_runs_in_background() {
         },
     )
     .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
@@ -468,7 +468,7 @@ fn xmp_result_after_library_switch_does_not_refresh_the_new_library() {
         },
     )
     .unwrap();
-    let mut cx = gpui::TestAppContext::single();
+    let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine_a.clone());
 
     view.update(vcx, |app, cx| {
