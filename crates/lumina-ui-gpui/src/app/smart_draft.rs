@@ -139,6 +139,7 @@ pub fn field_label(field: &RuleField) -> &'static str {
         RuleField::CountryCode => "Country code",
         RuleField::FileSize => "File size (bytes)",
         RuleField::DurationMs => "Duration (ms)",
+        RuleField::Query => "Search",
     }
 }
 
@@ -160,7 +161,7 @@ pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
     use RuleOperator::*;
     match field {
         RuleField::MediaType | RuleField::ColorLabel => &[Equals, NotEquals],
-        RuleField::IsFavorite => &[Equals],
+        RuleField::IsFavorite | RuleField::Query => &[Equals],
         RuleField::Date => &[Equals, LessThan, GreaterThan, Between, InTheLast],
         RuleField::Tag => &[Equals, NotEquals, Contains, IsEmpty, IsNotEmpty],
         RuleField::Rating => &[Equals, AtLeast, AtMost],
@@ -172,6 +173,8 @@ pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
 pub fn operator_label(field: &RuleField, op: &RuleOperator) -> &'static str {
     let date = *field == RuleField::Date;
     match op {
+        // Matches the compile error's wording for a saved search.
+        RuleOperator::Equals if *field == RuleField::Query => "matches",
         RuleOperator::Equals => "is",
         RuleOperator::NotEquals => "is not",
         RuleOperator::Contains => "contains",
@@ -446,6 +449,18 @@ mod tests {
         let summary = rule_summary(MatchMode::Any, &[video, stars]);
         assert_eq!(summary, "Kind is Video or Stars is greater than ★★★");
         assert_eq!(rule_summary(MatchMode::All, &[]), "No conditions yet");
+    }
+
+    #[test]
+    fn saved_search_row_reads_search_matches() {
+        let rule = row(RuleField::Query, RuleOperator::Equals, "sunset")
+            .to_rule()
+            .unwrap();
+        assert_eq!(
+            rule_summary(MatchMode::All, &[rule]),
+            "Search matches sunset",
+            "the row must say \"matches\", as the compile error does"
+        );
     }
 
     fn row(field: RuleField, op: RuleOperator, text: &str) -> DraftRow {

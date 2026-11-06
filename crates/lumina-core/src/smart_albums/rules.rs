@@ -35,6 +35,9 @@ pub enum RuleField {
     Place,
     /// Camera make or model (contains / does not contain).
     Camera,
+    /// A saved search: the value is the raw search text, compiled through
+    /// [`crate::StructuredQuery`] so the album and the search cannot drift.
+    Query,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,8 +101,14 @@ impl SmartAlbum {
         }
     }
 
-    /// Compiles the rules into a parameterized SQL WHERE clause and bindings.
+    /// Compiles the rules into a parameterized SQL WHERE clause and bindings,
+    /// for SQL with an ORDER BY (see [`Self::synthesize_count_query`]).
     pub fn build_sql(&self) -> Result<(String, Vec<rusqlite::types::Value>)> {
+        self.where_sql(true)
+    }
+
+    /// `sorted` only changes how a `Query` rule's FTS match is written.
+    fn where_sql(&self, sorted: bool) -> Result<(String, Vec<rusqlite::types::Value>)> {
         if self.rules.is_empty() {
             return Ok((
                 "m.is_trashed = 0 AND m.is_hidden = 0".to_string(),
@@ -111,7 +120,7 @@ impl SmartAlbum {
         let mut params = Vec::new();
 
         for rule in &self.rules {
-            let (clause, rule_params) = compile_rule(rule)?;
+            let (clause, rule_params) = compile_rule(rule, sorted)?;
             clauses.push(clause);
             params.extend(rule_params);
         }
@@ -170,7 +179,7 @@ impl SmartAlbum {
     }
 
     pub fn synthesize_count_query(&self) -> Result<(String, Vec<rusqlite::types::Value>)> {
-        let (where_clause, params) = self.build_sql()?;
+        let (where_clause, params) = self.where_sql(false)?;
 
         let sql = format!(
             r#"
@@ -211,10 +220,17 @@ fn column_for_field(field: &RuleField) -> &'static str {
         RuleField::Place | RuleField::Camera => {
             unreachable!("multi-column fields are compiled in compile_rule")
         }
+        RuleField::Query => unreachable!("RuleField::Query rules are compiled in compile_rule"),
     }
 }
 
-fn compile_rule(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_rule(
+    rule: &SmartAlbumRule,
+    sorted: bool,
+) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    if rule.field == RuleField::Query {
+        return compile_query_rule(rule, sorted);
+    }
     if rule.field == RuleField::Tag {
         return match &rule.operator {
             RuleOperator::Equals => {
@@ -404,6 +420,33 @@ fn compile_rule(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::V
             Vec::new(),
         )),
     }
+}
+
+/// A saved search: the raw text parsed exactly as the search field parses it.
+/// Refuses what a smart album cannot show or what the parser did not
+/// understand, so a saved search never silently shows more than was typed.
+fn compile_query_rule(
+    rule: &SmartAlbumRule,
+    sorted: bool,
+) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    let (RuleOperator::Equals, RuleValue::Text(text)) = (&rule.operator, &rule.value) else {
+        return Err(anyhow!(
+            "A saved search supports only \"matches\" with search text"
+        ));
+    };
+    let query = crate::StructuredQuery::parse(text);
+    if query.is_trashed == Some(true) {
+        return Err(anyhow!("A smart album cannot show deleted items"));
+    }
+    if !query.unrecognized.is_empty() {
+        return Err(anyhow!("Not understood: {}", query.unrecognized.join(", ")));
+    }
+    if query == crate::StructuredQuery::default() {
+        return Err(anyhow!("A saved search needs some search text"));
+    }
+    // Parenthesized so the album's AND/OR joiner cannot split the clause.
+    let (clause, params) = query.build_where_subquery(sorted);
+    Ok((format!("({clause})"), params))
 }
 
 const DAY_MS: i64 = 86_400_000;

@@ -1,6 +1,6 @@
 use gpui::*;
 use lumina_core::text::{clean_text, MAX_NAME_CHARS};
-use lumina_core::{MatchMode, RuleField, SmartAlbum, SmartAlbumRule};
+use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule};
 
 use crate::app::smart_draft::field_label;
 use crate::app::smart_draft::{
@@ -50,6 +50,24 @@ impl LuminaApp {
             AlbumSelection::User(id) => self.prompt_delete_smart_album(id, cx),
             _ => self.show_toast("Open a smart album to delete it", cx),
         }
+    }
+
+    /// Save Search as Smart Album…: the builder prefilled with one rule that
+    /// holds the search text as typed, titled with the query. The sheet's OK
+    /// saves it; compile errors show in its footer.
+    pub fn save_current_search_as_album(&mut self, cx: &mut Context<Self>) {
+        let query = self.search_query.trim().to_string();
+        if query.is_empty() {
+            self.show_toast("Type a search to save it", cx);
+            return;
+        }
+        let rule = SmartAlbumRule {
+            field: RuleField::Query,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Text(query.clone()),
+        };
+        let title = saved_search_title(&query);
+        self.open_draft(None, title, MatchMode::All, &[rule], cx);
     }
 
     fn open_draft(
@@ -420,4 +438,17 @@ impl LuminaApp {
             Err(err) => self.set_error(format!("Could not save smart album: {err}"), cx),
         }
     }
+}
+
+/// Longest default title for a saved search, in characters.
+const SAVED_SEARCH_TITLE_CHARS: usize = 60;
+
+/// The default title for a saved search: the query, trimmed and cut to at
+/// most 60 characters (never inside a character).
+pub(crate) fn saved_search_title(query: &str) -> String {
+    query
+        .trim()
+        .chars()
+        .take(SAVED_SEARCH_TITLE_CHARS)
+        .collect()
 }

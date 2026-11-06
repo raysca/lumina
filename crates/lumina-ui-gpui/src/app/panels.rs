@@ -444,6 +444,7 @@ impl LuminaApp {
                 after,
             });
             self.sync_metadata_sidecars(&[item.id], cx);
+            self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
             let message = if trimmed.is_empty() {
                 "Caption removed"
             } else {
@@ -758,6 +759,7 @@ impl LuminaApp {
             before: (item.latitude, item.longitude),
             after: (lat, lon),
         });
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
         if let Some(updated) = self
             .grid_state
             .as_ref()

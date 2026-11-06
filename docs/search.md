@@ -108,3 +108,23 @@ to 10, newest first, duplicates merged regardless of case). They are kept per
 machine in the app settings and shown first in the suggestion list, marked
 with a history icon. Command palette (⌘K) > Clear Recent Searches forgets
 them; it is listed only when there are some.
+
+## Saved searches
+
+Command palette (⌘K) > Save Search as Smart Album… opens the smart album
+builder with one rule that holds the search text exactly as typed, titled with
+the query (cut to 60 characters). The preview counts the same items the search
+shows; OK saves the album and opens it. The command is listed only while the
+search field has text.
+
+The album runs the search again each time it is opened, so new items that
+match appear in it. The builder refuses a search it cannot save and says why
+in its footer:
+
+- `is:trashed`: a smart album cannot show deleted items.
+- Anything listed under "Not understood", such as a misspelled filter.
+- Text with nothing to search for.
+
+Limitation: renaming a tag updates smart album Tag rules, but not a `tag:`
+filter inside a saved search's text. Edit the saved search after renaming a
+tag it uses.

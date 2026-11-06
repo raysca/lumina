@@ -7,7 +7,7 @@ use lumina_core::{
 
 use crate::app::smart_draft::DraftFocus;
 use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
+    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
@@ -429,6 +429,176 @@ fn removing_the_last_condition_matches_everything() {
     keystrokes(vcx, "x secondary-enter");
     let saved = engine.list_smart_albums();
     assert!(saved[0].rules.is_empty(), "the edit kept every item");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn save_search_opens_prefilled_builder_and_creates_album() {
+    let (dir, engine, _ids) = library("sab_save_search");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let query = "photo is:favorite";
+    let listed = |app: &LuminaApp| {
+        use crate::app::command_palette::{CommandId, PaletteTarget};
+        app.palette_rows()
+            .iter()
+            .any(|row| row.target == PaletteTarget::Command(CommandId::SaveSearch))
+    };
+    view.update(vcx, |app, _| {
+        app.command_query = "save search".into();
+        assert!(!listed(app), "no search to save: the command is hidden");
+        app.search_query = "   ".into();
+        assert!(!listed(app), "a blank search is not saveable either");
+        app.search_query.clear();
+        app.command_query.clear();
+    });
+
+    click(vcx, "search-input");
+    type_text(vcx, query);
+    let search_count = view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, query);
+        app.get_active_count()
+    });
+    assert_eq!(search_count, 2, "the two favourites match the search");
+    for _ in 0..2 {
+        if view.update(vcx, |app, _| app.search_focused) {
+            keystrokes(vcx, "escape");
+        }
+    }
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "secondary-k s a v e space s e a r c h enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.modal_open,
+            "⌘K Save Search opens the builder"
+        );
+        assert_eq!(app.album_draft.editing_album_id, None, "a new album");
+        assert_eq!(app.album_draft.album_title, query, "the query is the title");
+        assert_eq!(
+            app.draft_rules(),
+            Some(vec![SmartAlbumRule {
+                field: RuleField::Query,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Text(query.into()),
+            }]),
+            "one Query rule holding the raw search text"
+        );
+        assert_eq!(
+            app.album_draft.match_count,
+            Some(search_count),
+            "the preview counts what the search showed"
+        );
+    });
+
+    keystrokes(vcx, "secondary-enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.album_draft.modal_open, "OK saves and closes the sheet");
+        let album = app.user_smart_albums.first().expect("album saved");
+        assert_eq!(app.selection, AlbumSelection::User(album.id));
+        assert_eq!(
+            app.user_album_counts.get(&album.id).copied(),
+            Some(search_count),
+            "the sidebar row shows the search's count"
+        );
+        assert_eq!(app.get_active_count(), search_count);
+    });
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1, "the album is persisted in the catalog");
+    assert_eq!(
+        saved[0].rules[0].value,
+        RuleValue::Text(query.into()),
+        "the raw query text is stored"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn save_search_title_is_cut_on_a_char_boundary() {
+    assert_eq!(
+        crate::app::album_builder_actions::saved_search_title(&"é".repeat(70)),
+        "é".repeat(60),
+        "at most 60 characters, never a split character"
+    );
+    assert_eq!(
+        crate::app::album_builder_actions::saved_search_title("  sunset  "),
+        "sunset"
+    );
+}
+
+#[core::prelude::v1::test]
+fn saved_search_counts_follow_caption_and_location_edits() {
+    let (dir, engine, ids) = library("sab_saved_counts");
+    let saved = |text: &str| {
+        engine
+            .create_smart_album(
+                text,
+                "sparkles",
+                MatchMode::All,
+                &[SmartAlbumRule {
+                    field: RuleField::Query,
+                    operator: RuleOperator::Equals,
+                    value: RuleValue::Text(text.into()),
+                }],
+            )
+            .expect("create saved search")
+            .id
+    };
+    let sunset = saved("sunset");
+    let located = saved("has:location");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let counts = |vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| {
+            (
+                app.user_album_counts.get(&sunset).copied(),
+                app.user_album_counts.get(&located).copied(),
+            )
+        })
+    };
+    assert_eq!(counts(vcx), (Some(0), Some(0)), "nothing matches yet");
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = engine.get_item_by_id(ids[2]);
+        app.start_caption_input(cx);
+        app.caption.input_buffer = "Sunset over the bay".into();
+        app.commit_caption_input(cx);
+    });
+    assert_eq!(
+        counts(vcx),
+        (Some(1), Some(0)),
+        "a caption edit alone refreshes saved-search counts"
+    );
+    view.update(vcx, |app, cx| {
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "48.8566, 2.3522".into();
+        app.commit_location_input(cx);
+    });
+    assert_eq!(
+        counts(vcx),
+        (Some(1), Some(1)),
+        "a location edit alone refreshes saved-search counts"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.select_all(cx);
+        app.apply_batch_caption(Some("sunset glow".into()), cx);
+    });
+    assert_eq!(
+        counts(vcx),
+        (Some(4), Some(1)),
+        "a batch caption edit refreshes saved-search counts"
+    );
+    view.update(vcx, |app, cx| {
+        app.apply_batch_location("35.6762, 139.6503", cx);
+    });
+    assert_eq!(
+        counts(vcx),
+        (Some(4), Some(4)),
+        "a batch location edit refreshes saved-search counts"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

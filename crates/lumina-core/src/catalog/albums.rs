@@ -167,8 +167,7 @@ impl Catalog {
                 } else {
                     MatchMode::All
                 };
-                let rules: Vec<SmartAlbumRule> =
-                    serde_json::from_str(&rules_json).unwrap_or_default();
+                let rules = decode_rules(id, &rules_json);
 
                 Ok(SmartAlbum {
                     id,
@@ -207,7 +206,7 @@ impl Catalog {
             } else {
                 MatchMode::All
             };
-            let rules: Vec<SmartAlbumRule> = serde_json::from_str(&rules_json).unwrap_or_default();
+            let rules = decode_rules(id, &rules_json);
 
             Ok(SmartAlbum {
                 id,
@@ -287,4 +286,14 @@ impl Catalog {
             })?;
         Ok(count as usize)
     }
+}
+
+/// Decodes a stored album's rules. An unreadable `rules_json` (say, from a
+/// newer build) still yields no rules, as before, but is logged instead of
+/// passing silently.
+fn decode_rules(album_id: i64, rules_json: &str) -> Vec<SmartAlbumRule> {
+    serde_json::from_str(rules_json).unwrap_or_else(|err| {
+        log::warn!("smart album {album_id}: rules could not be read, so it has no rules: {err}");
+        Vec::new()
+    })
 }

@@ -291,11 +291,18 @@ impl LuminaApp {
     }
 
     /// Smart albums filtering on `field` change membership when it changes.
-    fn refresh_counts_if_rules_use(&mut self, field: lumina_core::RuleField) {
+    /// Saved searches (`Query` rules) always refresh; pass `RuleField::Query`
+    /// for an edit no other rule field covers, such as a caption.
+    pub(crate) fn refresh_counts_if_rules_use(&mut self, field: lumina_core::RuleField) {
         if self
             .user_smart_albums
             .iter()
-            .any(|a| a.rules.iter().any(|r| r.field == field))
+            // A saved search can filter on any field.
+            .any(|a| {
+                a.rules
+                    .iter()
+                    .any(|r| r.field == field || r.field == lumina_core::RuleField::Query)
+            })
         {
             self.refresh_album_counts();
         }
@@ -942,6 +949,7 @@ impl LuminaApp {
             changes,
         });
         self.sync_metadata_sidecars(&ids, cx);
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
         self.update_batch_summary();
         let message = if value.is_some() {
             format!("Caption applied to {} item(s)", ids.len())
@@ -1069,6 +1077,7 @@ impl LuminaApp {
 
         let ids: Vec<MediaId> = changes.iter().map(|(id, _, _)| *id).collect();
         self.push_undo(UndoAction::BatchLocation { changes });
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
         self.refresh_selected_item_from_engine();
         self.update_batch_summary();
         let message = if lat.is_some() {

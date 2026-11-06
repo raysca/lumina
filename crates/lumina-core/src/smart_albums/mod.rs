@@ -197,4 +197,71 @@ mod tests {
         assert!(sql_not_empty.contains("m.id IN (SELECT media_id FROM media_tags)"));
         assert_eq!(params_not_empty.len(), 0);
     }
+
+    fn query_album(text: &str) -> SmartAlbum {
+        SmartAlbum::new(
+            String::new(),
+            String::new(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field: RuleField::Query,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Text(text.to_string()),
+            }],
+        )
+    }
+
+    #[test]
+    fn query_rule_rejects_trashed_unknown_and_empty() {
+        let err = |text: &str| {
+            query_album(text)
+                .build_sql()
+                .expect_err(&format!("{text:?} must not compile"))
+                .to_string()
+        };
+        assert_eq!(
+            err("sunset is:trashed"),
+            "A smart album cannot show deleted items"
+        );
+        assert_eq!(
+            err("is:fovorite color:pink"),
+            "Not understood: is:fovorite, color:pink"
+        );
+        assert_eq!(err("   "), "A saved search needs some search text");
+        let other_operator = SmartAlbum::new(
+            String::new(),
+            String::new(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field: RuleField::Query,
+                operator: RuleOperator::Contains,
+                value: RuleValue::Text("sunset".into()),
+            }],
+        );
+        assert!(
+            other_operator.build_sql().is_err(),
+            "a Query rule supports only Equals"
+        );
+        let (sql, _) = query_album("sunset rating:>=3")
+            .build_sql()
+            .expect("a valid query compiles");
+        assert!(
+            sql.contains(
+                "+m.id IN (SELECT rowid FROM media_search_fts WHERE media_search_fts MATCH ?)"
+            ),
+            "the FTS match is an IN subquery, got {sql}"
+        );
+    }
+
+    #[test]
+    fn query_rule_round_trips_rules_json() {
+        let album = query_album("sunset -beach camera:\"Sony A7\" rating:>=3");
+        let json = serde_json::to_string(&album.rules).expect("serialize rules");
+        assert!(
+            json.contains(r#""field":"query""#),
+            "the field is stored as snake_case query, got {json}"
+        );
+        let back: Vec<SmartAlbumRule> = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back, album.rules, "the raw query text survives rules_json");
+    }
 }

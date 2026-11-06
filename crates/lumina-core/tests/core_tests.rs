@@ -3632,3 +3632,212 @@ fn migration_adds_color_index_idempotently() {
         check(&catalog, "upgrade from v14");
     }
 }
+
+fn query_rule_album(text: &str) -> lumina_core::SmartAlbum {
+    lumina_core::SmartAlbum::new(
+        text.to_string(),
+        "folder".to_string(),
+        MatchMode::All,
+        vec![SmartAlbumRule {
+            field: RuleField::Query,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Text(text.to_string()),
+        }],
+    )
+}
+
+#[test]
+fn query_rule_album_matches_search_rows() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let mut items = vec![
+        sample_media_item(
+            "/p/sunset_beach.jpg",
+            MediaType::Image,
+            10,
+            Some("Kyoto"),
+            None,
+        ),
+        sample_media_item("/p/sunset_city.jpg", MediaType::Image, 20, None, Some("A7")),
+        sample_media_item("/p/sunset_tie_a.jpg", MediaType::Image, 30, None, None),
+        sample_media_item("/p/sunset_tie_b.jpg", MediaType::Image, 30, None, None),
+        sample_media_item("/p/beach.mov", MediaType::Video, 40, Some("Paris"), None),
+        sample_media_item("/p/forest.jpg", MediaType::Image, 50, None, None),
+        sample_media_item("/p/sunset_hidden.jpg", MediaType::Image, 60, None, None),
+        sample_media_item("/p/sunset_trashed.jpg", MediaType::Image, 70, None, None),
+    ];
+    items[1].make = Some("Canon".to_string());
+    items[0].is_favorite = true;
+    items[4].is_favorite = true;
+    items[5].year = 2024;
+    items[6].is_hidden = true;
+    items[7].is_trashed = true;
+    catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items");
+    let by_name = |name: &str| {
+        catalog
+            .get_item_slice(0, 100)
+            .expect("slice")
+            .into_iter()
+            .find(|m| m.file_name == name)
+            .unwrap_or_else(|| panic!("{name} is seeded"))
+            .id
+    };
+    let (beach, city, tie_a, forest) = (
+        by_name("sunset_beach.jpg"),
+        by_name("sunset_city.jpg"),
+        by_name("sunset_tie_a.jpg"),
+        by_name("forest.jpg"),
+    );
+    catalog
+        .set_ratings(&[(beach, 4), (city, 2), (tie_a, 5)])
+        .expect("seed ratings");
+    catalog
+        .set_color_labels(&[(beach, 1), (forest, 1)])
+        .expect("seed labels");
+    catalog
+        .add_tags_batch(&[city], &["work".to_string()])
+        .expect("seed tags");
+
+    for text in [
+        "sunset",
+        "sunset -beach",
+        "-tag:work -sunset",
+        "rating:>=3 color:red",
+        "sunset camera:Sony rating:>=3",
+        "is:video beach",
+        "color:red",
+        "tag:work",
+        "is:favorite",
+        "-is:favorite",
+        "has:location",
+        "year:2024",
+    ] {
+        let search: Vec<MediaId> = catalog
+            .search_structured(&StructuredQuery::parse(text), 100, 0)
+            .unwrap_or_else(|e| panic!("search {text:?}: {e:#}"))
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        let album = query_rule_album(text);
+        let rows: Vec<MediaId> = catalog
+            .query_smart_album(&album, 100, 0)
+            .unwrap_or_else(|e| panic!("album {text:?}: {e:#}"))
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        assert!(!search.is_empty(), "{text:?} must match seeded rows");
+        assert_eq!(
+            rows, search,
+            "{text:?}: a saved search must give the search's rows in the same order"
+        );
+        assert_eq!(
+            catalog.query_smart_album_count(&album).expect("count"),
+            search.len(),
+            "{text:?}: the sidebar count must equal the search count"
+        );
+    }
+
+    // Any mode: a Query rule OR another rule shows rows matching either.
+    let ids_of = |text: &str| -> Vec<MediaId> {
+        catalog
+            .search_structured(&StructuredQuery::parse(text), 100, 0)
+            .expect("search")
+            .into_iter()
+            .map(|m| m.id)
+            .collect()
+    };
+    let mut union = ids_of("tag:work");
+    union.extend(ids_of("is:favorite"));
+    union.sort_by_key(|id| id.0);
+    union.dedup();
+    let mut any = query_rule_album("tag:work");
+    any.match_mode = MatchMode::Any;
+    any.rules.push(SmartAlbumRule {
+        field: RuleField::IsFavorite,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Bool(true),
+    });
+    let mut rows: Vec<MediaId> = catalog
+        .query_smart_album(&any, 100, 0)
+        .expect("any album")
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    rows.sort_by_key(|id| id.0);
+    assert_eq!(union.len(), 3, "work-tagged city plus two favourites");
+    assert_eq!(rows, union, "an Any album is the union of its rules");
+    assert_eq!(
+        catalog.query_smart_album_count(&any).expect("count"),
+        union.len(),
+        "the Any album's count is the union's size"
+    );
+}
+
+#[test]
+fn query_rule_count_plan_drives_from_fts() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[sample_media_item(
+            "/p/sunset.jpg",
+            MediaType::Image,
+            1,
+            None,
+            None,
+        )])
+        .expect("insert items");
+    for text in ["sunset", "sunset camera:Sony rating:>=3"] {
+        let (sql, params) = query_rule_album(text)
+            .synthesize_count_query()
+            .expect("compiles");
+        let rows = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain");
+        let plan = rows.join(" | ");
+        assert!(
+            plan.contains("VIRTUAL TABLE INDEX 0:M"),
+            "{text:?}: the count must MATCH through the FTS index, got: {plan}"
+        );
+        assert!(
+            !rows.iter().any(|r| r == "SCAN m" || r.starts_with("SCAN m ")),
+            "{text:?}: a saved-search count must drive from the FTS rowids, not scan media_items, got: {plan}"
+        );
+    }
+}
+
+#[test]
+fn query_rule_plan_uses_fts_index() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[sample_media_item(
+            "/p/sunset.jpg",
+            MediaType::Image,
+            1,
+            None,
+            None,
+        )])
+        .expect("insert items");
+    for text in ["sunset", "sunset camera:Sony rating:>=3", "sunset -beach"] {
+        let (sql, params) = query_rule_album(text)
+            .synthesize_query(50, 0)
+            .expect("compiles");
+        let rows = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain");
+        let plan = rows.join(" | ");
+        let matched = rows.iter().enumerate().any(|(i, r)| {
+            r.contains("LIST SUBQUERY")
+                && rows
+                    .get(i + 1)
+                    .is_some_and(|next| next.contains("VIRTUAL TABLE INDEX 0:M"))
+        });
+        assert!(
+            matched,
+            "{text:?}: the IN subquery must MATCH through the FTS index, got: {plan}"
+        );
+        assert!(
+            !plan.contains("USE TEMP B-TREE FOR ORDER BY"),
+            "{text:?}: the default sort must stay an index walk, got: {plan}"
+        );
+    }
+}

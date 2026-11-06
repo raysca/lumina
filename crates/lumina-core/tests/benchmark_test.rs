@@ -199,8 +199,16 @@ fn benchmark_scale_and_gates() {
         };
 
         // Every 50th file is a "beach" shot so `-beach` has rows to exclude.
+        // Every 20th from 8 is a Sony (even i) "sunset" shot for the
+        // saved-search album gate; the rating spread below rates about 30%
+        // of them. Every 1000th from 7 (25 rows, none of the others) is an
+        // "aurora" shot: the rare-term saved search.
         let file_name = if i % 50 == 0 {
             format!("beach_{:06}.jpg", i)
+        } else if i % 20 == 8 {
+            format!("sunset_{:06}.jpg", i)
+        } else if i % 1000 == 7 {
+            format!("aurora_{:06}.jpg", i)
         } else {
             format!("photo_{:06}.jpg", i)
         };
@@ -413,6 +421,71 @@ fn benchmark_scale_and_gates() {
         album_per_query_ms < album_budget,
         "Smart album query must resolve in < {album_budget}ms (got {album_per_query_ms:.3}ms)"
     );
+
+    // Gate 3: saved searches (smart album `Query` rules) under the default
+    // date sort: a common term with a LIKE and a rating filter, and a rare
+    // term (25 rows), which walks the date index. Then the sidebar count for
+    // each, which drives from the FTS rowids instead.
+    for (label, text) in [
+        ("common", "sunset camera:Sony rating:>=3"),
+        ("rare", "aurora"),
+    ] {
+        let saved_search = lumina_core::SmartAlbum::new(
+            text.to_string(),
+            "folder".to_string(),
+            lumina_core::MatchMode::All,
+            vec![lumina_core::SmartAlbumRule {
+                field: lumina_core::RuleField::Query,
+                operator: lumina_core::RuleOperator::Equals,
+                value: lumina_core::RuleValue::Text(text.to_string()),
+            }],
+        );
+        assert!(
+            !catalog
+                .query_smart_album(&saved_search, 50, 0)
+                .expect("saved-search album must run")
+                .is_empty(),
+            "the {label} saved-search album must match rows so the gate measures real work"
+        );
+        let saved_start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .query_smart_album(&saved_search, 50, 0)
+                .expect("saved-search album must keep running");
+        }
+        let saved_per_query_ms = (saved_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 3 - Saved Search Album Latency ({label} `{text}`): {:.3} ms/album (< {:.1} ms target)",
+            saved_per_query_ms, album_budget
+        );
+        assert!(
+            saved_per_query_ms < album_budget,
+            "{label} saved-search album must resolve in < {album_budget}ms (got {saved_per_query_ms:.3}ms)"
+        );
+
+        assert!(
+            catalog
+                .query_smart_album_count(&saved_search)
+                .expect("saved-search count must run")
+                > 0,
+            "the {label} saved-search count must be non-zero so the gate measures real work"
+        );
+        let count_start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .query_smart_album_count(&saved_search)
+                .expect("saved-search count must keep running");
+        }
+        let count_per_query_ms = (count_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 3 - Saved Search Count Latency ({label} `{text}`): {:.3} ms/count (< {:.1} ms target)",
+            count_per_query_ms, album_budget
+        );
+        assert!(
+            count_per_query_ms < album_budget,
+            "{label} saved-search count must resolve in < {album_budget}ms (got {count_per_query_ms:.3}ms)"
+        );
+    }
 
     // Gate 3: the Downloaded count the sidebar refreshes after each
     // download (1% of the library downloaded).

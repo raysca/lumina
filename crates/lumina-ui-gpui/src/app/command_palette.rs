@@ -53,6 +53,8 @@ pub enum CommandId {
     TogglePip,
     PipPlayPause,
     NewSmartAlbum,
+    /// Saves the search as a smart album; shown only while there is a query.
+    SaveSearch,
     EditSmartAlbum,
     DeleteSmartAlbum,
     LocateMissing,
@@ -111,7 +113,7 @@ impl Command {
             ToggleFavorite => Icon::Heart,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
-            NewSmartAlbum => Icon::Sparkles,
+            NewSmartAlbum | SaveSearch => Icon::Sparkles,
             EditSmartAlbum | AdjustDate | EditLocation => Icon::Pencil,
             RemoveLocation | DeleteSmartAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
@@ -527,6 +529,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "smart album rules filter create",
         },
         Command {
+            id: CommandId::SaveSearch,
+            key: "command.save_search",
+            shortcut: "",
+            keywords: "save search query smart album saved",
+        },
+        Command {
             id: CommandId::EditSmartAlbum,
             key: "command.edit_smart_album",
             shortcut: "",
@@ -618,6 +626,7 @@ impl LuminaApp {
             CommandId::Forward => self.can_navigate_forward(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
+            CommandId::SaveSearch => !self.search_query.trim().is_empty(),
             CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
@@ -856,6 +865,7 @@ impl LuminaApp {
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
+            CommandId::SaveSearch => self.save_current_search_as_album(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),
             CommandId::DeleteSmartAlbum => self.delete_selected_smart_album(cx),
             CommandId::LocateMissing => self.locate_missing_selected(cx),

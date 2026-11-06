@@ -46,9 +46,35 @@ pub struct StructuredQuery {
     pub has_color_label: Option<bool>,
 }
 
+/// How the free-text FTS match is written into the WHERE clause.
+#[derive(Clone, Copy)]
+enum FtsMatch {
+    /// `media_search_fts MATCH ?`: the query joins `media_search_fts`.
+    Joined,
+    /// `m.id IN (SELECT rowid …)`: for SQL that selects from `media_items`
+    /// alone, such as a smart album. `sorted` adds the unary `+` that SQL
+    /// with an ORDER BY needs; a count leaves it off so FTS drives.
+    Subquery { sorted: bool },
+}
+
 impl StructuredQuery {
-    /// Builds a parameterized SQL WHERE clause and parameters.
+    /// Builds a parameterized SQL WHERE clause and parameters. The FTS match
+    /// needs `media_search_fts` joined, as [`Self::synthesize_query`] does.
     pub fn build_sql(&self) -> (String, Vec<rusqlite::types::Value>) {
+        self.where_clause(FtsMatch::Joined)
+    }
+
+    /// The same WHERE clause as [`Self::build_sql`], but the FTS match is an
+    /// `m.id IN (SELECT rowid …)` subquery, so it runs against `media_items m`
+    /// alone (smart album `Query` rules). Pass `sorted` when the SQL has an
+    /// ORDER BY; leave it false for a count.
+    pub fn build_where_subquery(&self, sorted: bool) -> (String, Vec<rusqlite::types::Value>) {
+        self.where_clause(FtsMatch::Subquery { sorted })
+    }
+
+    /// The one clause builder behind `build_sql` and `build_where_subquery`,
+    /// so a search and a saved search cannot drift apart.
+    fn where_clause(&self, fts_match: FtsMatch) -> (String, Vec<rusqlite::types::Value>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -210,7 +236,19 @@ impl StructuredQuery {
         // FTS match clause if free-text terms exist
         let fts_query = build_fts5_expression(&self.fts_terms);
         if !fts_query.is_empty() {
-            clauses.push("media_search_fts MATCH ?".to_string());
+            clauses.push(match fts_match {
+                FtsMatch::Joined => "media_search_fts MATCH ?".to_string(),
+                // Sorted: the unary `+` stops the planner from driving the
+                // query from the FTS rowids, which forces a temp B-tree sort;
+                // instead it walks the sort index and probes the matched set.
+                // ponytail: a very rare term walks the whole timeline index;
+                // drive from FTS when the result set is known to be small.
+                // A count has no ORDER BY, so it drives from the FTS rowids.
+                FtsMatch::Subquery { sorted } => format!(
+                    "{}m.id IN (SELECT rowid FROM media_search_fts WHERE media_search_fts MATCH ?)",
+                    if sorted { "+" } else { "" }
+                ),
+            });
             params.push(fts_query.into());
         }
 
