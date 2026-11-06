@@ -198,11 +198,17 @@ fn benchmark_scale_and_gates() {
             MediaType::Image
         };
 
+        // Every 50th file is a "beach" shot so `-beach` has rows to exclude.
+        let file_name = if i % 50 == 0 {
+            format!("beach_{:06}.jpg", i)
+        } else {
+            format!("photo_{:06}.jpg", i)
+        };
         items.push(MediaItem {
             id: MediaId(0),
-            path: PathBuf::from(format!("/library/folder_{}/photo_{:06}.jpg", i / 1000, i)),
+            path: PathBuf::from(format!("/library/folder_{}/{}", i / 1000, file_name)),
             parent_dir: format!("/library/folder_{}", i / 1000),
-            file_name: format!("photo_{:06}.jpg", i),
+            file_name,
             title: None,
             file_size: 4_000_000 + (i as u64 % 100_000),
             mtime_epoch_ms: 1789430400000 + (i as i64 * 60_000),
@@ -317,21 +323,28 @@ fn benchmark_scale_and_gates() {
     );
 
     // Gate 2: Structured Query Latency (< 5ms)
-    let q = StructuredQuery::parse("camera:Sony is:favorite iso:>800");
-    let search_start = Instant::now();
-    for _ in 0..iterations {
-        let _ = catalog.search_structured(&q, 50, 0);
+    for text in ["camera:Sony is:favorite iso:>800", "-beach is:favorite"] {
+        let q = StructuredQuery::parse(text);
+        catalog
+            .search_structured(&q, 50, 0)
+            .unwrap_or_else(|e| panic!("bench query `{text}` must run: {e:#}"));
+        let search_start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .search_structured(&q, 50, 0)
+                .expect("bench query must keep running");
+        }
+        let search_elapsed = search_start.elapsed();
+        let search_per_query_ms = (search_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 2 - Structured Query Latency `{text}`: {:.3} ms/query (< {:.1} ms target)",
+            search_per_query_ms, query_budget
+        );
+        assert!(
+            search_per_query_ms < query_budget,
+            "Structured query `{text}` must resolve in < {query_budget}ms (got {search_per_query_ms:.3}ms)"
+        );
     }
-    let search_elapsed = search_start.elapsed();
-    let search_per_query_ms = (search_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
-    println!(
-        "Gate 2 - Structured Query Latency: {:.3} ms/query (< {:.1} ms target)",
-        search_per_query_ms, query_budget
-    );
-    assert!(
-        search_per_query_ms < query_budget,
-        "Structured query must resolve in < {query_budget}ms (got {search_per_query_ms:.3}ms)"
-    );
 
     // Gate 3: Smart Album Evaluation Latency (< 8ms)
     let album_start = Instant::now();

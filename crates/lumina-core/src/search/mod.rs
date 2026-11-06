@@ -4,9 +4,24 @@ mod parse;
 
 pub use parse::tokenize_query;
 
+/// A parsed search query: free text plus structured filters.
+///
+/// Fields added after the first release carry `#[serde(default)]` so older
+/// serialized queries still deserialize.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct StructuredQuery {
     pub fts_terms: Vec<String>,
+    /// Free text to exclude (`-word`, `-"two words"`), with the same prefix
+    /// matching as inclusion: `-beach` also hides "beaches".
+    #[serde(default)]
+    pub fts_exclude: Vec<String>,
+    /// Tags to exclude (`-tag:x`), lowercased like `tag`.
+    #[serde(default)]
+    pub exclude_tags: Vec<String>,
+    /// Filter tokens that were not understood, as typed (`is:fovorite`,
+    /// `rating:abc`, `-is:video`). They add no clause and are not searched.
+    #[serde(default)]
+    pub unrecognized: Vec<String>,
     pub year: Option<i32>,
     pub month: Option<u32>,
     pub date_range: Option<(i64, i64)>, // epoch ms
@@ -144,9 +159,16 @@ impl StructuredQuery {
         }
 
         if let Some(ref tag) = self.tag {
-            clauses.push(
-                "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND tag = ?)".to_string(),
-            );
+            clauses.push(format!(
+                "EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {TAG_PREDICATE})"
+            ));
+            params.push(tag.clone().into());
+        }
+
+        for tag in &self.exclude_tags {
+            clauses.push(format!(
+                "NOT EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND {TAG_PREDICATE})"
+            ));
             params.push(tag.clone().into());
         }
 
@@ -171,6 +193,17 @@ impl StructuredQuery {
             } else {
                 clauses.push("m.color_label = 0".to_string());
             }
+        }
+
+        // Exclusions are one OR expression over the FTS index, so the planner
+        // runs a single indexed subquery however many words are excluded.
+        let exclude = fts5_terms(&self.fts_exclude).join(" OR ");
+        if !exclude.is_empty() {
+            clauses.push(
+                "m.id NOT IN (SELECT rowid FROM media_search_fts WHERE media_search_fts MATCH ?)"
+                    .to_string(),
+            );
+            params.push(exclude.into());
         }
 
         // FTS match clause if free-text terms exist
@@ -283,15 +316,22 @@ impl StructuredQuery {
     }
 }
 
-fn build_fts5_expression(terms: &[String]) -> String {
-    let escaped_terms: Vec<String> = terms
+/// The tag test shared by `tag:x` and `-tag:x`, so both stay in step.
+const TAG_PREDICATE: &str = "tag = ?";
+
+/// Escapes each term as a literal FTS5 prefix phrase (`"term"*`), dropping
+/// quotes and `*` so typed text can never become FTS5 syntax.
+fn fts5_terms(terms: &[String]) -> Vec<String> {
+    terms
         .iter()
         .map(|t| t.replace(['"', '*'], "").trim().to_string())
         .filter(|clean| !clean.is_empty())
         .map(|clean| format!("\"{}\"*", clean))
-        .collect();
+        .collect()
+}
 
-    escaped_terms.join(" ")
+fn build_fts5_expression(terms: &[String]) -> String {
+    fts5_terms(terms).join(" ")
 }
 
 #[cfg(test)]
@@ -341,5 +381,24 @@ mod tests {
             sql_tag.contains("EXISTS (SELECT 1 FROM media_tags WHERE media_id = m.id AND tag = ?)")
         );
         assert_eq!(params.len(), 1);
+    }
+
+    #[test]
+    fn color_none_and_unlabeled_are_one_clause() {
+        for text in ["color:none", "color:0", "is:unlabeled", "-has:color"] {
+            let q = StructuredQuery::parse(text);
+            assert_eq!(q.color_label, None, "{text:?} must not set a label value");
+            assert_eq!(q.has_color_label, Some(false), "{text:?}");
+            let (sql, _) = q.build_sql();
+            assert_eq!(
+                sql.matches("color_label").count(),
+                1,
+                "{text:?} must give exactly one color clause, got {sql}"
+            );
+        }
+        assert_eq!(
+            StructuredQuery::parse("color:none").build_sql(),
+            StructuredQuery::parse("is:unlabeled").build_sql()
+        );
     }
 }

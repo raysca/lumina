@@ -5,103 +5,24 @@ use super::StructuredQuery;
 impl StructuredQuery {
     /// Parses a user search query string containing keywords and structured tokens.
     /// Example: "sunset in Kyoto camera:Sony is:favorite year:2026 iso:>400 date:2026-09-01..2026-10-10"
+    ///
+    /// A leading `-` negates a word, a quoted phrase, `tag:`, `is:favorite`
+    /// and `has:location|tag|color`. Bad filter values and unsupported
+    /// negations land in [`StructuredQuery::unrecognized`].
     pub fn parse(input: &str) -> Self {
         let mut query = Self::default();
-        let tokens = tokenize_query(input);
 
-        for token in tokens {
-            if let Some((prefix, value)) = split_prefix(&token) {
-                let prefix_lower = prefix.to_lowercase();
+        for token in tokenize_query(input) {
+            if let Some(rest) = token.strip_prefix('-') {
+                query.parse_negated(&token, rest);
+            } else if let Some((prefix, value)) = split_prefix(&token) {
+                let prefix = prefix.to_lowercase();
                 let val_clean = value.trim_matches('"').trim();
-
-                match prefix_lower.as_str() {
-                    "year" => {
-                        if let Ok(y) = val_clean.parse::<i32>() {
-                            query.year = Some(y);
-                        }
-                    }
-                    "month" => {
-                        if let Some(m) = parse_month(val_clean) {
-                            query.month = Some(m);
-                        }
-                    }
-                    "date" => {
-                        if let Some(range) = parse_date_filter(val_clean) {
-                            query.date_range = Some(range);
-                        }
-                    }
-                    "camera" | "model" | "make" => {
-                        if !val_clean.is_empty() {
-                            query.camera = Some(val_clean.to_string());
-                        }
-                    }
-                    "lens" => {
-                        if !val_clean.is_empty() {
-                            query.lens = Some(val_clean.to_string());
-                        }
-                    }
-                    "city" => {
-                        if !val_clean.is_empty() {
-                            query.city = Some(val_clean.to_string());
-                        }
-                    }
-                    "country" => {
-                        if !val_clean.is_empty() {
-                            query.country = Some(val_clean.to_uppercase());
-                        }
-                    }
-                    "iso" => {
-                        parse_num_filter(val_clean, &mut query.min_iso, &mut query.max_iso);
-                    }
-                    "f" | "fnumber" => {
-                        parse_float_filter(
-                            val_clean,
-                            &mut query.min_f_number,
-                            &mut query.max_f_number,
-                        );
-                    }
-                    "is" => match val_clean.to_lowercase().as_str() {
-                        "favorite" | "fav" => query.is_favorite = Some(true),
-                        "video" => query.media_type = Some("video".to_string()),
-                        "image" | "photo" => query.media_type = Some("image".to_string()),
-                        "raw" => query.media_type = Some("raw".to_string()),
-                        "trashed" | "trash" => query.is_trashed = Some(true),
-                        _ => {}
-                    },
-                    "has" => match val_clean.to_lowercase().as_str() {
-                        "location" | "geo" | "gps" => query.has_location = Some(true),
-                        "tag" | "tags" | "label" => query.has_tag = Some(true),
-                        "color" | "color_label" => query.has_color_label = Some(true),
-                        "rating" | "stars" => query.min_rating = Some(1),
-                        _ => {}
-                    },
-                    "rating" | "stars" => {
-                        parse_num_filter(val_clean, &mut query.min_rating, &mut query.max_rating);
-                    }
-                    "color" => {
-                        let code = match val_clean.to_lowercase().as_str() {
-                            "red" | "1" => Some(1),
-                            "orange" | "2" => Some(2),
-                            "yellow" | "3" => Some(3),
-                            "green" | "4" => Some(4),
-                            "blue" | "5" => Some(5),
-                            "purple" | "6" => Some(6),
-                            "none" | "0" => Some(0),
-                            _ => None,
-                        };
-                        if let Some(c) = code {
-                            query.color_label = Some(c);
-                        }
-                    }
-                    "tag" | "keyword" => {
-                        if !val_clean.is_empty() {
-                            query.tag = Some(val_clean.to_lowercase());
-                        }
-                    }
-                    _ => {
-                        // Unrecognized prefix treated as free-form text
-                        query.fts_terms.push(token);
-                    }
+                if !is_filter_prefix(&prefix) {
+                    // Unknown prefixes (`foo:bar`, `12:30`) are free text.
+                    query.fts_terms.push(token);
+                } else if !query.apply_filter(&prefix, val_clean) {
+                    query.unrecognized.push(token);
                 }
             } else {
                 let trimmed = token.trim_matches('"').trim();
@@ -113,6 +34,131 @@ impl StructuredQuery {
 
         query
     }
+
+    /// Handles a `-token`. `token` is the whole token as typed, `rest` is it
+    /// without the leading `-`.
+    fn parse_negated(&mut self, token: &str, rest: &str) {
+        let Some((prefix, value)) = split_prefix(rest) else {
+            let text = rest.trim_matches('"').trim();
+            if !text.is_empty() {
+                self.fts_exclude.push(text.to_string());
+            }
+            return;
+        };
+        let value = value.trim_matches('"').trim().to_lowercase();
+        let prefix = prefix.to_lowercase();
+        match (prefix.as_str(), value.as_str()) {
+            ("tag" | "keyword", tag) if !tag.is_empty() => self.exclude_tags.push(tag.to_string()),
+            ("is", "favorite" | "favourite" | "fav") => self.is_favorite = Some(false),
+            ("has", "location" | "geo" | "gps") => self.has_location = Some(false),
+            ("has", "tag" | "tags" | "label") => self.has_tag = Some(false),
+            ("has", "color" | "color_label") => self.has_color_label = Some(false),
+            _ if is_filter_prefix(&prefix) => self.unrecognized.push(token.to_string()),
+            // ponytail: unknown prefixes are text when positive, so negated ones are excluded text
+            _ => self.fts_exclude.push(rest.to_string()),
+        }
+    }
+
+    /// Applies one known-prefix `prefix:value` token. Returns false when the
+    /// value is not understood.
+    fn apply_filter(&mut self, prefix: &str, val: &str) -> bool {
+        match prefix {
+            "year" => set(&mut self.year, val.parse::<i32>().ok()),
+            "month" => set(&mut self.month, parse_month(val)),
+            "date" => set(&mut self.date_range, parse_date_filter(val)),
+            "camera" | "model" | "make" => set(&mut self.camera, non_empty(val)),
+            "lens" => set(&mut self.lens, non_empty(val)),
+            "city" => set(&mut self.city, non_empty(val)),
+            "country" => set(&mut self.country, non_empty(val).map(|c| c.to_uppercase())),
+            "iso" => parse_num_filter(val, &mut self.min_iso, &mut self.max_iso),
+            "f" | "fnumber" => {
+                parse_float_filter(val, &mut self.min_f_number, &mut self.max_f_number)
+            }
+            "rating" | "stars" => parse_num_filter(val, &mut self.min_rating, &mut self.max_rating),
+            "tag" | "keyword" => set(&mut self.tag, non_empty(val).map(|t| t.to_lowercase())),
+            "is" => {
+                match val.to_lowercase().as_str() {
+                    "favorite" | "favourite" | "fav" => self.is_favorite = Some(true),
+                    "video" => self.media_type = Some("video".to_string()),
+                    "image" | "photo" => self.media_type = Some("image".to_string()),
+                    "raw" => self.media_type = Some("raw".to_string()),
+                    "trashed" | "trash" => self.is_trashed = Some(true),
+                    "untagged" => self.has_tag = Some(false),
+                    "unrated" => self.max_rating = Some(0),
+                    "unlabeled" => self.has_color_label = Some(false),
+                    _ => return false,
+                }
+                true
+            }
+            "has" => {
+                match val.to_lowercase().as_str() {
+                    "location" | "geo" | "gps" => self.has_location = Some(true),
+                    "tag" | "tags" | "label" => self.has_tag = Some(true),
+                    "color" | "color_label" => self.has_color_label = Some(true),
+                    "rating" | "stars" => self.min_rating = Some(1),
+                    _ => return false,
+                }
+                true
+            }
+            "color" => {
+                let code = match val.to_lowercase().as_str() {
+                    "red" | "1" => 1,
+                    "orange" | "2" => 2,
+                    "yellow" | "3" => 3,
+                    "green" | "4" => 4,
+                    "blue" | "5" => 5,
+                    "purple" | "6" => 6,
+                    "none" | "0" => {
+                        self.has_color_label = Some(false);
+                        return true;
+                    }
+                    _ => return false,
+                };
+                self.color_label = Some(code);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Prefixes the parser treats as filters (anything else is free text).
+fn is_filter_prefix(prefix: &str) -> bool {
+    matches!(
+        prefix,
+        "year"
+            | "month"
+            | "date"
+            | "camera"
+            | "model"
+            | "make"
+            | "lens"
+            | "city"
+            | "country"
+            | "iso"
+            | "f"
+            | "fnumber"
+            | "rating"
+            | "stars"
+            | "tag"
+            | "keyword"
+            | "is"
+            | "has"
+            | "color"
+    )
+}
+
+/// Stores `value` in `slot` when present; returns whether it was.
+fn set<T>(slot: &mut Option<T>, value: Option<T>) -> bool {
+    let ok = value.is_some();
+    if ok {
+        *slot = value;
+    }
+    ok
+}
+
+fn non_empty(val: &str) -> Option<String> {
+    (!val.is_empty()).then(|| val.to_string())
 }
 
 /// Splits a search query into terms, keeping `"quoted phrases"` (and
@@ -224,49 +270,44 @@ fn parse_date_filter(val: &str) -> Option<(i64, i64)> {
     None
 }
 
-fn parse_num_filter(s: &str, min: &mut Option<u32>, max: &mut Option<u32>) {
-    if let Some(stripped) = s.strip_prefix(">=") {
-        if let Ok(n) = stripped.parse::<u32>() {
-            *min = Some(n);
-        }
-    } else if let Some(stripped) = s.strip_prefix('>') {
-        if let Ok(n) = stripped.parse::<u32>() {
-            *min = Some(n.saturating_add(1));
-        }
-    } else if let Some(stripped) = s.strip_prefix("<=") {
-        if let Ok(n) = stripped.parse::<u32>() {
-            *max = Some(n);
-        }
-    } else if let Some(stripped) = s.strip_prefix('<') {
-        if let Ok(n) = stripped.parse::<u32>() {
-            *max = Some(n.saturating_sub(1));
-        }
-    } else if let Ok(n) = s.parse::<u32>() {
+/// Parses `>=n`, `>n`, `<=n`, `<n` or `n` into the bounds. Returns false
+/// (bounds untouched) when the value is not a number.
+fn parse_num_filter(s: &str, min: &mut Option<u32>, max: &mut Option<u32>) -> bool {
+    let num = |v: &str| v.parse::<u32>().ok();
+    if let Some(rest) = s.strip_prefix(">=") {
+        set(min, num(rest))
+    } else if let Some(rest) = s.strip_prefix('>') {
+        set(min, num(rest).map(|n| n.saturating_add(1)))
+    } else if let Some(rest) = s.strip_prefix("<=") {
+        set(max, num(rest))
+    } else if let Some(rest) = s.strip_prefix('<') {
+        set(max, num(rest).map(|n| n.saturating_sub(1)))
+    } else if let Some(n) = num(s) {
         *min = Some(n);
         *max = Some(n);
+        true
+    } else {
+        false
     }
 }
 
-fn parse_float_filter(s: &str, min: &mut Option<f64>, max: &mut Option<f64>) {
-    if let Some(stripped) = s.strip_prefix(">=") {
-        if let Ok(n) = stripped.parse::<f64>() {
-            *min = Some(n);
-        }
-    } else if let Some(stripped) = s.strip_prefix('>') {
-        if let Ok(n) = stripped.parse::<f64>() {
-            *min = Some(n + 0.01);
-        }
-    } else if let Some(stripped) = s.strip_prefix("<=") {
-        if let Ok(n) = stripped.parse::<f64>() {
-            *max = Some(n);
-        }
-    } else if let Some(stripped) = s.strip_prefix('<') {
-        if let Ok(n) = stripped.parse::<f64>() {
-            *max = Some(n - 0.01);
-        }
-    } else if let Ok(n) = s.parse::<f64>() {
+/// Like [`parse_num_filter`] for f-numbers; an exact value matches +-0.05.
+fn parse_float_filter(s: &str, min: &mut Option<f64>, max: &mut Option<f64>) -> bool {
+    let num = |v: &str| v.parse::<f64>().ok().filter(|n| n.is_finite());
+    if let Some(rest) = s.strip_prefix(">=") {
+        set(min, num(rest))
+    } else if let Some(rest) = s.strip_prefix('>') {
+        set(min, num(rest).map(|n| n + 0.01))
+    } else if let Some(rest) = s.strip_prefix("<=") {
+        set(max, num(rest))
+    } else if let Some(rest) = s.strip_prefix('<') {
+        set(max, num(rest).map(|n| n - 0.01))
+    } else if let Some(n) = num(s) {
         *min = Some(n - 0.05);
         *max = Some(n + 0.05);
+        true
+    } else {
+        false
     }
 }
 
@@ -296,5 +337,94 @@ mod tests {
 
         let r_exact = parse_date_filter("2026-05-10").unwrap();
         assert!(r_exact.0 < r_exact.1);
+    }
+
+    #[test]
+    fn negated_booleans_and_aliases_parse() {
+        let q = StructuredQuery::parse("-is:favorite -has:location -has:tag -has:color");
+        assert_eq!(
+            q.is_favorite,
+            Some(false),
+            "-is:favorite means not favorite"
+        );
+        assert_eq!(q.has_location, Some(false), "-has:location");
+        assert_eq!(q.has_tag, Some(false), "-has:tag");
+        assert_eq!(q.has_color_label, Some(false), "-has:color");
+        assert!(q.fts_terms.is_empty() && q.unrecognized.is_empty());
+
+        let q = StructuredQuery::parse("-beach -\"two words\" -tag:Work");
+        assert_eq!(q.fts_exclude, vec!["beach", "two words"]);
+        assert_eq!(q.exclude_tags, vec!["work"], "-tag: lowercases like tag:");
+        assert!(
+            q.fts_terms.is_empty(),
+            "exclusions are not searched as text"
+        );
+
+        assert_eq!(StructuredQuery::parse("is:untagged").has_tag, Some(false));
+        assert_eq!(StructuredQuery::parse("is:unrated").max_rating, Some(0));
+        assert_eq!(
+            StructuredQuery::parse("is:unlabeled").has_color_label,
+            Some(false)
+        );
+        assert_eq!(
+            StructuredQuery::parse("is:favourite").is_favorite,
+            Some(true)
+        );
+        assert_eq!(StructuredQuery::parse("is:fav").is_favorite, Some(true));
+
+        for lone in ["-", "-\"\""] {
+            assert_eq!(
+                StructuredQuery::parse(lone),
+                StructuredQuery::default(),
+                "{lone:?} is ignored"
+            );
+        }
+
+        let q = StructuredQuery::parse("-is:video -camera:x");
+        assert_eq!(
+            q.unrecognized,
+            vec!["-is:video", "-camera:x"],
+            "unsupported negations are reported"
+        );
+        assert_eq!(q.media_type, None);
+        assert_eq!(q.camera, None);
+    }
+
+    #[test]
+    fn unknown_filter_values_are_reported() {
+        let q = StructuredQuery::parse(
+            "is:fovorite color:pink color:grey color:gray rating:abc year:20x6 iso:lots f:wide month:smarch date:yesterday has:wings",
+        );
+        assert_eq!(
+            q.unrecognized,
+            vec![
+                "is:fovorite",
+                "color:pink",
+                "color:grey",
+                "color:gray",
+                "rating:abc",
+                "year:20x6",
+                "iso:lots",
+                "f:wide",
+                "month:smarch",
+                "date:yesterday",
+                "has:wings",
+            ],
+            "every bad value is reported as typed"
+        );
+        assert!(q.fts_terms.is_empty(), "reported tokens are not searched");
+        assert_eq!(
+            q.build_sql(),
+            StructuredQuery::default().build_sql(),
+            "reported tokens add no clause"
+        );
+
+        let q = StructuredQuery::parse("foo:bar 12:30");
+        assert_eq!(
+            q.fts_terms,
+            vec!["foo:bar", "12:30"],
+            "unknown prefixes stay text"
+        );
+        assert!(q.unrecognized.is_empty());
     }
 }

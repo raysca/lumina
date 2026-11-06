@@ -3326,3 +3326,196 @@ fn test_network_import_source_attribution_and_cascade() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+fn names_for(catalog: &Catalog, query: &str) -> Vec<String> {
+    let q = StructuredQuery::parse(query);
+    let mut names: Vec<String> = catalog
+        .search_structured(&q, 100, 0)
+        .unwrap_or_else(|e| panic!("query {query:?} must not fail: {e:#}"))
+        .into_iter()
+        .map(|item| item.file_name)
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn minus_term_excludes_fts_matches() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/beach.jpg", MediaType::Image, 1, None, None),
+            sample_media_item("/p/beaches_sunset.jpg", MediaType::Image, 2, None, None),
+            sample_media_item("/p/city.jpg", MediaType::Image, 3, None, None),
+            sample_media_item("/p/city_sunset.jpg", MediaType::Image, 4, None, None),
+        ])
+        .expect("insert items");
+
+    assert_eq!(
+        names_for(&catalog, "-beach"),
+        vec!["city.jpg", "city_sunset.jpg"],
+        "-beach must hide every row matching beach, including the prefix match beaches"
+    );
+    assert_eq!(
+        names_for(&catalog, "sunset -beach"),
+        vec!["city_sunset.jpg"],
+        "inclusion and exclusion combine"
+    );
+    assert_eq!(
+        names_for(&catalog, "-beach -city"),
+        Vec::<String>::new(),
+        "several exclusions each hide their rows"
+    );
+    assert_eq!(
+        catalog
+            .search_structured_count(&StructuredQuery::parse("sunset -beach"))
+            .expect("count"),
+        1,
+        "the count query applies the exclusion too"
+    );
+}
+
+#[test]
+fn minus_tag_excludes_tagged_rows() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let inserted = catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/a.jpg", MediaType::Image, 1, None, None),
+            sample_media_item("/p/b.jpg", MediaType::Image, 2, None, None),
+            sample_media_item("/p/c.jpg", MediaType::Image, 3, None, None),
+        ])
+        .expect("insert items");
+    catalog
+        .add_tags_batch(&[inserted[0].id], &["work".to_string()])
+        .expect("tag a");
+    catalog
+        .add_tags_batch(&[inserted[1].id], &["family".to_string()])
+        .expect("tag b");
+
+    assert_eq!(
+        names_for(&catalog, "-tag:work"),
+        vec!["b.jpg", "c.jpg"],
+        "-tag:work hides only rows tagged work, untagged rows stay"
+    );
+    assert_eq!(
+        names_for(&catalog, "-tag:Work -tag:family"),
+        vec!["c.jpg"],
+        "tag exclusion is case-insensitive like tag:"
+    );
+    assert_eq!(
+        names_for(&catalog, "has:tag -tag:work"),
+        vec!["b.jpg"],
+        "has:tag and -tag combine"
+    );
+}
+
+#[test]
+fn fts_syntax_in_query_text_is_literal() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/or.jpg", MediaType::Image, 1, None, None),
+            sample_media_item("/p/beach.jpg", MediaType::Image, 2, None, None),
+            sample_media_item("/p/city.jpg", MediaType::Image, 3, None, None),
+        ])
+        .expect("insert items");
+
+    for text in [
+        "OR",
+        "NOT x",
+        "a NEAR b",
+        "\"unclosed",
+        "a*b",
+        "^x",
+        "col:x",
+        "-",
+        "-\"two words\"",
+        "x OR -y",
+        "-\"\"",
+        "-*",
+        "-OR",
+        "-NEAR(",
+    ] {
+        let q = StructuredQuery::parse(text);
+        catalog
+            .search_structured(&q, 10, 0)
+            .unwrap_or_else(|e| panic!("{text:?} must be literal text, got SQL error {e:#}"));
+        catalog
+            .search_structured_count(&q)
+            .unwrap_or_else(|e| panic!("{text:?} count must not fail: {e:#}"));
+    }
+    assert_eq!(
+        names_for(&catalog, "OR"),
+        vec!["or.jpg"],
+        "OR alone is a word, not an operator"
+    );
+    assert_eq!(
+        names_for(&catalog, "-"),
+        vec!["beach.jpg", "city.jpg", "or.jpg"],
+        "a lone - is ignored"
+    );
+}
+
+/// Inlines `?` parameters as SQL literals so `explain_query_plan` (which binds
+/// nothing) can plan a synthesized query. Test-only: values are trusted.
+fn inline_sql_params(sql: &str, params: &[rusqlite::types::Value]) -> String {
+    use rusqlite::types::Value;
+    assert_eq!(
+        sql.matches('?').count(),
+        params.len(),
+        "every ? placeholder needs exactly one parameter"
+    );
+    let mut values = params.iter();
+    sql.chars()
+        .map(|c| {
+            if c != '?' {
+                return c.to_string();
+            }
+            match values.next() {
+                Some(Value::Integer(n)) => n.to_string(),
+                Some(Value::Real(f)) => f.to_string(),
+                Some(Value::Text(t)) => format!("'{}'", t.replace('\'', "''")),
+                Some(Value::Null) => "NULL".to_string(),
+                other => panic!("inline_sql_params cannot inline {other:?}"),
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn exclusion_plan_uses_fts_index() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[sample_media_item(
+            "/p/beach.jpg",
+            MediaType::Image,
+            1,
+            None,
+            None,
+        )])
+        .expect("insert items");
+    for text in ["-beach", "-beach is:favorite", "sunset -beach"] {
+        let (sql, params) = StructuredQuery::parse(text).synthesize_query(50, 0);
+        let rows = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain");
+        let plan = rows.join(" | ");
+        // FTS5 reports a full scan as `VIRTUAL TABLE INDEX 0:` and a MATCH
+        // lookup as `0:M...`; the row right under the subquery is its scan.
+        let sub = rows
+            .iter()
+            .position(|r| r.contains("LIST SUBQUERY"))
+            .unwrap_or_else(|| panic!("{text:?}: expected a NOT IN subquery, got: {plan}"));
+        assert!(
+            rows.get(sub + 1)
+                .is_some_and(|r| r.contains("VIRTUAL TABLE INDEX 0:M")),
+            "{text:?}: the NOT IN subquery must MATCH through the FTS index, got: {plan}"
+        );
+        if !text.starts_with("sunset") {
+            assert!(
+                !plan.contains("USE TEMP B-TREE FOR ORDER BY"),
+                "{text:?}: the default sort must stay an index walk, got: {plan}"
+            );
+        }
+    }
+}
