@@ -221,6 +221,7 @@ impl LuminaApp {
                                 let item_color = this.get_item_color_label(item);
                                 let is_video = item.media_type == MediaType::Video;
                                 let is_missing = this.missing_items.contains(&item.id);
+                                let is_edited = this.edits.edited_ids.contains(&item.id);
 
                                 let texture = row_textures.get(offset_in_row).cloned().flatten();
 
@@ -567,6 +568,10 @@ impl LuminaApp {
                                                                 theme::danger_text(),
                                                             )),
                                                     )
+                                                })
+                                                // Edited or rotated in Lumina (top-left).
+                                                .when(is_edited, |card| {
+                                                    card.child(edited_badge(item_id_num))
                                                 })
                                                 // Video Duration Overlay (bottom-right)
                                                 .child(if is_video && !dur_text.is_empty() {
@@ -1063,6 +1068,27 @@ fn month_title(year: i32, month: u32) -> String {
     } else {
         "Undated".to_string()
     }
+}
+
+/// Top-left card badge for an item with Lumina edits or a rotation; reads
+/// the cached `edited_ids`, never the catalog.
+fn edited_badge(item_id_num: usize) -> impl IntoElement {
+    div()
+        .id(("grid-edited-badge", item_id_num as u64))
+        .debug_selector(move || format!("grid-edited-badge-{item_id_num}"))
+        .role(Role::Image)
+        .aria_label("Edited")
+        .absolute()
+        .top_1()
+        .left_1()
+        .size(px(20.0))
+        .rounded(theme::RADIUS_SM)
+        .bg(rgba(0x00000099))
+        .flex()
+        .items_center()
+        .justify_center()
+        .tooltip(theme::tooltip_label("Edited"))
+        .child(render_icon(Icon::Sliders, px(12.0), rgb(0xffffff)))
 }
 
 #[cfg(test)]

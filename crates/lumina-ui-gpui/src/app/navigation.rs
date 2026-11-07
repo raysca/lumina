@@ -479,6 +479,17 @@ impl LuminaApp {
     }
 
     pub(crate) fn select_item_internal(&mut self, item: MediaItem, cx: &mut Context<Self>) {
+        // A draft belongs to the photo it was opened on: trash, a watcher
+        // removal or any other step to another item discards it, so Done
+        // can never write to a photo other than the one shown.
+        if self
+            .edits
+            .session
+            .as_ref()
+            .is_some_and(|s| s.item != item.id)
+        {
+            self.discard_edit_draft();
+        }
         self.selected_item = Some(item.clone());
         self.set_viewer_image(None);
         self.tag_input_active = false;
@@ -1127,6 +1138,8 @@ impl LuminaApp {
     /// already notify their own caller, so they use this version to drop a
     /// selection that no longer belongs to the active view.
     pub(crate) fn clear_selection_fields(&mut self) {
+        // No photo is shown any more, so a draft would have nothing to edit.
+        self.discard_edit_draft();
         self.selected_indices.clear();
         self.selection_anchor = None;
         self.selected_index = None;

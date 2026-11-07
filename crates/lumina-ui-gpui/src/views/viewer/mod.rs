@@ -6,6 +6,7 @@ use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
+pub mod edit_bar;
 pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;
@@ -38,7 +39,10 @@ impl MediaViewer {
         let is_immersive = this.is_immersive_fullscreen;
         let hud_visible = this.immersive_hud_visible;
         let show_chrome = !is_immersive || hud_visible;
-        let show_drawer = is_inspector_open && show_chrome;
+        // Edit mode swaps the top bar for the edit bar and hides what could
+        // step to, or act on, another photo (nav buttons, info drawer).
+        let editing = this.edits.session.is_some();
+        let show_drawer = is_inspector_open && show_chrome && !editing;
 
         let backdrop = div()
             .id("viewer-backdrop")
@@ -67,7 +71,9 @@ impl MediaViewer {
                 }),
             )
             // 1. Top Bar
-            .child(if is_immersive && !hud_visible {
+            .child(if editing {
+                edit_bar::render(this, cx)
+            } else if is_immersive && !hud_visible {
                 Empty.into_any_element()
             } else if is_immersive {
                 // The HUD fades back in after an idle hide.
@@ -91,7 +97,7 @@ impl MediaViewer {
                     // so it never covers the media, next button or transport.
                     // Not in immersive mode: the drawer hides with the HUD
                     // there, and the photo must not resize each time.
-                    .when(is_inspector_open && !is_immersive, |stage| {
+                    .when(is_inspector_open && !is_immersive && !editing, |stage| {
                         stage.pr(px(DRAWER_WIDTH + DRAWER_INSET * 2.0))
                     })
                     .flex()
@@ -117,7 +123,7 @@ impl MediaViewer {
                             .items_center()
                             .justify_center()
                             .child(ViewerViewport::render(this, cx))
-                            .when(show_chrome, |frame| {
+                            .when(show_chrome && !editing, |frame| {
                                 frame.children(stage_controls::render_nav_buttons(cx))
                             }),
                     )

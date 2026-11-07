@@ -2,13 +2,14 @@
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
 //! ratings, color labels, favorites, captions, tags, trash/restore, rotation,
+//! quick edits (exposure, auto-enhance, Revert to Original),
 //! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
 //! and smart-album rules), and smart album deletion.
 //! Permanent deletion is intentionally excluded.
 
 use anyhow::Result;
 use gpui::*;
-use lumina_core::{LuminaEngine, MediaId, SmartAlbum, TagChange, TagReplay, TemplateChange};
+use lumina_core::{Edits, LuminaEngine, MediaId, SmartAlbum, TagChange, TagReplay, TemplateChange};
 
 use crate::app::tag_undo::TagViewRefs;
 use crate::app::LuminaApp;
@@ -35,6 +36,11 @@ pub enum UndoAction {
     ColorLabel { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after) quarter turns; one entry covers a whole batch.
     Rotation { changes: Vec<(MediaId, u8, u8)> },
+    /// (id, before, after) edits, rotation included: one Done in edit mode
+    /// or one Revert to Original for a whole selection.
+    Edits {
+        changes: Vec<(MediaId, Edits, Edits)>,
+    },
     /// (id, before, after)
     Favorite { changes: Vec<(MediaId, bool, bool)> },
     Caption {
@@ -130,8 +136,9 @@ impl UndoAction {
             UndoAction::BatchDate { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::BatchLocation { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::Tags { ids, .. } => ids.clone(),
-            // Rotation is not written to sidecars.
+            // Rotation and edits are not written to sidecars.
             UndoAction::Rotation { .. }
+            | UndoAction::Edits { .. }
             | UndoAction::SmartAlbumDeleted { .. }
             | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
@@ -144,6 +151,7 @@ impl UndoAction {
             UndoAction::Rating { .. } => "rating",
             UndoAction::ColorLabel { .. } => "color label",
             UndoAction::Rotation { .. } => "rotation",
+            UndoAction::Edits { .. } => "edit",
             UndoAction::Favorite { .. } => "favorite",
             UndoAction::Caption { .. } => "caption",
             UndoAction::Title { .. } => "title",
@@ -172,6 +180,7 @@ impl UndoAction {
             UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
             UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
             UndoAction::Rotation { changes } => engine.set_rotations(&pick(changes, before)),
+            UndoAction::Edits { changes } => engine.set_edits(&pick(changes, before)),
             UndoAction::Favorite { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_favorite(ids, value)
             }),
@@ -359,6 +368,12 @@ impl LuminaApp {
         before: bool,
         cx: &mut Context<Self>,
     ) -> Option<String> {
+        // ⌘Z is absorbed in edit mode, but the toast's Undo is not: never
+        // change the catalog under an open draft.
+        if self.edits.session.is_some() {
+            self.show_toast("Finish editing the photo first", cx);
+            return None;
+        }
         if let UndoAction::TemplateDeleted { index, template } = action {
             return self
                 .replay_template_delete(*index, template, before, cx)
@@ -377,9 +392,13 @@ impl LuminaApp {
                         self.clear_selection(cx);
                     }
                 }
-                if let UndoAction::Rotation { changes } = action {
-                    let ids: Vec<MediaId> = changes.iter().map(|&(id, _, _)| id).collect();
-                    self.evict_rendered(&ids);
+                let edited: Vec<MediaId> = match action {
+                    UndoAction::Rotation { changes } => changes.iter().map(|c| c.0).collect(),
+                    UndoAction::Edits { changes } => changes.iter().map(|c| c.0).collect(),
+                    _ => Vec::new(),
+                };
+                if !edited.is_empty() {
+                    self.after_edits_written(&edited, cx);
                 }
                 // Get Info caches rights per item; reload them.
                 if matches!(action, UndoAction::Template { .. }) {

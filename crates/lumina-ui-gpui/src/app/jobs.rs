@@ -47,6 +47,8 @@ impl LuminaApp {
             return;
         };
         self.jobs.export = Some(ids.len());
+        // Export copies originals; the report says so for edited items.
+        let edited = ids.iter().any(|id| self.edits.edited_ids.contains(id));
         let destination = folder.clone();
         let task = cx
             .background_executor()
@@ -54,7 +56,7 @@ impl LuminaApp {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             // The app may be gone; then there is no job left to clear.
-            let _ = this.update(cx, |app, cx| app.finish_export(&folder, result, cx));
+            let _ = this.update(cx, |app, cx| app.finish_export(&folder, result, edited, cx));
         })
         .detach();
         cx.notify();
@@ -64,6 +66,7 @@ impl LuminaApp {
         &mut self,
         folder: &Path,
         result: anyhow::Result<ExportReport>,
+        edited: bool,
         cx: &mut Context<Self>,
     ) {
         self.jobs.export = None;
@@ -78,9 +81,15 @@ impl LuminaApp {
                 if report.sidecars > 0 {
                     summary.push_str(&format!(" ({} XMP sidecar(s))", report.sidecars));
                 }
+                let note = if edited {
+                    "; the originals were exported without Lumina's edits or rotation"
+                } else {
+                    ""
+                };
+                summary.push_str(note);
                 self.set_last_action(summary);
                 if report.failed.is_empty() {
-                    self.show_toast(format!("Exported {} item(s)", report.exported), cx);
+                    self.show_toast(format!("Exported {} item(s){note}", report.exported), cx);
                 } else {
                     let details = report
                         .failed

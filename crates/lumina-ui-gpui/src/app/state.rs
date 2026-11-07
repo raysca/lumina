@@ -483,6 +483,8 @@ pub struct LuminaApp {
     pub caption: CaptionState,
     /// Reversible catalog edits (ratings, tags, captions, favorites, trash).
     pub undo: crate::app::undo::UndoState,
+    /// Edit mode and the edited-ids cache behind the grid badge.
+    pub edits: crate::app::quick_edit::QuickEdits,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
     /// Bumped per opened library; see `UiMessage::LibraryEvent`.
     pub(crate) library_generation: u64,
@@ -663,6 +665,7 @@ impl LuminaApp {
             downloads: Default::default(),
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),
+            edits: Default::default(),
             event_receiver_thread: None,
             library_generation: 0,
             active_view: Default::default(),

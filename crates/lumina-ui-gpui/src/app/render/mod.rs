@@ -1,3 +1,4 @@
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::actions::*;
@@ -105,7 +106,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
     (
         "GENERAL",
         &[
@@ -159,6 +160,17 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
             ("Z", "Toggle 1:1 zoom"),
             ("O", "Open in default app"),
             ("R / ⇧R", "Rotate right / left"),
+            ("E", "Edit photo"),
+        ],
+    ),
+    (
+        "EDITING A PHOTO",
+        &[
+            ("R / ⇧R", "Rotate right / left"),
+            ("- / =", "Darker / brighter (⅓ stop)"),
+            ("A", "Auto enhance on / off"),
+            ("Enter", "Done (⌘Z undoes)"),
+            ("Esc", "Cancel"),
         ],
     ),
     (
@@ -411,6 +423,7 @@ impl Render for LuminaApp {
         let inspector_open = self.inspector_open;
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
+        let editing = self.edits.session.is_some();
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
             cx,
@@ -423,20 +436,8 @@ impl Render for LuminaApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
-                this.open_preferences(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ShowCommandPalette, _w, cx| {
-                this.open_command_palette(cx);
-            }))
-            .on_action(cx.listener(|this, _: &RescanLibrary, _w, cx| {
-                this.rescan_library(cx);
-            }))
             .on_action(cx.listener(|this, _: &ShowShortcuts, _w, cx| {
                 this.toggle_shortcuts_overlay(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
-                this.open_about(cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
                 this.toggle_sidebar(cx);
@@ -444,35 +445,59 @@ impl Render for LuminaApp {
             .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
                 this.toggle_inspector(cx);
             }))
-            .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
-                this.pick_import_folders(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ImportNetworkVideo, _w, cx| {
-                this.open_network_import_dialog(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ToggleDownloads, _w, cx| {
-                this.toggle_downloads_panel(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
-                this.import_sidecars_selected(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ManageTemplates, _w, cx| {
-                this.open_template_editor(cx);
-            }))
-            .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
-                this.open_album_builder(cx);
-            }))
-            .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
-                this.navigate_back(cx);
-            }))
-            .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
-                this.navigate_forward(cx);
-            }))
+            // Edit mode: no handler means a disabled menu item. These open
+            // overlays that take the keys, change media, or leave the photo
+            // under the draft. Rotate and Revert go to the draft; Quit and
+            // Open Library stay (they discard the draft and say so).
+            .when(!editing, |root| {
+                root.on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
+                    this.open_preferences(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
+                    this.open_about(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowCommandPalette, _w, cx| {
+                    this.open_command_palette(cx);
+                }))
+                .on_action(cx.listener(|this, _: &RescanLibrary, _w, cx| {
+                    this.rescan_library(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
+                    this.pick_import_folders(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ImportNetworkVideo, _w, cx| {
+                    this.open_network_import_dialog(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ToggleDownloads, _w, cx| {
+                    this.toggle_downloads_panel(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
+                    this.import_sidecars_selected(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ManageTemplates, _w, cx| {
+                    this.open_template_editor(cx);
+                }))
+                .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
+                    this.open_album_builder(cx);
+                }))
+                .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
+                    this.navigate_back(cx);
+                }))
+                .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
+                    this.navigate_forward(cx);
+                }))
+            })
             .on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
                 this.rotate_selection(ViewerRotation::Left, cx);
             }))
             .on_action(cx.listener(|this, _: &RotateRight, _w, cx| {
                 this.rotate_selection(ViewerRotation::Right, cx);
+            }))
+            .on_action(cx.listener(|this, _: &EditPhoto, _w, cx| {
+                this.enter_edit_mode(cx);
+            }))
+            .on_action(cx.listener(|this, _: &RevertToOriginal, _w, cx| {
+                this.revert_selection_to_original(cx);
             }))
             .on_mouse_down(
                 MouseButton::Left,

@@ -156,6 +156,11 @@ impl ViewerViewport {
                     // The menu acts on the shown item only: drop any grid
                     // multi-selection so Delete/Rate cannot reach hidden items.
                     // The viewer can be open without a grid index.
+                    // Edit mode has its own bar; the menu's Delete and
+                    // Rotate must not act under the draft.
+                    if this.edits.session.is_some() {
+                        return;
+                    }
                     if let Some(item) = this.selected_item.clone() {
                         this.selected_indices.clear();
                         this.selected_indices.extend(this.selected_index);

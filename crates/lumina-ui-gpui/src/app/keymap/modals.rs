@@ -424,6 +424,36 @@ impl LuminaApp {
             return true;
         }
 
+        // 6b. Edit mode in the viewer. After every sheet and field above
+        // (one opened from the menu takes its keys first), before the
+        // global Enter (closes the viewer) and the viewer's -/= zoom. Every
+        // other key is absorbed: ⌘⌫, arrows and ⌘Z must not act on the
+        // photo, or another one, under the draft.
+        if self.edits.session.is_some() {
+            let m = &keystroke.modifiers;
+            let plain = !cmd_or_ctrl && !m.alt;
+            match key {
+                // After a failed Done, Esc first dismisses the banner and
+                // keeps the draft for another try.
+                "escape" if self.error_message.is_some() => self.dismiss_error(cx),
+                "escape" => self.cancel_edit(cx),
+                "enter" | "return" => self.finish_edit(cx),
+                k if plain && k.eq_ignore_ascii_case("r") => self.rotate_edit_draft(
+                    if m.shift {
+                        crate::views::viewer_state::ViewerRotation::Left
+                    } else {
+                        crate::views::viewer_state::ViewerRotation::Right
+                    },
+                    cx,
+                ),
+                "-" | "_" if plain => self.step_edit_exposure(-1, cx),
+                "=" | "+" if plain => self.step_edit_exposure(1, cx),
+                k if plain && !m.shift && k.eq_ignore_ascii_case("a") => self.toggle_edit_auto(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 7. Dismiss a visible toast from the keyboard.
         //
         // This sits after every modal and inline-editor branch above, so those

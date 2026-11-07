@@ -23,6 +23,8 @@ actions!(
         GoBack,
         GoForward,
         RotateLeft,
-        RotateRight
+        RotateRight,
+        EditPhoto,
+        RevertToOriginal
     ]
 );

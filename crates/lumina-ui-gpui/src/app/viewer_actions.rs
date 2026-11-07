@@ -329,6 +329,8 @@ impl LuminaApp {
         self.hud_idle = Default::default();
         self.viewer_shortcuts_open = false;
         self.context_menu_state = None;
+        // Closing the viewer (the Back button) discards an open draft.
+        self.discard_edit_draft();
         self.viewer_state.reset();
         if !self.video.in_pip {
             self.stop_video_player();

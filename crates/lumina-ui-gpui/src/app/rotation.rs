@@ -19,21 +19,12 @@ impl LuminaApp {
     /// mixed selection stays mixed. Videos are skipped because the player
     /// surface is not rotated; a selection of only videos says so.
     pub fn rotate_selection(&mut self, direction: ViewerRotation, cx: &mut Context<Self>) {
-        // Image > Rotate skips the keymap's modal shield: never turn the
-        // selection hidden behind a sheet, dialog or focused text field.
-        // The import dialog is not in `import_blocked_by_modal`: its own
-        // steps call that check.
-        if self.import_blocked_by_modal() || self.import.dialog.is_some() {
-            self.show_toast("Close the open dialog before rotating", cx);
+        if self.media_edit_refused(("rotating", "rotate"), cx) {
             return;
         }
-        if self.text_target().is_some() {
-            self.show_toast("Finish editing the field before rotating", cx);
-            return;
-        }
-        // The context menu hides Rotate here; keys, ⌘K and the menu match it.
-        if self.selection == AlbumSelection::Trash {
-            self.show_toast("Restore items from Recently Deleted to rotate them", cx);
+        // In edit mode Image > Rotate and ⌘K turn the draft, not the catalog.
+        if self.edits.session.is_some() {
+            self.rotate_edit_draft(direction, cx);
             return;
         }
         let items = if self.is_fullscreen_viewer {
@@ -82,7 +73,7 @@ impl LuminaApp {
             return;
         }
         let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
-        self.evict_rendered(&changed);
+        self.after_edits_written(&changed, cx);
         self.push_undo(UndoAction::Rotation { changes });
         let side = match direction {
             ViewerRotation::Left => "left",
@@ -95,6 +86,36 @@ impl LuminaApp {
         self.set_last_action(message.clone());
         self.show_undo_toast(message, cx);
         cx.notify();
+    }
+
+    /// True (with a toast) when an edit to the selection must not run now:
+    /// behind a sheet or dialog, while a field has focus, or in Recently
+    /// Deleted. Menu actions skip the keymap's modal shield, so every edit
+    /// action checks this itself. `verb` is ("rotating", "rotate").
+    pub(crate) fn media_edit_refused(
+        &mut self,
+        (doing, verb): (&str, &str),
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // The import dialog is not in `import_blocked_by_modal`: its own
+        // steps call that check.
+        if self.import_blocked_by_modal() || self.import.dialog.is_some() {
+            self.show_toast(format!("Close the open dialog before {doing}"), cx);
+            return true;
+        }
+        if self.text_target().is_some() {
+            self.show_toast(format!("Finish editing the field before {doing}"), cx);
+            return true;
+        }
+        // The context menu hides Rotate here; keys, ⌘K and the menu match it.
+        if self.selection == AlbumSelection::Trash {
+            self.show_toast(
+                format!("Restore items from Recently Deleted to {verb} them"),
+                cx,
+            );
+            return true;
+        }
+        false
     }
 
     /// Drops what was rendered for `ids` so the grid and viewer decode them

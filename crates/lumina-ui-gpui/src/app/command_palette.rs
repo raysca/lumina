@@ -53,6 +53,10 @@ pub enum CommandId {
     /// Quarter turn of the viewer item or the selected stills.
     RotateLeft,
     RotateRight,
+    /// Edit mode on the viewer photo (E in the viewer).
+    EditPhoto,
+    /// Clears rotation and edits on the viewer photo or the selection.
+    RevertToOriginal,
     TogglePip,
     PipPlayPause,
     NewSmartAlbum,
@@ -125,6 +129,8 @@ impl Command {
             ToggleFavorite => Icon::Heart,
             RotateLeft => Icon::RotateCcw,
             RotateRight => Icon::RotateCw,
+            EditPhoto => Icon::Sliders,
+            RevertToOriginal => Icon::Undo2,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
             NewSmartAlbum | SaveSearch => Icon::Sparkles,
@@ -454,6 +460,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "R",
             keywords: "turn clockwise orientation image photo",
         },
+        Command {
+            id: CommandId::EditPhoto,
+            key: "command.edit_photo",
+            shortcut: "E",
+            keywords: "adjust exposure brightness auto enhance quick edit image",
+        },
+        Command {
+            id: CommandId::RevertToOriginal,
+            key: "command.revert_to_original",
+            shortcut: "",
+            keywords: "reset undo remove edits rotation exposure image photo",
+        },
         // After the Rate commands: "rate 3" also matches "Show Rated ★ 3+".
         Command {
             id: CommandId::QuickFilter("is:favorite"),
@@ -673,7 +691,9 @@ impl LuminaApp {
         // Commands act on the grid; over the tag manager or the template
         // editor they would change media behind the sheet (the menu item
         // reaches here, not the keymap).
-        if self.tag_manager.open || self.templates.editor.is_some() {
+        // Nor over edit mode: they would act on the photo under the draft.
+        if self.tag_manager.open || self.templates.editor.is_some() || self.edits.session.is_some()
+        {
             return;
         }
         self.command_palette_open = true;
@@ -710,9 +730,13 @@ impl LuminaApp {
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
-            CommandId::RotateLeft | CommandId::RotateRight => {
+            CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
             }
+            CommandId::EditPhoto => self
+                .selected_item
+                .as_ref()
+                .is_some_and(|item| item.media_type != lumina_core::MediaType::Video),
             CommandId::ApplyTemplate => {
                 !self.config.templates.is_empty()
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
@@ -965,6 +989,8 @@ impl LuminaApp {
             CommandId::ToggleFavorite => self.toggle_favorite_selected(cx),
             CommandId::RotateLeft => self.rotate_selection(ViewerRotation::Left, cx),
             CommandId::RotateRight => self.rotate_selection(ViewerRotation::Right, cx),
+            CommandId::EditPhoto => self.enter_edit_mode(cx),
+            CommandId::RevertToOriginal => self.revert_selection_to_original(cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),

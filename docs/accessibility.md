@@ -48,6 +48,13 @@ Lumina is designed to be usable without a mouse:
 - **Rotation**: `R` / `⇧R` rotate the viewer photo or the grid selection
   right / left, also ⌘K Rotate Right / Rotate Left and Image > Rotate
   Right / Rotate Left; the keys type into a focused text field instead.
+- **Quick edits**: `E` in the viewer, ⌘K Edit Photo or Image > Edit Photo
+  opens edit mode; `R` / `⇧R` rotate, `-` / `=` change exposure, `A`
+  toggles auto enhance, `Enter` is Done and `Esc` Cancel. Every other key
+  is absorbed while editing (`⌘⌫` cannot trash the photo, arrows do not
+  change it). Revert to Original is in ⌘K and the Image menu. The edit
+  bar's buttons and the grid's "Edited" badge carry roles, labels and
+  tooltips, not yet checked with VoiceOver.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
 - **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video, Tag
@@ -90,7 +97,12 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   1:1 preset buttons under the navigator (button, labelled "Fit (⌘0)",
   "Fill (⌘3)", "Actual size (⌘1)");
 - also from that work: the search explanation footer (status, labelled with
-  the explanation text).
+  the explanation text);
+- the viewer's edit bar (toolbar, labelled "Edit photo"): Cancel, Rotate
+  Left/Right, Darker, Brighter, Auto Enhance (labelled on/off), Revert to
+  Original and Done (buttons), and the exposure value (status);
+- the grid's "Edited" badge on edited or rotated photos (image, labelled
+  "Edited").
 
 The recent-search history icon and the scrub preview card have no role.
 

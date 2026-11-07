@@ -119,6 +119,19 @@ core handles cataloguing, decoding, and search.
   (also ⌘K, the Image menu and the context menu). Videos in the selection
   are skipped. The turn is stored in the library, never written to the
   file, and one `⌘Z` puts each photo back at its own previous angle.
+- **Quick edits** — `E` in the viewer (also ⌘K and Image > Edit Photo)
+  opens an edit bar: rotate (`R` / `⇧R`), exposure in ⅓-stop steps up to
+  ±2 (`-` / `=`), auto enhance (`A`), and Revert to Original. `Enter` saves
+  (one `⌘Z` undoes it) and `Esc` cancels; closing the viewer, showing
+  another photo or opening another library discards unsaved adjustments.
+  While editing, menu items that would open a sheet or act on other photos
+  are disabled. Edits are stored in the library
+  and applied when photos are shown, so the original file and the
+  thumbnail cache are never changed; a small badge marks edited photos in
+  the grid. Image > Revert to Original clears the edits and rotation of the
+  whole selection in one undo step. Videos are not edited. Edits are not
+  written to XMP sidecars, and Export copies the originals without them
+  (the export report says so). Crop arrives in a later release.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

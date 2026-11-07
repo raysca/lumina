@@ -92,6 +92,10 @@ fn reveal(path: &Path) {
 
 impl LuminaApp {
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
+        // Its sheet would take the keys over an open draft (Done/Cancel).
+        if self.edits.session.is_some() {
+            return;
+        }
         self.preferences_open = true;
         self.preferences_tab = PreferencesTab::General;
         self.preferences_cache_cleared = false;
@@ -100,6 +104,10 @@ impl LuminaApp {
     }
 
     pub fn open_about(&mut self, cx: &mut Context<Self>) {
+        // About is a Preferences tab: the same sheet, the same rule.
+        if self.edits.session.is_some() {
+            return;
+        }
         self.preferences_open = true;
         self.preferences_tab = PreferencesTab::About;
         self.preferences_cache_cleared = false;

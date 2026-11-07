@@ -70,6 +70,16 @@ impl LuminaApp {
             return true;
         }
 
+        // E: edit the open photo (exposure, auto, rotation).
+        if !cmd_or_ctrl
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.shift
+            && key.eq_ignore_ascii_case("e")
+        {
+            self.enter_edit_mode(cx);
+            return true;
+        }
+
         // R / ⇧R: rotate the open still right / left.
         if !cmd_or_ctrl && !keystroke.modifiers.alt && key.eq_ignore_ascii_case("r") {
             let direction = if keystroke.modifiers.shift {

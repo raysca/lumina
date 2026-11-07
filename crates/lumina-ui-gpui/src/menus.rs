@@ -36,6 +36,9 @@ pub fn build_menus() -> Vec<Menu> {
         Menu::new("Image").items([
             MenuItem::action("Rotate Left", RotateLeft),
             MenuItem::action("Rotate Right", RotateRight),
+            MenuItem::separator(),
+            MenuItem::action("Edit Photo", EditPhoto),
+            MenuItem::action("Revert to Original", RevertToOriginal),
         ]),
         Menu::new("Go").items([
             MenuItem::action("Back", GoBack),

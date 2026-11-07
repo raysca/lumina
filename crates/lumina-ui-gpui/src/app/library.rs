@@ -226,7 +226,10 @@ impl LuminaApp {
                 let playing_here = !self.video.in_pip
                     && self.video.player.is_some()
                     && self.video.item.as_ref().is_some_and(|item| item.id == id);
-                if let Some(current) = self.selected_item.as_ref().filter(|_| !playing_here) {
+                // Nor may a saved frame replace the edit preview.
+                let editing_here = self.edits.session.as_ref().is_some_and(|s| s.item == id);
+                let keep_shown = playing_here || editing_here;
+                if let Some(current) = self.selected_item.as_ref().filter(|_| !keep_shown) {
                     if current.id == id {
                         match frame_to_gpui_image(frame) {
                             Ok(gpui_img) => {
@@ -505,6 +508,8 @@ impl LuminaApp {
         self.search_focused = false;
         self.active_year = None;
         self.is_fullscreen_viewer = false;
+        self.discard_edit_draft();
+        self.edits.reset_for_library();
         // A new library is a jump, not user navigation: start a fresh trail.
         self.reset_navigation_history();
 
@@ -528,6 +533,7 @@ impl LuminaApp {
             .ok();
 
         self.refresh_album_counts();
+        self.reload_edited_ids(cx);
         cx.notify();
     }
 
