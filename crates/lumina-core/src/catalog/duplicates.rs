@@ -287,8 +287,8 @@ impl Catalog {
     }
 
     /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
-    /// favorite (any), rating (highest), and caption, colour label, title and rights
-    /// where the keeper has none.
+    /// favorite (any), rating (highest), and caption, colour label, title, rights
+    /// and the edits row where the keeper has none.
     pub(crate) fn merge_metadata_in_tx(
         tx: &rusqlite::Transaction,
         keep_id: MediaId,
@@ -399,6 +399,36 @@ impl Catalog {
             )?;
             for trash_id in trash_ids {
                 rights_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 5. Edits row (crop, exposure, auto-enhance) when keep_id has none.
+        // The crop is in unrotated coordinates; the copied row brings its
+        // rotation along when the keeper is unrotated, so the user sees the
+        // same edit (the first duplicate with a row wins).
+        {
+            let mut rotate_stmt = tx.prepare_cached(
+                r#"
+                UPDATE media_items SET rotation_quarters =
+                    (SELECT rotation_quarters FROM media_items WHERE id = ?2)
+                WHERE id = ?1 AND rotation_quarters % 4 = 0;
+                "#,
+            )?;
+            let mut edits_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_edits
+                    (media_id, crop_x, crop_y, crop_w, crop_h, exposure_ev, auto_enhance,
+                     updated_epoch_ms)
+                SELECT ?1, crop_x, crop_y, crop_w, crop_h, exposure_ev, auto_enhance,
+                     updated_epoch_ms
+                FROM media_edits WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                let ids = params![keep_id.0 as i64, trash_id.0 as i64];
+                if edits_stmt.execute(ids)? > 0 {
+                    rotate_stmt.execute(ids)?;
+                }
             }
         }
 

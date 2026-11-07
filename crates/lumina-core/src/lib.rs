@@ -19,7 +19,7 @@ use anyhow::{Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -28,8 +28,8 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, Rights, TagChange,
-    TagReplay, TemplateChange, SCHEMA_VERSION,
+    Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, PriorDownload, Rights,
+    TagChange, TagReplay, TemplateChange, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -696,6 +696,25 @@ impl LuminaEngine {
     /// Each id's persisted rotation; ids not in the catalog are left out.
     pub fn get_rotations(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, u8>> {
         self.catalog.get_rotations(ids)
+    }
+
+    /// Each id's edits (rotation, crop, exposure, auto-enhance); ids not in
+    /// the catalog are left out.
+    pub fn get_edits(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, Edits>> {
+        self.catalog.get_edits(ids)
+    }
+
+    /// Replaces each item's edits in one transaction; ids not in the catalog
+    /// are skipped and an invalid crop fails the write. Nothing is dropped
+    /// from the disk cache: it holds the unedited decode and edits apply
+    /// after the lookup, like rotation.
+    pub fn set_edits(&self, changes: &[(MediaId, Edits)]) -> Result<()> {
+        self.catalog.set_edits(changes)
+    }
+
+    /// Every item with an edit or a rotation.
+    pub fn edited_ids(&self) -> Result<HashSet<MediaId>> {
+        self.catalog.edited_ids()
     }
 
     /// Persisted clockwise quarter turns for an item (0 when unset).

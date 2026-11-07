@@ -141,6 +141,19 @@ impl Catalog {
                 FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
             );
 
+            -- v18: non-destructive edits per item; rotation stays in
+            -- media_items.rotation_quarters. A row with no edit is deleted
+            -- instead of stored.
+            CREATE TABLE IF NOT EXISTS media_edits (
+                media_id INTEGER PRIMARY KEY,
+                -- Crop in normalized [0,1] coordinates of the unrotated decoded frame; NULL = none.
+                crop_x REAL, crop_y REAL, crop_w REAL, crop_h REAL,
+                exposure_ev REAL NOT NULL DEFAULT 0,
+                auto_enhance INTEGER NOT NULL DEFAULT 0,
+                updated_epoch_ms INTEGER NOT NULL,
+                FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS app_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
