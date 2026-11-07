@@ -14,6 +14,12 @@ use crate::{normalize_quarter_turns, MediaId};
 /// Smallest crop side, as a fraction of the frame.
 const MIN_CROP_SIDE: f32 = 0.02;
 
+/// One item's rotation and edits row; read for every thumbnail request.
+const GET_EDITS_SQL: &str = "SELECT m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h,
+        e.exposure_ev, e.auto_enhance
+ FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id
+ WHERE m.id = ?1;";
+
 /// A crop in normalized `[0, 1]` coordinates of the unrotated decoded frame,
 /// so a later rotation never needs to remap it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -65,12 +71,7 @@ impl Catalog {
     /// The edits of each of `ids` in the catalog; unknown ids are left out.
     pub fn get_edits(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, Edits>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            "SELECT m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h,
-                    e.exposure_ev, e.auto_enhance
-             FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id
-             WHERE m.id = ?1;",
-        )?;
+        let mut stmt = conn.prepare_cached(GET_EDITS_SQL)?;
         let mut edits = HashMap::with_capacity(ids.len());
         for &id in ids {
             let row = stmt
@@ -377,6 +378,21 @@ mod tests {
             catalog.get_edits(&[keep2]).unwrap()[&keep2],
             own,
             "a keeper's own edits win"
+        );
+    }
+
+    #[test]
+    fn get_edits_plan_uses_primary_keys() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let plan = catalog
+            .explain_query_plan(&GET_EDITS_SQL.replace("?1", "1"))
+            .unwrap();
+        assert!(
+            plan.len() == 2
+                && plan
+                    .iter()
+                    .all(|step| step.contains("USING INTEGER PRIMARY KEY")),
+            "the per-thumbnail edits read must be two primary-key lookups: {plan:?}"
         );
     }
 
