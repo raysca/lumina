@@ -283,11 +283,20 @@ fn search_from_an_album_year_goes_back_to_that_year() {
                     app.active_year,
                     app.search_query.as_str()
                 ),
-                (FAVORITES, Some(year), ""),
-                "Back (suggestion: {suggestion}) lands on the album and year that were left"
+                (AlbumSelection::AllLibrary, Some(year), ""),
+                "Back (suggestion: {suggestion}) lands on the year that was left \
+                 (a year is the whole library's)"
             );
         });
-        keystrokes(vcx, "secondary-[ secondary-[");
+        keystrokes(vcx, "secondary-[");
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                (app.selection.clone(), app.active_year),
+                (FAVORITES, None),
+                "one more Back is the album the year was chosen from"
+            );
+        });
+        keystrokes(vcx, "secondary-[");
         view.update(vcx, |app, _| {
             assert_eq!(app.selection, AlbumSelection::AllLibrary);
             assert!(

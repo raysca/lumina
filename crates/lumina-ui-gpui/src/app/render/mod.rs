@@ -140,6 +140,8 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("← ↑ → ↓", "Move selection"),
             ("⇧ + arrows", "Extend selection"),
             ("⌘A", "Select all"),
+            ("⇧⌘A", "Add to album…"),
+            ("⌫ in an album", "Remove from album"),
             ("Home / End", "First / last item"),
             ("PageUp / PageDown", "Jump four rows"),
             ("⌘+ / ⌘-", "Grid density"),
@@ -492,6 +494,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &NewAlbum, _w, cx| {
                     this.new_album(cx);
                 }))
+                .on_action(cx.listener(|this, _: &AddToAlbum, _w, cx| {
+                    this.open_album_picker(cx);
+                }))
                 .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                     this.open_album_builder(cx);
                 }))
@@ -683,6 +688,12 @@ impl Render for LuminaApp {
                 self.albums.confirm_delete.is_some(),
                 crate::views::album_delete::render(self, cx),
                 "album-delete-in",
+            ))
+            // 8b3. Add to Album picker
+            .child(motion::overlay_in(
+                self.albums.picker.is_some(),
+                crate::views::album_picker::render(self, cx),
+                "album-picker-in",
             ))
             // 8c. Import dialog
             .child(motion::overlay_in(

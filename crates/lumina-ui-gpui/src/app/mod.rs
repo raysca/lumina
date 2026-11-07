@@ -1,5 +1,6 @@
 pub mod active_view;
 pub mod album_builder_actions;
+pub mod album_membership;
 pub mod albums;
 pub mod command_palette;
 pub mod crop;

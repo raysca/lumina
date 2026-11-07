@@ -300,8 +300,16 @@ fn opening_another_library_resets_album_state() {
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::Album(album.id), cx);
         app.start_album_rename(album.id, cx);
+        app.select_album(AlbumSelection::AllLibrary, cx);
+        app.select_index(0, cx);
+        app.open_album_picker(cx);
+        assert!(app.albums.picker.is_some(), "the picker is open");
         app.albums.confirm_delete = Some(album.id);
         app.open_library_inner(other.clone(), cx);
+        assert!(
+            app.albums.picker.is_none(),
+            "the picker holds old ids and closes on a switch"
+        );
         assert!(app.albums.renaming.is_none(), "no rename carries over");
         assert!(app.albums.rename_buffer.is_empty());
         assert!(
@@ -333,6 +341,11 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
         app.new_album_with_selection(cx);
         app.start_album_rename(album.id, cx);
         app.prompt_delete_album(album.id, cx);
+        app.open_album_picker(cx);
+        assert!(
+            app.albums.picker.is_none(),
+            "no picker in edit mode (it would take the keys from the draft)"
+        );
         let session = app
             .edits
             .session
@@ -356,7 +369,13 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
     view.update(vcx, |app, cx| {
         app.discard_edit_draft();
         app.close_viewer(cx);
+        app.select_index(0, cx);
         app.open_tag_manager(cx);
+        app.open_album_picker(cx);
+        assert!(
+            app.albums.picker.is_none(),
+            "no picker under the tag manager"
+        );
         app.new_album(cx);
         app.new_album_with_selection(cx);
         app.start_album_rename(album.id, cx);

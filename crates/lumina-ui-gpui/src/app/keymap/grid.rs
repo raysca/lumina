@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::views::sidebar::AlbumSelection;
 use crate::views::viewer_state::ViewerRotation;
 
 impl LuminaApp {
@@ -41,9 +42,15 @@ impl LuminaApp {
             return;
         }
 
-        // ⌫ and ⌘⌫ (the menu's shortcut) both open the Delete dialog.
+        // ⌫ in an album takes the selection out of the album and never
+        // trashes; ⌘⌫ (the menu's shortcut), and ⌫ anywhere else, open the
+        // Delete dialog.
         if key == "backspace" || key == "delete" {
-            self.prompt_delete_selected(cx);
+            if !cmd_or_ctrl && matches!(self.selection, AlbumSelection::Album(_)) {
+                self.remove_selection_from_album(cx);
+            } else {
+                self.prompt_delete_selected(cx);
+            }
             return;
         }
 

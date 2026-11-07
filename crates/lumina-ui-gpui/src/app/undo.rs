@@ -4,7 +4,8 @@
 //! ratings, color labels, favorites, captions, tags, trash/restore, rotation,
 //! quick edits (exposure, auto-enhance, Revert to Original),
 //! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
-//! and smart-album rules), smart album deletion, and album rename and deletion.
+//! and smart-album rules), smart album deletion, album rename and deletion,
+//! and album membership.
 //! Permanent deletion is intentionally excluded.
 
 use anyhow::Result;
@@ -97,6 +98,13 @@ pub enum UndoAction {
     /// A deleted album and every member it had; undo restores both under
     /// the same id (members purged since are skipped).
     AlbumDeleted { album: Album, members: Vec<MediaId> },
+    /// Items put in (`added = true`) or taken out of an album; `ids` are
+    /// only those the step changed.
+    AlbumMembership {
+        album: i64,
+        ids: Vec<MediaId>,
+        added: bool,
+    },
     /// One metadata template apply: undo restores every item's rights and
     /// removes only the keywords the apply added.
     Template { change: TemplateChange },
@@ -153,6 +161,7 @@ impl UndoAction {
             | UndoAction::SmartAlbumDeleted { .. }
             | UndoAction::AlbumRenamed { .. }
             | UndoAction::AlbumDeleted { .. }
+            | UndoAction::AlbumMembership { .. }
             | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
             UndoAction::TagRows { change, .. } => change.affected_ids(),
@@ -181,6 +190,8 @@ impl UndoAction {
             UndoAction::SmartAlbumDeleted { .. } => "smart album delete",
             UndoAction::AlbumRenamed { .. } => "album rename",
             UndoAction::AlbumDeleted { .. } => "album delete",
+            UndoAction::AlbumMembership { added: true, .. } => "add to album",
+            UndoAction::AlbumMembership { added: false, .. } => "remove from album",
             UndoAction::Template { .. } => "template",
             UndoAction::TemplateDeleted { .. } => "template delete",
             UndoAction::TagRows { label, .. } => label,
@@ -278,6 +289,14 @@ impl UndoAction {
                     engine.restore_album(album, members)
                 } else {
                     engine.delete_album(album.id).map(|_| ())
+                }
+            }
+            UndoAction::AlbumMembership { album, ids, added } => {
+                // Undo of an add removes; undo of a remove adds back.
+                if before != *added {
+                    engine.add_to_album(*album, ids).map(|_| ())
+                } else {
+                    engine.remove_from_album(*album, ids).map(|_| ())
                 }
             }
             UndoAction::Template { change } => engine.replay_template_change(change, before),
@@ -429,6 +448,12 @@ impl LuminaApp {
                 if deleted.as_ref() == Some(&self.selection) {
                     self.selection = AlbumSelection::AllLibrary;
                     self.clear_selection(cx);
+                }
+                // Items joined or left the open album: positions shifted.
+                if let UndoAction::AlbumMembership { album, .. } = action {
+                    if self.selection == AlbumSelection::Album(*album) {
+                        self.clear_selection(cx);
+                    }
                 }
                 let edited: Vec<MediaId> = match action {
                     UndoAction::Rotation { changes } => changes.iter().map(|c| c.0).collect(),

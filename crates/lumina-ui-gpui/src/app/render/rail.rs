@@ -31,6 +31,7 @@ impl LuminaApp {
                         "year-rail-item".into(),
                         year as u64,
                     ))
+                    .debug_selector(move || format!("year-rail-{year}"))
                     .px_1p5()
                     .py_0p5()
                     .rounded(theme::RADIUS_SM)

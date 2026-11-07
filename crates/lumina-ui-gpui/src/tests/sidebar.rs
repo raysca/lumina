@@ -174,8 +174,15 @@ fn one_back_after_all_photos_returns_to_the_year_view() {
         app.navigate_back(cx);
         assert_eq!(
             (app.selection.clone(), app.active_year),
-            (AlbumSelection::System(SystemAlbum::Favorites), Some(year)),
-            "clicking All Photos & Videos is one Back step, not two"
+            (AlbumSelection::AllLibrary, Some(year)),
+            "clicking All Photos & Videos is one Back step, not two \
+             (the year view is the whole library's)"
+        );
+        app.navigate_back(cx);
+        assert_eq!(
+            (app.selection.clone(), app.active_year),
+            (AlbumSelection::System(SystemAlbum::Favorites), None),
+            "the step before the year is the album it was chosen from"
         );
     });
     let _ = std::fs::remove_dir_all(&dir);

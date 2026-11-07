@@ -41,6 +41,19 @@ impl LuminaApp {
             return true;
         }
 
+        // 0. Add to Album picker: typing filters (the field input), and every
+        // other key stays here, so ⌫ never removes or trashes the selection.
+        if self.albums.picker.is_some() {
+            match key {
+                "escape" => self.close_album_picker(cx),
+                "enter" | "return" => self.activate_album_picker(cx),
+                "up" => self.move_album_picker(-1, cx),
+                "down" => self.move_album_picker(1, cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 0. Keyboard shortcut cheat sheet
         if self.shortcuts_overlay_open {
             match key {

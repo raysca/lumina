@@ -1,3 +1,5 @@
+mod album_membership;
+mod album_membership_guards;
 mod albums;
 mod albums_delete;
 mod batch_edit;

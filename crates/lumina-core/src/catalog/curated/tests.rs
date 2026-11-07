@@ -228,6 +228,13 @@ fn add_is_idempotent_and_counts_active_only() {
         1,
         "existing members and unknown ids add nothing"
     );
+    let d = plain(&catalog, "/lib/d.mp4");
+    assert_eq!(
+        catalog.add_new_to_album(album.id, &[a, d, c]).unwrap(),
+        vec![d],
+        "only ids that were not members come back, so undo removes only those"
+    );
+    catalog.remove_from_album(album.id, &[d]).unwrap();
     catalog.batch_set_trashed(&[c], true).unwrap();
 
     assert_eq!(
@@ -248,6 +255,14 @@ fn add_is_idempotent_and_counts_active_only() {
         "adding to an unknown album is an error, not a silent no-op"
     );
 
+    assert_eq!(
+        catalog
+            .remove_members_from_album(album.id, &[d, a])
+            .unwrap(),
+        vec![a],
+        "only ids that were members come back, so undo re-adds only those"
+    );
+    catalog.add_to_album(album.id, &[a]).unwrap();
     assert_eq!(catalog.remove_from_album(album.id, &[a, c]).unwrap(), 2);
     assert_eq!(catalog.remove_from_album(album.id, &[a]).unwrap(), 0);
     assert_eq!(album_members(&catalog, album.id), vec![b]);

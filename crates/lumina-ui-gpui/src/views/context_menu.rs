@@ -40,6 +40,7 @@ impl MediaContextMenu {
             app: cx.entity().downgrade(),
         };
         let is_trash = app.selection == AlbumSelection::Trash;
+        let in_album = matches!(app.selection, AlbumSelection::Album(_));
         let is_fav = item.is_favorite;
         let is_video = item.media_type == lumina_core::MediaType::Video;
         let in_viewer = app.is_fullscreen_viewer;
@@ -49,7 +50,7 @@ impl MediaContextMenu {
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
         let menu_w = 256.0;
-        let menu_h = 470.0;
+        let menu_h = 530.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
         let win_h: f32 = win_size.height.into();
@@ -286,7 +287,33 @@ impl MediaContextMenu {
                             this.begin_tagging_selection(cx);
                         }),
                     ))
-                    // 10. New Album with Selection (Add to Album… is plan 5 A3)
+                    // 10. Add to Album…, Remove from Album (in an album), New
+                    // Album with Selection
+                    .children((!is_trash).then(|| {
+                        Self::render_menu_item(
+                            &hover,
+                            "context-add-to-album",
+                            crate::i18n::t("command.add_to_album"),
+                            Some("⇧⌘A"),
+                            false,
+                            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.open_album_picker(cx);
+                            }),
+                        )
+                    }))
+                    .children(in_album.then(|| {
+                        Self::render_menu_item(
+                            &hover,
+                            "context-remove-from-album",
+                            crate::i18n::t("command.remove_from_album"),
+                            // ⌫ removes only in the grid.
+                            (!in_viewer).then_some("⌫"),
+                            false,
+                            cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.remove_selection_from_album(cx);
+                            }),
+                        )
+                    }))
                     .child(Self::render_menu_item(
                         &hover,
                         "context-new-album-with-selection",
@@ -539,9 +566,12 @@ impl MediaContextMenu {
     ) -> impl IntoElement {
         let is_hovered = hover.hovered == Some(id_str);
         let app = hover.app.clone();
+        let label: SharedString = label.into();
         div()
             .id(id_str)
             .debug_selector(move || id_str.to_string())
+            .role(Role::MenuItem)
+            .aria_label(label.clone())
             .px_2p5()
             .h(px(26.0))
             .rounded(theme::RADIUS_SM)
@@ -577,7 +607,7 @@ impl MediaContextMenu {
             .flex_row()
             .justify_between()
             .items_center()
-            .child(div().text_size(theme::TEXT_BODY).child(label.into()))
+            .child(div().text_size(theme::TEXT_BODY).child(label))
             .child(trailing)
             .on_click(on_click_handler)
     }

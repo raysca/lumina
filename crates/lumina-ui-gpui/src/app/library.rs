@@ -827,6 +827,12 @@ impl LuminaApp {
     pub fn set_active_year(&mut self, year: Option<i32>, cx: &mut Context<Self>) {
         let departing = self.navigation_snapshot();
         self.active_year = year;
+        // A year shows the whole library (it overrides the selection in
+        // `ViewQuery`), so the sidebar must say Library, as a search does.
+        // Back still returns to the album through `departing`.
+        if year.is_some() {
+            self.selection = AlbumSelection::AllLibrary;
+        }
         self.search_query.clear();
         self.search_focused = false;
         self.clear_selection(cx);
@@ -871,6 +877,10 @@ impl LuminaApp {
         }
         self.search_focused = false;
         self.active_year = restored.active_year;
+        // A session saved before years were scoped to the library.
+        if self.active_year.is_some() {
+            self.selection = AlbumSelection::AllLibrary;
+        }
 
         // The startup open already cleared these, but restoring must never
         // inherit stale position-based state if a scan lands late.

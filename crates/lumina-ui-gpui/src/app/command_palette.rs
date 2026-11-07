@@ -69,6 +69,10 @@ pub enum CommandId {
     /// Act on the open album; shown only in an album view.
     RenameAlbum,
     DeleteAlbum,
+    /// The Add to Album picker (⇧⌘A); shown only with a selection.
+    AddToAlbum,
+    /// Takes the selection out of the open album (⌫ there).
+    RemoveFromAlbum,
     NewSmartAlbum,
     /// Saves the search as a smart album; shown only while there is a query.
     SaveSearch,
@@ -144,10 +148,10 @@ impl Command {
             EditInExternalEditor | EditCopyInExternalEditor => Icon::ExternalLink,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
-            NewAlbum | NewAlbumWithSelection => Icon::Plus,
+            NewAlbum | NewAlbumWithSelection | AddToAlbum => Icon::Plus,
             NewSmartAlbum | SaveSearch => Icon::Sparkles,
             EditSmartAlbum | RenameAlbum | AdjustDate | EditLocation => Icon::Pencil,
-            RemoveLocation | DeleteSmartAlbum | DeleteAlbum => Icon::X,
+            RemoveLocation | DeleteSmartAlbum | DeleteAlbum | RemoveFromAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
@@ -631,6 +635,18 @@ pub fn commands() -> &'static [Command] {
             keywords: "album remove delete",
         },
         Command {
+            id: CommandId::AddToAlbum,
+            key: "command.add_to_album",
+            shortcut: "⇧⌘A",
+            keywords: "album add put collection selected items",
+        },
+        Command {
+            id: CommandId::RemoveFromAlbum,
+            key: "command.remove_from_album",
+            shortcut: "⌫",
+            keywords: "album remove take out collection selected items",
+        },
+        Command {
             id: CommandId::NewSmartAlbum,
             key: "command.new_smart_album",
             shortcut: "⌥⌘N",
@@ -780,6 +796,14 @@ impl LuminaApp {
             CommandId::SaveSearch => !self.search_query.trim().is_empty(),
             CommandId::NewAlbumWithSelection => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
+            }
+            CommandId::AddToAlbum => {
+                self.selection != AlbumSelection::Trash
+                    && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            }
+            CommandId::RemoveFromAlbum => {
+                matches!(self.selection, AlbumSelection::Album(_))
+                    && (self.selected_item.is_some() || !self.selected_indices.is_empty())
             }
             CommandId::RenameAlbum | CommandId::DeleteAlbum => {
                 matches!(self.selection, AlbumSelection::Album(_))
@@ -1101,6 +1125,8 @@ impl LuminaApp {
             CommandId::NewAlbumWithSelection => self.new_album_with_selection(cx),
             CommandId::RenameAlbum => self.rename_selected_album(cx),
             CommandId::DeleteAlbum => self.delete_selected_album(cx),
+            CommandId::AddToAlbum => self.open_album_picker(cx),
+            CommandId::RemoveFromAlbum => self.remove_selection_from_album(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::SaveSearch => self.save_current_search_as_album(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),

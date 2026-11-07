@@ -179,15 +179,25 @@ impl Catalog {
     /// Ids no longer in the catalog are skipped, so undoing a remove cannot
     /// fail on an item purged meanwhile. An unknown album is an error.
     pub fn add_to_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        Ok(self.add_new_to_album(id, media)?.len())
+    }
+
+    /// [`Self::add_to_album`], returning the ids that were not members yet
+    /// (in `media` order), so undo removes only what the add put in.
+    pub fn add_new_to_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let mut added = 0;
+        let mut added = Vec::new();
         {
             let mut stmt = tx.prepare_cached(INSERT_MEMBER_SQL)?;
             for item in media {
-                added += stmt
+                if stmt
                     .execute(params![id, item.0 as i64])
-                    .context("adding to an album")?;
+                    .context("adding to an album")?
+                    > 0
+                {
+                    added.push(*item);
+                }
             }
         }
         tx.commit()?;
@@ -197,16 +207,26 @@ impl Catalog {
     /// Removes media from an album (never from the catalog) and returns how
     /// many were members.
     pub fn remove_from_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        Ok(self.remove_members_from_album(id, media)?.len())
+    }
+
+    /// [`Self::remove_from_album`], returning the ids that were members (in
+    /// `media` order), so undo adds back only what the remove took out.
+    pub fn remove_members_from_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let mut removed = 0;
+        let mut removed = Vec::new();
         {
             let mut stmt = tx
                 .prepare_cached("DELETE FROM album_items WHERE album_id = ?1 AND media_id = ?2;")?;
             for item in media {
-                removed += stmt
+                if stmt
                     .execute(params![id, item.0 as i64])
-                    .context("removing from an album")?;
+                    .context("removing from an album")?
+                    > 0
+                {
+                    removed.push(*item);
+                }
             }
         }
         tx.commit()?;

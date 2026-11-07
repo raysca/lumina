@@ -129,9 +129,15 @@ impl LuminaApp {
             return;
         }
 
-        // Global Selection and Search Shortcuts
+        // ⌘A: Select All; ⇧⌘A: Add to Album…
         if cmd_or_ctrl && key.eq_ignore_ascii_case("a") {
-            self.select_all(cx);
+            if keystroke.modifiers.shift {
+                if !keystroke.modifiers.alt {
+                    self.open_album_picker(cx);
+                }
+            } else {
+                self.select_all(cx);
+            }
             return;
         }
 

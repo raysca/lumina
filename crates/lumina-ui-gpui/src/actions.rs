@@ -21,6 +21,7 @@ actions!(
         ToggleDownloads,
         NewSmartAlbum,
         NewAlbum,
+        AddToAlbum,
         GoBack,
         GoForward,
         RotateLeft,

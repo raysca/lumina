@@ -27,6 +27,19 @@ pub struct AlbumsState {
     pub rename_buffer: String,
     /// The album whose delete confirmation is open.
     pub confirm_delete: Option<i64>,
+    /// The Add to Album picker (⇧⌘A), while it is open.
+    pub picker: Option<AlbumPicker>,
+}
+
+/// The Add to Album picker: the items it adds, the typed filter, and the
+/// highlighted row (the shown albums, then New Album…).
+pub struct AlbumPicker {
+    /// The selection when the picker opened.
+    pub ids: Vec<MediaId>,
+    pub filter: String,
+    pub highlight: usize,
+    /// Keeps the highlighted row in view as ↑/↓ move it.
+    pub scroll: ScrollHandle,
 }
 
 #[cfg(test)]
@@ -40,7 +53,7 @@ thread_local! {
 impl LuminaApp {
     /// Runs one album write. On failure the banner says `t(action)` and
     /// why, and the result is `None`; with no library open it is `None` too.
-    fn album_write<T>(
+    pub(super) fn album_write<T>(
         &mut self,
         action: &str,
         write: impl FnOnce(&LuminaEngine) -> anyhow::Result<T>,
@@ -85,7 +98,7 @@ impl LuminaApp {
     /// reaches the app in edit mode, and opening the name field would close
     /// the viewer and drop the unsaved draft; under a sheet the field would
     /// take keys while hidden.
-    fn albums_blocked(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(super) fn albums_blocked(&mut self, cx: &mut Context<Self>) -> bool {
         if self.edits.session.is_some() {
             self.show_toast(t("album.finish_edit_first"), cx);
             return true;
@@ -103,7 +116,7 @@ impl LuminaApp {
         if self.albums_blocked(cx) {
             return;
         }
-        self.create_album_with(&[], cx);
+        self.create_album_with(t("album.untitled"), &[], cx);
     }
 
     /// New Album with Selection: an album holding the selected items.
@@ -116,11 +129,16 @@ impl LuminaApp {
             self.show_toast(t("album.select_first"), cx);
             return;
         }
-        self.create_album_with(&ids, cx);
+        self.create_album_with(t("album.untitled"), &ids, cx);
     }
 
-    fn create_album_with(&mut self, ids: &[MediaId], cx: &mut Context<Self>) {
-        let title = t("album.untitled");
+    /// Creates album `title` holding `ids` and opens its name field.
+    pub(super) fn create_album_with(
+        &mut self,
+        title: String,
+        ids: &[MediaId],
+        cx: &mut Context<Self>,
+    ) {
         let Some(album) = self.album_write(
             "album.create_failed",
             |e| e.create_album_with(&title, ids),

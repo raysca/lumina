@@ -40,6 +40,8 @@ pub(crate) enum TextTarget {
     TagRename,
     /// An album's name in the sidebar.
     AlbumRename,
+    /// The Add to Album picker's filter.
+    AlbumPicker,
     TagManagerRename,
     TagManagerAlias,
     TagManagerSearch,
@@ -78,6 +80,7 @@ impl TextTarget {
             Caption => ("Type caption... (Enter to save, Esc to cancel)", "Caption"),
             TagRename | TagManagerRename => ("", "Tag name"),
             AlbumRename => ("", "Album name"),
+            AlbumPicker => ("Filter albums…", "Filter albums"),
             TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
             TagManagerSearch => ("Filter tags by name…", "Filter tags"),
             Search => ("", "Search"),
@@ -490,6 +493,9 @@ impl LuminaApp {
         if self.command_palette_open {
             return Some(Palette);
         }
+        if self.albums.picker.is_some() {
+            return Some(AlbumPicker);
+        }
         if self.shortcuts_overlay_open
             || self.preferences_open
             || self.delete_confirm_state.is_some()
@@ -563,6 +569,7 @@ impl LuminaApp {
             Caption => &mut self.caption.input_buffer,
             TagRename => &mut self.editing_tag_buffer,
             AlbumRename => &mut self.albums.rename_buffer,
+            AlbumPicker => &mut self.albums.picker.as_mut()?.filter,
             TagManagerRename => &mut self.tag_manager.editing_buffer,
             TagManagerAlias => &mut self.tag_manager.alias_buffer,
             TagManagerSearch => &mut self.tag_manager.search,
@@ -587,7 +594,9 @@ impl LuminaApp {
     fn text_limit(&self, target: TextTarget) -> usize {
         use TextTarget::*;
         match target {
-            Tag | TagRename | AlbumRename | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
+            Tag | TagRename | AlbumRename | AlbumPicker | TagManagerRename | TagManagerAlias => {
+                MAX_NAME_CHARS
+            }
             Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             _ => MAX_TEXT_CHARS,
@@ -602,6 +611,13 @@ impl LuminaApp {
             TextTarget::Palette => {
                 self.command_selected = 0;
                 self.command_scroll.scroll_to_item(1);
+            }
+            // The highlight starts again at the first match.
+            TextTarget::AlbumPicker => {
+                if let Some(picker) = self.albums.picker.as_mut() {
+                    picker.highlight = 0;
+                    picker.scroll.scroll_to_item(0);
+                }
             }
             TextTarget::AlbumDraft if self.album_draft.focus != DraftFocus::Title => {
                 self.refresh_draft_preview();

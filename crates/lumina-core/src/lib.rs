@@ -661,9 +661,19 @@ impl LuminaEngine {
         self.catalog.add_to_album(id, media)
     }
 
+    /// Adds media to an album; returns the ids that were not members yet.
+    pub fn add_new_to_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
+        self.catalog.add_new_to_album(id, media)
+    }
+
     /// Removes media from an album (never from the library).
     pub fn remove_from_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
         self.catalog.remove_from_album(id, media)
+    }
+
+    /// Removes media from an album; returns the ids that were members.
+    pub fn remove_members_from_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
+        self.catalog.remove_members_from_album(id, media)
     }
 
     /// A page of an album's active members in `sort` order.
