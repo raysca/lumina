@@ -551,9 +551,17 @@ impl LuminaApp {
         self.batch_summary = Default::default();
         self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
-        // Album ids restart with each library.
-        self.album_draft.confirm_delete = None;
+        // Album and media ids restart with each library: a dialog left open
+        // would act on the new library's rows with the old ids (a Delete
+        // could trash unrelated files), so every id-holding dialog closes.
+        self.album_draft = Default::default();
         self.albums = Default::default();
+        self.delete_confirm_state = None;
+        self.context_menu_state = None;
+        self.close_tag_manager(cx);
+        // Undo entries hold ids from the old library; replaying them here
+        // would change the wrong rows.
+        self.undo = Default::default();
         // An import belongs to the library it was started in.
         self.abandon_import(cx);
         self.search_query.clear();

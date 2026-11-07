@@ -370,3 +370,64 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
     assert_eq!(only_album(&engine).title, "Trip", "the album is untouched");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn opening_another_library_clears_undo_history() {
+    let (dir, engine) = seed_library("album_switch_undo", 1);
+    let (other, other_engine) = seed_library("album_switch_undo_other", 1);
+    let album = engine.create_album("Trip").unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.prompt_delete_album(album.id, cx);
+        app.confirm_delete_album(cx);
+        assert!(!app.undo.undo_stack.is_empty(), "the delete is undoable");
+        app.open_library_inner(other.clone(), cx);
+        assert!(
+            app.undo.undo_stack.is_empty() && app.undo.redo_stack.is_empty(),
+            "undo history belongs to the library it was made in"
+        );
+        app.undo_last(cx);
+    });
+    assert!(
+        other_engine.list_albums_with_counts().is_empty(),
+        "⌘Z after a switch must not restore the old library's album"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&other);
+}
+
+#[core::prelude::v1::test]
+fn opening_another_library_closes_dialogs_holding_old_ids() {
+    let (dir, engine) = seed_library("switch_dialogs", 2);
+    let (other, other_engine) = seed_library("switch_dialogs_other", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_index(0, cx);
+        app.prompt_delete_selected(cx);
+        assert!(
+            app.delete_confirm_state.is_some(),
+            "the Delete dialog is open"
+        );
+        // A smart-album sheet editing some id, and the tag manager.
+        app.album_draft.modal_open = true;
+        app.album_draft.editing_album_id = Some(1);
+        app.open_tag_manager(cx);
+        app.open_library_inner(other.clone(), cx);
+        assert!(
+            app.delete_confirm_state.is_none(),
+            "a Delete dialog must not outlive its library"
+        );
+        assert!(
+            !app.album_draft.modal_open && app.album_draft.editing_album_id.is_none(),
+            "the smart-album sheet closes"
+        );
+        assert!(!app.tag_manager.open, "the tag manager closes");
+        app.execute_confirmed_deletion(cx);
+    });
+    let trashed = other_engine.query_system_album_count(lumina_core::SystemAlbum::RecentlyDeleted);
+    assert_eq!(trashed, 0, "nothing in the other library was deleted");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&other);
+}
