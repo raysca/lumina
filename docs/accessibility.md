@@ -9,8 +9,18 @@ Lumina is designed to be usable without a mouse:
   and inspector toggles, grid zoom, viewer zoom presets (in the photo
   viewer, also on `⌘0`–`⌘4`), quick search filters, Clear Recent Searches,
   Save Search as Smart Album… and more. Its GO TO group reaches every
-  sidebar destination (views, years, tags, smart albums). Type to filter (each
+  sidebar destination (every default collection, including Screenshots,
+  Places and Missing, plus years, tags and smart albums). Type to filter (each
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
+  "missing" alone ranks the Locate Missing File… command first; type "go to
+  missing" to open the Missing collection.
+- **Sidebar**: `⌃⌘S` hides and shows it, as do the toolbar toggle, View >
+  Hide Sidebar / Show Sidebar and ⌘K. The toggle's icon, tooltip, aria label and the
+  menu and palette titles say what it will do next. Like the other
+  shortcuts, `⌃⌘S` does nothing while a sheet, the palette or a text field
+  has the keys. Collapsed, the sidebar is a 48 px rail with one icon button
+  per default collection (Untagged, listed under Smart Albums, is not on
+  the rail).
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
@@ -115,7 +125,13 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
 - the crop overlay (group, labelled "Crop area") and its four corner
   handles (buttons, labelled by corner, with a tooltip);
 - the grid's "Edited" badge on edited or rotated photos (image, labelled
-  "Edited").
+  "Edited");
+- added with the sidebar revamp: the sidebar's default-collection rows
+  (button, labelled with the name and count, e.g. "Favorites, 22 items"),
+  the collapsed rail's icon buttons (button, same label, tooltip
+  "Favorites · 22") and the toolbar's sidebar toggle (button, labelled
+  "Hide Sidebar (⌃⌘S)" or "Show Sidebar (⌃⌘S)"). User smart-album and tag
+  rows have no role yet; Untagged (under Smart Albums) does.
 
 The recent-search history icon and the scrub preview card have no role.
 

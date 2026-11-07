@@ -164,8 +164,9 @@ core handles cataloguing, decoding, and search.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut
-  cheat sheet (⌘/), manual rescan (⌘R), and a native macOS menu bar (Open
-  Library, Rescan, Sidebar/Inspector, Preferences ⌘, About, Quit).
+  cheat sheet (⌘/), manual rescan (⌘R), Hide/Show Sidebar (⌃⌘S), and a native
+  macOS menu bar (Open Library, Rescan, Hide/Show Sidebar, Inspector,
+  Preferences ⌘, About, Quit).
 - **Preferences** — in-app General/Storage/About panel: library path and item
   count, rescan, log/database locations, thumbnail-cache size with clear/reveal,
   and version/settings-file details.

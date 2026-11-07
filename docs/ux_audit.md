@@ -50,6 +50,14 @@ even when the feature list is strong.
   session. The viewer is not reopened; Enter opens the restored selection.
 - Closing the viewer leaves the grid where it was (the grid stays mounted).
 - Sidebar sections do not collapse; albums/tags cannot be pinned or reordered.
+- Sidebar revamp: every default collection row has an icon (smart albums get
+  sparkles; tags keep their colour dot). Collapsed, the sidebar is a 48 px
+  rail of the same collections as icon buttons (not Untagged, which sits
+  under Smart Albums), with the active one marked;
+  the rail's own expand button is gone. One toolbar toggle hides and shows
+  the sidebar; its icon, tooltip and the View menu and palette titles follow
+  the state ("Hide Sidebar" / "Show Sidebar"), and `⌃⌘S` does the same.
+  The change is instant (no slide).
 - Switching album clears search, year and selection; Back returns to the
   previous view. Opening another library starts a fresh Back/Forward trail.
 
@@ -369,8 +377,9 @@ canceling import leaves no corruption; every failure has a recovery action.
 - Preferences: General, Storage, About only.
 - No tabs, multi-window, recent views or in-app updates.
 - GPUI reports elements to VoiceOver through AccessKit only when they set an id
-  and a role; only the text fields, the welcome screen, the viewer zoom presets
-  and the search explanation do so far, none of them checked with VoiceOver
+  and a role; only the text fields, the welcome screen, the viewer zoom presets,
+  the search explanation and the sidebar's collection rows, rail buttons and
+  toggle do so far, none of them checked with VoiceOver
   (see `docs/accessibility.md`). Keyboard coverage is good but tab order and
   focus rings are incomplete. English only.
 
