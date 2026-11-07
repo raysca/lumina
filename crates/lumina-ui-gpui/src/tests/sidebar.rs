@@ -330,3 +330,171 @@ fn rail_tooltip_and_label_carry_the_count() {
     assert_eq!(aria_label("Favorites", 22), "Favorites, 22 items");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn press_ctrl_cmd_s(vcx: &mut gpui::VisualTestContext, view: &gpui::Entity<crate::LuminaApp>) {
+    crate::tests::ui_automation::focus_app(vcx, view);
+    crate::tests::ui_automation::keystrokes(vcx, "ctrl-cmd-s");
+}
+
+#[core::prelude::v1::test]
+fn ctrl_cmd_s_toggles_the_sidebar_and_persists() {
+    let (dir, engine) = seed_library("sidebar_shortcut", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    press_ctrl_cmd_s(vcx, &view);
+    view.update(vcx, |app, _| assert!(app.sidebar_collapsed, "⌃⌘S hides"));
+    press_ctrl_cmd_s(vcx, &view);
+    view.update(vcx, |app, _| assert!(!app.sidebar_collapsed, "⌃⌘S shows"));
+
+    // ⌘S and ⌃S alone are not the sidebar shortcut.
+    for key in ["cmd-s", "ctrl-s"] {
+        crate::tests::ui_automation::keystrokes(vcx, key);
+        view.update(vcx, |app, _| {
+            assert!(!app.sidebar_collapsed, "{key} must not toggle the sidebar")
+        });
+    }
+
+    // The shortcut saves the setting. A failed save says so and puts the
+    // sidebar back, so what you see matches what is saved. Under test the
+    // save writes nothing (AGENTS §2).
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    press_ctrl_cmd_s(vcx, &view);
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+    view.update(vcx, |app, _| {
+        assert!(!app.sidebar_collapsed, "a failed save reverts the toggle");
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not save settings")),
+            "⌃⌘S writes sidebar_visible through save_config"
+        );
+    });
+    let view_items = vcx.update(|_, cx| {
+        cx.get_menus()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.name.as_ref() == "View")
+            .flat_map(|m| m.items)
+            .filter_map(|item| match item {
+                gpui::OwnedMenuItem::Action { name, .. } => Some(name),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    });
+    assert!(
+        view_items.iter().any(|n| n == "Hide Sidebar"),
+        "the View menu matches the reverted state: {view_items:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn sidebar_shortcut_is_absorbed_by_modals() {
+    let (dir, engine) = seed_library("sidebar_shortcut_modal", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    for (open, what, close) in [
+        ("secondary-k", "the command palette", "escape"),
+        ("secondary-/", "the shortcut sheet", "escape"),
+        // The first Esc hides the search suggestions, the second blurs.
+        ("secondary-f", "the search field", "escape escape"),
+    ] {
+        crate::tests::ui_automation::focus_app(vcx, &view);
+        crate::tests::ui_automation::keystrokes(vcx, open);
+        crate::tests::ui_automation::keystrokes(vcx, "ctrl-cmd-s");
+        view.update(vcx, |app, _| {
+            assert!(
+                !app.sidebar_collapsed,
+                "⌃⌘S must not reach the window while {what} has the keys"
+            )
+        });
+        crate::tests::ui_automation::keystrokes(vcx, close);
+    }
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open && !app.shortcuts_overlay_open && !app.search_focused)
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn toggle_label_follows_state() {
+    use crate::app::command_palette::{CommandId, PaletteTarget};
+    use crate::icons::Icon;
+
+    let (dir, engine) = seed_library("sidebar_toggle_label", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    for (collapsed, title, icon) in [
+        (false, "Hide Sidebar", Icon::PanelLeftClose),
+        (true, "Show Sidebar", Icon::PanelLeftOpen),
+        (false, "Hide Sidebar", Icon::PanelLeftClose),
+    ] {
+        if view.update(vcx, |app, _| app.sidebar_collapsed) != collapsed {
+            click(vcx, "sidebar-toggle");
+            render_ui(vcx);
+        }
+
+        // Toolbar tooltip (the aria label uses the same text).
+        let center = bounds_center(vcx, "sidebar-toggle");
+        vcx.simulate_mouse_move(center, None, gpui::Modifiers::default());
+        vcx.background_executor
+            .advance_clock(std::time::Duration::from_millis(600));
+        vcx.run_until_parked();
+        render_ui(vcx);
+        let tooltip = format!("tooltip-{title} (⌃⌘S)");
+        assert!(
+            vcx.debug_bounds(leak(tooltip.clone())).is_some(),
+            "the toolbar toggle says {tooltip}"
+        );
+        vcx.simulate_mouse_move(
+            gpui::point(gpui::px(600.0), gpui::px(400.0)),
+            None,
+            gpui::Modifiers::default(),
+        );
+
+        // Palette entry: title, icon and shortcut.
+        view.update(vcx, |app, _| {
+            // The palette lists eight commands at most; "sidebar" finds it.
+            app.command_query = "sidebar".into();
+            let rows = app.palette_rows();
+            app.command_query.clear();
+            let row = rows
+                .iter()
+                .find(|r| matches!(r.target, PaletteTarget::Command(CommandId::ToggleSidebar)))
+                .expect("the palette lists the sidebar toggle");
+            assert_eq!(row.title, title, "the palette entry follows the state");
+            assert_eq!(row.icon, icon, "the palette icon follows the state");
+            assert_eq!(row.shortcut, "⌃⌘S");
+        });
+    }
+
+    // View menu: rebuilt on every toggle.
+    let view_menu_names = |vcx: &mut gpui::VisualTestContext| {
+        vcx.update(|_, cx| {
+            cx.get_menus()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|m| m.name.as_ref() == "View")
+                .flat_map(|m| m.items)
+                .filter_map(|item| match item {
+                    gpui::OwnedMenuItem::Action { name, .. } => Some(name),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+    };
+    click(vcx, "sidebar-toggle");
+    assert!(
+        view_menu_names(vcx).iter().any(|n| n == "Show Sidebar"),
+        "View offers Show Sidebar while the sidebar is hidden"
+    );
+    click(vcx, "sidebar-toggle");
+    assert!(
+        view_menu_names(vcx).iter().any(|n| n == "Hide Sidebar"),
+        "View offers Hide Sidebar while the sidebar is shown"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

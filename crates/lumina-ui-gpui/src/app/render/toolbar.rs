@@ -96,6 +96,11 @@ impl LuminaApp {
     ) -> impl IntoElement {
         let view_label = view_label.to_string();
         let own_controls = draws_own_window_controls(window);
+        let sidebar_toggle_label = format!(
+            "{} ({})",
+            crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed),
+            crate::app::panels::SIDEBAR_SHORTCUT
+        );
         // Only Recently Deleted shows a count and its bulk actions.
         let trash_count = if self.selection == AlbumSelection::Trash {
             self.system_album_counts
@@ -129,8 +134,13 @@ impl LuminaApp {
             .child(
                 icon_button("sidebar-toggle-btn", false)
                     .debug_selector(|| "sidebar-toggle".to_string())
-                    .tooltip(theme::tooltip_label("Toggle sidebar"))
-                    .child(toolbar_icon(crate::icons::Icon::PanelLeft, false))
+                    .role(Role::Button)
+                    .aria_label(sidebar_toggle_label.clone())
+                    .tooltip(theme::tooltip_label(sidebar_toggle_label))
+                    .child(toolbar_icon(
+                        crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed),
+                        false,
+                    ))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.toggle_sidebar(cx);
                     })),

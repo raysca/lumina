@@ -120,6 +120,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("⌘[ / ⌘]", "Back / Forward"),
             ("⌥⌘N", "New smart album"),
             ("⌥⌘L", "Show or hide downloads"),
+            ("⌃⌘S", "Show or hide sidebar"),
             ("I", "Toggle inspector"),
             ("⌘I", "Get Info window"),
             ("F", "Favorite"),

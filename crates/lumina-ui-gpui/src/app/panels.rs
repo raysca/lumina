@@ -26,7 +26,13 @@ fn take_steps(accum: &mut f32, delta: f32, step: f32) -> isize {
 impl LuminaApp {
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_collapsed = !self.sidebar_collapsed;
-        self.save_config();
+        // A failed save is in the banner; put the sidebar back so the
+        // screen matches the saved setting.
+        if !self.save_config() {
+            self.sidebar_collapsed = !self.sidebar_collapsed;
+        }
+        // The View menu names what the item will do next.
+        cx.set_menus(crate::menus::build_menus(self.sidebar_collapsed));
         cx.notify();
     }
 
@@ -946,6 +952,27 @@ pub(crate) fn parse_edited_timestamp(input: &str, current_epoch_ms: i64) -> Opti
     }
     None
 }
+
+/// What the sidebar toggle does next: "Hide Sidebar" or "Show Sidebar".
+pub(crate) fn sidebar_toggle_title(collapsed: bool) -> String {
+    crate::i18n::t(if collapsed {
+        "sidebar.show"
+    } else {
+        "sidebar.hide"
+    })
+}
+
+/// The toolbar and palette icon for the sidebar toggle.
+pub(crate) fn sidebar_toggle_icon(collapsed: bool) -> crate::icons::Icon {
+    if collapsed {
+        crate::icons::Icon::PanelLeftOpen
+    } else {
+        crate::icons::Icon::PanelLeftClose
+    }
+}
+
+/// Show/Hide Sidebar, the macOS standard in Finder, Mail and Notes.
+pub(crate) const SIDEBAR_SHORTCUT: &str = "⌃⌘S";
 
 #[cfg(test)]
 mod tests {

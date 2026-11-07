@@ -42,7 +42,9 @@ fn main() {
     gpui::application()
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
-            cx.set_menus(crate::menus::build_menus());
+            cx.set_menus(crate::menus::build_menus(
+                !crate::config::AppConfig::load().sidebar_visible,
+            ));
             // The text fields' input key bindings and globals.
             gpui::init(cx);
 

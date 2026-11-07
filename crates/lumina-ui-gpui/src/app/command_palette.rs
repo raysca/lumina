@@ -298,9 +298,10 @@ pub fn commands() -> &'static [Command] {
         },
         Command {
             id: CommandId::ToggleSidebar,
+            // Titled by state in `command_title`: Hide or Show Sidebar.
             key: "command.toggle_sidebar",
-            shortcut: "",
-            keywords: "panel hide show",
+            shortcut: crate::app::panels::SIDEBAR_SHORTCUT,
+            keywords: "panel hide show toggle sidebar",
         },
         Command {
             id: CommandId::ToggleInspector,
@@ -727,6 +728,15 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// A command's palette title; the sidebar toggle says what it will do.
+    fn command_title(&self, command: &Command) -> String {
+        if command.id == CommandId::ToggleSidebar {
+            crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed)
+        } else {
+            command.title()
+        }
+    }
+
     /// Commands that would do nothing right now stay out of the list.
     fn command_applies(&self, id: CommandId) -> bool {
         match id {
@@ -798,13 +808,19 @@ impl LuminaApp {
         }
         let mut rows: Vec<PaletteRow> = commands()
             .iter()
-            .filter(|c| self.command_applies(c.id) && matches(&words, &c.title(), c.keywords))
+            .filter(|c| {
+                self.command_applies(c.id) && matches(&words, &self.command_title(c), c.keywords)
+            })
             .take(MAX_COMMANDS)
             .map(|c| PaletteRow {
                 target: PaletteTarget::Command(c.id),
-                title: c.title(),
+                title: self.command_title(c),
                 shortcut: c.shortcut,
-                icon: c.icon(),
+                icon: if c.id == CommandId::ToggleSidebar {
+                    crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed)
+                } else {
+                    c.icon()
+                },
                 selector: format!("command-item-{}", c.key),
             })
             .collect();

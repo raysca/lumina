@@ -151,6 +151,17 @@ impl LuminaApp {
             return;
         }
 
+        // ⌃⌘S: Show/Hide Sidebar. After the modal shield above, so a sheet,
+        // the palette or a focused field keeps it, like every other shortcut.
+        if ctrl_cmd
+            && !keystroke.modifiers.shift
+            && !keystroke.modifiers.alt
+            && key.eq_ignore_ascii_case("s")
+        {
+            self.toggle_sidebar(cx);
+            return;
+        }
+
         // ⌥⌘N: New Smart Album…
         if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("n") {
             self.open_album_builder(cx);

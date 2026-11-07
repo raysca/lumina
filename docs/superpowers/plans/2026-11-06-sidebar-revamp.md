@@ -123,6 +123,7 @@
   - `ctrl_cmd_s_toggles_the_sidebar_and_persists`: in memory, without writing real config.
   - `sidebar_shortcut_is_absorbed_by_modals`: with a modal open, ⌃⌘S does nothing.
   - `toggle_label_follows_state`.
+- Note (as built): there is no `KeyBinding`. ⌃⌘S lives in the `on_key_down` keymap, after the modal shield. A menu key equivalent would fire before the window sees the key and bypass that shield, so the View menu cannot show ⌃⌘S. The shortcut is shown in the toolbar tooltip, the palette and the shortcut sheet. Like the other shortcuts, it is absorbed while a text field has focus.
 
 ### Task 5: Docs and gate (S)
 

@@ -4,7 +4,9 @@ use gpui::{Menu, MenuItem};
 
 use crate::actions::*;
 
-pub fn build_menus() -> Vec<Menu> {
+/// `sidebar_collapsed` picks the View menu's Show/Hide Sidebar title; the
+/// app rebuilds the menus when it changes.
+pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
     vec![
         Menu::new("Lumina").items([
             MenuItem::action("About Lumina", ShowAbout),
@@ -27,7 +29,10 @@ pub fn build_menus() -> Vec<Menu> {
         Menu::new("View").items([
             MenuItem::action("Command Palette…", ShowCommandPalette),
             MenuItem::separator(),
-            MenuItem::action("Toggle Sidebar", ToggleSidebar),
+            MenuItem::action(
+                crate::app::panels::sidebar_toggle_title(sidebar_collapsed),
+                ToggleSidebar,
+            ),
             MenuItem::action("Toggle Inspector", ToggleInspector),
             MenuItem::action("Show Downloads", ToggleDownloads),
             MenuItem::separator(),
@@ -60,7 +65,7 @@ mod tests {
 
     #[test]
     fn menu_bar_has_core_commands() {
-        let menus = build_menus();
+        let menus = build_menus(false);
         let names: Vec<&str> = menus.iter().map(|menu| menu.name.as_ref()).collect();
         assert_eq!(names, vec!["Lumina", "File", "View", "Image", "Go", "Help"]);
 
@@ -82,7 +87,7 @@ mod tests {
 
     #[test]
     fn go_menu_has_back_and_forward() {
-        let menus = build_menus();
+        let menus = build_menus(false);
         let go = menus
             .iter()
             .find(|menu| menu.name.as_ref() == "Go")
