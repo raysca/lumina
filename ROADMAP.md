@@ -249,10 +249,11 @@ or rule import/export.
 
 **Target:**
 
-- **Curated albums** (static selections) separate from smart albums, with drag
-  and keyboard add/remove.
-- Album cover/preview thumbnails and live item counts.
-- Pin/favorite/reorder albums; nested folders/collections.
+- **Curated albums** (static selections) separate from smart albums, with
+  keyboard add/remove (drag to album: after 0.6).
+- Live album item counts (cover/preview thumbnails: after 0.6).
+- Pin/favorite albums; nested folders/collections (manual reorder: after 0.6;
+  albums follow the sort order).
 - Album descriptions, custom icons, and optional colors.
 - Duplicate a smart album and import/export rule JSON.
 - Richer smart rules: relative dates, camera/lens sets, rating/color ranges,

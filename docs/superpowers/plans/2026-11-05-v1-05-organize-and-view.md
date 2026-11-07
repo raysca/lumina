@@ -317,6 +317,20 @@ Extend `VideoBackend` (`player/backend.rs`) with `audio_tracks() -> Vec<String>`
 8. Part A5 (cover thumbnails, drag to album): in 0.6 or later? ROADMAP §5 lists both cover thumbnails and drag add as targets, so "later" means updating that section.
 9. Order with plan 3: Part B uses plan 3 Task 9's query-token quick filters and assumes its D11 (search moves the sidebar to Library). If plan 3 Task 9 is not approved, should "Show Picks" extend `GridFilter` instead?
 
+## Owner answers (2026-11-07)
+
+The owner accepted the recommended defaults:
+
+1. Albums follow the sort order in 0.6; no manual reordering, no `position` column.
+2. Map: the offline bundled basemap only. No tile fetch.
+3. Picks and rejects stay catalog-only; they are not written to XMP sidecars.
+4. Stacks: a review tab only; the grid does not collapse stacks.
+5. Yes: viewer zoom presets move to ⌘0/⌘1/⌘2/⌘4, so digits rate everywhere (Task B0).
+6. Slideshow: videos show their poster for the interval.
+7. Loop range and audio-track choice are per session only.
+8. Part A5 (cover thumbnails, drag to album) is later, not 0.6. ROADMAP §5 is updated to say so.
+9. Plan 3 Task 9 has landed (`dbab4cb`), so "Show Picks" builds on its query-token quick filters.
+
 ## Out of scope
 
 - Subtitles, trim/export clip (see Part F), wide-gamut (P3) rendering, a RAW develop pipeline.
