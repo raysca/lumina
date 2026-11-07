@@ -6,6 +6,7 @@ use crate::app::LuminaApp;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
+pub mod crop_overlay;
 pub mod edit_bar;
 pub mod scrub_preview;
 pub mod stage_controls;

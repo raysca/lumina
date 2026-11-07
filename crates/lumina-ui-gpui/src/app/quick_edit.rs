@@ -10,6 +10,7 @@ use std::sync::Arc;
 use gpui::*;
 use lumina_core::{DecodedFrame, Edits, MediaId, MediaType};
 
+use crate::app::crop::CropSession;
 use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 use crate::views::viewer_state::ViewerRotation;
@@ -29,6 +30,8 @@ pub struct QuickEditState {
     /// already has the saved edits). `None` until it arrives, or if the
     /// decode failed; the viewer then keeps the saved frame.
     pub source: Option<Arc<DecodedFrame>>,
+    /// Crop mode (C): `Some` while the overlay is shown.
+    pub crop: Option<CropSession>,
     /// Bumped by each preview render; only the newest result is shown.
     pub(crate) generation: u64,
     /// The draft the one render in flight was started with. Changes made
@@ -54,6 +57,20 @@ pub struct QuickEdits {
     /// their own range, so a late render from a cancelled session never
     /// matches the next one's.
     sessions_opened: u64,
+}
+
+impl QuickEditState {
+    /// What the preview shows: the draft, but uncropped while cropping, so
+    /// the overlay sits on the whole frame.
+    fn preview_edits(&self) -> Edits {
+        match self.crop {
+            Some(_) => Edits {
+                crop: None,
+                ..self.draft
+            },
+            None => self.draft,
+        }
+    }
 }
 
 impl QuickEdits {
@@ -105,6 +122,7 @@ impl LuminaApp {
             draft: original,
             original,
             source: None,
+            crop: None,
             generation: self.edits.sessions_opened << 32,
             rendering: None,
             #[cfg(test)]
@@ -162,7 +180,7 @@ impl LuminaApp {
     /// Renders the draft from the unedited source on the background
     /// executor, one render at a time: while one is in flight, changes wait
     /// and `land_edit_preview` starts one more for the latest draft.
-    fn render_edit_preview(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn render_edit_preview(&mut self, cx: &mut Context<Self>) {
         let Some(session) = self.edits.session.as_mut() else {
             return;
         };
@@ -173,24 +191,13 @@ impl LuminaApp {
             return;
         }
         session.generation += 1;
-        session.rendering = Some(session.draft);
+        session.rendering = Some(session.preview_edits());
         #[cfg(test)]
         {
             session.renders += 1;
         }
-        let (item, generation, draft) = (session.item, session.generation, session.draft);
-        let task = cx.background_executor().spawn(async move {
-            let frame = DecodedFrame {
-                id: source.id,
-                width: source.width,
-                height: source.height,
-                format: source.format,
-                data: source.data.clone(),
-            };
-            crate::bridge::frame_to_gpui_image(lumina_core::edits::apply_edits(frame, &draft))
-                .map_err(|err| log::warn!("edit preview for {item:?} failed: {err:#}"))
-                .ok()
-        });
+        let (item, generation, draft) = (session.item, session.generation, session.preview_edits());
+        let task = render_task(source, draft, cx);
         cx.spawn(async move |this, cx| {
             let image = task.await;
             // The app may be gone; nothing to show then.
@@ -220,7 +227,7 @@ impl LuminaApp {
             return;
         };
         let rendered = session.rendering.take();
-        let behind = rendered != Some(session.draft);
+        let behind = rendered != Some(session.preview_edits());
         #[cfg(test)]
         if image.is_some() {
             session.shown = rendered;
@@ -244,7 +251,12 @@ impl LuminaApp {
     }
 
     pub fn rotate_edit_draft(&mut self, direction: ViewerRotation, cx: &mut Context<Self>) {
-        self.change_draft(|d| d.rotation = direction.apply_to(d.rotation), cx);
+        let Some(from) = self.edits.session.as_ref().map(|s| s.draft.rotation) else {
+            return;
+        };
+        let to = direction.apply_to(from);
+        self.rotate_crop_rect(from, to);
+        self.change_draft(|d| d.rotation = to, cx);
     }
 
     /// One third of a stop brighter (`1`) or darker (`-1`), within ±2 EV.
@@ -266,6 +278,7 @@ impl LuminaApp {
     /// Resets the draft to the original file (no rotation, no edits); Done
     /// saves that, Cancel keeps what was saved before.
     pub fn revert_edit_draft(&mut self, cx: &mut Context<Self>) {
+        self.reset_crop_rect();
         self.change_draft(|d| *d = Edits::default(), cx);
     }
 
@@ -282,22 +295,30 @@ impl LuminaApp {
     /// Enter / Done: writes the draft once, as one undo step. On failure
     /// edit mode stays open with the draft and the banner says why.
     pub fn finish_edit(&mut self, cx: &mut Context<Self>) {
+        // Done while cropping applies the crop first; the preview is only
+        // rendered again if edit mode stays open (a failed write).
+        let was_cropping = self.commit_crop();
         let Some(session) = self.edits.session.as_ref() else {
             return;
         };
         let (id, before, after) = (session.item, session.original, session.draft);
+        let source = session.source.clone().filter(|_| was_cropping);
         if before == after {
-            // Nothing to save; a preview on screen already shows these edits.
+            // Nothing to save; a preview on screen already shows these
+            // edits, or (from crop mode) the cropped render replaces it.
             self.edits.session = None;
+            self.show_cropped_after_done(id, source, after, cx);
             cx.notify();
             return;
         }
         let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
             self.set_error("Open a library before editing", cx);
+            self.render_edit_preview(cx);
             return;
         };
         if let Err(err) = engine.set_edits(&[(id, after)]) {
             self.set_error(format!("Could not save edits: {err:#}"), cx);
+            self.render_edit_preview(cx);
             return;
         }
         self.edits.session = None;
@@ -306,11 +327,13 @@ impl LuminaApp {
         });
         // The preview shows exactly what was saved: keep it on screen until
         // the re-requested saved frame replaces it, instead of blanking.
+        // From crop mode it is uncropped until the cropped render lands.
         let preview = self.viewer_image.clone();
         self.after_edits_written(&[id], cx);
         if preview.is_some() && self.viewer_image.is_none() {
             self.set_viewer_image(preview);
         }
+        self.show_cropped_after_done(id, source, after, cx);
         self.set_last_action("Saved edits");
         self.show_undo_toast("Saved edits", cx);
         cx.notify();
@@ -432,4 +455,24 @@ impl LuminaApp {
             self.request_viewer_frame(state, id);
         }
     }
+}
+
+/// `edits` applied to a copy of `source` on the background executor.
+pub(crate) fn render_task(
+    source: Arc<DecodedFrame>,
+    edits: Edits,
+    cx: &mut Context<LuminaApp>,
+) -> Task<Option<Arc<RenderImage>>> {
+    cx.background_executor().spawn(async move {
+        let frame = DecodedFrame {
+            id: source.id,
+            width: source.width,
+            height: source.height,
+            format: source.format,
+            data: source.data.clone(),
+        };
+        crate::bridge::frame_to_gpui_image(lumina_core::edits::apply_edits(frame, &edits))
+            .map_err(|err| log::warn!("edit preview for {:?} failed: {err:#}", source.id))
+            .ok()
+    })
 }

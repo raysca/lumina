@@ -372,6 +372,8 @@ impl ViewerViewport {
                         .absolute()
                         .size_full()
                     })
+                    // Crop mode's rectangle and handles, over the frame.
+                    .children(super::crop_overlay::render(this, cx))
                     // Large Circular Play Indicator (Centered on Video when paused).
                     // Not while PiP owns the player: this is a poster then.
                     .child(

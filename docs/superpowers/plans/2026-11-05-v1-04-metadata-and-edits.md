@@ -341,7 +341,7 @@ Rotation stays in `media_items.rotation_quarters`.
 - Mouse: four corner handles (drag). Keyboard: `C` cycles aspect, arrows move 1 % (Shift 10 %), `⌥` + arrows resize.
 - debug_selectors: `edit-aspect-{name}`, `crop-overlay`, `crop-handle-{tl,tr,bl,br}`.
 
-- [ ] Tests: `keyboard_only_crop_persists` (E, `C` to Square, Enter -> catalog crop square in pixel terms, viewer frame dimensions square); `crop_on_rotated_photo_stores_unrotated_coordinates` (rotation 1, crop the visible left half -> stored rect is the unrotated top half); `crop_handle_drag_resizes` (drag `crop-handle-br` by rendered bounds); `crop_arrow_keys_stay_inside_frame`.
+- [ ] Tests: `keyboard_only_crop_persists` (E, `C` to Square, Enter -> catalog crop square in pixel terms, viewer frame dimensions square); `crop_on_rotated_photo_stores_unrotated_coordinates` (rotation 1, crop the visible left half -> stored rect is the unrotated bottom half `(0,0.5,1,0.5)`, since rotation 1 is clockwise); `crop_handle_drag_resizes` (drag `crop-handle-br` by rendered bounds); `crop_arrow_keys_stay_inside_frame`.
 - [ ] `make ui-smoke`.
 - [ ] Docs: README crop paragraph; shortcut sheet.
 

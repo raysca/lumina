@@ -50,9 +50,13 @@ Lumina is designed to be usable without a mouse:
   Right / Rotate Left; the keys type into a focused text field instead.
 - **Quick edits**: `E` in the viewer, ⌘K Edit Photo or Image > Edit Photo
   opens edit mode; `R` / `⇧R` rotate, `-` / `=` change exposure, `A`
-  toggles auto enhance, `Enter` is Done and `Esc` Cancel. Every other key
-  is absorbed while editing (`⌘⌫` cannot trash the photo, arrows do not
-  change it). Revert to Original is in ⌘K and the Image menu. The edit
+  toggles auto enhance, `C` enters crop mode and then cycles the aspect,
+  `⇧C` turns crop mode on or off (off keeps the crop and edit mode),
+  `Enter` is Done and `Esc` Cancel. While cropping, arrows move the crop
+  rectangle (1 %, `⇧` 10 %), `⌥` + arrows resize it, and `Esc` leaves
+  crop mode only, without the new crop. Every other key is absorbed while
+  editing (`⌘⌫` cannot trash the photo, arrows never step to another
+  photo). Revert to Original is in ⌘K and the Image menu. The edit
   bar's buttons and the grid's "Edited" badge carry roles, labels and
   tooltips, not yet checked with VoiceOver.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
@@ -100,7 +104,11 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   the explanation text);
 - the viewer's edit bar (toolbar, labelled "Edit photo"): Cancel, Rotate
   Left/Right, Darker, Brighter, Auto Enhance (labelled on/off), Revert to
-  Original and Done (buttons), and the exposure value (status);
+  Original, Crop (labelled on/off) and Done (buttons), and the exposure
+  value (status); while cropping, a second row holds the aspect presets
+  (buttons, each with its own label and tooltip);
+- the crop overlay (group, labelled "Crop area") and its four corner
+  handles (buttons, labelled by corner, with a tooltip);
 - the grid's "Edited" badge on edited or rotated photos (image, labelled
   "Edited").
 

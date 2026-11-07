@@ -169,8 +169,12 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("R / ⇧R", "Rotate right / left"),
             ("- / =", "Darker / brighter (⅓ stop)"),
             ("A", "Auto enhance on / off"),
+            ("C", "Crop; again: next aspect"),
+            ("⇧C", "Crop on / off (keeps the crop)"),
+            ("← → ↑ ↓", "Move the crop 1 % (⇧ 10 %)"),
+            ("⌥ arrows", "Resize the crop"),
             ("Enter", "Done (⌘Z undoes)"),
-            ("Esc", "Cancel"),
+            ("Esc", "Cancel (while cropping: leave crop)"),
         ],
     ),
     (

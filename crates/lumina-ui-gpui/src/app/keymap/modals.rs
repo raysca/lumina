@@ -432,11 +432,39 @@ impl LuminaApp {
         if self.edits.session.is_some() {
             let m = &keystroke.modifiers;
             let plain = !cmd_or_ctrl && !m.alt;
+            let cropping = self
+                .edits
+                .session
+                .as_ref()
+                .is_some_and(|s| s.crop.is_some());
+            let step = if m.shift { 0.1 } else { 0.01 };
             match key {
                 // After a failed Done, Esc first dismisses the banner and
                 // keeps the draft for another try.
                 "escape" if self.error_message.is_some() => self.dismiss_error(cx),
+                // Esc in crop mode leaves crop only, dropping that crop.
+                "escape" if cropping => self.leave_crop(false, cx),
                 "escape" => self.cancel_edit(cx),
+                // C: crop, then the next aspect. ⇧C: crop on / off, keeping
+                // the crop and edit mode (apply and keep editing).
+                k if plain && k.eq_ignore_ascii_case("c") => {
+                    if m.shift {
+                        self.toggle_crop(cx)
+                    } else {
+                        self.crop_key(cx)
+                    }
+                }
+                // Arrows move the crop (⇧ 10 %), ⌥ resizes it. Outside crop
+                // they fall through to the absorbing arm below.
+                "left" | "right" | "up" | "down" if cropping && !cmd_or_ctrl => {
+                    let delta = match key {
+                        "left" => (-step, 0.0),
+                        "right" => (step, 0.0),
+                        "up" => (0.0, -step),
+                        _ => (0.0, step),
+                    };
+                    self.crop_arrow(delta, m.alt, cx);
+                }
                 "enter" | "return" => self.finish_edit(cx),
                 k if plain && k.eq_ignore_ascii_case("r") => self.rotate_edit_draft(
                     if m.shift {

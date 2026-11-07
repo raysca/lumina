@@ -131,7 +131,19 @@ core handles cataloguing, decoding, and search.
   the grid. Image > Revert to Original clears the edits and rotation of the
   whole selection in one undo step. Videos are not edited. Edits are not
   written to XMP sidecars, and Export copies the originals without them
-  (the export report says so). Crop arrives in a later release.
+  (the export report says so).
+- **Crop** — in edit mode, `C` (or the Crop button) shows the whole
+  photo, turned as it is shown, with the crop rectangle over it; `C` again
+  cycles the aspect: Original, Square, 4:3, 3:2, 16:9 and Free (also the
+  buttons under the edit bar). Each preset centres the largest rectangle
+  of that aspect, measured on screen, so Square stays square on a turned
+  photo. Drag a corner handle, or use the arrows to move the rectangle by
+  1 % (`⇧` 10 %) and `⌥` + arrows to resize it; it stays inside the
+  photo. `⇧C` (or the Crop button again) applies the crop and keeps
+  editing, `Enter` saves it with the other edits (one `⌘Z`), and `Esc`
+  leaves crop mode without the new crop and keeps edit mode open. The crop is stored
+  independently of rotation, so turning a cropped photo keeps the same
+  region; Revert to Original removes it.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

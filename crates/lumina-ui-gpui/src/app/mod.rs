@@ -1,6 +1,8 @@
 pub mod active_view;
 pub mod album_builder_actions;
 pub mod command_palette;
+pub mod crop;
+pub mod crop_geometry;
 pub mod deletion;
 pub mod downloads;
 pub mod first_scan;

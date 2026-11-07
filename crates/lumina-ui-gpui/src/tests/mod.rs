@@ -27,6 +27,8 @@ mod palette_and_empty;
 mod pip;
 mod preferences;
 mod quick_edit;
+mod quick_edit_crop;
+mod quick_edit_crop_mouse;
 mod quick_edit_guards;
 mod quick_edit_preview;
 mod regressions;

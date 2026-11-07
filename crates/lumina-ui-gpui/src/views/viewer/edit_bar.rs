@@ -1,9 +1,11 @@
 //! The edit-mode bar that replaces the viewer's top bar: Cancel, rotate,
-//! exposure, Auto, Revert to Original and Done. Keys are in
+//! exposure, Auto, Crop (with the aspect presets while cropping), Revert to
+//! Original and Done. Keys are in
 //! `keymap/modals.rs`; state and actions in `app/quick_edit.rs`.
 
 use gpui::*;
 
+use crate::app::crop::CropAspect;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -42,6 +44,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         return Empty.into_any_element();
     };
     let draft = session.draft;
+    let crop_aspect = session.crop.map(|crop| crop.aspect);
     let icon = |icon: Icon| render_icon(icon, px(16.0), theme::text());
     let exposure = exposure_label(draft.exposure_ev);
 
@@ -132,6 +135,25 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         )
         .child(
             bar_button(
+                "edit-crop",
+                if crop_aspect.is_some() {
+                    theme::control_on
+                } else {
+                    theme::control
+                },
+                if crop_aspect.is_some() {
+                    "Crop, on"
+                } else {
+                    "Crop, off"
+                },
+                "Crop (C); ⇧C applies and keeps editing",
+                LuminaApp::toggle_crop,
+                cx,
+            )
+            .child("Crop"),
+        )
+        .child(
+            bar_button(
                 "edit-revert",
                 theme::control,
                 "Revert to Original",
@@ -142,7 +164,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .child("Revert to Original"),
         );
 
-    div()
+    let bar = div()
         .id("edit-bar")
         .debug_selector(|| "edit-bar".to_string())
         .role(Role::Toolbar)
@@ -191,8 +213,50 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             )
             .font_weight(FontWeight::MEDIUM)
             .child("Done"),
-        )
+        );
+    // The aspect presets get their own row while cropping, so the bar fits
+    // the 960 pt minimum window.
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .child(bar)
+        .children(crop_aspect.map(|current| aspect_buttons(current, cx)))
         .into_any_element()
+}
+
+/// The aspect presets, shown while cropping; the current one is on.
+fn aspect_buttons(current: CropAspect, cx: &mut Context<LuminaApp>) -> Div {
+    div()
+        .w_full()
+        .h(px(40.0))
+        .bg(theme::bg_app())
+        .border_b_1()
+        .border_color(theme::border_subtle())
+        .justify_center()
+        .text_xs()
+        .text_color(theme::text())
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_1()
+        .children(CropAspect::ALL.into_iter().map(|aspect| {
+            let id = SharedString::from(format!("edit-aspect-{}", aspect.name()));
+            let base: fn(SharedString) -> Stateful<Div> = if aspect == current {
+                theme::control_on
+            } else {
+                theme::control
+            };
+            base(id.clone())
+                .debug_selector(move || id.to_string())
+                .role(Role::Button)
+                .aria_label(format!("Crop aspect {}", aspect.label()))
+                .tooltip(theme::tooltip_label(aspect.tooltip()))
+                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                    this.set_crop_aspect(aspect, cx)
+                }))
+                .child(aspect.label())
+        }))
 }
 
 #[cfg(test)]
