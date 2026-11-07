@@ -43,6 +43,12 @@ pub enum Icon {
     Pencil,
     Settings,
     Database,
+    Images,
+    Camera,
+    MapPin,
+    Copy,
+    PanelLeftClose,
+    PanelLeftOpen,
 }
 
 impl Icon {
@@ -90,6 +96,12 @@ impl Icon {
         Icon::Pencil,
         Icon::Settings,
         Icon::Database,
+        Icon::Images,
+        Icon::Camera,
+        Icon::MapPin,
+        Icon::Copy,
+        Icon::PanelLeftClose,
+        Icon::PanelLeftOpen,
     ];
 
     pub fn path(self) -> &'static str {
@@ -134,6 +146,12 @@ impl Icon {
             Self::Pencil => "icons/pencil.svg",
             Self::Settings => "icons/settings.svg",
             Self::Database => "icons/database.svg",
+            Self::Images => "icons/images.svg",
+            Self::Camera => "icons/camera.svg",
+            Self::MapPin => "icons/map-pin.svg",
+            Self::Copy => "icons/copy.svg",
+            Self::PanelLeftClose => "icons/panel-left-close.svg",
+            Self::PanelLeftOpen => "icons/panel-left-open.svg",
         }
     }
 }
