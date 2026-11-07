@@ -265,11 +265,17 @@ mod tests {
             SystemAlbum::Downloaded.build_where_clause()
         );
         let plan = catalog.explain_query_plan(&sql).unwrap();
+        // Downloads are a small slice of the library: drive from the sources
+        // and look items up by key, so the count does not grow with the
+        // library (an EXISTS probe per item took 7 ms at 100k items).
         assert!(
-            !plan
-                .iter()
-                .any(|step| step.starts_with("SCAN s") || step.contains("SCAN media_sources")),
-            "the Downloaded filter must look sources up by key, got {plan:?}"
+            plan.iter()
+                .any(|step| step.starts_with("SEARCH m USING INTEGER PRIMARY KEY")),
+            "the Downloaded filter must look items up by key, got {plan:?}"
+        );
+        assert!(
+            !plan.iter().any(|step| step.starts_with("SCAN m")),
+            "the Downloaded filter must not scan the library, got {plan:?}"
         );
     }
 }
