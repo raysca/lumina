@@ -147,3 +147,33 @@ fn nav_rows_keep_their_click_rules() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn one_back_after_all_photos_returns_to_the_year_view() {
+    let (dir, engine) = seed_library("nav_back", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Back keeps only a year the library has, so use one from its timeline.
+    let year = view.update(vcx, |app, cx| {
+        let year = app
+            .timeline_year_buckets
+            .first()
+            .map(|(year, _)| *year)
+            .expect("the seeded library has a timeline year");
+        app.select_album(AlbumSelection::System(SystemAlbum::Favorites), cx);
+        app.set_active_year(Some(year), cx);
+        year
+    });
+    click(vcx, "sidebar-nav-All Photos & Videos");
+    view.update(vcx, |app, cx| {
+        assert_eq!(app.selection, AlbumSelection::AllLibrary);
+        app.navigate_back(cx);
+        assert_eq!(
+            (app.selection.clone(), app.active_year),
+            (AlbumSelection::System(SystemAlbum::Favorites), Some(year)),
+            "clicking All Photos & Videos is one Back step, not two"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

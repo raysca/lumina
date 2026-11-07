@@ -124,18 +124,15 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
     .collect()
 }
 
-/// What clicking an entry does. All Photos & Videos also clears the active
-/// year; clicking Untagged again goes back to the whole library.
+/// What clicking an entry does: clicking Untagged again goes back to the
+/// whole library. `select_album` itself clears the year and the search, and
+/// records one Back step.
 pub(crate) fn open_entry(
     this: &mut LuminaApp,
     selection: &AlbumSelection,
     cx: &mut Context<LuminaApp>,
 ) {
     match selection {
-        AlbumSelection::AllLibrary => {
-            this.set_active_year(None, cx);
-            this.select_album(AlbumSelection::AllLibrary, cx);
-        }
         AlbumSelection::Untagged if this.selection == AlbumSelection::Untagged => {
             this.select_album(AlbumSelection::AllLibrary, cx);
         }
