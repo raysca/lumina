@@ -68,7 +68,7 @@ impl TextTarget {
             AlbumDraft => ("", "Smart album field"),
             Tag => ("Type a tag, Enter to add", "Tag"),
             Title => ("Type a title... (Enter to save, Esc to cancel)", "Title"),
-            Date => ("YYYY-MM-DD HH:MM:SS", "Date"),
+            Date => ("2024-05-01, or +2h to shift", "Date"),
             Location => (
                 "latitude, longitude (Enter to save, Esc to cancel)",
                 "Location",
@@ -174,7 +174,9 @@ fn load_field<M: InputModeKind>(
     let end = text.len();
     state.set_value(text, window, cx);
     // A caption would start at its first line; every field opens at its end.
-    state.set_selected_range(end..end, cx);
+    // The date opens selected, so typing a shift (`+2h`) replaces it.
+    let start = if target == TextTarget::Date { 0 } else { end };
+    state.set_selected_range(start..end, cx);
 }
 
 /// The span of `new` (in UTF-16 units) that differs from `old`, and the

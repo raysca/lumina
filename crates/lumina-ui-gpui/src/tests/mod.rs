@@ -1,3 +1,4 @@
+mod batch_edit;
 mod browser;
 mod delete_dialog;
 mod design_system;

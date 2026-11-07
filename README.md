@@ -97,7 +97,11 @@ core handles cataloguing, decoding, and search.
   is deliberately not undoable.
 - **Editable metadata & XMP import** — click the title, date-taken or coordinate
   row in the inspector to edit it (SQLite, undoable; titles also go to
-  `dc:title`; date edits rebuild timeline buckets). "Import XMP Metadata" in the
+  `dc:title`; date edits rebuild timeline buckets). The date field takes a
+  date (`2024-05-01`) or a signed shift (`+2h`, `-1d`, `+1d 3h 15m`, `-0:30`);
+  with several items selected, the batch inspector's DATE row (or ⌘K Adjust
+  Date Taken…) moves each item by the shift, keeping their spacing, and one
+  ⌘Z restores them all. "Import XMP Metadata" in the
   card context menu applies sidecar titles, ratings, color labels, captions and
   tags (a sidecar without a label leaves the catalog's label alone).
 - **Import** — drop files or folders on the window, or File ▸ Import… (⇧⌘I),

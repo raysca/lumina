@@ -4,7 +4,7 @@ use std::cmp;
 use std::collections::BTreeSet;
 
 use crate::app::history::{NavigationHistory, NavigationSnapshot};
-use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates};
+use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates, DATE_INPUT_ERROR};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
 use crate::app::types::BatchSelectionSummary;
 use crate::app::undo::{BatchField, BatchLocationChange, UndoAction};
@@ -964,6 +964,8 @@ impl LuminaApp {
     ///
     /// Accepts the same syntax as the single-item editor. A date without a time
     /// keeps each item's existing time of day, mirroring the single-item path.
+    /// A signed shift (`+2h`, `-1d`) moves each item by the same amount, so
+    /// their spacing is kept.
     /// Items already at the target timestamp are left out of the undo entry;
     /// the catalog writes the rest in one transaction.
     pub fn apply_batch_date(&mut self, value: &str, cx: &mut Context<Self>) {
@@ -975,7 +977,7 @@ impl LuminaApp {
             return;
         };
         if parse_edited_timestamp(value, first.timestamp_epoch_ms).is_none() {
-            self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+            self.set_error(DATE_INPUT_ERROR, cx);
             self.update_batch_summary();
             cx.notify();
             return;
@@ -984,7 +986,7 @@ impl LuminaApp {
         let mut changes: Vec<(MediaId, i64, i64)> = Vec::with_capacity(items.len());
         for item in &items {
             let Some(after) = parse_edited_timestamp(value, item.timestamp_epoch_ms) else {
-                self.set_error("Enter a date as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", cx);
+                self.set_error(DATE_INPUT_ERROR, cx);
                 self.update_batch_summary();
                 cx.notify();
                 return;

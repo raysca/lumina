@@ -580,7 +580,7 @@ pub fn commands() -> &'static [Command] {
             id: CommandId::AdjustDate,
             key: "command.adjust_date",
             shortcut: "",
-            keywords: "date taken time edit change get info",
+            keywords: "date taken time edit change shift offset get info",
         },
         Command {
             id: CommandId::EditLocation,

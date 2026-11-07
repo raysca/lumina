@@ -1942,6 +1942,54 @@ fn test_edit_timestamp_rebuilds_buckets_and_location() {
 }
 
 #[test]
+fn date_shift_crossing_month_rebuilds_buckets() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    // 2026-10-31 at 20:00, 22:00 and 23:00 UTC.
+    let times = [1_793_476_800_000_i64, 1_793_484_000_000, 1_793_487_600_000];
+    let items: Vec<MediaItem> = times
+        .iter()
+        .enumerate()
+        .map(|(i, &ts)| {
+            let mut item = sample_media_item(
+                &format!("/photos/shift/{i}.jpg"),
+                MediaType::Image,
+                ts,
+                None,
+                None,
+            );
+            item.day = 31;
+            item
+        })
+        .collect();
+    let inserted = catalog.insert_or_update_batch(&items).unwrap();
+    catalog.compute_timeline_buckets().unwrap();
+    let months = |catalog: &Catalog| -> Vec<(String, usize)> {
+        let mut months: Vec<_> = catalog
+            .get_timeline_buckets("month")
+            .unwrap()
+            .into_iter()
+            .map(|bucket| (bucket.bucket_key, bucket.item_count))
+            .collect();
+        months.sort();
+        months
+    };
+    assert_eq!(months(&catalog), vec![("2026-10".to_string(), 3)]);
+
+    // A +3h shift, as the inspector writes it: one set_timestamps call.
+    let delta = 3 * 3_600_000;
+    let shifted: Vec<(MediaId, i64)> = inserted
+        .iter()
+        .map(|item| (item.id, item.timestamp_epoch_ms + delta))
+        .collect();
+    catalog.set_timestamps(&shifted).unwrap();
+    assert_eq!(
+        months(&catalog),
+        vec![("2026-10".to_string(), 1), ("2026-11".to_string(), 2)],
+        "a shift across a month boundary must move items between month buckets"
+    );
+}
+
+#[test]
 fn test_import_sidecars_applies_title_caption_rating_and_tags() {
     let tmp_dir = std::env::temp_dir().join(format!(
         "lumina_import_{}",
