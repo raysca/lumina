@@ -35,6 +35,7 @@ mod quick_edit_guards;
 mod quick_edit_preview;
 mod regressions;
 mod session_restore;
+mod sidebar;
 mod smart_album_builder;
 mod states;
 mod tag_manager;

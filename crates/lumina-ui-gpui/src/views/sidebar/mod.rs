@@ -1,3 +1,4 @@
+pub(crate) mod nav;
 mod sections;
 
 use gpui::*;

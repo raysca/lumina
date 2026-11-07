@@ -1,9 +1,11 @@
 use crate::app::text_input::TextTarget;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::{SmartAlbum, SystemAlbum};
+use lumina_core::SmartAlbum;
 
+use super::nav::{self, nav_entries, NavEntry};
 use super::{tag_color, AlbumSelection};
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
@@ -12,43 +14,6 @@ pub(super) fn render_library_section(
     this: &LuminaApp,
     cx: &mut Context<LuminaApp>,
 ) -> impl IntoElement {
-    let total_count = this.total_library_count;
-    let fav_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Favorites)
-        .copied()
-        .unwrap_or(0);
-    let video_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Videos)
-        .copied()
-        .unwrap_or(0);
-    let downloaded_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Downloaded)
-        .copied()
-        .unwrap_or(0);
-    let screenshot_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Screenshots)
-        .copied()
-        .unwrap_or(0);
-    let places_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Places)
-        .copied()
-        .unwrap_or(0);
-    let trash_count = this
-        .system_album_counts
-        .get(&SystemAlbum::RecentlyDeleted)
-        .copied()
-        .unwrap_or(0);
-    let missing_count = this
-        .system_album_counts
-        .get(&SystemAlbum::Missing)
-        .copied()
-        .unwrap_or(0);
-
     div()
         .flex()
         .flex_col()
@@ -86,105 +51,12 @@ pub(super) fn render_library_section(
                         })),
                 ),
         )
-        .child(render_nav_item(
-            "All Photos & Videos",
-            if this.grid_state.is_some() {
-                total_count
-            } else {
-                22
-            },
-            this.selection == AlbumSelection::AllLibrary,
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.set_active_year(None, cx);
-                this.select_album(AlbumSelection::AllLibrary, cx);
-            }),
-        ))
-        .child(render_nav_item(
-            "Favorites",
-            if this.grid_state.is_some() {
-                fav_count
-            } else {
-                3
-            },
-            this.selection == AlbumSelection::System(SystemAlbum::Favorites),
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::System(SystemAlbum::Favorites), cx);
-            }),
-        ))
-        .child(render_nav_item(
-            "Videos",
-            if this.grid_state.is_some() {
-                video_count
-            } else {
-                7
-            },
-            this.selection == AlbumSelection::System(SystemAlbum::Videos),
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::System(SystemAlbum::Videos), cx);
-            }),
-        ))
-        // Only once something was downloaded from a link.
-        .children((downloaded_count > 0).then(|| {
-            render_nav_item(
-                "Downloaded",
-                downloaded_count,
-                this.selection == AlbumSelection::System(SystemAlbum::Downloaded),
-                cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.select_album(AlbumSelection::System(SystemAlbum::Downloaded), cx);
-                }),
-            )
-        }))
-        .child(render_nav_item(
-            "Screenshots",
-            if this.grid_state.is_some() {
-                screenshot_count
-            } else {
-                2
-            },
-            this.selection == AlbumSelection::System(SystemAlbum::Screenshots),
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::System(SystemAlbum::Screenshots), cx);
-            }),
-        ))
-        .child(render_nav_item(
-            "Places",
-            places_count,
-            this.selection == AlbumSelection::System(SystemAlbum::Places),
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::System(SystemAlbum::Places), cx);
-            }),
-        ))
-        .child(render_nav_item(
-            "Duplicates",
-            this.duplicate_items_count,
-            this.selection == AlbumSelection::Duplicates,
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::Duplicates, cx);
-            }),
-        ))
-        // Only while something is missing: there is nothing to do otherwise.
-        .children((missing_count > 0).then(|| {
-            render_nav_item(
-                "Missing",
-                missing_count,
-                this.selection == AlbumSelection::System(SystemAlbum::Missing),
-                cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.select_album(AlbumSelection::System(SystemAlbum::Missing), cx);
-                }),
-            )
-        }))
-        .child(render_nav_item(
-            "Recently Deleted",
-            if this.grid_state.is_some() {
-                trash_count
-            } else {
-                1
-            },
-            this.selection == AlbumSelection::Trash,
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.select_album(AlbumSelection::Trash, cx);
-            }),
-        ))
+        .children(
+            nav_entries(this)
+                .into_iter()
+                .filter(|entry| entry.selection != AlbumSelection::Untagged)
+                .map(|entry| render_entry(this, entry, cx)),
+        )
 }
 
 fn render_user_smart_album_row(
@@ -203,7 +75,7 @@ fn render_user_smart_album_row(
         .flex()
         .flex_row()
         .items_center()
-        .gap_1()
+        .gap_2()
         .px_2()
         .h(px(26.0))
         .rounded(theme::RADIUS_MD)
@@ -221,16 +93,17 @@ fn render_user_smart_album_row(
             }
         })
         .child(
+            render_icon(Icon::Sparkles, px(16.0), text_color(is_active))
+                .flex_none()
+                .debug_selector(move || format!("smart-album-row-{album_id}-icon")),
+        )
+        .child(
             div()
                 .flex_1()
                 .min_w_0()
                 .truncate()
                 .text_size(theme::TEXT_BODY)
-                .text_color(if is_active {
-                    theme::selection_fg()
-                } else {
-                    theme::text_row()
-                })
+                .text_color(text_color(is_active))
                 .child(album.title.clone()),
         )
         .child(
@@ -338,6 +211,7 @@ pub(super) fn render_smart_albums_section(
             if this.grid_state.is_none() {
                 vec![render_nav_item(
                     "Fast Glass",
+                    Icon::Sparkles,
                     0,
                     false,
                     cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -360,18 +234,12 @@ pub(super) fn render_smart_albums_section(
                 .collect::<Vec<_>>()
         })
         // Untagged is a built-in smart album (v3 sidebar).
-        .child(render_nav_item(
-            "Untagged",
-            this.untagged_count,
-            this.selection == AlbumSelection::Untagged,
-            cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                if this.selection == AlbumSelection::Untagged {
-                    this.select_album(AlbumSelection::AllLibrary, cx);
-                } else {
-                    this.select_album(AlbumSelection::Untagged, cx);
-                }
-            }),
-        ))
+        .children(
+            nav_entries(this)
+                .into_iter()
+                .filter(|entry| entry.selection == AlbumSelection::Untagged)
+                .map(|entry| render_entry(this, entry, cx)),
+        )
 }
 
 pub(super) fn render_tags_section(
@@ -606,23 +474,51 @@ pub(super) fn render_tags_section(
         )
 }
 
+fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let is_active = this.selection == entry.selection;
+    let selection = entry.selection;
+    render_nav_item(
+        entry.label,
+        entry.icon,
+        entry.count,
+        is_active,
+        cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            nav::open_entry(this, &selection, cx);
+        }),
+    )
+    .into_any_element()
+}
+
+/// Label and icon colour of a sidebar row.
+fn text_color(is_active: bool) -> Rgba {
+    if is_active {
+        theme::selection_fg()
+    } else {
+        theme::text_row()
+    }
+}
+
 fn render_nav_item(
     label: &str,
+    icon: Icon,
     count: usize,
     is_active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let label_text = label.to_string();
     let debug_label = label_text.clone();
+    let icon_selector = format!("sidebar-nav-{label_text}-icon");
+    let aria_label = t(if count == 1 {
+        "sidebar.nav_label_one"
+    } else {
+        "sidebar.nav_label_other"
+    })
+    .replace("{label}", &label_text)
+    .replace("{n}", &count.to_string());
     let bg_color = if is_active {
         theme::selection_bg()
     } else {
         theme::bg_app()
-    };
-    let text_color = if is_active {
-        theme::selection_fg()
-    } else {
-        theme::text_row()
     };
     let count_color = if is_active {
         theme::selection_count()
@@ -633,6 +529,8 @@ fn render_nav_item(
     div()
         .id(ElementId::Name(label_text.clone().into()))
         .debug_selector(move || format!("sidebar-nav-{debug_label}"))
+        .role(Role::Button)
+        .aria_label(aria_label)
         .px_2()
         .h(px(26.0))
         .rounded(theme::RADIUS_MD)
@@ -647,18 +545,26 @@ fn render_nav_item(
         .cursor_pointer()
         .flex()
         .flex_row()
-        .justify_between()
+        .gap_2()
         .items_center()
         .on_click(on_click)
         .child(
+            render_icon(icon, px(16.0), text_color(is_active))
+                .flex_none()
+                .debug_selector(move || icon_selector),
+        )
+        .child(
             div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
                 .text_size(theme::TEXT_BODY)
                 .font_weight(if is_active {
                     FontWeight::MEDIUM
                 } else {
                     FontWeight::NORMAL
                 })
-                .text_color(text_color)
+                .text_color(text_color(is_active))
                 .child(label_text),
         )
         .child(if count > 0 {

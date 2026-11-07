@@ -190,6 +190,8 @@ fn en_us(key: &str) -> Option<&'static str> {
             "Lumina can't find the library “{name}” at {path}. \
             If it is on a drive, connect the drive. If you moved it, open it from its new place."
         }
+        "sidebar.nav_label_one" => "{label}, 1 item",
+        "sidebar.nav_label_other" => "{label}, {n} items",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",
