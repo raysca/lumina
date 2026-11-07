@@ -365,7 +365,9 @@ struct TooltipLabel {
 
 impl Render for TooltipLabel {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let label = self.text.clone();
         div()
+            .debug_selector(move || format!("tooltip-{label}"))
             .px_2()
             .py_1()
             .bg(bg_hud())

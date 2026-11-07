@@ -1,4 +1,5 @@
 pub(crate) mod nav;
+mod rail;
 mod sections;
 
 use gpui::*;
@@ -49,42 +50,7 @@ pub struct SidebarView;
 impl SidebarView {
     pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
         if this.sidebar_collapsed {
-            return div()
-                .w(px(48.0))
-                .h_full()
-                .bg(theme::bg_app())
-                .border_r_1()
-                .border_color(theme::border())
-                .flex()
-                .flex_col()
-                .items_center()
-                .py_4()
-                .gap_4()
-                .child(
-                    div()
-                        .id("expand-sidebar-btn")
-                        .debug_selector(|| "expand-sidebar".to_string())
-                        .w(px(32.0))
-                        .h(px(32.0))
-                        .rounded(theme::RADIUS_MD)
-                        .bg(theme::bg_raised())
-                        .hover(|s| s.bg(theme::bg_control()))
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .text_color(theme::text_muted())
-                        .child(crate::icons::render_icon(
-                            crate::icons::Icon::PanelLeft,
-                            px(16.0),
-                            theme::text_muted(),
-                        ))
-                        .tooltip(theme::tooltip_label("Expand sidebar"))
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.toggle_sidebar(cx);
-                        })),
-                )
-                .into_any_element();
+            return rail::render_rail(this, cx).into_any_element();
         }
 
         div()

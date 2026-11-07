@@ -5,7 +5,6 @@ use lumina_core::SmartAlbum;
 
 use super::nav::{self, nav_entries, NavEntry};
 use super::{tag_color, AlbumSelection};
-use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
@@ -508,13 +507,7 @@ fn render_nav_item(
     let label_text = label.to_string();
     let debug_label = label_text.clone();
     let icon_selector = format!("sidebar-nav-{label_text}-icon");
-    let aria_label = t(if count == 1 {
-        "sidebar.nav_label_one"
-    } else {
-        "sidebar.nav_label_other"
-    })
-    .replace("{label}", &label_text)
-    .replace("{n}", &count.to_string());
+    let aria_label = nav::aria_label(&label_text, count);
     let bg_color = if is_active {
         theme::selection_bg()
     } else {

@@ -192,6 +192,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         }
         "sidebar.nav_label_one" => "{label}, 1 item",
         "sidebar.nav_label_other" => "{label}, {n} items",
+        "sidebar.rail_tooltip" => "{label} · {n}",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",

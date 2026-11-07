@@ -200,8 +200,9 @@ fn ui_automation_toolbar_buttons_by_mouse() {
 
     click(vcx, "sidebar-toggle");
     view.update(vcx, |app, _| assert!(app.sidebar_collapsed));
-    assert!(vcx.debug_bounds("expand-sidebar").is_some());
-    click(vcx, "expand-sidebar");
+    // One toggle: the rail has no expand button of its own.
+    assert!(vcx.debug_bounds("expand-sidebar").is_none());
+    click(vcx, "sidebar-toggle");
     view.update(vcx, |app, _| assert!(!app.sidebar_collapsed));
 
     click(vcx, "inspector-toggle");
