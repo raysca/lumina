@@ -166,7 +166,7 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
 #[test]
 #[ignore = "performance gate: run via make bench"]
 fn benchmark_scale_and_gates() {
-    use lumina_core::{Catalog, MediaId, MediaItem, MediaType, StructuredQuery, SystemAlbum};
+    use lumina_core::{Catalog, Flag, MediaId, MediaItem, MediaType, StructuredQuery, SystemAlbum};
 
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -308,6 +308,17 @@ fn benchmark_scale_and_gates() {
     catalog
         .set_color_labels(&labels)
         .expect("seed bench labels");
+    // Culling: rejects on 2% of rows (rare, like `color:red`), picks on 6%.
+    let flags: Vec<(MediaId, Flag)> = ids
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &id)| match i % 50 {
+            25 => Some((id, Flag::Reject)),
+            26..=28 => Some((id, Flag::Pick)),
+            _ => None,
+        })
+        .collect();
+    catalog.set_flags(&flags).expect("seed bench flags");
 
     // Recompute timeline buckets
     catalog
@@ -368,18 +379,12 @@ fn benchmark_scale_and_gates() {
     );
 
     // Gate 2: Structured Query Latency (< 5ms)
-    // (query, offset). Offset 450 on `color:red` is nearly the last page of
-    // the ~495 red rows, so the date-index walk covers almost the whole
-    // timeline: the worst case for a rare filter without its own index.
-    for (text, offset) in [
-        ("camera:Sony is:favorite iso:>800", 0),
-        ("-beach is:favorite", 0),
-        ("rating:>=4", 0),
-        ("color:red", 0),
-        ("color:red", 450),
-        ("is:unrated", 0),
-        ("is:unlabeled", 0),
-    ] {
+    // (query, offset). Offset 450 on `color:red` / `is:reject` is nearly the
+    // last page of ~495 rows: the deep-page case for a rare filter. Both have
+    // their own index (`idx_media_color`, `idx_media_flag`); at this 25k
+    // scale a date-index walk would still pass, so the plan tests in
+    // core_tests.rs are what guard those indexes.
+    let gate = |text: &str, offset: usize, note: &str| {
         let q = StructuredQuery::parse(text);
         let first = catalog
             .search_structured(&q, 50, offset)
@@ -397,14 +402,38 @@ fn benchmark_scale_and_gates() {
         let search_elapsed = search_start.elapsed();
         let search_per_query_ms = (search_elapsed.as_secs_f64() * 1000.0) / iterations as f64;
         println!(
-            "Gate 2 - Structured Query Latency `{text}` @{offset}: {:.3} ms/query (< {:.1} ms target)",
+            "Gate 2 - Structured Query Latency `{text}`{note} @{offset}: {:.3} ms/query (< {:.1} ms target)",
             search_per_query_ms, query_budget
         );
         assert!(
             search_per_query_ms < query_budget,
-            "Structured query `{text}` must resolve in < {query_budget}ms (got {search_per_query_ms:.3}ms)"
+            "Structured query `{text}`{note} must resolve in < {query_budget}ms (got {search_per_query_ms:.3}ms)"
         );
+    };
+    for (text, offset) in [
+        ("camera:Sony is:favorite iso:>800", 0),
+        ("-beach is:favorite", 0),
+        ("rating:>=4", 0),
+        ("color:red", 0),
+        ("color:red", 450),
+        ("is:unrated", 0),
+        ("is:unlabeled", 0),
+        ("is:pick", 0),
+        ("is:reject", 0),
+        ("is:reject", 450),
+    ] {
+        gate(text, offset, "");
     }
+    // Rare rejects: thin them to 0.1% of rows, so page 0 is also the last
+    // page and a date-index walk would cover the whole timeline.
+    let unreject: Vec<(MediaId, Flag)> = ids
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| i % 50 == 25 && i % 1000 != 25)
+        .map(|(_, &id)| (id, Flag::Unflagged))
+        .collect();
+    catalog.set_flags(&unreject).expect("thin bench rejects");
+    gate("is:reject", 0, " (rare 0.1%, last page)");
 
     // Gate 3: Smart Album Evaluation Latency (< 8ms)
     let album_start = Instant::now();

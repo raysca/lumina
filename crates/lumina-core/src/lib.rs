@@ -54,6 +54,27 @@ pub use xmp::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MediaId(pub u64);
 
+/// A culling flag, stored as `media_items.flag`. Ordered so that the
+/// highest wins a merge: pick beats unflagged beats reject. Not `None`,
+/// which would shadow `Option::None` in glob imports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Flag {
+    Reject = -1,
+    Unflagged = 0,
+    Pick = 1,
+}
+
+impl Flag {
+    /// The flag for a stored value; anything out of range reads by its sign.
+    pub(crate) fn from_db(value: i64) -> Self {
+        match value.signum() {
+            1 => Flag::Pick,
+            -1 => Flag::Reject,
+            _ => Flag::Unflagged,
+        }
+    }
+}
+
 /// (latitude, longitude) for a location edit; `None` clears it.
 pub type Coordinates = (Option<f64>, Option<f64>);
 
@@ -761,6 +782,16 @@ impl LuminaEngine {
 
     pub fn set_color_label(&self, id: MediaId, label: u8) -> Result<()> {
         self.catalog.set_color_label(id, label)
+    }
+
+    /// Sets each item's culling flag in one transaction.
+    pub fn set_flags(&self, changes: &[(MediaId, Flag)]) -> Result<()> {
+        self.catalog.set_flags(changes)
+    }
+
+    /// Every picked or rejected item; unflagged items are left out.
+    pub fn get_flags_map(&self) -> std::collections::HashMap<MediaId, Flag> {
+        self.read("get flags map", self.catalog.get_flags_map())
     }
 
     pub fn set_color_labels(&self, changes: &[(MediaId, u8)]) -> Result<()> {

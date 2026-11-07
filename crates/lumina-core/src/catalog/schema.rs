@@ -76,7 +76,8 @@ impl Catalog {
                 rotation_quarters INTEGER NOT NULL DEFAULT 0,
                 added_epoch_ms INTEGER,
                 date_edited INTEGER NOT NULL DEFAULT 0,
-                place_edited INTEGER NOT NULL DEFAULT 0
+                place_edited INTEGER NOT NULL DEFAULT 0,
+                flag INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -599,6 +600,18 @@ impl Catalog {
             .context("adding the pin to smart albums")?;
         }
 
+        // v20: culling flags (-1 reject, 0 unflagged, 1 pick).
+        let has_flag: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'flag'")?
+            .exists([])?;
+        if !has_flag {
+            conn.execute(
+                "ALTER TABLE media_items ADD COLUMN flag INTEGER NOT NULL DEFAULT 0;",
+                [],
+            )
+            .context("adding culling flags to media items")?;
+        }
+
         // v15: `color:<label>` under the default date sort seeks the label and
         // walks it in timeline order (tie-breaker follows the primary
         // direction) instead of filtering every row of idx_media_timestamp.
@@ -609,6 +622,16 @@ impl Catalog {
             [],
         )
         .context("creating the colour label index")?;
+
+        // v20: `is:pick` / `is:reject` seek the flag and walk it in timeline
+        // order, like the colour index. Not a `WHERE flag != 0` partial index:
+        // SQLite cannot prove `flag = ?` implies it, so it would never be
+        // chosen. Created after the guarded ALTER that adds `flag`.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_flag ON media_items(flag, timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;",
+            [],
+        )
+        .context("creating the culling flag index")?;
 
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;

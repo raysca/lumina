@@ -4,6 +4,7 @@ pub use curated::Album;
 mod downloads;
 mod duplicates;
 mod edits;
+mod flags;
 pub use edits::{CropRect, Edits};
 pub(crate) mod files;
 mod keyword_ops;
@@ -38,7 +39,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {

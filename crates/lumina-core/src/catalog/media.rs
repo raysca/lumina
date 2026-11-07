@@ -389,7 +389,7 @@ impl Catalog {
 
     /// Runs `sql` (value ?1, id ?2) for every row in one transaction, so a
     /// batch edit is all-or-nothing and commits once.
-    fn update_each<T: rusqlite::ToSql>(
+    pub(super) fn update_each<T: rusqlite::ToSql>(
         &self,
         sql: &str,
         rows: impl IntoIterator<Item = (MediaId, T)>,

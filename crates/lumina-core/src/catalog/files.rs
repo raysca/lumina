@@ -695,6 +695,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn fold_into_keeps_pick() {
+        let dir = TempDir::new("fold_flags");
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = ingest(&catalog, &dir.write("a.jpg", b"a")).id;
+        let other = ingest(&catalog, &dir.write("b.jpg", b"b")).id;
+        catalog
+            .set_flags(&[(keep, crate::Flag::Reject), (other, crate::Flag::Pick)])
+            .unwrap();
+
+        catalog.fold_into(keep, other).unwrap();
+
+        assert_eq!(
+            catalog.get_flags_map().unwrap(),
+            std::collections::HashMap::from([(keep, crate::Flag::Pick)]),
+            "fold deletes `other`, so its pick must move to `keep` first"
+        );
+    }
+
+    #[test]
     fn fold_into_carries_album_membership() {
         let dir = TempDir::new("fold_albums");
         let catalog = Catalog::open_in_memory().unwrap();

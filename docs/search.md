@@ -34,6 +34,7 @@ spaces. Every part must match (AND). The grammar lives in
 | `is:unrated` | No star rating |
 | `is:untagged` | No tags |
 | `is:unlabeled`, `color:none` (`color:0`) | No color label |
+| `is:pick`, `is:reject`, `is:unflagged` | Culling flag: picked, rejected, or neither |
 | `has:location`, `has:tag`, `has:color`, `has:rating` | Has GPS, any tag, any color label, any rating |
 
 ## Excluding

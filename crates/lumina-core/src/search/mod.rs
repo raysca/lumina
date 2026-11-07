@@ -45,6 +45,9 @@ pub struct StructuredQuery {
     pub max_rating: Option<u32>,
     pub color_label: Option<u8>,
     pub has_color_label: Option<bool>,
+    /// `is:pick`, `is:reject`, `is:unflagged`.
+    #[serde(default)]
+    pub flag: Option<crate::Flag>,
 }
 
 /// How the free-text FTS match is written into the WHERE clause.
@@ -224,6 +227,11 @@ impl StructuredQuery {
             } else {
                 clauses.push("m.color_label = 0".to_string());
             }
+        }
+
+        if let Some(flag) = self.flag {
+            clauses.push("m.flag = ?".to_string());
+            params.push((flag as i64).into());
         }
 
         // Exclusions are one OR expression over the FTS index, so the planner

@@ -144,6 +144,22 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
         "the pin reaches the catalog"
     );
 
+    // Culling flags (schema v20) on the upgraded catalog, through the engine
+    // the culling keys will call.
+    engine
+        .set_flags(&[(first.id, lumina_core::Flag::Pick)])
+        .expect("flagging must work on an upgraded catalog");
+    assert_eq!(
+        engine.get_flags_map().get(&first.id),
+        Some(&lumina_core::Flag::Pick),
+        "the pick reaches the catalog"
+    );
+    assert_eq!(
+        engine.search_structured_count(&lumina_core::StructuredQuery::parse("is:pick")),
+        1,
+        "is:pick finds it"
+    );
+
     // Trash.
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::AllLibrary, cx)

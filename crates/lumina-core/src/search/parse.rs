@@ -89,6 +89,9 @@ impl StructuredQuery {
                     "untagged" => self.has_tag = Some(false),
                     "unrated" => self.max_rating = Some(0),
                     "unlabeled" => self.has_color_label = Some(false),
+                    "pick" => self.flag = Some(crate::Flag::Pick),
+                    "reject" => self.flag = Some(crate::Flag::Reject),
+                    "unflagged" => self.flag = Some(crate::Flag::Unflagged),
                     _ => return false,
                 }
                 true

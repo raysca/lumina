@@ -1,8 +1,8 @@
 use lumina_core::{
     read_sidecar, write_sidecar, Catalog, DecodedFrame, DeletionTarget, DiskCache, EngineEvent,
-    LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat, Rights,
-    RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule, SortDirection,
-    SortField, SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
+    Flag, LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat,
+    Rights, RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule,
+    SortDirection, SortField, SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
 };
 use std::fs::File;
 use std::io::Write;
@@ -3903,6 +3903,51 @@ fn rating_and_color_filter_plans_use_an_index() {
                 .split(" | ")
                 .any(|row| row.contains("SCAN m") && !row.contains("INDEX")),
             "{text:?}: media_items must not be scanned without an index, got: {plan}"
+        );
+    }
+}
+
+/// `is:pick` / `is:reject` under the default date sort seek the flag in
+/// `idx_media_flag` and walk it in timeline order, instead of filtering the
+/// whole timeline index or sorting every match in a temp B-tree.
+#[test]
+fn flag_filter_plans_use_the_flag_index() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = (0..20)
+        .map(|i| sample_media_item(&format!("/p/{i}.jpg"), MediaType::Image, i, None, None))
+        .collect();
+    catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items");
+    let ids: Vec<_> = catalog
+        .get_item_slice(0, 20)
+        .expect("slice")
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    catalog
+        .set_flags(&[(ids[0], Flag::Pick), (ids[1], Flag::Reject)])
+        .expect("seed flags");
+
+    for text in ["is:pick", "is:reject"] {
+        let q = StructuredQuery::parse(text);
+        assert_eq!(
+            catalog.search_structured(&q, 50, 0).expect("search").len(),
+            1,
+            "{text:?} must match its seeded row"
+        );
+        let (sql, params) = q.synthesize_query_sorted(50, 0, SortSpec::default());
+        let plan = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ");
+        assert!(
+            plan.contains("idx_media_flag"),
+            "{text:?}: the date-sorted plan must seek idx_media_flag, got: {plan}"
+        );
+        assert!(
+            !plan.contains("USE TEMP B-TREE"),
+            "{text:?}: the date sort must stay an index walk, got: {plan}"
         );
     }
 }

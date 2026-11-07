@@ -119,6 +119,16 @@ impl StructuredQuery {
                 .into(),
             );
         }
+        if let Some(flag) = self.flag {
+            out.push(
+                match flag {
+                    crate::Flag::Pick => "Picks",
+                    crate::Flag::Reject => "Rejects",
+                    crate::Flag::Unflagged => "Unflagged",
+                }
+                .into(),
+            );
+        }
         if let Some(loc) = self.has_location {
             out.push(
                 if loc {
@@ -225,6 +235,7 @@ mod tests {
             max_rating: _,
             color_label: _,
             has_color_label: _,
+            flag: _,
         } = StructuredQuery::default();
 
         assert!(
@@ -261,6 +272,9 @@ mod tests {
             ("max_rating", "is:unrated", "Unrated"),
             ("color_label", "color:red", "Color Red"),
             ("has_color_label", "is:unlabeled", "No color label"),
+            ("flag", "is:pick", "Picks"),
+            ("flag", "is:reject", "Rejects"),
+            ("flag", "is:unflagged", "Unflagged"),
         ];
         for (field, text, phrase) in cases {
             let got = q(text);

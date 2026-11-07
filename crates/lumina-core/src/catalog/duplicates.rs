@@ -287,38 +287,47 @@ impl Catalog {
     }
 
     /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
-    /// favorite (any), rating (highest), album membership (union), and caption,
+    /// favorite (any), rating (highest), flag (highest: pick beats unflagged
+    /// beats reject), album membership (union), and caption,
     /// colour label, title, rights and the edits row where the keeper has none.
     pub(crate) fn merge_metadata_in_tx(
         tx: &rusqlite::Transaction,
         keep_id: MediaId,
         trash_ids: &[MediaId],
     ) -> Result<()> {
-        // 1. Merge favorite, rating, color label, and title onto keep_id
+        // 1. Merge favorite, rating, color label, title and flag onto keep_id
         {
             let mut read_stmt = tx.prepare_cached(
-                "SELECT is_favorite, rating, color_label, title FROM media_items WHERE id = ?1;",
+                "SELECT is_favorite, rating, color_label, title, flag FROM media_items WHERE id = ?1;",
             )?;
-            let keeper_meta: Option<(i32, u8, u8, Option<String>)> = read_stmt
+            let keeper_meta: Option<(i32, u8, u8, Option<String>, i64)> = read_stmt
                 .query_row(params![keep_id.0 as i64], |row| {
-                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
                 })
                 .ok();
 
-            if let Some((init_fav, init_rating, init_color, init_title)) = keeper_meta {
+            if let Some((init_fav, init_rating, init_color, init_title, init_flag)) = keeper_meta {
                 let mut updated_fav = init_fav != 0;
                 let mut updated_rating = init_rating;
                 let mut updated_color = init_color;
                 let mut updated_title = init_title;
+                let mut updated_flag = init_flag;
 
                 for trash_id in trash_ids {
-                    if let Ok((fav, rating, color, title)) =
+                    if let Ok((fav, rating, color, title, flag)) =
                         read_stmt.query_row(params![trash_id.0 as i64], |row| {
                             Ok((
                                 row.get::<_, i32>(0)?,
                                 row.get::<_, u8>(1)?,
                                 row.get::<_, u8>(2)?,
                                 row.get::<_, Option<String>>(3)?,
+                                row.get::<_, i64>(4)?,
                             ))
                         })
                     {
@@ -334,14 +343,15 @@ impl Catalog {
                         if updated_title.is_none() && title.is_some() {
                             updated_title = title;
                         }
+                        updated_flag = updated_flag.max(flag);
                     }
                 }
 
                 let mut update_stmt = tx.prepare_cached(
                     r#"
                     UPDATE media_items
-                    SET is_favorite = ?1, rating = ?2, color_label = ?3, title = ?4
-                    WHERE id = ?5;
+                    SET is_favorite = ?1, rating = ?2, color_label = ?3, title = ?4, flag = ?5
+                    WHERE id = ?6;
                     "#,
                 )?;
                 update_stmt.execute(params![
@@ -349,6 +359,7 @@ impl Catalog {
                     updated_rating,
                     updated_color,
                     updated_title.as_deref(),
+                    updated_flag,
                     keep_id.0 as i64
                 ])?;
             }
@@ -501,6 +512,7 @@ mod tests {
     use super::*;
     use crate::catalog::tests_support::{album_members, video_item};
     use crate::catalog::{CropRect, Edits};
+    use crate::Flag;
 
     fn plain(catalog: &Catalog, path: &str) -> MediaId {
         catalog.insert_or_update_batch(&[video_item(path)]).unwrap()[0].id
@@ -540,6 +552,47 @@ mod tests {
         assert!(
             beach(&catalog).is_empty(),
             "the keeper is indexed once, so removing the tag removes the match"
+        );
+    }
+
+    #[test]
+    fn merge_keeps_pick_over_reject() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let reject = plain(&catalog, "/lib/reject.mp4");
+        let pick = plain(&catalog, "/lib/pick.mp4");
+        catalog
+            .set_flags(&[
+                (keep, Flag::Reject),
+                (reject, Flag::Reject),
+                (pick, Flag::Pick),
+            ])
+            .unwrap();
+
+        catalog
+            .merge_duplicate_group(keep, &[reject, pick])
+            .unwrap();
+
+        assert_eq!(
+            catalog.get_flags_map().unwrap().get(&keep),
+            Some(&Flag::Pick),
+            "the keeper takes the highest flag: pick beats unflagged beats reject"
+        );
+    }
+
+    #[test]
+    fn merge_does_not_lower_the_keepers_flag() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog.set_flags(&[(dup, Flag::Reject)]).unwrap();
+
+        catalog.merge_duplicate_group(keep, &[dup]).unwrap();
+
+        assert_eq!(
+            catalog.get_flags_map().unwrap().get(&keep),
+            None,
+            "an unflagged keeper stays unflagged when the copy was rejected"
         );
     }
 
