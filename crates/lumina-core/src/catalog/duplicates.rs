@@ -354,55 +354,7 @@ impl Catalog {
             }
         }
 
-        // The search index is contentless, so its 'delete' must see the values
-        // that were indexed. The UPDATE above fires `media_fts_au`, which reads
-        // tags and caption from the tables: it ran before the copies, so it
-        // saw the indexed ones. The copies below change only those tables, so
-        // the keeper's row is removed before them and rebuilt after.
-        Self::delete_fts_for_items(tx, &[keep_id.0 as i64])?;
-        // 2. Copy missing tags from trash_ids to keep_id
-        {
-            let mut tag_stmt = tx.prepare_cached(
-                r#"
-                INSERT OR IGNORE INTO media_tags (media_id, tag)
-                SELECT ?1, tag FROM media_tags WHERE media_id = ?2;
-                "#,
-            )?;
-            for trash_id in trash_ids {
-                tag_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
-            }
-        }
-
-        // 3. Copy missing caption from trash_ids to keep_id
-        {
-            let mut caption_stmt = tx.prepare_cached(
-                r#"
-                INSERT OR IGNORE INTO media_captions (media_id, caption)
-                SELECT ?1, caption FROM media_captions WHERE media_id = ?2;
-                "#,
-            )?;
-            for trash_id in trash_ids {
-                caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
-            }
-        }
-
-        // 4. Rights when keep_id has none (not indexed, so FTS order does not
-        // matter here). The first trash row that has any wins.
-        {
-            let mut rights_stmt = tx.prepare_cached(
-                r#"
-                INSERT OR IGNORE INTO media_rights
-                    (media_id, creator, copyright, usage_terms, contact_email, contact_url)
-                SELECT ?1, creator, copyright, usage_terms, contact_email, contact_url
-                FROM media_rights WHERE media_id = ?2;
-                "#,
-            )?;
-            for trash_id in trash_ids {
-                rights_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
-            }
-        }
-
-        // 5. Edits row (crop, exposure, auto-enhance) when keep_id has none.
+        // 2. Edits row (crop, exposure, auto-enhance) when keep_id has none.
         // The crop is in unrotated coordinates; the copied row brings its
         // rotation along when the keeper is unrotated, so the user sees the
         // same edit (the first duplicate with a row wins).
@@ -429,6 +381,56 @@ impl Catalog {
                 if edits_stmt.execute(ids)? > 0 {
                     rotate_stmt.execute(ids)?;
                 }
+            }
+        }
+
+        // The search index is contentless, so its 'delete' must see the values
+        // that were indexed. The UPDATEs above fire `media_fts_au`, which reads
+        // tags and caption from the tables: they run before the copies, so
+        // they saw the indexed ones. The copies below change only those tables,
+        // so the keeper's row is removed before them and rebuilt after. No
+        // media_items UPDATE may run between the two, or `media_fts_au` would
+        // delete a row that is not indexed and corrupt the index.
+        Self::delete_fts_for_items(tx, &[keep_id.0 as i64])?;
+        // 3. Copy missing tags from trash_ids to keep_id
+        {
+            let mut tag_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_tags (media_id, tag)
+                SELECT ?1, tag FROM media_tags WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                tag_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 4. Copy missing caption from trash_ids to keep_id
+        {
+            let mut caption_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_captions (media_id, caption)
+                SELECT ?1, caption FROM media_captions WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                caption_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
+
+        // 5. Rights when keep_id has none (not indexed, so FTS order does not
+        // matter here). The first trash row that has any wins.
+        {
+            let mut rights_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO media_rights
+                    (media_id, creator, copyright, usage_terms, contact_email, contact_url)
+                SELECT ?1, creator, copyright, usage_terms, contact_email, contact_url
+                FROM media_rights WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                rights_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
             }
         }
 
@@ -474,5 +476,53 @@ impl Catalog {
         }
         tx.commit()?;
         Ok(all_trashed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::tests_support::video_item;
+    use crate::catalog::{CropRect, Edits};
+
+    fn plain(catalog: &Catalog, path: &str) -> MediaId {
+        catalog.insert_or_update_batch(&[video_item(path)]).unwrap()[0].id
+    }
+
+    #[test]
+    fn duplicate_merge_with_edits_and_tags_keeps_the_search_index() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog.add_tags_batch(&[dup], &["beach".into()]).unwrap();
+        catalog.set_caption(dup, "sunset").unwrap();
+        let edits = Edits {
+            rotation: 1,
+            crop: Some(CropRect {
+                x: 0.25,
+                y: 0.125,
+                w: 0.5,
+                h: 0.75,
+            }),
+            exposure_ev: -0.5,
+            auto_enhance: true,
+        };
+        catalog.set_edits(&[(dup, edits)]).unwrap();
+        // Catalogued after the duplicate's tags, with words of its own.
+        let keep = plain(&catalog, "/lib/keep (edited).mp4");
+        catalog
+            .merge_duplicate_group(keep, &[dup])
+            .expect("merging an edited, tagged duplicate must not corrupt the search index");
+        let beach = |catalog: &Catalog| -> Vec<MediaId> {
+            let found = catalog.search_fts("beach", 10).unwrap();
+            found.iter().map(|item| item.id).collect()
+        };
+        assert_eq!(beach(&catalog), vec![keep], "the merged tag is searchable");
+        catalog
+            .remove_tags_batch(&[keep], &["beach".into()])
+            .unwrap();
+        assert!(
+            beach(&catalog).is_empty(),
+            "the keeper is indexed once, so removing the tag removes the match"
+        );
     }
 }
