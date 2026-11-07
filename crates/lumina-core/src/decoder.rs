@@ -296,6 +296,10 @@ impl DecoderPipeline {
             if status.success() && temp_out.exists() {
                 if let Ok(bytes) = fs::read(&temp_out) {
                     if let Ok(img) = image::load_from_memory(&bytes) {
+                        // sips keeps the source pixels unrotated and copies the
+                        // orientation into the PNG's eXIf chunk; apply it, as
+                        // the in-process decoders do.
+                        let img = Self::apply_exif_orientation(img, &bytes);
                         return Self::resize_to_frame(id, img, target_size);
                     }
                 }
@@ -696,5 +700,68 @@ mod tests {
             (64, 48, PixelFormat::Bgra8),
             "video frames come back at their own size in the texture format"
         );
+    }
+
+    /// A JPEG whose left half is red and right half blue, tagged EXIF
+    /// Orientation 6 (display turned 90° clockwise: the left half on top).
+    fn orientation_six_jpeg(path: &Path, width: u32, height: u32) {
+        let image = image::RgbImage::from_fn(width, height, |x, _| {
+            if x < width / 2 {
+                image::Rgb([230, 20, 20])
+            } else {
+                image::Rgb([20, 20, 230])
+            }
+        });
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+            .encode_image(&image)
+            .expect("fixture encodes");
+        // Big-endian TIFF, IFD0 with one entry: Orientation (0x0112) = 6.
+        let mut app1 = b"Exif\0\0MM\0\x2a\0\0\0\x08\0\x01".to_vec();
+        app1.extend_from_slice(&[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]);
+        let mut segment = vec![0xff, 0xe1];
+        segment.extend_from_slice(&((app1.len() + 2) as u16).to_be_bytes());
+        segment.extend_from_slice(&app1);
+        // After SOI and the encoder's APP0 (JFIF) segment.
+        let app0_end = 4 + u16::from_be_bytes([jpeg[4], jpeg[5]]) as usize;
+        jpeg.splice(app0_end..app0_end, segment);
+        fs::write(path, jpeg).expect("fixture writes");
+    }
+
+    /// Regression: the sips path (large JPEGs at small sizes, HEIC, RAW)
+    /// returned unrotated pixels while the in-process path applied EXIF
+    /// orientation, so a crop picked a different region per decode size.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sips_and_in_process_decodes_agree_on_exif_orientation() {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_orientation_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("rotated.jpg");
+        orientation_six_jpeg(&path, 2800, 1400);
+
+        // 320 goes through sips (over 2560 px), 4096 decodes in process.
+        for size in [320, 4096] {
+            let frame = DecoderPipeline::decode_media(MediaId(1), MediaType::Image, &path, size)
+                .expect("the fixture decodes");
+            assert!(
+                frame.height > frame.width,
+                "orientation 6 displays portrait at size {size}: {}x{}",
+                frame.width,
+                frame.height
+            );
+            let top = &frame.data[(frame.width as usize / 2) * 4..][..4];
+            assert!(
+                top[2] > 150 && top[0] < 100,
+                "the left (red) half is on top at size {size}: BGRA {top:?}"
+            );
+        }
+        let _ = fs::remove_dir_all(&dir);
     }
 }

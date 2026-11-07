@@ -18,8 +18,9 @@ pub struct DiskCache {
     trimming: Arc<AtomicBool>,
 }
 
-/// Bump when the on-disk thumbnail encoding changes.
-const CACHE_FORMAT_VERSION: u32 = 2;
+/// Bump when the on-disk thumbnail encoding changes. v3: sips decodes apply
+/// EXIF orientation, so v2 files of rotated photos are stale.
+const CACHE_FORMAT_VERSION: u32 = 3;
 
 /// Default disk budget for thumbnails (1.5 GB).
 pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
