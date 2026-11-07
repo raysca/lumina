@@ -30,8 +30,8 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, PriorDownload, Rights,
-    TagChange, TagReplay, TemplateChange, SCHEMA_VERSION,
+    Album, Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, PriorDownload,
+    Rights, TagChange, TagReplay, TemplateChange, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -616,6 +616,73 @@ impl LuminaEngine {
 
     pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
         self.catalog.delete_smart_album(id)
+    }
+
+    /// Pins or unpins a smart album; false when it no longer exists.
+    pub fn set_smart_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
+        self.catalog.set_smart_album_pinned(id, pinned)
+    }
+
+    /// Creates an empty hand-picked album.
+    pub fn create_album(&self, title: &str) -> Result<Album> {
+        self.catalog.create_album(title)
+    }
+
+    /// Renames an album; false when it no longer exists.
+    pub fn rename_album(&self, id: i64, title: &str) -> Result<bool> {
+        self.catalog.rename_album(id, title)
+    }
+
+    /// Deletes an album, returning it and its members for undo.
+    pub fn delete_album(&self, id: i64) -> Result<Option<(Album, Vec<MediaId>)>> {
+        self.catalog.delete_album(id)
+    }
+
+    /// Undoes [`Self::delete_album`]; members purged since are skipped.
+    pub fn restore_album(&self, album: &Album, members: &[MediaId]) -> Result<()> {
+        self.catalog.restore_album(album, members)
+    }
+
+    /// Every album with its active member count, for the sidebar.
+    pub fn list_albums_with_counts(&self) -> Vec<(Album, usize)> {
+        self.read(
+            "list albums with counts",
+            self.catalog.list_albums_with_counts(),
+        )
+    }
+
+    /// Adds media to an album; returns how many were new members.
+    pub fn add_to_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        self.catalog.add_to_album(id, media)
+    }
+
+    /// Removes media from an album (never from the library).
+    pub fn remove_from_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        self.catalog.remove_from_album(id, media)
+    }
+
+    /// A page of an album's active members in `sort` order.
+    pub fn query_album_sorted(
+        &self,
+        id: i64,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Vec<MediaItem> {
+        self.read(
+            "query album sorted",
+            self.catalog.query_album_sorted(id, limit, offset, sort),
+        )
+    }
+
+    /// How many active members an album has.
+    pub fn query_album_count(&self, id: i64) -> usize {
+        self.read("query album count", self.catalog.query_album_count(id))
+    }
+
+    /// Pins or unpins an album; false when it no longer exists.
+    pub fn set_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
+        self.catalog.set_album_pinned(id, pinned)
     }
 
     pub fn query_smart_album(

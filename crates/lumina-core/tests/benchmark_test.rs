@@ -514,5 +514,77 @@ fn benchmark_scale_and_gates() {
         "Downloaded count must resolve in < {album_budget}ms (got {count_per_query_ms:.3}ms)"
     );
 
+    // Gate 3: hand-picked albums, a 500-member and a 20k-member one. The
+    // join cannot use idx_media_timestamp for the ORDER BY, so each page of
+    // the big album sorts its members; the deep offset is near the last page.
+    let small_album = catalog.create_album("Small").expect("create album");
+    let small_members: Vec<MediaId> = ids.iter().copied().step_by(50).collect();
+    catalog
+        .add_to_album(small_album.id, &small_members)
+        .expect("fill small album");
+    let big_album = catalog.create_album("Big").expect("create album");
+    catalog
+        .add_to_album(big_album.id, &ids[..20_000])
+        .expect("fill big album");
+    let sort = lumina_core::SortSpec::default();
+    for (label, album, offset) in [
+        ("500-member", small_album.id, 0),
+        ("20k-member", big_album.id, 0),
+        ("20k-member", big_album.id, 19_000),
+    ] {
+        assert_eq!(
+            catalog
+                .query_album_sorted(album, 50, offset, sort)
+                .expect("album slice must run")
+                .len(),
+            50,
+            "the {label} album page must be full so the gate measures real work"
+        );
+        let slice_start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .query_album_sorted(album, 50, offset, sort)
+                .expect("album slice must keep running");
+        }
+        let slice_ms = (slice_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 3 - Album Slice Latency ({label} @{offset}): {slice_ms:.3} ms/slice (< {album_budget:.1} ms target)"
+        );
+        assert!(
+            slice_ms < album_budget,
+            "{label} album slice @{offset} must resolve in < {album_budget}ms (got {slice_ms:.3}ms)"
+        );
+    }
+    for (label, album) in [("500-member", small_album.id), ("20k-member", big_album.id)] {
+        let count_start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .query_album_count(album)
+                .expect("album count must keep running");
+        }
+        let count_ms = (count_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 3 - Album Count Latency ({label}): {count_ms:.3} ms/count (< {album_budget:.1} ms target)"
+        );
+        assert!(
+            count_ms < album_budget,
+            "{label} album count must resolve in < {album_budget}ms (got {count_ms:.3}ms)"
+        );
+    }
+    let list_start = Instant::now();
+    for _ in 0..iterations {
+        catalog
+            .list_albums_with_counts()
+            .expect("album list must keep running");
+    }
+    let list_ms = (list_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+    println!(
+        "Gate 3 - Album List With Counts Latency: {list_ms:.3} ms/list (< {album_budget:.1} ms target)"
+    );
+    assert!(
+        list_ms < album_budget,
+        "album list with counts must resolve in < {album_budget}ms (got {list_ms:.3}ms)"
+    );
+
     let _ = std::fs::remove_file(&temp_db);
 }

@@ -106,8 +106,26 @@ impl Catalog {
                 icon_name TEXT NOT NULL DEFAULT 'folder',
                 match_mode TEXT NOT NULL DEFAULT 'all',
                 rules_json TEXT NOT NULL,
-                created_at_epoch_ms INTEGER NOT NULL
+                created_at_epoch_ms INTEGER NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0
             );
+
+            -- v19: hand-picked albums. Members follow the view's sort order
+            -- (no position column). Both sides cascade, so purging media or
+            -- deleting an album leaves no orphan rows.
+            CREATE TABLE IF NOT EXISTS albums (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                created_at_epoch_ms INTEGER NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS album_items (
+                album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+                media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+                PRIMARY KEY (album_id, media_id)
+            ) WITHOUT ROWID;
+            -- "Albums containing this item", and the media-side cascade.
+            CREATE INDEX IF NOT EXISTS idx_album_items_media ON album_items(media_id);
 
             CREATE TABLE IF NOT EXISTS media_tags (
                 media_id INTEGER NOT NULL,
@@ -567,6 +585,18 @@ impl Catalog {
                 [],
             )
             .context("adding the downloaded flag to media sources")?;
+        }
+
+        // v19: smart albums can be pinned.
+        let has_smart_pinned: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('smart_albums') WHERE name = 'pinned'")?
+            .exists([])?;
+        if !has_smart_pinned {
+            conn.execute(
+                "ALTER TABLE smart_albums ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;",
+                [],
+            )
+            .context("adding the pin to smart albums")?;
         }
 
         // v15: `color:<label>` under the default date sort seeks the label and

@@ -92,15 +92,16 @@ impl Catalog {
             MatchMode::Any => "any",
         };
         conn.execute(
-            "INSERT INTO smart_albums (id, title, icon_name, match_mode, rules_json, created_at_epoch_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+            "INSERT INTO smart_albums (id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
             params![
                 album.id,
                 album.title,
                 album.icon_name,
                 match_str,
                 rules_json,
-                album.created_at_epoch_ms
+                album.created_at_epoch_ms,
+                album.pinned as i64
             ],
         )?;
         Ok(())
@@ -140,6 +141,7 @@ impl Catalog {
             match_mode,
             rules: rules.to_vec(),
             created_at_epoch_ms: now_ms,
+            pinned: false,
         })
     }
 
@@ -147,7 +149,7 @@ impl Catalog {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(
             r#"
-            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms
+            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned
             FROM smart_albums
             WHERE id = ?1;
             "#,
@@ -161,6 +163,7 @@ impl Catalog {
                 let match_str: String = row.get(3)?;
                 let rules_json: String = row.get(4)?;
                 let created_at: i64 = row.get(5)?;
+                let pinned: i64 = row.get(6)?;
 
                 let match_mode = if match_str == "any" {
                     MatchMode::Any
@@ -176,6 +179,7 @@ impl Catalog {
                     match_mode,
                     rules,
                     created_at_epoch_ms: created_at,
+                    pinned: pinned != 0,
                 })
             })
             .optional()?;
@@ -187,7 +191,7 @@ impl Catalog {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(
             r#"
-            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms
+            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned
             FROM smart_albums
             ORDER BY created_at_epoch_ms ASC, id ASC;
             "#,
@@ -200,6 +204,7 @@ impl Catalog {
             let match_str: String = row.get(3)?;
             let rules_json: String = row.get(4)?;
             let created_at: i64 = row.get(5)?;
+            let pinned: i64 = row.get(6)?;
 
             let match_mode = if match_str == "any" {
                 MatchMode::Any
@@ -215,6 +220,7 @@ impl Catalog {
                 match_mode,
                 rules,
                 created_at_epoch_ms: created_at,
+                pinned: pinned != 0,
             })
         })?;
 
@@ -245,6 +251,16 @@ impl Catalog {
              SET title = ?1, icon_name = ?2, match_mode = ?3, rules_json = ?4
              WHERE id = ?5;",
             params![title, icon_name, match_str, rules_json, id],
+        )?;
+        Ok(affected > 0)
+    }
+
+    /// Pins or unpins a smart album; false when no smart album has `id`.
+    pub fn set_smart_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
+        let conn = self.conn.lock();
+        let affected = conn.execute(
+            "UPDATE smart_albums SET pinned = ?1 WHERE id = ?2;",
+            params![pinned as i64, id],
         )?;
         Ok(affected > 0)
     }

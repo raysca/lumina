@@ -84,6 +84,9 @@ pub struct SmartAlbum {
     pub match_mode: MatchMode,
     pub rules: Vec<SmartAlbumRule>,
     pub created_at_epoch_ms: i64,
+    /// Shown in the sidebar's pinned group. Not part of the rules.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 impl SmartAlbum {
@@ -100,6 +103,7 @@ impl SmartAlbum {
             match_mode,
             rules,
             created_at_epoch_ms: Utc::now().timestamp_millis(),
+            pinned: false,
         }
     }
 

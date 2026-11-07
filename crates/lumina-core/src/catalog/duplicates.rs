@@ -287,8 +287,8 @@ impl Catalog {
     }
 
     /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
-    /// favorite (any), rating (highest), and caption, colour label, title, rights
-    /// and the edits row where the keeper has none.
+    /// favorite (any), rating (highest), album membership (union), and caption,
+    /// colour label, title, rights and the edits row where the keeper has none.
     pub(crate) fn merge_metadata_in_tx(
         tx: &rusqlite::Transaction,
         keep_id: MediaId,
@@ -435,6 +435,23 @@ impl Catalog {
         }
 
         Self::insert_fts_for_items(tx, &[keep_id.0 as i64])?;
+
+        // 6. Album membership: keep_id joins every album a trash_id is in.
+        // Not indexed and no media_items row changes, so it sits outside the
+        // FTS window. Must run before `fold_into` deletes `other`, whose rows
+        // the cascade would drop; a merged duplicate is only trashed, so it
+        // keeps its own row too.
+        {
+            let mut album_stmt = tx.prepare_cached(
+                r#"
+                INSERT OR IGNORE INTO album_items (album_id, media_id)
+                SELECT album_id, ?1 FROM album_items WHERE media_id = ?2;
+                "#,
+            )?;
+            for trash_id in trash_ids {
+                album_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
         Ok(())
     }
 
@@ -482,7 +499,7 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::tests_support::video_item;
+    use crate::catalog::tests_support::{album_members, video_item};
     use crate::catalog::{CropRect, Edits};
 
     fn plain(catalog: &Catalog, path: &str) -> MediaId {
@@ -524,5 +541,35 @@ mod tests {
             beach(&catalog).is_empty(),
             "the keeper is indexed once, so removing the tag removes the match"
         );
+    }
+
+    #[test]
+    fn merge_duplicates_carries_album_membership() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog.add_tags_batch(&[dup], &["beach".into()]).unwrap();
+        let album = catalog.create_album("Picks").unwrap();
+        catalog.add_to_album(album.id, &[dup]).unwrap();
+
+        catalog.merge_duplicate_group(keep, &[dup]).unwrap();
+
+        assert_eq!(
+            album_members(&catalog, album.id),
+            vec![keep, dup],
+            "the keeper joins the copy's album; the trashed copy keeps its own row"
+        );
+        assert_eq!(
+            catalog.query_album_count(album.id).unwrap(),
+            1,
+            "only the keeper is active"
+        );
+        let found: Vec<MediaId> = catalog
+            .search_fts("beach", 10)
+            .unwrap()
+            .iter()
+            .map(|item| item.id)
+            .collect();
+        assert_eq!(found, vec![keep], "the search index stays consistent");
     }
 }

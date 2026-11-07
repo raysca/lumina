@@ -695,6 +695,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn fold_into_carries_album_membership() {
+        let dir = TempDir::new("fold_albums");
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = ingest(&catalog, &dir.write("a.jpg", b"a")).id;
+        let other = ingest(&catalog, &dir.write("b.jpg", b"b")).id;
+        let album = catalog.create_album("Picks").unwrap();
+        catalog.add_to_album(album.id, &[other]).unwrap();
+
+        catalog.fold_into(keep, other).unwrap();
+
+        assert!(catalog.get_item_by_id(other).unwrap().is_none());
+        assert_eq!(
+            crate::catalog::tests_support::album_members(&catalog, album.id),
+            vec![keep],
+            "fold deletes `other`, so its membership must move to `keep` first"
+        );
+    }
+
+    #[test]
     fn deleted_folder_with_hard_links_marks_both_missing() {
         let dir = TempDir::new("hardlink_dir");
         let a_path = dir.write("sub/a.jpg", b"same");

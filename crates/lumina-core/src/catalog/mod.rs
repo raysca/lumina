@@ -1,4 +1,6 @@
 mod albums;
+mod curated;
+pub use curated::Album;
 mod downloads;
 mod duplicates;
 mod edits;
@@ -36,7 +38,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 18;
+pub const SCHEMA_VERSION: i64 = 19;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {
@@ -355,8 +357,22 @@ impl Catalog {
 
 #[cfg(test)]
 pub(crate) mod tests_support {
+    use super::Catalog;
     use crate::{MediaId, MediaItem, MediaType};
     use std::path::PathBuf;
+
+    /// Every member of album `id`, trashed and hidden ones included, by id.
+    pub(crate) fn album_members(catalog: &Catalog, id: i64) -> Vec<MediaId> {
+        let conn = catalog.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT media_id FROM album_items WHERE album_id = ?1 ORDER BY media_id;")
+            .expect("album_items must be readable");
+        let rows = stmt
+            .query_map([id], |row| row.get::<_, i64>(0))
+            .expect("album members must be readable");
+        rows.map(|row| MediaId(row.expect("member id") as u64))
+            .collect()
+    }
 
     /// A catalogue-ready video at `path`.
     pub(crate) fn video_item(path: &str) -> MediaItem {

@@ -107,6 +107,43 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
         "{titles:?}"
     );
 
+    // Hand-picked albums and smart-album pins (schema v19) on the upgraded
+    // catalog. No album UI yet, so through the engine the UI will call.
+    let album = engine
+        .create_album("Keepers")
+        .expect("creating an album must work on an upgraded catalog");
+    assert_eq!(
+        engine
+            .add_to_album(album.id, &[first.id])
+            .expect("adding to an album must work on an upgraded catalog"),
+        1
+    );
+    assert_eq!(engine.list_albums_with_counts(), vec![(album.clone(), 1)]);
+    assert_eq!(
+        engine
+            .query_album_sorted(album.id, 10, 0, Default::default())
+            .into_iter()
+            .map(|item| item.id)
+            .collect::<Vec<_>>(),
+        vec![first.id]
+    );
+    let old_id = engine
+        .list_smart_albums()
+        .into_iter()
+        .find(|a| a.title == "Old favourites X")
+        .expect("the edited old album exists")
+        .id;
+    assert!(engine
+        .set_smart_album_pinned(old_id, true)
+        .expect("pinning a smart album must work on an upgraded catalog"));
+    assert!(
+        engine
+            .list_smart_albums()
+            .iter()
+            .any(|a| a.id == old_id && a.pinned),
+        "the pin reaches the catalog"
+    );
+
     // Trash.
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::AllLibrary, cx)

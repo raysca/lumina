@@ -5242,3 +5242,63 @@ fn foreign_sidecar_is_not_overwritten() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn album_query_plan_uses_membership_index() {
+    use rusqlite::types::Value;
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<MediaItem> = (0..10_000)
+        .map(|i| {
+            sample_media_item(
+                &format!("/lib/plan_{i:05}.jpg"),
+                MediaType::Image,
+                1_700_000_000_000 + i * 1_000,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    let album = catalog.create_album("Picks").expect("create album");
+    catalog
+        .add_to_album(album.id, &ids[..500])
+        .expect("add members");
+
+    for field in [
+        SortField::DateTaken,
+        SortField::FileName,
+        SortField::FileSize,
+        SortField::Rating,
+    ] {
+        for direction in [SortDirection::Descending, SortDirection::Ascending] {
+            let sort = SortSpec { field, direction };
+            let sql = Catalog::album_slice_sql(sort);
+            let params = [
+                Value::Integer(album.id),
+                Value::Integer(50),
+                Value::Integer(0),
+            ];
+            // The SQL numbers its parameters; inline them by position.
+            let numbered = sql.replace("?1", "?").replace("?2", "?").replace("?3", "?");
+            let rows = catalog
+                .explain_query_plan(&inline_sql_params(&numbered, &params))
+                .expect("explain the album query");
+            let plan = rows.join(" | ");
+            assert!(
+                rows.iter().any(|row| row.starts_with("SEARCH ai USING")
+                    && (row.contains("PRIMARY KEY (album_id=?)")
+                        || row.contains("idx_album_items_media"))),
+                "{sort:?}: the album query must seek its members by album id, got: {plan}"
+            );
+            assert!(
+                !rows.iter().any(|row| row.starts_with("SCAN ")),
+                "{sort:?}: the album query must scan neither media_items nor album_items, got: {plan}"
+            );
+        }
+    }
+}
