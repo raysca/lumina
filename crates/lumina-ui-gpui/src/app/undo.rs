@@ -1,7 +1,7 @@
 //! Undo/redo for catalog mutations.
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
-//! ratings, color labels, favorites, captions, tags, trash/restore, rotation,
+//! ratings, flags, color labels, favorites, captions, tags, trash/restore, rotation,
 //! quick edits (exposure, auto-enhance, Revert to Original),
 //! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
 //! and smart-album rules), smart album deletion, album rename and deletion,
@@ -37,6 +37,10 @@ pub enum UndoAction {
     Rating { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after); one entry covers a whole batch.
     ColorLabel { changes: Vec<(MediaId, u8, u8)> },
+    /// (id, before, after) culling flags; one entry covers a whole batch.
+    Flag {
+        changes: Vec<(MediaId, lumina_core::Flag, lumina_core::Flag)>,
+    },
     /// (id, before, after) quarter turns; one entry covers a whole batch.
     Rotation { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after) edits, rotation included: one Done in edit mode
@@ -157,6 +161,7 @@ impl UndoAction {
             UndoAction::Tags { ids, .. } => ids.clone(),
             // Rotation and edits are not written to sidecars.
             UndoAction::Rotation { .. }
+            | UndoAction::Flag { .. }
             | UndoAction::Edits { .. }
             | UndoAction::SmartAlbumDeleted { .. }
             | UndoAction::AlbumRenamed { .. }
@@ -173,6 +178,7 @@ impl UndoAction {
             UndoAction::Rating { .. } => "rating",
             UndoAction::ColorLabel { .. } => "color label",
             UndoAction::Rotation { .. } => "rotation",
+            UndoAction::Flag { .. } => "flag",
             UndoAction::Edits { .. } => "edit",
             UndoAction::Favorite { .. } => "favorite",
             UndoAction::Caption { .. } => "caption",
@@ -206,6 +212,7 @@ impl UndoAction {
             UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
             UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
             UndoAction::Rotation { changes } => engine.set_rotations(&pick(changes, before)),
+            UndoAction::Flag { changes } => engine.set_flags(&pick(changes, before)),
             UndoAction::Edits { changes } => engine.set_edits(&pick(changes, before)),
             UndoAction::Favorite { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_favorite(ids, value)
@@ -433,8 +440,13 @@ impl LuminaApp {
             self.set_error("Open a library before undoing", cx);
             return None;
         };
+        // Flags and ratings can reorder or filter the view; see selection_by_id.
+        let held = self.hold_for_history(action);
         match action.apply(&engine, before) {
             Ok(skipped) => {
+                if let Some(held) = held {
+                    self.reselect_held(held, cx);
+                }
                 // Redoing an album delete must not leave the view on it.
                 let deleted = match (action, before) {
                     (UndoAction::SmartAlbumDeleted { album }, false) => {
@@ -497,6 +509,7 @@ impl LuminaApp {
         if let Some(state) = self.grid_state.as_ref() {
             self.item_ratings = state.engine.get_ratings_map();
             self.item_color_labels = state.engine.get_color_labels_map();
+            self.item_flags = state.engine.get_flags_map();
             self.item_captions = state.engine.get_captions_map();
             let updated_selected = self
                 .selected_item

@@ -49,6 +49,8 @@ pub enum CommandId {
     ClearFilters,
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
+    /// Picks, rejects or unflags the selection (P / X / U).
+    Flag(lumina_core::Flag),
     ToggleFavorite,
     /// Quarter turn of the viewer item or the selected stills.
     RotateLeft,
@@ -147,6 +149,9 @@ impl Command {
             ClearFilters => Icon::X,
             Rate(0) => Icon::Star,
             Rate(_) => Icon::StarFilled,
+            Flag(lumina_core::Flag::Pick) => Icon::Check,
+            Flag(lumina_core::Flag::Reject) => Icon::X,
+            Flag(lumina_core::Flag::Unflagged) => Icon::Minus,
             ToggleFavorite => Icon::Heart,
             RotateLeft => Icon::RotateCcw,
             RotateRight => Icon::RotateCw,
@@ -436,38 +441,56 @@ pub fn commands() -> &'static [Command] {
         Command {
             id: CommandId::Rate(1),
             key: "command.rate_1",
-            shortcut: "",
+            shortcut: "1",
             keywords: "rating stars one",
         },
         Command {
             id: CommandId::Rate(2),
             key: "command.rate_2",
-            shortcut: "",
+            shortcut: "2",
             keywords: "rating stars two",
         },
         Command {
             id: CommandId::Rate(3),
             key: "command.rate_3",
-            shortcut: "",
+            shortcut: "3",
             keywords: "rating stars three",
         },
         Command {
             id: CommandId::Rate(4),
             key: "command.rate_4",
-            shortcut: "",
+            shortcut: "4",
             keywords: "rating stars four",
         },
         Command {
             id: CommandId::Rate(5),
             key: "command.rate_5",
-            shortcut: "",
+            shortcut: "5",
             keywords: "rating stars five",
         },
         Command {
             id: CommandId::Rate(0),
             key: "command.clear_rating",
-            shortcut: "",
+            shortcut: "0",
             keywords: "rating stars remove unrate",
+        },
+        Command {
+            id: CommandId::Flag(lumina_core::Flag::Pick),
+            key: "command.flag_pick",
+            shortcut: "P",
+            keywords: "flag cull keep select",
+        },
+        Command {
+            id: CommandId::Flag(lumina_core::Flag::Reject),
+            key: "command.flag_reject",
+            shortcut: "X",
+            keywords: "flag cull discard",
+        },
+        Command {
+            id: CommandId::Flag(lumina_core::Flag::Unflagged),
+            key: "command.flag_clear",
+            shortcut: "U",
+            keywords: "flag cull unflag unpick unreject remove",
         },
         Command {
             id: CommandId::ToggleFavorite,
@@ -517,6 +540,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.filter_favorites",
             shortcut: "",
             keywords: "filter hearts loved favourites",
+        },
+        Command {
+            id: CommandId::QuickFilter("is:pick"),
+            key: "command.filter_picks",
+            shortcut: "",
+            keywords: "filter flag picked cull",
+        },
+        Command {
+            id: CommandId::QuickFilter("is:reject"),
+            key: "command.filter_rejected",
+            shortcut: "",
+            keywords: "filter flag rejects cull",
         },
         Command {
             id: CommandId::QuickFilter("is:video"),
@@ -1154,7 +1189,12 @@ impl LuminaApp {
             CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),
             CommandId::QuickFilter(token) => self.toggle_quick_filter(token, cx),
             CommandId::ClearFilters => self.clear_quick_filters(cx),
-            CommandId::Rate(rating) => self.set_rating_selected(rating, cx),
+            CommandId::Rate(rating) => {
+                self.set_rating_selected(rating, cx);
+            }
+            CommandId::Flag(flag) => {
+                self.set_flag_selected(flag, cx);
+            }
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)
             }

@@ -1006,6 +1006,7 @@ impl LuminaApp {
             }
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();
+            self.item_flags = engine.get_flags_map();
             self.item_captions = engine.get_captions_map();
             self.missing_items = engine.get_missing_ids();
             self.month_header.counts = engine

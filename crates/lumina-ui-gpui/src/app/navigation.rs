@@ -199,10 +199,12 @@ impl LuminaApp {
 }
 
 impl LuminaApp {
-    pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) {
+    /// Rates the selection (0 clears); `false` when nothing is selected or
+    /// the write failed.
+    pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) -> bool {
         let ids = self.get_selected_ids();
         if ids.is_empty() {
-            return;
+            return false;
         }
         let rating = rating.min(5);
         // Re-applying a rating every item already has clears it; otherwise the
@@ -222,16 +224,18 @@ impl LuminaApp {
             .collect();
         if changes.is_empty() {
             cx.notify();
-            return;
+            return true;
         }
         let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        let held = self.hold_selection(&ids, writes.len());
         if let Some(state) = self.grid_state.as_ref() {
             if let Err(err) = state.engine.set_ratings(&writes) {
                 self.set_error(format!("Could not save rating: {err:#}"), cx);
-                return;
+                return false;
             }
         }
         set_or_clear(&mut self.item_ratings, &writes);
+        self.reselect_held(held, cx);
         let shown = self.selected_item.as_ref().map(|item| item.id);
         self.mark_pop.rated(shown, rating);
         let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
@@ -246,6 +250,7 @@ impl LuminaApp {
             },
             cx,
         );
+        true
     }
 
     /// Gives each selected item `label`, or clears it on items that already
@@ -269,6 +274,7 @@ impl LuminaApp {
             return;
         }
         let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        let held = self.hold_selection(&ids, writes.len());
         if let Some(state) = self.grid_state.as_ref() {
             if let Err(err) = state.engine.set_color_labels(&writes) {
                 self.set_error(format!("Could not save color label: {err:#}"), cx);
@@ -276,6 +282,7 @@ impl LuminaApp {
             }
         }
         set_or_clear(&mut self.item_color_labels, &writes);
+        self.reselect_held(held, cx);
         let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
         self.push_undo(UndoAction::ColorLabel { changes });
         self.sync_metadata_sidecars(&changed, cx);

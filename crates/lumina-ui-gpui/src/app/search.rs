@@ -175,6 +175,7 @@ enum FilterFamily {
     Rating,
     Colour,
     MediaType,
+    Flag,
 }
 
 /// The family of one parsed token, read from the fields the core parser set
@@ -188,6 +189,8 @@ fn filter_family(parsed: &lumina_core::StructuredQuery) -> Option<FilterFamily> 
         Some(FilterFamily::Colour)
     } else if parsed.media_type.is_some() {
         Some(FilterFamily::MediaType)
+    } else if parsed.flag.is_some() {
+        Some(FilterFamily::Flag)
     } else {
         None
     }
@@ -203,7 +206,7 @@ fn is_filter_token(token: &str) -> bool {
 
 /// Toggles a quick-filter `token` in `query` (D8). A token with the same
 /// parsed effect is removed; otherwise tokens of the same family (favorite,
-/// rating, colour, media type) are replaced and `token` is appended. Quoted phrases
+/// rating, colour, media type, flag) are replaced and `token` is appended. Quoted phrases
 /// and free text are kept.
 pub(crate) fn toggle_query_token(query: &str, token: &str) -> String {
     use lumina_core::StructuredQuery;

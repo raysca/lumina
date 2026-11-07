@@ -472,6 +472,8 @@ pub struct LuminaApp {
     pub month_header: MonthHeader,
     pub item_ratings: HashMap<MediaId, u8>,
     pub item_color_labels: HashMap<MediaId, u8>,
+    /// Picked and rejected items (unflagged ones are left out).
+    pub item_flags: HashMap<MediaId, lumina_core::Flag>,
     pub item_captions: HashMap<MediaId, String>,
     /// Items whose file is gone from disk (badged in the grid).
     pub missing_items: HashSet<MediaId>,
@@ -660,6 +662,7 @@ impl LuminaApp {
             month_header: MonthHeader::default(),
             item_ratings: HashMap::new(),
             item_color_labels: HashMap::new(),
+            item_flags: HashMap::new(),
             item_captions: HashMap::new(),
             missing_items: HashSet::new(),
             import: Default::default(),

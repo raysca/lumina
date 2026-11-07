@@ -284,6 +284,12 @@ impl LuminaApp {
             return;
         }
 
+        // P / X / U flag and 0-5 rate, in the grid and the viewer (plain
+        // keys only: ⌥P stays PiP).
+        if self.handle_culling_key(keystroke, cx) {
+            return;
+        }
+
         // Fullscreen Viewer Shortcuts
         if self.is_fullscreen_viewer {
             if self.handle_viewer_key_down(key, cmd_or_ctrl, keystroke, window, cx) {

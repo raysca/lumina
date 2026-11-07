@@ -9,7 +9,8 @@ impl LuminaApp {
     ///
     /// Zoom: `+`/`-` step by 0.25, `⌘0` is Fit, `⌘1`/`⌘2`/`⌘4` are
     /// 100%/200%/400% of actual pixels, `⌘3` is Fill, and `Z` toggles
-    /// Fit/100%. Plain digits do nothing here (reserved for ratings).
+    /// Fit/100%. Plain digits rate and P/X/U flag (`app/culling.rs`, before
+    /// this handler).
     /// Returns `true` if handled.
     pub fn handle_viewer_key_down(
         &mut self,

@@ -1,5 +1,5 @@
-use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::marks;
 use crate::views::viewer_state::ViewerRotation;
 use crate::{AlbumSelection, LuminaApp};
 use gpui::*;
@@ -50,7 +50,7 @@ impl MediaContextMenu {
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
         let menu_w = 256.0;
-        let menu_h = 530.0;
+        let menu_h = 562.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
         let win_h: f32 = win_size.height.into();
@@ -183,96 +183,10 @@ impl MediaContextMenu {
                     } else {
                         Empty.into_any_element()
                     })
-                    // 6. Interactive Rating Row
-                    .child(
-                        div()
-                            .px_2p5()
-                            .py_1()
-                            .rounded(theme::RADIUS_SM)
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(div().text_xs().text_color(theme::text()).child("Rating"))
-                            .child(div().flex().flex_row().items_center().children((1..=5).map(
-                                |star_val| {
-                                    let current_rating = app.get_item_rating(&item);
-                                    let star_pop = app.mark_pop.star(Some(item.id));
-                                    let is_filled = star_val <= current_rating;
-                                    div()
-                                        .id(ElementId::NamedInteger(
-                                            "context-rating-star".into(),
-                                            star_val as u64,
-                                        ))
-                                        .debug_selector(move || {
-                                            format!("context-rating-star-{star_val}")
-                                        })
-                                        .size(px(20.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .child(crate::motion::pop(
-                                            render_icon(
-                                                if is_filled {
-                                                    Icon::StarFilled
-                                                } else {
-                                                    Icon::Star
-                                                },
-                                                px(12.0),
-                                                if is_filled {
-                                                    theme::rating()
-                                                } else {
-                                                    theme::rating_unset()
-                                                },
-                                            ),
-                                            star_pop
-                                                .clone()
-                                                .filter(|(s, _)| *s == star_val)
-                                                .map(|(_, id)| id),
-                                        ))
-                                        .on_click(cx.listener(
-                                            move |this, _e: &ClickEvent, _w, cx| {
-                                                this.set_rating_selected(star_val, cx);
-                                            },
-                                        ))
-                                },
-                            ))),
-                    )
-                    // 7. Interactive Color Label Row
-                    .child(
-                        div()
-                            .px_2p5()
-                            .py_1()
-                            .rounded(theme::RADIUS_SM)
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(div().text_xs().text_color(theme::text()).child("Label"))
-                            .child({
-                                let current_label =
-                                    app.item_color_labels.get(&item.id).copied().unwrap_or(0);
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(2.0))
-                                    .children(theme::label_options().into_iter().map(|label| {
-                                        let label_idx = label.0;
-                                        theme::label_swatch(
-                                            "context-label",
-                                            label,
-                                            current_label == label_idx,
-                                        )
-                                        .on_click(
-                                            cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                                                this.set_color_label_selected(label_idx, cx);
-                                            }),
-                                        )
-                                    }))
-                            }),
-                    )
+                    // 6-7. Rating, colour label and pick/reject rows
+                    .child(marks::rating_row(app, &item, cx))
+                    .child(marks::label_row(app, &item, cx))
+                    .child(marks::flag_row(app, &item, cx))
                     // Divider
                     .child(Self::render_divider())
                     // 8. Tags...

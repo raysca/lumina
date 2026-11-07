@@ -11,6 +11,7 @@ use crate::theme;
 use crate::views::grid::{
     media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, GRID_CARD_GAP, GRID_ROW_PADDING_X,
 };
+use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
@@ -222,6 +223,7 @@ impl LuminaApp {
                                 let is_video = item.media_type == MediaType::Video;
                                 let is_missing = this.missing_items.contains(&item.id);
                                 let is_edited = this.edits.edited_ids.contains(&item.id);
+                                let flag = this.item_flag(item.id);
 
                                 let texture = row_textures.get(offset_in_row).cloned().flatten();
 
@@ -375,6 +377,9 @@ impl LuminaApp {
                                                 .bg(photo_background)
                                                 // Recently Deleted reads as set aside.
                                                 .when(in_trash, |well| well.opacity(0.6))
+                                                .when(flag == lumina_core::Flag::Reject, |well| {
+                                                    well.opacity(REJECTED_OPACITY)
+                                                })
                                                 // Square well and square highlight: no
                                                 // corner radius on the thumbnail (FIXES.md).
                                                 .overflow_hidden()
@@ -569,6 +574,8 @@ impl LuminaApp {
                                                             )),
                                                     )
                                                 })
+                                                // Picked or rejected (top-right).
+                                                .child(flag_badge(item_id_num, flag, is_missing))
                                                 // Edited or rotated in Lumina (top-left).
                                                 .when(is_edited, |card| {
                                                     card.child(edited_badge(item_id_num))

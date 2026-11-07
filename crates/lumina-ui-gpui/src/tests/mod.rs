@@ -5,6 +5,8 @@ mod albums_delete;
 mod albums_pinned;
 mod batch_edit;
 mod browser;
+mod culling;
+mod culling_filtered;
 mod delete_dialog;
 mod design_system;
 mod downloads;
