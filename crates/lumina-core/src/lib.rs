@@ -4,6 +4,7 @@ pub mod decoder;
 pub mod duplicates;
 pub mod edit_copy;
 pub mod edits;
+pub mod geo_cluster;
 pub mod geocoder;
 pub mod import;
 pub mod net_import;
@@ -30,11 +31,13 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Album, Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, PriorDownload,
-    RejectedItems, Rights, TagChange, TagReplay, TemplateChange, ViewScope, SCHEMA_VERSION,
+    Album, Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, GeoPoint,
+    PriorDownload, RejectedItems, Rights, TagChange, TagReplay, TemplateChange, ViewScope,
+    SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
+pub use geo_cluster::Cluster;
 pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, extract_video_size, Scanner};
 pub use search::StructuredQuery;

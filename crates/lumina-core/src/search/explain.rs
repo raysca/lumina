@@ -129,6 +129,9 @@ impl StructuredQuery {
                 .into(),
             );
         }
+        if let Some([south, west, north, east]) = self.within {
+            out.push(format!("Within {south}, {west} and {north}, {east}"));
+        }
         if let Some(loc) = self.has_location {
             out.push(
                 if loc {
@@ -236,6 +239,7 @@ mod tests {
             color_label: _,
             has_color_label: _,
             flag: _,
+            within: _,
         } = StructuredQuery::default();
 
         assert!(
@@ -275,6 +279,11 @@ mod tests {
             ("flag", "is:pick", "Picks"),
             ("flag", "is:reject", "Rejects"),
             ("flag", "is:unflagged", "Unflagged"),
+            (
+                "within",
+                "within:34.5,135,35.5,136",
+                "Within 34.5, 135 and 35.5, 136",
+            ),
         ];
         for (field, text, phrase) in cases {
             let got = q(text);

@@ -9,6 +9,14 @@ use super::Catalog;
 use crate::text::{clean_caption, clean_text, MAX_TEXT_CHARS};
 use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
 
+/// One geotagged item for the map, without the rest of its row.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeoPoint {
+    pub id: MediaId,
+    pub lat: f32,
+    pub lon: f32,
+}
+
 impl Catalog {
     /// Upserts scanned items by path; scans and the watcher both land here.
     /// A date or place the user edited (`date_edited` / `place_edited`) is
@@ -292,6 +300,25 @@ impl Catalog {
             |row| row.get(0),
         )?;
         Ok(count as usize)
+    }
+
+    /// Every active (not trashed, not hidden) item with a latitude and a
+    /// longitude, in id order.
+    pub fn geo_points(&self) -> Result<Vec<GeoPoint>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, latitude, longitude FROM media_items \
+             WHERE latitude IS NOT NULL AND longitude IS NOT NULL \
+             AND is_trashed = 0 AND is_hidden = 0 ORDER BY id;",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(GeoPoint {
+                id: MediaId(row.get::<_, i64>(0)? as u64),
+                lat: row.get::<_, f64>(1)? as f32,
+                lon: row.get::<_, f64>(2)? as f32,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     pub fn get_item_slice(&self, offset: usize, limit: usize) -> Result<Vec<MediaItem>> {

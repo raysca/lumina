@@ -8,7 +8,7 @@ impl StructuredQuery {
     /// Example: "sunset in Kyoto camera:Sony is:favorite year:2026 iso:>400 date:2026-09-01..2026-10-10"
     ///
     /// A leading `-` negates a word, a quoted phrase, `tag:`, `is:favorite`
-    /// and `has:location|tag|color`. Bad filter values and unsupported
+    /// and `has:location|tag|color` (not `within:`). Bad filter values and unsupported
     /// negations land in [`StructuredQuery::unrecognized`].
     pub fn parse(input: &str) -> Self {
         let mut query = Self::default();
@@ -123,6 +123,7 @@ impl StructuredQuery {
                 self.color_label = Some(code);
                 true
             }
+            "within" => set(&mut self.within, parse_within(val)),
             _ => false,
         }
     }
@@ -151,6 +152,7 @@ fn is_filter_prefix(prefix: &str) -> bool {
             | "is"
             | "has"
             | "color"
+            | "within"
     )
 }
 
@@ -208,6 +210,25 @@ fn split_prefix(token: &str) -> Option<(&str, &str)> {
         }
     }
     None
+}
+
+/// Parses `lat1,lon1,lat2,lon2` into `[south, west, north, east]`. Each
+/// part must be a number, latitudes in -90..=90 and longitudes in
+/// -180..=180; anything else is not understood. Latitudes are put in
+/// order; longitudes are kept as typed, so `west > east` wraps the
+/// antimeridian.
+fn parse_within(val: &str) -> Option<[f64; 4]> {
+    let parts: Vec<f64> = val
+        .split(',')
+        .map(|p| p.trim().parse::<f64>().ok())
+        .collect::<Option<_>>()?;
+    let [lat1, lon1, lat2, lon2] = parts[..] else {
+        return None;
+    };
+    let lat_ok = |v: f64| (-90.0..=90.0).contains(&v);
+    let lon_ok = |v: f64| (-180.0..=180.0).contains(&v);
+    (lat_ok(lat1) && lat_ok(lat2) && lon_ok(lon1) && lon_ok(lon2))
+        .then(|| [lat1.min(lat2), lon1, lat1.max(lat2), lon2])
 }
 
 fn parse_month(s: &str) -> Option<u32> {
@@ -394,6 +415,61 @@ mod tests {
         );
         assert_eq!(q.media_type, None);
         assert_eq!(q.camera, None);
+    }
+
+    #[test]
+    fn within_ignores_malformed_value() {
+        let q = StructuredQuery::parse("within:35.5,135,34.5,136 is:favorite beach");
+        assert_eq!(
+            q.within,
+            Some([34.5, 135.0, 35.5, 136.0]),
+            "latitudes are put in order; longitudes stay as typed"
+        );
+        assert_eq!(q.is_favorite, Some(true), "within: composes with filters");
+        assert_eq!(q.fts_terms, vec!["beach"], "and with free text");
+        assert_eq!(
+            StructuredQuery::parse("within:-20,170,-10,-170").within,
+            Some([-20.0, 170.0, -10.0, -170.0]),
+            "west > east is kept: the box wraps the antimeridian"
+        );
+        assert_eq!(
+            StructuredQuery::parse(r#"within:"35, 135, 36, 136""#).within,
+            Some([35.0, 135.0, 36.0, 136.0]),
+            "a quoted value may contain spaces"
+        );
+        assert_eq!(
+            StructuredQuery::parse("WITHIN:-90,-180,90,180").within,
+            Some([-90.0, -180.0, 90.0, 180.0]),
+            "the range limits are inclusive and the prefix is case-insensitive"
+        );
+
+        for bad in [
+            "within:1,2,3",
+            "within:1,2,3,4,5",
+            "within:a,b,c,d",
+            "within:1,,3,4",
+            "within:1;2;3;4",
+            "within:91,0,0,1",
+            "within:0,0,-90.5,1",
+            "within:0,181,1,1",
+            "within:0,0,1,-180.01",
+            "within:nan,0,1,1",
+            "within:0,inf,1,1",
+            "-within:0,0,1,1",
+        ] {
+            let q = StructuredQuery::parse(bad);
+            assert_eq!(q.within, None, "{bad:?} must add no geo filter");
+            assert!(
+                q.fts_terms.is_empty() && q.fts_exclude.is_empty(),
+                "{bad:?} must never become a text term, got {q:?}"
+            );
+            assert_eq!(q.unrecognized, vec![bad], "{bad:?} is reported as typed");
+            assert_eq!(
+                q.build_sql(),
+                StructuredQuery::default().build_sql(),
+                "{bad:?} adds no clause"
+            );
+        }
     }
 
     #[test]

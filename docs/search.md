@@ -36,6 +36,27 @@ spaces. Every part must match (AND). The grammar lives in
 | `is:unlabeled`, `color:none` (`color:0`) | No color label |
 | `is:pick`, `is:reject`, `is:unflagged` | Culling flag: picked, rejected, or neither |
 | `has:location`, `has:tag`, `has:color`, `has:rating` | Has GPS, any tag, any color label, any rating |
+| `within:34.9,135.6,35.1,135.9` | GPS inside a box, see below |
+
+## Within a box
+
+`within:lat1,lon1,lat2,lon2` finds items whose GPS position lies inside the
+box with corners (`lat1`, `lon1`) and (`lat2`, `lon2`), in decimal degrees
+(south and west are negative).
+
+- Edges are included: a photo exactly on the border matches.
+- The two latitudes can come in either order.
+- Longitude runs from `lon1` east to `lon2`. When `lon1` is greater than
+  `lon2`, the box crosses the 180° meridian: `within:-20,170,-10,-170`
+  covers Fiji and Samoa, while `within:-20,-170,-10,170` is the box between
+  them.
+- Items without GPS never match.
+- The value must be four numbers separated by commas, latitudes from -90
+  to 90 and longitudes from -180 to 180. Quote it to include spaces:
+  `within:"35, 135, 36, 136"`. Anything else,
+  such as `within:1,2,3` or `within:0,200,1,1`, is not understood and has no
+  effect.
+- `-within:` is not supported.
 
 ## Excluding
 
@@ -49,18 +70,18 @@ A leading `-` excludes:
 - `-has:location`, `-has:tag`, `-has:color` show items without GPS, tags or a
   color label.
 
-A lone `-` (or `-""`) is ignored. Other negated filters, such as `-is:video`
-or `-camera:Sony`, are not supported.
+A lone `-` (or `-""`) is ignored. Other negated filters, such as `-is:video`,
+`-camera:Sony` or `-within:`, are not supported.
 
 ## Not understood
 
 A filter the search cannot use is reported as not understood and has no
 effect: an unknown value (`is:fovorite`, `color:pink`, `color:grey`,
 `has:wings`), a value that does not parse (`rating:abc`, `year:20x6`,
-`iso:lots`, `month:smarch`, `date:yesterday`), or an unsupported negation
-(`-is:video`). These tokens are not searched as text either. In code they are
-collected in `StructuredQuery::unrecognized`, and the explanation under the
-search field lists them as "Not understood: …".
+`iso:lots`, `month:smarch`, `date:yesterday`, `within:1,2,3`), or an
+unsupported negation (`-is:video`). These tokens are not searched as text
+either. In code they are collected in `StructuredQuery::unrecognized`, and
+the explanation under the search field lists them as "Not understood: …".
 
 ## Scope
 

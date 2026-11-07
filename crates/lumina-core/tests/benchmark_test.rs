@@ -163,6 +163,40 @@ fn benchmark_desktop_pics_cold_scan_and_decodes() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
+/// GPS for bench row `i`: a third of the rows are geotagged (`j = i / 3`).
+/// `j % 800 == 7` (~10 rows at 25k, never trashed) is one spot in Sydney,
+/// the rare case. The oldest 2,500 geotagged rows (`j < 2500`) are one old
+/// trip to Paris: dense, but last in the date sort. 30% of the others sit
+/// in a small home-city box around Kyoto (the dense case); the rest are
+/// spread over the world between 60°S and 70°N.
+fn bench_coords(i: usize) -> Option<(f64, f64)> {
+    if !i.is_multiple_of(3) {
+        return None;
+    }
+    let j = i / 3;
+    Some(if j % 800 == 7 {
+        (-33.8688, 151.2093)
+    } else if j < 2500 {
+        (
+            48.85 + (j % 7) as f64 * 0.001,
+            2.35 + (j % 11) as f64 * 0.001,
+        )
+    } else if j % 10 < 3 {
+        (35.0 + (j % 7) as f64 * 0.01, 135.7 + (j % 11) as f64 * 0.01)
+    } else {
+        (
+            -60.0 + (i * 7919 % 13_000) as f64 / 100.0,
+            -180.0 + (i * 104_729 % 36_000) as f64 / 100.0,
+        )
+    })
+}
+
+const RARE_BOX: &str = "within:-33.9,151.2,-33.8,151.3";
+const HOME_BOX: &str = "within:34.9,135.6,35.1,135.9";
+const TRIP_BOX: &str = "within:48.8,2.3,48.9,2.4";
+const WORLD_BOX: &str = "within:-90,-180,90,180";
+const EMPTY_BOX: &str = "within:-89,-179,-61,179";
+
 #[test]
 #[ignore = "performance gate: run via make bench"]
 fn benchmark_scale_and_gates() {
@@ -228,8 +262,8 @@ fn benchmark_scale_and_gates() {
             year: 2026,
             month: ((i % 12) + 1) as u32,
             day: ((i % 28) + 1) as u32,
-            latitude: if i % 3 == 0 { Some(35.0116) } else { None },
-            longitude: if i % 3 == 0 { Some(135.7681) } else { None },
+            latitude: bench_coords(i).map(|c| c.0),
+            longitude: bench_coords(i).map(|c| c.1),
             altitude: Some(50.0),
             country_code: if i % 3 == 0 {
                 Some("JP".to_string())
@@ -421,9 +455,60 @@ fn benchmark_scale_and_gates() {
         ("is:pick", 0),
         ("is:reject", 0),
         ("is:reject", 450),
+        // `within:`: a rare box (~10 rows), the dense home city (~1,700
+        // rows) on page 0 and a deep page, an old dense trip (~2,500 rows,
+        // all older than every other row), and the whole world.
+        (RARE_BOX, 0),
+        (HOME_BOX, 0),
+        (HOME_BOX, 1600),
+        (TRIP_BOX, 0),
+        (WORLD_BOX, 0),
     ] {
         gate(text, offset, "");
     }
+    // `within:` counts, plus a huge box with no rows (south of every point).
+    for text in [RARE_BOX, HOME_BOX, TRIP_BOX, WORLD_BOX, EMPTY_BOX] {
+        let q = StructuredQuery::parse(text);
+        let n = catalog.search_structured_count(&q).expect("within count");
+        assert_eq!(
+            n == 0,
+            text == EMPTY_BOX,
+            "`{text}` count must be non-zero, except the empty box"
+        );
+        let start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .search_structured_count(&q)
+                .expect("within count must keep running");
+        }
+        let ms = (start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 2 - Structured Query Latency `{text}` count ({n} rows): {ms:.3} ms/query (< {query_budget:.1} ms target)"
+        );
+        assert!(
+            ms < query_budget,
+            "`{text}` count must resolve in < {query_budget}ms (got {ms:.3}ms)"
+        );
+    }
+    let q = StructuredQuery::parse(EMPTY_BOX);
+    let start = Instant::now();
+    for _ in 0..iterations {
+        assert!(
+            catalog
+                .search_structured(&q, 50, 0)
+                .expect("empty box must keep running")
+                .is_empty(),
+            "the empty box has no rows"
+        );
+    }
+    let ms = (start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+    println!(
+        "Gate 2 - Structured Query Latency `{EMPTY_BOX}` page (0 rows): {ms:.3} ms/query (< {query_budget:.1} ms target)"
+    );
+    assert!(
+        ms < query_budget,
+        "`{EMPTY_BOX}` page must resolve in < {query_budget}ms (got {ms:.3}ms)"
+    );
     // Rare rejects: thin them to 0.1% of rows, so page 0 is also the last
     // page and a date-index walk would cover the whole timeline.
     let unreject: Vec<(MediaId, Flag)> = ids
@@ -614,6 +699,92 @@ fn benchmark_scale_and_gates() {
         list_ms < album_budget,
         "album list with counts must resolve in < {album_budget}ms (got {list_ms:.3}ms)"
     );
+
+    // Map: every geotagged row as a point, then clustered, over 100k
+    // points. Debug budgets only; the owner sets a release gate once these
+    // numbers exist.
+    let geo_batch: Vec<MediaItem> = (0..100_000)
+        .map(|i| {
+            let (lat, lon) = bench_coords(i * 3).expect("every multiple of 3 is geotagged");
+            let file_name = format!("geo_{i:06}.jpg");
+            MediaItem {
+                id: MediaId(0),
+                path: PathBuf::from(format!("/geo/{file_name}")),
+                parent_dir: "/geo".to_string(),
+                file_name,
+                title: None,
+                file_size: 3_000_000,
+                mtime_epoch_ms: 1789430400000 + i as i64 * 1000,
+                media_type: MediaType::Image,
+                width: 4032,
+                height: 3024,
+                duration_ms: None,
+                timestamp_epoch_ms: 1789430400000 + i as i64 * 1000,
+                year: 2026,
+                month: 9,
+                day: 1,
+                latitude: Some(lat),
+                longitude: Some(lon),
+                altitude: None,
+                country_code: None,
+                admin1_region: None,
+                city: None,
+                make: None,
+                model: None,
+                lens: None,
+                focal_length: None,
+                f_number: None,
+                iso: None,
+                exposure_time: None,
+                is_favorite: false,
+                is_hidden: false,
+                is_trashed: false,
+            }
+        })
+        .collect();
+    for chunk in geo_batch.chunks(batch_size) {
+        catalog
+            .insert_or_update_batch(chunk)
+            .expect("insert geo batch");
+    }
+    let geo_start = Instant::now();
+    let points = catalog.geo_points().expect("geo points must load");
+    let geo_ms = geo_start.elapsed().as_secs_f64() * 1000.0;
+    assert!(
+        points.len() >= 100_000,
+        "the geo bench must cover 100k points, got {}",
+        points.len()
+    );
+    let (geo_budget, cluster_budget) = (1000.0, 500.0);
+    println!(
+        "Map - geo_points: {} points in {geo_ms:.1} ms (debug budget < {geo_budget:.0} ms)",
+        points.len()
+    );
+    assert!(
+        geo_ms < geo_budget,
+        "geo_points over {} rows must load in < {geo_budget} ms (got {geo_ms:.1} ms)",
+        points.len()
+    );
+    for cell in [10.0, 1.0, 0.1] {
+        let cluster_start = Instant::now();
+        let clusters = lumina_core::geo_cluster::cluster(&points, cell);
+        let cluster_ms = cluster_start.elapsed().as_secs_f64() * 1000.0;
+        assert_eq!(
+            clusters.iter().map(|c| c.count).sum::<usize>(),
+            points.len(),
+            "clustering must keep every point"
+        );
+        println!(
+            "Map - cluster {cell}°: {} points -> {} clusters in {cluster_ms:.1} ms (debug budget < {cluster_budget:.0} ms)",
+            points.len(),
+            clusters.len()
+        );
+        assert!(
+            cluster_ms < cluster_budget,
+            "clustering {} points at {cell}° must take < {cluster_budget} ms (got {cluster_ms:.1} ms)",
+            points.len()
+        );
+    }
 
     let _ = std::fs::remove_file(&temp_db);
 }

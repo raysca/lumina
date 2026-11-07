@@ -17,6 +17,7 @@ pub use downloads::{DownloadRow, DownloadState};
 pub use files::MissingChange;
 pub use sources::PriorDownload;
 mod media;
+pub use media::GeoPoint;
 mod rights;
 pub use rights::Rights;
 mod schema;

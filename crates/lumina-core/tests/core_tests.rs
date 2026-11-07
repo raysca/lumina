@@ -3952,6 +3952,278 @@ fn flag_filter_plans_use_the_flag_index() {
     }
 }
 
+/// Seeds named geotagged rows for the `within:` tests and returns the
+/// catalog. `None` coordinates mean no GPS; the rows named `trashed` and
+/// `hidden` are trashed and hidden.
+fn geo_catalog(rows: &[(&str, Option<(f64, f64)>)]) -> Catalog {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let items: Vec<_> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, &(name, coords))| {
+            let mut item = sample_media_item(
+                &format!("/geo/{name}.jpg"),
+                MediaType::Image,
+                i as i64,
+                None,
+                None,
+            );
+            item.latitude = coords.map(|c| c.0);
+            item.longitude = coords.map(|c| c.1);
+            item.is_trashed = name == "trashed";
+            item.is_hidden = name == "hidden";
+            item
+        })
+        .collect();
+    catalog
+        .insert_or_update_batch(&items)
+        .expect("insert geo items");
+    catalog
+}
+
+fn search_names(catalog: &Catalog, text: &str) -> Vec<String> {
+    let mut names: Vec<String> = catalog
+        .search_structured(&StructuredQuery::parse(text), 100, 0)
+        .unwrap_or_else(|e| panic!("{text:?} must run: {e:#}"))
+        .into_iter()
+        .map(|m| m.file_name.trim_end_matches(".jpg").to_string())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn within_filters_bbox_and_wraps_antimeridian() {
+    let catalog = geo_catalog(&[
+        ("kyoto", Some((35.0116, 135.7681))),
+        ("osaka", Some((34.69, 135.50))),
+        ("corner", Some((35.5, 136.0))),
+        ("fiji", Some((-17.7, 178.0))),
+        ("samoa", Some((-13.8, -172.1))),
+        ("nogps", None),
+        ("trashed", Some((35.0, 135.7))),
+        ("hidden", Some((35.0, 135.7))),
+    ]);
+
+    let kansai = ["corner", "kyoto", "osaka"];
+    assert_eq!(
+        search_names(&catalog, "within:34.5,135,35.5,136"),
+        kansai,
+        "the box is inclusive (corner sits on its edge) and skips trashed, hidden and GPS-less rows"
+    );
+    assert_eq!(
+        search_names(&catalog, "within:35.5,135,34.5,136"),
+        kansai,
+        "latitude order does not matter"
+    );
+    assert_eq!(
+        search_names(&catalog, "within:-20,170,-10,-170"),
+        ["fiji", "samoa"],
+        "west > east wraps the antimeridian"
+    );
+    assert!(
+        search_names(&catalog, "within:-20,-170,-10,170").is_empty(),
+        "west < east is the box between them, which holds neither island"
+    );
+
+    let kyoto_id = catalog
+        .search_structured(&StructuredQuery::parse("kyoto"), 10, 0)
+        .expect("find kyoto")[0]
+        .id;
+    catalog
+        .toggle_favorite(kyoto_id, true)
+        .expect("favorite kyoto");
+    assert_eq!(
+        search_names(&catalog, "within:34.5,135,35.5,136 is:favorite"),
+        ["kyoto"],
+        "within: ANDs with other filters"
+    );
+    assert_eq!(
+        search_names(&catalog, "within:34.5,135,35.5,136 -kyoto"),
+        ["corner", "osaka"],
+        "within: ANDs with exclusions"
+    );
+    assert_eq!(
+        catalog
+            .search_structured_count(&StructuredQuery::parse("within:34.5,135,35.5,136"))
+            .expect("count"),
+        3,
+        "the count query uses the same box"
+    );
+
+    let saved = lumina_core::SmartAlbum::new(
+        "Kansai".to_string(),
+        "folder".to_string(),
+        MatchMode::All,
+        vec![SmartAlbumRule {
+            field: RuleField::Query,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Text("within:34.5,135,35.5,136".to_string()),
+        }],
+    );
+    let mut album_names: Vec<String> = catalog
+        .query_smart_album(&saved, 50, 0)
+        .expect("saved search runs")
+        .into_iter()
+        .map(|m| m.file_name.trim_end_matches(".jpg").to_string())
+        .collect();
+    album_names.sort();
+    assert_eq!(album_names, kansai, "within: works in a saved-search album");
+    assert_eq!(
+        catalog
+            .query_smart_album_count(&saved)
+            .expect("album count"),
+        3,
+        "and in its count"
+    );
+
+    let points = catalog.geo_points().expect("geo points");
+    assert_eq!(
+        points.len(),
+        5,
+        "geo_points lists active geotagged rows only: {points:?}"
+    );
+    let fiji = catalog
+        .search_structured(&StructuredQuery::parse("fiji"), 10, 0)
+        .expect("find fiji")[0]
+        .id;
+    let p = points
+        .iter()
+        .find(|p| p.id == fiji)
+        .expect("fiji must be a geo point");
+    assert_eq!((p.lat, p.lon), (-17.7, 178.0));
+    assert!(
+        points.windows(2).all(|w| w[0].id.0 < w[1].id.0),
+        "geo points come in id order"
+    );
+}
+
+/// `within:` under the default date sort. A box with few matches for the
+/// page it asks for seeks `idx_media_geo` and sorts them; a box dense
+/// enough to fill page 0 quickly walks `idx_media_timestamp` and filters,
+/// with no temp B-tree; a deep page of that box seeks the index again.
+#[test]
+fn within_query_plan() {
+    let rows: Vec<(String, Option<(f64, f64)>)> = (0..1200)
+        .map(|i| {
+            let coords = match i {
+                0..=19 => Some((-33.8688, 151.2093)),
+                20..=1119 => Some((35.0 + (i % 50) as f64 * 0.001, 135.7)),
+                _ => None,
+            };
+            (format!("p{i}"), coords)
+        })
+        .collect();
+    let refs: Vec<_> = rows.iter().map(|(n, c)| (n.as_str(), *c)).collect();
+    let catalog = geo_catalog(&refs);
+
+    for (label, text, matches, index) in [
+        (
+            "rare",
+            "within:-33.9,151.2,-33.8,151.3",
+            20,
+            "idx_media_geo",
+        ),
+        (
+            "dense",
+            "within:34.9,135.6,35.1,135.8",
+            1100,
+            "idx_media_timestamp",
+        ),
+    ] {
+        let q = StructuredQuery::parse(text);
+        assert_eq!(
+            catalog.search_structured_count(&q).expect("count"),
+            matches,
+            "{label} box must match its seeded rows"
+        );
+        assert_eq!(
+            catalog.search_structured(&q, 50, 0).expect("search").len(),
+            matches.min(50),
+            "{label} box page 0 must be full"
+        );
+        let (sql, params) = catalog
+            .search_sql_sorted(&q, 50, 0, SortSpec::default())
+            .expect("search sql");
+        let plan = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ");
+        println!("within_query_plan {label}: {plan}");
+        assert!(
+            plan.contains(&format!("USING INDEX {index}")),
+            "{label}: the date-sorted plan must use {index}, got: {plan}"
+        );
+        if label == "dense" {
+            assert!(
+                !plan.contains("USE TEMP B-TREE"),
+                "{label}: a dense box on page 0 must walk the sort index, got: {plan}"
+            );
+        }
+    }
+
+    // A deep page of the dense box: walking the timeline to offset 1050 would
+    // read nearly every row, so sorting the box's 1,100 matches wins.
+    let q = StructuredQuery::parse("within:34.9,135.6,35.1,135.8");
+    assert_eq!(
+        catalog
+            .search_structured(&q, 50, 1050)
+            .expect("deep page")
+            .len(),
+        50
+    );
+    let (sql, params) = catalog
+        .search_sql_sorted(&q, 50, 1050, SortSpec::default())
+        .expect("deep page sql");
+    let plan = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .expect("explain deep page")
+        .join(" | ");
+    println!("within_query_plan deep: {plan}");
+    assert!(
+        plan.contains("USING INDEX idx_media_geo"),
+        "a deep page of a dense box must seek idx_media_geo, got: {plan}"
+    );
+
+    // An old trip: a dense box whose rows are all older than the rest of the
+    // library. Page 0 of the date sort would walk every newer row before the
+    // first match, so it must seek the geo index.
+    let rows: Vec<(String, Option<(f64, f64)>)> = (0..3000)
+        .map(|i| {
+            let coords = (i < 1100).then_some((35.0 + (i % 50) as f64 * 0.001, 135.7));
+            (format!("t{i}"), coords)
+        })
+        .collect();
+    let refs: Vec<_> = rows.iter().map(|(n, c)| (n.as_str(), *c)).collect();
+    let trip = geo_catalog(&refs);
+    let q = StructuredQuery::parse("within:34.9,135.6,35.1,135.8");
+    assert_eq!(trip.search_structured(&q, 50, 0).expect("trip").len(), 50);
+    let (sql, params) = trip
+        .search_sql_sorted(&q, 50, 0, SortSpec::default())
+        .expect("trip sql");
+    let plan = trip
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .expect("explain trip")
+        .join(" | ");
+    println!("within_query_plan trip: {plan}");
+    assert!(
+        plan.contains("USING INDEX idx_media_geo"),
+        "page 0 of an old dense trip must seek idx_media_geo, got: {plan}"
+    );
+
+    // The count is index-only for any box size.
+    let (sql, params) =
+        StructuredQuery::parse("within:34.9,135.6,35.1,135.8").synthesize_count_query();
+    let plan = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .expect("explain count")
+        .join(" | ");
+    assert!(
+        plan.contains("idx_media_geo"),
+        "a within: count must use idx_media_geo, got: {plan}"
+    );
+}
+
 /// v15 adds `idx_media_color` so a colour filter under the default date sort
 /// seeks the label and walks it in order instead of filtering the whole
 /// timeline. Covers a fresh catalog, a second open, and a v14 upgrade.

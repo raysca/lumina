@@ -90,6 +90,7 @@ impl Catalog {
             CREATE INDEX IF NOT EXISTS idx_media_rating ON media_items(rating DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
             CREATE INDEX IF NOT EXISTS idx_media_file_name ON media_items(file_name COLLATE NOCASE ASC, id ASC) WHERE is_trashed = 0 AND is_hidden = 0;
             CREATE INDEX IF NOT EXISTS idx_media_file_size ON media_items(file_size DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
+            CREATE INDEX IF NOT EXISTS idx_media_geo ON media_items(latitude, longitude) WHERE latitude IS NOT NULL AND is_trashed = 0 AND is_hidden = 0;
 
             CREATE TABLE IF NOT EXISTS timeline_buckets (
                 bucket_type TEXT NOT NULL,

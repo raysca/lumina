@@ -48,6 +48,10 @@ pub struct StructuredQuery {
     /// `is:pick`, `is:reject`, `is:unflagged`.
     #[serde(default)]
     pub flag: Option<crate::Flag>,
+    /// `within:lat1,lon1,lat2,lon2` as `[south, west, north, east]`
+    /// (inclusive). `west > east` means the box crosses the antimeridian.
+    #[serde(default)]
+    pub within: Option<[f64; 4]>,
 }
 
 /// How the free-text FTS match is written into the WHERE clause.
@@ -61,24 +65,89 @@ enum FtsMatch {
     Subquery { sorted: bool },
 }
 
+/// Whether a `within:` box may seek `idx_media_geo`. See
+/// `Catalog::search_sql_sorted` for when a search turns it off.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum GeoIndex {
+    Use,
+    /// `+m.latitude`: the planner walks the sort index and filters the box.
+    Skip,
+}
+
 impl StructuredQuery {
     /// Builds a parameterized SQL WHERE clause and parameters. The FTS match
     /// needs `media_search_fts` joined, as [`Self::synthesize_query`] does.
     pub fn build_sql(&self) -> (String, Vec<rusqlite::types::Value>) {
-        self.where_clause(FtsMatch::Joined)
+        self.where_clause(FtsMatch::Joined, GeoIndex::Use)
     }
 
     /// The same WHERE clause as [`Self::build_sql`], but the FTS match is an
     /// `m.id IN (SELECT rowid …)` subquery, so it runs against `media_items m`
     /// alone (smart album `Query` rules). Pass `sorted` when the SQL has an
     /// ORDER BY; leave it false for a count.
+    ///
+    /// A `within:` box here always may seek `idx_media_geo` (no probe): a
+    /// dense box then sorts all its matches in a temp B-tree, which is
+    /// bounded by the box's row count, not the library's.
     pub fn build_where_subquery(&self, sorted: bool) -> (String, Vec<rusqlite::types::Value>) {
-        self.where_clause(FtsMatch::Subquery { sorted })
+        self.where_clause(FtsMatch::Subquery { sorted }, GeoIndex::Use)
+    }
+
+    /// `SELECT count(*)` of the active rows in the `within:` box, stopping at
+    /// `cap`. Index-only on `idx_media_geo`. Callers check
+    /// [`Self::walk_probe_sql`] first for when a probe applies.
+    pub(crate) fn box_count_sql(
+        &self,
+        cap: usize,
+    ) -> Option<(String, Vec<rusqlite::types::Value>)> {
+        let mut clauses = Vec::new();
+        let mut params = Vec::new();
+        push_within(&mut clauses, &mut params, self.within?, GeoIndex::Use);
+        params.push((cap as i64).into());
+        Some((
+            format!(
+                "SELECT count(*) FROM (SELECT 1 FROM media_items m \
+                 WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND {} LIMIT ?);",
+                clauses.join(" AND ")
+            ),
+            params,
+        ))
+    }
+
+    /// How many of the first `cap` active rows in `sort` order lie in the
+    /// `within:` box: what a walk of the sort index would find after reading
+    /// `cap` rows. `None` when there is no box, the query searches the trash
+    /// (`idx_media_geo` covers active rows only), or free text drives the
+    /// plan through the FTS join.
+    pub(crate) fn walk_probe_sql(
+        &self,
+        cap: usize,
+        sort: crate::SortSpec,
+    ) -> Option<(String, Vec<rusqlite::types::Value>)> {
+        if self.is_trashed.is_some() || !self.fts_terms.is_empty() {
+            return None;
+        }
+        let mut clauses = Vec::new();
+        let mut params = vec![(cap as i64).into()];
+        push_within(&mut clauses, &mut params, self.within?, GeoIndex::Use);
+        Some((
+            format!(
+                "SELECT count(*) FROM (SELECT m.latitude, m.longitude FROM media_items m \
+                 WHERE m.is_trashed = 0 AND m.is_hidden = 0 ORDER BY {} LIMIT ?) m WHERE {};",
+                sort.order_by("m."),
+                clauses.join(" AND ")
+            ),
+            params,
+        ))
     }
 
     /// The one clause builder behind `build_sql` and `build_where_subquery`,
     /// so a search and a saved search cannot drift apart.
-    fn where_clause(&self, fts_match: FtsMatch) -> (String, Vec<rusqlite::types::Value>) {
+    fn where_clause(
+        &self,
+        fts_match: FtsMatch,
+        geo: GeoIndex,
+    ) -> (String, Vec<rusqlite::types::Value>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -177,6 +246,10 @@ impl StructuredQuery {
             } else {
                 clauses.push("m.latitude IS NULL".to_string());
             }
+        }
+
+        if let Some(within) = self.within {
+            push_within(&mut clauses, &mut params, within, geo);
         }
 
         if let Some(has_tag) = self.has_tag {
@@ -288,7 +361,18 @@ impl StructuredQuery {
         offset: usize,
         sort: crate::SortSpec,
     ) -> (String, Vec<rusqlite::types::Value>) {
-        let (where_clause, mut params) = self.build_sql();
+        self.synthesize_query_geo(limit, offset, sort, GeoIndex::Use)
+    }
+
+    /// [`Self::synthesize_query_sorted`] with the `within:` index choice.
+    pub(crate) fn synthesize_query_geo(
+        &self,
+        limit: usize,
+        offset: usize,
+        sort: crate::SortSpec,
+        geo: GeoIndex,
+    ) -> (String, Vec<rusqlite::types::Value>) {
+        let (where_clause, mut params) = self.where_clause(FtsMatch::Joined, geo);
         let fts_query = build_fts5_expression(&self.fts_terms);
 
         let sql = if !fts_query.is_empty() {
@@ -365,6 +449,33 @@ impl StructuredQuery {
 
         (sql, params)
     }
+}
+
+/// The inclusive `within:` box. Plain comparisons on `m.latitude` imply the
+/// `latitude IS NOT NULL` of the partial `idx_media_geo`, so it is usable;
+/// [`GeoIndex::Skip`] writes `+m.latitude`, which no index can serve.
+fn push_within(
+    clauses: &mut Vec<String>,
+    params: &mut Vec<rusqlite::types::Value>,
+    [south, west, north, east]: [f64; 4],
+    geo: GeoIndex,
+) {
+    let lat = if geo == GeoIndex::Skip {
+        "+m.latitude"
+    } else {
+        "m.latitude"
+    };
+    clauses.push(format!("{lat} >= ? AND {lat} <= ?"));
+    params.push(south.into());
+    params.push(north.into());
+    clauses.push(if west <= east {
+        "m.longitude >= ? AND m.longitude <= ?".to_string()
+    } else {
+        // Across the antimeridian: east of `west` or west of `east`.
+        "(m.longitude >= ? OR m.longitude <= ?)".to_string()
+    });
+    params.push(west.into());
+    params.push(east.into());
 }
 
 /// Escapes each term as a literal FTS5 prefix phrase (`"term"*`), dropping

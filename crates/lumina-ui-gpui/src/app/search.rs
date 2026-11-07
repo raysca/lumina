@@ -43,6 +43,7 @@ const SEARCH_FIELD_SUGGESTIONS: &[&str] = &[
     "color:green",
     "color:blue",
     "color:purple",
+    "within:",
 ];
 
 /// The token currently being typed: the last whitespace-separated word.
