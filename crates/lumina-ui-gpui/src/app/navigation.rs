@@ -160,6 +160,9 @@ impl LuminaApp {
             {
                 AlbumSelection::AllLibrary
             }
+            AlbumSelection::Album(id) if self.album_title(id).is_none() => {
+                AlbumSelection::AllLibrary
+            }
             AlbumSelection::Tag(tag)
                 if !self.library_tag_counts.iter().any(|(name, _)| name == &tag) =>
             {

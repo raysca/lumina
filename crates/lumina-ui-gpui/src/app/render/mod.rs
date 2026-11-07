@@ -4,6 +4,7 @@ use gpui::*;
 use crate::actions::*;
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::motion;
 use crate::theme;
@@ -118,6 +119,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("⌘R", "Rescan library"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘[ / ⌘]", "Back / Forward"),
+            ("⌘N", "New album"),
             ("⌥⌘N", "New smart album"),
             ("⌥⌘L", "Show or hide downloads"),
             ("⌃⌘S", "Show or hide sidebar"),
@@ -419,6 +421,9 @@ impl Render for LuminaApp {
                 .find(|a| a.id == *id)
                 .map(|a| a.title.clone())
                 .unwrap_or_else(|| "Album".into()),
+            AlbumSelection::Album(id) => self
+                .album_title(*id)
+                .map_or_else(|| t("album.fallback_title"), str::to_string),
             AlbumSelection::Tag(tag) => format!("#{tag}"),
             AlbumSelection::Untagged => "Untagged".into(),
             AlbumSelection::Duplicates => "Duplicates".into(),
@@ -483,6 +488,9 @@ impl Render for LuminaApp {
                 }))
                 .on_action(cx.listener(|this, _: &ManageTemplates, _w, cx| {
                     this.open_template_editor(cx);
+                }))
+                .on_action(cx.listener(|this, _: &NewAlbum, _w, cx| {
+                    this.new_album(cx);
                 }))
                 .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                     this.open_album_builder(cx);
@@ -669,6 +677,12 @@ impl Render for LuminaApp {
                 self.album_draft.confirm_delete.is_some(),
                 crate::views::smart_album_delete::render(self, cx),
                 "smart-album-delete-in",
+            ))
+            // 8b2. Album delete confirmation
+            .child(motion::overlay_in(
+                self.albums.confirm_delete.is_some(),
+                crate::views::album_delete::render(self, cx),
+                "album-delete-in",
             ))
             // 8c. Import dialog
             .child(motion::overlay_in(

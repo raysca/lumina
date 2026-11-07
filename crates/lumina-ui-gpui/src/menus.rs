@@ -21,6 +21,7 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             MenuItem::action("Import Video from URL…", ImportNetworkVideo),
             MenuItem::action("Rescan Library", RescanLibrary),
             MenuItem::separator(),
+            MenuItem::action(crate::i18n::t("command.new_album"), NewAlbum),
             MenuItem::action("New Smart Album…", NewSmartAlbum),
             MenuItem::separator(),
             MenuItem::action("Import XMP Metadata", ImportXmp),

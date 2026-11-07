@@ -25,6 +25,8 @@ pub enum LastView {
     Trash,
     Untagged,
     User(i64),
+    /// A hand-picked album, token `album:{id}`.
+    Album(i64),
     Tag(String),
 }
 
@@ -40,6 +42,7 @@ impl LastView {
             LastView::Trash => "trash".to_string(),
             LastView::Untagged => "untagged".to_string(),
             LastView::User(id) => format!("user:{id}"),
+            LastView::Album(id) => format!("album:{id}"),
             LastView::Tag(tag) => format!("tag:{tag}"),
         }
     }
@@ -58,6 +61,12 @@ impl LastView {
                 if let Some(raw_id) = other.strip_prefix("user:") {
                     return match raw_id.parse::<i64>() {
                         Ok(id) if id > 0 => LastView::User(id),
+                        _ => LastView::All,
+                    };
+                }
+                if let Some(raw_id) = other.strip_prefix("album:") {
+                    return match raw_id.parse::<i64>() {
+                        Ok(id) if id > 0 => LastView::Album(id),
                         _ => LastView::All,
                     };
                 }
@@ -85,6 +94,7 @@ impl LastView {
             // Views not exposed by the sidebar have no persisted token yet.
             AlbumSelection::System(_) => LastView::All,
             AlbumSelection::User(id) => LastView::User(*id),
+            AlbumSelection::Album(id) => LastView::Album(*id),
             AlbumSelection::Tag(tag) => LastView::Tag(tag.clone()),
             AlbumSelection::Untagged => LastView::Untagged,
             // Duplicates has no persisted token; it restores as All.
@@ -106,6 +116,7 @@ impl LastView {
             LastView::Trash => AlbumSelection::Trash,
             LastView::Untagged => AlbumSelection::Untagged,
             LastView::User(id) => AlbumSelection::User(*id),
+            LastView::Album(id) => AlbumSelection::Album(*id),
             LastView::Tag(tag) => AlbumSelection::Tag(tag.clone()),
         }
     }

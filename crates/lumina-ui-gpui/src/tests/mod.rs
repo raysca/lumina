@@ -1,3 +1,5 @@
+mod albums;
+mod albums_delete;
 mod batch_edit;
 mod browser;
 mod delete_dialog;

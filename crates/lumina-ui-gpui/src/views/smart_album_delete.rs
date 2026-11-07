@@ -1,4 +1,4 @@
-//! Confirmation before a smart album is deleted.
+//! Confirmation before a smart album (or an album) is deleted.
 
 use gpui::*;
 
@@ -18,11 +18,37 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             || "this smart album".to_string(),
             |a| format!("“{}”", a.title),
         );
+    confirm_dialog(
+        "smart-album-delete",
+        format!("Delete {title}?"),
+        "Only the album goes. Its photos and videos stay in your library.".into(),
+        ("Cancel".into(), "Delete".into()),
+        LuminaApp::cancel_delete_smart_album,
+        LuminaApp::confirm_delete_smart_album,
+        cx,
+    )
+}
 
-    let button = |id: &'static str, label: &'static str| {
+type Handler = fn(&mut LuminaApp, &mut Context<LuminaApp>);
+
+/// A delete confirmation card over a dimmed backdrop. Selectors are
+/// `{prefix}-backdrop`, `-dialog`, `-cancel` and `-confirm`; a click on the
+/// backdrop cancels. `buttons` are the (cancel, confirm) labels.
+pub(crate) fn confirm_dialog(
+    prefix: &'static str,
+    heading: String,
+    body: String,
+    buttons: (SharedString, SharedString),
+    cancel: Handler,
+    confirm: Handler,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
+    let name = move |part: &str| format!("{prefix}-{part}");
+    let button = |part: &str, label: SharedString| {
+        let selector = name(part);
         div()
-            .id(id)
-            .debug_selector(move || id.to_string())
+            .id(ElementId::Name(selector.clone().into()))
+            .debug_selector(move || selector.clone())
             .h(px(30.0))
             .px_3()
             .rounded(theme::RADIUS_MD)
@@ -34,10 +60,11 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .text_xs()
             .child(label)
     };
+    let (backdrop, dialog) = (name("backdrop"), name("dialog"));
 
     div()
-        .id("smart-album-delete-backdrop")
-        .debug_selector(|| "smart-album-delete-backdrop".to_string())
+        .id(ElementId::Name(backdrop.clone().into()))
+        .debug_selector(move || backdrop.clone())
         .absolute()
         .inset_0()
         .occlude()
@@ -48,14 +75,12 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .p_8()
         .on_mouse_down(
             MouseButton::Left,
-            cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                this.cancel_delete_smart_album(cx);
-            }),
+            cx.listener(move |this, _e: &MouseDownEvent, _w, cx| cancel(this, cx)),
         )
         .child(
             div()
-                .id("smart-album-delete-dialog")
-                .debug_selector(|| "smart-album-delete-dialog".to_string())
+                .id(ElementId::Name(dialog.clone().into()))
+                .debug_selector(move || dialog.clone())
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                     cx.stop_propagation();
@@ -81,11 +106,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme::text())
                                 .truncate()
-                                .child(format!("Delete {title}?")),
+                                .child(heading),
                         )
-                        .child(div().text_xs().text_color(theme::text_muted()).child(
-                            "Only the album goes. Its photos and videos stay in your library.",
-                        )),
+                        .child(div().text_xs().text_color(theme::text_muted()).child(body)),
                 )
                 .child(
                     div()
@@ -94,24 +117,24 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .justify_end()
                         .gap_2()
                         .child(
-                            button("smart-album-delete-cancel", "Cancel")
+                            button("cancel", buttons.0)
                                 .bg(theme::bg_control())
                                 .hover(|s| s.bg(theme::bg_control_hover()))
                                 .text_color(theme::text())
                                 .child(theme::kbd("Esc"))
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.cancel_delete_smart_album(cx);
+                                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                    cancel(this, cx)
                                 })),
                         )
                         .child(
-                            button("smart-album-delete-confirm", "Delete")
+                            button("confirm", buttons.1)
                                 .bg(theme::danger())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme::text())
                                 .child(theme::kbd("↵"))
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.confirm_delete_smart_album(cx);
+                                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                    confirm(this, cx)
                                 })),
                         ),
                 ),

@@ -10,7 +10,7 @@ Lumina is designed to be usable without a mouse:
   viewer, also on `⌘0`–`⌘4`), quick search filters, Clear Recent Searches,
   Save Search as Smart Album… and more. Its GO TO group reaches every
   sidebar destination (every default collection, including Screenshots,
-  Places and Missing, plus years, tags and smart albums). Type to filter (each
+  Places and Missing, plus years, tags, albums and smart albums). Type to filter (each
   word matches separately), `↑`/`↓` to move, `↵` to run, `Esc` to close.
   "missing" alone ranks the Locate Missing File… command first; type "go to
   missing" to open the Missing collection.
@@ -21,6 +21,14 @@ Lumina is designed to be usable without a mouse:
   has the keys. Collapsed, the sidebar is a 48 px rail with one icon button
   per default collection (Untagged, listed under Smart Albums, is not on
   the rail).
+- **Albums**: `⌘N` (File > New Album, ⌘K New Album) makes an empty album
+  and opens its name field in the sidebar; ⌘K New Album with Selection
+  (also in the right-click menu) makes one holding the selection. `↵` saves
+  the name, `Esc` keeps the old one, and the field takes every other key.
+  With an album open, ⌘K Rename Album… and Delete Album… act on it; the
+  delete confirmation takes `↵`/`Esc` and absorbs every other key. `⌘Z`
+  undoes a rename or a delete (members come back). Album rows carry a list
+  item role and a label with the count, not yet checked with VoiceOver.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With

@@ -1,3 +1,4 @@
+mod albums;
 pub(crate) mod nav;
 mod rail;
 mod sections;
@@ -13,6 +14,8 @@ pub enum AlbumSelection {
     AllLibrary,
     System(SystemAlbum),
     User(i64),
+    /// A hand-picked album (its own id space, not a smart album).
+    Album(i64),
     Tag(String),
     /// Active media that carries no tags at all.
     Untagged,
@@ -75,6 +78,7 @@ impl SidebarView {
                     .gap_0()
                     .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
+                    .child(albums::render_albums_section(this, cx))
                     .child(sections::render_smart_albums_section(this, cx))
                     .child(sections::render_tags_section(this, cx)),
             )

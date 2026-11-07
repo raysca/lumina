@@ -286,7 +286,18 @@ impl MediaContextMenu {
                             this.begin_tagging_selection(cx);
                         }),
                     ))
-                    // No manual albums yet, so no Add to Album rows.
+                    // 10. New Album with Selection (Add to Album… is plan 5 A3)
+                    .child(Self::render_menu_item(
+                        &hover,
+                        "context-new-album-with-selection",
+                        crate::i18n::t("command.new_album_with_selection"),
+                        None,
+                        false,
+                        cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.close_context_menu(cx);
+                            this.new_album_with_selection(cx);
+                        }),
+                    ))
                     // 11. Export...
                     .child(Self::render_menu_item(
                         &hover,
@@ -489,7 +500,7 @@ impl MediaContextMenu {
     fn render_menu_item(
         hover: &RowHover,
         id_str: &'static str,
-        label: &'static str,
+        label: impl Into<SharedString>,
         shortcut: Option<&'static str>,
         is_destructive: bool,
         on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -521,7 +532,7 @@ impl MediaContextMenu {
     fn render_menu_row(
         hover: &RowHover,
         id_str: &'static str,
-        label: &'static str,
+        label: impl Into<SharedString>,
         trailing: AnyElement,
         is_destructive: bool,
         on_click_handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -566,7 +577,7 @@ impl MediaContextMenu {
             .flex_row()
             .justify_between()
             .items_center()
-            .child(div().text_size(theme::TEXT_BODY).child(label))
+            .child(div().text_size(theme::TEXT_BODY).child(label.into()))
             .child(trailing)
             .on_click(on_click_handler)
     }

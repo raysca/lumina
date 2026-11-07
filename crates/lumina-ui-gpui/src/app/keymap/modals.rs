@@ -95,6 +95,16 @@ impl LuminaApp {
             return true;
         }
 
+        // 1b2. Album delete confirmation
+        if self.albums.confirm_delete.is_some() {
+            match key {
+                "escape" => self.cancel_delete_album(cx),
+                "enter" | "return" => self.confirm_delete_album(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 1c. Import dialog
         if self.import.dialog.is_some() {
             match key {
@@ -278,6 +288,16 @@ impl LuminaApp {
             if key == "enter" || key == "return" {
                 self.commit_tag_rename(cx);
                 return true;
+            }
+            return true;
+        }
+
+        // 4b. Renaming an album in the sidebar
+        if self.albums.renaming.is_some() {
+            match key {
+                "escape" => self.cancel_album_rename(cx),
+                "enter" | "return" => self.commit_album_rename(cx),
+                _ => {}
             }
             return true;
         }

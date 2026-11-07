@@ -58,6 +58,7 @@ impl ViewQuery {
                 .album
                 .as_ref()
                 .map_or(0, |album| engine.query_smart_album_count(album)),
+            AlbumSelection::Album(id) => engine.query_album_count(*id),
             AlbumSelection::Trash => engine.query_system_album_count(SystemAlbum::RecentlyDeleted),
             AlbumSelection::Tag(tag) => engine.search_query_count(&tag_query(tag)),
             AlbumSelection::Untagged => engine.query_untagged_count(),
@@ -87,6 +88,7 @@ impl ViewQuery {
             AlbumSelection::User(_) => self.album.as_ref().map_or_else(Vec::new, |album| {
                 engine.query_smart_album_sorted(album, limit, offset, sort)
             }),
+            AlbumSelection::Album(id) => engine.query_album_sorted(*id, limit, offset, sort),
             AlbumSelection::Trash => {
                 engine.query_system_album_sorted(SystemAlbum::RecentlyDeleted, limit, offset, sort)
             }

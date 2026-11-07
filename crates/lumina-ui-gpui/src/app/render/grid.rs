@@ -831,6 +831,19 @@ impl LuminaApp {
                         )
                     },
                 },
+                AlbumSelection::Album(id) => EmptyCopy {
+                    primary: show_all(),
+                    ..copy(
+                        Icon::Image,
+                        match self.album_title(*id) {
+                            Some(title) => {
+                                crate::i18n::t("album.empty_title").replace("{title}", title)
+                            }
+                            None => crate::i18n::t("album.empty_title_unknown"),
+                        },
+                        crate::i18n::t("album.empty_body"),
+                    )
+                },
                 AlbumSelection::Tag(tag) => EmptyCopy {
                     primary: show_all(),
                     secondary: Some(("Manage tags".into(), EmptyAction::ManageTags)),

@@ -62,6 +62,13 @@ pub enum CommandId {
     EditCopyInExternalEditor,
     TogglePip,
     PipPlayPause,
+    /// New Album (⌘N), always empty; New Album with Selection holds the
+    /// selected items (shown only with a selection).
+    NewAlbum,
+    NewAlbumWithSelection,
+    /// Act on the open album; shown only in an album view.
+    RenameAlbum,
+    DeleteAlbum,
     NewSmartAlbum,
     /// Saves the search as a smart album; shown only while there is a query.
     SaveSearch,
@@ -137,9 +144,10 @@ impl Command {
             EditInExternalEditor | EditCopyInExternalEditor => Icon::ExternalLink,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
+            NewAlbum | NewAlbumWithSelection => Icon::Plus,
             NewSmartAlbum | SaveSearch => Icon::Sparkles,
-            EditSmartAlbum | AdjustDate | EditLocation => Icon::Pencil,
-            RemoveLocation | DeleteSmartAlbum => Icon::X,
+            EditSmartAlbum | RenameAlbum | AdjustDate | EditLocation => Icon::Pencil,
+            RemoveLocation | DeleteSmartAlbum | DeleteAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates => Icon::Repeat,
@@ -599,6 +607,30 @@ pub fn commands() -> &'static [Command] {
             keywords: "pip picture in picture video pause resume",
         },
         Command {
+            id: CommandId::NewAlbum,
+            key: "command.new_album",
+            shortcut: "⌘N",
+            keywords: "album create collection",
+        },
+        Command {
+            id: CommandId::NewAlbumWithSelection,
+            key: "command.new_album_with_selection",
+            shortcut: "",
+            keywords: "album create collection selected items",
+        },
+        Command {
+            id: CommandId::RenameAlbum,
+            key: "command.rename_album",
+            shortcut: "",
+            keywords: "album name title change",
+        },
+        Command {
+            id: CommandId::DeleteAlbum,
+            key: "command.delete_album",
+            shortcut: "",
+            keywords: "album remove delete",
+        },
+        Command {
             id: CommandId::NewSmartAlbum,
             key: "command.new_smart_album",
             shortcut: "⌥⌘N",
@@ -746,6 +778,12 @@ impl LuminaApp {
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
             CommandId::SaveSearch => !self.search_query.trim().is_empty(),
+            CommandId::NewAlbumWithSelection => {
+                self.selected_item.is_some() || !self.selected_indices.is_empty()
+            }
+            CommandId::RenameAlbum | CommandId::DeleteAlbum => {
+                matches!(self.selection, AlbumSelection::Album(_))
+            }
             CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
@@ -934,6 +972,14 @@ impl LuminaApp {
                 format!("tag-{tag}"),
             )
         }));
+        go_to.extend(self.albums.list.iter().map(|album| {
+            go(
+                AlbumSelection::Album(album.id),
+                album.title.clone(),
+                Icon::Image,
+                format!("curated-{}", album.id),
+            )
+        }));
         go_to.extend(self.user_smart_albums.iter().map(|album| {
             go(
                 AlbumSelection::User(album.id),
@@ -1051,6 +1097,10 @@ impl LuminaApp {
             CommandId::EditCopyInExternalEditor => self.edit_selected_externally(true, cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
+            CommandId::NewAlbum => self.new_album(cx),
+            CommandId::NewAlbumWithSelection => self.new_album_with_selection(cx),
+            CommandId::RenameAlbum => self.rename_selected_album(cx),
+            CommandId::DeleteAlbum => self.delete_selected_album(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::SaveSearch => self.save_current_search_as_album(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),

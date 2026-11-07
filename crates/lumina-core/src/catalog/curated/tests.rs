@@ -427,3 +427,40 @@ fn album_query_follows_sort_spec() {
     assert_eq!(ids(second), vec![a], "limit and offset page the album");
     assert!(!page(&catalog, album.id, SortSpec::default()).contains(&outsider));
 }
+
+#[test]
+fn create_album_with_adds_members_in_one_transaction() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let a = plain(&catalog, "/lib/a.mp4");
+    let b = plain(&catalog, "/lib/b.mp4");
+    let album = catalog
+        .create_album_with("Picks", &[a, b, MediaId(9_999)])
+        .unwrap();
+    assert_eq!(
+        album_members(&catalog, album.id),
+        vec![a, b],
+        "the selected items are members; an unknown id is skipped"
+    );
+
+    // A member insert that fails takes the new album row with it.
+    catalog
+        .conn
+        .lock()
+        .execute_batch(
+            "CREATE TEMP TRIGGER no_members BEFORE INSERT ON album_items
+             BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+        )
+        .unwrap();
+    assert!(catalog.create_album_with("Lost", &[a]).is_err());
+    let titles: Vec<String> = catalog
+        .list_albums_with_counts()
+        .unwrap()
+        .into_iter()
+        .map(|(album, _)| album.title)
+        .collect();
+    assert_eq!(
+        titles,
+        vec!["Picks".to_string()],
+        "a failed member insert leaves no half-made album"
+    );
+}

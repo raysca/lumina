@@ -489,7 +489,7 @@ fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) 
 }
 
 /// Label and icon colour of a sidebar row.
-fn text_color(is_active: bool) -> Rgba {
+pub(super) fn text_color(is_active: bool) -> Rgba {
     if is_active {
         theme::selection_fg()
     } else {

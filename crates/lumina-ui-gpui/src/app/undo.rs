@@ -4,12 +4,14 @@
 //! ratings, color labels, favorites, captions, tags, trash/restore, rotation,
 //! quick edits (exposure, auto-enhance, Revert to Original),
 //! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
-//! and smart-album rules), and smart album deletion.
+//! and smart-album rules), smart album deletion, and album rename and deletion.
 //! Permanent deletion is intentionally excluded.
 
 use anyhow::Result;
 use gpui::*;
-use lumina_core::{Edits, LuminaEngine, MediaId, SmartAlbum, TagChange, TagReplay, TemplateChange};
+use lumina_core::{
+    Album, Edits, LuminaEngine, MediaId, SmartAlbum, TagChange, TagReplay, TemplateChange,
+};
 
 use crate::app::tag_undo::TagViewRefs;
 use crate::app::LuminaApp;
@@ -86,6 +88,15 @@ pub enum UndoAction {
     BatchLocation { changes: Vec<BatchLocationChange> },
     /// A deleted smart album; undo restores it under the same id.
     SmartAlbumDeleted { album: SmartAlbum },
+    /// An album renamed in the sidebar.
+    AlbumRenamed {
+        id: i64,
+        before: String,
+        after: String,
+    },
+    /// A deleted album and every member it had; undo restores both under
+    /// the same id (members purged since are skipped).
+    AlbumDeleted { album: Album, members: Vec<MediaId> },
     /// One metadata template apply: undo restores every item's rights and
     /// removes only the keywords the apply added.
     Template { change: TemplateChange },
@@ -140,6 +151,8 @@ impl UndoAction {
             UndoAction::Rotation { .. }
             | UndoAction::Edits { .. }
             | UndoAction::SmartAlbumDeleted { .. }
+            | UndoAction::AlbumRenamed { .. }
+            | UndoAction::AlbumDeleted { .. }
             | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
             UndoAction::TagRows { change, .. } => change.affected_ids(),
@@ -166,6 +179,8 @@ impl UndoAction {
             UndoAction::BatchDate { .. } => "batch date",
             UndoAction::BatchLocation { .. } => "batch location",
             UndoAction::SmartAlbumDeleted { .. } => "smart album delete",
+            UndoAction::AlbumRenamed { .. } => "album rename",
+            UndoAction::AlbumDeleted { .. } => "album delete",
             UndoAction::Template { .. } => "template",
             UndoAction::TemplateDeleted { .. } => "template delete",
             UndoAction::TagRows { label, .. } => label,
@@ -247,6 +262,22 @@ impl UndoAction {
                     engine.restore_smart_album(album)
                 } else {
                     engine.delete_smart_album(album.id).map(|_| ())
+                }
+            }
+            UndoAction::AlbumRenamed {
+                id,
+                before: b,
+                after: a,
+            } => match engine.rename_album(*id, if before { b } else { a }) {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(anyhow::anyhow!("the album no longer exists")),
+                Err(err) => Err(err),
+            },
+            UndoAction::AlbumDeleted { album, members } => {
+                if before {
+                    engine.restore_album(album, members)
+                } else {
+                    engine.delete_album(album.id).map(|_| ())
                 }
             }
             UndoAction::Template { change } => engine.replay_template_change(change, before),
@@ -385,12 +416,19 @@ impl LuminaApp {
         };
         match action.apply(&engine, before) {
             Ok(skipped) => {
-                // Redoing a smart album delete must not leave the view on it.
-                if let (UndoAction::SmartAlbumDeleted { album }, false) = (action, before) {
-                    if self.selection == AlbumSelection::User(album.id) {
-                        self.selection = AlbumSelection::AllLibrary;
-                        self.clear_selection(cx);
+                // Redoing an album delete must not leave the view on it.
+                let deleted = match (action, before) {
+                    (UndoAction::SmartAlbumDeleted { album }, false) => {
+                        Some(AlbumSelection::User(album.id))
                     }
+                    (UndoAction::AlbumDeleted { album, .. }, false) => {
+                        Some(AlbumSelection::Album(album.id))
+                    }
+                    _ => None,
+                };
+                if deleted.as_ref() == Some(&self.selection) {
+                    self.selection = AlbumSelection::AllLibrary;
+                    self.clear_selection(cx);
                 }
                 let edited: Vec<MediaId> = match action {
                     UndoAction::Rotation { changes } => changes.iter().map(|c| c.0).collect(),

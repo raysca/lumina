@@ -628,6 +628,11 @@ impl LuminaEngine {
         self.catalog.create_album(title)
     }
 
+    /// Creates an album holding `members` in one transaction.
+    pub fn create_album_with(&self, title: &str, members: &[MediaId]) -> Result<Album> {
+        self.catalog.create_album_with(title, members)
+    }
+
     /// Renames an album; false when it no longer exists.
     pub fn rename_album(&self, id: i64, title: &str) -> Result<bool> {
         self.catalog.rename_album(id, title)

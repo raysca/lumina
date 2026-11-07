@@ -50,16 +50,32 @@ fn album_title(title: &str) -> Result<String> {
 impl Catalog {
     /// Creates an empty album.
     pub fn create_album(&self, title: &str) -> Result<Album> {
+        self.create_album_with(title, &[])
+    }
+
+    /// Creates an album holding `members`, in one transaction: a failed
+    /// member insert leaves no album behind. Ids no longer in the catalog
+    /// are skipped.
+    pub fn create_album_with(&self, title: &str, members: &[MediaId]) -> Result<Album> {
         let title = album_title(title)?;
         let now_ms = Utc::now().timestamp_millis();
-        let conn = self.conn.lock();
-        let id = conn
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let id = tx
             .query_row(
                 "INSERT INTO albums (title, created_at_epoch_ms) VALUES (?1, ?2) RETURNING id;",
                 params![title, now_ms],
                 |row| row.get(0),
             )
             .context("creating an album")?;
+        {
+            let mut stmt = tx.prepare_cached(INSERT_MEMBER_SQL)?;
+            for media in members {
+                stmt.execute(params![id, media.0 as i64])
+                    .context("adding to the new album")?;
+            }
+        }
+        tx.commit()?;
         Ok(Album {
             id,
             title,

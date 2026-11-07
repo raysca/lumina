@@ -1,5 +1,5 @@
 use gpui::*;
-use lumina_core::{EngineEvent, LuminaEngine, MediaId, MediaItem, SmartAlbum, SystemAlbum};
+use lumina_core::{Album, EngineEvent, LuminaEngine, MediaId, MediaItem, SmartAlbum, SystemAlbum};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -16,10 +16,17 @@ use crate::views::grid::GridState;
 use crate::views::sidebar::AlbumSelection;
 
 /// Maps the persisted view onto the current library, falling back to All when
-/// the saved user smart album no longer exists.
-fn resolve_restored_view(view: LastView, user_albums: &[SmartAlbum]) -> AlbumSelection {
+/// the saved smart album or album no longer exists.
+fn resolve_restored_view(
+    view: LastView,
+    user_albums: &[SmartAlbum],
+    albums: &[Album],
+) -> AlbumSelection {
     match view {
         LastView::User(id) if !user_albums.iter().any(|album| album.id == id) => {
+            AlbumSelection::AllLibrary
+        }
+        LastView::Album(id) if !albums.iter().any(|album| album.id == id) => {
             AlbumSelection::AllLibrary
         }
         view => view.to_selection(),
@@ -546,6 +553,7 @@ impl LuminaApp {
         self.selection = AlbumSelection::AllLibrary;
         // Album ids restart with each library.
         self.album_draft.confirm_delete = None;
+        self.albums = Default::default();
         // An import belongs to the library it was started in.
         self.abandon_import(cx);
         self.search_query.clear();
@@ -653,6 +661,7 @@ impl LuminaApp {
             }
             AlbumSelection::System(album) => self.system_album_counts.get(album).copied(),
             AlbumSelection::User(id) => self.user_album_counts.get(id).copied(),
+            AlbumSelection::Album(id) => self.albums.counts.get(id).copied(),
             AlbumSelection::Trash => self
                 .system_album_counts
                 .get(&SystemAlbum::RecentlyDeleted)
@@ -844,7 +853,8 @@ impl LuminaApp {
             return;
         }
 
-        self.selection = resolve_restored_view(restored.view, &self.user_smart_albums);
+        self.selection =
+            resolve_restored_view(restored.view, &self.user_smart_albums, &self.albums.list);
         self.search_query = restored.search_query;
         // A session saved before D11 can hold an album with a query. The
         // trail is reset below, so no Back step is needed.
@@ -968,6 +978,8 @@ impl LuminaApp {
             }
             self.user_album_counts = usr;
             self.user_smart_albums = albums;
+            let engine = engine.clone();
+            self.refresh_albums(&engine);
             self.library_tag_counts = engine.query_tag_counts();
             self.untagged_count = engine.query_untagged_count();
             self.duplicate_items_count = engine.query_duplicate_count();
@@ -1159,12 +1171,12 @@ mod restore_tests {
     #[core::prelude::v1::test]
     fn removed_user_album_falls_back_to_all() {
         assert_eq!(
-            resolve_restored_view(LastView::User(7), &[]),
+            resolve_restored_view(LastView::User(7), &[], &[]),
             AlbumSelection::AllLibrary,
             "a removed smart album must not restore a phantom view"
         );
         assert_eq!(
-            resolve_restored_view(LastView::User(7), &[user_album(7)]),
+            resolve_restored_view(LastView::User(7), &[user_album(7)], &[]),
             AlbumSelection::User(7),
             "an existing smart album restores its view"
         );
@@ -1173,7 +1185,7 @@ mod restore_tests {
     #[core::prelude::v1::test]
     fn tag_view_restores_without_a_user_album() {
         assert_eq!(
-            resolve_restored_view(LastView::Tag("travel".to_string()), &[]),
+            resolve_restored_view(LastView::Tag("travel".to_string()), &[], &[]),
             AlbumSelection::Tag("travel".to_string()),
             "tag views do not depend on smart album ids"
         );

@@ -450,6 +450,8 @@ pub struct LuminaApp {
     pub system_album_counts: HashMap<SystemAlbum, usize>,
     pub user_album_counts: HashMap<i64, usize>,
     pub user_smart_albums: Vec<SmartAlbum>,
+    /// Hand-picked albums in the sidebar.
+    pub albums: crate::app::albums::AlbumsState,
     pub library_tag_counts: Vec<(String, usize)>,
     /// Cached count of active media with no tags, shown by the Untagged row.
     pub untagged_count: usize,
@@ -641,6 +643,7 @@ impl LuminaApp {
             system_album_counts: HashMap::new(),
             user_album_counts: HashMap::new(),
             user_smart_albums: Vec::new(),
+            albums: Default::default(),
             library_tag_counts: Vec::new(),
             untagged_count: 0,
             duplicate_items_count: 0,

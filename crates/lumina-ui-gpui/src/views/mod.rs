@@ -1,4 +1,5 @@
 pub mod album_builder;
+pub mod album_delete;
 pub mod command_palette;
 pub mod context_menu;
 pub mod delete_modal;

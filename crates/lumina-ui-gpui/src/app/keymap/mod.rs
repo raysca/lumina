@@ -168,6 +168,17 @@ impl LuminaApp {
             return;
         }
 
+        // ⌘N: New Album (always empty, in rename mode)
+        if cmd_or_ctrl
+            && !ctrl_cmd
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.shift
+            && key.eq_ignore_ascii_case("n")
+        {
+            self.new_album(cx);
+            return;
+        }
+
         // ⌥⌘U: Import Video from URL…
         if cmd_or_ctrl && keystroke.modifiers.alt && key.eq_ignore_ascii_case("u") {
             self.open_network_import_dialog(cx);

@@ -38,6 +38,8 @@ pub(crate) enum TextTarget {
     Location,
     Caption,
     TagRename,
+    /// An album's name in the sidebar.
+    AlbumRename,
     TagManagerRename,
     TagManagerAlias,
     TagManagerSearch,
@@ -75,6 +77,7 @@ impl TextTarget {
             ),
             Caption => ("Type caption... (Enter to save, Esc to cancel)", "Caption"),
             TagRename | TagManagerRename => ("", "Tag name"),
+            AlbumRename => ("", "Album name"),
             TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
             TagManagerSearch => ("Filter tags by name…", "Filter tags"),
             Search => ("", "Search"),
@@ -491,6 +494,7 @@ impl LuminaApp {
             || self.preferences_open
             || self.delete_confirm_state.is_some()
             || self.album_draft.confirm_delete.is_some()
+            || self.albums.confirm_delete.is_some()
             || self.import.dialog.is_some()
         {
             return None;
@@ -525,6 +529,8 @@ impl LuminaApp {
             Caption
         } else if self.editing_tag.is_some() {
             TagRename
+        } else if self.albums.renaming.is_some() {
+            AlbumRename
         } else if self.tag_manager.open {
             if self.tag_manager.editing.is_some() {
                 TagManagerRename
@@ -556,6 +562,7 @@ impl LuminaApp {
             Location => &mut self.caption.location_input_buffer,
             Caption => &mut self.caption.input_buffer,
             TagRename => &mut self.editing_tag_buffer,
+            AlbumRename => &mut self.albums.rename_buffer,
             TagManagerRename => &mut self.tag_manager.editing_buffer,
             TagManagerAlias => &mut self.tag_manager.alias_buffer,
             TagManagerSearch => &mut self.tag_manager.search,
@@ -580,7 +587,7 @@ impl LuminaApp {
     fn text_limit(&self, target: TextTarget) -> usize {
         use TextTarget::*;
         match target {
-            Tag | TagRename | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
+            Tag | TagRename | AlbumRename | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
             Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             _ => MAX_TEXT_CHARS,

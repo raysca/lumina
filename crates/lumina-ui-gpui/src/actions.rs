@@ -20,6 +20,7 @@ actions!(
         ImportNetworkVideo,
         ToggleDownloads,
         NewSmartAlbum,
+        NewAlbum,
         GoBack,
         GoForward,
         RotateLeft,
