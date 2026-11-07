@@ -15,6 +15,7 @@ mod immersive_hud;
 mod import;
 mod inspector;
 mod interaction;
+mod keyword_undo;
 mod keywords;
 mod legacy_catalog;
 mod missing;

@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{
     Catalog, DeletionTarget, DownloadRow, DownloadState, PriorDownload, Rights, TagChange,
-    TemplateChange, SCHEMA_VERSION,
+    TagReplay, TemplateChange, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -1582,6 +1582,13 @@ impl LuminaEngine {
     /// [`Catalog::delete_tags_globally`].
     pub fn delete_tags_globally(&self, tags: &[String]) -> Result<TagChange> {
         self.catalog.delete_tags_globally(tags)
+    }
+
+    /// Undoes (`before = true`) or redoes a global keyword change; returns
+    /// what it left alone because it changed since. See
+    /// [`Catalog::replace_tag_rows`].
+    pub fn apply_tag_rows(&self, change: &TagChange, before: bool) -> Result<TagReplay> {
+        self.catalog.replace_tag_rows(change, before)
     }
 
     /// Merges a keyword into another; see [`Catalog::merge_tags`].

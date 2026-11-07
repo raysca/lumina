@@ -92,7 +92,8 @@ core handles cataloguing, decoding, and search.
   day), and an imported date or place survives
   a rescan like an edit.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
-  titles, tag add/remove, metadata templates, and trash/restore. Metadata
+  titles, tag add/remove, global tag rename/merge/delete (one step even for a
+  bulk delete), metadata templates, and trash/restore. Metadata
   edits also refresh the item's XMP sidecar automatically; permanent deletion
   is deliberately not undoable.
 - **Editable metadata & XMP import** — click the title, date-taken or coordinate

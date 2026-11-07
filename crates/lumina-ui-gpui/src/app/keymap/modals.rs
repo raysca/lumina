@@ -306,6 +306,17 @@ impl LuminaApp {
                 return true;
             }
 
+            // ⌘Z / ⇧⌘Z: rename, merge and delete happen here, so their undo
+            // must too. The history step reloads the counts and detail panel.
+            if cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
+                if keystroke.modifiers.shift {
+                    self.redo_last(cx);
+                } else {
+                    self.undo_last(cx);
+                }
+                return true;
+            }
+
             // ⇧⌘A alias and ⇧⌘M Move to… for the focused keyword; before
             // ⌘A / ⌘M, which ignore ⇧.
             if cmd_or_ctrl && keystroke.modifiers.shift && key == "a" {

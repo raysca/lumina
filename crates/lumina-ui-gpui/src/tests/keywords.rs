@@ -11,12 +11,12 @@ use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::{LuminaEngine, MediaId};
 
-fn tag(engine: &LuminaEngine, id: MediaId, tags: &[&str]) {
+pub(super) fn tag(engine: &LuminaEngine, id: MediaId, tags: &[&str]) {
     let tags: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
     engine.add_tags_batch(&[id], &tags).unwrap();
 }
 
-fn open_manager(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
+pub(super) fn open_manager(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
     view.update(vcx, |app, cx| {
         app.refresh_album_counts();
         app.open_tag_manager(cx);
@@ -40,7 +40,7 @@ fn select_first(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> (Media
     })
 }
 
-fn sorted_tags(engine: &LuminaEngine, id: MediaId) -> Vec<String> {
+pub(super) fn sorted_tags(engine: &LuminaEngine, id: MediaId) -> Vec<String> {
     let mut tags = engine.get_tags_for_item(id);
     tags.sort();
     tags

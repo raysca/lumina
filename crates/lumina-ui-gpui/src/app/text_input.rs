@@ -17,8 +17,8 @@
 
 use gpui::base::input::{
     Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
-    InputEditorStyle, InputEvent, InputModeKind, InputState, OutdentInline, Paste, SelectAll,
-    Textarea, TextareaState,
+    InputEditorStyle, InputEvent, InputModeKind, InputState, OutdentInline, Paste, Redo, SelectAll,
+    Textarea, TextareaState, Undo,
 };
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
@@ -422,7 +422,10 @@ impl LuminaApp {
             return;
         };
         if secondary {
-            keystroke.modifiers = Modifiers::secondary_key(cx);
+            // Added to the parsed ones, so `secondary-shift-z` keeps ⇧.
+            let platform = Modifiers::secondary_key(cx);
+            keystroke.modifiers.platform |= platform.platform;
+            keystroke.modifiers.control |= platform.control;
         }
         cx.stop_propagation();
         let event = KeyDownEvent {
@@ -639,8 +642,8 @@ impl LuminaApp {
     }
 }
 
-/// Sends Tab to the keymap (smart-album focus), and Backspace in an empty field (it removes the last
-/// tag) and ⌘V to the app. Each window root that draws fields calls this.
+/// Sends Tab to the keymap (smart-album focus), Backspace in an empty field (it removes the last
+/// tag), ⌘Z/⇧⌘Z in an empty tag filter, and ⌘V to the app. Each window root that draws fields calls this.
 pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     fn always(_: &mut LuminaApp, _: TextTarget) -> bool {
         true
@@ -668,6 +671,14 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     let root = reroute::<Backspace>(root, app, "backspace", empty);
     let root = reroute::<DeleteToBeginningOfLine>(root, app, "secondary-backspace", empty);
     let root = reroute::<SelectAll>(root, app, "secondary-a", tag_filter);
+    // ⌘Z / ⇧⌘Z in an empty tag filter undo the catalog (rename, merge,
+    // delete happen in that sheet); with text they edit the filter.
+    fn empty_tag_filter(app: &mut LuminaApp, target: TextTarget) -> bool {
+        tag_filter(app, target) && empty(app, target)
+    }
+
+    let root = reroute::<Undo>(root, app, "secondary-z", empty_tag_filter);
+    let root = reroute::<Redo>(root, app, "secondary-shift-z", empty_tag_filter);
     let app = app.clone();
     root.capture_action(move |_: &Paste, window, cx| {
         app.update(cx, |app, cx| app.paste_into_field(window, cx));

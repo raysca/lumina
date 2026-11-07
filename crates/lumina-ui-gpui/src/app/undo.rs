@@ -2,13 +2,15 @@
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
 //! ratings, color labels, favorites, captions, tags, trash/restore, metadata
-//! template applies, and smart album deletion.
-//! Permanent deletion and global tag rename/merge are intentionally excluded.
+//! template applies, global keyword rename/merge/delete (exact rows, aliases
+//! and smart-album rules), and smart album deletion.
+//! Permanent deletion is intentionally excluded.
 
 use anyhow::Result;
 use gpui::*;
-use lumina_core::{LuminaEngine, MediaId, SmartAlbum, TemplateChange};
+use lumina_core::{LuminaEngine, MediaId, SmartAlbum, TagChange, TagReplay, TemplateChange};
 
+use crate::app::tag_undo::TagViewRefs;
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
@@ -79,6 +81,19 @@ pub enum UndoAction {
     /// One metadata template apply: undo restores every item's rights and
     /// removes only the keywords the apply added.
     Template { change: TemplateChange },
+    /// A global keyword rename, merge or delete (one entry for a bulk
+    /// delete or a multi-tag merge): undo puts back the exact rows, aliases
+    /// and smart-album rules.
+    TagRows {
+        label: &'static str,
+        change: TagChange,
+        /// The view before the op and right after it; see [`TagViewRefs`].
+        view_before: TagViewRefs,
+        view_after: TagViewRefs,
+        /// True for a rename or move onto a new path: the tag view holds the
+        /// same items on both sides, so grid positions stay valid.
+        keeps_positions: bool,
+    },
     /// A deleted metadata template (user config, not the catalog); undo
     /// puts it back at `index`.
     TemplateDeleted {
@@ -115,6 +130,7 @@ impl UndoAction {
             UndoAction::Tags { ids, .. } => ids.clone(),
             UndoAction::SmartAlbumDeleted { .. } | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
+            UndoAction::TagRows { change, .. } => change.affected_ids(),
         }
     }
 
@@ -138,19 +154,15 @@ impl UndoAction {
             UndoAction::SmartAlbumDeleted { .. } => "smart album delete",
             UndoAction::Template { .. } => "template",
             UndoAction::TemplateDeleted { .. } => "template delete",
+            UndoAction::TagRows { label, .. } => label,
         }
     }
 
-    fn apply_before(&self, engine: &LuminaEngine) -> Result<()> {
-        self.apply(engine, true)
-    }
-
-    fn apply_after(&self, engine: &LuminaEngine) -> Result<()> {
-        self.apply(engine, false)
-    }
-
-    fn apply(&self, engine: &LuminaEngine, before: bool) -> Result<()> {
-        match self {
+    /// Applies one side. Only a keyword change can leave anything alone
+    /// (rows, aliases or albums changed since); every other action reports
+    /// nothing skipped.
+    fn apply(&self, engine: &LuminaEngine, before: bool) -> Result<TagReplay> {
+        let done = match self {
             UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
             UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
             UndoAction::Favorite { changes } => set_bool_changes(changes, before, |ids, value| {
@@ -224,8 +236,21 @@ impl UndoAction {
             UndoAction::Template { change } => engine.replay_template_change(change, before),
             // Config, not the catalog: `apply_history_action` handles it.
             UndoAction::TemplateDeleted { .. } => Ok(()),
-        }
+            UndoAction::TagRows { change, .. } => return engine.apply_tag_rows(change, before),
+        };
+        done.map(|()| TagReplay::default())
     }
+}
+
+/// The toast's note on what a replay left alone, or `""`.
+fn replay_note(skipped: TagReplay) -> String {
+    let kept = |n: usize, one: &str, many: &str| match n {
+        0 => String::new(),
+        1 => format!("; 1 {one} since was kept"),
+        n => format!("; {n} {many} since were kept"),
+    };
+    kept(skipped.aliases, "alias changed", "aliases changed")
+        + &kept(skipped.albums, "smart album edited", "smart albums edited")
 }
 
 /// The `before` or `after` side of (id, before, after) rows.
@@ -275,14 +300,14 @@ impl LuminaApp {
             cx.notify();
             return;
         };
-        if self.apply_history_action(&action, true, cx) {
+        if let Some(note) = self.apply_history_action(&action, true, cx) {
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.redo_stack.push(action);
             self.refresh_after_history(cx);
             self.sync_metadata_sidecars(&affected, cx);
             self.set_last_action(format!("Undid {label}"));
-            self.announce_history(format!("Undid {label}"), false, cx);
+            self.announce_history(format!("Undid {label}{note}"), false, cx);
         } else {
             self.undo.undo_stack.push(action);
         }
@@ -295,7 +320,7 @@ impl LuminaApp {
             cx.notify();
             return;
         };
-        if self.apply_history_action(&action, false, cx) {
+        if let Some(note) = self.apply_history_action(&action, false, cx) {
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.undo_stack.push(action);
@@ -304,7 +329,7 @@ impl LuminaApp {
             self.set_last_action(format!("Redid {label}"));
             // Redo pushes the action back onto the undo stack, so the toast can
             // offer Undo to reverse it again.
-            self.announce_history(format!("Redid {label}"), true, cx);
+            self.announce_history(format!("Redid {label}{note}"), true, cx);
         } else {
             self.undo.redo_stack.push(action);
         }
@@ -326,21 +351,18 @@ impl LuminaApp {
         action: &UndoAction,
         before: bool,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> Option<String> {
         if let UndoAction::TemplateDeleted { index, template } = action {
-            return self.replay_template_delete(*index, template, before, cx);
+            return self
+                .replay_template_delete(*index, template, before, cx)
+                .then(String::new);
         }
         let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
             self.set_error("Open a library before undoing", cx);
-            return false;
+            return None;
         };
-        let result = if before {
-            action.apply_before(&engine)
-        } else {
-            action.apply_after(&engine)
-        };
-        match result {
-            Ok(()) => {
+        match action.apply(&engine, before) {
+            Ok(skipped) => {
                 // Redoing a smart album delete must not leave the view on it.
                 if let (UndoAction::SmartAlbumDeleted { album }, false) = (action, before) {
                     if self.selection == AlbumSelection::User(album.id) {
@@ -352,11 +374,28 @@ impl LuminaApp {
                 if matches!(action, UndoAction::Template { .. }) {
                     self.info_details = None;
                 }
-                true
+                // The tag manager's detail grid lists the focused keyword's
+                // items; counts and aliases reload in refresh_after_history.
+                if let UndoAction::TagRows {
+                    view_before,
+                    view_after,
+                    keeps_positions,
+                    ..
+                } = action
+                {
+                    let (from, to) = if before {
+                        (view_after, view_before)
+                    } else {
+                        (view_before, view_after)
+                    };
+                    self.restore_tag_view_refs(from, to, *keeps_positions, cx);
+                    self.load_tag_manager_items();
+                }
+                Some(replay_note(skipped))
             }
             Err(err) => {
                 self.set_error(format!("History action failed: {err}"), cx);
-                false
+                None
             }
         }
     }

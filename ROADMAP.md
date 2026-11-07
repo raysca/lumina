@@ -431,8 +431,9 @@ view, and export without a mouse; no keyboard trap; documented limitations.
 
 **Current:** SQLite migrations and backups, sidecars for title/rating/tags/caption,
 rights, and edited date/location (written and imported), undo, single-instance
-lock, logging, cache eviction. No backup/restore UI; global tag operations are
-outside undo.
+lock, logging, cache eviction. Global tag rename, merge and delete undo as one
+step each (exact rows, aliases and smart-album rules; albums edited since are
+kept). No backup/restore UI.
 
 **Target:**
 
@@ -440,7 +441,7 @@ outside undo.
 - Catalog backup/restore UI and an integrity report.
 - Library health check: missing files, unreadable sidecars, FTS consistency,
   stale cache.
-- Undo coverage for global tag operations and batch edits.
+- Undo coverage for the remaining edits (rotation).
 - Crash-safe recovery prompts after an interrupted import or migration.
 - Diagnostics export and a clear privacy policy for logs.
 

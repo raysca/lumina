@@ -1,6 +1,7 @@
 use gpui::*;
 use lumina_core::catalog::keywords::{normalize_path, subtree_suffix};
 use lumina_core::text::{clean_text, MAX_NAME_CHARS};
+use lumina_core::TagChange;
 
 use crate::app::types::TagSortOrder;
 use crate::app::LuminaApp;
@@ -267,6 +268,7 @@ impl LuminaApp {
                 return;
             };
             if clean_new != old_tag {
+                let keeps_positions = self.keyword_is_unused(&clean_new);
                 let result = match self.grid_state.as_ref() {
                     Some(state) => state.engine.rename_tag(&old_tag, &clean_new),
                     None => Ok(Default::default()),
@@ -276,12 +278,15 @@ impl LuminaApp {
                     return;
                 };
                 self.sync_metadata_sidecars(&change.affected_ids(), cx);
+                let view_before = self.tag_view_refs();
                 self.retarget_tag_refs(&old_tag, Some(&clean_new), cx);
+                let recorded =
+                    self.push_tag_rows_undo("tag rename", change, view_before, keeps_positions);
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
                 let message = format!("Renamed tag to \"{}\"", clean_new);
                 self.set_last_action(message.clone());
-                self.show_toast(message, cx);
+                self.tag_rows_toast(recorded, message, cx);
             }
         }
         cx.notify();
@@ -306,13 +311,18 @@ impl LuminaApp {
             return;
         };
         self.sync_metadata_sidecars(&change.affected_ids(), cx);
+        let view_before = self.tag_view_refs();
         // The delete succeeded, so nothing may keep pointing at a keyword
         // (or a child of it) that no longer exists in the catalog.
         self.retarget_tag_refs(&clean, None, cx);
+        let recorded = self.push_tag_rows_undo("tag delete", change, view_before, false);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         // A deleted child changes the focused keyword's count.
         self.load_tag_manager_items();
+        if recorded {
+            self.show_undo_toast(format!("Deleted tag \"{clean}\""), cx);
+        }
         cx.notify();
     }
 
@@ -441,6 +451,7 @@ impl LuminaApp {
                 return;
             };
             if new_tag != old_tag.to_lowercase() {
+                let keeps_positions = self.keyword_is_unused(&new_tag);
                 let result = match self.grid_state.as_ref() {
                     Some(state) => state.engine.rename_tag(&old_tag, &new_tag),
                     None => Ok(Default::default()),
@@ -450,7 +461,10 @@ impl LuminaApp {
                     return;
                 };
                 self.sync_metadata_sidecars(&change.affected_ids(), cx);
+                let view_before = self.tag_view_refs();
                 self.retarget_tag_refs(&old_tag, Some(&new_tag), cx);
+                let label = if moved { "keyword move" } else { "tag rename" };
+                let recorded = self.push_tag_rows_undo(label, change, view_before, keeps_positions);
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
                 // A move onto an existing keyword merges, so recount.
@@ -460,7 +474,7 @@ impl LuminaApp {
                 } else {
                     t("tags.renamed_to")
                 };
-                self.show_toast(message.replace("{path}", &new_tag), cx);
+                self.tag_rows_toast(recorded, message.replace("{path}", &new_tag), cx);
             }
             cx.notify();
         }
@@ -499,7 +513,9 @@ impl LuminaApp {
             .collect();
         sources.sort();
         let mut merged = 0;
-        let mut affected = Vec::new();
+        // Every merge folds into one change, so one undo reverses them all.
+        let mut combined = TagChange::default();
+        let view_before = self.tag_view_refs();
         for source in &sources {
             let result = match self.grid_state.as_ref() {
                 Some(state) => state.engine.merge_tags(source, &target),
@@ -510,21 +526,23 @@ impl LuminaApp {
             let Some(change) = self.apply_tag_mutation("Could not merge tags", result, cx) else {
                 break;
             };
-            affected.extend(change.affected_ids());
+            combined.then(change);
             merged += 1;
             self.retarget_tag_refs(source, Some(&target), cx);
         }
         if merged == sources.len() {
             self.tag_manager.selected.clear();
         }
-        // sync_metadata_sidecars rewrites each id from the catalog, so an id
-        // listed twice costs one extra write, never a wrong sidecar.
-        self.sync_metadata_sidecars(&affected, cx);
+        self.sync_metadata_sidecars(&combined.affected_ids(), cx);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         self.focus_tag_manager_tag(target.clone(), cx);
+        // On a failure part way the merges before it are committed: they
+        // still undo as one step.
+        let recorded = self.push_tag_rows_undo("tag merge", combined, view_before, false);
         if merged > 0 {
-            self.show_toast(format!("Merged {merged} tag(s) into \"{target}\""), cx);
+            let message = format!("Merged {merged} tag(s) into \"{target}\"");
+            self.tag_rows_toast(recorded, message, cx);
         }
         cx.notify();
     }
@@ -563,14 +581,23 @@ impl LuminaApp {
             return;
         };
         self.sync_metadata_sidecars(&change.affected_ids(), cx);
-
+        let view_before = self.tag_view_refs();
         for tag in &deleted {
             self.retarget_tag_refs(tag, None, cx);
         }
+        // One transaction, so one undo entry for all N tags.
+        let recorded = self.push_tag_rows_undo("tag delete", change, view_before, false);
         self.refresh_selected_tags();
         self.refresh_album_counts();
         // A deleted child changes the focused keyword's count.
         self.load_tag_manager_items();
+        if recorded {
+            let message = match deleted.len() {
+                1 => format!("Deleted tag \"{}\"", deleted[0]),
+                n => format!("Deleted {n} tags"),
+            };
+            self.show_undo_toast(message, cx);
+        }
         cx.notify();
     }
 }

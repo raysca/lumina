@@ -25,6 +25,7 @@ pub mod search;
 pub mod smart_draft;
 pub mod sort;
 pub mod state;
+pub mod tag_undo;
 pub mod tags;
 pub mod templates;
 pub mod text_input;
