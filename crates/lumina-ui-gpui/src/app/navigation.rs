@@ -199,60 +199,6 @@ impl LuminaApp {
 }
 
 impl LuminaApp {
-    /// Rates the selection (0 clears); `false` when nothing is selected or
-    /// the write failed.
-    pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) -> bool {
-        let ids = self.get_selected_ids();
-        if ids.is_empty() {
-            return false;
-        }
-        let rating = rating.min(5);
-        // Re-applying a rating every item already has clears it; otherwise the
-        // whole selection gets that rating (a mixed selection never toggles).
-        let new_r = if ids
-            .iter()
-            .all(|id| self.item_ratings.get(id).copied().unwrap_or(0) == rating)
-        {
-            0
-        } else {
-            rating
-        };
-        let changes: Vec<(MediaId, u8, u8)> = ids
-            .iter()
-            .map(|id| (*id, self.item_ratings.get(id).copied().unwrap_or(0), new_r))
-            .filter(|(_, before, after)| before != after)
-            .collect();
-        if changes.is_empty() {
-            cx.notify();
-            return true;
-        }
-        let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
-        let held = self.hold_selection(&ids, writes.len());
-        if let Some(state) = self.grid_state.as_ref() {
-            if let Err(err) = state.engine.set_ratings(&writes) {
-                self.set_error(format!("Could not save rating: {err:#}"), cx);
-                return false;
-            }
-        }
-        set_or_clear(&mut self.item_ratings, &writes);
-        self.reselect_held(held, cx);
-        let shown = self.selected_item.as_ref().map(|item| item.id);
-        self.mark_pop.rated(shown, rating);
-        let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
-        self.push_undo(UndoAction::Rating { changes });
-        self.sync_metadata_sidecars(&changed, cx);
-        self.refresh_counts_if_rules_use(lumina_core::RuleField::Rating);
-        self.show_undo_toast(
-            if new_r == 0 {
-                "Rating cleared".to_string()
-            } else {
-                format!("Rated {} item(s)", changed.len())
-            },
-            cx,
-        );
-        true
-    }
-
     /// Gives each selected item `label`, or clears it on items that already
     /// have it: one write, one undo entry and one sidecar pass per batch.
     pub fn set_color_label_selected(&mut self, label: u8, cx: &mut Context<Self>) {
@@ -1526,7 +1472,10 @@ fn format_batch_timestamp(epoch_ms: i64) -> String {
 }
 
 /// Applies (id, value) writes to a 0-means-unset map.
-fn set_or_clear(map: &mut std::collections::HashMap<MediaId, u8>, writes: &[(MediaId, u8)]) {
+pub(crate) fn set_or_clear(
+    map: &mut std::collections::HashMap<MediaId, u8>,
+    writes: &[(MediaId, u8)],
+) {
     for &(id, value) in writes {
         if value == 0 {
             map.remove(&id);

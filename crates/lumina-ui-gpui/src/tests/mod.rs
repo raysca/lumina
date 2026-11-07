@@ -5,6 +5,7 @@ mod albums_delete;
 mod albums_pinned;
 mod batch_edit;
 mod browser;
+mod compare;
 mod culling;
 mod culling_delete;
 mod culling_filtered;

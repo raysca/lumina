@@ -37,6 +37,26 @@ pub(crate) struct HeldSelection {
     in_view: bool,
 }
 
+impl HeldSelection {
+    /// Another write of `n` items before [`LuminaApp::reselect_held`]: rows
+    /// may now be `n` further from where they were held.
+    pub(crate) fn widen(&mut self, n: usize) {
+        self.moved += n;
+    }
+
+    /// Rows `lo..=hi` of a view of `count` rows that can hold the held
+    /// items, or `None` when the selection was never this view's or the
+    /// view is empty.
+    pub(crate) fn window(&self, count: usize) -> Option<(usize, usize)> {
+        let (lo, hi) = self.span.filter(|_| self.in_view && count > 0)?;
+        let last = count - 1;
+        Some((
+            lo.saturating_sub(self.moved).min(last),
+            (hi + self.moved).min(last),
+        ))
+    }
+}
+
 impl LuminaApp {
     /// The selection (`ids`, from `get_selected_ids`) by identity, before a
     /// write that changes `moved` items, while positions are still valid.

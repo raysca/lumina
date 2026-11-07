@@ -11,7 +11,7 @@ use lumina_core::{Flag, LuminaEngine, MediaId};
 
 /// A library of `n` items, all rejected, shown through Show Rejected (plus
 /// one unflagged item the filter hides). Returns the rejects in view order.
-fn rejects_view<'a>(
+pub(super) fn rejects_view<'a>(
     cx: &'a mut gpui::TestAppContext,
     prefix: &str,
     n: usize,

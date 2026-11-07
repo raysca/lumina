@@ -489,6 +489,8 @@ pub struct LuminaApp {
     pub undo: crate::app::undo::UndoState,
     /// Edit mode and the edited-ids cache behind the grid badge.
     pub edits: crate::app::quick_edit::QuickEdits,
+    /// Compare / survey mode; `None` when it is closed.
+    pub(crate) compare: Option<crate::app::present::CompareState>,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
     /// Bumped per opened library; see `UiMessage::LibraryEvent`.
     pub(crate) library_generation: u64,
@@ -672,6 +674,7 @@ impl LuminaApp {
             caption: CaptionState::default(),
             undo: crate::app::undo::UndoState::default(),
             edits: Default::default(),
+            compare: None,
             event_receiver_thread: None,
             library_generation: 0,
             active_view: Default::default(),

@@ -23,6 +23,7 @@ pub mod network_import;
 pub mod panels;
 pub mod pip;
 pub mod preferences;
+pub mod present;
 pub mod quick_edit;
 pub mod recents;
 pub mod render;

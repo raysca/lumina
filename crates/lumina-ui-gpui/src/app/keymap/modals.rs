@@ -515,6 +515,12 @@ impl LuminaApp {
             return true;
         }
 
+        // 6c. Compare: after every sheet and field above, before the toast's
+        // Esc and every global shortcut, which it absorbs (app/present.rs).
+        if self.handle_compare_key(keystroke, cx) {
+            return true;
+        }
+
         // 7. Dismiss a visible toast from the keyboard.
         //
         // This sits after every modal and inline-editor branch above, so those

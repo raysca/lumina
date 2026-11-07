@@ -18,7 +18,7 @@ use crate::app::tag_undo::TagViewRefs;
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
-const MAX_UNDO: usize = 100;
+pub(crate) const MAX_UNDO: usize = 100;
 
 use lumina_core::Coordinates;
 /// One (id, before, after) row in a grouped batch location edit.
@@ -137,6 +137,9 @@ pub enum UndoAction {
 pub struct UndoState {
     pub undo_stack: Vec<UndoAction>,
     pub redo_stack: Vec<UndoAction>,
+    /// Rows every push, undo and redo could have moved, summed; it only
+    /// grows (compare's held selection widens by its difference).
+    pub moves: usize,
 }
 
 impl UndoAction {
@@ -363,6 +366,7 @@ impl LuminaApp {
         if self.undo.undo_stack.len() >= MAX_UNDO {
             self.undo.undo_stack.remove(0);
         }
+        self.undo.moves += crate::app::present::history_moves(&action);
         self.undo.undo_stack.push(action);
         self.undo.redo_stack.clear();
     }
@@ -376,6 +380,7 @@ impl LuminaApp {
         if let Some(note) = self.apply_history_action(&action, true, cx) {
             let label = action.label();
             let affected = action.affected_ids();
+            self.undo.moves += crate::app::present::history_moves(&action);
             self.undo.redo_stack.push(action);
             self.refresh_after_history(cx);
             self.sync_metadata_sidecars(&affected, cx);
@@ -396,6 +401,7 @@ impl LuminaApp {
         if let Some(note) = self.apply_history_action(&action, false, cx) {
             let label = action.label();
             let affected = action.affected_ids();
+            self.undo.moves += crate::app::present::history_moves(&action);
             self.undo.undo_stack.push(action);
             self.refresh_after_history(cx);
             self.sync_metadata_sidecars(&affected, cx);

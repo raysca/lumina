@@ -53,6 +53,8 @@ pub enum CommandId {
     Flag(lumina_core::Flag),
     /// The current view's rejects, to the Delete dialog.
     DeleteRejected,
+    /// Compare / survey of the 2-9 selected items (C in the grid).
+    Compare,
     ToggleFavorite,
     /// Quarter turn of the viewer item or the selected stills.
     RotateLeft,
@@ -155,6 +157,7 @@ impl Command {
             Flag(lumina_core::Flag::Reject) => Icon::X,
             Flag(lumina_core::Flag::Unflagged) => Icon::Minus,
             DeleteRejected => Icon::Trash,
+            Compare => Icon::Images,
             ToggleFavorite => Icon::Heart,
             RotateLeft => Icon::RotateCcw,
             RotateRight => Icon::RotateCw,
@@ -500,6 +503,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.delete_rejected",
             shortcut: "",
             keywords: "flag cull reject rejects rejected trash remove",
+        },
+        Command {
+            id: CommandId::Compare,
+            key: "command.compare",
+            shortcut: "C",
+            keywords: "compare survey side by side cull",
         },
         Command {
             id: CommandId::ToggleFavorite,
@@ -907,6 +916,7 @@ impl LuminaApp {
             CommandId::DeleteRejected => {
                 self.grid_state.is_some() && self.view_query().reject_scope().is_some()
             }
+            CommandId::Compare => self.grid_state.is_some() && !self.is_fullscreen_viewer,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
@@ -1208,6 +1218,7 @@ impl LuminaApp {
                 self.set_flag_selected(flag, cx);
             }
             CommandId::DeleteRejected => self.delete_rejected(cx),
+            CommandId::Compare => self.open_compare(cx),
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)
             }

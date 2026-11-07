@@ -60,7 +60,8 @@ minimal; no copy-into-library workflow or drag-and-drop import; tags are flat
 and there is no first-class Untagged view; albums are smart-only (no curated
 static albums); batch editing covers ratings/colors/tags/trash but not
 title/date/location/caption; video lacks resume, chapters, subtitle/audio track
-selection, and scrub previews; no compare, slideshow, or map view; no light
+selection, and scrub previews; no slideshow or map view (compare/survey
+landed in plan 5 C1); no light
 theme; no on-device semantic search; Windows/Linux are planned but unsupported;
 VoiceOver has no GPUI element tree; no in-app update mechanism.
 

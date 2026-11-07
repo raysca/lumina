@@ -43,6 +43,7 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             ),
             MenuItem::action("Toggle Inspector", ToggleInspector),
             MenuItem::action("Show Downloads", ToggleDownloads),
+            MenuItem::action(crate::i18n::t("command.compare"), Compare),
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
         ]),

@@ -24,7 +24,7 @@ pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 impl LuminaApp {
     /// Banner for recoverable failures: alert icon, title and description,
     /// optional Retry, and a bordered dismiss button.
-    fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(message) = self.error_message.clone() else {
             return Empty.into_any_element();
         };
@@ -107,7 +107,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 8] = [
     (
         "GENERAL",
         &[
@@ -151,6 +151,18 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("P / X / U", "Pick / reject / remove flag"),
             ("1–5 / 0", "Rate / clear rating"),
             ("⌫", "Delete…"),
+            ("C", "Compare the selection (2–9)"),
+        ],
+    ),
+    (
+        "COMPARE",
+        &[
+            ("← / → / Tab", "Focus another pane"),
+            ("P / X / U, 0–5", "Flag / rate the focused pane"),
+            ("⌫", "Remove the pane (keeps the file)"),
+            ("Enter", "Open in viewer (Esc returns)"),
+            ("+ / - / Z / ⌘0–⌘4", "Zoom every pane"),
+            ("Esc", "Close compare"),
         ],
     ),
     (
@@ -442,6 +454,9 @@ impl Render for LuminaApp {
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
         let editing = self.edits.session.is_some();
+        // Compare shows (not the viewer opened from it): menu items that act
+        // on the hidden grid selection or open a dialog are disabled.
+        let comparing = self.compare.is_some() && !is_fullscreen_viewer;
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
             cx,
@@ -467,7 +482,7 @@ impl Render for LuminaApp {
             // overlays that take the keys, change media, or leave the photo
             // under the draft. Rotate and Revert go to the draft; Quit and
             // Open Library stay (they discard the draft and say so).
-            .when(!editing, |root| {
+            .when(!editing && !comparing, |root| {
                 root.on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
                     this.open_preferences(cx);
                 }))
@@ -507,6 +522,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
                     this.delete_rejected(cx);
                 }))
+                .on_action(cx.listener(|this, _: &Compare, _w, cx| {
+                    this.open_compare(cx);
+                }))
                 .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
                     this.import_smart_album_rules(cx);
                 }))
@@ -526,18 +544,20 @@ impl Render for LuminaApp {
                     },
                 ))
             })
-            .on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
-                this.rotate_selection(ViewerRotation::Left, cx);
-            }))
-            .on_action(cx.listener(|this, _: &RotateRight, _w, cx| {
-                this.rotate_selection(ViewerRotation::Right, cx);
-            }))
-            .on_action(cx.listener(|this, _: &EditPhoto, _w, cx| {
-                this.enter_edit_mode(cx);
-            }))
-            .on_action(cx.listener(|this, _: &RevertToOriginal, _w, cx| {
-                this.revert_selection_to_original(cx);
-            }))
+            .when(!comparing, |root| {
+                root.on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
+                    this.rotate_selection(ViewerRotation::Left, cx);
+                }))
+                .on_action(cx.listener(|this, _: &RotateRight, _w, cx| {
+                    this.rotate_selection(ViewerRotation::Right, cx);
+                }))
+                .on_action(cx.listener(|this, _: &EditPhoto, _w, cx| {
+                    this.enter_edit_mode(cx);
+                }))
+                .on_action(cx.listener(|this, _: &RevertToOriginal, _w, cx| {
+                    this.revert_selection_to_original(cx);
+                }))
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -673,6 +693,8 @@ impl Render for LuminaApp {
                         Empty.into_any_element()
                     }),
             )
+            // 5b. Compare / survey, under the viewer it can open
+            .child(crate::views::compare::render(self, cx))
             // 6. Fullscreen Detail Viewer Modal
             .child(self.render_viewer_modal(cx))
             // 7. Visual Smart Album Builder Modal

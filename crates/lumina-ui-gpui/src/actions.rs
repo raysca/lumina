@@ -24,6 +24,7 @@ actions!(
         NewAlbum,
         AddToAlbum,
         DeleteRejected,
+        Compare,
         GoBack,
         GoForward,
         RotateLeft,

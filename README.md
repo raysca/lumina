@@ -52,7 +52,11 @@ core handles cataloguing, decoding, and search.
   `is:reject` and `is:unflagged` filter a search, ⌘K "Show Picks" / "Show
   Rejected" add them, and a smart album can match on the flag. File >
   Delete Rejected… (also ⌘K) sends the open view's rejects to the Delete
-  dialog (Move to Trash, undoable, by default).
+  dialog (Move to Trash, undoable, by default). `C` (View > Compare, ⌘K)
+  compares 2–9 selected items side by side, 2×2 or 3×3 with one shared
+  zoom: ←/→ or Tab focus a pane, `P`/`X`/`U` and `0`–`5` mark it, `⌫`
+  takes it out of the comparison (the file stays), `Enter` opens it in the
+  viewer and `Esc` comes back.
 - **Keywords** — a keyword can be a path (`places/usa/new york`). The Tag
   Manager and the sidebar show the tree, each level indented under its
   parent (a parent no item carries directly still gets a row), and filtering

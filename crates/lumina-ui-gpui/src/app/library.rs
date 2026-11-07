@@ -494,6 +494,7 @@ impl LuminaApp {
         }
         // PiP plays media from the library being closed.
         self.close_pip(cx);
+        self.close_compare(cx);
 
         // Tests must never write the user's real config or catalogs: they keep
         // the catalog inside the (temporary) library folder instead.

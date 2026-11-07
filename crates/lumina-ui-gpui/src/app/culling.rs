@@ -28,6 +28,20 @@ impl LuminaApp {
     /// write failed (the banner says why and nothing changes).
     pub fn set_flag_selected(&mut self, flag: Flag, cx: &mut Context<Self>) -> bool {
         let ids = self.get_selected_ids();
+        self.set_flag_on(&ids, flag, true, cx)
+    }
+
+    /// [`Self::set_flag_selected`] on explicit `ids` (compare acts on its
+    /// focused pane, never on the grid selection). `reselect` keeps the grid
+    /// selection on its items when the write reorders the view; compare
+    /// passes `false` so the grid selection is left alone.
+    pub(crate) fn set_flag_on(
+        &mut self,
+        ids: &[MediaId],
+        flag: Flag,
+        reselect: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if ids.is_empty() {
             return false;
         }
@@ -46,7 +60,7 @@ impl LuminaApp {
             return true;
         }
         let writes: Vec<(MediaId, Flag)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
-        let held = self.hold_selection(&ids, writes.len());
+        let held = reselect.then(|| self.hold_selection(ids, writes.len()));
         if !self.flag_write(&writes, cx) {
             return false;
         }
@@ -60,7 +74,9 @@ impl LuminaApp {
         let count = writes.len();
         self.push_undo(UndoAction::Flag { changes });
         // Show Rejected / Show Picks drop the item: keep the selection by id.
-        self.reselect_held(held, cx);
+        if let Some(held) = held {
+            self.reselect_held(held, cx);
+        }
         // A Flag rule, or a saved search on is:pick / is:reject.
         self.refresh_counts_if_rules_use(lumina_core::RuleField::Flag);
         self.show_undo_toast(
@@ -68,6 +84,77 @@ impl LuminaApp {
                 Flag::Pick => format!("Picked {count} item(s)"),
                 Flag::Reject => format!("Rejected {count} item(s)"),
                 Flag::Unflagged => "Flag removed".to_string(),
+            },
+            cx,
+        );
+        true
+    }
+
+    /// Rates the selection (0 clears); `false` when nothing is selected or
+    /// the write failed.
+    pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) -> bool {
+        let ids = self.get_selected_ids();
+        self.set_rating_on(&ids, rating, true, cx)
+    }
+
+    /// [`Self::set_rating_selected`] on explicit `ids`; `reselect` as in
+    /// [`Self::set_flag_on`].
+    pub(crate) fn set_rating_on(
+        &mut self,
+        ids: &[MediaId],
+        rating: u8,
+        reselect: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if ids.is_empty() {
+            return false;
+        }
+        let rating = rating.min(5);
+        // Re-applying a rating every item already has clears it; otherwise the
+        // whole selection gets that rating (a mixed selection never toggles).
+        let new_r = if ids
+            .iter()
+            .all(|id| self.item_ratings.get(id).copied().unwrap_or(0) == rating)
+        {
+            0
+        } else {
+            rating
+        };
+        let changes: Vec<(MediaId, u8, u8)> = ids
+            .iter()
+            .map(|id| (*id, self.item_ratings.get(id).copied().unwrap_or(0), new_r))
+            .filter(|(_, before, after)| before != after)
+            .collect();
+        if changes.is_empty() {
+            cx.notify();
+            return true;
+        }
+        let writes: Vec<(MediaId, u8)> = changes.iter().map(|&(id, _, a)| (id, a)).collect();
+        let held = reselect.then(|| self.hold_selection(ids, writes.len()));
+        if let Some(state) = self.grid_state.as_ref() {
+            if let Err(err) = state.engine.set_ratings(&writes) {
+                self.set_error(format!("Could not save rating: {err:#}"), cx);
+                return false;
+            }
+        }
+        crate::app::navigation::set_or_clear(&mut self.item_ratings, &writes);
+        let shown = match held {
+            Some(held) => {
+                self.reselect_held(held, cx);
+                self.selected_item.as_ref().map(|item| item.id)
+            }
+            None => ids.first().copied(),
+        };
+        self.mark_pop.rated(shown, rating);
+        let changed: Vec<MediaId> = writes.iter().map(|&(id, _)| id).collect();
+        self.push_undo(UndoAction::Rating { changes });
+        self.sync_metadata_sidecars(&changed, cx);
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Rating);
+        self.show_undo_toast(
+            if new_r == 0 {
+                "Rating cleared".to_string()
+            } else {
+                format!("Rated {} item(s)", changed.len())
             },
             cx,
         );

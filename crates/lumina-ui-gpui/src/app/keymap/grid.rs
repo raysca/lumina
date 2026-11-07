@@ -31,6 +31,12 @@ impl LuminaApp {
             return;
         }
 
+        // C: compare the 2-9 selected items.
+        if !cmd_or_ctrl && !alt && !shift && key.eq_ignore_ascii_case("c") {
+            self.open_compare(cx);
+            return;
+        }
+
         // R / ⇧R: rotate the selected stills right / left.
         if !cmd_or_ctrl && !alt && key.eq_ignore_ascii_case("r") {
             let direction = if shift {
