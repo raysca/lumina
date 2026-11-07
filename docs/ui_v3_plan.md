@@ -63,7 +63,8 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Video zoom has no on-screen control now; Z, +/− and the ⌘0–⌘4 keys
   still work.
 - Multi-select dock has no Rate ▾ menu (rating is in the batch inspector)
-  and no Add to Album: there are no manual albums to add to.
+  and no Add to Album button; adding a selection to an album is ⇧⌘A, the
+  context menu or ⌘K Add to Album….
 - Tag group, colour and keyboard shortcut from the design are not built:
   tags are plain names in the catalog (needs a schema change and a spec).
 - Docked inspector: the video strip has duration and resolution but no fps

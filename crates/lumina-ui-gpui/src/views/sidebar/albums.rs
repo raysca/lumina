@@ -1,11 +1,13 @@
-//! The ALBUMS section: hand-picked albums, above the smart albums. The
-//! collapsed rail shows only the default collections, not these.
+//! The PINNED group and the ALBUMS section: hand-picked albums, above the
+//! smart albums. Pinned albums and smart albums leave their own sections
+//! for the Pinned group, which comes first. The collapsed rail shows only
+//! the default collections, not these.
 
 use gpui::*;
 use lumina_core::Album;
 
 use super::nav;
-use super::sections::text_color;
+use super::sections::{self, text_color};
 use super::AlbumSelection;
 use crate::app::text_input::TextTarget;
 use crate::i18n::t;
@@ -22,6 +24,7 @@ pub(super) fn render_albums_section(
         return Empty.into_any_element();
     }
     div()
+        .debug_selector(|| "sidebar-albums-section".to_string())
         .flex()
         .flex_col()
         .gap_0p5()
@@ -57,14 +60,63 @@ pub(super) fn render_albums_section(
                         })),
                 ),
         )
-        .children(this.albums.list.iter().map(|album| {
-            if this.albums.renaming == Some(album.id) {
-                render_rename_row(this, cx)
-            } else {
-                render_album_row(this, album, cx)
-            }
+        .children(
+            this.albums
+                .list
+                .iter()
+                .filter(|album| !album.pinned)
+                .map(|album| render_album_or_rename(this, album, cx)),
+        )
+        .into_any_element()
+}
+
+/// Pinned albums, then pinned smart albums; nothing when none is pinned.
+pub(super) fn render_pinned_section(
+    this: &LuminaApp,
+    cx: &mut Context<LuminaApp>,
+) -> impl IntoElement {
+    let albums: Vec<&Album> = this.albums.list.iter().filter(|a| a.pinned).collect();
+    let smart: Vec<_> = this.user_smart_albums.iter().filter(|a| a.pinned).collect();
+    if this.grid_state.is_none() || (albums.is_empty() && smart.is_empty()) {
+        return Empty.into_any_element();
+    }
+    div()
+        .debug_selector(|| "sidebar-pinned-section".to_string())
+        .flex()
+        .flex_col()
+        .gap_0p5()
+        .child(
+            div()
+                .debug_selector(|| "sidebar-pinned-header".to_string())
+                .px_2()
+                .pt(px(16.0))
+                .pb_1()
+                .child(theme::section_label(t("sidebar.pinned"))),
+        )
+        .children(
+            albums
+                .into_iter()
+                .map(|album| render_album_or_rename(this, album, cx)),
+        )
+        .children(smart.into_iter().map(|album| {
+            let is_active = this.selection == AlbumSelection::User(album.id);
+            let count = this.user_album_counts.get(&album.id).copied().unwrap_or(0);
+            sections::render_user_smart_album_row(this, album, count, is_active, cx)
+                .into_any_element()
         }))
         .into_any_element()
+}
+
+fn render_album_or_rename(
+    this: &LuminaApp,
+    album: &Album,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
+    if this.albums.renaming == Some(album.id) {
+        render_rename_row(this, cx)
+    } else {
+        render_album_row(this, album, cx)
+    }
 }
 
 fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>) -> AnyElement {

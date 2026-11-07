@@ -24,8 +24,14 @@ core handles cataloguing, decoding, and search.
   match all/any of conditions on kind, favorite, date (including "in the
   last N days/weeks/months"), tag, stars, color label, camera, lens,
   aperture, ISO, focal length, filename and place, with a live count and
-  preview. Albums can be re-edited (⌘K "Edit Smart Album…") and deleted from
-  the sidebar row.
+  preview. Albums can be re-edited (⌘K "Edit Smart Album…"), deleted from
+  the sidebar row (⌘Z restores), duplicated (⌘K "Duplicate Smart Album"), and
+  their rules exported to or imported from a JSON file (⌘K "Export / Import
+  Smart Album Rules…").
+- **Albums** — hand-picked albums beside the smart ones: New Album (⌘N),
+  Add to Album (⇧⌘A or the context menu), ⌫ in an album to take items out
+  (the files stay), rename and delete with undo. ⌘K "Pin Album" keeps an
+  album or smart album in a Pinned group at the top of the sidebar.
 - **Fast grid & viewer** — virtualized grid with five densities (8, 6, 4, 3
   or 2 columns; ⌘= / ⌘-, ⌘-scroll or pinch, anchored at the pointer or the
   selection), sort by date,

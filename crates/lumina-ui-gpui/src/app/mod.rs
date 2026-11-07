@@ -29,6 +29,7 @@ pub mod rotation;
 pub mod sample;
 pub mod scrub_preview;
 pub mod search;
+pub mod smart_album_share;
 pub mod smart_draft;
 pub mod sort;
 pub mod state;

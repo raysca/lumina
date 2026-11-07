@@ -2,13 +2,15 @@ mod rules;
 mod system;
 
 pub use rules::{
-    parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum,
-    SmartAlbumRule,
+    from_portable_json, parse_rule_date, split_date_range, to_portable_json, MatchMode,
+    PortableSmartAlbum, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule,
+    MAX_PORTABLE_BYTES,
 };
 pub use system::SystemAlbum;
 
 #[cfg(test)]
 mod tests {
+    use super::rules::{MAX_PORTABLE_BYTES, MAX_PORTABLE_RULES, MAX_PORTABLE_TEXT_CHARS};
     use super::*;
 
     #[test]
@@ -269,5 +271,213 @@ mod tests {
         );
         let back: Vec<SmartAlbumRule> = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, album.rules, "the raw query text survives rules_json");
+    }
+
+    /// One rule per field. The match is exhaustive, so a new `RuleField`
+    /// does not compile until it is added here and to the round trip.
+    fn rule_for(field: RuleField) -> SmartAlbumRule {
+        use RuleOperator as Op;
+        use RuleValue as V;
+        let (operator, value) = match field {
+            RuleField::Tag => (Op::Equals, V::Text("trips/kyoto".into())),
+            RuleField::MediaType => (Op::Equals, V::Text("video".into())),
+            RuleField::IsFavorite => (Op::Equals, V::Bool(true)),
+            RuleField::Year => (Op::Between, V::Range(2019.0, 2021.0)),
+            RuleField::Month => (Op::Equals, V::Number(7.0)),
+            RuleField::City => (Op::Contains, V::Text("Kyoto".into())),
+            RuleField::CountryCode => (Op::NotEquals, V::Text("JP".into())),
+            RuleField::CameraMake => (Op::Contains, V::Text("Sony".into())),
+            RuleField::CameraModel => (Op::NotContains, V::Text("A7".into())),
+            RuleField::Lens => (Op::IsNotEmpty, V::Text(String::new())),
+            RuleField::Iso => (Op::GreaterThan, V::Number(800.0)),
+            RuleField::FNumber => (Op::LessThan, V::Number(2.8)),
+            RuleField::FocalLength => (Op::AtLeast, V::Number(35.0)),
+            RuleField::Date => (Op::InTheLast, V::Text("2w".into())),
+            RuleField::Filename => (Op::Contains, V::Text("IMG_".into())),
+            RuleField::FileSize => (Op::AtMost, V::Number(1_000_000.0)),
+            RuleField::DurationMs => (Op::GreaterThan, V::Number(60_000.0)),
+            RuleField::Rating => (Op::AtLeast, V::Number(3.0)),
+            RuleField::ColorLabel => (Op::Equals, V::Text("red".into())),
+            RuleField::Place => (Op::Contains, V::Text("Japan".into())),
+            RuleField::Camera => (Op::NotContains, V::Text("iPhone".into())),
+            RuleField::Query => (Op::Equals, V::Text("sunset rating:>=3".into())),
+        };
+        SmartAlbumRule {
+            field,
+            operator,
+            value,
+        }
+    }
+
+    #[test]
+    fn portable_json_round_trips_every_rule_field() {
+        let fields = [
+            RuleField::Tag,
+            RuleField::MediaType,
+            RuleField::IsFavorite,
+            RuleField::Year,
+            RuleField::Month,
+            RuleField::City,
+            RuleField::CountryCode,
+            RuleField::CameraMake,
+            RuleField::CameraModel,
+            RuleField::Lens,
+            RuleField::Iso,
+            RuleField::FNumber,
+            RuleField::FocalLength,
+            RuleField::Date,
+            RuleField::Filename,
+            RuleField::FileSize,
+            RuleField::DurationMs,
+            RuleField::Rating,
+            RuleField::ColorLabel,
+            RuleField::Place,
+            RuleField::Camera,
+            RuleField::Query,
+        ];
+        let mut album = SmartAlbum::new(
+            "Kyoto “trip”".into(),
+            "folder".into(),
+            MatchMode::Any,
+            fields.into_iter().map(rule_for).collect(),
+        );
+        album.id = 42;
+        album.pinned = true;
+        album
+            .build_sql()
+            .expect("every sample rule compiles, so the import check passes");
+        let json = to_portable_json(&album).expect("export");
+        assert!(
+            json.contains(r#""lumina_smart_album": 1"#),
+            "the file names its format and version: {json}"
+        );
+        assert!(
+            !json.contains("pinned") && !json.contains("\"id\""),
+            "the pin and the catalog id stay in this library: {json}"
+        );
+        let back = from_portable_json(&json).expect("import");
+        assert_eq!(back.title, album.title);
+        assert_eq!(back.icon_name, album.icon_name);
+        assert_eq!(back.match_mode, MatchMode::Any);
+        assert_eq!(
+            back.rules, album.rules,
+            "every rule field survives the file"
+        );
+    }
+
+    #[test]
+    fn portable_json_rejects_unknown_version() {
+        let album = SmartAlbum::new(
+            "Faves".into(),
+            "folder".into(),
+            MatchMode::All,
+            vec![rule_for(RuleField::IsFavorite)],
+        );
+        let json = to_portable_json(&album).expect("export");
+        let newer = json.replace(r#""lumina_smart_album": 1"#, r#""lumina_smart_album": 2"#);
+        let err = from_portable_json(&newer).expect_err("a newer format is refused");
+        assert!(
+            err.to_string().contains("newer version of Lumina"),
+            "the error says why: {err}"
+        );
+        let err = from_portable_json(r#"{"title": "x"}"#).expect_err("no version, no import");
+        assert!(
+            err.to_string().contains("not a Lumina smart album"),
+            "the error says why: {err}"
+        );
+        let unknown_field = json.replace(r#""field": "is_favorite""#, r#""field": "flag""#);
+        assert_ne!(unknown_field, json, "the sample has an is_favorite rule");
+        assert!(
+            from_portable_json(&unknown_field).is_err(),
+            "a rule field this build does not know is refused"
+        );
+        let extra_key = json.replacen('{', r#"{"pinned": true, "#, 1);
+        assert!(
+            from_portable_json(&extra_key).is_err(),
+            "an unknown top-level setting is refused, not dropped"
+        );
+        let extra_rule_key = json.replace(
+            r#""field": "is_favorite","#,
+            r#""field": "is_favorite", "negate": true,"#,
+        );
+        assert_ne!(extra_rule_key, json, "the sample has an is_favorite rule");
+        let err = from_portable_json(&extra_rule_key)
+            .expect_err("an unknown key inside a rule is refused, not dropped");
+        assert!(
+            err.to_string().contains("does not know") && !err.to_string().contains("negate"),
+            "a plain sentence, not the parser's detail: {err}"
+        );
+        let bad_rule = json.replace(r#""field": "is_favorite""#, r#""field": "query""#);
+        let err = from_portable_json(&bad_rule).expect_err("rules that do not compile are refused");
+        let compile_err = SmartAlbum::new(
+            String::new(),
+            String::new(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field: RuleField::Query,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Bool(true),
+            }],
+        )
+        .build_sql()
+        .expect_err("a query rule needs text");
+        assert_eq!(
+            err.to_string(),
+            compile_err.to_string(),
+            "the import reports the builder's own compile error"
+        );
+    }
+
+    fn album_with(rules: Vec<SmartAlbumRule>) -> String {
+        to_portable_json(&SmartAlbum::new(
+            "Big".into(),
+            "folder".into(),
+            MatchMode::Any,
+            rules,
+        ))
+        .expect("export")
+    }
+
+    #[test]
+    fn portable_json_refuses_oversized_input() {
+        let many = album_with(vec![
+            rule_for(RuleField::IsFavorite);
+            MAX_PORTABLE_RULES + 1
+        ]);
+        let err = from_portable_json(&many).expect_err("too many rules");
+        assert!(
+            err.to_string().contains("more than 100 rules"),
+            "the error says why: {err}"
+        );
+        assert!(
+            from_portable_json(&album_with(vec![
+                rule_for(RuleField::IsFavorite);
+                MAX_PORTABLE_RULES
+            ]))
+            .is_ok(),
+            "exactly the limit is fine"
+        );
+
+        let long = SmartAlbumRule {
+            field: RuleField::Filename,
+            operator: RuleOperator::Contains,
+            value: RuleValue::Text("x".repeat(MAX_PORTABLE_TEXT_CHARS + 1)),
+        };
+        let err = from_portable_json(&album_with(vec![long])).expect_err("too long a value");
+        assert!(
+            err.to_string().contains("too long"),
+            "the error says why: {err}"
+        );
+
+        let huge = format!(
+            "{}{}",
+            album_with(vec![rule_for(RuleField::IsFavorite)]),
+            " ".repeat(MAX_PORTABLE_BYTES)
+        );
+        let err = from_portable_json(&huge).expect_err("too large a file");
+        assert!(
+            err.to_string().contains("too large"),
+            "the error says why: {err}"
+        );
     }
 }

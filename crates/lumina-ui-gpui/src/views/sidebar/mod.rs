@@ -78,6 +78,7 @@ impl SidebarView {
                     .gap_0()
                     .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
+                    .child(albums::render_pinned_section(this, cx))
                     .child(albums::render_albums_section(this, cx))
                     .child(sections::render_smart_albums_section(this, cx))
                     .child(sections::render_tags_section(this, cx)),

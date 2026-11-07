@@ -24,6 +24,10 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             MenuItem::action(crate::i18n::t("command.new_album"), NewAlbum),
             MenuItem::action(crate::i18n::t("command.add_to_album"), AddToAlbum),
             MenuItem::action("New Smart Album…", NewSmartAlbum),
+            MenuItem::action(
+                crate::i18n::t("command.import_smart_album_rules"),
+                ImportSmartAlbumRules,
+            ),
             MenuItem::separator(),
             MenuItem::action("Import XMP Metadata", ImportXmp),
             MenuItem::action("Metadata Templates…", ManageTemplates),

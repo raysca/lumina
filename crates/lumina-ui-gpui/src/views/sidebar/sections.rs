@@ -58,7 +58,7 @@ pub(super) fn render_library_section(
         )
 }
 
-fn render_user_smart_album_row(
+pub(super) fn render_user_smart_album_row(
     _this: &LuminaApp,
     album: &SmartAlbum,
     count: usize,
@@ -71,6 +71,8 @@ fn render_user_smart_album_row(
         .id(("smart-album-row", album_id as u64))
         .group("smart-album-row")
         .debug_selector(move || format!("smart-album-row-{album_id}"))
+        .role(Role::ListItem)
+        .aria_label(nav::aria_label(&album.title, count))
         .flex()
         .flex_row()
         .items_center()
@@ -224,6 +226,8 @@ pub(super) fn render_smart_albums_section(
         } else {
             user_albums
                 .iter()
+                // Pinned ones are drawn in the Pinned group instead.
+                .filter(|album| !album.pinned)
                 .map(|album| {
                     let is_active = this.selection == AlbumSelection::User(album.id);
                     let count = this.user_album_counts.get(&album.id).copied().unwrap_or(0);

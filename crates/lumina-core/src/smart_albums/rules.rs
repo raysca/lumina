@@ -200,6 +200,131 @@ impl SmartAlbum {
     }
 }
 
+/// The format version a smart album rules file carries.
+const PORTABLE_VERSION: u32 = 1;
+/// The largest rules file an import reads, in bytes.
+pub const MAX_PORTABLE_BYTES: usize = 1024 * 1024;
+/// The most rules an imported smart album may have.
+pub const MAX_PORTABLE_RULES: usize = 100;
+/// The longest text value an imported rule may have, in characters.
+pub const MAX_PORTABLE_TEXT_CHARS: usize = 1_000;
+
+/// A smart album as a rules file holds it: no catalog id, date or pin,
+/// which belong to one library.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PortableSmartAlbum {
+    pub title: String,
+    pub icon_name: String,
+    pub match_mode: MatchMode,
+    pub rules: Vec<SmartAlbumRule>,
+}
+
+/// The file layout. Unknown keys are refused at both levels, so a file from
+/// a newer build never imports as a silently narrower album; the stored
+/// `rules_json` keeps reading [`SmartAlbumRule`] as before.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PortableFile {
+    lumina_smart_album: u32,
+    title: String,
+    icon_name: String,
+    match_mode: MatchMode,
+    rules: Vec<PortableRule>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PortableRule {
+    field: RuleField,
+    operator: RuleOperator,
+    value: RuleValue,
+}
+
+/// Export Smart Album Rules…: the album's title, icon, match mode and
+/// rules as pretty JSON.
+pub fn to_portable_json(album: &SmartAlbum) -> Result<String> {
+    let file = PortableFile {
+        lumina_smart_album: PORTABLE_VERSION,
+        title: album.title.clone(),
+        icon_name: album.icon_name.clone(),
+        match_mode: album.match_mode,
+        rules: album
+            .rules
+            .iter()
+            .map(|r| PortableRule {
+                field: r.field.clone(),
+                operator: r.operator.clone(),
+                value: r.value.clone(),
+            })
+            .collect(),
+    };
+    Ok(serde_json::to_string_pretty(&file)?)
+}
+
+/// Import Smart Album Rules…: parses a rules file and checks that its rules
+/// compile, the same check the builder makes before it saves. A file from
+/// a newer build (another version, a setting or a rule field this build
+/// does not know) is an error, never a silently narrower album. Sizes are
+/// bounded, since the file can come from anywhere.
+pub fn from_portable_json(json: &str) -> Result<PortableSmartAlbum> {
+    if json.len() > MAX_PORTABLE_BYTES {
+        return Err(anyhow!(
+            "This file is too large to be a smart album rules file"
+        ));
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|_| anyhow!("This is not a Lumina smart album file"))?;
+    match value.get("lumina_smart_album").and_then(|v| v.as_u64()) {
+        None => return Err(anyhow!("This is not a Lumina smart album file")),
+        Some(v) if v > PORTABLE_VERSION as u64 => {
+            return Err(anyhow!(
+                "This file was made by a newer version of Lumina; update Lumina to import it"
+            ))
+        }
+        Some(v) if v != PORTABLE_VERSION as u64 => {
+            return Err(anyhow!(
+                "This smart album file has an unknown version ({v})"
+            ))
+        }
+        Some(_) => {}
+    }
+    let file: PortableFile = serde_json::from_value(value).map_err(|err| {
+        log::warn!("smart album rules file refused: {err}");
+        anyhow!("This file has a rule or setting this version of Lumina does not know")
+    })?;
+    if file.rules.len() > MAX_PORTABLE_RULES {
+        return Err(anyhow!(
+            "This file has more than {MAX_PORTABLE_RULES} rules, too many to import"
+        ));
+    }
+    let too_long = |v: &RuleValue| matches!(v, RuleValue::Text(text) if text.chars().count() > MAX_PORTABLE_TEXT_CHARS);
+    if file.rules.iter().any(|r| too_long(&r.value)) {
+        return Err(anyhow!("A rule in this file is too long to import"));
+    }
+    let portable = PortableSmartAlbum {
+        title: file.title,
+        icon_name: file.icon_name,
+        match_mode: file.match_mode,
+        rules: file
+            .rules
+            .into_iter()
+            .map(|r| SmartAlbumRule {
+                field: r.field,
+                operator: r.operator,
+                value: r.value,
+            })
+            .collect(),
+    };
+    SmartAlbum::new(
+        String::new(),
+        String::new(),
+        portable.match_mode,
+        portable.rules.clone(),
+    )
+    .build_sql()?;
+    Ok(portable)
+}
+
 fn column_for_field(field: &RuleField) -> &'static str {
     match field {
         RuleField::Tag => unreachable!(

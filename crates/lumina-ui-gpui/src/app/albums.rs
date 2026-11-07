@@ -262,4 +262,56 @@ impl LuminaApp {
         }
         cx.notify();
     }
+
+    /// Whether the open album or smart album is pinned; `None` in any
+    /// other view.
+    pub(crate) fn open_album_pinned(&self) -> Option<bool> {
+        match self.selection {
+            AlbumSelection::Album(id) => self
+                .albums
+                .list
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| a.pinned),
+            AlbumSelection::User(id) => self
+                .user_smart_albums
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| a.pinned),
+            _ => None,
+        }
+    }
+
+    /// Pin Album / Unpin Album: the open album or smart album moves into or
+    /// out of the sidebar's Pinned group.
+    // ponytail: not on the undo stack; pinning again is the undo.
+    pub fn set_open_album_pinned(&mut self, pinned: bool, cx: &mut Context<Self>) {
+        let action = if pinned {
+            "album.pin_failed"
+        } else {
+            "album.unpin_failed"
+        };
+        let written = match self.selection {
+            AlbumSelection::Album(id) => {
+                self.album_write(action, |e| e.set_album_pinned(id, pinned), cx)
+            }
+            AlbumSelection::User(id) => {
+                self.album_write(action, |e| e.set_smart_album_pinned(id, pinned), cx)
+            }
+            _ => return,
+        };
+        if written.is_some() {
+            self.refresh_album_counts();
+        }
+        if written == Some(true) {
+            let message = t(if pinned {
+                "album.pinned"
+            } else {
+                "album.unpinned"
+            });
+            self.set_last_action(message.clone());
+            self.show_toast(message, cx);
+        }
+        cx.notify();
+    }
 }

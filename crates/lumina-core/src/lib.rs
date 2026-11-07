@@ -39,8 +39,9 @@ pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, extract_video_size, Scanner};
 pub use search::StructuredQuery;
 pub use smart_albums::{
-    parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum,
-    SmartAlbumRule, SystemAlbum,
+    from_portable_json, parse_rule_date, split_date_range, to_portable_json, MatchMode,
+    PortableSmartAlbum, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule,
+    SystemAlbum, MAX_PORTABLE_BYTES,
 };
 pub use sort::{SortDirection, SortField, SortSpec};
 pub use video_frame::video_preview_strip;

@@ -299,8 +299,19 @@ UI thread.
   a tag does not rewrite `tag:` inside a saved search.
 - Tags list in the sidebar with an Untagged node, but no right-click
   rename/delete; rename is only in the tag-manager modal.
-- Smart albums: deletion asks for confirmation (no undo). No cover preview,
-  pinning, reordering, descriptions, duplicate, or rule import/export.
+- Smart albums: deletion asks for confirmation, and ⌘Z restores the album.
+  ⌘K Duplicate Smart Album copies one; Export / Import Smart Album Rules…
+  save and load its rules as a JSON file, and an import that does not compile
+  or comes from a newer build is refused in the banner. No cover preview,
+  reordering or descriptions.
+- Curated albums: New Album (⌘N), New Album with Selection, rename and
+  delete with undo; Add to Album (⇧⌘A picker or the context menu) and Remove
+  from Album (⌫ in an album; ⌘⌫ still opens Delete) with undo. Pin Album /
+  Unpin Album (⌘K) move an album or smart album into a Pinned group at the
+  top of the sidebar; pin has no undo (Unpin reverses it).
+- In an album, choosing a year on the year rail shows that year across the
+  whole library and moves the sidebar to Library, as search does; Back
+  returns to the album.
 - A sticky month band over the date-sorted grid; no jump-to-date or timeline
   scrubber.
 
@@ -312,8 +323,7 @@ UI thread.
   saved searches.
 - First-class Untagged; tag right-click menu; drag tags onto selection; hierarchy
   and aliases; undo for rename/merge/delete.
-- Smart-album preview, pin, duplicate, description, rule import/export, and
-  confirm/undo on delete.
+- Smart-album preview of why an item matched, and descriptions.
 - Grouped timeline headers in the grid and a visible scrubber.
 
 **Acceptance:** filters never contradict the query text; a user can build a

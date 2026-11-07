@@ -73,6 +73,13 @@ pub enum CommandId {
     AddToAlbum,
     /// Takes the selection out of the open album (⌫ there).
     RemoveFromAlbum,
+    /// Pin or unpin the open album or smart album; one shows at a time.
+    PinAlbum,
+    UnpinAlbum,
+    /// Act on the open smart album; shown only in a smart album view.
+    DuplicateSmartAlbum,
+    ExportSmartAlbumRules,
+    ImportSmartAlbumRules,
     NewSmartAlbum,
     /// Saves the search as a smart album; shown only while there is a query.
     SaveSearch,
@@ -149,7 +156,10 @@ impl Command {
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
             NewAlbum | NewAlbumWithSelection | AddToAlbum => Icon::Plus,
-            NewSmartAlbum | SaveSearch => Icon::Sparkles,
+            NewSmartAlbum | SaveSearch | DuplicateSmartAlbum => Icon::Sparkles,
+            PinAlbum | UnpinAlbum => Icon::Star,
+            ExportSmartAlbumRules => Icon::ExternalLink,
+            ImportSmartAlbumRules => Icon::ArrowDownToLine,
             EditSmartAlbum | RenameAlbum | AdjustDate | EditLocation => Icon::Pencil,
             RemoveLocation | DeleteSmartAlbum | DeleteAlbum | RemoveFromAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
@@ -647,6 +657,36 @@ pub fn commands() -> &'static [Command] {
             keywords: "album remove take out collection selected items",
         },
         Command {
+            id: CommandId::PinAlbum,
+            key: "command.pin_album",
+            shortcut: "",
+            keywords: "album smart pin pinned top favorite keep first",
+        },
+        Command {
+            id: CommandId::UnpinAlbum,
+            key: "command.unpin_album",
+            shortcut: "",
+            keywords: "album smart unpin pinned remove",
+        },
+        Command {
+            id: CommandId::DuplicateSmartAlbum,
+            key: "command.duplicate_smart_album",
+            shortcut: "",
+            keywords: "smart album copy duplicate clone rules",
+        },
+        Command {
+            id: CommandId::ExportSmartAlbumRules,
+            key: "command.export_smart_album_rules",
+            shortcut: "",
+            keywords: "smart album rules export save file json share",
+        },
+        Command {
+            id: CommandId::ImportSmartAlbumRules,
+            key: "command.import_smart_album_rules",
+            shortcut: "",
+            keywords: "smart album rules import open file json",
+        },
+        Command {
             id: CommandId::NewSmartAlbum,
             key: "command.new_smart_album",
             shortcut: "⌥⌘N",
@@ -808,6 +848,12 @@ impl LuminaApp {
             CommandId::RenameAlbum | CommandId::DeleteAlbum => {
                 matches!(self.selection, AlbumSelection::Album(_))
             }
+            CommandId::PinAlbum => self.open_album_pinned() == Some(false),
+            CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),
+            CommandId::DuplicateSmartAlbum | CommandId::ExportSmartAlbumRules => {
+                matches!(self.selection, AlbumSelection::User(_))
+            }
+            CommandId::ImportSmartAlbumRules => self.grid_state.is_some(),
             CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
@@ -1127,6 +1173,11 @@ impl LuminaApp {
             CommandId::DeleteAlbum => self.delete_selected_album(cx),
             CommandId::AddToAlbum => self.open_album_picker(cx),
             CommandId::RemoveFromAlbum => self.remove_selection_from_album(cx),
+            CommandId::PinAlbum => self.set_open_album_pinned(true, cx),
+            CommandId::UnpinAlbum => self.set_open_album_pinned(false, cx),
+            CommandId::DuplicateSmartAlbum => self.duplicate_selected_smart_album(cx),
+            CommandId::ExportSmartAlbumRules => self.export_selected_smart_album_rules(cx),
+            CommandId::ImportSmartAlbumRules => self.import_smart_album_rules(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),
             CommandId::SaveSearch => self.save_current_search_as_album(cx),
             CommandId::EditSmartAlbum => self.edit_selected_smart_album(cx),

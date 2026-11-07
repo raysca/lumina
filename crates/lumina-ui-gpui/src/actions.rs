@@ -20,6 +20,7 @@ actions!(
         ImportNetworkVideo,
         ToggleDownloads,
         NewSmartAlbum,
+        ImportSmartAlbumRules,
         NewAlbum,
         AddToAlbum,
         GoBack,

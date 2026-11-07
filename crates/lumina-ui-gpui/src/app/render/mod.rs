@@ -500,6 +500,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                     this.open_album_builder(cx);
                 }))
+                .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
+                    this.import_smart_album_rules(cx);
+                }))
                 .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
                     this.navigate_back(cx);
                 }))

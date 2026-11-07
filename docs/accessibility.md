@@ -27,8 +27,14 @@ Lumina is designed to be usable without a mouse:
   the name, `Esc` keeps the old one, and the field takes every other key.
   With an album open, ⌘K Rename Album… and Delete Album… act on it; the
   delete confirmation takes `↵`/`Esc` and absorbs every other key. `⌘Z`
-  undoes a rename or a delete (members come back). Album rows carry a list
-  item role and a label with the count, not yet checked with VoiceOver.
+  undoes a rename or a delete (members come back). `⇧⌘A` (⌘K Add to
+  Album…) opens the album picker: type to filter, `↑`/`↓` move, `↵` adds,
+  `Esc` closes, and the picker absorbs every other key. `⌫` in an album
+  takes the selection out of it (the files stay; `⌘⌫` still opens Delete).
+  ⌘K Pin Album / Unpin Album act on the open album or smart album, and ⌘K
+  Duplicate Smart Album and Export Smart Album Rules… on smart albums;
+  Import Smart Album Rules… is in ⌘K and the File menu. Album rows carry a list item role and a label with the count, not
+  yet checked with VoiceOver.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With

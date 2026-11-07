@@ -2,6 +2,7 @@ mod album_membership;
 mod album_membership_guards;
 mod albums;
 mod albums_delete;
+mod albums_pinned;
 mod batch_edit;
 mod browser;
 mod delete_dialog;
