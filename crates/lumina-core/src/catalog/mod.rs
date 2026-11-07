@@ -300,11 +300,7 @@ impl Catalog {
         let is_trashed: i32 = row.get(29)?;
         let title: Option<String> = row.get(30)?;
 
-        let media_type = match media_type_str.as_str() {
-            "video" => MediaType::Video,
-            "raw" => MediaType::Raw,
-            _ => MediaType::Image,
-        };
+        let media_type = media_type_from_db(&media_type_str);
 
         Ok(MediaItem {
             id: MediaId(id as u64),
@@ -355,6 +351,15 @@ impl Catalog {
             items.push(r?);
         }
         Ok(items)
+    }
+}
+
+/// Maps a stored `media_items.media_type` value; anything unknown is an image.
+pub(crate) fn media_type_from_db(value: &str) -> MediaType {
+    match value {
+        "video" => MediaType::Video,
+        "raw" => MediaType::Raw,
+        _ => MediaType::Image,
     }
 }
 

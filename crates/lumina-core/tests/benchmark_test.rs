@@ -786,5 +786,82 @@ fn benchmark_scale_and_gates() {
         );
     }
 
+    // Stacks: 100k more rows in groups of ten, 10 s apart. Each group is
+    // nine JPEGs 100 ms apart plus a RAW twin of the first, so one burst of
+    // nine and one pair. find_stacks reads every active row (~225k here).
+    // Debug budget only; no release gate until the owner sets one.
+    let stack_batch: Vec<MediaItem> = (0..100_000)
+        .map(|i| {
+            let (group, k) = (i / 10, i % 10);
+            let shot = if k == 9 { 0 } else { k };
+            let (file_name, media_type) = if k == 9 {
+                (format!("S{group:05}_{shot}.ARW"), MediaType::Raw)
+            } else {
+                (format!("S{group:05}_{shot}.JPG"), MediaType::Image)
+            };
+            let ts = 1700000000000 + group as i64 * 10_000 + shot as i64 * 100;
+            let parent_dir = format!("/stacks/f_{}", group / 100);
+            MediaItem {
+                id: MediaId(0),
+                path: PathBuf::from(format!("{parent_dir}/{file_name}")),
+                parent_dir,
+                file_name,
+                title: None,
+                file_size: 3_000_000,
+                mtime_epoch_ms: ts,
+                media_type,
+                width: 4032,
+                height: 3024,
+                duration_ms: None,
+                timestamp_epoch_ms: ts,
+                year: 2023,
+                month: 11,
+                day: 14,
+                latitude: None,
+                longitude: None,
+                altitude: None,
+                country_code: None,
+                admin1_region: None,
+                city: None,
+                make: Some("Nikon".to_string()),
+                model: Some("Z8".to_string()),
+                lens: None,
+                focal_length: None,
+                f_number: None,
+                iso: None,
+                exposure_time: None,
+                is_favorite: false,
+                is_hidden: false,
+                is_trashed: false,
+            }
+        })
+        .collect();
+    for chunk in stack_batch.chunks(batch_size) {
+        catalog
+            .insert_or_update_batch(chunk)
+            .expect("insert stack batch");
+    }
+    let stacks_start = Instant::now();
+    let stacks = catalog.find_stacks().expect("find_stacks must run");
+    let stacks_ms = stacks_start.elapsed().as_secs_f64() * 1000.0;
+    let bursts = stacks
+        .iter()
+        .filter(|s| s.kind == lumina_core::StackKind::Burst)
+        .count();
+    assert_eq!(
+        (bursts, stacks.len() - bursts),
+        (10_000, 10_000),
+        "every 10-row group is one burst and one RAW+JPEG pair; the 60 s spaced main rows never stack"
+    );
+    let stacks_budget = 2000.0;
+    println!(
+        "Stacks - find_stacks: {} stacks in {stacks_ms:.1} ms (debug budget < {stacks_budget:.0} ms)",
+        stacks.len()
+    );
+    assert!(
+        stacks_ms < stacks_budget,
+        "find_stacks with 100k stack rows must take < {stacks_budget} ms (got {stacks_ms:.1} ms)"
+    );
+
     let _ = std::fs::remove_file(&temp_db);
 }

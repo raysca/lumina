@@ -13,6 +13,7 @@ pub mod scanner;
 pub mod search;
 pub mod smart_albums;
 pub mod sort;
+pub mod stacks;
 pub mod text;
 mod video_frame;
 pub mod watcher;
@@ -47,6 +48,7 @@ pub use smart_albums::{
     SystemAlbum, MAX_PORTABLE_BYTES,
 };
 pub use sort::{SortDirection, SortField, SortSpec};
+pub use stacks::{Stack, StackKind};
 pub use video_frame::video_preview_strip;
 pub use watcher::LibraryWatcher;
 pub use xmp::{
