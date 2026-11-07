@@ -5,7 +5,7 @@ use std::process::Command;
 
 use crate::app::LuminaApp;
 use crate::config::validate_external_editor;
-use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
+use crate::views::viewer_state::ViewerZoomPreset;
 
 /// Immersive mode hides the HUD after this long without pointer or key
 /// activity (v3 polish: immersive only; the windowed viewer keeps it).
@@ -469,67 +469,6 @@ impl LuminaApp {
     /// Resets zoom and pan to fit (the Fit to window button).
     pub fn reset_viewer_zoom(&mut self, cx: &mut Context<Self>) {
         self.viewer_state.reset();
-        cx.notify();
-    }
-
-    /// Rotates the selected still one quarter turn and persists the rotation.
-    ///
-    /// The original file is never rewritten: only the catalog's
-    /// `rotation_quarters` column changes, and the decoder applies the turn when
-    /// thumbnail and viewer frames are requested. The in-memory texture for the
-    /// item is dropped and both surfaces are re-requested so the grid and the
-    /// viewer show the new orientation. Video is a deliberate no-op because the
-    /// player surface is not rotated; the status line says so.
-    pub fn rotate_viewer_selected(&mut self, direction: ViewerRotation, cx: &mut Context<Self>) {
-        let Some(item) = self.selected_item.clone() else {
-            self.set_last_action("Select an item to rotate");
-            cx.notify();
-            return;
-        };
-        if item.media_type == MediaType::Video {
-            self.set_last_action("Rotation is not supported for video");
-            cx.notify();
-            return;
-        }
-        let Some(engine) = self.grid_state.as_ref().map(|state| state.engine.clone()) else {
-            self.set_error("Open a library before rotating", cx);
-            return;
-        };
-        let current = match engine.get_rotation(item.id) {
-            Ok(quarters) => quarters,
-            Err(err) => {
-                self.set_error(format!("Could not read rotation: {err}"), cx);
-                return;
-            }
-        };
-        let next = direction.apply_to(current);
-        if let Err(err) = engine.set_rotation(&[item.id], next) {
-            self.set_error(format!("Could not rotate item: {err}"), cx);
-            return;
-        }
-
-        // The GPU texture cache has no rotation component in its entry, so drop
-        // it (and any in-flight marker) to make the grid decode the frame again
-        // instead of painting the previous angle.
-        let stale = self.grid_state.as_ref().and_then(|state| {
-            state.in_flight.lock().remove(&item.id);
-            state.texture_cache.lock().pop(&item.id)
-        });
-        if let Some(stale) = stale {
-            self.retire_image(stale);
-        }
-        self.set_viewer_image(None);
-
-        // Re-request the full viewer frame through the normal background path so
-        // the displayed image is transformed by the decoder, not by the UI.
-        if let Some(state) = self.grid_state.as_ref() {
-            self.request_viewer_frame(state, item.id);
-        }
-        self.queue_thumbnail_request(item.id);
-        self.set_last_action(match direction {
-            ViewerRotation::Left => "Rotated left",
-            ViewerRotation::Right => "Rotated right",
-        });
         cx.notify();
     }
 

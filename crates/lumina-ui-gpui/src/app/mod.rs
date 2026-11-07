@@ -19,6 +19,7 @@ pub mod pip;
 pub mod preferences;
 pub mod recents;
 pub mod render;
+pub mod rotation;
 pub mod sample;
 pub mod scrub_preview;
 pub mod search;

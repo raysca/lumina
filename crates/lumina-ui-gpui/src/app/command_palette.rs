@@ -6,7 +6,7 @@ use lumina_core::{SortDirection, SortField};
 use crate::icons::Icon;
 use crate::views::inspector::InspectorTab;
 use crate::views::sidebar::AlbumSelection;
-use crate::views::viewer_state::ViewerZoomPreset;
+use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
 
 use crate::app::LuminaApp;
 use crate::i18n::t;
@@ -50,6 +50,9 @@ pub enum CommandId {
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
     ToggleFavorite,
+    /// Quarter turn of the viewer item or the selected stills.
+    RotateLeft,
+    RotateRight,
     TogglePip,
     PipPlayPause,
     NewSmartAlbum,
@@ -120,6 +123,8 @@ impl Command {
             Rate(0) => Icon::Star,
             Rate(_) => Icon::StarFilled,
             ToggleFavorite => Icon::Heart,
+            RotateLeft => Icon::RotateCcw,
+            RotateRight => Icon::RotateCw,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
             NewSmartAlbum | SaveSearch => Icon::Sparkles,
@@ -437,6 +442,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "F",
             keywords: "heart star like",
         },
+        Command {
+            id: CommandId::RotateLeft,
+            key: "command.rotate_left",
+            shortcut: "⇧R",
+            keywords: "turn counterclockwise anticlockwise orientation image photo",
+        },
+        Command {
+            id: CommandId::RotateRight,
+            key: "command.rotate_right",
+            shortcut: "R",
+            keywords: "turn clockwise orientation image photo",
+        },
         // After the Rate commands: "rate 3" also matches "Show Rated ★ 3+".
         Command {
             id: CommandId::QuickFilter("is:favorite"),
@@ -693,6 +710,9 @@ impl LuminaApp {
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
+            CommandId::RotateLeft | CommandId::RotateRight => {
+                self.selected_item.is_some() || !self.selected_indices.is_empty()
+            }
             CommandId::ApplyTemplate => {
                 !self.config.templates.is_empty()
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
@@ -943,6 +963,8 @@ impl LuminaApp {
                 self.batch_toggle_favorite(cx)
             }
             CommandId::ToggleFavorite => self.toggle_favorite_selected(cx),
+            CommandId::RotateLeft => self.rotate_selection(ViewerRotation::Left, cx),
+            CommandId::RotateRight => self.rotate_selection(ViewerRotation::Right, cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),

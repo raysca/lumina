@@ -491,28 +491,35 @@ impl Catalog {
         Ok(map)
     }
 
-    /// Sets the persisted clockwise quarter-turn rotation for every id.
-    ///
-    /// Only the catalog column changes; the original file is never rewritten.
-    /// The update is one transaction and normalizes `quarters` to 0..=3. An
-    /// empty id list is a no-op, and ids with no row are skipped without
-    /// failing the batch.
-    pub fn set_rotation(&self, ids: &[MediaId], quarters: u8) -> Result<()> {
-        if ids.is_empty() {
-            return Ok(());
-        }
-        let normalized = normalize_quarter_turns(quarters as i32);
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-        {
-            let mut stmt =
-                tx.prepare_cached("UPDATE media_items SET rotation_quarters = ?1 WHERE id = ?2;")?;
-            for id in ids {
-                stmt.execute(params![normalized as i32, id.0 as i64])?;
+    /// Sets each item's own clockwise quarter turns in one transaction (batch
+    /// rotate and its undo). Only the catalog column changes; the original
+    /// file is never rewritten. Values normalize to 0..=3, and ids with no
+    /// row are skipped without failing the batch.
+    pub fn set_rotations(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.update_each(
+            "UPDATE media_items SET rotation_quarters = ?1 WHERE id = ?2;",
+            changes
+                .iter()
+                .map(|&(id, quarters)| (id, normalize_quarter_turns(quarters as i32) as i32)),
+        )
+    }
+
+    /// Each id's persisted rotation; ids with no row are left out, so a
+    /// caller never records a change for a purged item.
+    pub fn get_rotations(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, u8>> {
+        let conn = self.conn.lock();
+        let mut stmt =
+            conn.prepare_cached("SELECT rotation_quarters FROM media_items WHERE id = ?1;")?;
+        let mut map = HashMap::with_capacity(ids.len());
+        for id in ids {
+            let quarters: Option<i32> = stmt
+                .query_row(params![id.0 as i64], |row| row.get(0))
+                .optional()?;
+            if let Some(quarters) = quarters {
+                map.insert(*id, normalize_quarter_turns(quarters));
             }
         }
-        tx.commit()?;
-        Ok(())
+        Ok(map)
     }
 
     /// Persisted clockwise quarter turns for `id` (0 when unset or absent).
@@ -1175,7 +1182,7 @@ mod tests {
             "new items start unrotated"
         );
         catalog
-            .set_rotation(&[id], 1)
+            .set_rotations(&[(id, 1)])
             .expect("rotation write must succeed");
         assert_eq!(catalog.get_rotation(id).expect("rotation read"), 1);
 
@@ -1201,7 +1208,7 @@ mod tests {
             "the migration must default existing rows to 0"
         );
         catalog
-            .set_rotation(&[id], 2)
+            .set_rotations(&[(id, 2)])
             .expect("rotation write after migration");
         drop(catalog);
 
@@ -1217,7 +1224,34 @@ mod tests {
     }
 
     #[test]
-    fn set_rotation_is_transactional_normalized_and_survives_rescan() {
+    fn set_rotations_stores_each_value_and_reads_back_known_ids() {
+        let (dir, db) = temp_catalog("rotation_per_item");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        let inserted = catalog
+            .insert_or_update_batch(&[sample_item(1), sample_item(2)])
+            .expect("sample items must insert");
+        let (a, b) = (inserted[0].id, inserted[1].id);
+        let missing = MediaId(9_999);
+
+        catalog
+            .set_rotations(&[(a, 1), (b, 6), (missing, 2)])
+            .expect("per-item rotations must save, skipping unknown ids");
+        let read = catalog
+            .get_rotations(&[a, b, missing])
+            .expect("rotations must read");
+        assert_eq!(read.get(&a), Some(&1), "each item keeps its own value");
+        assert_eq!(read.get(&b), Some(&2), "values normalize to 0..=3");
+        assert!(
+            !read.contains_key(&missing),
+            "an unknown id is left out so callers never record it"
+        );
+
+        drop(catalog);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_rotations_is_transactional_normalized_and_survives_rescan() {
         let (dir, db) = temp_catalog("rotation_set");
         let catalog = Catalog::open(&db).expect("catalog must open");
         let inserted = catalog
@@ -1226,12 +1260,12 @@ mod tests {
         let ids: Vec<MediaId> = inserted.iter().map(|item| item.id).collect();
 
         assert!(
-            catalog.set_rotation(&[], 3).is_ok(),
+            catalog.set_rotations(&[]).is_ok(),
             "an empty id list must be a successful no-op"
         );
 
         catalog
-            .set_rotation(&ids, 7)
+            .set_rotations(&[(ids[0], 7), (ids[1], 7)])
             .expect("out-of-range turns must normalize, not fail");
         assert_eq!(catalog.get_rotation(ids[0]).expect("rotation read"), 3);
         assert_eq!(catalog.get_rotation(ids[1]).expect("rotation read"), 3);
@@ -1255,7 +1289,7 @@ mod tests {
 
         // Unknown ids must not abort the batch for known ones.
         catalog
-            .set_rotation(&[ids[0], MediaId(9_999)], 2)
+            .set_rotations(&[(ids[0], 2), (MediaId(9_999), 2)])
             .expect("mixed id list must succeed");
         assert_eq!(catalog.get_rotation(ids[0]).expect("rotation read"), 2);
         assert_eq!(

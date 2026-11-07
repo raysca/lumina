@@ -85,6 +85,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.rate_5" => "Rate 5 Stars",
         "command.clear_rating" => "Clear Rating",
         "command.toggle_favorite" => "Toggle Favorite",
+        "command.rotate_left" => "Rotate Left",
+        "command.rotate_right" => "Rotate Right",
         "command.toggle_pip" => "Toggle Picture-in-Picture",
         "command.pip_play_pause" => "Play/Pause Picture-in-Picture",
         "command.new_smart_album" => "New Smart Album…",

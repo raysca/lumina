@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::views::viewer_state::ViewerRotation;
 
 impl LuminaApp {
     /// Handles grid navigation, zoom, selection, and contextual shortcuts.
@@ -9,6 +10,7 @@ impl LuminaApp {
         key: &str,
         cmd_or_ctrl: bool,
         shift: bool,
+        alt: bool,
         cx: &mut Context<Self>,
     ) {
         if !cmd_or_ctrl && key.eq_ignore_ascii_case("f") {
@@ -25,6 +27,17 @@ impl LuminaApp {
             if self.selected_item.is_some() {
                 self.begin_tagging_selection(cx);
             }
+            return;
+        }
+
+        // R / ⇧R: rotate the selected stills right / left.
+        if !cmd_or_ctrl && !alt && key.eq_ignore_ascii_case("r") {
+            let direction = if shift {
+                ViewerRotation::Left
+            } else {
+                ViewerRotation::Right
+            };
+            self.rotate_selection(direction, cx);
             return;
         }
 

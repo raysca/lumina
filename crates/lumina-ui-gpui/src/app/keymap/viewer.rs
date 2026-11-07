@@ -2,7 +2,7 @@ use gpui::*;
 use lumina_core::MediaType;
 
 use crate::app::LuminaApp;
-use crate::views::viewer_state::ViewerZoomPreset;
+use crate::views::viewer_state::{ViewerRotation, ViewerZoomPreset};
 
 impl LuminaApp {
     /// Handles shortcuts when fullscreen viewer is open.
@@ -67,6 +67,17 @@ impl LuminaApp {
         }
         if !cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
             self.toggle_viewer_zoom(cx);
+            return true;
+        }
+
+        // R / ⇧R: rotate the open still right / left.
+        if !cmd_or_ctrl && !keystroke.modifiers.alt && key.eq_ignore_ascii_case("r") {
+            let direction = if keystroke.modifiers.shift {
+                ViewerRotation::Left
+            } else {
+                ViewerRotation::Right
+            };
+            self.rotate_selection(direction, cx);
             return true;
         }
 

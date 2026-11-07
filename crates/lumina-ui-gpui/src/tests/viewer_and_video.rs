@@ -1,5 +1,5 @@
 use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library, type_text,
 };
 use crate::*;
 
@@ -1246,6 +1246,7 @@ fn test_video_resume_progress_throttle_and_close() {
 /// thumbnail invalidation are exercised end to end.
 fn rotation_test_library(
     prefix: &str,
+    files: &[&str],
 ) -> (
     std::path::PathBuf,
     std::sync::Arc<lumina_core::LuminaEngine>,
@@ -1258,12 +1259,9 @@ fn rotation_test_library(
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
-    for index in 0..2 {
-        std::fs::write(
-            temp_dir.join(format!("photo{index}.jpg")),
-            b"test-jpeg-content",
-        )
-        .expect("temp photo must be writable");
+    for file in files {
+        std::fs::write(temp_dir.join(file), b"test-jpeg-content")
+            .expect("temp media file must be writable");
     }
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
@@ -1283,7 +1281,8 @@ fn rotation_test_library(
 fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     use crate::views::grid::GridState;
 
-    let (temp_dir, engine) = rotation_test_library("viewer_rotate_controls");
+    let (temp_dir, engine) =
+        rotation_test_library("viewer_rotate_controls", &["photo0.jpg", "photo1.jpg"]);
     let item = engine
         .get_item_slice(0..1)
         .into_iter()
@@ -1431,7 +1430,7 @@ fn test_viewer_rotate_video_is_a_clear_no_op() {
         app.grid_state = None;
         app.select_item_at(video.clone(), 1, cx);
         app.open_viewer(video, cx);
-        app.rotate_viewer_selected(ViewerRotation::Right, cx);
+        app.rotate_selection(ViewerRotation::Right, cx);
         assert_eq!(
             app.last_action.as_deref(),
             Some("Rotation is not supported for video"),
@@ -1443,6 +1442,370 @@ fn test_viewer_rotate_video_is_a_clear_no_op() {
         );
     });
     cx.run_until_parked();
+}
+
+/// Three photos and a clip; returns the photo ids (in catalog order) and the
+/// clip's id.
+fn rotation_batch_library(
+    prefix: &str,
+) -> (
+    std::path::PathBuf,
+    std::sync::Arc<lumina_core::LuminaEngine>,
+    Vec<lumina_core::MediaId>,
+    lumina_core::MediaId,
+) {
+    let (dir, engine) = rotation_test_library(prefix, &["a.jpg", "b.jpg", "c.jpg", "clip.mp4"]);
+    let items = engine.get_item_slice(0..4);
+    assert_eq!(items.len(), 4, "three photos and a clip must be cataloged");
+    let photos = items
+        .iter()
+        .filter(|item| item.media_type != lumina_core::MediaType::Video)
+        .map(|item| item.id)
+        .collect();
+    let video = items
+        .iter()
+        .find(|item| item.media_type == lumina_core::MediaType::Video)
+        .expect("the clip must be cataloged as video")
+        .id;
+    (dir, engine, photos, video)
+}
+
+fn rotations(engine: &lumina_core::LuminaEngine, ids: &[lumina_core::MediaId]) -> Vec<u8> {
+    ids.iter()
+        .map(|id| engine.get_rotation(*id).expect("rotation read must work"))
+        .collect()
+}
+
+/// Opens the viewer on the first photo, with the app focused.
+fn open_rotation_viewer(
+    view: &gpui::Entity<LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    engine: &lumina_core::LuminaEngine,
+    id: lumina_core::MediaId,
+) {
+    let item = engine.get_item_by_id(id).expect("photo must be cataloged");
+    view.update(vcx, |app, cx| {
+        app.select_item_at(item.clone(), 0, cx);
+        app.open_viewer(item, cx);
+    });
+    render_viewer_ui(vcx);
+    focus_app(vcx, view);
+}
+
+#[core::prelude::v1::test]
+fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
+    let (dir, engine, photos, video) = rotation_batch_library("rotate_batch_shortcut");
+    // Different starting angles, so undo must restore each item's own value.
+    let seeded = [0_u8, 1, 3];
+    for (id, quarters) in photos.iter().zip(seeded) {
+        engine
+            .set_rotations(&[(*id, quarters)])
+            .expect("seed rotation");
+    }
+    engine
+        .set_rotations(&[(video, 2)])
+        .expect("seed video rotation");
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "cmd-a");
+    keystrokes(vcx, "r");
+
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![1, 2, 0],
+        "R must turn every selected photo one quarter clockwise"
+    );
+    assert_eq!(
+        engine.get_rotation(video).expect("rotation read"),
+        2,
+        "R must leave a selected video untouched"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.error_message.is_none(), "{:?}", app.error_message);
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "a batch rotation is one undo step"
+        );
+        // A thumbnail painted at the new angle, which undo must drop.
+        let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+            image::RgbaImage::new(4, 4),
+        )]));
+        app.grid_state
+            .as_ref()
+            .expect("grid state must be installed")
+            .texture_cache
+            .lock()
+            .put(photos[0], texture);
+    });
+
+    keystrokes(vcx, "cmd-z");
+    view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().expect("grid state");
+        assert!(
+            !state.texture_cache.lock().contains(&photos[0]),
+            "undo must drop the thumbnail painted at the undone angle"
+        );
+    });
+    assert_eq!(
+        rotations(&engine, &photos),
+        seeded.to_vec(),
+        "one ⌘Z must restore each photo's own previous rotation"
+    );
+    assert_eq!(engine.get_rotation(video).expect("rotation read"), 2);
+
+    // Redo turns them again and must drop what was painted at the old angle.
+    put_test_texture(&view, vcx, photos[0]);
+    keystrokes(vcx, "cmd-shift-z");
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![1, 2, 0],
+        "⇧⌘Z must reapply each photo's own rotation"
+    );
+    view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().expect("grid state");
+        assert!(
+            !state.texture_cache.lock().contains(&photos[0]),
+            "redo must drop the thumbnail painted at the redone angle"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn shift_r_rotates_left_in_viewer() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_shift_r_viewer");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_rotation_viewer(&view, vcx, &engine, photos[0]);
+
+    keystrokes(vcx, "shift-r");
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![3, 0, 0],
+        "⇧R in the viewer must turn only the open photo counter-clockwise"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "rotating must keep the viewer open"
+        );
+        assert_eq!(app.undo.undo_stack.len(), 1);
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn rotate_from_palette_in_viewer() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_palette_viewer");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_rotation_viewer(&view, vcx, &engine, photos[0]);
+
+    keystrokes(vcx, "cmd-k");
+    type_text(vcx, "rotate right");
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![1, 0, 0],
+        "⌘K Rotate Right must turn the open photo clockwise"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_palette_open,
+            "running a command closes the palette"
+        );
+        assert!(app.is_fullscreen_viewer);
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Caches a placeholder thumbnail for `id`, as if painted at its angle.
+fn put_test_texture(
+    view: &gpui::Entity<LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    id: lumina_core::MediaId,
+) {
+    let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(4, 4),
+    )]));
+    view.update(vcx, |app, _| {
+        app.grid_state
+            .as_ref()
+            .expect("grid state must be installed")
+            .texture_cache
+            .lock()
+            .put(id, texture);
+    });
+}
+
+/// Asserts nothing was rotated and no undo step was recorded.
+fn assert_not_rotated(
+    view: &gpui::Entity<LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    engine: &lumina_core::LuminaEngine,
+    photos: &[lumina_core::MediaId],
+    why: &str,
+) {
+    assert_eq!(rotations(engine, photos), vec![0, 0, 0], "{why}");
+    view.update(vcx, |app, _| {
+        assert!(app.undo.undo_stack.is_empty(), "{why}: no undo step");
+    });
+}
+
+#[core::prelude::v1::test]
+fn image_menu_rotate_is_refused_behind_sheets() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_menu_shield");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "cmd-a");
+
+    view.update(vcx, |app, cx| app.open_preferences(cx));
+    render_ui(vcx);
+    vcx.dispatch_action(crate::actions::RotateRight);
+    vcx.run_until_parked();
+    assert_not_rotated(
+        &view,
+        vcx,
+        &engine,
+        &photos,
+        "Image > Rotate must not turn the selection hidden behind Preferences",
+    );
+    view.update(vcx, |app, cx| {
+        app.close_preferences(cx);
+        app.open_tag_manager(cx);
+    });
+    render_ui(vcx);
+    vcx.dispatch_action(crate::actions::RotateRight);
+    vcx.run_until_parked();
+    assert_not_rotated(
+        &view,
+        vcx,
+        &engine,
+        &photos,
+        "Image > Rotate must not turn the selection hidden behind the tag manager",
+    );
+
+    view.update(vcx, |app, cx| {
+        app.close_tag_manager(cx);
+        app.import.dialog = Some(crate::app::import::ImportDialog::Planning {
+            count: 1,
+            checked: None,
+        });
+    });
+    render_ui(vcx);
+    vcx.dispatch_action(crate::actions::RotateRight);
+    vcx.run_until_parked();
+    assert_not_rotated(
+        &view,
+        vcx,
+        &engine,
+        &photos,
+        "Image > Rotate must not turn the selection hidden behind Import…",
+    );
+
+    view.update(vcx, |app, _| app.import.dialog = None);
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "cmd-f");
+    vcx.dispatch_action(crate::actions::RotateRight);
+    vcx.run_until_parked();
+    assert_not_rotated(
+        &view,
+        vcx,
+        &engine,
+        &photos,
+        "Image > Rotate must not act while the search field has focus",
+    );
+
+    // With nothing open the same menu action rotates the selection.
+    view.update(vcx, |app, cx| app.blur_search(cx));
+    vcx.dispatch_action(crate::actions::RotateRight);
+    vcx.run_until_parked();
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![1, 1, 1],
+        "Image > Rotate Right turns the selection when no sheet is open"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn rotate_is_refused_in_recently_deleted() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_in_trash");
+    engine
+        .batch_set_trashed(&photos, true)
+        .expect("photos must move to Recently Deleted");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, cx| {
+        app.select_album(crate::AlbumSelection::Trash, cx)
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "cmd-a");
+    keystrokes(vcx, "r");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_indices.is_empty(),
+            "⌘A selects the deleted photos"
+        )
+    });
+    assert_not_rotated(
+        &view,
+        vcx,
+        &engine,
+        &photos,
+        "R must not rotate in Recently Deleted, where the context menu hides Rotate",
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn option_r_does_not_rotate_in_grid() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_option_r");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "cmd-a");
+    keystrokes(vcx, "alt-r");
+    assert_not_rotated(&view, vcx, &engine, &photos, "only R and ⇧R rotate, not ⌥R");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn r_in_text_field_does_not_rotate() {
+    let (dir, engine, photos, _video) = rotation_batch_library("rotate_r_in_search");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "cmd-a");
+    keystrokes(vcx, "cmd-f");
+    keystrokes(vcx, "r");
+    keystrokes(vcx, "shift-r");
+
+    view.update(vcx, |app, _| {
+        assert!(app.search_focused, "⌘F focuses the search field");
+        assert_eq!(
+            app.search_query, "rR",
+            "R and ⇧R type into the search field"
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "typing must not record a rotation"
+        );
+    });
+    assert_eq!(
+        rotations(&engine, &photos),
+        vec![0, 0, 0],
+        "typing R in a text field must not rotate the selection"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Synthetic double-click at a window-space position. The click count is read
@@ -1945,7 +2308,7 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             app.selected_item.is_some(),
             "the cached item is in the catalog"
         );
-        app.rotate_viewer_selected(crate::views::viewer_state::ViewerRotation::Right, cx);
+        app.rotate_selection(crate::views::viewer_state::ViewerRotation::Right, cx);
         assert_eq!(
             app.retired_images.len(),
             3,

@@ -433,7 +433,8 @@ view, and export without a mouse; no keyboard trap; documented limitations.
 rights, and edited date/location (written and imported), undo, single-instance
 lock, logging, cache eviction. Global tag rename, merge and delete undo as one
 step each (exact rows, aliases and smart-album rules; albums edited since are
-kept). No backup/restore UI.
+kept). Rotation (R / ⇧R, ⌘K, Image menu) undoes as one step per batch, each
+item back to its own angle. No backup/restore UI.
 
 **Target:**
 
@@ -441,7 +442,7 @@ kept). No backup/restore UI.
 - Catalog backup/restore UI and an integrity report.
 - Library health check: missing files, unreadable sidecars, FTS consistency,
   stale cache.
-- Undo coverage for the remaining edits (rotation).
+- Undo coverage for rotation: done (one step per batch, see Current).
 - Crash-safe recovery prompts after an interrupted import or migration.
 - Diagnostics export and a clear privacy policy for logs.
 

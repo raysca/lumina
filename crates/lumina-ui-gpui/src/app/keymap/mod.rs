@@ -263,6 +263,12 @@ impl LuminaApp {
         }
 
         // Grid & Browser Shortcuts
-        self.handle_grid_key_down(key, cmd_or_ctrl, keystroke.modifiers.shift, cx);
+        self.handle_grid_key_down(
+            key,
+            cmd_or_ctrl,
+            keystroke.modifiers.shift,
+            keystroke.modifiers.alt,
+            cx,
+        );
     }
 }

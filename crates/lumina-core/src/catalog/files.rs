@@ -638,7 +638,7 @@ pub(crate) mod tests {
         let catalog = Catalog::open_in_memory().unwrap();
         let keep = ingest(&catalog, &dir.write("a.jpg", b"a")).id;
         let other = ingest(&catalog, &dir.write("b.jpg", b"b")).id;
-        catalog.set_rotation(&[other], 1).unwrap();
+        catalog.set_rotations(&[(other, 1)]).unwrap();
         // 2001-09-09 UTC
         catalog.set_timestamp(other, 1_000_000_000_000).unwrap();
         catalog

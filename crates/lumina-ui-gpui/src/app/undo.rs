@@ -1,8 +1,8 @@
 //! Undo/redo for catalog mutations.
 //!
 //! Only operations that are fully reversible in the catalog are recorded:
-//! ratings, color labels, favorites, captions, tags, trash/restore, metadata
-//! template applies, global keyword rename/merge/delete (exact rows, aliases
+//! ratings, color labels, favorites, captions, tags, trash/restore, rotation,
+//! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
 //! and smart-album rules), and smart album deletion.
 //! Permanent deletion is intentionally excluded.
 
@@ -33,6 +33,8 @@ pub enum UndoAction {
     Rating { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after); one entry covers a whole batch.
     ColorLabel { changes: Vec<(MediaId, u8, u8)> },
+    /// (id, before, after) quarter turns; one entry covers a whole batch.
+    Rotation { changes: Vec<(MediaId, u8, u8)> },
     /// (id, before, after)
     Favorite { changes: Vec<(MediaId, bool, bool)> },
     Caption {
@@ -128,7 +130,10 @@ impl UndoAction {
             UndoAction::BatchDate { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::BatchLocation { changes } => changes.iter().map(|(id, _, _)| *id).collect(),
             UndoAction::Tags { ids, .. } => ids.clone(),
-            UndoAction::SmartAlbumDeleted { .. } | UndoAction::TemplateDeleted { .. } => Vec::new(),
+            // Rotation is not written to sidecars.
+            UndoAction::Rotation { .. }
+            | UndoAction::SmartAlbumDeleted { .. }
+            | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
             UndoAction::TagRows { change, .. } => change.affected_ids(),
         }
@@ -138,6 +143,7 @@ impl UndoAction {
         match self {
             UndoAction::Rating { .. } => "rating",
             UndoAction::ColorLabel { .. } => "color label",
+            UndoAction::Rotation { .. } => "rotation",
             UndoAction::Favorite { .. } => "favorite",
             UndoAction::Caption { .. } => "caption",
             UndoAction::Title { .. } => "title",
@@ -165,6 +171,7 @@ impl UndoAction {
         let done = match self {
             UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
             UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
+            UndoAction::Rotation { changes } => engine.set_rotations(&pick(changes, before)),
             UndoAction::Favorite { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_favorite(ids, value)
             }),
@@ -369,6 +376,10 @@ impl LuminaApp {
                         self.selection = AlbumSelection::AllLibrary;
                         self.clear_selection(cx);
                     }
+                }
+                if let UndoAction::Rotation { changes } = action {
+                    let ids: Vec<MediaId> = changes.iter().map(|&(id, _, _)| id).collect();
+                    self.evict_rendered(&ids);
                 }
                 // Get Info caches rights per item; reload them.
                 if matches!(action, UndoAction::Template { .. }) {

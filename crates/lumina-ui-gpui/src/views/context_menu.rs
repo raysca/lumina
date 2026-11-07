@@ -399,22 +399,22 @@ impl MediaContextMenu {
                                 &hover,
                                 "quick-edit-rotate-left",
                                 "Rotate Left",
-                                None,
+                                Some("⇧R"),
                                 false,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.close_context_menu(cx);
-                                    this.rotate_viewer_selected(ViewerRotation::Left, cx);
+                                    this.rotate_selection(ViewerRotation::Left, cx);
                                 }),
                             ))
                             .child(Self::render_menu_item(
                                 &hover,
                                 "quick-edit-rotate-right",
                                 "Rotate Right",
-                                None,
+                                Some("R"),
                                 false,
                                 cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.close_context_menu(cx);
-                                    this.rotate_viewer_selected(ViewerRotation::Right, cx);
+                                    this.rotate_selection(ViewerRotation::Right, cx);
                                 }),
                             ))
                     }))

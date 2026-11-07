@@ -93,7 +93,7 @@ core handles cataloguing, decoding, and search.
   a rescan like an edit.
 - **Undo / redo** — `⌘Z` / `⇧⌘Z` for ratings, color labels, favorites, captions,
   titles, tag add/remove, global tag rename/merge/delete (one step even for a
-  bulk delete), metadata templates, and trash/restore. Metadata
+  bulk delete), metadata templates, rotation, and trash/restore. Metadata
   edits also refresh the item's XMP sidecar automatically; permanent deletion
   is deliberately not undoable.
 - **Editable metadata & XMP import** — click the title, date-taken or coordinate
@@ -114,6 +114,11 @@ core handles cataloguing, decoding, and search.
   row, metadata and thumbnail, with a badge and a Missing view. Files moved or
   renamed inside the library reconnect by inode; "Locate…" (context menu or
   ⌘K) points an item at its file by hand.
+- **Rotate** — `R` turns the photo open in the viewer, or every photo
+  selected in the grid, a quarter turn clockwise and `⇧R` counter-clockwise
+  (also ⌘K, the Image menu and the context menu). Videos in the selection
+  are skipped. The turn is stored in the library, never written to the
+  file, and one `⌘Z` puts each photo back at its own previous angle.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

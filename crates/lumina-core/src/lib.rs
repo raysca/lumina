@@ -682,28 +682,20 @@ impl LuminaEngine {
         self.catalog.set_color_labels(changes)
     }
 
-    /// Sets the persisted clockwise quarter-turn rotation for every id.
+    /// Sets each item's own clockwise quarter turns in one transaction
+    /// (batch rotate and its undo); ids not in the catalog are skipped.
     ///
-    /// Rotation is display-only: the original file is never rewritten. The
-    /// catalog write is one transaction, and cached thumbnails for the affected
-    /// items are dropped because the cache key has no rotation component, so an
-    /// unchanged key would otherwise keep serving the previous orientation.
-    pub fn set_rotation(&self, ids: &[MediaId], quarters: u8) -> Result<()> {
-        if ids.is_empty() {
-            return Ok(());
-        }
-        let mut affected = Vec::with_capacity(ids.len());
-        for id in ids {
-            if let Some(item) = self.catalog.get_item_by_id(*id)? {
-                affected.push(item);
-            }
-        }
-        self.catalog.set_rotation(ids, quarters)?;
-        for item in &affected {
-            self.cache
-                .remove_cached_item(&item.path, item.file_size, item.mtime_epoch_ms);
-        }
-        Ok(())
+    /// Rotation is display-only: the original file is never rewritten, and
+    /// the disk cache keeps its entries because it stores the unrotated
+    /// decode (the turn is applied after the cache lookup, see
+    /// `process_thumbnail_request`).
+    pub fn set_rotations(&self, changes: &[(MediaId, u8)]) -> Result<()> {
+        self.catalog.set_rotations(changes)
+    }
+
+    /// Each id's persisted rotation; ids not in the catalog are left out.
+    pub fn get_rotations(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, u8>> {
+        self.catalog.get_rotations(ids)
     }
 
     /// Persisted clockwise quarter turns for an item (0 when unset).
@@ -2013,26 +2005,33 @@ mod tests {
 
         let unrotated = request_thumbnail_frame(&engine, item.id, 320);
         assert_eq!((unrotated.width, unrotated.height), (8, 4));
+        let cache_file = engine.cache.cache_file_path(&DiskCache::compute_key(
+            &item.path,
+            item.file_size,
+            item.mtime_epoch_ms,
+            320,
+        ));
+        assert!(
+            cache_file.exists(),
+            "the first decode must fill the disk cache"
+        );
 
         engine
-            .set_rotation(&[item.id], 1)
+            .set_rotations(&[(item.id, 1)])
             .expect("rotation write must succeed");
         assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 1);
+        assert!(
+            cache_file.exists(),
+            "rotating must keep the cached decode: it holds the unrotated frame"
+        );
 
+        // Served from the disk cache: rotation is applied after the lookup,
+        // so the cached unrotated bytes stay valid.
         let rotated = request_thumbnail_frame(&engine, item.id, 320);
         assert_eq!(
             (rotated.width, rotated.height),
             (4, 8),
-            "thumbnail decode must apply the stored quarter turn"
-        );
-
-        // A repeated request can be served from the disk cache; rotation is
-        // applied after the cache lookup, so the cached bytes stay valid.
-        let cached_rotated = request_thumbnail_frame(&engine, item.id, 320);
-        assert_eq!(
-            (cached_rotated.width, cached_rotated.height),
-            (4, 8),
-            "the cached frame must be rotated on every request"
+            "a cached frame decoded after rotation must come back rotated"
         );
 
         assert_eq!(
@@ -2042,10 +2041,10 @@ mod tests {
         );
 
         engine
-            .set_rotation(&[], 3)
+            .set_rotations(&[])
             .expect("an empty rotation batch must be a no-op");
         engine
-            .set_rotation(&[item.id, MediaId(9_999)], 3)
+            .set_rotations(&[(item.id, 3), (MediaId(9_999), 3)])
             .expect("unknown ids must not fail the batch");
         assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 3);
 

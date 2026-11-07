@@ -9,6 +9,7 @@ use crate::theme;
 use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
 use crate::views::sidebar::{AlbumSelection, SidebarView};
+use crate::views::viewer_state::ViewerRotation;
 
 mod grid;
 mod overlays;
@@ -138,6 +139,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
             ("⌘+ / ⌘-", "Grid density"),
             ("Space / Enter", "Open in viewer"),
             ("T", "Tag selection"),
+            ("R / ⇧R", "Rotate right / left"),
             ("⌫", "Delete…"),
         ],
     ),
@@ -156,6 +158,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
             ("⌘3", "Fill"),
             ("Z", "Toggle 1:1 zoom"),
             ("O", "Open in default app"),
+            ("R / ⇧R", "Rotate right / left"),
         ],
     ),
     (
@@ -464,6 +467,12 @@ impl Render for LuminaApp {
             }))
             .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
                 this.navigate_forward(cx);
+            }))
+            .on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
+                this.rotate_selection(ViewerRotation::Left, cx);
+            }))
+            .on_action(cx.listener(|this, _: &RotateRight, _w, cx| {
+                this.rotate_selection(ViewerRotation::Right, cx);
             }))
             .on_mouse_down(
                 MouseButton::Left,

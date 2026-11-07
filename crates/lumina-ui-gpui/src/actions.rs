@@ -21,6 +21,8 @@ actions!(
         ToggleDownloads,
         NewSmartAlbum,
         GoBack,
-        GoForward
+        GoForward,
+        RotateLeft,
+        RotateRight
     ]
 );

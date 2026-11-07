@@ -45,12 +45,15 @@ Lumina is designed to be usable without a mouse:
   editor's fields, list rows and buttons, and the batch inspector's template
   picker and Apply button, carry roles and labels, not yet checked with
   VoiceOver.
+- **Rotation**: `R` / `⇧R` rotate the viewer photo or the grid selection
+  right / left, also ⌘K Rotate Right / Rotate Left and Image > Rotate
+  Right / Rotate Left; the keys type into a focused text field instead.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
 - **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video, Tag
   Manager and metadata template keys;
   `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` and `Space` scroll it.
-- **Native menu bar** exposes File, View and Help commands; macOS treats these
+- **Native menu bar** exposes File, View, Image, Go and Help commands; macOS treats these
   as accessible menu items for VoiceOver.
 - Arrow/Home/End/Page navigation, `⌘F` search focus, `⌘Z`/`⇧⌘Z` undo/redo,
   tooltips on icon-only controls, and visible focus/selection styling.

@@ -33,6 +33,10 @@ pub fn build_menus() -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
         ]),
+        Menu::new("Image").items([
+            MenuItem::action("Rotate Left", RotateLeft),
+            MenuItem::action("Rotate Right", RotateRight),
+        ]),
         Menu::new("Go").items([
             MenuItem::action("Back", GoBack),
             MenuItem::action("Forward", GoForward),
@@ -52,7 +56,7 @@ mod tests {
     fn menu_bar_has_core_commands() {
         let menus = build_menus();
         let names: Vec<&str> = menus.iter().map(|menu| menu.name.as_ref()).collect();
-        assert_eq!(names, vec!["Lumina", "File", "View", "Go", "Help"]);
+        assert_eq!(names, vec!["Lumina", "File", "View", "Image", "Go", "Help"]);
 
         let app_items = &menus[0].items;
         assert!(app_items
