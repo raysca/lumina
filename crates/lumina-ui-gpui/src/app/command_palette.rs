@@ -839,7 +839,7 @@ impl LuminaApp {
             go(
                 AlbumSelection::AllLibrary,
                 "All Photos".into(),
-                Icon::Image,
+                Icon::Images,
                 "all".into(),
             ),
             go(
@@ -861,6 +861,26 @@ impl LuminaApp {
                 "downloaded downloads url".into(),
             ),
             go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Screenshots),
+                "Screenshots".into(),
+                Icon::Camera,
+                "screenshots".into(),
+            ),
+            go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Places),
+                "Places".into(),
+                Icon::MapPin,
+                "places".into(),
+            ),
+            // Listed even at 0, like Downloaded: the palette is a keyboard
+            // path, so its rows do not come and go with the counts.
+            go(
+                AlbumSelection::System(lumina_core::SystemAlbum::Missing),
+                "Missing".into(),
+                Icon::TriangleAlert,
+                "missing".into(),
+            ),
+            go(
                 AlbumSelection::Trash,
                 "Recently Deleted".into(),
                 Icon::Trash,
@@ -875,7 +895,7 @@ impl LuminaApp {
             go(
                 AlbumSelection::Duplicates,
                 "Duplicates".into(),
-                Icon::Repeat,
+                Icon::Copy,
                 "duplicates".into(),
             ),
         ]);

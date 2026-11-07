@@ -352,3 +352,53 @@ fn palette_hides_trash_and_retry_commands_that_cannot_act() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn palette_go_to_opens_screenshots_places_and_missing() {
+    use crate::views::sidebar::AlbumSelection;
+    use lumina_core::SystemAlbum;
+    let (dir, engine) = seed_library("palette_goto_sidebar", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+
+    for (query, slug, album) in [
+        ("screenshots", "screenshots", SystemAlbum::Screenshots),
+        ("places", "places", SystemAlbum::Places),
+        // Listed even while nothing is missing, like Downloaded. "Go to"
+        // skips the Locate Missing File command, which ranks first.
+        ("go to missing", "missing", SystemAlbum::Missing),
+    ] {
+        view.update(vcx, |app, cx| {
+            app.select_album(AlbumSelection::AllLibrary, cx)
+        });
+        focus_app(vcx, &view);
+        keystrokes(vcx, "secondary-k");
+        for ch in query.chars() {
+            keystrokes(
+                vcx,
+                if ch == ' ' {
+                    "space"
+                } else {
+                    leak(ch.to_string())
+                },
+            );
+        }
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds(leak(format!("palette-go-{slug}")))
+                .is_some(),
+            "⌘K {query} lists the {slug} collection"
+        );
+        keystrokes(vcx, "enter");
+        view.update(vcx, |app, _| {
+            assert!(!app.command_palette_open);
+            assert_eq!(
+                app.selection,
+                AlbumSelection::System(album),
+                "every sidebar collection has a keyboard path: ⌘K {query} ↵"
+            );
+        });
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
