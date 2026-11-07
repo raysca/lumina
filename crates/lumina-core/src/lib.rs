@@ -2,6 +2,7 @@ pub mod cache;
 pub mod catalog;
 pub mod decoder;
 pub mod duplicates;
+pub mod edit_copy;
 pub mod edits;
 pub mod geocoder;
 pub mod import;

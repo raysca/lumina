@@ -215,6 +215,13 @@ impl LuminaApp {
             return;
         }
 
+        // ⌘E: Edit in External Editor; ⌥⌘E: Edit a Copy. Text fields, sheets
+        // and edit mode took the key in `handle_modal_key_down` above.
+        if cmd_or_ctrl && !ctrl_cmd && !keystroke.modifiers.shift && key.eq_ignore_ascii_case("e") {
+            self.edit_selected_externally(keystroke.modifiers.alt, cx);
+            return;
+        }
+
         // Cmd+R: rescan the active library (filesystem watcher is best-effort)
         if cmd_or_ctrl && key.eq_ignore_ascii_case("r") {
             self.rescan_library(cx);

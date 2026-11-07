@@ -144,6 +144,17 @@ core handles cataloguing, decoding, and search.
   leaves crop mode without the new crop and keeps edit mode open. The crop is stored
   independently of rotation, so turning a cropped photo keeps the same
   region; Revert to Original removes it.
+- **Edit in…** — set an external editor in Preferences, then `⌘E` (also ⌘K,
+  Image > Edit in External Editor and the context menu) opens the selected
+  file in it, in place. `⌥⌘E` (Edit a Copy) first copies the file to
+  `name (edited).ext` in the same folder (never over an existing file, and
+  never under a name a deleted or trashed library item still holds),
+  adds the copy to the library with the original's keywords, caption,
+  rating, favorite, label, title and rights, selects it and opens the copy;
+  the original stays as it was. The editor opens the file without Lumina's
+  crop, exposure or rotation, so the copy starts with none of them. With no
+  editor set, both open Preferences on the editor row. Neither works on
+  several items at once or while editing a photo in Lumina.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

@@ -9,7 +9,7 @@ use rusqlite::{params, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 
 use super::Catalog;
-use crate::{normalize_quarter_turns, MediaId};
+use crate::{normalize_quarter_turns, MediaId, MediaItem};
 
 /// Smallest crop side, as a fraction of the frame.
 const MIN_CROP_SIDE: f32 = 0.02;
@@ -169,6 +169,62 @@ impl Catalog {
             .map(|id| id.map(|id| MediaId(id as u64)))
             .collect::<rusqlite::Result<_>>()?;
         Ok(ids)
+    }
+
+    /// True when a catalog row (present, missing or trashed) has `path`.
+    pub(crate) fn has_path(&self, path: &std::path::Path) -> Result<bool> {
+        let conn = self.conn.lock();
+        let found = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM media_items WHERE file_path = ?1);",
+            [path.to_string_lossy()],
+            |row| row.get(0),
+        )?;
+        Ok(found)
+    }
+
+    /// Catalogues `copy` (an Edit a Copy file) with the user metadata of
+    /// `original`, in one transaction: tags, caption, favorite, rating,
+    /// label, title, rights, and the edited date/place flags. The copy gets
+    /// no edits row and rotation 0: the external editor opens the plain file,
+    /// so Lumina's edits would otherwise apply twice once it saves.
+    pub(crate) fn insert_edit_copy(
+        &self,
+        copy: &MediaItem,
+        original: MediaId,
+    ) -> Result<MediaItem> {
+        let inodes = [super::files::file_inode(&copy.path)];
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        // The name was chosen free of catalog rows; one that appeared since
+        // can only be the watcher cataloguing this new file. Never take over
+        // a trashed or missing row: the copy would inherit its metadata.
+        let stale: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM media_items m
+                 LEFT JOIN media_file_state s ON s.media_id = m.id
+                 WHERE m.file_path = ?1
+                   AND (m.is_trashed = 1 OR s.missing_since_epoch_ms IS NOT NULL));",
+            [copy.path.to_string_lossy()],
+            |row| row.get(0),
+        )?;
+        if stale {
+            bail!("a catalog item already uses {:?}", copy.path);
+        }
+        let inserted = Self::upsert_in_tx(&tx, std::slice::from_ref(copy), &inodes)?
+            .pop()
+            .context("the catalog returned no row for the copy")?;
+        Self::merge_metadata_in_tx(&tx, inserted.id, &[original])?;
+        let new_id = inserted.id.0 as i64;
+        tx.execute("DELETE FROM media_edits WHERE media_id = ?1;", [new_id])?;
+        tx.execute(
+            "UPDATE media_items SET rotation_quarters = 0,
+                 date_edited = (SELECT date_edited FROM media_items WHERE id = ?2),
+                 place_edited = (SELECT place_edited FROM media_items WHERE id = ?2)
+             WHERE id = ?1;",
+            params![new_id, original.0 as i64],
+        )?;
+        Self::rebuild_timeline_buckets(&tx)?;
+        tx.commit()?;
+        Ok(inserted)
     }
 }
 

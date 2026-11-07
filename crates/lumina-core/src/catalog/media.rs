@@ -58,7 +58,7 @@ impl Catalog {
         Ok(inserted)
     }
 
-    fn upsert_in_tx(
+    pub(super) fn upsert_in_tx(
         tx: &rusqlite::Transaction,
         items: &[MediaItem],
         inodes: &[Option<u64>],

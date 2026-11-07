@@ -5,6 +5,7 @@ mod design_system;
 mod downloads;
 mod downloads_panel;
 mod duplicates;
+mod editor_copy;
 mod editor_handoff;
 mod engine_release;
 mod get_info;

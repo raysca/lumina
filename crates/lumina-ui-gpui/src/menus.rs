@@ -39,6 +39,9 @@ pub fn build_menus() -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action("Edit Photo", EditPhoto),
             MenuItem::action("Revert to Original", RevertToOriginal),
+            MenuItem::separator(),
+            MenuItem::action("Edit in External Editor", EditInExternalEditor),
+            MenuItem::action("Edit a Copy in External Editor", EditCopyInExternalEditor),
         ]),
         Menu::new("Go").items([
             MenuItem::action("Back", GoBack),

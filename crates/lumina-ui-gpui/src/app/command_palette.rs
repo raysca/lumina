@@ -57,6 +57,9 @@ pub enum CommandId {
     EditPhoto,
     /// Clears rotation and edits on the viewer photo or the selection.
     RevertToOriginal,
+    /// The one selected item in the external editor, in place or a copy.
+    EditInExternalEditor,
+    EditCopyInExternalEditor,
     TogglePip,
     PipPlayPause,
     NewSmartAlbum,
@@ -131,6 +134,7 @@ impl Command {
             RotateRight => Icon::RotateCw,
             EditPhoto => Icon::Sliders,
             RevertToOriginal => Icon::Undo2,
+            EditInExternalEditor | EditCopyInExternalEditor => Icon::ExternalLink,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
             NewSmartAlbum | SaveSearch => Icon::Sparkles,
@@ -472,6 +476,18 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "reset undo remove edits rotation exposure image photo",
         },
+        Command {
+            id: CommandId::EditInExternalEditor,
+            key: "command.edit_external",
+            shortcut: "⌘E",
+            keywords: "open app application editor retouch image photo",
+        },
+        Command {
+            id: CommandId::EditCopyInExternalEditor,
+            key: "command.edit_copy_external",
+            shortcut: "⌥⌘E",
+            keywords: "duplicate open app application editor image photo",
+        },
         // After the Rate commands: "rate 3" also matches "Show Rated ★ 3+".
         Command {
             id: CommandId::QuickFilter("is:favorite"),
@@ -733,6 +749,10 @@ impl LuminaApp {
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
             }
+            CommandId::EditInExternalEditor | CommandId::EditCopyInExternalEditor => {
+                self.selected_item.is_some()
+                    && (self.is_fullscreen_viewer || self.selected_indices.len() <= 1)
+            }
             CommandId::EditPhoto => self
                 .selected_item
                 .as_ref()
@@ -991,6 +1011,8 @@ impl LuminaApp {
             CommandId::RotateRight => self.rotate_selection(ViewerRotation::Right, cx),
             CommandId::EditPhoto => self.enter_edit_mode(cx),
             CommandId::RevertToOriginal => self.revert_selection_to_original(cx),
+            CommandId::EditInExternalEditor => self.edit_selected_externally(false, cx),
+            CommandId::EditCopyInExternalEditor => self.edit_selected_externally(true, cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
             CommandId::NewSmartAlbum => self.open_album_builder(cx),

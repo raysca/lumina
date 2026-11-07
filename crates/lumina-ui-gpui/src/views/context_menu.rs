@@ -379,11 +379,26 @@ impl MediaContextMenu {
                             &hover,
                             "edit-external-menu-btn",
                             "Edit in External Editor",
-                            None,
+                            Some("⌘E"),
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.close_context_menu(cx);
                                 this.open_item_in_external_editor(&path_for_edit, cx);
+                            }),
+                        )
+                    })
+                    // 15. Edit a copy next to the original (no Lumina edits)
+                    .child({
+                        let item_for_copy = item.clone();
+                        Self::render_menu_item(
+                            &hover,
+                            "edit-copy-external-menu-btn",
+                            "Edit a Copy in External Editor",
+                            Some("⌥⌘E"),
+                            false,
+                            cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.close_context_menu(cx);
+                                this.edit_item_externally(item_for_copy.clone(), true, cx);
                             }),
                         )
                     })

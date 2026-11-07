@@ -89,6 +89,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.rotate_right" => "Rotate Right",
         "command.edit_photo" => "Edit Photo",
         "command.revert_to_original" => "Revert to Original",
+        "command.edit_external" => "Edit in External Editor",
+        "command.edit_copy_external" => "Edit a Copy in External Editor",
         "command.toggle_pip" => "Toggle Picture-in-Picture",
         "command.pip_play_pause" => "Play/Pause Picture-in-Picture",
         "command.new_smart_album" => "New Smart Album…",

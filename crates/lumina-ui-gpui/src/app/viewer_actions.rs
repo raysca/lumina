@@ -247,9 +247,9 @@ impl LuminaApp {
             self.set_error(EXTERNAL_EDITOR_INVALID_MESSAGE, cx);
             return;
         };
-        // Tests never launch a real editor.
+        // Tests never launch a real editor; they record the command.
         #[cfg(test)]
-        drop(command);
+        crate::app::external_edit::test_launches::record(&command);
         #[cfg(not(test))]
         Self::launch_reporting(command, EXTERNAL_EDITOR_FAILED_MESSAGE, cx);
     }

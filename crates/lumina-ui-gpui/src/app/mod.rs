@@ -5,6 +5,7 @@ pub mod crop;
 pub mod crop_geometry;
 pub mod deletion;
 pub mod downloads;
+pub mod external_edit;
 pub mod first_scan;
 pub mod history;
 pub mod import;

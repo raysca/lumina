@@ -59,6 +59,11 @@ Lumina is designed to be usable without a mouse:
   photo). Revert to Original is in ⌘K and the Image menu. The edit
   bar's buttons and the grid's "Edited" badge carry roles, labels and
   tooltips, not yet checked with VoiceOver.
+- **External editor**: `⌘E` opens the selected item in the editor set in
+  Preferences and `⌥⌘E` opens a copy of it (Edit a Copy), also ⌘K, the
+  Image menu and the context menu. With no editor set they open
+  Preferences on its General tab, where the editor row is. A focused text
+  field and edit mode absorb both keys.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
 - **Shortcut sheet** (`⌘/`) lists general, browsing, viewer, video, Tag

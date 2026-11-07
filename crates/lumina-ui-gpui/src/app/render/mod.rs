@@ -125,6 +125,8 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 7] = [
             ("F", "Favorite"),
             ("⇧⌘R", "Show in Finder"),
             ("⌥⌘C", "Copy file path"),
+            ("⌘E", "Edit in external editor"),
+            ("⌥⌘E", "Edit a copy in external editor"),
             ("Esc", "Close / go back"),
             ("⌘/", "Toggle this help"),
         ],
@@ -490,6 +492,15 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
                     this.navigate_forward(cx);
                 }))
+                // The editor opens the file without the draft's edits.
+                .on_action(cx.listener(|this, _: &EditInExternalEditor, _w, cx| {
+                    this.edit_selected_externally(false, cx);
+                }))
+                .on_action(cx.listener(
+                    |this, _: &EditCopyInExternalEditor, _w, cx| {
+                        this.edit_selected_externally(true, cx);
+                    },
+                ))
             })
             .on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
                 this.rotate_selection(ViewerRotation::Left, cx);

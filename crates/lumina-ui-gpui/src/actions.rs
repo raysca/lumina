@@ -25,6 +25,8 @@ actions!(
         RotateLeft,
         RotateRight,
         EditPhoto,
-        RevertToOriginal
+        RevertToOriginal,
+        EditInExternalEditor,
+        EditCopyInExternalEditor
     ]
 );
