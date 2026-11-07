@@ -55,6 +55,12 @@ pub enum CommandId {
     DeleteRejected,
     /// Compare / survey of the 2-9 selected items (C in the grid).
     Compare,
+    /// The current view in the immersive viewer (⌥⌘S).
+    Slideshow,
+    /// Toggles whether the slideshow wraps at the end.
+    SlideshowLoop,
+    /// Seconds per slide (3, 5 or 10).
+    SlideshowInterval(u8),
     ToggleFavorite,
     /// Quarter turn of the viewer item or the selected stills.
     RotateLeft,
@@ -158,6 +164,8 @@ impl Command {
             Flag(lumina_core::Flag::Unflagged) => Icon::Minus,
             DeleteRejected => Icon::Trash,
             Compare => Icon::Images,
+            Slideshow | SlideshowInterval(_) => Icon::Play,
+            SlideshowLoop => Icon::Repeat,
             ToggleFavorite => Icon::Heart,
             RotateLeft => Icon::RotateCcw,
             RotateRight => Icon::RotateCw,
@@ -509,6 +517,36 @@ pub fn commands() -> &'static [Command] {
             key: "command.compare",
             shortcut: "C",
             keywords: "compare survey side by side cull",
+        },
+        Command {
+            id: CommandId::Slideshow,
+            key: "command.slideshow",
+            shortcut: "⌥⌘S",
+            keywords: "slideshow slide show play present full screen",
+        },
+        Command {
+            id: CommandId::SlideshowLoop,
+            key: "command.slideshow_loop",
+            shortcut: "",
+            keywords: "slideshow loop repeat wrap",
+        },
+        Command {
+            id: CommandId::SlideshowInterval(3),
+            key: "command.slideshow_interval_3",
+            shortcut: "",
+            keywords: "slideshow interval seconds speed timing",
+        },
+        Command {
+            id: CommandId::SlideshowInterval(5),
+            key: "command.slideshow_interval_5",
+            shortcut: "",
+            keywords: "slideshow interval seconds speed timing",
+        },
+        Command {
+            id: CommandId::SlideshowInterval(10),
+            key: "command.slideshow_interval_10",
+            shortcut: "",
+            keywords: "slideshow interval seconds speed timing",
         },
         Command {
             id: CommandId::ToggleFavorite,
@@ -917,6 +955,8 @@ impl LuminaApp {
                 self.grid_state.is_some() && self.view_query().reject_scope().is_some()
             }
             CommandId::Compare => self.grid_state.is_some() && !self.is_fullscreen_viewer,
+            CommandId::Slideshow => self.grid_state.is_some() && self.compare.is_none(),
+            CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
@@ -1219,6 +1259,9 @@ impl LuminaApp {
             }
             CommandId::DeleteRejected => self.delete_rejected(cx),
             CommandId::Compare => self.open_compare(cx),
+            CommandId::Slideshow => self.start_slideshow_deferred(cx),
+            CommandId::SlideshowLoop => self.toggle_slideshow_loop(cx),
+            CommandId::SlideshowInterval(secs) => self.set_slideshow_interval(secs, cx),
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)
             }

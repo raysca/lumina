@@ -60,8 +60,8 @@ minimal; no copy-into-library workflow or drag-and-drop import; tags are flat
 and there is no first-class Untagged view; albums are smart-only (no curated
 static albums); batch editing covers ratings/colors/tags/trash but not
 title/date/location/caption; video lacks resume, chapters, subtitle/audio track
-selection, and scrub previews; no slideshow or map view (compare/survey
-landed in plan 5 C1); no light
+selection, and scrub previews; no map view (compare/survey and the
+slideshow landed in plan 5 C1 and C2); no light
 theme; no on-device semantic search; Windows/Linux are planned but unsupported;
 VoiceOver has no GPUI element tree; no in-app update mechanism.
 
@@ -345,8 +345,8 @@ colour-label index (schema v15) keeps colour filters fast. Timeline buckets,
 sorting, grid density, viewer zoom/pan and keyboard navigation as before.
 Known limits: no value suggestions for cameras, lenses or cities; renaming a
 tag does not rewrite `tag:` inside a saved search; an older app build reads a
-saved search as an album with no rules (the whole library). No compare,
-slideshow, map or jump-to-date.
+saved search as an album with no rules (the whole library). No map or
+jump-to-date (compare/survey and the slideshow came later, in plan 5 C1 and C2).
 
 **Target:**
 
@@ -590,8 +590,8 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P0 | Top | Batch metadata + grouped undo | 0.4 | Apply templates/keywords to a selection. |
 | P1 | Mid | Private S3-compatible backup (encrypted, OS credentials) | 0.5 | User-owned bucket; no sync/browsing. |
 | P1 | Mid | Curated albums + smart-album polish | 0.6 | Shipped: curated albums (⌘N, ⇧⌘A picker, ⌫ in an album, undo), pin for albums and smart albums, Duplicate Smart Album, rule JSON export/import. Missing: covers, drag to album, smart-album preview of why an item matched. |
-| P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…. Missing: compare/survey. |
-| P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. |
+| P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…, compare/survey of 2–9 items with shared zoom (C, View > Compare; plan 5 C1). |
+| P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Missing: map; slideshow music and transitions beyond a fade. |
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. |

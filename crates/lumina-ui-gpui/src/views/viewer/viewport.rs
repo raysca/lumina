@@ -158,7 +158,9 @@ impl ViewerViewport {
                     // The viewer can be open without a grid index.
                     // Edit mode has its own bar; the menu's Delete and
                     // Rotate must not act under the draft.
-                    if this.edits.session.is_some() {
+                    // A slideshow has no menu: its Delete and Rotate would
+                    // act on a slide behind the timer.
+                    if this.edits.session.is_some() || this.slideshow.is_some() {
                         return;
                     }
                     if let Some(item) = this.selected_item.clone() {

@@ -107,7 +107,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 8] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 9] = [
     (
         "GENERAL",
         &[
@@ -184,6 +184,15 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 8] = [
             ("1–5 / 0", "Rate / clear rating, then next"),
             ("R / ⇧R", "Rotate right / left"),
             ("E", "Edit photo"),
+        ],
+    ),
+    (
+        "SLIDESHOW",
+        &[
+            ("⌥⌘S", "Play the view from the selection"),
+            ("Space", "Pause / resume"),
+            ("← / →", "Previous / next slide"),
+            ("Esc", "End the slideshow"),
         ],
     ),
     (
@@ -339,6 +348,11 @@ fn app_actions(div: Div, cx: &mut Context<LuminaApp>) -> Div {
         this.request_quit(cx);
     }))
     .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
+        // The menu bar is reachable over a full-screen slideshow; the
+        // picker would open behind it while the show plays on.
+        if this.slideshow.is_some() {
+            return;
+        }
         this.pick_folder_dialog(cx);
     }))
 }
@@ -454,9 +468,12 @@ impl Render for LuminaApp {
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
 
         let editing = self.edits.session.is_some();
-        // Compare shows (not the viewer opened from it): menu items that act
-        // on the hidden grid selection or open a dialog are disabled.
-        let comparing = self.compare.is_some() && !is_fullscreen_viewer;
+        // Compare shows (not the viewer opened from it), or a slideshow
+        // plays (the menu bar stays reachable in full screen): menu items
+        // that act on the hidden selection, open a dialog or move the view
+        // are disabled.
+        let slideshow = self.slideshow.is_some();
+        let presenting = (self.compare.is_some() && !is_fullscreen_viewer) || slideshow;
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
             cx,
@@ -469,20 +486,24 @@ impl Render for LuminaApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &ShowShortcuts, _w, cx| {
-                this.toggle_shortcuts_overlay(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
-                this.toggle_sidebar(cx);
-            }))
-            .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
-                this.toggle_inspector(cx);
-            }))
+            // Compare leaves these on; under a slideshow they would change
+            // the panels or open the sheet unseen behind the slide.
+            .when(!slideshow, |root| {
+                root.on_action(cx.listener(|this, _: &ShowShortcuts, _w, cx| {
+                    this.toggle_shortcuts_overlay(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
+                    this.toggle_sidebar(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
+                    this.toggle_inspector(cx);
+                }))
+            })
             // Edit mode: no handler means a disabled menu item. These open
             // overlays that take the keys, change media, or leave the photo
             // under the draft. Rotate and Revert go to the draft; Quit and
             // Open Library stay (they discard the draft and say so).
-            .when(!editing && !comparing, |root| {
+            .when(!editing && !presenting, |root| {
                 root.on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
                     this.open_preferences(cx);
                 }))
@@ -525,6 +546,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &Compare, _w, cx| {
                     this.open_compare(cx);
                 }))
+                .on_action(cx.listener(|this, _: &Slideshow, window, cx| {
+                    this.start_slideshow(window, cx);
+                }))
                 .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
                     this.import_smart_album_rules(cx);
                 }))
@@ -544,7 +568,7 @@ impl Render for LuminaApp {
                     },
                 ))
             })
-            .when(!comparing, |root| {
+            .when(!presenting, |root| {
                 root.on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
                     this.rotate_selection(ViewerRotation::Left, cx);
                 }))

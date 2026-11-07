@@ -43,7 +43,10 @@ impl MediaViewer {
         // Edit mode swaps the top bar for the edit bar and hides what could
         // step to, or act on, another photo (nav buttons, info drawer).
         let editing = this.edits.session.is_some();
-        let show_drawer = is_inspector_open && show_chrome && !editing;
+        // A slideshow keeps only Back: no step, mark, zoom, play or PiP
+        // control acts behind its timer (its keys are Space, ←/→ and Esc).
+        let presenting = this.slideshow.is_some();
+        let show_drawer = is_inspector_open && show_chrome && !editing && !presenting;
 
         let backdrop = div()
             .id("viewer-backdrop")
@@ -124,16 +127,18 @@ impl MediaViewer {
                             .items_center()
                             .justify_center()
                             .child(ViewerViewport::render(this, cx))
-                            .when(show_chrome && !editing, |frame| {
+                            .when(show_chrome && !editing && !presenting, |frame| {
                                 frame.children(stage_controls::render_nav_buttons(cx))
                             }),
                     )
-                    .when(show_chrome && !is_video, |stage| {
+                    .when(show_chrome && !is_video && !presenting, |stage| {
                         stage.children(stage_controls::render_zoom_controls(this, cx))
                     })
                     // Video Transport Bar (Scrubber + Dock). While PiP owns the
                     // player the viewer shows the poster and a hand-off pill.
-                    .child(if is_video && show_chrome && this.video.in_pip {
+                    .child(if presenting {
+                        Empty.into_any_element()
+                    } else if is_video && show_chrome && this.video.in_pip {
                         stage_controls::render_pip_handoff(this, item, cx).into_any_element()
                     } else if is_video && show_chrome && is_immersive {
                         crate::motion::fade_in(

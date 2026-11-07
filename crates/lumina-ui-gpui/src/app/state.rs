@@ -491,6 +491,8 @@ pub struct LuminaApp {
     pub edits: crate::app::quick_edit::QuickEdits,
     /// Compare / survey mode; `None` when it is closed.
     pub(crate) compare: Option<crate::app::present::CompareState>,
+    /// The running slideshow; `None` when there is none.
+    pub(crate) slideshow: Option<crate::app::slideshow::SlideshowState>,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
     /// Bumped per opened library; see `UiMessage::LibraryEvent`.
     pub(crate) library_generation: u64,
@@ -675,6 +677,7 @@ impl LuminaApp {
             undo: crate::app::undo::UndoState::default(),
             edits: Default::default(),
             compare: None,
+            slideshow: None,
             event_receiver_thread: None,
             library_generation: 0,
             active_view: Default::default(),

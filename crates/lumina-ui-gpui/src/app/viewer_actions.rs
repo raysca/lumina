@@ -323,6 +323,8 @@ impl LuminaApp {
     }
 
     pub fn close_viewer(&mut self, cx: &mut Context<Self>) {
+        // The Back button or a removed item ends a slideshow too.
+        self.drop_slideshow(cx);
         self.is_fullscreen_viewer = false;
         self.is_immersive_fullscreen = false;
         self.immersive_hud_visible = true;

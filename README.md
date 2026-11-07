@@ -56,7 +56,11 @@ core handles cataloguing, decoding, and search.
   compares 2–9 selected items side by side, 2×2 or 3×3 with one shared
   zoom: ←/→ or Tab focus a pane, `P`/`X`/`U` and `0`–`5` mark it, `⌫`
   takes it out of the comparison (the file stays), `Enter` opens it in the
-  viewer and `Esc` comes back.
+  viewer and `Esc` comes back. `⌥⌘S` (View > Slideshow, ⌘K) plays the
+  view full screen from the selection, 3, 5 or 10 seconds a slide (⌘K
+  Slideshow Interval): `Space` pauses, `←`/`→` step, `Esc` ends it. Videos
+  show their poster and do not play; it stops at the end unless ⌘K
+  "Slideshow: Loop" is on.
 - **Keywords** — a keyword can be a path (`places/usa/new york`). The Tag
   Manager and the sidebar show the tree, each level indented under its
   parent (a parent no item carries directly still gets a row), and filtering

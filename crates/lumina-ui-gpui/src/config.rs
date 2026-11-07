@@ -413,6 +413,13 @@ pub struct AppConfig {
     /// them. They belong to the person, not a library, so they live here.
     #[serde(default)]
     pub templates: Vec<crate::app::templates::MetadataTemplate>,
+    /// Seconds per slideshow slide: 3, 5 or 10 (see
+    /// [`AppConfig::slideshow_interval`]).
+    #[serde(default = "default_slideshow_interval_secs")]
+    pub slideshow_interval_secs: u8,
+    /// Whether the slideshow wraps to the first item at the end.
+    #[serde(default)]
+    pub slideshow_loop: bool,
 }
 
 /// Playback speeds the video speed menu offers.
@@ -468,6 +475,10 @@ fn default_card_fit_mode() -> bool {
     true
 }
 
+fn default_slideshow_interval_secs() -> u8 {
+    5
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -497,6 +508,8 @@ impl Default for AppConfig {
             video_speed: None,
             video_muted: false,
             templates: Vec::new(),
+            slideshow_interval_secs: default_slideshow_interval_secs(),
+            slideshow_loop: false,
         }
     }
 }
@@ -569,6 +582,16 @@ impl AppConfig {
                 .unwrap_or(1.0),
             _ => 1.0,
         }
+    }
+
+    /// The slideshow interval; a hand-edited value off the 3/5/10 menu is
+    /// read as the 5 second default.
+    pub fn slideshow_interval(&self) -> std::time::Duration {
+        let secs = match self.slideshow_interval_secs {
+            secs @ (3 | 5 | 10) => secs,
+            _ => default_slideshow_interval_secs(),
+        };
+        std::time::Duration::from_secs(secs.into())
     }
 
     /// Restores the persisted grid sort, defaulting to date taken descending.
@@ -783,6 +806,40 @@ mod tests {
             "a saved session must round-trip through the config file"
         );
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn slideshow_settings_round_trip_and_old_config_defaults() {
+        let path = temp_config_path("slideshow");
+        // Older config files predate both keys and must still load.
+        std::fs::write(&path, br#"{"last_view":"all"}"#).unwrap();
+        let old = AppConfig::load_from(&path);
+        assert_eq!(old.slideshow_interval_secs, 5, "5 s by default");
+        assert!(!old.slideshow_loop, "no loop by default");
+
+        let cfg = AppConfig {
+            slideshow_interval_secs: 10,
+            slideshow_loop: true,
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.slideshow_interval(),
+            std::time::Duration::from_secs(10)
+        );
+        assert!(loaded.slideshow_loop, "Loop must round-trip");
+
+        let odd = AppConfig {
+            slideshow_interval_secs: 0,
+            ..AppConfig::default()
+        };
+        assert_eq!(
+            odd.slideshow_interval(),
+            std::time::Duration::from_secs(5),
+            "an off-menu interval reads as the default, never a zero timer"
+        );
         let _ = std::fs::remove_file(&path);
     }
 

@@ -159,7 +159,9 @@ impl LuminaApp {
                 // fullscreen viewer. Children painted after this hitbox (the
                 // viewer itself) stay interactive.
                 .occlude()
-                .child(MediaViewer::render(self, cx))
+                .child(
+                    self.render_slideshow_stage(MediaViewer::render(self, cx).into_any_element()),
+                )
                 .into_any_element()
         } else {
             Empty.into_any_element()

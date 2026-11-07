@@ -30,6 +30,12 @@ impl LuminaApp {
             return;
         }
 
+        // A running slideshow takes every key but ⌘Q and ⌘, before the
+        // global, culling and viewer shortcuts (app/slideshow.rs).
+        if self.handle_slideshow_key(keystroke, cx) {
+            return;
+        }
+
         // "Building your library": ↵/Esc open the library, ⌘. stops the
         // scan; nothing else reaches the grid hidden behind it.
         if self.first_scan.is_some() {
@@ -165,6 +171,16 @@ impl LuminaApp {
             && key.eq_ignore_ascii_case("s")
         {
             self.toggle_sidebar(cx);
+            return;
+        }
+
+        // ⌥⌘S: Slideshow (⌃⌘S, the sidebar, is above).
+        if cmd_or_ctrl
+            && keystroke.modifiers.alt
+            && !keystroke.modifiers.shift
+            && key.eq_ignore_ascii_case("s")
+        {
+            self.start_slideshow(window, cx);
             return;
         }
 

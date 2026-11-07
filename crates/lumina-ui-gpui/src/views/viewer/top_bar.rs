@@ -151,14 +151,21 @@ impl ViewerTopBar {
                                     .into_any_element()
                             })
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.close_viewer(cx);
+                                // During a slideshow Back is Esc: it also
+                                // puts the selection back.
+                                if this.slideshow.is_some() {
+                                    this.end_slideshow(cx);
+                                } else {
+                                    this.close_viewer(cx);
+                                }
                             })),
                     ),
             )
             // Center Section: Breadcrumb, Filename, Specs Line
             .child(center_section)
             // Right Section: Favorite and Info only (v3). Open, Reveal, Edit
-            // and Rotate live in the viewer's right-click menu.
+            // and Rotate live in the viewer's right-click menu. A slideshow
+            // has neither: they would act on, or cover, a moving slide.
             .child(
                 div()
                     .flex()
@@ -166,56 +173,59 @@ impl ViewerTopBar {
                     .items_center()
                     .gap(px(4.0))
                     .flex_shrink_0()
-                    .child(
-                        bar_button(
-                            "viewer-fav-btn",
-                            if is_fav {
-                                "Unfavorite (F)"
-                            } else {
-                                "Favorite (F)"
-                            },
-                            false,
-                        )
-                        .child(crate::motion::pop(
-                            render_icon(
-                                if is_fav {
-                                    Icon::HeartFilled
-                                } else {
-                                    Icon::Heart
-                                },
-                                px(16.0),
-                                if is_fav {
-                                    theme::rating()
-                                } else {
-                                    theme::text_muted()
-                                },
-                            ),
-                            this.mark_pop.heart(Some(item.id)),
-                        ))
-                        .on_click(cx.listener(
-                            |this, _e: &ClickEvent, _w, cx| {
-                                this.toggle_favorite_selected(cx);
-                            },
-                        )),
-                    )
-                    .child(
-                        bar_icon_button(
-                            "viewer-info-btn",
-                            Icon::Info,
-                            "Info (I)",
-                            if is_inspector_open {
-                                theme::selection_fg()
-                            } else {
-                                theme::text_muted()
-                            },
-                            is_inspector_open,
-                        )
-                        .on_click(cx.listener(
-                            |this, _e: &ClickEvent, _w, cx| {
-                                this.toggle_inspector(cx);
-                            },
-                        )),
-                    ),
+                    .when(this.slideshow.is_none(), |right| {
+                        right
+                            .child(
+                                bar_button(
+                                    "viewer-fav-btn",
+                                    if is_fav {
+                                        "Unfavorite (F)"
+                                    } else {
+                                        "Favorite (F)"
+                                    },
+                                    false,
+                                )
+                                .child(crate::motion::pop(
+                                    render_icon(
+                                        if is_fav {
+                                            Icon::HeartFilled
+                                        } else {
+                                            Icon::Heart
+                                        },
+                                        px(16.0),
+                                        if is_fav {
+                                            theme::rating()
+                                        } else {
+                                            theme::text_muted()
+                                        },
+                                    ),
+                                    this.mark_pop.heart(Some(item.id)),
+                                ))
+                                .on_click(cx.listener(
+                                    |this, _e: &ClickEvent, _w, cx| {
+                                        this.toggle_favorite_selected(cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                bar_icon_button(
+                                    "viewer-info-btn",
+                                    Icon::Info,
+                                    "Info (I)",
+                                    if is_inspector_open {
+                                        theme::selection_fg()
+                                    } else {
+                                        theme::text_muted()
+                                    },
+                                    is_inspector_open,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _e: &ClickEvent, _w, cx| {
+                                        this.toggle_inspector(cx);
+                                    },
+                                )),
+                            )
+                    }),
             )
     }
 }

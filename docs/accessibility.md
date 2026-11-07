@@ -45,6 +45,15 @@ Lumina is designed to be usable without a mouse:
   dialog on the open view's rejects (`↵` Move to Trash, `↑`/`↓` other
   choices, `Esc` cancels), or a toast says there are none. Flag badges are
   drawn, not yet announced to VoiceOver.
+- **Slideshow**: `⌥⌘S`, View > Slideshow or ⌘K Slideshow plays the open
+  view full screen from the selection. `Space` pauses and resumes (also on
+  a video, which shows its poster and never plays), `←`/`→` step, and one
+  `Esc` ends it and puts the selection back. ⌘K Slideshow: Loop and
+  Slideshow Interval (3, 5 or 10 seconds) set it up beforehand. While it
+  plays every other key and the menu items that open dialogs or act on the
+  selection are off; `⌘,` (which pauses it) and `⌘Q` still work. The slide,
+  the Paused label and the Back button set no AccessKit role, so VoiceOver
+  does not announce them; the keys and the shortcut sheet are the path.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
@@ -113,7 +122,8 @@ Lumina is designed to be usable without a mouse:
 Menus, dialogs, toasts, new thumbnails and the viewer HUD fade in briefly
 (at most 220 ms); closing is instant. With **Reduce Motion** on (System
 Settings › Accessibility › Display) the fades stay but the toast no longer
-rises and stars and hearts no longer pop. Lumina reads the setting at
+rises, stars and hearts no longer pop, and slideshow slides change without
+a fade. Lumina reads the setting at
 launch, so relaunch after changing it.
 
 ## Screen readers

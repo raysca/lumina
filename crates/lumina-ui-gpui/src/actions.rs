@@ -25,6 +25,7 @@ actions!(
         AddToAlbum,
         DeleteRejected,
         Compare,
+        Slideshow,
         GoBack,
         GoForward,
         RotateLeft,

@@ -32,6 +32,7 @@ pub mod sample;
 pub mod scrub_preview;
 pub mod search;
 pub mod selection_by_id;
+pub mod slideshow;
 pub mod smart_album_share;
 pub mod smart_draft;
 pub mod sort;
