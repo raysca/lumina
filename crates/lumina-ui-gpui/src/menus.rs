@@ -31,6 +31,8 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action("Import XMP Metadata", ImportXmp),
             MenuItem::action("Metadata Templates…", ManageTemplates),
+            MenuItem::separator(),
+            MenuItem::action(crate::i18n::t("command.delete_rejected"), DeleteRejected),
         ]),
         Menu::new("View").items([
             MenuItem::action("Command Palette…", ShowCommandPalette),
@@ -88,6 +90,12 @@ mod tests {
                 |item| matches!(item, MenuItem::Action { name, .. } if name == "Metadata Templates…")
             ),
             "File offers the template editor"
+        );
+        assert!(
+            menus[1].items.iter().any(
+                |item| matches!(item, MenuItem::Action { name, .. } if name == "Delete Rejected…")
+            ),
+            "File offers Delete Rejected… (there is no Edit menu)"
         );
     }
 

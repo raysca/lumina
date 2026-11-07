@@ -301,6 +301,7 @@ mod tests {
             RuleField::Place => (Op::Contains, V::Text("Japan".into())),
             RuleField::Camera => (Op::NotContains, V::Text("iPhone".into())),
             RuleField::Query => (Op::Equals, V::Text("sunset rating:>=3".into())),
+            RuleField::Flag => (Op::NotEquals, V::Number(-1.0)),
         };
         SmartAlbumRule {
             field,
@@ -334,6 +335,7 @@ mod tests {
             RuleField::Place,
             RuleField::Camera,
             RuleField::Query,
+            RuleField::Flag,
         ];
         let mut album = SmartAlbum::new(
             "Kyoto “trip”".into(),
@@ -385,7 +387,7 @@ mod tests {
             err.to_string().contains("not a Lumina smart album"),
             "the error says why: {err}"
         );
-        let unknown_field = json.replace(r#""field": "is_favorite""#, r#""field": "flag""#);
+        let unknown_field = json.replace(r#""field": "is_favorite""#, r#""field": "sharpness""#);
         assert_ne!(unknown_field, json, "the sample has an is_favorite rule");
         assert!(
             from_portable_json(&unknown_field).is_err(),

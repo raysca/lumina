@@ -174,8 +174,9 @@ layout shift or blocks input.
   100%/200%/400% of actual pixels and `⌘3` Fill, also in ⌘K and (while
   zoomed) as Fit · Fill · 1:1 buttons under the navigator. `Z` and
   double-click toggle Fit/100%; pan stops at the media edges. Plain digits do
-  not zoom (they are reserved for ratings). Stills decode at most 2048px, so
-  100% of larger photos is an enlarged decode.
+  not zoom: they rate (`0`–`5`); the presets moved from plain digits to ⌘
+  digits in 0.4. Stills decode at most 2048px, so 100% of larger photos is
+  an enlarged decode.
 - While zoomed the HUD shows a navigator with the percentage, a Fit button
   and the Fit · Fill · 1:1 preset buttons. Video does not zoom from pinch or
   scroll, but the zoom keys still change zoom on a video. Fill keeps the
@@ -338,6 +339,9 @@ filter without memorizing syntax; tag and album edits are reversible.
   metadata templates.
 - Mixed values are not shown; no apply-to-N confirmation.
 - Batch undo is per item, not one grouped action.
+- Culling: `P` / `X` / `U` and `0`–`5` flag or rate the selection in one
+  undoable batch; Delete Rejected… (File, ⌘K) opens the Delete dialog on the
+  open view's rejects.
 - Context menu lacks Share, Copy Image, Edit, Open in External Editor, Move,
   Rename and curated-album add.
 

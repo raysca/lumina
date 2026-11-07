@@ -17,6 +17,7 @@ pub const FIELDS: &[RuleField] = &[
     RuleField::Date,
     RuleField::Tag,
     RuleField::Rating,
+    RuleField::Flag,
     RuleField::ColorLabel,
     RuleField::Camera,
     RuleField::Lens,
@@ -38,6 +39,8 @@ const STARS: &[(&str, &str)] = &[
     ("4", "★★★★"),
     ("5", "★★★★★"),
 ];
+/// [`lumina_core::Flag`] values.
+const FLAGS: &[(&str, &str)] = &[("1", "Pick"), ("-1", "Reject"), ("0", "Unflagged")];
 /// Same order and numbering as the inspector's label dots.
 pub const LABELS: &[(&str, &str)] = &[
     ("1", "Red"),
@@ -140,6 +143,7 @@ pub fn field_label(field: &RuleField) -> &'static str {
         RuleField::FileSize => "File size (bytes)",
         RuleField::DurationMs => "Duration (ms)",
         RuleField::Query => "Search",
+        RuleField::Flag => "Flag",
     }
 }
 
@@ -160,7 +164,7 @@ fn is_numeric(field: &RuleField) -> bool {
 pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
     use RuleOperator::*;
     match field {
-        RuleField::MediaType | RuleField::ColorLabel => &[Equals, NotEquals],
+        RuleField::MediaType | RuleField::ColorLabel | RuleField::Flag => &[Equals, NotEquals],
         RuleField::IsFavorite | RuleField::Query => &[Equals],
         RuleField::Date => &[Equals, LessThan, GreaterThan, Between, InTheLast],
         RuleField::Tag => &[Equals, NotEquals, Contains, IsEmpty, IsNotEmpty],
@@ -199,6 +203,7 @@ pub fn value_kind(field: &RuleField, op: &RuleOperator) -> ValueKind {
         (RuleField::IsFavorite, _) => ValueKind::Choice(YES_NO),
         (RuleField::Rating, _) => ValueKind::Choice(STARS),
         (RuleField::ColorLabel, _) => ValueKind::Choice(LABELS),
+        (RuleField::Flag, _) => ValueKind::Choice(FLAGS),
         (RuleField::Date, RuleOperator::Between) => ValueKind::DateRange,
         (RuleField::Date, RuleOperator::InTheLast) => ValueKind::Period,
         (RuleField::Date, _) => ValueKind::Date,
@@ -500,6 +505,7 @@ mod tests {
             row(RuleField::MediaType, RuleOperator::NotEquals, "video"),
             row(RuleField::IsFavorite, RuleOperator::Equals, "false"),
             row(RuleField::Rating, RuleOperator::AtLeast, "4"),
+            row(RuleField::Flag, RuleOperator::NotEquals, "-1"),
             row(RuleField::FNumber, RuleOperator::LessThan, "2.8"),
             row(
                 RuleField::Date,
@@ -511,8 +517,9 @@ mod tests {
         let rules = rules_from_rows(&rows).expect("all rows valid");
         assert_eq!(rules[1].value, RuleValue::Bool(false));
         assert_eq!(rules[2].value, RuleValue::Integer(4));
-        assert_eq!(rules[3].value, RuleValue::Number(2.8));
-        assert_eq!(rules[5].value, RuleValue::Text("6mo".into()));
+        assert_eq!(rules[3].value, RuleValue::Integer(-1));
+        assert_eq!(rules[4].value, RuleValue::Number(2.8));
+        assert_eq!(rules[6].value, RuleValue::Text("6mo".into()));
         let back: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
         assert_eq!(back, rows, "editing a saved album restores the same rows");
     }

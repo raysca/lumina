@@ -10,7 +10,7 @@ use std::ops::Range;
 use gpui::Context;
 use std::collections::HashSet;
 
-use lumina_core::{LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum};
+use lumina_core::{LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum, ViewScope};
 
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
@@ -64,6 +64,28 @@ impl ViewQuery {
             AlbumSelection::Untagged => engine.query_untagged_count(),
             AlbumSelection::Duplicates => engine.query_duplicate_count(),
         }
+    }
+
+    /// The view as Delete Rejected… scopes it, the same precedence as
+    /// [`Self::count`]; `None` for the Trash and Duplicates, which it does
+    /// not cover.
+    pub(crate) fn reject_scope(&self) -> Option<ViewScope> {
+        let key = &self.key;
+        if !key.query.is_empty() {
+            return Some(ViewScope::Search(key.query.clone()));
+        }
+        if let Some(year) = key.year {
+            return Some(ViewScope::Search(format!("year:{year}")));
+        }
+        Some(match &key.selection {
+            AlbumSelection::AllLibrary => ViewScope::Library,
+            AlbumSelection::System(album) => ViewScope::System(*album),
+            AlbumSelection::User(_) => ViewScope::Smart(self.album.clone()?),
+            AlbumSelection::Album(id) => ViewScope::Album(*id),
+            AlbumSelection::Tag(tag) => ViewScope::Search(tag_query(tag)),
+            AlbumSelection::Untagged => ViewScope::Untagged,
+            AlbumSelection::Trash | AlbumSelection::Duplicates => return None,
+        })
     }
 
     /// The view's items at `range`, in view order.

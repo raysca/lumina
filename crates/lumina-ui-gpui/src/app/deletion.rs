@@ -57,7 +57,18 @@ impl LuminaApp {
             .iter()
             .map(|item| (item.id, item.is_trashed, new_trashed))
             .collect();
+        self.apply_trash(ids, changes, new_trashed, cx);
+    }
 
+    /// Moves `ids` in or out of the Trash in one write, with one undo step
+    /// (`changes` holds each item's before/after), then clears the selection.
+    pub(crate) fn apply_trash(
+        &mut self,
+        ids: Vec<MediaId>,
+        changes: Vec<(MediaId, bool, bool)>,
+        new_trashed: bool,
+        cx: &mut Context<Self>,
+    ) {
         let result = if let Some(ref state) = self.grid_state {
             state.engine.batch_set_trashed(&ids, new_trashed)
         } else {
@@ -196,12 +207,23 @@ impl LuminaApp {
             }
             return;
         }
+        // Delete Rejected… trashes its ids (never trashed: the lookup leaves
+        // trashed items out), not whatever the grid has selected.
+        if let Some(st) = self.delete_confirm_state.as_ref().filter(|st| {
+            st.intent == DeleteIntent::Rejected && st.target == DeletionTarget::SystemTrash
+        }) {
+            let ids = st.item_ids.clone();
+            let changes = ids.iter().map(|id| (*id, false, true)).collect();
+            self.delete_confirm_state = None;
+            self.apply_trash(ids, changes, true, cx);
+            return;
+        }
         if let Some(st) = self.delete_confirm_state.take() {
             // Emptying the Trash removes a trashed video playing in PiP.
             let removed_pip: Vec<MediaId> = match st.intent {
-                DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => {
-                    st.item_ids.clone()
-                }
+                DeleteIntent::DeleteSelected
+                | DeleteIntent::LibrarySelection
+                | DeleteIntent::Rejected => st.item_ids.clone(),
                 DeleteIntent::EmptyTrash => self
                     .video
                     .item
@@ -218,7 +240,9 @@ impl LuminaApp {
             if let Some(ref state) = self.grid_state {
                 let result = match st.intent {
                     DeleteIntent::EmptyTrash => state.engine.empty_trash(st.target).map(|_| ()),
-                    DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => state
+                    DeleteIntent::DeleteSelected
+                    | DeleteIntent::LibrarySelection
+                    | DeleteIntent::Rejected => state
                         .engine
                         .permanently_delete_items(&st.item_ids, st.target)
                         .map(|_| ()),
@@ -235,7 +259,9 @@ impl LuminaApp {
                 _ if st.target == DeletionTarget::CatalogOnly => {
                     format!("Removed {} item(s) from Lumina", st.item_ids.len())
                 }
-                DeleteIntent::DeleteSelected | DeleteIntent::LibrarySelection => {
+                DeleteIntent::DeleteSelected
+                | DeleteIntent::LibrarySelection
+                | DeleteIntent::Rejected => {
                     format!("Permanently deleted {} item(s)", st.item_ids.len())
                 }
             };

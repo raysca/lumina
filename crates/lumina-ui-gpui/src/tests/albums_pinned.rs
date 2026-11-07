@@ -242,7 +242,7 @@ fn import_rejected_rule_shows_banner() {
         )],
     ))
     .unwrap()
-    .replace(r#""is_favorite""#, r#""flag""#);
+    .replace(r#""is_favorite""#, r#""sharpness""#);
     std::fs::write(&newer, newer_json).unwrap();
     // Over 1 MiB, and not text: only the size check before reading can
     // say "too large".

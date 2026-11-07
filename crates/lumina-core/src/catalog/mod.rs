@@ -6,6 +6,7 @@ mod duplicates;
 mod edits;
 mod flags;
 pub use edits::{CropRect, Edits};
+pub use flags::{RejectedItems, ViewScope};
 pub(crate) mod files;
 mod keyword_ops;
 pub mod keywords;

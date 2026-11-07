@@ -17,6 +17,10 @@ pub enum DeleteIntent {
     /// Delete from the library (v3): "Move to Trash" means Lumina's
     /// Recently Deleted, which is undoable.
     LibrarySelection,
+    /// Delete Rejected… (v5 B3): as `LibrarySelection`, but it acts on
+    /// `item_ids`, never on grid positions, since the rejects need not be
+    /// selected or even loaded.
+    Rejected,
 }
 
 #[derive(Debug, Clone)]

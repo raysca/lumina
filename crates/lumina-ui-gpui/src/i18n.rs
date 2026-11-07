@@ -86,6 +86,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.flag_pick" => "Pick",
         "command.flag_reject" => "Reject",
         "command.flag_clear" => "Remove Flag",
+        "command.delete_rejected" => "Delete Rejected…",
         "command.filter_picks" => "Show Picks",
         "command.filter_rejected" => "Show Rejected",
         "context.flag" => "Flag",

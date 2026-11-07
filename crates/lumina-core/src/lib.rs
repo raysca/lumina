@@ -31,7 +31,7 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{
     Album, Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, PriorDownload,
-    Rights, TagChange, TagReplay, TemplateChange, SCHEMA_VERSION,
+    RejectedItems, Rights, TagChange, TagReplay, TemplateChange, ViewScope, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -787,6 +787,12 @@ impl LuminaEngine {
     /// Sets each item's culling flag in one transaction.
     pub fn set_flags(&self, changes: &[(MediaId, Flag)]) -> Result<()> {
         self.catalog.set_flags(changes)
+    }
+
+    /// The rejected items of one view, for Delete Rejected…. A read error
+    /// is returned, not hidden as "no rejects".
+    pub fn rejected_in(&self, scope: &ViewScope) -> Result<RejectedItems> {
+        self.catalog.rejected_in(scope)
     }
 
     /// Every picked or rejected item; unflagged items are left out.

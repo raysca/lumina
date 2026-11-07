@@ -4,9 +4,60 @@
 //! round-trip picks, and `xmp:Rating=-1` would overwrite stars).
 
 use super::Catalog;
-use crate::{Flag, MediaId};
+use crate::{Flag, MediaId, SmartAlbum, StructuredQuery, SystemAlbum};
 use anyhow::{Context, Result};
+use rusqlite::types::Value;
 use std::collections::HashMap;
+
+/// The view "Delete Rejected…" acts on: each kind of grid view whose rows
+/// are a WHERE over `media_items m`. A search, a year and a tag are all
+/// search text (`year:2024`, `tag:beach`), as the grid runs them.
+#[derive(Debug, Clone)]
+pub enum ViewScope {
+    Library,
+    Search(String),
+    System(SystemAlbum),
+    Smart(SmartAlbum),
+    Album(i64),
+    Untagged,
+}
+
+/// The rejected items of one view, with the Delete dialog's header summary.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RejectedItems {
+    pub ids: Vec<MediaId>,
+    pub photos: usize,
+    pub videos: usize,
+    pub total_bytes: u64,
+}
+
+/// One query: the reject flag ANDed with the view's own WHERE. Trashed and
+/// hidden items are left out (a trashed reject is already deleted), and
+/// those two terms also let SQLite seek the partial `idx_media_flag`.
+pub(crate) fn rejected_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+    let (view, mut params): (String, Vec<Value>) = match scope {
+        ViewScope::Library => ("1".into(), Vec::new()),
+        ViewScope::Search(text) => StructuredQuery::parse(text).build_where_subquery(false),
+        ViewScope::System(album) => (album.build_where_clause().into(), Vec::new()),
+        ViewScope::Smart(album) => album.where_sql(false)?,
+        ViewScope::Album(id) => (
+            "m.id IN (SELECT media_id FROM album_items WHERE album_id = ?)".into(),
+            vec![(*id).into()],
+        ),
+        ViewScope::Untagged => (
+            "NOT EXISTS (SELECT 1 FROM media_tags mt WHERE mt.media_id = m.id)".into(),
+            Vec::new(),
+        ),
+    };
+    params.insert(0, (Flag::Reject as i64).into());
+    Ok((
+        format!(
+            "SELECT m.id, m.media_type, m.file_size FROM media_items m \
+             WHERE m.flag = ? AND m.is_trashed = 0 AND m.is_hidden = 0 AND ({view});"
+        ),
+        params,
+    ))
+}
 
 impl Catalog {
     /// Sets each item's flag in one transaction. Ids with no row are
@@ -32,6 +83,25 @@ impl Catalog {
         rows.collect::<rusqlite::Result<_>>()
             .context("reading flags")
     }
+
+    /// The rejected items of `scope`, in one query (Delete Rejected…).
+    pub fn rejected_in(&self, scope: &ViewScope) -> Result<RejectedItems> {
+        let (sql, params) = rejected_sql(scope)?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let mut rows = stmt.query(rusqlite::params_from_iter(params.iter()))?;
+        let mut found = RejectedItems::default();
+        while let Some(row) = rows.next()? {
+            found.ids.push(MediaId(row.get::<_, i64>(0)? as u64));
+            if row.get::<_, String>(1)? == "video" {
+                found.videos += 1;
+            } else {
+                found.photos += 1;
+            }
+            found.total_bytes += row.get::<_, i64>(2)?.max(0) as u64;
+        }
+        Ok(found)
+    }
 }
 
 #[cfg(test)]
@@ -39,7 +109,10 @@ mod tests {
     use super::*;
     use crate::catalog::files::tests::TempDir;
     use crate::catalog::tests_support::video_item;
-    use crate::{StructuredQuery, SCHEMA_VERSION};
+    use crate::{
+        MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbum, SmartAlbumRule, StructuredQuery,
+        SCHEMA_VERSION,
+    };
 
     fn plain(catalog: &Catalog, path: &str) -> MediaId {
         catalog.insert_or_update_batch(&[video_item(path)]).unwrap()[0].id
@@ -143,6 +216,155 @@ mod tests {
         catalog
             .set_flags(&[(MediaId(9_999), Flag::Reject)])
             .expect("an unknown id is skipped, not an error");
+    }
+
+    fn flag_album(operator: RuleOperator, flag: Flag) -> SmartAlbum {
+        SmartAlbum::new(
+            "Flags".into(),
+            "folder".into(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field: RuleField::Flag,
+                operator,
+                value: RuleValue::Integer(flag as i64),
+            }],
+        )
+    }
+
+    fn smart_ids(catalog: &Catalog, album: &SmartAlbum) -> Vec<MediaId> {
+        let mut ids: Vec<MediaId> = catalog
+            .query_smart_album(album, 50, 0)
+            .unwrap()
+            .into_iter()
+            .map(|item| item.id)
+            .collect();
+        ids.sort_by_key(|id| id.0);
+        ids
+    }
+
+    fn plan_of(catalog: &Catalog, sql: &str, params: &[rusqlite::types::Value]) -> String {
+        let conn = catalog.conn.lock();
+        let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap();
+        rows.map(|row| row.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    #[test]
+    fn flag_rule_matches_picks() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let pick = plain(&catalog, "/lib/pick.mp4");
+        let reject = plain(&catalog, "/lib/reject.mp4");
+        let none = plain(&catalog, "/lib/none.mp4");
+        let trashed_pick = plain(&catalog, "/lib/trashed.mp4");
+        catalog
+            .set_flags(&[
+                (pick, Flag::Pick),
+                (reject, Flag::Reject),
+                (trashed_pick, Flag::Pick),
+            ])
+            .unwrap();
+        catalog.set_trashed(trashed_pick, true).unwrap();
+
+        let picks = flag_album(RuleOperator::Equals, Flag::Pick);
+        assert_eq!(
+            smart_ids(&catalog, &picks),
+            vec![pick],
+            "Flag is Pick matches the picks, never a trashed one"
+        );
+        assert_eq!(catalog.query_smart_album_count(&picks).unwrap(), 1);
+        assert_eq!(
+            smart_ids(&catalog, &flag_album(RuleOperator::NotEquals, Flag::Pick)),
+            vec![reject, none],
+            "Flag is not Pick matches rejects and unflagged items"
+        );
+        assert_eq!(
+            smart_ids(&catalog, &flag_album(RuleOperator::Equals, Flag::Unflagged)),
+            vec![none]
+        );
+
+        let (sql, params) = picks.synthesize_count_query().unwrap();
+        assert!(
+            sql.contains("m.flag = ?"),
+            "the rule compiles to m.flag = ?, got {sql}"
+        );
+        let plan = plan_of(&catalog, &sql, &params);
+        assert!(
+            plan.contains("idx_media_flag"),
+            "a Flag is rule seeks idx_media_flag, got: {plan}"
+        );
+
+        let mut bad = flag_album(RuleOperator::AtLeast, Flag::Pick);
+        assert!(bad.build_sql().is_err(), "Flag supports only is / is not");
+        bad.rules[0].operator = RuleOperator::Equals;
+        bad.rules[0].value = RuleValue::Integer(5);
+        assert!(
+            bad.build_sql().is_err(),
+            "a flag value other than pick, reject or unflagged is refused"
+        );
+    }
+
+    #[test]
+    fn rejected_in_scopes_to_the_view() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let in_album = plain(&catalog, "/lib/beach.mp4");
+        let in_album_kept = plain(&catalog, "/lib/beach2.mp4");
+        let outside = plain(&catalog, "/lib/city.mp4");
+        let trashed = plain(&catalog, "/lib/gone.mp4");
+        catalog
+            .set_flags(&[
+                (in_album, Flag::Reject),
+                (in_album_kept, Flag::Pick),
+                (outside, Flag::Reject),
+                (trashed, Flag::Reject),
+            ])
+            .unwrap();
+        catalog.set_trashed(trashed, true).unwrap();
+        let album = catalog
+            .create_album_with("Trip", &[in_album, in_album_kept, trashed])
+            .unwrap();
+
+        let ids = |scope: &ViewScope| {
+            let mut ids = catalog.rejected_in(scope).unwrap().ids;
+            ids.sort_by_key(|id| id.0);
+            ids
+        };
+        assert_eq!(
+            ids(&ViewScope::Album(album.id)),
+            vec![in_album],
+            "an album's rejects only, never one outside it or in the Trash"
+        );
+        assert_eq!(ids(&ViewScope::Library), vec![in_album, outside]);
+        assert_eq!(ids(&ViewScope::Search("beach".into())), vec![in_album]);
+        assert_eq!(
+            ids(&ViewScope::Search("is:trashed".into())),
+            Vec::<MediaId>::new(),
+            "trashed rejects are never offered for deletion again"
+        );
+        assert_eq!(ids(&ViewScope::Untagged), vec![in_album, outside]);
+        assert_eq!(
+            ids(&ViewScope::System(crate::SystemAlbum::Videos)),
+            vec![in_album, outside]
+        );
+        let smart = flag_album(RuleOperator::NotEquals, Flag::Pick);
+        assert_eq!(ids(&ViewScope::Smart(smart)), vec![in_album, outside]);
+
+        let found = catalog.rejected_in(&ViewScope::Library).unwrap();
+        assert_eq!(
+            (found.photos, found.videos, found.total_bytes),
+            (0, 2, 2_000),
+            "the dialog header summary comes with the ids"
+        );
+
+        let (sql, params) = rejected_sql(&ViewScope::Library).unwrap();
+        let plan = plan_of(&catalog, &sql, &params);
+        assert!(
+            plan.contains("idx_media_flag"),
+            "the reject lookup seeks idx_media_flag, got: {plan}"
+        );
     }
 
     #[test]

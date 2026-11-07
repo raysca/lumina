@@ -35,9 +35,9 @@ Tokens and control helpers already live in `crates/lumina-ui-gpui/src/theme.rs`.
 - Not yet designed: context menu, scan/import progress, shortcut sheet.
 - Inspector summary has no histogram (no luminance data in the catalog) and
   no map (no network); location shows as text only.
-- Rating has no direct key binding (plain digits are reserved for it; the
-  viewer zoom presets moved to ⌘0–⌘4);
-  the ⌘K palette has Rate 1–5 Stars and Clear Rating.
+- Ratings are on plain `0`–`5` in the grid and the viewer (the viewer zoom
+  presets moved to ⌘0–⌘4), flags on `P` / `X` / `U`; the ⌘K palette also
+  has Rate 1–5 Stars, Clear Rating, Pick, Reject and Remove Flag.
 - Viewer zoom: pinch and ⌘-scroll at the pointer, +/−, ⌘0–⌘4 presets
   (⌘3 Fill) and Z.
 - Inspector: Modified/Created/Added rows keep the short date format; only

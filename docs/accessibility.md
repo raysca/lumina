@@ -35,6 +35,16 @@ Lumina is designed to be usable without a mouse:
   Duplicate Smart Album and Export Smart Album Rules… on smart albums;
   Import Smart Album Rules… is in ⌘K and the File menu. Album rows carry a list item role and a label with the count, not
   yet checked with VoiceOver.
+- **Culling**: in the grid and the viewer, `P` picks, `X` rejects, `U`
+  removes the flag and `0`–`5` rate the selection (one `⌘Z` undoes the
+  batch). In the viewer the key then moves to the next item, so a cull is
+  `→`-free: look, press `P` or `X`, look at the next. The keys need no
+  modifier (`⌥P` stays Picture-in-Picture) and do nothing while the
+  palette, a dialog or a text field has the keys. ⌘K Show Picks / Show
+  Rejected filter the view; ⌘K or File > Delete Rejected… opens the Delete
+  dialog on the open view's rejects (`↵` Move to Trash, `↑`/`↓` other
+  choices, `Esc` cancels), or a toast says there are none. Flag badges are
+  drawn, not yet announced to VoiceOver.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With

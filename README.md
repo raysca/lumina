@@ -22,9 +22,9 @@ core handles cataloguing, decoding, and search.
   geocoding against a bundled GeoNames dataset.
 - **Smart albums** — 10 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
   match all/any of conditions on kind, favorite, date (including "in the
-  last N days/weeks/months"), tag, stars, color label, camera, lens,
-  aperture, ISO, focal length, filename and place, with a live count and
-  preview. Albums can be re-edited (⌘K "Edit Smart Album…"), deleted from
+  last N days/weeks/months"), tag, stars, pick/reject flag, color label,
+  camera, lens, aperture, ISO, focal length, filename and place, with a live
+  count and preview. Albums can be re-edited (⌘K "Edit Smart Album…"), deleted from
   the sidebar row (⌘Z restores), duplicated (⌘K "Duplicate Smart Album"), and
   their rules exported to or imported from a JSON file (⌘K "Export / Import
   Smart Album Rules…").
@@ -46,6 +46,13 @@ core handles cataloguing, decoding, and search.
   another video plays it there.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,
   multi-select batch actions, and a full Trash lifecycle.
+- **Culling** — keyboard-first, in the grid and the viewer: `P` pick, `X`
+  reject, `U` remove the flag, `0`–`5` rate, each on the whole selection with
+  one undo; in the viewer a key moves on to the next item. `is:pick`,
+  `is:reject` and `is:unflagged` filter a search, ⌘K "Show Picks" / "Show
+  Rejected" add them, and a smart album can match on the flag. File >
+  Delete Rejected… (also ⌘K) sends the open view's rejects to the Delete
+  dialog (Move to Trash, undoable, by default).
 - **Keywords** — a keyword can be a path (`places/usa/new york`). The Tag
   Manager and the sidebar show the tree, each level indented under its
   parent (a parent no item carries directly still gets a row), and filtering

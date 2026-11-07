@@ -253,7 +253,9 @@ sidebar; ⌘K Duplicate Smart Album copies the rules, and Export / Import Smart
 Album Rules… save them as a versioned JSON file (an import whose rules do not
 compile, or that comes from a newer build, is refused with a banner). In an
 album, choosing a year on the year rail shows that year across the whole
-library, as search does; Back returns to the album. Not yet: album covers,
+library, as search does; Back returns to the album. Smart albums can match
+the culling flag (Flag is / is not Pick, Reject or Unflagged), and the count
+follows each flag key. Not yet: album covers,
 drag to album, nesting, descriptions, manual reorder, and undo for pin.
 
 **Target:**
@@ -274,8 +276,11 @@ deletion.
 ## 6. Multi-select and batch editing
 
 **Current:** range/cmd selection, select-all, batch favorite/tags/trash/export,
-and batch rating/color in the inspector. No rubber-band selection, mixed-value
-editing, batch title/date/location/caption, or grouped undo.
+and batch rating/color in the inspector. Culling keys (`P` / `X` / `U`,
+`0`–`5`) flag or rate the whole selection with one undo entry; File > Delete
+Rejected… (⌘K too) opens the Delete dialog on the open view's rejects only.
+No rubber-band selection, mixed-value editing, batch
+title/date/location/caption, or grouped undo.
 
 **Target:**
 
@@ -584,7 +589,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P0 | Top | Batch metadata + grouped undo | 0.4 | Apply templates/keywords to a selection. |
 | P1 | Mid | Private S3-compatible backup (encrypted, OS credentials) | 0.5 | User-owned bucket; no sync/browsing. |
 | P1 | Mid | Curated albums + smart-album polish | 0.6 | Shipped: curated albums (⌘N, ⇧⌘A picker, ⌫ in an album, undo), pin for albums and smart albums, Duplicate Smart Album, rule JSON export/import. Missing: covers, drag to album, smart-album preview of why an item matched. |
-| P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. |
+| P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…. Missing: compare/survey. |
 | P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. |
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. |

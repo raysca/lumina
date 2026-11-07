@@ -51,6 +51,8 @@ pub enum CommandId {
     Rate(u8),
     /// Picks, rejects or unflags the selection (P / X / U).
     Flag(lumina_core::Flag),
+    /// The current view's rejects, to the Delete dialog.
+    DeleteRejected,
     ToggleFavorite,
     /// Quarter turn of the viewer item or the selected stills.
     RotateLeft,
@@ -152,6 +154,7 @@ impl Command {
             Flag(lumina_core::Flag::Pick) => Icon::Check,
             Flag(lumina_core::Flag::Reject) => Icon::X,
             Flag(lumina_core::Flag::Unflagged) => Icon::Minus,
+            DeleteRejected => Icon::Trash,
             ToggleFavorite => Icon::Heart,
             RotateLeft => Icon::RotateCcw,
             RotateRight => Icon::RotateCw,
@@ -491,6 +494,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.flag_clear",
             shortcut: "U",
             keywords: "flag cull unflag unpick unreject remove",
+        },
+        Command {
+            id: CommandId::DeleteRejected,
+            key: "command.delete_rejected",
+            shortcut: "",
+            keywords: "flag cull reject rejects rejected trash remove",
         },
         Command {
             id: CommandId::ToggleFavorite,
@@ -895,6 +904,9 @@ impl LuminaApp {
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
+            CommandId::DeleteRejected => {
+                self.grid_state.is_some() && self.view_query().reject_scope().is_some()
+            }
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
@@ -1195,6 +1207,7 @@ impl LuminaApp {
             CommandId::Flag(flag) => {
                 self.set_flag_selected(flag, cx);
             }
+            CommandId::DeleteRejected => self.delete_rejected(cx),
             CommandId::ToggleFavorite if self.selected_indices.len() > 1 => {
                 self.batch_toggle_favorite(cx)
             }

@@ -4,6 +4,7 @@
 use gpui::*;
 use lumina_core::{Flag, MediaId};
 
+use crate::app::types::{DeleteConfirmState, DeleteIntent};
 use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 
@@ -60,8 +61,8 @@ impl LuminaApp {
         self.push_undo(UndoAction::Flag { changes });
         // Show Rejected / Show Picks drop the item: keep the selection by id.
         self.reselect_held(held, cx);
-        // A saved search can filter on is:pick / is:reject.
-        self.refresh_counts_if_rules_use(lumina_core::RuleField::Query);
+        // A Flag rule, or a saved search on is:pick / is:reject.
+        self.refresh_counts_if_rules_use(lumina_core::RuleField::Flag);
         self.show_undo_toast(
             match new {
                 Flag::Pick => format!("Picked {count} item(s)"),
@@ -94,6 +95,67 @@ impl LuminaApp {
                 false
             }
         }
+    }
+
+    /// Delete Rejected… (palette, File menu): the current view's rejects,
+    /// found by one core query off the UI thread, go to the Delete dialog,
+    /// which keeps its trash, undo and permanent choices. The search box is
+    /// left alone, and the dialog acts on the ids, not on grid positions.
+    pub fn delete_rejected(&mut self, cx: &mut Context<Self>) {
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
+            return;
+        };
+        // ↵ meant for another dialog must never reach a Delete dialog.
+        if self.import_blocked_by_modal() {
+            self.show_toast(crate::i18n::t("album.close_dialog_first"), cx);
+            return;
+        }
+        let Some(scope) = self.view_query().reject_scope() else {
+            self.show_toast(
+                "Delete Rejected is not available in the Trash or Duplicates",
+                cx,
+            );
+            return;
+        };
+        let key = self.view_key();
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.rejected_in(&scope) });
+        cx.spawn(async move |this, cx| {
+            let found = task.await;
+            let _ = this.update(cx, |app, cx| {
+                // The user moved on meanwhile (these rejects are another
+                // view's) or opened a dialog whose keys the Delete dialog
+                // would take.
+                if app.view_key() != key || app.import_blocked_by_modal() {
+                    return;
+                }
+                match found {
+                    Ok(found) if found.ids.is_empty() => {
+                        app.show_toast("No rejected items here", cx);
+                    }
+                    Ok(found) => {
+                        app.delete_confirm_state = Some(DeleteConfirmState {
+                            intent: DeleteIntent::Rejected,
+                            target: lumina_core::DeletionTarget::SystemTrash,
+                            item_count: found.ids.len(),
+                            preview_ids: found.ids.iter().take(3).copied().collect(),
+                            item_ids: found.ids,
+                            permanent_acknowledged: false,
+                            photos: found.photos,
+                            videos: found.videos,
+                            total_bytes: found.total_bytes,
+                        });
+                        cx.notify();
+                    }
+                    Err(err) => {
+                        log::warn!("could not find rejected items: {err:?}");
+                        app.set_error(format!("Could not find rejected items: {err:#}"), cx);
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     /// P pick, X reject, U unflag and 0-5 rate, with no modifier (⌥P is

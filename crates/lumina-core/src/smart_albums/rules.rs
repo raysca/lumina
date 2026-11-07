@@ -40,6 +40,9 @@ pub enum RuleField {
     /// A saved search: the value is the raw search text, compiled through
     /// [`crate::StructuredQuery`] so the album and the search cannot drift.
     Query,
+    /// Culling flag (is / is not): the value is the [`crate::Flag`] number,
+    /// 1 pick, -1 reject, 0 unflagged.
+    Flag,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,7 +117,7 @@ impl SmartAlbum {
     }
 
     /// `sorted` only changes how a `Query` rule's FTS match is written.
-    fn where_sql(&self, sorted: bool) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    pub(crate) fn where_sql(&self, sorted: bool) -> Result<(String, Vec<rusqlite::types::Value>)> {
         if self.rules.is_empty() {
             return Ok((
                 "m.is_trashed = 0 AND m.is_hidden = 0".to_string(),
@@ -352,6 +355,7 @@ fn column_for_field(field: &RuleField) -> &'static str {
             unreachable!("multi-column fields are compiled in compile_rule")
         }
         RuleField::Query => unreachable!("RuleField::Query rules are compiled in compile_rule"),
+        RuleField::Flag => unreachable!("RuleField::Flag rules are compiled in compile_rule"),
     }
 }
 
@@ -361,6 +365,9 @@ fn compile_rule(
 ) -> Result<(String, Vec<rusqlite::types::Value>)> {
     if rule.field == RuleField::Query {
         return compile_query_rule(rule, sorted);
+    }
+    if rule.field == RuleField::Flag {
+        return compile_flag_rule(rule);
     }
     if rule.field == RuleField::Tag {
         return match &rule.operator {
@@ -578,6 +585,23 @@ fn compile_query_rule(
     // Parenthesized so the album's AND/OR joiner cannot split the clause.
     let (clause, params) = query.build_where_subquery(sorted);
     Ok((format!("({clause})"), params))
+}
+
+/// `m.flag = ?` (never wrapped in a function or `IS NULL`), so the
+/// partial `idx_media_flag` can serve an "is" rule.
+fn compile_flag_rule(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    // Stored rules_json reads a whole number back as `Number`.
+    let flag = match rule.value {
+        RuleValue::Integer(v @ -1..=1) => v,
+        RuleValue::Number(n) if [-1.0, 0.0, 1.0].contains(&n) => n as i64,
+        _ => return Err(anyhow!("Flag is pick, reject or unflagged")),
+    };
+    let clause = match rule.operator {
+        RuleOperator::Equals => "m.flag = ?",
+        RuleOperator::NotEquals => "m.flag != ?",
+        _ => return Err(anyhow!("Flag supports is / is not")),
+    };
+    Ok((clause.to_string(), vec![flag.into()]))
 }
 
 const DAY_MS: i64 = 86_400_000;

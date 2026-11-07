@@ -45,7 +45,10 @@ impl DeleteConfirmModal {
             DeleteIntent::EmptyTrash => format!("Empty Trash ({items})?"),
             _ => format!("Delete {items}?"),
         };
-        let from_library = state.intent == DeleteIntent::LibrarySelection;
+        let from_library = matches!(
+            state.intent,
+            DeleteIntent::LibrarySelection | DeleteIntent::Rejected
+        );
         let trash_description = if from_library {
             "Keeps them in Recently Deleted. You can restore them at any time."
         } else {

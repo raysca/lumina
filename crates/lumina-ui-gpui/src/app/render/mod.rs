@@ -504,6 +504,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                     this.open_album_builder(cx);
                 }))
+                .on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
+                    this.delete_rejected(cx);
+                }))
                 .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
                     this.import_smart_album_rules(cx);
                 }))

@@ -23,6 +23,7 @@ actions!(
         ImportSmartAlbumRules,
         NewAlbum,
         AddToAlbum,
+        DeleteRejected,
         GoBack,
         GoForward,
         RotateLeft,
