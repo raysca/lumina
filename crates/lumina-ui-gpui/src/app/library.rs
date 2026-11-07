@@ -63,6 +63,7 @@ impl LuminaApp {
                 let mut removed_textures = Vec::new();
                 let mut error = None;
                 let mut selected_refresh = None;
+                let mut changed_files = Vec::new();
 
                 if let Some(ref mut state) = self.grid_state {
                     match evt {
@@ -88,6 +89,45 @@ impl LuminaApp {
                             // Initial scan batches are followed by ScanComplete; only
                             // refresh sidebar counts for post-scan (watcher) changes.
                             if !state.is_scanning {
+                                // Outside a scan a batch is the watcher's: files
+                                // whose signature changed (an editor saved over
+                                // one) or that moved. Drop what was drawn from
+                                // an old file, except after a pure rename (same
+                                // size and mtime), which changes no pixels. A
+                                // cached row may already be refetched, so only a
+                                // row that shows the move keeps its texture.
+                                // A rescan must not flush the grid, so scan
+                                // batches skip this.
+                                //
+                                // The grid re-requests from its cached rows
+                                // until the refetch lands; they must carry the
+                                // new path, size and mtime (the disk cache key),
+                                // or the decode reads a gone path (and marks the
+                                // item failed) or brings the old thumbnail back.
+                                let renamed = self.active_view.refresh_row_files(&items);
+                                let textures = state.texture_cache.lock();
+                                let open = self
+                                    .selected_item
+                                    .as_ref()
+                                    .filter(|_| self.is_fullscreen_viewer);
+                                changed_files.extend(
+                                    items
+                                        .iter()
+                                        .filter(|item| {
+                                            let grid = textures.contains(&item.id)
+                                                && !renamed.contains(&item.id);
+                                            let viewer = open.is_some_and(|open| {
+                                                open.id == item.id
+                                                    && !(open.path != item.path
+                                                        && crate::app::active_view::same_file_signature(
+                                                            open, item,
+                                                        ))
+                                            });
+                                            grid || viewer
+                                        })
+                                        .map(|item| item.id),
+                                );
+                                drop(textures);
                                 should_refresh_counts = true;
                                 // Added/removed items shift position-based selection.
                                 if structural_change {
@@ -180,6 +220,10 @@ impl LuminaApp {
                 }
                 for image in removed_textures {
                     self.retire_image(image);
+                }
+                if !changed_files.is_empty() {
+                    // Also reloads the open viewer photo.
+                    self.evict_rendered(&changed_files);
                 }
                 if should_clear_selection {
                     self.clear_selection(cx);

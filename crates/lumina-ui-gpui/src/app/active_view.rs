@@ -8,7 +8,9 @@
 use std::ops::Range;
 
 use gpui::Context;
-use lumina_core::{LuminaEngine, MediaItem, SmartAlbum, SortSpec, SystemAlbum};
+use std::collections::HashSet;
+
+use lumina_core::{LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum};
 
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
@@ -97,6 +99,11 @@ impl ViewQuery {
     }
 }
 
+/// Same size and mtime: the bytes did not change (a rename or a move).
+pub(crate) fn same_file_signature(a: &MediaItem, b: &MediaItem) -> bool {
+    (a.file_size, a.mtime_epoch_ms) == (b.file_size, b.mtime_epoch_ms)
+}
+
 /// What a fetch read, and at which catalog revision.
 struct Fetched {
     key: ViewKey,
@@ -125,6 +132,35 @@ impl ActiveView {
         self.data
             .as_ref()
             .filter(|data| &data.key == key && data.revision == revision)
+    }
+
+    /// Gives cached rows the file (path, size, mtime, dimensions) of the
+    /// same items in a watcher batch, so a decode asked for before the
+    /// refetch lands reads the file that is there now and keys the disk
+    /// cache on it. Other columns wait for the refetch: the batch has the
+    /// file's date, not an edited one. Returns the ids whose row only moved
+    /// (new path, same size and mtime): a rename, which changes no pixels.
+    /// ponytail: rows × batch scan; a watcher batch is a few files.
+    pub(crate) fn refresh_row_files(&mut self, changed: &[MediaItem]) -> HashSet<MediaId> {
+        let mut renamed = HashSet::new();
+        let Some(data) = self.data.as_mut() else {
+            return renamed;
+        };
+        for row in &mut data.items {
+            if let Some(new) = changed.iter().find(|item| item.id == row.id) {
+                if row.path != new.path && same_file_signature(row, new) {
+                    renamed.insert(row.id);
+                }
+                row.path = new.path.clone();
+                row.parent_dir = new.parent_dir.clone();
+                row.file_name = new.file_name.clone();
+                row.file_size = new.file_size;
+                row.mtime_epoch_ms = new.mtime_epoch_ms;
+                row.width = new.width;
+                row.height = new.height;
+            }
+        }
+        renamed
     }
 
     fn covers(data: &Fetched, range: &Range<usize>) -> bool {

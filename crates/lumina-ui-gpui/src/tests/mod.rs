@@ -7,6 +7,7 @@ mod downloads_panel;
 mod duplicates;
 mod editor_copy;
 mod editor_handoff;
+mod editor_round_trip;
 mod engine_release;
 mod get_info;
 mod grid_scroll;

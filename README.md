@@ -155,6 +155,12 @@ core handles cataloguing, decoding, and search.
   crop, exposure or rotation, so the copy starts with none of them. With no
   editor set, both open Preferences on the editor row. Neither works on
   several items at once or while editing a photo in Lumina.
+  When the editor saves in place, the library picks the change up on its
+  own: the item keeps its id, keywords and other metadata, and its
+  thumbnail (and the viewer, if it is open) shows the saved file. A "Save
+  As" file saved into the library folder appears as a new item. Lumina's
+  crop, exposure and rotation stay applied on top of the saved file, so if
+  the editor already cropped or turned it, use Image > Revert to Original.
 - **Floating panels** — detachable inspector and PiP windows.
 - **Keyboard-first** — a searchable command palette (⌘K) for every major action,
   arrows/Home/End/Page navigation with scroll-into-view, a built-in shortcut

@@ -821,6 +821,9 @@ impl LuminaApp {
     pub(crate) fn queue_thumbnail_request_item(&self, item: &lumina_core::MediaItem) {
         if let Some(state) = self.grid_state.as_ref() {
             if let Some(callback) = self.begin_thumbnail_request(state, item.id) {
+                #[cfg(test)]
+                THUMB_REQUEST_ITEMS
+                    .with(|items| items.borrow_mut().push((item.id, item.mtime_epoch_ms)));
                 state
                     .engine
                     .request_thumbnail_item(item.clone(), 320, callback);
@@ -919,6 +922,10 @@ pub(crate) fn on_viewer_frame(
 thread_local! {
     /// Thumbnail decodes actually sent to the engine from this test thread.
     pub(crate) static THUMB_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Id and file mtime of each decode sent with a row the UI already held;
+    /// a stale row would decode (or hit the disk cache for) the old file.
+    pub(crate) static THUMB_REQUEST_ITEMS: std::cell::RefCell<Vec<(MediaId, i64)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(test)]
