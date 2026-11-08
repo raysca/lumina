@@ -56,6 +56,30 @@ pub(crate) struct GridMetrics {
     pub row_height: f32,
 }
 
+/// The center pane's width: the window less the sidebar (or its collapsed
+/// rail) and its resizer, the year rail when painted, and the inspector
+/// (`Some` when painted) and its resizer.
+pub(crate) fn center_pane_width(
+    window_width: f32,
+    sidebar_width: f32,
+    sidebar_collapsed: bool,
+    year_rail_visible: bool,
+    inspector_width: Option<f32>,
+) -> f32 {
+    let sidebar = if sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        sidebar_width.max(0.0) + RESIZER_WIDTH
+    };
+    let year_rail = if year_rail_visible {
+        YEAR_RAIL_WIDTH
+    } else {
+        0.0
+    };
+    let inspector = inspector_width.map_or(0.0, |width| width.max(0.0) + RESIZER_WIDTH);
+    (window_width - sidebar - year_rail - inspector).max(0.0)
+}
+
 /// Derives the square photo well and row height from the actual card width.
 ///
 /// The center pane loses the sidebar (or its 48px collapsed rail) plus a 4px
@@ -74,18 +98,13 @@ pub(crate) fn grid_metrics(
     columns: usize,
 ) -> GridMetrics {
     let columns = columns.clamp(2, 8) as f32;
-    let sidebar = if sidebar_collapsed {
-        SIDEBAR_COLLAPSED_WIDTH
-    } else {
-        sidebar_width.max(0.0) + RESIZER_WIDTH
-    };
-    let year_rail = if year_rail_visible {
-        YEAR_RAIL_WIDTH
-    } else {
-        0.0
-    };
-    let inspector = inspector_width.map_or(0.0, |width| width.max(0.0) + RESIZER_WIDTH);
-    let grid_width = (window_width - sidebar - year_rail - inspector).max(0.0);
+    let grid_width = center_pane_width(
+        window_width,
+        sidebar_width,
+        sidebar_collapsed,
+        year_rail_visible,
+        inspector_width,
+    );
     let card_width = (grid_width - 2.0 * GRID_ROW_PADDING_X - GRID_CARD_GAP * (columns - 1.0))
         .max(0.0)
         / columns;

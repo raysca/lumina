@@ -24,6 +24,15 @@ pub fn t(key: &str) -> String {
     }
 }
 
+/// [`t`] with each `{}` in the text replaced by the next of `args`.
+pub fn t_with(key: &str, args: &[&str]) -> String {
+    let mut out = t(key);
+    for arg in args {
+        out = out.replacen("{}", arg, 1);
+    }
+    out
+}
+
 fn en_us(key: &str) -> Option<&'static str> {
     Some(match key {
         "command.open_library" => "Open Library…",
@@ -97,6 +106,32 @@ fn en_us(key: &str) -> Option<&'static str> {
         "slideshow.empty" => "Nothing to show here",
         "slideshow.loop_on" => "Slideshow loops at the end",
         "slideshow.loop_off" => "Slideshow stops at the end",
+        "command.show_exact_copies" => "Show Exact Copies",
+        "command.show_similar_shots" => "Show Similar Shots",
+        "duplicates.title" => "Duplicates",
+        "duplicates.tab_exact" => "Exact copies",
+        "duplicates.tab_exact_hint" => "Files with identical content",
+        "duplicates.tab_similar" => "Similar shots",
+        "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
+        "stacks.loading" => "Looking for similar shots…",
+        "stacks.empty_title" => "No similar shots",
+        "stacks.empty_body" => "RAW + JPEG pairs and bursts from one camera show up here.",
+        "stacks.error_title" => "Could not look for similar shots",
+        "stacks.error_body" => "The library could not be read. Try again; if it keeps failing, reopen the library.",
+        "stacks.read_failed" => "Could not read this stack: the library could not be read. Try again.",
+        "stacks.changed" => "This stack changed since it was listed, so nothing was flagged. The list was refreshed.",
+        "stacks.title" => "{} · {} items",
+        "stacks.more" => "+{} more",
+        "stacks.no_slideshow" => "There is nothing to play here. Open Exact copies or another view for a slideshow.",
+        "stacks.with_shortcut" => "{} ({})",
+        "stacks.retry" => "Try Again",
+        "stacks.kind_pair" => "RAW + JPEG",
+        "stacks.kind_burst" => "Burst",
+        "stacks.keep_picks" => "Keep picks, reject the rest",
+        "stacks.reject_others" => "Reject all but the first",
+        "stacks.pick_first" => "Pick at least one item in this stack first",
+        "stacks.nothing_to_reject" => "Nothing left to reject in this stack",
+        "stacks.hint" => "↑ ↓ move · Enter keep picks · ⇧Enter keep the first · Rejects wait for Delete Rejected…",
         "compare.title" => "Compare",
         "compare.close" => "Close Compare",
         "compare.hint" => "← → focus · P X U, 0–5 mark · ⌫ remove · Enter view",

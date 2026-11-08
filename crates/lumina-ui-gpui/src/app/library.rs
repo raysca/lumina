@@ -553,6 +553,7 @@ impl LuminaApp {
         self.batch_summary = Default::default();
         self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
+        self.stacks.reset();
         // Album and media ids restart with each library: a dialog left open
         // would act on the new library's rows with the old ids (a Delete
         // could trash unrelated files), so every id-holding dialog closes.
@@ -719,6 +720,7 @@ impl LuminaApp {
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
+        self.stacks.reset();
         if self.selection == AlbumSelection::Duplicates {
             self.refresh_duplicates();
         }
@@ -834,6 +836,7 @@ impl LuminaApp {
         // Back still returns to the album through `departing`.
         if year.is_some() {
             self.selection = AlbumSelection::AllLibrary;
+            self.stacks.reset();
         }
         self.search_query.clear();
         self.search_focused = false;

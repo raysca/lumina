@@ -326,6 +326,7 @@ impl LuminaApp {
         album.search_query.clear();
         self.navigation_history.sync_pending(album);
         self.selection = AlbumSelection::AllLibrary;
+        self.stacks.reset();
     }
 
     /// Runs a quick filter: toggles its token in the query (D8).

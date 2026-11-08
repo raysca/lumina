@@ -107,7 +107,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 9] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 10] = [
     (
         "GENERAL",
         &[
@@ -163,6 +163,18 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 9] = [
             ("Enter", "Open in viewer (Esc returns)"),
             ("+ / - / Z / ⌘0–⌘4", "Zoom every pane"),
             ("Esc", "Close compare"),
+        ],
+    ),
+    (
+        "SIMILAR SHOTS (DUPLICATES)",
+        &[
+            ("↑ / ↓", "Previous / next stack"),
+            ("Enter on a stack", "Keep picks, reject the rest"),
+            ("⇧Enter", "Reject all but the first"),
+            (
+                "⌘K Show Similar Shots",
+                "This tab (⌘K Show Exact Copies: the other)",
+            ),
         ],
     ),
     (
@@ -672,12 +684,11 @@ impl Render for LuminaApp {
                                     .flex()
                                     .flex_row()
                                     .child(if self.selection == AlbumSelection::Duplicates {
-                                        crate::views::duplicates::DuplicatesView::render(
+                                        crate::views::stacks::render_duplicates(
                                             self,
                                             total_count,
                                             cx,
                                         )
-                                        .into_any_element()
                                     } else {
                                         self.render_browser_grid(total_count, cx).into_any_element()
                                     })

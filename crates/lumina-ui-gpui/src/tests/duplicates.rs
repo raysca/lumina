@@ -5,7 +5,7 @@ use super::ui_automation::{
 };
 use crate::views::sidebar::AlbumSelection;
 
-fn run_palette_command(
+pub(crate) fn run_palette_command(
     vcx: &mut gpui::VisualTestContext,
     view: &gpui::Entity<crate::LuminaApp>,
     query: &str,

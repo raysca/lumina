@@ -375,6 +375,35 @@ impl Catalog {
         Ok(rows.pop())
     }
 
+    /// The rows for `ids` in one read per 500 ids (under SQLite's variable
+    /// limit), in `ids` order; ids with no row are left out. Trashed and
+    /// hidden rows are returned too: callers check the flags.
+    pub fn get_items_by_ids(&self, ids: &[MediaId]) -> Result<Vec<MediaItem>> {
+        let mut found: HashMap<MediaId, MediaItem> = HashMap::with_capacity(ids.len());
+        let conn = self.conn.lock();
+        for chunk in ids.chunks(500) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id, file_path, parent_dir, file_name, file_size, mtime_epoch_ms, \
+                 media_type, width, height, duration_ms, \
+                 timestamp_epoch_ms, year, month, day, \
+                 latitude, longitude, altitude, \
+                 country_code, admin1_region, city, \
+                 make, model, lens, focal_length, f_number, iso, exposure_time, \
+                 is_favorite, is_hidden, is_trashed, title \
+                 FROM media_items WHERE id IN ({marks});"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let params = rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64));
+            found.extend(
+                Self::map_query_rows(&mut stmt, params)?
+                    .into_iter()
+                    .map(|item| (item.id, item)),
+            );
+        }
+        Ok(ids.iter().filter_map(|id| found.remove(id)).collect())
+    }
+
     pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute(
@@ -987,6 +1016,32 @@ mod tests {
             .lock()
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("user_version must be readable")
+    }
+
+    #[test]
+    fn items_by_ids_keeps_order_skips_unknown_and_spans_chunks() {
+        let (dir, db) = temp_catalog("items_by_ids");
+        let catalog = Catalog::open(&db).expect("catalog must open");
+        let items: Vec<MediaItem> = (0..1_201).map(sample_item).collect();
+        let stored = catalog.insert_or_update_batch(&items).unwrap();
+        let mut ids: Vec<MediaId> = stored.iter().map(|i| i.id).rev().collect();
+        ids.insert(3, MediaId(999_999));
+        let got = catalog.get_items_by_ids(&ids).unwrap();
+        assert_eq!(
+            got.len(),
+            1_201,
+            "every known id across three chunks, unknown left out"
+        );
+        let want: Vec<MediaId> = ids.iter().copied().filter(|id| id.0 != 999_999).collect();
+        let got_ids: Vec<MediaId> = got.iter().map(|i| i.id).collect();
+        assert_eq!(got_ids, want, "rows come back in the order asked");
+        assert_eq!(
+            got[0].file_name,
+            stored.last().unwrap().file_name,
+            "full rows are mapped"
+        );
+        assert!(catalog.get_items_by_ids(&[]).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

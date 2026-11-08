@@ -103,6 +103,9 @@ impl LuminaApp {
             self.close_viewer(cx);
         }
 
+        // Back/Forward lands on Exact copies with a fresh Similar shots read
+        // to come: the old list may hold items trashed meanwhile.
+        self.stacks.reset();
         self.selection = self.resolve_navigation_selection(snapshot.selection);
         self.search_query = snapshot.search_query;
         self.search_focused = false;
@@ -298,6 +301,10 @@ impl LuminaApp {
     }
 
     pub fn select_index(&mut self, index: usize, cx: &mut Context<Self>) {
+        // Similar shots shows no selection, so it can hold none.
+        if self.similar_shots_shown() {
+            return;
+        }
         let total_count = self.navigation_count();
         if total_count == 0 {
             self.clear_selection(cx);
@@ -435,6 +442,10 @@ impl LuminaApp {
     }
 
     pub(crate) fn select_item_internal(&mut self, item: MediaItem, cx: &mut Context<Self>) {
+        if self.similar_shots_shown() {
+            self.clear_selection_fields();
+            return;
+        }
         // A draft belongs to the photo it was opened on: trash, a watcher
         // removal or any other step to another item discards it, so Done
         // can never write to a photo other than the one shown.
@@ -1062,7 +1073,7 @@ impl LuminaApp {
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
         let total = self.get_active_count();
-        if total == 0 {
+        if total == 0 || self.similar_shots_shown() {
             return;
         }
         self.selected_indices.clear();

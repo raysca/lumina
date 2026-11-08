@@ -36,6 +36,7 @@ pub mod slideshow;
 pub mod smart_album_share;
 pub mod smart_draft;
 pub mod sort;
+pub mod stacks;
 pub mod state;
 pub mod tag_undo;
 pub mod tags;

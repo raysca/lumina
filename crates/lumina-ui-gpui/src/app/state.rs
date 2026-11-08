@@ -491,6 +491,8 @@ pub struct LuminaApp {
     pub edits: crate::app::quick_edit::QuickEdits,
     /// Compare / survey mode; `None` when it is closed.
     pub(crate) compare: Option<crate::app::present::CompareState>,
+    /// The Duplicates destination's tab and its Similar shots list.
+    pub(crate) stacks: crate::app::stacks::StacksState,
     /// The running slideshow; `None` when there is none.
     pub(crate) slideshow: Option<crate::app::slideshow::SlideshowState>,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
@@ -677,6 +679,7 @@ impl LuminaApp {
             undo: crate::app::undo::UndoState::default(),
             edits: Default::default(),
             compare: None,
+            stacks: Default::default(),
             slideshow: None,
             event_receiver_thread: None,
             library_generation: 0,

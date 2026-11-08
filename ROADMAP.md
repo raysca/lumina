@@ -357,7 +357,8 @@ jump-to-date (compare/survey and the slideshow came later, in plan 5 C1 and C2).
 - Compare view (2-up and 4-up), synchronized zoom/pan.
 - Slideshow with interval, loop, and optional music-free presentation mode.
 - Map view using the existing offline geocoder and GPS metadata.
-- Duplicate detection and burst stacks with a review UI.
+- Duplicate detection and burst stacks with a review UI (shipped: Duplicates >
+  Similar shots, plan 5 D2).
 - Quick Look/Finder integration and drag-out to Finder.
 
 **Acceptance:** search is discoverable without memorizing the grammar; compare
@@ -593,7 +594,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…, compare/survey of 2–9 items with shared zoom (C, View > Compare; plan 5 C1). |
 | P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Missing: map; slideshow music and transitions beyond a fade. |
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
-| P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. |
+| P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. Shipped: exact-copy merge; Similar shots tab in Duplicates (plan 5 D1/D2) for RAW+JPEG pairs and bursts, with Keep picks / Reject all but the first (flags only, one undo; Delete Rejected… removes them), loading, empty and error states. Missing: near-duplicate (visual) matching, collapsing stacks in the grid. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. |
 | P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. |
 | P1 | Mid | Light/system theme, accent, density, motion settings | 0.7 | UX-4 consistency. |

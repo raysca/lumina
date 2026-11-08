@@ -25,6 +25,9 @@ pub enum CommandId {
     EmptyTrash,
     RestoreAll,
     MergeAllDuplicates,
+    /// The Duplicates destination on its Exact copies / Similar shots tab.
+    ShowExactCopies,
+    ShowSimilarShots,
     RetryError,
     Shortcuts,
     ToggleSidebar,
@@ -183,7 +186,7 @@ impl Command {
             RemoveLocation | DeleteSmartAlbum | DeleteAlbum | RemoveFromAlbum => Icon::X,
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
-            MergeAllDuplicates => Icon::Repeat,
+            MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
@@ -312,6 +315,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.merge_all_duplicates",
             shortcut: "",
             keywords: "duplicate duplicates merge clean dedup",
+        },
+        Command {
+            id: CommandId::ShowExactCopies,
+            key: "command.show_exact_copies",
+            shortcut: "",
+            keywords: "duplicates exact copies identical",
+        },
+        Command {
+            id: CommandId::ShowSimilarShots,
+            key: "command.show_similar_shots",
+            shortcut: "",
+            keywords: "duplicates similar shots stacks raw jpeg pairs bursts",
         },
         Command {
             id: CommandId::RetryError,
@@ -951,6 +966,7 @@ impl LuminaApp {
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
+            CommandId::ShowExactCopies | CommandId::ShowSimilarShots => self.grid_state.is_some(),
             CommandId::DeleteRejected => {
                 self.grid_state.is_some() && self.view_query().reject_scope().is_some()
             }
@@ -1206,6 +1222,7 @@ impl LuminaApp {
                 // One history entry: Back returns to where the jump started.
                 let departing = self.navigation_snapshot();
                 self.selection = AlbumSelection::AllLibrary;
+                self.stacks.reset();
                 self.active_year = Some(year);
                 self.search_query.clear();
                 self.search_focused = false;
@@ -1227,6 +1244,12 @@ impl LuminaApp {
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),
             CommandId::RestoreAll => self.restore_all_trash(cx),
             CommandId::MergeAllDuplicates => self.merge_all_duplicates(cx),
+            CommandId::ShowExactCopies => {
+                self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Exact, cx)
+            }
+            CommandId::ShowSimilarShots => {
+                self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Similar, cx)
+            }
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),

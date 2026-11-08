@@ -61,6 +61,12 @@ core handles cataloguing, decoding, and search.
   Slideshow Interval): `Space` pauses, `←`/`→` step, `Esc` ends it. Videos
   show their poster and do not play; it stops at the end unless ⌘K
   "Slideshow: Loop" is on.
+- **Similar shots** — Duplicates has a second tab (⌘K "Show Similar Shots")
+  listing RAW + JPEG pairs and bursts from one camera. Per stack, "Keep
+  picks, reject the rest" (`Enter`) or "Reject all but the first" (`⇧Enter`,
+  keeps the image of a pair, the earliest shot of a burst); `↑`/`↓` move
+  between stacks and each action is one `⌘Z`. Nothing is deleted there:
+  rejects wait for Delete Rejected….
 - **Keywords** — a keyword can be a path (`places/usa/new york`). The Tag
   Manager and the sidebar show the tree, each level indented under its
   parent (a parent no item carries directly still gets a row), and filtering

@@ -77,6 +77,10 @@ impl LuminaApp {
         let Some(item) = self.video.item.clone() else {
             return;
         };
+        // Similar shots holds no selection: show the video from Exact copies.
+        if self.similar_shots_shown() {
+            self.set_duplicates_tab(crate::app::stacks::DuplicatesTab::Exact, cx);
+        }
         // `in_pip` stays set while selecting so the viewer sync leaves the
         // player running. Position-based selection must follow the item; when
         // the current view no longer contains it, nothing stays selected by

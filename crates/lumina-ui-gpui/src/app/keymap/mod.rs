@@ -137,6 +137,10 @@ impl LuminaApp {
 
         // ⌘A: Select All; ⇧⌘A: Add to Album…
         if cmd_or_ctrl && key.eq_ignore_ascii_case("a") {
+            // Similar shots holds no selection to select or add.
+            if self.similar_shots_shown() {
+                return;
+            }
             if keystroke.modifiers.shift {
                 if !keystroke.modifiers.alt {
                     self.open_album_picker(cx);
@@ -282,6 +286,11 @@ impl LuminaApp {
             } else {
                 self.toggle_inspector(cx);
             }
+            return;
+        }
+
+        // Similar shots takes ↑/↓/↵ and absorbs the grid's keys.
+        if self.handle_stacks_key(keystroke, cx) {
             return;
         }
 

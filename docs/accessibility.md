@@ -45,6 +45,19 @@ Lumina is designed to be usable without a mouse:
   dialog on the open view's rejects (`↵` Move to Trash, `↑`/`↓` other
   choices, `Esc` cancels), or a toast says there are none. Flag badges are
   drawn, not yet announced to VoiceOver.
+- **Similar shots**: ⌘K Show Similar Shots / Show Exact Copies switch the
+  Duplicates tabs (from the viewer too, which then closes); a click on a
+  tab does the same. On Similar shots `↑`/`↓` move the focused stack (drawn
+  with an accent bar and ring, scrolled into view). `↵` runs Keep picks,
+  reject the rest; with no pick in the stack a toast asks for one first.
+  On the error state `↵` runs Try Again. `⇧↵` runs Reject all but the
+  first. Each action is one `⌘Z`, and `Esc` acts as on Exact copies. Every
+  other grid key (P/X/U, digits, F, ⌫, ⌘A, ⇧⌘A) is absorbed there and the
+  tab holds no selection, so no menu or palette command acts on hidden
+  items; `⌥⌘S` plays nothing and says so. Back/Forward onto Duplicates
+  opens Exact copies. A stack wider
+  than the pane draws the members that fit and a "+k more" count. Roles:
+  see the controls list below.
 - **Slideshow**: `⌥⌘S`, View > Slideshow or ⌘K Slideshow plays the open
   view full screen from the selection. `Space` pauses and resumes (also on
   a video, which shows its poster and never plays), `←`/`→` step, and one
@@ -165,7 +178,14 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   the collapsed rail's icon buttons (button, same label, tooltip
   "Favorites · 22") and the toolbar's sidebar toggle (button, labelled
   "Hide Sidebar (⌃⌘S)" or "Show Sidebar (⌃⌘S)"). User smart-album and tag
-  rows have no role yet; Untagged (under Smart Albums) does.
+  rows have no role yet; Untagged (under Smart Albums) does;
+- the Duplicates tabs (tab list; each tab a tab, labelled "Exact copies" or
+  "Similar shots", selected when shown, with a tooltip), the Similar shots
+  list (list, labelled "Similar shots"), each stack (list item, labelled
+  e.g. "Burst · 3 items", selected when focused), its thumbnails (image,
+  labelled with the file name), its two actions and Try Again (buttons,
+  with a tooltip and key shortcuts `Enter` / `Shift+Enter`), and the
+  loading, empty and error notices (status).
 
 The recent-search history icon and the scrub preview card have no role.
 
