@@ -111,6 +111,11 @@ core handles cataloguing, decoding, and search.
   left behind. Existing files are never overwritten. File > Export
   Originals… (also the context menu and batch dock Export…) copies the
   originals with XMP sidecars.
+- **Share** — File > Share…, ⌘K Share…, Share… in the right-click menu or
+  the batch dock's Share… button opens the macOS share sheet for the
+  selected originals (macOS only, up to 500 items at a time). Missing files
+  are left out; if every selected file is missing a toast says so. Lumina sends nothing itself: the sharing
+  services are the system's.
 - **Metadata templates** — save a creator, copyright, usage terms, contact
   email and website plus keywords as a named template (File > Metadata
   Templates…, or ⌘K Metadata Templates…). Apply one to the selection with ⌘K

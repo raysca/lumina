@@ -558,6 +558,13 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &ExportAsJpeg, _w, cx| {
                     this.export_pick_folder(lumina_core::ExportPreset::Jpeg2048, cx);
                 }))
+                // File > Share… exists on macOS only; elsewhere nothing sends it.
+                .on_action(cx.listener(|this, _: &ShareSelection, _w, cx| {
+                    #[cfg(target_os = "macos")]
+                    this.share_selection(None, cx);
+                    #[cfg(not(target_os = "macos"))]
+                    let _ = (this, cx);
+                }))
                 .on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
                     this.delete_rejected(cx);
                 }))

@@ -12,6 +12,8 @@ mod logging;
 mod menus;
 mod motion;
 mod player;
+#[cfg(target_os = "macos")]
+mod share;
 mod theme;
 mod views;
 

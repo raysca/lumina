@@ -104,6 +104,7 @@ impl LuminaApp {
                         }),
                     ),
                 )
+                .children(share_dock_button(cx))
                 .child(separator())
                 .child(
                     dock_button(
@@ -220,6 +221,29 @@ impl LuminaApp {
             Empty.into_any_element()
         }
     }
+}
+
+/// The dock's Share… (macOS only), anchored where it was clicked.
+#[cfg(target_os = "macos")]
+fn share_dock_button(cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
+    let label = crate::i18n::t("share.dock_tooltip");
+    // Labelled here, not by dock_button: the title comes from the catalog.
+    Some(
+        dock_button("batch-share-dock-btn", "", None, theme::text())
+            .px(px(10.0))
+            .child(crate::i18n::t("command.share"))
+            .role(Role::Button)
+            .aria_label(label.clone())
+            .tooltip(theme::tooltip_label(label))
+            .on_click(cx.listener(|this, e: &ClickEvent, _w, cx| {
+                this.share_selection(Some(e.position()), cx);
+            })),
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+fn share_dock_button(_cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
+    None
 }
 
 /// Flat dock button: a text label, or an icon alone when `label` is empty.

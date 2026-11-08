@@ -58,6 +58,12 @@ Lumina is designed to be usable without a mouse:
   opens Exact copies. A stack wider
   than the pane draws the members that fit and a "+k more" count. Roles:
   see the controls list below.
+- **Share** (macOS): File > Share… or ⌘K Share… opens the system share
+  sheet for the selection (up to 500 items) at the window centre; the
+  right-click menu and the batch dock also have Share…. It is not offered while a dialog, edit mode, compare
+  or a slideshow is up, nor on Similar shots (no selection). The share
+  sheet itself is the system's, with its own keyboard and VoiceOver
+  support.
 - **Slideshow**: `⌥⌘S`, View > Slideshow or ⌘K Slideshow plays the open
   view full screen from the selection. `Space` pauses and resumes (also on
   a video, which shows its poster and never plays), `←`/`→` step, and one
@@ -186,6 +192,8 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   labelled with the file name), its two actions and Try Again (buttons,
   with a tooltip and key shortcuts `Enter` / `Shift+Enter`), and the
   loading, empty and error notices (status).
+- the batch dock's Share… button (button, labelled "Share the selected
+  originals", with the same tooltip).
 
 The recent-search history icon and the scrub preview card have no role.
 

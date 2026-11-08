@@ -26,6 +26,7 @@ actions!(
         DeleteRejected,
         ExportOriginals,
         ExportAsJpeg,
+        ShareSelection,
         Compare,
         Slideshow,
         GoBack,

@@ -50,13 +50,32 @@ impl MediaContextMenu {
         let raw_x: f32 = state.position.x.into();
         let raw_y: f32 = state.position.y.into();
         let menu_w = 256.0;
-        let menu_h = 562.0;
+        let menu_h = 590.0;
         let win_size = window.viewport_size();
         let win_w: f32 = win_size.width.into();
         let win_h: f32 = win_size.height.into();
 
         let x = (raw_x.min(win_w - menu_w - 8.0)).max(8.0);
         let y = (raw_y.min(win_h - menu_h - 8.0)).max(8.0);
+
+        // Share… (macOS only): the selection, anchored at the clicked card.
+        #[cfg(target_os = "macos")]
+        let share_row = {
+            let at = state.position;
+            Some(Self::render_menu_item(
+                &hover,
+                "share-menu-btn",
+                crate::i18n::t("command.share"),
+                None,
+                false,
+                cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                    this.close_context_menu(cx);
+                    this.share_selection(Some(at), cx);
+                }),
+            ))
+        };
+        #[cfg(not(target_os = "macos"))]
+        let share_row: Option<Empty> = None;
 
         div()
             .id("context-menu-layer")
@@ -251,6 +270,7 @@ impl MediaContextMenu {
                             this.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
                         }),
                     ))
+                    .children(share_row)
                     // 12. Import XMP metadata
                     .child(Self::render_menu_item(
                         &hover,

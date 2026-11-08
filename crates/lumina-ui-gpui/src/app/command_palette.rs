@@ -35,6 +35,8 @@ pub enum CommandId {
     GetInfo,
     ExportSelection,
     ExportJpeg,
+    /// The selected originals to the system share picker (macOS only).
+    Share,
     ImportXmp,
     SortDate,
     SortName,
@@ -152,7 +154,7 @@ impl Command {
             About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
-            ExportSelection | ExportJpeg => Icon::ExternalLink,
+            ExportSelection | ExportJpeg | Share => Icon::ExternalLink,
             ImportXmp => Icon::ArrowDownToLine,
             ToggleFit => Icon::Maximize,
             ZoomInGrid => Icon::Plus,
@@ -371,6 +373,13 @@ pub fn commands() -> &'static [Command] {
             key: "command.get_info",
             shortcut: "⌘I",
             keywords: "info window details metadata",
+        },
+        // Before Export as JPEG…, whose keywords also say "share".
+        Command {
+            id: CommandId::Share,
+            key: "command.share",
+            shortcut: "",
+            keywords: "send airdrop mail messages",
         },
         Command {
             id: CommandId::ExportSelection,
@@ -982,6 +991,11 @@ impl LuminaApp {
             CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection | CommandId::ExportJpeg => self.jobs.export.is_none(),
+            // Similar shots holds no selection, so it offers no Share….
+            CommandId::Share => {
+                cfg!(target_os = "macos")
+                    && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            }
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
@@ -1269,6 +1283,11 @@ impl LuminaApp {
             CommandId::ExportJpeg => {
                 self.export_pick_folder(lumina_core::ExportPreset::Jpeg2048, cx)
             }
+            // Anchored at the window centre: the palette has no item to point at.
+            #[cfg(target_os = "macos")]
+            CommandId::Share => self.share_selection(None, cx),
+            #[cfg(not(target_os = "macos"))]
+            CommandId::Share => {}
             CommandId::ImportXmp => self.import_sidecars_selected(cx),
             CommandId::SortDate => self.set_sort_field(SortField::DateTaken, cx),
             CommandId::SortName => self.set_sort_field(SortField::FileName, cx),

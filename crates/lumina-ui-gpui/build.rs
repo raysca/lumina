@@ -3,9 +3,11 @@ fn main() {
     {
         cc::Build::new()
             .file("src/player/macos_bridge.m")
+            .file("src/share/macos_share.m")
             .flag("-fobjc-arc")
             .flag("-Wno-deprecated-declarations")
-            .compile("lumina_player_macos");
+            .flag("-Werror=unguarded-availability-new")
+            .compile("lumina_macos_bridge");
 
         println!("cargo:rustc-link-lib=framework=AVFoundation");
         println!("cargo:rustc-link-lib=framework=CoreMedia");
@@ -14,5 +16,6 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=AppKit");
         println!("cargo:rustc-link-lib=framework=CoreGraphics");
         println!("cargo:rerun-if-changed=src/player/macos_bridge.m");
+        println!("cargo:rerun-if-changed=src/share/macos_share.m");
     }
 }

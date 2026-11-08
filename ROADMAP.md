@@ -360,6 +360,8 @@ jump-to-date (compare/survey and the slideshow came later, in plan 5 C1 and C2).
 - Duplicate detection and burst stacks with a review UI (shipped: Duplicates >
   Similar shots, plan 5 D2).
 - Quick Look/Finder integration and drag-out to Finder.
+- Native share sheet for the selected originals (shipped: File menu, ⌘K,
+  context menu and batch dock Share…, macOS only; plan 5 D4).
 
 **Acceptance:** search is discoverable without memorizing the grammar; compare
 and slideshow are keyboard-operable; map/duplicate views have empty and error
@@ -595,7 +597,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Missing: map; slideshow music and transitions beyond a fade. |
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. Shipped: exact-copy merge; Similar shots tab in Duplicates (plan 5 D1/D2) for RAW+JPEG pairs and bursts, with Keep picks / Reject all but the first (flags only, one undo; Delete Rejected… removes them), loading, empty and error states. Missing: near-duplicate (visual) matching, collapsing stacks in the grid. |
-| P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. Shipped: Export Originals… and Export as JPEG… (2048 px, edits applied, no metadata; plan 5 D3). Missing: share sheet, export cancel control. |
+| P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. Shipped: Export Originals… and Export as JPEG… (2048 px, edits applied, no metadata; plan 5 D3); macOS share sheet for the selected originals from the File menu, ⌘K, the context menu and the batch dock (plan 5 D4). Missing: export cancel control. |
 | P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. |
 | P1 | Mid | Light/system theme, accent, density, motion settings | 0.7 | UX-4 consistency. |
 | P1 | Mid | Accessibility bridge, focus order, reduced motion | 0.7 | Grade A requirement. |

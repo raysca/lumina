@@ -31,6 +31,8 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action(crate::i18n::t("command.export"), ExportOriginals),
             MenuItem::action(crate::i18n::t("command.export_jpeg"), ExportAsJpeg),
+            #[cfg(target_os = "macos")]
+            MenuItem::action(crate::i18n::t("command.share"), ShareSelection),
             MenuItem::action("Import XMP Metadata", ImportXmp),
             MenuItem::action("Metadata Templates…", ManageTemplates),
             MenuItem::separator(),
@@ -110,6 +112,14 @@ mod tests {
                 "File offers {export}"
             );
         }
+        #[cfg(target_os = "macos")]
+        assert!(
+            menus[1]
+                .items
+                .iter()
+                .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Share…")),
+            "File offers Share… on macOS"
+        );
     }
 
     #[test]

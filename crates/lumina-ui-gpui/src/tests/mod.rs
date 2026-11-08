@@ -45,6 +45,8 @@ mod quick_edit_guards;
 mod quick_edit_preview;
 mod regressions;
 mod session_restore;
+#[cfg(target_os = "macos")]
+mod share;
 mod sidebar;
 mod slideshow;
 mod smart_album_builder;
