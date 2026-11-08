@@ -76,7 +76,7 @@ impl SystemAlbum {
                 "m.media_type = 'video' AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Downloaded => {
-                "EXISTS (SELECT 1 FROM media_sources s WHERE s.media_id = m.id AND s.downloaded = 1) AND m.is_trashed = 0 AND m.is_hidden = 0"
+                "m.id IN (SELECT s.media_id FROM media_sources s WHERE s.downloaded = 1) AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Raw => {
                 "(m.media_type = 'raw' OR m.file_name LIKE '%.arw' OR m.file_name LIKE '%.cr3' OR m.file_name LIKE '%.cr2' OR m.file_name LIKE '%.nef' OR m.file_name LIKE '%.dng' OR m.file_name LIKE '%.rw2' OR m.file_name LIKE '%.orf' OR m.file_name LIKE '%.raf') AND m.is_trashed = 0 AND m.is_hidden = 0"
