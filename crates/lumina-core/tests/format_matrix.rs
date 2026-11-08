@@ -129,8 +129,17 @@ fn fixture(dir: &Path, name: &str, spec: Spec) -> PathBuf {
     let ext = name.rsplit('.').next().expect("fixture extension");
     // sips cannot write WebP; the image crate writes both (lossless).
     if ext == "png" || ext == "webp" {
-        assert!(!(spec.rotated || spec.large || spec.p3), "plain only");
-        write_png(&out, false);
+        assert!(!(spec.rotated || spec.large), "plain or P3 only");
+        if !spec.p3 {
+            write_png(&out, false);
+        } else if ext == "png" {
+            let base = dir.join(format!("{name}.base.png"));
+            write_png(&base, false);
+            sips(&["-m", DISPLAY_P3, "-s", "format", "png"], &base, &out);
+            let _ = fs::remove_file(base);
+        } else {
+            write_p3_webp(dir, &out);
+        }
         return out;
     }
     let png = dir.join(format!("{name}.base.png"));
@@ -159,6 +168,34 @@ fn fixture(dir: &Path, name: &str, spec: Spec) -> PathBuf {
     }
     let _ = fs::remove_file(png);
     out
+}
+
+/// A lossless WebP holding the Display P3 pixels of the fixture, tagged
+/// with the Display P3 profile (sips converts the PNG; the image crate
+/// writes the WebP and its ICCP chunk).
+fn write_p3_webp(dir: &Path, out: &Path) {
+    use image::ImageEncoder;
+    let p3_png = dir.join("webp.p3.png");
+    let base = dir.join("webp.base.png");
+    write_png(&base, false);
+    sips(&["-m", DISPLAY_P3, "-s", "format", "png"], &base, &p3_png);
+    let pixels = image::open(&p3_png).expect("read P3 PNG").to_rgb8();
+    let mut webp = Vec::new();
+    let mut encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut webp);
+    encoder
+        .set_icc_profile(fs::read(DISPLAY_P3).expect("read Display P3 profile"))
+        .expect("WebP takes an ICC profile");
+    encoder
+        .write_image(
+            &pixels,
+            pixels.width(),
+            pixels.height(),
+            image::ExtendedColorType::Rgb8,
+        )
+        .expect("encode P3 WebP");
+    fs::write(out, webp).expect("write P3 WebP");
+    let _ = fs::remove_file(base);
+    let _ = fs::remove_file(p3_png);
 }
 
 /// Replaces the JPEG's EXIF APP1 segment (sips writes one) with a minimal
@@ -319,7 +356,6 @@ fn jpeg_small_srgb_color() {
 }
 
 #[test]
-#[ignore = "fails today: zune decodes P3 pixels without converting to sRGB; fixed by E3"]
 fn jpeg_small_p3_color() {
     let spec = Spec { p3: true, ..PLAIN };
     let frame = decode_cell("a.jpg", spec, SMALL_DECODE);
@@ -366,7 +402,6 @@ fn jpeg_large_srgb_color() {
 }
 
 #[test]
-#[ignore = "fails today: the sips decode keeps P3 pixels and the PNG reader ignores the profile; fixed by E3"]
 fn jpeg_large_p3_color() {
     let spec = Spec { p3: true, ..LARGE };
     let frame = decode_cell("big.jpg", spec, LARGE_DECODE);
@@ -387,7 +422,7 @@ fn jpeg_large_orientation_6_scanned_dims() {
     assert_scanned_dims("big.jpg", spec, (1500, 3000));
 }
 
-// PNG / WebP: the image crate (sRGB only).
+// PNG / WebP: the image crate; wide-gamut files go through sips.
 
 #[test]
 fn png_upright_and_color() {
@@ -401,6 +436,22 @@ fn webp_upright_and_color() {
     let frame = decode_cell("a.webp", PLAIN, SMALL_DECODE);
     assert_upright(&frame, false, "WebP");
     assert_srgb_red(&frame, "WebP");
+}
+
+#[test]
+fn png_p3_color() {
+    let spec = Spec { p3: true, ..PLAIN };
+    let frame = decode_cell("a.png", spec, SMALL_DECODE);
+    assert_upright(&frame, false, "PNG, Display P3");
+    assert_srgb_red(&frame, "PNG, Display P3");
+}
+
+#[test]
+fn webp_p3_color() {
+    let spec = Spec { p3: true, ..PLAIN };
+    let frame = decode_cell("a.webp", spec, SMALL_DECODE);
+    assert_upright(&frame, false, "WebP, Display P3");
+    assert_srgb_red(&frame, "WebP, Display P3");
 }
 
 #[test]
@@ -434,7 +485,6 @@ fn heic_srgb_color() {
 }
 
 #[test]
-#[ignore = "fails today: the sips decode keeps P3 pixels and the PNG reader ignores the profile; fixed by E3"]
 fn heic_p3_color() {
     let spec = Spec { p3: true, ..PLAIN };
     let frame = decode_cell("a.heic", spec, SMALL_DECODE);

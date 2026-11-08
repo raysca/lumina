@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use image::{imageops::FilterType, DynamicImage, GenericImageView};
+use image::{imageops::FilterType, DynamicImage, GenericImageView, ImageDecoder};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::fs;
 use std::path::Path;
@@ -178,6 +178,55 @@ pub(crate) mod live_children {
     }
 }
 
+/// The system sRGB profile that `sips -m` matches every decode to.
+const SRGB_PROFILE: &str = "/System/Library/ColorSync/Profiles/sRGB Profile.icc";
+
+/// Whether an ICC profile is sRGB, judged by its description ("sRGB
+/// IEC61966-2.1", "sRGB built-in", ...). A profile whose description cannot
+/// be read counts as not sRGB, so it is color matched rather than shown as
+/// is. (A file whose profile the decoder cannot extract at all reports no
+/// profile and is treated as untagged, that is, as sRGB.)
+fn is_srgb_profile(icc: &[u8]) -> bool {
+    icc_description(icc).is_some_and(|desc| desc.contains("sRGB"))
+}
+
+/// The `desc` tag of an ICC profile: ASCII in a v2 `desc` type, the first
+/// UTF-16BE record of a v4 `mluc` type.
+fn icc_description(icc: &[u8]) -> Option<String> {
+    let u32_at = |at: usize| -> Option<u32> {
+        Some(u32::from_be_bytes(icc.get(at..at + 4)?.try_into().ok()?))
+    };
+    let count = u32_at(128)? as usize;
+    let tag = (0..count.min(256)).find_map(|i| {
+        let entry = 132 + 12 * i;
+        (icc.get(entry..entry + 4)? == b"desc").then_some(entry)
+    })?;
+    let start = u32_at(tag + 4)? as usize;
+    let body = icc.get(start..start.checked_add(u32_at(tag + 8)? as usize)?)?;
+    let field = |at: usize| -> Option<usize> {
+        Some(u32::from_be_bytes(body.get(at..at + 4)?.try_into().ok()?) as usize)
+    };
+    match body.get(..4)? {
+        b"desc" => {
+            let text = body.get(12..field(8)?.checked_add(12)?)?;
+            let text = text.split(|&b| b == 0).next()?;
+            Some(String::from_utf8_lossy(text).into_owned())
+        }
+        b"mluc" if field(8)? > 0 => {
+            let (len, offset) = (field(20)?, field(24)?);
+            let units: Vec<u16> = body
+                .get(offset..offset.checked_add(len)?)?
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&pair| u16::from_be_bytes(pair))
+                .collect();
+            String::from_utf16(&units).ok()
+        }
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 pub struct DecoderPipeline {
     pool: Arc<ThreadPool>,
@@ -241,8 +290,20 @@ impl DecoderPipeline {
             }
         }
 
-        // Fallback to image crate
-        let img = Self::apply_exif_orientation(image::load_from_memory(&bytes)?, &bytes);
+        // Fallback to image crate (PNG, WebP, and JPEGs zune rejects).
+        let mut decoder = image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()?
+            .into_decoder()?;
+        let (width, height) = decoder.dimensions();
+        let icc = decoder.icc_profile().ok().flatten();
+        if let Some(frame) = Self::color_match_via_sips(id, path, target_size, icc, width, height) {
+            return Ok(frame);
+        }
+        // `into_decoder` skips the output-buffer guard that `decode()` has;
+        // without it a tiny file declaring a huge size is allocated (and an
+        // allocation failure aborts the process).
+        image::Limits::default().reserve(decoder.total_bytes())?;
+        let img = Self::apply_exif_orientation(DynamicImage::from_decoder(decoder)?, &bytes);
         Self::resize_to_frame(id, img, target_size)
     }
 
@@ -295,6 +356,13 @@ impl DecoderPipeline {
             }
         }
 
+        let icc = decoder.icc_profile();
+        if let Some(frame) =
+            Self::color_match_via_sips(id, path, target_size, icc, orig_width, orig_height)
+        {
+            return Ok(frame);
+        }
+
         let pixels = decoder.decode()?;
         // zune-jpeg returns RGB
         let img = image::RgbImage::from_raw(orig_width, orig_height, pixels)
@@ -304,6 +372,34 @@ impl DecoderPipeline {
         Self::resize_to_frame(id, dynamic, target_size)
     }
 
+    /// The in-process decoders (zune-jpeg, the image crate) ignore color
+    /// profiles, so a wide-gamut file (Display P3 from an iPhone or a macOS
+    /// screenshot, Adobe RGB from a camera) decoded as if it were sRGB looks
+    /// dull. When `icc` is present and not sRGB, decode through sips, which
+    /// color matches; `None` (no profile, sRGB, or sips failed) means decode
+    /// in process as before. Not scaled past the image's own size, as the
+    /// in-process path never upscales either.
+    // ponytail: a sips process plus a PNG round trip costs about 50 ms per
+    // decode against about 5 ms for zune at 1600x1200 (release). Upgrade path
+    // if wide-gamut libraries feel slow: in-process ImageIO, a CGImageSource
+    // drawn into an sRGB CGBitmapContext as `video_frame_macos.m` does.
+    fn color_match_via_sips(
+        id: MediaId,
+        path: &Path,
+        target_size: u32,
+        icc: Option<Vec<u8>>,
+        width: u32,
+        height: u32,
+    ) -> Option<DecodedFrame> {
+        if icc.is_none_or(|icc| is_srgb_profile(&icc)) {
+            return None;
+        }
+        Self::decode_via_sips(id, path, target_size.min(width.max(height))).ok()
+    }
+
+    /// Decodes through macOS `sips`, scaled to fit `target_size` and color
+    /// matched to sRGB (frames and the cache hold sRGB; untagged and sRGB
+    /// sources come back unchanged).
     pub fn decode_via_sips(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -317,6 +413,8 @@ impl DecoderPipeline {
                 .arg("-s")
                 .arg("format")
                 .arg("png")
+                .arg("-m")
+                .arg(SRGB_PROFILE)
                 .arg("-Z")
                 .arg(target_size.to_string())
                 .arg(path)
@@ -759,6 +857,240 @@ pub(crate) mod tests {
         let app0_end = 4 + u16::from_be_bytes([jpeg[4], jpeg[5]]) as usize;
         jpeg.splice(app0_end..app0_end, segment);
         fs::write(path, jpeg).expect("fixture writes");
+    }
+
+    #[test]
+    fn icc_description_reads_v2_desc_and_v4_mluc() {
+        let profiles = Path::new("/System/Library/ColorSync/Profiles");
+        if profiles.is_dir() {
+            // sRGB Profile.icc is a v2 `desc` tag, Display P3.icc a v4 `mluc`.
+            let read = |name: &str| fs::read(profiles.join(name)).expect("system ICC profile");
+            let srgb = read("sRGB Profile.icc");
+            let p3 = read("Display P3.icc");
+            assert_eq!(icc_description(&srgb).as_deref(), Some("sRGB IEC61966-2.1"));
+            assert_eq!(icc_description(&p3).as_deref(), Some("Display P3"));
+            assert!(is_srgb_profile(&srgb), "sRGB is not converted");
+            assert!(!is_srgb_profile(&p3), "Display P3 must be converted");
+            let desc = 132
+                + 12 * (0..)
+                    .find(|i| &srgb[132 + 12 * i..136 + 12 * i] == b"desc")
+                    .expect("desc tag");
+            let be = |at: usize| u32::from_be_bytes(srgb[at..at + 4].try_into().unwrap()) as usize;
+            let (body, body_len) = (be(desc + 4), be(desc + 8));
+            assert_eq!(
+                icc_description(&srgb).as_deref(),
+                Some("sRGB IEC61966-2.1"),
+                "the full-length profile parses"
+            );
+            for len in 0..srgb.len() {
+                let parsed = icc_description(&srgb[..len]);
+                if len < body + body_len {
+                    assert_eq!(
+                        parsed, None,
+                        "a profile cut to {len} bytes, inside its desc tag, has no description"
+                    );
+                }
+            }
+            let mut huge = srgb.clone();
+            huge[body + 8..body + 12].copy_from_slice(&u32::MAX.to_be_bytes());
+            assert_eq!(icc_description(&huge), None, "a huge desc length");
+        }
+        assert_eq!(icc_description(b"not a profile"), None);
+        assert_eq!(icc_description(&[0xff; 200]), None, "bad tag count");
+        assert!(
+            !is_srgb_profile(b"not a profile"),
+            "an unparseable profile counts as non-sRGB"
+        );
+    }
+
+    /// `jpeg` with `icc` spliced in as a single APP2 ICC_PROFILE segment.
+    fn with_icc(jpeg: &[u8], icc: &[u8]) -> Vec<u8> {
+        let mut payload = b"ICC_PROFILE\0\x01\x01".to_vec();
+        payload.extend_from_slice(icc);
+        let mut segment = vec![0xff, 0xe2];
+        segment.extend_from_slice(&((payload.len() + 2) as u16).to_be_bytes());
+        segment.extend_from_slice(&payload);
+        let mut out = jpeg.to_vec();
+        out.splice(2..2, segment);
+        out
+    }
+
+    /// Regression for the sRGB conversion: an untagged or sRGB-tagged JPEG
+    /// keeps its pixels (no second conversion, no shift), while a Display P3
+    /// one is converted.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn srgb_and_untagged_jpegs_are_not_converted() {
+        let image = image::RgbImage::from_fn(64, 32, |x, _| {
+            if x < 32 {
+                image::Rgb([200, 60, 40])
+            } else {
+                image::Rgb([40, 120, 220])
+            }
+        });
+        let mut untagged = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut untagged, 95)
+            .encode_image(&image)
+            .expect("fixture encodes");
+        let profiles = Path::new("/System/Library/ColorSync/Profiles");
+        let srgb = with_icc(
+            &untagged,
+            &fs::read(profiles.join("sRGB Profile.icc")).expect("sRGB profile"),
+        );
+        let p3 = with_icc(
+            &untagged,
+            &fs::read(profiles.join("Display P3.icc")).expect("P3 profile"),
+        );
+
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_icc_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("temp dir");
+        let _guard = TempDir(dir.clone());
+        let decode = |name: &str, bytes: &[u8]| {
+            let path = dir.join(name);
+            fs::write(&path, bytes).expect("fixture writes");
+            DecoderPipeline::decode_media(MediaId(1), MediaType::Image, &path, 64)
+                .expect("fixture decodes")
+        };
+        let plain = decode("untagged.jpg", &untagged);
+        let tagged = decode("srgb.jpg", &srgb);
+        let wide = decode("p3.jpg", &p3);
+
+        // BGRA at the centre of the left half.
+        let left = |f: &DecodedFrame| {
+            let i = (16 * f.width as usize + 16) * 4;
+            [f.data[i + 2], f.data[i + 1], f.data[i]]
+        };
+        let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
+        assert!(
+            near(left(&plain), [200, 60, 40]),
+            "an untagged JPEG keeps its sRGB values: {:?}",
+            left(&plain)
+        );
+        assert_eq!(
+            tagged.data, plain.data,
+            "an sRGB-tagged JPEG decodes exactly like the untagged one"
+        );
+        assert!(
+            !near(left(&wide), left(&plain)),
+            "the same values tagged Display P3 are converted to sRGB: {:?}",
+            left(&wide)
+        );
+    }
+
+    /// Regression: the image-crate fallback must keep image's 512 MiB output
+    /// buffer guard. A tiny WebP whose header declares 16383x16383 (about
+    /// 768 MiB of RGB) is refused before any buffer is allocated, rather
+    /// than allocated (an abort when the allocation fails).
+    #[test]
+    fn huge_declared_image_is_refused_before_allocating() {
+        // VP8L header: signature 0x2f, then 14-bit width-1 and height-1
+        // (both 16382, so 16383 px), no alpha, version 0; a few bytes of
+        // bitstream.
+        let size_bits: u32 = 16382 | (16382 << 14);
+        let mut vp8l = vec![0x2f];
+        vp8l.extend_from_slice(&size_bits.to_le_bytes());
+        vp8l.extend_from_slice(&[0; 11]);
+        let mut webp = b"RIFF".to_vec();
+        webp.extend_from_slice(&((4 + 8 + vp8l.len()) as u32).to_le_bytes());
+        webp.extend_from_slice(b"WEBPVP8L");
+        webp.extend_from_slice(&(vp8l.len() as u32).to_le_bytes());
+        webp.extend_from_slice(&vp8l);
+
+        let path = std::env::temp_dir().join(format!(
+            "lumina_huge_{}_{}.webp",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::write(&path, &webp).expect("fixture writes");
+        let _guard = TempFile(path.clone());
+        let Err(err) = DecoderPipeline::decode_image(MediaId(1), &path, 256) else {
+            panic!("a 16383x16383 image must not decode in process");
+        };
+        assert!(
+            matches!(
+                err.downcast_ref::<image::ImageError>(),
+                Some(image::ImageError::Limits(_))
+            ),
+            "the output buffer guard refuses it, not a later decode error: {err:#}"
+        );
+    }
+
+    /// The sRGB match that sips applies to every decode must leave sRGB and
+    /// untagged pixels alone (no shift), checked against a lossless source.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sips_decode_does_not_shift_srgb_or_untagged_pixels() {
+        use image::ImageEncoder;
+        let image = image::RgbImage::from_fn(64, 32, |x, y| {
+            image::Rgb([(x * 4) as u8, (y * 8 + x) as u8, (255 - x * 3) as u8])
+        });
+        let encode = |icc: Option<Vec<u8>>| {
+            let mut png = Vec::new();
+            let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+            if let Some(icc) = icc {
+                encoder
+                    .set_icc_profile(icc)
+                    .expect("PNG takes an ICC profile");
+            }
+            encoder
+                .write_image(&image, 64, 32, image::ExtendedColorType::Rgb8)
+                .expect("fixture encodes");
+            png
+        };
+        let srgb =
+            fs::read("/System/Library/ColorSync/Profiles/sRGB Profile.icc").expect("sRGB profile");
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_sips_shift_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("temp dir");
+        let _guard = TempDir(dir.clone());
+        for (name, png) in [
+            ("untagged.png", encode(None)),
+            ("srgb.png", encode(Some(srgb))),
+        ] {
+            let path = dir.join(name);
+            fs::write(&path, png).expect("fixture writes");
+            let frame = DecoderPipeline::decode_via_sips(MediaId(1), &path, 64)
+                .expect("sips decodes the fixture");
+            assert_eq!(
+                (frame.width, frame.height),
+                (64, 32),
+                "{name}: not rescaled"
+            );
+            let worst = frame
+                .data
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(image.pixels())
+                .map(|(bgra, rgb)| {
+                    (0..3)
+                        .map(|c| bgra[2 - c].abs_diff(rgb[c]))
+                        .max()
+                        .unwrap_or(0)
+                })
+                .max()
+                .unwrap_or(0);
+            assert!(
+                worst <= 2,
+                "{name}: the sRGB match must not shift pixels, worst channel off by {worst}"
+            );
+        }
     }
 
     /// Regression: the sips path (large JPEGs at small sizes, HEIC, RAW)
