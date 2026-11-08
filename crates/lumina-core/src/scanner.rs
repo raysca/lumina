@@ -204,7 +204,9 @@ impl Scanner {
             .unwrap_or_default();
 
         // Extract dimensions quickly from image header if possible
-        let (mut width, mut height) = image::image_dimensions(path).unwrap_or((0, 0));
+        let header = image::image_dimensions(path).ok();
+        let (mut width, mut height) = header.unwrap_or((0, 0));
+        let mut exif_size = crate::dims::ExifSize::default();
 
         // Deep EXIF metadata extraction
         let mut timestamp_epoch_ms = mtime_epoch_ms;
@@ -264,19 +266,8 @@ impl Scanner {
                         exposure_time = Some(clean_string(&f.display_value().to_string()));
                     }
 
-                    // Dimensions fallback from EXIF
-                    if width == 0 || height == 0 {
-                        if let Some(f) =
-                            exif_data.get_field(exif::Tag::PixelXDimension, exif::In::PRIMARY)
-                        {
-                            width = parse_integer(&f.value).unwrap_or(0);
-                        }
-                        if let Some(f) =
-                            exif_data.get_field(exif::Tag::PixelYDimension, exif::In::PRIMARY)
-                        {
-                            height = parse_integer(&f.value).unwrap_or(0);
-                        }
-                    }
+                    // Dimensions fallback and orientation from EXIF
+                    exif_size = crate::dims::ExifSize::read(&exif_data);
 
                     // GPS Coordinates
                     let lat_ref = exif_data
@@ -312,6 +303,7 @@ impl Scanner {
                     altitude = alt_val;
                 }
             }
+            (width, height) = crate::dims::displayed_size(path, header, exif_size);
         }
 
         // Deconstruct date components

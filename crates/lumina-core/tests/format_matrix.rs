@@ -332,7 +332,6 @@ fn jpeg_small_scanned_dims() {
 }
 
 #[test]
-#[ignore = "fails today: scanner stores stored (unrotated) dims for orientation 6; fixed by E2"]
 fn jpeg_small_orientation_6_scanned_dims() {
     assert_scanned_dims("a.jpg", ROTATED, (32, 64));
 }
@@ -380,7 +379,6 @@ fn jpeg_large_orientation_1_scanned_dims() {
 }
 
 #[test]
-#[ignore = "fails today: scanner stores stored (unrotated) dims for orientation 6; fixed by E2"]
 fn jpeg_large_orientation_6_scanned_dims() {
     let spec = Spec {
         rotated: true,
@@ -444,13 +442,11 @@ fn heic_p3_color() {
 }
 
 #[test]
-#[ignore = "fails today: scanner stores 0x0 for a HEIC without EXIF PixelX/YDimension (sips-written); fixed by E2"]
 fn heic_scanned_dims() {
     assert_scanned_dims("a.heic", PLAIN, (64, 32));
 }
 
 #[test]
-#[ignore = "fails today: scanner stores 0x0 for a HEIC without EXIF PixelX/YDimension (sips-written); fixed by E2"]
 fn heic_orientation_6_scanned_dims() {
     assert_scanned_dims("a.heic", ROTATED, (32, 64));
 }
@@ -475,7 +471,6 @@ fn tiff_scanned_dims() {
 }
 
 #[test]
-#[ignore = "fails today: scanner stores stored (unrotated) dims for orientation 6; fixed by E2"]
 fn tiff_orientation_6_scanned_dims() {
     assert_scanned_dims("a.tiff", ROTATED, (32, 64));
 }

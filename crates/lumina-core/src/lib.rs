@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod catalog;
 pub mod decoder;
+mod dims;
 pub mod duplicates;
 pub mod edit_copy;
 pub mod edits;
@@ -345,6 +346,12 @@ impl LuminaEngine {
         catalog
             .backfill_downloaded_sources(&library_root)
             .context("marking which sources are downloads")?;
+        if !db_existed {
+            // A new catalog's sizes all come from the current scanner.
+            catalog
+                .mark_dims_oriented()
+                .context("marking photo sizes as current")?;
+        }
         let decoder = DecoderPipeline::new(0)?;
 
         let cancel_flag = Arc::new(AtomicBool::new(false));
@@ -1417,8 +1424,15 @@ impl LuminaEngine {
         let outcome = match self.catalog.id_at_path(&path)? {
             Some(twin) if twin != id => {
                 // Fixed-size formats make size alone weak; dimensions too.
+                // A quarter-turned photo that went missing before sizes were
+                // stored oriented holds its unrotated size. Only then does a
+                // transposed size match: two uncompressed TIFFs of 6000x4000
+                // and 4000x6000 share a byte size.
+                let (w, h) = (missing.width, missing.height);
+                let turned = (5..=8).contains(&dims::read_exif_size(&path).orientation);
                 let same_file = item.file_size == missing.file_size
-                    && (item.width, item.height) == (missing.width, missing.height);
+                    && ((item.width, item.height) == (w, h)
+                        || (turned && (item.width, item.height) == (h, w)));
                 let same_content = match self.catalog.stored_hash(id)? {
                     Some(hash) => compute_file_hash(&path)? == hash,
                     None => true,
@@ -1804,6 +1818,16 @@ impl LuminaEngine {
     }
 
     fn run_scan(&self, cancel_flag: Arc<AtomicBool>) {
+        self.run_scan_with(cancel_flag, dims::read_displayed_size);
+    }
+
+    /// [`Self::run_scan`] with the photo-size reader for the one-time size
+    /// backfill injected, so tests can hold it.
+    fn run_scan_with(
+        &self,
+        cancel_flag: Arc<AtomicBool>,
+        measure_photo: impl Fn(&Path) -> Option<(u32, u32)>,
+    ) {
         // An unmounted or deleted library folder would make every file look
         // gone; report it instead of marking the library missing.
         if !self.library_root.is_dir() {
@@ -1902,6 +1926,44 @@ impl LuminaEngine {
             let _ = self
                 .event_tx
                 .send(EngineEvent::ScanComplete { total_items });
+            self.backfill_photo_sizes(&cancel_flag, measure_photo);
+        }
+    }
+
+    /// Once per catalog, after ScanComplete so the library opens without
+    /// waiting: fixes photo sizes stored before the scanner applied EXIF
+    /// orientation (re-reading every photo once, slow on a large RAW or
+    /// external-disk library). When rows changed, a second ScanComplete
+    /// refreshes counts, as a rescan does. A cancelled scan (rescan, or the
+    /// library closing) sends nothing: the next scan runs the backfill again,
+    /// and the UI drops a closed library's events by generation.
+    fn backfill_photo_sizes(
+        &self,
+        cancel_flag: &AtomicBool,
+        measure_photo: impl Fn(&Path) -> Option<(u32, u32)>,
+    ) {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return;
+        }
+        match self
+            .catalog
+            .backfill_oriented_dims(measure_photo, cancel_flag)
+        {
+            Ok(0) => {}
+            Ok(_) if cancel_flag.load(Ordering::Relaxed) => {}
+            Ok(_) => {
+                let total_items = match self.catalog.total_count() {
+                    Ok(total) => total,
+                    Err(e) => {
+                        log::warn!("counting items after the photo size backfill failed: {e:#}");
+                        return;
+                    }
+                };
+                let _ = self
+                    .event_tx
+                    .send(EngineEvent::ScanComplete { total_items });
+            }
+            Err(e) => log::warn!("photo size backfill failed: {e:#}"),
         }
     }
 }
@@ -2347,6 +2409,82 @@ mod tests {
             1,
             "a cropped viewer decode must not be written to the disk cache"
         );
+        drop(engine);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Waits for the next ScanComplete, skipping other events.
+    fn next_scan_complete(rx: &Receiver<EngineEvent>) {
+        let deadline = std::time::Instant::now() + TEST_WAIT;
+        loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            match rx.recv_timeout(left) {
+                Ok(EngineEvent::ScanComplete { .. }) => return,
+                Ok(_) => {}
+                Err(err) => panic!("no ScanComplete: {err}"),
+            }
+        }
+    }
+
+    /// The size backfill must not hold up ScanComplete (session restore,
+    /// counts and the timeline wait for it); a second ScanComplete after it
+    /// refreshes counts once sizes changed.
+    #[test]
+    fn scan_complete_is_sent_before_the_photo_size_backfill() {
+        let dir = temp_library("dims_after_scan");
+        let media = dir.join("media");
+        fs::create_dir_all(&media).expect("media dir");
+        crate::decoder::tests::orientation_six_jpeg(&media.join("p.jpg"), 16, 8);
+        let db = dir.join("catalog.db");
+        let (engine, rx) =
+            LuminaEngine::open_with_paths(media, db.clone(), Some(dir.join("cache")))
+                .expect("engine opens");
+        next_scan_complete(&rx);
+        let id = engine.get_item_slice(0..1)[0].id;
+        let size = || {
+            let item = engine.catalog().get_item_by_id(id).unwrap().unwrap();
+            (item.width, item.height)
+        };
+        assert_eq!(size(), (8, 16), "a new scan stores the displayed size");
+        // The startup scan's own backfill must not see the seeded catalog.
+        engine.cancel_scan();
+
+        // What an older Lumina left: the unrotated size and no marker.
+        rusqlite::Connection::open(&db)
+            .and_then(|conn| {
+                conn.busy_timeout(Duration::from_secs(5))?;
+                conn.execute_batch(
+                    "UPDATE media_items SET width = 16, height = 8;
+                     DELETE FROM app_config WHERE key = 'dims_oriented_v1';",
+                )
+            })
+            .expect("seed an old catalog");
+
+        let (release, held) = mpsc::channel::<()>();
+        let scan = {
+            let engine = engine.clone();
+            std::thread::spawn(move || {
+                engine.run_scan_with(Arc::new(AtomicBool::new(false)), move |path| {
+                    held.recv_timeout(TEST_WAIT)
+                        .expect("test releases the backfill");
+                    dims::read_displayed_size(path)
+                });
+            })
+        };
+        next_scan_complete(&rx);
+        assert_eq!(
+            size(),
+            (16, 8),
+            "ScanComplete arrives while the backfill is still measuring"
+        );
+        release.send(()).expect("backfill waits");
+        next_scan_complete(&rx);
+        assert_eq!(
+            size(),
+            (8, 16),
+            "the second ScanComplete follows the fixed sizes, so counts refresh"
+        );
+        scan.join().expect("scan thread");
         drop(engine);
         let _ = fs::remove_dir_all(&dir);
     }

@@ -41,8 +41,9 @@ pub fn effective_edits(media_type: MediaType, edits: Edits) -> Edits {
 
 /// The decode size (long side) that leaves `crop` at least `target` pixels
 /// on its long side. `original` is the catalog's `(width, height)`, `(0, 0)`
-/// when unknown. Those are stored dimensions, before EXIF orientation, while
-/// the crop is in the oriented frame, so the size covers both readings.
+/// when unknown: the displayed size, after EXIF orientation, like the crop.
+/// Rows not yet fixed by the one-time size backfill may still hold the
+/// stored (unrotated) size, so the result covers both readings.
 /// Never below `target`; capped at 4096 and at the original's long side.
 pub fn edit_decode_size(target: u32, crop: Option<CropRect>, original: (u32, u32)) -> u32 {
     let Some(crop) = crop else {

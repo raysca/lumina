@@ -2969,6 +2969,208 @@ fn video_size_backfill_sets_only_the_size_of_sizeless_videos() {
     );
 }
 
+/// Photos with a size, as the scanner stored them before it applied EXIF
+/// orientation: a portrait phone JPEG stored landscape, a HEIC it could not
+/// size, a landscape photo, a photo whose file is unreadable, and a video.
+fn dims_backfill_catalog() -> (Catalog, [MediaId; 5]) {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let at = 1789430400000;
+    let sized = |path, media_type, size: (u32, u32)| MediaItem {
+        width: size.0,
+        height: size.1,
+        ..sample_media_item(path, media_type, at, None, None)
+    };
+    let stored = catalog
+        .insert_or_update_batch(&[
+            sized("/p/portrait.jpg", MediaType::Image, (4032, 3024)),
+            sized("/p/pano.heic", MediaType::Image, (0, 0)),
+            sized("/p/landscape.jpg", MediaType::Image, (1920, 1080)),
+            sized("/p/gone.jpg", MediaType::Image, (800, 600)),
+            sized("/v/clip.mp4", MediaType::Video, (1920, 1080)),
+        ])
+        .expect("insert rows");
+    let ids = [0, 1, 2, 3, 4].map(|i| stored[i].id);
+    (catalog, ids)
+}
+
+/// What the files say now: displayed (EXIF-oriented) sizes.
+fn measured_dims(path: &std::path::Path) -> Option<(u32, u32)> {
+    match path.file_name()?.to_str()? {
+        "portrait.jpg" => Some((3024, 4032)),
+        "pano.heic" => Some((1000, 3000)),
+        "landscape.jpg" => Some((1920, 1080)),
+        "gone.jpg" => None,
+        other => panic!("only photos are measured, not {other}"),
+    }
+}
+
+fn dims_of(catalog: &Catalog, id: MediaId) -> (u32, u32) {
+    let item = catalog.get_item_by_id(id).unwrap().expect("row exists");
+    (item.width, item.height)
+}
+
+#[test]
+fn backfill_runs_once_and_fixes_portrait_dims() {
+    let (catalog, [portrait, heic, landscape, gone, video]) = dims_backfill_catalog();
+    let edited = 1600000000000;
+    catalog.set_timestamp(portrait, edited).unwrap();
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+
+    let fixed = catalog
+        .backfill_oriented_dims(measured_dims, &cancel)
+        .expect("backfill runs");
+    assert_eq!(fixed, 2, "only the portrait and the unsized HEIC change");
+    assert_eq!(
+        dims_of(&catalog, portrait),
+        (3024, 4032),
+        "a portrait stored landscape gets its displayed size"
+    );
+    assert_eq!(
+        dims_of(&catalog, heic),
+        (1000, 3000),
+        "an unsized HEIC is sized"
+    );
+    assert_eq!(
+        dims_of(&catalog, landscape),
+        (1920, 1080),
+        "a correct row is untouched"
+    );
+    assert_eq!(
+        dims_of(&catalog, gone),
+        (800, 600),
+        "an unreadable file keeps its stored size, never zeroed"
+    );
+    assert_eq!(
+        dims_of(&catalog, video),
+        (1920, 1080),
+        "videos are not touched"
+    );
+    assert_eq!(
+        catalog
+            .get_item_by_id(portrait)
+            .unwrap()
+            .unwrap()
+            .timestamp_epoch_ms,
+        edited,
+        "the backfill writes the size only, never an edited date"
+    );
+    assert_eq!(
+        catalog.get_config("dims_oriented_v1").unwrap().as_deref(),
+        Some("1"),
+        "a finished backfill sets its marker"
+    );
+
+    let again = catalog
+        .backfill_oriented_dims(|_| panic!("the marker stops a second run"), &cancel)
+        .expect("second run is a no-op");
+    assert_eq!(again, 0);
+}
+
+#[test]
+fn cancelled_dims_backfill_leaves_no_marker() {
+    let (catalog, [portrait, ..]) = dims_backfill_catalog();
+    let cancel = std::sync::atomic::AtomicBool::new(true);
+    let fixed = catalog
+        .backfill_oriented_dims(measured_dims, &cancel)
+        .expect("a cancelled backfill is not an error");
+    assert_eq!(fixed, 0);
+    assert_eq!(dims_of(&catalog, portrait), (4032, 3024));
+    assert_eq!(
+        catalog.get_config("dims_oriented_v1").unwrap(),
+        None,
+        "a cancelled backfill runs again on the next scan"
+    );
+}
+
+#[test]
+fn dims_backfill_never_overwrites_a_concurrent_rescan() {
+    let (catalog, [portrait, heic, ..]) = dims_backfill_catalog();
+    let rescanned = MediaItem {
+        width: 500,
+        height: 500,
+        ..sample_media_item(
+            "/p/portrait.jpg",
+            MediaType::Image,
+            1789430400000,
+            None,
+            None,
+        )
+    };
+    let fixed = catalog
+        .backfill_oriented_dims(
+            |path| {
+                if path.ends_with("portrait.jpg") {
+                    // The file changed and a rescan stored it mid-backfill.
+                    catalog
+                        .insert_or_update_batch(std::slice::from_ref(&rescanned))
+                        .expect("concurrent rescan writes");
+                }
+                measured_dims(path)
+            },
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
+    assert_eq!(
+        dims_of(&catalog, portrait),
+        (500, 500),
+        "the backfill's stale measurement must not overwrite the rescan"
+    );
+    assert_eq!(dims_of(&catalog, heic), (1000, 3000));
+    assert_eq!(fixed, 1, "only the HEIC write lands");
+}
+
+#[test]
+fn dims_backfill_skips_missing_files() {
+    let (catalog, [portrait, heic, ..]) = dims_backfill_catalog();
+    catalog
+        .mark_missing_under(std::path::Path::new("/p/portrait.jpg"))
+        .unwrap();
+    let fixed = catalog
+        .backfill_oriented_dims(
+            |path| {
+                assert!(
+                    !path.ends_with("portrait.jpg"),
+                    "a missing file is never measured"
+                );
+                measured_dims(path)
+            },
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
+    assert_eq!(fixed, 1);
+    assert_eq!(
+        dims_of(&catalog, portrait),
+        (4032, 3024),
+        "a missing row keeps its size"
+    );
+    assert_eq!(dims_of(&catalog, heic), (1000, 3000));
+}
+
+#[test]
+fn panorama_rule_uses_oriented_dims() {
+    let (catalog, [_, heic, ..]) = dims_backfill_catalog();
+    let panoramas = |catalog: &Catalog| -> Vec<MediaId> {
+        catalog
+            .query_system_album(SystemAlbum::Panoramas, 10, 0)
+            .unwrap()
+            .iter()
+            .map(|item| item.id)
+            .collect()
+    };
+    assert!(
+        panoramas(&catalog).is_empty(),
+        "an unsized HEIC is no panorama"
+    );
+    catalog
+        .backfill_oriented_dims(measured_dims, &std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(
+        panoramas(&catalog),
+        vec![heic],
+        "a 1000x3000 vertical panorama joins Panoramas once sized"
+    );
+}
+
 /// A one-photo library, scanned, with its catalog path for breaking it.
 fn scanned_library(
     prefix: &str,
@@ -6144,6 +6346,75 @@ fn originals_export_keeps_mode_dates_and_xattrs() {
         "an exported original keeps its extended attributes (Finder tags)"
     );
 
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+/// An old catalog that stored a portrait photo's size unrotated is fixed by
+/// the next open's scan, even though the unchanged file is not re-scanned.
+#[test]
+fn reopening_an_old_catalog_fixes_portrait_dims_once() {
+    let orientation_6 = exif::Field {
+        tag: exif::Tag::Orientation,
+        ifd_num: exif::In::PRIMARY,
+        value: exif::Value::Short(vec![6]),
+    };
+    let jpeg = with_exif(&red_jpeg(16, 8), &[orientation_6]);
+    let (tmp_dir, engine) = export_library("dims_backfill", &[("portrait.jpg", jpeg)]);
+    let id = item_named(&engine, "portrait.jpg").id;
+    let size = |engine: &LuminaEngine| {
+        let item = engine.catalog().get_item_by_id(id).unwrap().unwrap();
+        (item.width, item.height)
+    };
+    assert_eq!(
+        size(&engine),
+        (8, 16),
+        "a new scan stores the displayed size"
+    );
+    assert_eq!(
+        engine
+            .catalog()
+            .get_config("dims_oriented_v1")
+            .unwrap()
+            .as_deref(),
+        Some("1"),
+        "a new catalog needs no backfill"
+    );
+    let library = engine.library_root().to_path_buf();
+    // The startup scan's own backfill must not see the seeded catalog, so
+    // the fix below can only come from the reopen.
+    engine.cancel_scan();
+    drop(engine);
+
+    // What an older Lumina left behind: the stored size and no marker.
+    let db_path = tmp_dir.join("catalog.db");
+    raw_catalog(&db_path)
+        .execute_batch(
+            "UPDATE media_items SET width = 16, height = 8;
+             DELETE FROM app_config WHERE key = 'dims_oriented_v1';",
+        )
+        .unwrap();
+    let (engine, rx) =
+        LuminaEngine::open_with_paths(library, db_path, Some(tmp_dir.join("cache"))).unwrap();
+    // The scan's ScanComplete, then the backfill's once it changed a row.
+    let completes = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(30)).ok())
+        .filter(|event| matches!(event, EngineEvent::ScanComplete { .. }))
+        .take(2)
+        .count();
+    assert_eq!(
+        completes, 2,
+        "a backfill that changed sizes sends a second ScanComplete"
+    );
+    assert_eq!(size(&engine), (8, 16), "the backfill fixes the stored size");
+    assert_eq!(
+        engine
+            .catalog()
+            .get_config("dims_oriented_v1")
+            .unwrap()
+            .as_deref(),
+        Some("1"),
+        "the backfill marks itself done"
+    );
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

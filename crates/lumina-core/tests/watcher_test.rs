@@ -366,3 +366,83 @@ fn locate_refuses_a_different_photo_and_outside_files() {
         "{err}"
     );
 }
+
+/// A 24x16 JPEG, tagged EXIF orientation 6 (displayed 16x24) when `turned`.
+// ponytail: the lib's decoder test helper is crate-private, unreachable here.
+fn write_landscape_jpeg(path: &Path, turned: bool) {
+    let image = image::RgbImage::from_fn(24, 16, |x, y| {
+        image::Rgb([(x * 10) as u8, (y * 10) as u8, 96])
+    });
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+        .encode_image(&image)
+        .unwrap();
+    if turned {
+        // Big-endian TIFF, IFD0 with one entry: Orientation (0x0112) = 6,
+        // spliced after SOI and the encoder's APP0.
+        let mut app1 = b"Exif\0\0MM\0\x2a\0\0\0\x08\0\x01".to_vec();
+        app1.extend_from_slice(&[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]);
+        let mut segment = vec![0xff, 0xe1];
+        segment.extend_from_slice(&((app1.len() + 2) as u16).to_be_bytes());
+        segment.extend_from_slice(&app1);
+        let app0_end = 4 + u16::from_be_bytes([jpeg[4], jpeg[5]]) as usize;
+        jpeg.splice(app0_end..app0_end, segment);
+    }
+    std::fs::write(path, jpeg).unwrap();
+}
+
+/// `a.jpg` catalogued, copied to `copy.jpg` and deleted while closed, with
+/// the missing row's size read the other way round. Returns the relink
+/// result for `copy.jpg` and the copy's id.
+fn relink_with_transposed_row(
+    name: &str,
+    turned: bool,
+) -> (anyhow::Result<lumina_core::RelinkOutcome>, MediaId) {
+    let library = TestLibrary::new(name);
+    let media = library.media_dir();
+    write_landscape_jpeg(&media.join("a.jpg"), turned);
+    let original = {
+        let (engine, _rx) = open_scanned(&library);
+        id_at(&engine, &media.join("a.jpg"))
+    };
+    std::fs::copy(media.join("a.jpg"), media.join("copy.jpg")).unwrap();
+    std::fs::remove_file(media.join("a.jpg")).unwrap();
+    rusqlite::Connection::open(library.db_path())
+        .unwrap()
+        .execute(
+            "UPDATE media_items SET width = height, height = width WHERE id = ?1;",
+            [original.0 as i64],
+        )
+        .unwrap();
+    let (engine, _rx) = open_scanned(&library);
+    let copy = id_at(&engine, &media.join("copy.jpg"));
+    assert!(engine.get_missing_ids().contains(&original));
+    (engine.relink(original, &media.join("copy.jpg")), copy)
+}
+
+/// Regression: a portrait (EXIF orientation 6) that went missing before
+/// sizes were stored oriented keeps its unrotated 24x16, so Locate compared
+/// it with the scanned 16x24 and refused to fold the same file.
+#[test]
+fn locate_folds_a_twin_whose_old_row_stored_the_turned_size() {
+    let (outcome, copy) = relink_with_transposed_row("locate_turned_size", true);
+    assert_eq!(
+        outcome.unwrap(),
+        lumina_core::RelinkOutcome::Folded(copy),
+        "a quarter-turned photo's old unrotated size still matches its twin"
+    );
+}
+
+/// Without a quarter-turn orientation, a transposed size is a different
+/// photo (two uncompressed TIFFs, 6000x4000 and 4000x6000, share a byte
+/// size), so it must never fold and move tags onto the wrong file.
+#[test]
+fn locate_refuses_a_transposed_size_without_a_quarter_turn() {
+    let (outcome, _) = relink_with_transposed_row("locate_transposed_plain", false);
+    let err = outcome.expect_err("a transposed plain photo is not a twin");
+    assert!(
+        err.to_string()
+            .starts_with("That file is already in your library"),
+        "{err}"
+    );
+}

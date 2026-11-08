@@ -502,7 +502,7 @@ impl DecoderPipeline {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Regression: a native tool still running when the process exits must be
@@ -737,7 +737,7 @@ mod tests {
 
     /// A JPEG whose left half is red and right half blue, tagged EXIF
     /// Orientation 6 (display turned 90° clockwise: the left half on top).
-    fn orientation_six_jpeg(path: &Path, width: u32, height: u32) {
+    pub(crate) fn orientation_six_jpeg(path: &Path, width: u32, height: u32) {
         let image = image::RgbImage::from_fn(width, height, |x, _| {
             if x < width / 2 {
                 image::Rgb([230, 20, 20])

@@ -1,5 +1,6 @@
 mod albums;
 mod curated;
+mod dims;
 pub use curated::Album;
 mod downloads;
 mod duplicates;
