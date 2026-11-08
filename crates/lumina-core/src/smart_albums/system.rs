@@ -76,6 +76,8 @@ impl SystemAlbum {
                 "m.media_type = 'video' AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Downloaded => {
+                // ponytail: every page sorts all downloads, fine for URL imports (past the
+                // 8 ms gate near 15-20k downloads). Choose EXISTS by size if that ever happens.
                 "m.id IN (SELECT s.media_id FROM media_sources s WHERE s.downloaded = 1) AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Raw => {
