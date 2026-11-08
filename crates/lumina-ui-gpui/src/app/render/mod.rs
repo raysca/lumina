@@ -552,6 +552,12 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &NewSmartAlbum, _w, cx| {
                     this.open_album_builder(cx);
                 }))
+                .on_action(cx.listener(|this, _: &ExportOriginals, _w, cx| {
+                    this.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
+                }))
+                .on_action(cx.listener(|this, _: &ExportAsJpeg, _w, cx| {
+                    this.export_pick_folder(lumina_core::ExportPreset::Jpeg2048, cx);
+                }))
                 .on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
                     this.delete_rejected(cx);
                 }))

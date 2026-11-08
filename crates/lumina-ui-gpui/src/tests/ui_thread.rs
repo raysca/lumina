@@ -309,7 +309,11 @@ fn export_runs_in_background_and_refuses_a_second() {
             "control: the palette lists Export while none runs"
         );
         app.command_query.clear();
-        app.export_to_folder(destination.clone(), cx);
+        app.export_to_folder(
+            destination.clone(),
+            lumina_core::ExportPreset::Originals,
+            cx,
+        );
         assert_eq!(
             app.jobs.export,
             Some(3),
@@ -332,9 +336,9 @@ fn export_runs_in_background_and_refuses_a_second() {
             "the palette hides Export while one runs"
         );
         app.command_query.clear();
-        app.export_to_folder(dir.join("second"), cx);
+        app.export_to_folder(dir.join("second"), lumina_core::ExportPreset::Originals, cx);
         app.toast.dismiss();
-        app.export_pick_folder(cx);
+        app.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
         assert_eq!(
             app.toast.current().map(|t| t.message.as_str()),
             Some("An export is already running"),
@@ -383,7 +387,13 @@ fn export_failure_still_reaches_the_banner() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     select_all(&view, vcx);
 
-    view.update(vcx, |app, cx| app.export_to_folder(destination.clone(), cx));
+    view.update(vcx, |app, cx| {
+        app.export_to_folder(
+            destination.clone(),
+            lumina_core::ExportPreset::Originals,
+            cx,
+        )
+    });
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(app.jobs.export, None, "a failed export clears the job");

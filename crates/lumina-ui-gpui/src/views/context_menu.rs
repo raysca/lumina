@@ -248,7 +248,7 @@ impl MediaContextMenu {
                         false,
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.close_context_menu(cx);
-                            this.export_pick_folder(cx);
+                            this.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
                         }),
                     ))
                     // 12. Import XMP metadata

@@ -34,6 +34,7 @@ pub enum CommandId {
     ToggleInspector,
     GetInfo,
     ExportSelection,
+    ExportJpeg,
     ImportXmp,
     SortDate,
     SortName,
@@ -151,7 +152,7 @@ impl Command {
             About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
-            ExportSelection => Icon::ExternalLink,
+            ExportSelection | ExportJpeg => Icon::ExternalLink,
             ImportXmp => Icon::ArrowDownToLine,
             ToggleFit => Icon::Maximize,
             ZoomInGrid => Icon::Plus,
@@ -375,7 +376,13 @@ pub fn commands() -> &'static [Command] {
             id: CommandId::ExportSelection,
             key: "command.export",
             shortcut: "",
-            keywords: "download copy files xmp",
+            keywords: "download copy files xmp originals",
+        },
+        Command {
+            id: CommandId::ExportJpeg,
+            key: "command.export_jpeg",
+            shortcut: "",
+            keywords: "download convert jpg smaller share",
         },
         Command {
             id: CommandId::ImportXmp,
@@ -974,7 +981,7 @@ impl LuminaApp {
             CommandId::Slideshow => self.grid_state.is_some() && self.compare.is_none(),
             CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
-            CommandId::ExportSelection => self.jobs.export.is_none(),
+            CommandId::ExportSelection | CommandId::ExportJpeg => self.jobs.export.is_none(),
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
@@ -1256,7 +1263,12 @@ impl LuminaApp {
             CommandId::ToggleSidebar => self.toggle_sidebar(cx),
             CommandId::ToggleInspector => self.toggle_inspector(cx),
             CommandId::GetInfo => self.get_info(cx),
-            CommandId::ExportSelection => self.export_pick_folder(cx),
+            CommandId::ExportSelection => {
+                self.export_pick_folder(lumina_core::ExportPreset::Originals, cx)
+            }
+            CommandId::ExportJpeg => {
+                self.export_pick_folder(lumina_core::ExportPreset::Jpeg2048, cx)
+            }
             CommandId::ImportXmp => self.import_sidecars_selected(cx),
             CommandId::SortDate => self.set_sort_field(SortField::DateTaken, cx),
             CommandId::SortName => self.set_sort_field(SortField::FileName, cx),

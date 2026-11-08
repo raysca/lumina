@@ -892,7 +892,11 @@ fn ui_automation_export_writes_originals_and_sidecars() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
-        app.export_to_folder(destination.clone(), cx);
+        app.export_to_folder(
+            destination.clone(),
+            lumina_core::ExportPreset::Originals,
+            cx,
+        );
     });
     // The copy runs in the background.
     render_ui(vcx);

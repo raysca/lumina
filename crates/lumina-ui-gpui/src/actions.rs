@@ -24,6 +24,8 @@ actions!(
         NewAlbum,
         AddToAlbum,
         DeleteRejected,
+        ExportOriginals,
+        ExportAsJpeg,
         Compare,
         Slideshow,
         GoBack,

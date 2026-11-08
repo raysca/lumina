@@ -128,7 +128,7 @@ fn export_report_notes_edits_are_not_included() {
         view.update(vcx, |app, cx| {
             app.selected_item = Some(item);
             app.selected_indices.clear();
-            app.export_to_folder(destination, cx);
+            app.export_to_folder(destination, lumina_core::ExportPreset::Originals, cx);
         });
         render_ui(vcx);
         view.update(vcx, |app, _| app.last_action.clone().unwrap_or_default())

@@ -31,7 +31,11 @@ pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStatus> {
     command.stdout(Stdio::null()).stderr(Stdio::null());
-    let mut child = command.spawn()?;
+    wait_with_timeout(command.spawn()?, timeout)
+}
+
+/// Waits for `child`, killing it after `timeout`.
+fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Result<ExitStatus> {
     let _reaper = live_children::track(child.id());
     let deadline = Instant::now() + timeout;
     loop {
@@ -45,6 +49,35 @@ fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStat
             None => std::thread::sleep(Duration::from_millis(20)),
         }
     }
+}
+
+/// The pixel size of an image as macOS reads it (`sips -g`), for a file
+/// whose catalog size is unknown (an EXIF-less HEIC or RAW). `None` when the
+/// tool is missing, fails or times out. The output is two short lines, far
+/// below a pipe buffer, so reading it after the exit cannot deadlock.
+pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
+    use std::io::Read;
+    let mut child = Command::new("sips")
+        .args(["-g", "pixelWidth", "-g", "pixelHeight"])
+        .arg(path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdout = child.stdout.take()?;
+    if !wait_with_timeout(child, NATIVE_TOOL_TIMEOUT)
+        .ok()?
+        .success()
+    {
+        return None;
+    }
+    let mut text = String::new();
+    stdout.read_to_string(&mut text).ok()?;
+    let value = |key: &str| {
+        text.lines()
+            .find_map(|line| line.trim().strip_prefix(key)?.trim().parse::<u32>().ok())
+    };
+    Some((value("pixelWidth:")?, value("pixelHeight:")?))
 }
 
 /// Kills still-running native tools when the process exits.

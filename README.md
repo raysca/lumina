@@ -103,6 +103,14 @@ core handles cataloguing, decoding, and search.
   Lightroom's attribute form). Get Info shows the ones an item has, read-only;
   they are not searchable. Importing a sidecar sets the rights fields it names
   and never clears the others, and merging duplicates keeps them.
+- **Export as JPEG** — File > Export as JPEG… (or `⌘K`) writes each selected
+  photo as a JPEG at most 2048 px on the long side, with Lumina's rotation,
+  crop and tone edits applied and no metadata at all (no EXIF, so no GPS
+  position, and no sidecar). Photos are never scaled up. Videos are copied
+  as originals; the report counts them and says when a video's rotation is
+  left behind. Existing files are never overwritten. File > Export
+  Originals… (also the context menu and batch dock Export…) copies the
+  originals with XMP sidecars.
 - **Metadata templates** — save a creator, copyright, usage terms, contact
   email and website plus keywords as a named template (File > Metadata
   Templates…, or ⌘K Metadata Templates…). Apply one to the selection with ⌘K
@@ -157,8 +165,8 @@ core handles cataloguing, decoding, and search.
   thumbnail cache are never changed; a small badge marks edited photos in
   the grid. Image > Revert to Original clears the edits and rotation of the
   whole selection in one undo step. Videos are not edited. Edits are not
-  written to XMP sidecars, and Export copies the originals without them
-  (the export report says so).
+  written to XMP sidecars, and Export Originals copies the originals without
+  them (the export report says so); Export as JPEG applies them.
 - **Crop** — in edit mode, `C` (or the Crop button) shows the whole
   photo, turned as it is shown, with the crop rectangle over it; `C` again
   cycles the aspect: Original, Square, 4:3, 3:2, 16:9 and Free (also the

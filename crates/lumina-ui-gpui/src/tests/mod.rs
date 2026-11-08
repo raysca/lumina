@@ -18,6 +18,7 @@ mod editor_copy;
 mod editor_handoff;
 mod editor_round_trip;
 mod engine_release;
+mod export;
 mod get_info;
 mod grid_scroll;
 mod grid_zoom;

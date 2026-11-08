@@ -1,5 +1,7 @@
 use gpui::*;
-use lumina_core::{Album, EngineEvent, LuminaEngine, MediaId, MediaItem, SmartAlbum, SystemAlbum};
+use lumina_core::{
+    Album, EngineEvent, ExportPreset, LuminaEngine, MediaId, MediaItem, SmartAlbum, SystemAlbum,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -316,8 +318,8 @@ impl LuminaApp {
                 // waiting on the downloads prompt) gets the import.
                 self.import.pending_import_after_open = self.library_generation != generation;
             }
-            UiMessage::ExportFolderPicked(folder) => {
-                self.export_to_folder(folder, cx);
+            UiMessage::ExportFolderPicked(folder, preset) => {
+                self.export_to_folder(folder, preset, cx);
             }
             UiMessage::LocatePicked(id, path) => {
                 self.apply_locate(id, path, cx);
@@ -627,8 +629,8 @@ impl LuminaApp {
         .detach();
     }
 
-    /// Opens a folder picker for exporting the current selection.
-    pub fn export_pick_folder(&mut self, cx: &mut Context<Self>) {
+    /// Opens a folder picker for exporting the current selection as `preset`.
+    pub fn export_pick_folder(&mut self, preset: ExportPreset, cx: &mut Context<Self>) {
         // Refuse before the picker, so the user does not choose a folder
         // only to be told an export is already running.
         if self.jobs.export.is_some() {
@@ -640,18 +642,26 @@ impl LuminaApp {
             self.set_error("Select at least one item to export", cx);
             return;
         }
-        let tx = self.ui_tx.clone();
-        cx.spawn(async move |_this, _cx| {
-            if let Some(handle) = rfd::AsyncFileDialog::new()
-                .set_title(format!("Export {} item(s)", selected.len()))
-                .pick_folder()
-                .await
-            {
-                let _ =
-                    tx.send_blocking(UiMessage::ExportFolderPicked(handle.path().to_path_buf()));
-            }
-        })
-        .detach();
+        // Tests record the request instead of opening a real dialog.
+        #[cfg(test)]
+        EXPORT_PICKS.with(|picks| picks.borrow_mut().push(preset));
+        #[cfg(not(test))]
+        {
+            let tx = self.ui_tx.clone();
+            cx.spawn(async move |_this, _cx| {
+                if let Some(handle) = rfd::AsyncFileDialog::new()
+                    .set_title(format!("Export {} item(s)", selected.len()))
+                    .pick_folder()
+                    .await
+                {
+                    let _ = tx.send_blocking(UiMessage::ExportFolderPicked(
+                        handle.path().to_path_buf(),
+                        preset,
+                    ));
+                }
+            })
+            .detach();
+        }
     }
 
     /// The view's count from the sidebar's cached counts, without querying.
@@ -1334,4 +1344,7 @@ mod restore_tests {
 thread_local! {
     /// Folder pickers the app asked to open on this test thread.
     pub(crate) static FOLDER_PICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Export folder pickers asked for on this thread, by preset.
+    pub(crate) static EXPORT_PICKS: std::cell::RefCell<Vec<ExportPreset>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }

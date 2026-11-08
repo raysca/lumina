@@ -64,7 +64,9 @@ pub enum UiMessage {
     // Only the real folder dialog sends this; tests count the request instead.
     #[cfg_attr(test, allow(dead_code))]
     FolderPicked(PathBuf),
-    ExportFolderPicked(PathBuf),
+    // Only the real folder dialog sends this outside tests.
+    #[cfg_attr(test, allow(dead_code))]
+    ExportFolderPicked(PathBuf, lumina_core::ExportPreset),
     /// The folder chosen for "Import into New Library…": open it, then ask
     /// for the photos to copy in once its first scan is done.
     NewLibraryPicked(PathBuf),

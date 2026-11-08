@@ -39,7 +39,7 @@ pub use catalog::{
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
-pub use export::ExportReport;
+pub use export::{ExportPreset, ExportReport};
 pub use geo_cluster::Cluster;
 pub use geocoder::{GeoLocation, OfflineGeocoder};
 pub use scanner::{extract_video_duration, extract_video_size, Scanner};

@@ -5619,3 +5619,531 @@ fn album_query_plan_uses_membership_index() {
         }
     }
 }
+
+// ---- Export presets (plan 5 D3) ----
+// ponytail: fixtures stay at or below 2560 px; larger JPEGs decode through
+// sips, whose orientation path is checked by plan 5 E1's export cell.
+
+/// A solid red baseline JPEG, `width` x `height`.
+fn red_jpeg(width: u32, height: u32) -> Vec<u8> {
+    let image = image::RgbImage::from_pixel(width, height, image::Rgb([230, 10, 10]));
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 95)
+        .encode_image(&image)
+        .unwrap();
+    bytes
+}
+
+/// `jpeg` with an EXIF APP1 holding a GPS position, right after SOI.
+fn with_gps_exif(jpeg: &[u8]) -> Vec<u8> {
+    use exif::{Field, In, Rational, Tag, Value};
+    let degrees =
+        |d: u32| Value::Rational(vec![Rational::from((d, 1)), (0, 1).into(), (0, 1).into()]);
+    let fields = [
+        Field {
+            tag: Tag::GPSLatitudeRef,
+            ifd_num: In::PRIMARY,
+            value: Value::Ascii(vec![b"N".to_vec()]),
+        },
+        Field {
+            tag: Tag::GPSLatitude,
+            ifd_num: In::PRIMARY,
+            value: degrees(35),
+        },
+        Field {
+            tag: Tag::GPSLongitudeRef,
+            ifd_num: In::PRIMARY,
+            value: Value::Ascii(vec![b"E".to_vec()]),
+        },
+        Field {
+            tag: Tag::GPSLongitude,
+            ifd_num: In::PRIMARY,
+            value: degrees(135),
+        },
+    ];
+    with_exif(jpeg, &fields)
+}
+
+/// `jpeg` with an EXIF APP1 holding `fields`, right after SOI.
+fn with_exif(jpeg: &[u8], fields: &[exif::Field]) -> Vec<u8> {
+    let mut writer = exif::experimental::Writer::new();
+    for field in fields {
+        writer.push_field(field);
+    }
+    let mut tiff = std::io::Cursor::new(Vec::new());
+    writer.write(&mut tiff, false).unwrap();
+    let tiff = tiff.into_inner();
+    let mut out = jpeg[..2].to_vec();
+    out.extend_from_slice(&[0xFF, 0xE1]);
+    out.extend_from_slice(&((2 + 6 + tiff.len()) as u16).to_be_bytes());
+    out.extend_from_slice(b"Exif\0\0");
+    out.extend_from_slice(&tiff);
+    out.extend_from_slice(&jpeg[2..]);
+    out
+}
+
+/// A scanned library holding `files`; returns the temp root and the engine.
+fn export_library(
+    prefix: &str,
+    files: &[(&str, Vec<u8>)],
+) -> (PathBuf, std::sync::Arc<LuminaEngine>) {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_{prefix}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let media_dir = tmp_dir.join("library");
+    std::fs::create_dir_all(&media_dir).unwrap();
+    for (name, bytes) in files {
+        std::fs::write(media_dir.join(name), bytes).unwrap();
+    }
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        media_dir,
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
+        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
+    assert!(scanned, "the initial scan must finish");
+    (tmp_dir, engine)
+}
+
+fn item_named(engine: &LuminaEngine, name: &str) -> MediaItem {
+    engine
+        .get_item_slice(0..100)
+        .into_iter()
+        .find(|item| item.file_name == name)
+        .unwrap_or_else(|| panic!("{name} must be catalogued"))
+}
+
+fn export_jpeg(
+    engine: &LuminaEngine,
+    ids: &[MediaId],
+    destination: &std::path::Path,
+) -> lumina_core::ExportReport {
+    engine
+        .export_items_with(
+            ids,
+            destination,
+            lumina_core::ExportPreset::Jpeg2048,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .expect("a JPEG export must not fail as a whole")
+}
+
+/// True when the JPEG has an APP1 segment (EXIF or XMP).
+fn has_app1(jpeg: &[u8]) -> bool {
+    jpeg.windows(2).any(|pair| pair == [0xFF, 0xE1])
+}
+
+#[test]
+fn jpeg_export_applies_rotation_and_strips_gps() {
+    let source = with_gps_exif(&red_jpeg(64, 32));
+    assert!(has_app1(&source), "control: the fixture carries EXIF GPS");
+    let (tmp_dir, engine) = export_library("jpeg_rotation", &[("photo.jpg", source)]);
+    let photo = item_named(&engine, "photo.jpg");
+    engine.set_rotations(&[(photo.id, 1)]).unwrap();
+
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[photo.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+
+    let bytes = std::fs::read(destination.join("photo.jpg")).unwrap();
+    assert!(
+        !has_app1(&bytes),
+        "the exported JPEG must carry no EXIF/XMP APP1, so no GPS"
+    );
+    assert!(
+        !bytes.windows(2).any(|pair| pair == [0xFF, 0xE2]),
+        "the exported JPEG must carry no APP2 ICC profile"
+    );
+    let decoded = image::load_from_memory(&bytes).unwrap();
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (32, 64),
+        "a quarter turn in the catalog must turn the exported pixels"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_applies_quick_edit_crop() {
+    let (tmp_dir, engine) = export_library("jpeg_crop", &[("photo.jpg", red_jpeg(64, 32))]);
+    let photo = item_named(&engine, "photo.jpg");
+    let edits = lumina_core::Edits {
+        rotation: 0,
+        crop: Some(lumina_core::CropRect {
+            x: 0.0,
+            y: 0.0,
+            w: 0.25,
+            h: 1.0,
+        }),
+        exposure_ev: 0.0,
+        auto_enhance: false,
+    };
+    engine.set_edits(&[(photo.id, edits)]).unwrap();
+
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[photo.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let decoded = image::open(destination.join("photo.jpg")).unwrap();
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (16, 32),
+        "the JPEG export applies the viewer's crop"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_never_overwrites() {
+    let (tmp_dir, engine) = export_library("jpeg_collide", &[("photo.jpg", red_jpeg(16, 16))]);
+    let photo = item_named(&engine, "photo.jpg");
+    let destination = tmp_dir.join("out");
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::write(destination.join("photo.jpg"), b"keep me").unwrap();
+
+    let report = export_jpeg(&engine, &[photo.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    assert_eq!(
+        std::fs::read(destination.join("photo.jpg")).unwrap(),
+        b"keep me",
+        "an existing file in the export folder is never overwritten"
+    );
+    let renamed = std::fs::read(destination.join("photo (1).jpg"))
+        .expect("the export takes the next free numbered name");
+    image::load_from_memory(&renamed).expect("the numbered file is the exported JPEG");
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn export_cancel_stops_between_files() {
+    let (tmp_dir, engine) = export_library(
+        "jpeg_cancel",
+        &[("a.jpg", red_jpeg(16, 16)), ("b.jpg", red_jpeg(16, 16))],
+    );
+    let ids = [
+        item_named(&engine, "a.jpg").id,
+        item_named(&engine, "b.jpg").id,
+    ];
+    let destination = tmp_dir.join("out");
+    let cancel = std::sync::atomic::AtomicBool::new(true);
+    for preset in [
+        lumina_core::ExportPreset::Originals,
+        lumina_core::ExportPreset::Jpeg2048,
+    ] {
+        let report = engine
+            .export_items_with(&ids, &destination, preset, &cancel)
+            .unwrap();
+        assert!(report.cancelled, "{preset:?}: the report says it stopped");
+        assert_eq!(report.exported, 0, "{preset:?}: no file after a cancel");
+    }
+    let written = std::fs::read_dir(&destination)
+        .map(|entries| entries.count())
+        .unwrap_or(0);
+    assert_eq!(written, 0, "a cancelled export writes nothing more");
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn missing_source_reported_not_fatal() {
+    let (tmp_dir, engine) = export_library(
+        "jpeg_missing",
+        &[
+            ("gone.jpg", red_jpeg(16, 16)),
+            ("here.jpg", red_jpeg(16, 16)),
+        ],
+    );
+    let gone = item_named(&engine, "gone.jpg");
+    let here = item_named(&engine, "here.jpg");
+    std::fs::remove_file(&gone.path).unwrap();
+
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[gone.id, here.id], &destination);
+    assert_eq!(report.exported, 1, "the file that exists is still exported");
+    assert_eq!(
+        report
+            .failed
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
+        vec![&gone.path],
+        "the missing source is reported by path"
+    );
+    assert!(destination.join("here.jpg").exists());
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_copies_videos_as_originals() {
+    let video = b"not really a movie".to_vec();
+    let (tmp_dir, engine) = export_library(
+        "jpeg_videos",
+        &[
+            ("photo.jpg", red_jpeg(16, 16)),
+            ("clip.mp4", video.clone()),
+            ("clip2.mov", video.clone()),
+        ],
+    );
+    let photo = item_named(&engine, "photo.jpg");
+    engine.catalog().set_rating(photo.id, 5).unwrap();
+    let ids = [
+        photo.id,
+        item_named(&engine, "clip.mp4").id,
+        item_named(&engine, "clip2.mov").id,
+    ];
+
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &ids, &destination);
+    assert_eq!(report.exported, 3, "failures: {:?}", report.failed);
+    assert_eq!(
+        report.videos_as_originals, 2,
+        "the report counts videos copied as originals"
+    );
+    assert_eq!(report.sidecars, 0, "the JPEG preset writes no sidecar");
+    assert_eq!(std::fs::read(destination.join("clip.mp4")).unwrap(), video);
+    assert_eq!(std::fs::read(destination.join("clip2.mov")).unwrap(), video);
+    let names: Vec<String> = std::fs::read_dir(&destination)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        !names.iter().any(|name| name.ends_with(".xmp")),
+        "no sidecar for a rated photo or a video: {names:?}"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_pixels_are_rgb_not_bgr() {
+    let (tmp_dir, engine) = export_library("jpeg_red", &[("red.jpg", red_jpeg(32, 32))]);
+    let red = item_named(&engine, "red.jpg");
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[red.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let decoded = image::open(destination.join("red.jpg")).unwrap().to_rgb8();
+    let image::Rgb([r, g, b]) = *decoded.get_pixel(16, 16);
+    assert!(
+        r > 200 && g < 50 && b < 50,
+        "a red source stays red, not blue (BGRA must be swizzled): {:?}",
+        (r, g, b)
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_caps_long_side_at_2048() {
+    let (tmp_dir, engine) = export_library("jpeg_cap", &[("wide.jpg", red_jpeg(2560, 1280))]);
+    let wide = item_named(&engine, "wide.jpg");
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[wide.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let decoded = image::open(destination.join("wide.jpg")).unwrap();
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (2048, 1024),
+        "a 2560 px photo exports at exactly 2048 px on the long side"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_caps_a_crop_of_an_exif_rotated_photo() {
+    use exif::{Field, In, Tag, Value};
+    let source = with_exif(
+        &red_jpeg(2560, 1280),
+        &[Field {
+            tag: Tag::Orientation,
+            ifd_num: In::PRIMARY,
+            value: Value::Short(vec![6]),
+        }],
+    );
+    let (tmp_dir, engine) = export_library("jpeg_cap_crop", &[("turned.jpg", source)]);
+    let turned = item_named(&engine, "turned.jpg");
+    let edits = lumina_core::Edits {
+        rotation: 0,
+        crop: Some(lumina_core::CropRect {
+            x: 0.0,
+            y: 0.0,
+            w: 0.5,
+            h: 1.0,
+        }),
+        exposure_ev: 0.0,
+        auto_enhance: false,
+    };
+    engine.set_edits(&[(turned.id, edits)]).unwrap();
+
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[turned.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let decoded = image::open(destination.join("turned.jpg")).unwrap();
+    assert!(
+        decoded.width().max(decoded.height()) <= 2048,
+        "the long side never exceeds 2048 px, got {}x{}",
+        decoded.width(),
+        decoded.height()
+    );
+    assert!(
+        decoded.height() > decoded.width(),
+        "the crop of the portrait (EXIF 6) photo stays portrait, got {}x{}",
+        decoded.width(),
+        decoded.height()
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn jpeg_export_never_upscales_a_small_heic() {
+    let scratch = std::env::temp_dir().join(format!(
+        "lumina_heic_src_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&scratch).unwrap();
+    let png = scratch.join("small.png");
+    image::RgbImage::from_pixel(64, 32, image::Rgb([230, 10, 10]))
+        .save(&png)
+        .unwrap();
+    let heic = scratch.join("small.heic");
+    let made = std::process::Command::new("sips")
+        .args(["-s", "format", "heic"])
+        .arg(&png)
+        .arg("--out")
+        .arg(&heic)
+        .output()
+        .is_ok_and(|out| out.status.success() && heic.exists());
+    assert!(
+        made,
+        "sips must write HEIC on a supported Mac; this test cannot run without it"
+    );
+    let bytes = std::fs::read(&heic).unwrap();
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    let (tmp_dir, engine) = export_library("jpeg_heic", &[("small.heic", bytes)]);
+    let small = item_named(&engine, "small.heic");
+    let destination = tmp_dir.join("out");
+    let report = export_jpeg(&engine, &[small.id], &destination);
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let decoded = image::open(destination.join("small.jpg")).unwrap();
+    assert!(
+        decoded.width().max(decoded.height()) <= 64,
+        "a 64 px HEIC is never upscaled, got {}x{}",
+        decoded.width(),
+        decoded.height()
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn jpeg_export_counts_videos_that_lose_their_rotation() {
+    let video = b"not really a movie".to_vec();
+    let (tmp_dir, engine) = export_library(
+        "jpeg_video_rotation",
+        &[("turned.mp4", video.clone()), ("plain.mp4", video)],
+    );
+    let turned = item_named(&engine, "turned.mp4");
+    let plain = item_named(&engine, "plain.mp4");
+    engine.set_rotations(&[(turned.id, 1)]).unwrap();
+
+    let report = export_jpeg(&engine, &[turned.id, plain.id], &tmp_dir.join("out"));
+    assert_eq!(report.videos_as_originals, 2);
+    assert_eq!(
+        report.videos_without_rotation, 1,
+        "only the rotated video is reported as copied without its rotation"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn originals_export_is_byte_identical() {
+    let payload: Vec<u8> = (0..=255u8).cycle().take(300_000).collect();
+    let (tmp_dir, engine) = export_library("originals_bytes", &[("raw.jpg", payload.clone())]);
+    let item = item_named(&engine, "raw.jpg");
+    let destination = tmp_dir.join("out");
+    let report = engine.export_items(&[item.id], &destination).unwrap();
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    assert_eq!(
+        std::fs::read(destination.join("raw.jpg")).unwrap(),
+        payload,
+        "an original is copied byte for byte"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn originals_export_keeps_mode_dates_and_xattrs() {
+    use std::os::unix::fs::PermissionsExt;
+    let (tmp_dir, engine) = export_library("originals_meta", &[("kept.jpg", b"jpeg".to_vec())]);
+    let item = item_named(&engine, "kept.jpg");
+    let ok = |cmd: &mut std::process::Command| {
+        assert!(cmd.status().unwrap().success(), "fixture command {cmd:?}");
+    };
+    ok(std::process::Command::new("xattr")
+        .args(["-w", "org.lumina.test", "kept"])
+        .arg(&item.path));
+    ok(std::process::Command::new("touch")
+        .args(["-t", "201001021530"])
+        .arg(&item.path));
+    std::fs::set_permissions(&item.path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    let source_mtime = std::fs::metadata(&item.path).unwrap().modified().unwrap();
+
+    let destination = tmp_dir.join("out");
+    let report = engine.export_items(&[item.id], &destination).unwrap();
+    assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
+    let copy = destination.join("kept.jpg");
+    let meta = std::fs::metadata(&copy).unwrap();
+    assert_eq!(
+        meta.permissions().mode() & 0o777,
+        0o640,
+        "an exported original keeps its mode"
+    );
+    assert_eq!(
+        meta.modified().unwrap(),
+        source_mtime,
+        "an exported original keeps its modification date"
+    );
+    let xattr = std::process::Command::new("xattr")
+        .args(["-p", "org.lumina.test"])
+        .arg(&copy)
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&xattr.stdout).trim(),
+        "kept",
+        "an exported original keeps its extended attributes (Finder tags)"
+    );
+
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}

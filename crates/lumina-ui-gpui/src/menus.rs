@@ -29,6 +29,8 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
                 ImportSmartAlbumRules,
             ),
             MenuItem::separator(),
+            MenuItem::action(crate::i18n::t("command.export"), ExportOriginals),
+            MenuItem::action(crate::i18n::t("command.export_jpeg"), ExportAsJpeg),
             MenuItem::action("Import XMP Metadata", ImportXmp),
             MenuItem::action("Metadata Templates…", ManageTemplates),
             MenuItem::separator(),
@@ -99,6 +101,15 @@ mod tests {
             ),
             "File offers Delete Rejected… (there is no Edit menu)"
         );
+        for export in ["Export Originals…", "Export as JPEG…"] {
+            assert!(
+                menus[1]
+                    .items
+                    .iter()
+                    .any(|item| matches!(item, MenuItem::Action { name, .. } if name == export)),
+                "File offers {export}"
+            );
+        }
     }
 
     #[test]

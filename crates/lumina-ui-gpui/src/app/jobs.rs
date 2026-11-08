@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use gpui::*;
-use lumina_core::{ExportReport, ImportReport};
+use lumina_core::{ExportPreset, ExportReport, ImportReport};
 
 use crate::app::LuminaApp;
 use crate::i18n::t;
@@ -31,9 +31,15 @@ impl ForegroundJobs {
 }
 
 impl LuminaApp {
-    /// Copies the selection into `folder` in the background, writing XMP
-    /// sidecars for annotated items. A second export while one runs is refused.
-    pub fn export_to_folder(&mut self, folder: PathBuf, cx: &mut Context<Self>) {
+    /// Exports the selection into `folder` as `preset` in the background:
+    /// originals with XMP sidecars, or edited JPEGs. A second export while
+    /// one runs is refused.
+    pub fn export_to_folder(
+        &mut self,
+        folder: PathBuf,
+        preset: ExportPreset,
+        cx: &mut Context<Self>,
+    ) {
         if self.jobs.export.is_some() {
             self.show_toast(t("jobs.export_running"), cx);
             return;
@@ -47,12 +53,21 @@ impl LuminaApp {
             return;
         };
         self.jobs.export = Some(ids.len());
-        // Export copies originals; the report says so for edited items.
-        let edited = ids.iter().any(|id| self.edits.edited_ids.contains(id));
+        // Originals leave Lumina's edits behind; the report says so for
+        // edited items. The JPEG preset applies them.
+        let edited = preset == ExportPreset::Originals
+            && ids.iter().any(|id| self.edits.edited_ids.contains(id));
         let destination = folder.clone();
-        let task = cx
-            .background_executor()
-            .spawn(async move { engine.export_items(&ids, &destination) });
+        // ponytail: no cancel control yet; the engine checks this between files.
+        let task = cx.background_executor().spawn(async move {
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            // A panic in a decoder must end this job with an error, not take
+            // down the app or leave `jobs.export` set forever.
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                engine.export_items_with(&ids, &destination, preset, &cancel)
+            }))
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("the export stopped unexpectedly")))
+        });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             // The app may be gone; then there is no job left to clear.
@@ -81,12 +96,28 @@ impl LuminaApp {
                 if report.sidecars > 0 {
                     summary.push_str(&format!(" ({} XMP sidecar(s))", report.sidecars));
                 }
-                let note = if edited {
-                    "; the originals were exported without Lumina's edits or rotation"
+                let mut note = if edited {
+                    "; the originals were exported without Lumina's edits or rotation".to_string()
                 } else {
-                    ""
+                    String::new()
                 };
-                summary.push_str(note);
+                if report.videos_as_originals > 0 {
+                    let key = if report.videos_as_originals == 1 {
+                        "export.videos_as_originals_one"
+                    } else {
+                        "export.videos_as_originals_other"
+                    };
+                    note.push_str("; ");
+                    note.push_str(&t(key).replace("{n}", &report.videos_as_originals.to_string()));
+                    if report.videos_without_rotation > 0 {
+                        note.push(' ');
+                        note.push_str(
+                            &t("export.videos_rotation_dropped")
+                                .replace("{n}", &report.videos_without_rotation.to_string()),
+                        );
+                    }
+                }
+                summary.push_str(&note);
                 self.set_last_action(summary);
                 if report.failed.is_empty() {
                     self.show_toast(format!("Exported {} item(s){note}", report.exported), cx);

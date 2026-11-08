@@ -100,7 +100,7 @@ impl LuminaApp {
                 .child(
                     dock_button("batch-export-dock-btn", "Export…", None, theme::text()).on_click(
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.export_pick_folder(cx);
+                            this.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
                         }),
                     ),
                 )

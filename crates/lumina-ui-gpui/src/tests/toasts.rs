@@ -386,7 +386,11 @@ fn toast_export_and_import_success_are_hooked() {
 
     view.update(vcx, |app, cx| {
         app.selected_item = Some(item.clone());
-        app.export_to_folder(destination.clone(), cx);
+        app.export_to_folder(
+            destination.clone(),
+            lumina_core::ExportPreset::Originals,
+            cx,
+        );
     });
     render_ui(vcx);
     view.update(vcx, |app, _| {
