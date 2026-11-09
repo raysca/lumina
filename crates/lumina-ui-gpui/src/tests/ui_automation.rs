@@ -13,13 +13,17 @@ pub(crate) fn seed_library(
     prefix: &str,
     count: usize,
 ) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+    // The clock alone is not unique: tests start together and macOS reports
+    // microseconds, so two could share a catalog ("database is locked").
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_uitest_{}_{}",
+        "lumina_uitest_{}_{}_{}",
         prefix,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
     for i in 0..count {
