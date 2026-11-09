@@ -985,3 +985,63 @@ fn scrubber_draws_the_range() {
         "15–45 s of 60 s spans the middle half: {band:?} on {track:?}"
     );
 }
+
+/// The open video, playing on a real unloaded player, at 30 s of 60 s.
+fn play_at_30(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) {
+    view.update(vcx, |app, cx| {
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.is_playing = true;
+        app.video.playback_time = 30.0;
+        cx.notify();
+    });
+}
+
+#[core::prelude::v1::test]
+fn switching_library_stops_the_viewer_video() {
+    let mut cx = crate::tests::TestApp::single();
+    let (fixture, view, vcx) = open_video(&mut cx);
+    play_at_30(&view, vcx);
+    let other = fixture.0.join("other_library");
+    std::fs::create_dir_all(&other).expect("create the second library");
+    view.update(vcx, |app, cx| {
+        let id = app.video.item.as_ref().expect("a video is open").id;
+        let state = app.grid_state.as_ref().expect("a library is open");
+        // The sample file does not exist, so its load cleared this; a real
+        // load leaves the video tracked. Its point survives the prune on
+        // close because this sample is among the seeded rows.
+        state.video_resume.begin(id);
+        let positions = state.video_resume.positions.clone();
+        app.is_immersive_fullscreen = true;
+        app.open_library_inner(other.clone(), cx);
+        assert_eq!(
+            positions.get(id),
+            Some(30.0),
+            "stopping for the switch must keep the video's resume point"
+        );
+        assert!(
+            app.video.player.is_none() && app.video.item.is_none() && !app.video.is_playing,
+            "a video from the closed library must not keep playing with no window"
+        );
+        assert!(
+            !app.is_fullscreen_viewer && !app.is_immersive_fullscreen,
+            "the new library opens on its grid, not in a leftover viewer mode"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn a_library_that_fails_to_open_leaves_the_video_playing() {
+    let mut cx = crate::tests::TestApp::single();
+    let (fixture, view, vcx) = open_video(&mut cx);
+    play_at_30(&view, vcx);
+    // A file where the library folder should be: its catalog cannot be created.
+    let not_a_folder = fixture.0.join("not_a_folder");
+    std::fs::write(&not_a_folder, b"x").expect("write the blocking file");
+    view.update(vcx, |app, cx| {
+        app.open_library_inner(not_a_folder.clone(), cx);
+        assert!(
+            app.video.player.is_some() && app.video.is_playing && app.is_fullscreen_viewer,
+            "the current library stays open, so its video keeps playing"
+        );
+    });
+}

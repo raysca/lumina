@@ -523,6 +523,12 @@ impl LuminaApp {
                 return;
             }
         };
+        // Here, not earlier: a failed open keeps the current library and its
+        // viewer. Not later: the old library's state tracks which video the
+        // resume point belongs to.
+        if self.is_fullscreen_viewer {
+            self.close_viewer(cx);
+        }
         // Only a library that opened becomes the startup library and a recent.
         self.config.last_library_path = Some(path.clone());
         crate::app::recents::push_recent(&mut self.config.recent_libraries, &path);
@@ -577,7 +583,6 @@ impl LuminaApp {
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
-        self.is_fullscreen_viewer = false;
         self.discard_edit_draft();
         self.edits.reset_for_library();
         // A new library is a jump, not user navigation: start a fresh trail.
