@@ -17,6 +17,7 @@ pub mod jobs;
 pub mod keymap;
 pub mod keywords;
 pub mod library;
+pub mod loop_range;
 pub mod missing;
 pub mod navigation;
 pub mod network_import;

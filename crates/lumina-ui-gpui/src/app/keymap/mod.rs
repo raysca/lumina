@@ -277,8 +277,8 @@ impl LuminaApp {
         }
 
         // ⇧⌘I imports; ⌘I opens the Get Info window, as in Finder; I toggles
-        // the inspector.
-        if key.eq_ignore_ascii_case("i") {
+        // the inspector. Plain ⌥I is the viewer's loop start.
+        if key.eq_ignore_ascii_case("i") && (cmd_or_ctrl || !keystroke.modifiers.alt) {
             if cmd_or_ctrl && keystroke.modifiers.shift {
                 self.pick_import_folders(cx);
             } else if cmd_or_ctrl {

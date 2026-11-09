@@ -229,6 +229,8 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 10] = [
             ("→", "Forward 5 s"),
             (", / .", "Previous / next frame"),
             ("L", "Loop"),
+            ("⌥I / ⌥O", "Set loop start / end"),
+            ("⌥X", "Clear loop range"),
             ("M", "Mute"),
             ("⌥P", "Picture-in-Picture on / off"),
         ],

@@ -442,3 +442,546 @@ fn a_catalog_refresh_keeps_the_players_video_dimensions() {
         );
     });
 }
+
+// Loop range (F1). Most of these tests have no player: on macOS the backend is
+// AVFoundation and the sample files do not exist, so the position is the
+// tracked `playback_time` and a tick moves it the same way a seek does.
+
+/// The open video playing at `start`, with `(in, out)` set through the real
+/// commands at those positions.
+fn with_range(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+    in_point: Option<f64>,
+    out_point: Option<f64>,
+) {
+    view.update(vcx, |app, cx| {
+        if let Some(at) = in_point {
+            app.video.playback_time = at;
+            app.set_loop_in(cx);
+        }
+        if let Some(at) = out_point {
+            app.video.playback_time = at;
+            app.set_loop_out(cx);
+        }
+    });
+}
+
+/// Plays one frame tick at `position` and returns where the playhead went.
+fn tick_at(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+    position: f64,
+) -> f64 {
+    view.update(vcx, |app, cx| {
+        app.video.is_playing = true;
+        app.video.playback_time = position;
+        app.handle_ui_message(crate::app::types::UiMessage::VideoFrameTick, cx);
+        app.video.playback_time
+    })
+}
+
+fn range(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+) -> (Option<f64>, Option<f64>) {
+    view.update(vcx, |app, _| {
+        (
+            app.video.loop_range.in_point,
+            app.video.loop_range.out_point,
+        )
+    })
+}
+
+fn toast_text(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+) -> Option<String> {
+    view.update(vcx, |app, _| app.toast.current().map(|t| t.message.clone()))
+}
+
+#[core::prelude::v1::test]
+fn loop_range_seeks_back_to_in_point() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    assert_eq!(
+        tick_at(&view, vcx, 15.0),
+        15.0,
+        "inside the range playback carries on"
+    );
+    assert_eq!(
+        tick_at(&view, vcx, 20.0),
+        10.0,
+        "reaching the out point seeks back to the in point"
+    );
+}
+
+#[core::prelude::v1::test]
+fn clear_loop_range_restores_full_loop() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    view.update(vcx, |app, cx| app.clear_loop_range(cx));
+    assert_eq!(range(&view, vcx), (None, None), "clear forgets both points");
+    assert_eq!(
+        tick_at(&view, vcx, 25.0),
+        25.0,
+        "with no range the old out point must not seek"
+    );
+}
+
+#[core::prelude::v1::test]
+fn out_before_in_is_refused() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), None);
+    for at in [10.0, 5.0] {
+        with_range(&view, vcx, None, Some(at));
+        assert_eq!(
+            range(&view, vcx),
+            (Some(10.0), None),
+            "an out point at {at}, not after the in point, must leave the range alone"
+        );
+    }
+    assert_eq!(
+        toast_text(&view, vcx),
+        Some(crate::i18n::t("video.loop_end_before_start")),
+        "a refused out point says why"
+    );
+}
+
+#[core::prelude::v1::test]
+fn in_after_out_is_refused() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, None, Some(20.0));
+    for at in [20.0, 30.0] {
+        with_range(&view, vcx, Some(at), None);
+        assert_eq!(
+            range(&view, vcx),
+            (None, Some(20.0)),
+            "an in point at {at}, not before the out point, must leave the range alone"
+        );
+    }
+    assert_eq!(
+        toast_text(&view, vcx),
+        Some(crate::i18n::t("video.loop_start_after_end")),
+        "a refused in point says why"
+    );
+}
+
+#[core::prelude::v1::test]
+fn an_out_point_at_the_start_and_an_in_point_at_the_end_are_refused() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, None, Some(0.0));
+    with_range(&view, vcx, Some(60.0), None);
+    assert_eq!(
+        range(&view, vcx),
+        (None, None),
+        "the start acts as in and the end as out, so both would be empty ranges"
+    );
+    assert_eq!(
+        toast_text(&view, vcx),
+        Some(crate::i18n::t("video.loop_start_after_end")),
+        "the refusal says why"
+    );
+}
+
+#[core::prelude::v1::test]
+fn in_point_alone_loops_from_the_end_of_the_video() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), None);
+    assert_eq!(tick_at(&view, vcx, 40.0), 40.0, "the middle plays on");
+    assert_eq!(tick_at(&view, vcx, 60.0), 10.0, "the end acts as out");
+}
+
+#[core::prelude::v1::test]
+fn out_point_alone_loops_from_the_start() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, None, Some(20.0));
+    assert_eq!(tick_at(&view, vcx, 20.0), 0.0, "the start acts as in");
+}
+
+#[core::prelude::v1::test]
+fn seeking_past_the_out_point_wraps_only_while_playing() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    let paused = view.update(vcx, |app, cx| {
+        app.video.is_playing = false;
+        app.video.playback_time = 40.0;
+        app.handle_ui_message(crate::app::types::UiMessage::VideoFrameTick, cx);
+        app.video.playback_time
+    });
+    assert_eq!(paused, 40.0, "paused, a hand seek past the out point stays");
+    assert_eq!(
+        tick_at(&view, vcx, 40.0),
+        10.0,
+        "playing from past the out point goes back to the in point"
+    );
+}
+
+/// Sets when the wrap seek in flight may be reissued.
+fn set_settle(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+    until: std::time::Instant,
+) {
+    view.update(vcx, |app, _| {
+        app.video.loop_range.settle_until = Some(until)
+    });
+}
+
+#[core::prelude::v1::test]
+fn a_seek_in_flight_is_not_restarted_on_every_tick() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    assert_eq!(tick_at(&view, vcx, 20.0), 10.0, "the first tick seeks");
+    view.read_with(vcx, |app, _| {
+        assert!(
+            app.video.loop_range.settle_until.is_some(),
+            "a wrap must start the hold, or every tick cancels the seek in flight"
+        )
+    });
+    set_settle(
+        &view,
+        vcx,
+        std::time::Instant::now() + std::time::Duration::from_secs(3600),
+    );
+    assert_eq!(
+        tick_at(&view, vcx, 20.01),
+        20.01,
+        "a player still reporting the old position must not get a new seek, \
+         which would cancel the one in flight"
+    );
+}
+
+#[core::prelude::v1::test]
+fn a_wrap_seek_is_reissued_once_the_watchdog_expires() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    assert_eq!(tick_at(&view, vcx, 20.0), 10.0, "the first tick seeks");
+    set_settle(&view, vcx, std::time::Instant::now());
+    assert_eq!(
+        tick_at(&view, vcx, 20.01),
+        10.0,
+        "a seek that never landed is issued again when the watchdog runs out"
+    );
+}
+
+#[core::prelude::v1::test]
+fn the_settle_clears_once_the_position_is_back_in_range() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(10.1));
+    assert_eq!(tick_at(&view, vcx, 10.1), 10.0, "the first tick seeks");
+    assert_eq!(tick_at(&view, vcx, 10.05), 10.05, "the seek landed");
+    assert_eq!(
+        tick_at(&view, vcx, 10.1),
+        10.0,
+        "a landed seek must not hold back the next wrap, or a short range overshoots"
+    );
+}
+
+/// The open video with a real, unloaded native player: its looping flag is
+/// the bridge's own, and it reports itself as stopped.
+fn with_stub_player(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) {
+    use crate::player::VideoPlayerBackend;
+    view.update(vcx, |app, _| {
+        let mut player = crate::player::NativeVideoPlayer::new();
+        player.set_looping(true);
+        app.video.player = Some(player);
+        app.video.is_looping = true;
+    });
+}
+
+fn native_looping(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) -> bool {
+    use crate::player::VideoPlayerBackend;
+    view.update(vcx, |app, _| {
+        app.video
+            .player
+            .as_ref()
+            .expect("the stub player is installed")
+            .is_looping()
+    })
+}
+
+#[core::prelude::v1::test]
+fn native_loop_is_off_exactly_while_a_range_is_set() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    with_range(&view, vcx, Some(10.0), None);
+    assert!(
+        !native_looping(&view, vcx),
+        "an in point must turn off the player's restart at zero"
+    );
+    view.update(vcx, |app, cx| app.clear_loop_range(cx));
+    assert!(native_looping(&view, vcx), "clear gives the full loop back");
+    with_range(&view, vcx, None, Some(20.0));
+    assert!(
+        !native_looping(&view, vcx),
+        "an out point must turn off the player's restart at zero"
+    );
+}
+
+#[core::prelude::v1::test]
+fn l_with_a_range_set_keeps_the_native_loop_off() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    with_stub_player(&view, vcx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    for expected in [false, true] {
+        keystrokes(vcx, "l");
+        assert_eq!(
+            view.update(vcx, |app, _| app.video.is_looping),
+            expected,
+            "L still toggles the Loop button"
+        );
+        assert!(
+            !native_looping(&view, vcx),
+            "L must not hand the end of the file back to the player"
+        );
+    }
+    view.update(vcx, |app, cx| app.clear_loop_range(cx));
+    assert!(
+        native_looping(&view, vcx),
+        "clearing applies the Loop button L left on"
+    );
+}
+
+#[core::prelude::v1::test]
+fn reaching_the_end_of_the_file_goes_back_to_the_in_point_and_keeps_playing() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    with_range(&view, vcx, Some(10.0), None);
+    // The stub reports itself stopped at position 0: the "ended" path.
+    let (time, playing) = view.update(vcx, |app, cx| {
+        app.video.is_playing = true;
+        app.handle_ui_message(crate::app::types::UiMessage::VideoFrameTick, cx);
+        (app.video.playback_time, app.video.is_playing)
+    });
+    assert_eq!(time, 10.0, "the end of the file goes back to the in point");
+    assert!(playing, "a range keeps playing past the end of the file");
+}
+
+#[core::prelude::v1::test]
+fn setting_a_point_confirms_it_with_the_time() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(12.5), None);
+    assert_eq!(
+        toast_text(&view, vcx).as_deref(),
+        Some("Loop start set to 0:12.50"),
+    );
+    with_range(&view, vcx, None, Some(20.0));
+    assert_eq!(
+        toast_text(&view, vcx).as_deref(),
+        Some("Loop end set to 0:20.00"),
+    );
+}
+
+#[core::prelude::v1::test]
+fn a_non_finite_position_never_becomes_a_point() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(f64::NAN), Some(f64::NAN));
+    assert_eq!(range(&view, vcx), (None, None), "NaN is not a position");
+}
+
+#[core::prelude::v1::test]
+fn loop_keys_stop_at_the_viewer_and_never_reach_the_input_context() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, _| app.video.playback_time = 12.0);
+    for source in ["alt-i->ˆ", "alt-o->ø", "alt-x->≈"] {
+        let propagated = vcx.update(|window, cx| {
+            let keystroke = gpui::Keystroke::parse(source).expect("a valid keystroke");
+            window
+                .dispatch_event(
+                    gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
+                        keystroke,
+                        is_held: false,
+                        prefer_character_input: false,
+                    }),
+                    cx,
+                )
+                .propagate
+        });
+        assert!(
+            !propagated,
+            "{source} must be consumed, or a dead key leaves a pending composition"
+        );
+    }
+}
+
+#[core::prelude::v1::test]
+fn another_video_or_closing_the_viewer_drops_the_range() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    view.update(vcx, |app, cx| {
+        let other = app.selected_item.clone().expect("the video is shown");
+        app.load_video_player(&other, cx);
+    });
+    assert_eq!(
+        range(&view, vcx),
+        (None, None),
+        "loading a video starts without a range"
+    );
+
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    assert_eq!(
+        range(&view, vcx),
+        (None, None),
+        "closing the viewer ends the range"
+    );
+}
+
+#[core::prelude::v1::test]
+fn alt_i_sets_in_point_without_toggling_inspector() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, _| app.video.playback_time = 12.0);
+    let before = view.update(vcx, |app, _| app.inspector_open);
+    keystrokes(vcx, "alt-i->ˆ");
+    assert_eq!(range(&view, vcx).0, Some(12.0), "⌥I sets the in point");
+    assert_eq!(
+        view.update(vcx, |app, _| app.inspector_open),
+        before,
+        "⌥I must not toggle the inspector"
+    );
+}
+
+#[core::prelude::v1::test]
+fn alt_o_does_not_open_default_app() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, _| app.video.playback_time = 12.0);
+    keystrokes(vcx, "alt-o->ø");
+    assert_eq!(range(&view, vcx).1, Some(12.0), "⌥O sets the out point");
+    assert!(
+        view.update(vcx, |app, _| app.error_message.is_none()),
+        "⌥O must not try to open the (missing) sample file in the default app"
+    );
+}
+
+#[core::prelude::v1::test]
+fn alt_x_clears_the_range_without_rejecting() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    with_range(&view, vcx, Some(10.0), Some(20.0));
+    let shown = view.update(vcx, |app, _| app.selected_item.as_ref().map(|i| i.id));
+    keystrokes(vcx, "alt-x->≈");
+    assert_eq!(range(&view, vcx), (None, None), "⌥X clears the range");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|i| i.id),
+            shown,
+            "⌥X must not act as the X reject key and move on"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn loop_keys_do_nothing_in_the_palette_or_a_text_field() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| {
+        app.video.playback_time = 12.0;
+        app.open_command_palette(cx);
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "alt-i->ˆ");
+    assert_eq!(range(&view, vcx), (None, None), "the palette owns the keys");
+    view.update(vcx, |app, cx| {
+        app.close_command_palette(cx);
+        app.search_focused = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "alt-o->ø");
+    assert_eq!(
+        range(&view, vcx),
+        (None, None),
+        "a text field owns the keys"
+    );
+}
+
+#[core::prelude::v1::test]
+fn loop_keys_ignore_a_still_in_the_viewer() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| {
+        let still = get_sample_items()
+            .into_iter()
+            .find(|item| item.media_type != MediaType::Video)
+            .expect("the sample set has a still");
+        app.open_viewer(still, cx);
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "alt-i");
+    assert_eq!(range(&view, vcx), (None, None), "a photo has no range");
+}
+
+#[core::prelude::v1::test]
+fn palette_offers_loop_commands_only_for_an_open_video() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    let titles = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| {
+            app.command_query = "loop".into();
+            app.palette_rows()
+                .iter()
+                .map(|row| format!("{row:?}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+    };
+    let open = titles(&view, vcx);
+    for title in ["Set Loop Start", "Set Loop End", "Clear Loop Range"] {
+        assert!(open.contains(title), "{title} is offered: {open}");
+    }
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    let closed = titles(&view, vcx);
+    assert!(
+        !closed.contains("Loop Start"),
+        "with no video open the loop commands are hidden: {closed}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn scrubber_draws_the_range() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    assert!(
+        vcx.debug_bounds("video-loop-range").is_none(),
+        "no range, no band"
+    );
+    with_range(&view, vcx, Some(15.0), Some(45.0));
+    view.update(vcx, |_, cx| cx.notify());
+    render_ui(vcx);
+    let track = bounds(vcx, "video-scrubber");
+    let band = bounds(vcx, "video-loop-range");
+    let width = f32::from(track.size.width);
+    assert!(
+        (f32::from(band.left() - track.left()) / width - 0.25).abs() < 0.02
+            && (f32::from(band.size.width) / width - 0.5).abs() < 0.02,
+        "15–45 s of 60 s spans the middle half: {band:?} on {track:?}"
+    );
+}

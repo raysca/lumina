@@ -93,7 +93,7 @@ impl LuminaApp {
         }
 
         // Open in Default App (QuickTime / Preview)
-        if !cmd_or_ctrl && key.eq_ignore_ascii_case("o") {
+        if !cmd_or_ctrl && !keystroke.modifiers.alt && key.eq_ignore_ascii_case("o") {
             self.open_selected_in_default_app(cx);
             return true;
         }
@@ -136,6 +136,33 @@ impl LuminaApp {
         }
 
         if is_video && !self.video.in_pip && !cmd_or_ctrl {
+            // ⌥I / ⌥O / ⌥X: loop range.
+            if keystroke.modifiers.alt && !keystroke.modifiers.shift {
+                match key.to_ascii_lowercase().as_str() {
+                    "i" => {
+                        self.set_loop_in(cx);
+                        // Option keys can be dead keys: the input context must not
+                        // start a composition from it.
+                        cx.stop_propagation();
+                        return true;
+                    }
+                    "o" => {
+                        self.set_loop_out(cx);
+                        // Option keys can be dead keys: the input context must not
+                        // start a composition from it.
+                        cx.stop_propagation();
+                        return true;
+                    }
+                    "x" => {
+                        self.clear_loop_range(cx);
+                        // Option keys can be dead keys: the input context must not
+                        // start a composition from it.
+                        cx.stop_propagation();
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
             if key == "space" || key.eq_ignore_ascii_case("k") {
                 self.toggle_video_play(cx);
                 return true;

@@ -124,6 +124,8 @@ pub struct VideoPlaybackState {
     pub(crate) strip_request: Option<crate::app::scrub_preview::StripRequest>,
     /// True when a scrub press paused playback, so release resumes it.
     pub resume_after_scrub: bool,
+    /// In and out points of the open video, for this session only.
+    pub loop_range: crate::app::loop_range::LoopRange,
 }
 
 /// Tag manager modal state.

@@ -80,6 +80,10 @@ pub enum CommandId {
     EditCopyInExternalEditor,
     TogglePip,
     PipPlayPause,
+    /// Loop range of the open video; shown only while one is in the viewer.
+    SetLoopStart,
+    SetLoopEnd,
+    ClearLoopRange,
     /// New Album (⌘N), always empty; New Album with Selection holds the
     /// selected items (shown only with a selection).
     NewAlbum,
@@ -180,6 +184,7 @@ impl Command {
             EditInExternalEditor | EditCopyInExternalEditor => Icon::ExternalLink,
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
+            SetLoopStart | SetLoopEnd | ClearLoopRange => Icon::Repeat,
             NewAlbum | NewAlbumWithSelection | AddToAlbum => Icon::Plus,
             NewSmartAlbum | SaveSearch | DuplicateSmartAlbum => Icon::Sparkles,
             PinAlbum | UnpinAlbum => Icon::Star,
@@ -743,6 +748,24 @@ pub fn commands() -> &'static [Command] {
             keywords: "pip picture in picture video pause resume",
         },
         Command {
+            id: CommandId::SetLoopStart,
+            key: "command.set_loop_start",
+            shortcut: "⌥I",
+            keywords: "video loop range in point start",
+        },
+        Command {
+            id: CommandId::SetLoopEnd,
+            key: "command.set_loop_end",
+            shortcut: "⌥O",
+            keywords: "video loop range out point end",
+        },
+        Command {
+            id: CommandId::ClearLoopRange,
+            key: "command.clear_loop_range",
+            shortcut: "⌥X",
+            keywords: "video loop range remove reset",
+        },
+        Command {
             id: CommandId::NewAlbum,
             key: "command.new_album",
             shortcut: "⌘N",
@@ -1012,6 +1035,9 @@ impl LuminaApp {
             CommandId::ApplyTemplate => {
                 !self.config.templates.is_empty()
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            }
+            CommandId::SetLoopStart | CommandId::SetLoopEnd | CommandId::ClearLoopRange => {
+                self.loop_range_applies()
             }
             CommandId::ViewerZoom(_) => {
                 self.is_fullscreen_viewer
@@ -1328,6 +1354,9 @@ impl LuminaApp {
             CommandId::EditCopyInExternalEditor => self.edit_selected_externally(true, cx),
             CommandId::TogglePip => self.toggle_pip(cx),
             CommandId::PipPlayPause => self.toggle_pip_playback(cx),
+            CommandId::SetLoopStart => self.set_loop_in(cx),
+            CommandId::SetLoopEnd => self.set_loop_out(cx),
+            CommandId::ClearLoopRange => self.clear_loop_range(cx),
             CommandId::NewAlbum => self.new_album(cx),
             CommandId::NewAlbumWithSelection => self.new_album_with_selection(cx),
             CommandId::RenameAlbum => self.rename_selected_album(cx),

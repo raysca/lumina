@@ -41,7 +41,8 @@ core handles cataloguing, decoding, and search.
   previous/next navigation, keyboard-first shortcuts.
 - **Video playback** — native AVFoundation bridge with scrubbing (hovering
   or dragging the scrubber previews real frames; a playing video pauses while
-  you drag), frame stepping, speed, mute (both remembered between launches) and looping. Picture-in-Picture (⌥P) is a detached
+  you drag), frame stepping, speed, mute (both remembered between launches), looping and a loop range for the open
+  video (⌥I start, ⌥O end, ⌥X clear). Picture-in-Picture (⌥P) is a detached
   player: it keeps playing while you browse and view photos, and opening
   another video plays it there.
 - **Organization** — tags, ratings, color labels, captions, favorites, albums,

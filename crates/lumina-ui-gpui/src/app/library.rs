@@ -376,6 +376,11 @@ impl LuminaApp {
                     stop_ticker = true;
                 }
 
+                if playing && self.enforce_loop_range(playback_ended) {
+                    playback_ended = false;
+                    frame = None;
+                }
+
                 if playback_ended {
                     self.video.is_playing = false;
                     // Playback can end while a scrub drag is active. Do not

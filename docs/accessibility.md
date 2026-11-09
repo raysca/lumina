@@ -107,6 +107,11 @@ Lumina is designed to be usable without a mouse:
   editor's fields, list rows and buttons, and the batch inspector's template
   picker and Apply button, carry roles and labels, not yet checked with
   VoiceOver.
+- **Loop range**: with a video open in the viewer, `⌥I` sets the loop start,
+  `⌥O` the loop end and `⌥X` clears them (also ⌘K Set Loop Start, Set Loop
+  End, Clear Loop Range). A dialog absorbs the keys, the palette takes them as typed text, and in a
+  text field they type the ⌥ character instead. Setting a point shows its time
+  in a toast.
 - **Rotation**: `R` / `⇧R` rotate the viewer photo or the grid selection
   right / left, also ⌘K Rotate Right / Rotate Left and Image > Rotate
   Right / Rotate Left; the keys type into a focused text field instead.

@@ -84,7 +84,7 @@ impl LuminaApp {
     /// Best known current playback position. The backend position wins when it
     /// is usable; the tracked playback time covers a missing or not-yet-loaded
     /// player (seeks and tests).
-    fn current_player_position(&self) -> f64 {
+    pub(crate) fn current_player_position(&self) -> f64 {
         match self.video.player.as_ref().map(|player| player.position()) {
             Some(position) if position.is_finite() && position > 0.0 => position,
             _ => self.video.playback_time,
@@ -250,6 +250,8 @@ impl LuminaApp {
         self.video.last_scrub_seek = None;
         self.video.seek_refresh_until = None;
         self.video.resume_after_scrub = false;
+        // A range belongs to one open video.
+        self.video.loop_range = Default::default();
         self.clear_scrub_strip();
     }
 
@@ -380,7 +382,7 @@ impl LuminaApp {
 
     /// Duration used for scrub math: player metadata when loaded, otherwise the
     /// selected item's catalog duration (the transport shows the same value).
-    fn video_scrub_duration(&self) -> f64 {
+    pub(crate) fn video_scrub_duration(&self) -> f64 {
         if self.video.duration > 0.0 {
             self.video.duration
         } else {
@@ -407,7 +409,7 @@ impl LuminaApp {
 
     /// Seeks and renders the resulting frame. This is the existing click/keyboard
     /// seek behavior and also runs when a scrub drag is committed on release.
-    fn seek_video_to_time(&mut self, target: f64) {
+    pub(crate) fn seek_video_to_time(&mut self, target: f64) {
         self.video.playback_time = target;
         let mut rendered = false;
         let mut seeked = false;
@@ -549,9 +551,7 @@ impl LuminaApp {
 
     pub fn toggle_video_loop(&mut self, cx: &mut Context<Self>) {
         self.video.is_looping = !self.video.is_looping;
-        if let Some(ref mut player) = self.video.player {
-            player.set_looping(self.video.is_looping);
-        }
+        self.sync_player_looping();
         cx.notify();
     }
 

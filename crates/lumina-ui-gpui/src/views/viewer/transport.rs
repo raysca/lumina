@@ -127,6 +127,15 @@ impl ViewerTransport {
             hover_pct.zip(hover_time)
         };
 
+        // The loop range as 0..=1 of the track; a missing point is the file's
+        // start or end.
+        let range = &this.video.loop_range;
+        let loop_band = (range.is_set() && duration > 0.0).then(|| {
+            let start = (range.in_point.unwrap_or(0.0) / duration).clamp(0.0, 1.0) as f32;
+            let end = (range.out_point.unwrap_or(duration) / duration).clamp(0.0, 1.0) as f32;
+            (start, end - start)
+        });
+
         let time_label = |t: f64| {
             div()
                 .w(px(56.0))
@@ -251,6 +260,19 @@ impl ViewerTransport {
                                     .rounded(theme::RADIUS_MD)
                                     .bg(theme::bg_control()),
                             )
+                            // Loop range, under the played tint.
+                            .children(loop_band.map(|(start, width)| {
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .debug_selector(|| "video-loop-range".to_string())
+                                    .left(relative(start))
+                                    .w(relative(width))
+                                    .border_x_1()
+                                    .border_color(theme::accent())
+                                    .bg(theme::selection_bg())
+                            }))
                             // Played portion: a 22% amber tint up to the playhead.
                             .child(
                                 div()
