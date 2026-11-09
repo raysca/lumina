@@ -598,7 +598,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. Shipped: exact-copy merge; Similar shots tab in Duplicates (plan 5 D1/D2) for RAW+JPEG pairs and bursts, with Keep picks / Reject all but the first (flags only, one undo; Delete Rejected… removes them), loading, empty and error states. Missing: near-duplicate (visual) matching, collapsing stacks in the grid. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. Shipped: Export Originals… and Export as JPEG… (2048 px, edits applied, no metadata; plan 5 D3); macOS share sheet for the selected originals from the File menu, ⌘K, the context menu and the batch dock (plan 5 D4). Missing: export cancel control. |
-| P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. |
+| P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. Shipped: format test grid (plan 5 E1), displayed sizes for rotated and HEIC photos with a one-time catalog correction (E2), wide-colour conversion to sRGB at decode on macOS (E3); see README "Supported formats". Missing: checks on real RAW files, wide-gamut display output. |
 | P1 | Mid | Light/system theme, accent, density, motion settings | 0.7 | UX-4 consistency. |
 | P1 | Mid | Accessibility bridge, focus order, reduced motion | 0.7 | Grade A requirement. |
 | P1 | Mid | Locale catalog (one non-English locale) | 0.7 | i18n proof. |

@@ -214,6 +214,34 @@ core handles cataloguing, decoding, and search.
 > **Status note:** local semantic/AI search ("Phase 10" in the roadmap) is a
 > planned feature and is **not implemented** in this tree.
 
+## Supported formats
+
+Photos are decoded upright and converted to sRGB, with the exceptions in the
+table below. The catalog stores each photo's
+displayed size, so a rotated portrait counts as a portrait. This table says
+what the format tests (`crates/lumina-core/tests/format_matrix.rs`) actually
+check on macOS, using files generated at test time.
+
+| Format | Extensions | Upright | Wide colour to sRGB | Displayed size |
+| --- | --- | --- | --- | --- |
+| JPEG | jpg, jpeg | Tested, with EXIF rotation | Tested (Display P3) | Tested, with EXIF rotation |
+| PNG, WebP | png, webp | Tested, unrotated only | Tested (Display P3) | Tested |
+| HEIC | heic, heif | Tested, with EXIF rotation | Tested (Display P3) | Tested, with EXIF rotation |
+| TIFF | tiff, tif | Tested at 8 MB or less, with EXIF rotation | Over 8 MB converted, not tested; smaller files use the system preview, colour not checked | Tested, with EXIF rotation |
+| RAW | arw, cr2, cr3, nef, dng, raf, rw2, orf | Not yet checked on real files | Not yet checked on real files | Not yet checked on real files |
+
+Video files (mp4, mov, m4v, avi, mkv) are catalogued, and play only if macOS can
+decode them. These tests do not cover video.
+
+Limits:
+
+- Colours outside sRGB are clipped to sRGB, so a wide-colour photo does not use
+  the full range of a wide-colour display. The original file is never changed.
+- RAW photos use the system's rendering. Lumina is not a RAW developer.
+- A HEIC rotated only by its container, with no EXIF orientation, has not been
+  tested.
+- Colour conversion needs macOS tools. Windows and Linux are not supported yet.
+
 ## Requirements
 
 - macOS 12 or newer for the current release (Windows and Linux are planned but
