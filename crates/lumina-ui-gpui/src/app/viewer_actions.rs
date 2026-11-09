@@ -425,13 +425,14 @@ impl LuminaApp {
         }));
     }
 
-    /// The HUD never hides under the pointer, over an open menu (context or
-    /// speed) or help sheet, mid-scrub or mid-pan (hiding the transport would drop the
+    /// The HUD never hides under the pointer, over an open menu (context,
+    /// speed or audio) or help sheet, mid-scrub or mid-pan (hiding the transport would drop the
     /// release), or while a field takes typing.
     fn hud_must_stay(&self) -> bool {
         self.hud_idle.pointer_on_hud
             || self.context_menu_state.is_some()
             || self.video.speed_menu_open
+            || self.video.tracks.audio_menu_open
             || self.video.is_scrubbing
             || self.viewer_state.is_dragging
             || self.viewer_shortcuts_open

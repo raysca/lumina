@@ -163,6 +163,15 @@ impl LuminaApp {
                     _ => {}
                 }
             }
+            // ⌥← / ⌥→: previous / next chapter. Before the plain arrows
+            // below, which ignore modifiers and would seek instead.
+            if keystroke.modifiers.alt
+                && !keystroke.modifiers.shift
+                && (key == "left" || key == "right")
+            {
+                self.jump_chapter(key == "right", cx);
+                return true;
+            }
             if key == "space" || key.eq_ignore_ascii_case("k") {
                 self.toggle_video_play(cx);
                 return true;
@@ -201,8 +210,9 @@ impl LuminaApp {
         // viewer. Escape and the viewer Back button are the exits.
 
         if key == "escape" {
-            if self.video.speed_menu_open {
+            if self.video.speed_menu_open || self.video.tracks.audio_menu_open {
                 self.video.speed_menu_open = false;
+                self.video.tracks.audio_menu_open = false;
                 cx.notify();
                 return true;
             }

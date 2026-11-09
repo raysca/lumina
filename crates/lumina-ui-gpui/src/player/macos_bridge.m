@@ -20,6 +20,11 @@
 @property (nonatomic, assign) BOOL isPlayingState;
 @property (nonatomic, assign) float volume;
 @property (nonatomic, assign) BOOL isMuted;
+/// Alternative audio tracks of the loaded file; nil when it offers none.
+@property (nonatomic, strong) AVMediaSelectionGroup *audioGroup;
+/// Chapter starts (NSNumber seconds) and titles, read once per load.
+@property (nonatomic, strong) NSArray<NSNumber *> *chapterStarts;
+@property (nonatomic, strong) NSArray<NSString *> *chapterTitles;
 @end
 
 @implementation LuminaPlayerBridge {
@@ -61,6 +66,9 @@
     _playerItem = nil;
     _videoOutput = nil;
     _isPlayingState = NO;
+    _audioGroup = nil;
+    _chapterStarts = nil;
+    _chapterTitles = nil;
 }
 
 - (BOOL)loadFile:(NSString *)path
@@ -155,6 +163,10 @@
 
     _player = [AVPlayer playerWithPlayerItem:_playerItem];
     _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+
+    // Synchronous reads, like duration and tracks above: the asset is local.
+    _audioGroup = [asset mediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicAudible];
+    [self readChaptersOfAsset:asset];
     _player.volume = _volume;
     _player.muted = _isMuted;
 
@@ -163,6 +175,40 @@
     if (outHeight) *outHeight = _scaledHeight;
 
     return YES;
+}
+
+- (void)readChaptersOfAsset:(AVAsset *)asset {
+    NSMutableArray<NSNumber *> *starts = [NSMutableArray array];
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    NSArray<AVTimedMetadataGroup *> *groups =
+        [asset chapterMetadataGroupsBestMatchingPreferredLanguages:[NSLocale preferredLanguages]];
+    for (AVTimedMetadataGroup *group in groups) {
+        CMTime start = group.timeRange.start;
+        if (!CMTIME_IS_NUMERIC(start)) continue;
+        NSArray<AVMetadataItem *> *items =
+            [AVMetadataItem metadataItemsFromArray:group.items
+                              filteredByIdentifier:AVMetadataCommonIdentifierTitle];
+        NSString *title = items.firstObject.stringValue ?: @"";
+        [starts addObject:@(CMTimeGetSeconds(start))];
+        [titles addObject:title];
+    }
+    _chapterStarts = starts;
+    _chapterTitles = titles;
+}
+
+- (NSInteger)selectedAudioIndex {
+    if (!_audioGroup || !_playerItem) return -1;
+    AVMediaSelectionOption *option =
+        [_playerItem.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:_audioGroup];
+    if (!option) return -1;
+    NSUInteger index = [_audioGroup.options indexOfObject:option];
+    return index == NSNotFound ? -1 : (NSInteger)index;
+}
+
+- (void)selectAudioIndex:(NSInteger)index {
+    if (!_audioGroup || !_playerItem) return;
+    if (index < 0 || (NSUInteger)index >= _audioGroup.options.count) return;
+    [_playerItem selectMediaOption:_audioGroup.options[index] inMediaSelectionGroup:_audioGroup];
 }
 
 - (void)onItemEnd:(NSNotification *)notif {
@@ -541,6 +587,76 @@ void lumina_player_free_frame(uint8_t* data) {
     }
 }
 
+
+// Strings below are malloc'd UTF-8; Rust frees them with lumina_player_free_string.
+static char *lumina_copy_utf8(NSString *text) {
+    const char *utf8 = (text ?: @"").UTF8String;
+    return strdup(utf8 ? utf8 : "");
+}
+
+int lumina_player_audio_track_count(void* player) {
+    if (!player) return 0;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        return (int)bridge.audioGroup.options.count;
+    }
+}
+
+char* lumina_player_audio_track_name(void* player, int index) {
+    if (!player || index < 0) return NULL;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        NSArray<AVMediaSelectionOption *> *options = bridge.audioGroup.options;
+        if ((NSUInteger)index >= options.count) return NULL;
+        return lumina_copy_utf8(options[index].displayName);
+    }
+}
+
+int lumina_player_selected_audio_track(void* player) {
+    if (!player) return -1;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        return (int)[bridge selectedAudioIndex];
+    }
+}
+
+void lumina_player_select_audio_track(void* player, int index) {
+    if (!player) return;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        [bridge selectAudioIndex:index];
+    }
+}
+
+int lumina_player_chapter_count(void* player) {
+    if (!player) return 0;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        return (int)bridge.chapterStarts.count;
+    }
+}
+
+double lumina_player_chapter_start(void* player, int index) {
+    if (!player || index < 0) return 0.0;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        if ((NSUInteger)index >= bridge.chapterStarts.count) return 0.0;
+        return bridge.chapterStarts[index].doubleValue;
+    }
+}
+
+char* lumina_player_chapter_title(void* player, int index) {
+    if (!player || index < 0) return NULL;
+    @autoreleasepool {
+        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
+        if ((NSUInteger)index >= bridge.chapterTitles.count) return NULL;
+        return lumina_copy_utf8(bridge.chapterTitles[index]);
+    }
+}
+
+void lumina_player_free_string(char* s) {
+    free(s);
+}
 
 // Read once at startup by motion::reduce_motion().
 int lumina_reduce_motion(void) {

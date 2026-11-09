@@ -112,6 +112,16 @@ Lumina is designed to be usable without a mouse:
   End, Clear Loop Range). A dialog absorbs the keys, the palette takes them as typed text, and in a
   text field they type the ⌥ character instead. Setting a point shows its time
   in a toast.
+- **Chapters and audio tracks**: with a video open in the viewer, `⌥←` /
+  `⌥→` go to the previous / next chapter and a toast names it (`⌥←` restarts
+  the current chapter when more than 3 s into it, otherwise goes to the one
+  before). Without chapters they seek 5 s back / forward like `←` / `→`; a
+  dialog, the palette or a text field takes them first. The transport's
+  Audio menu (shown only when the file offers more than one alternative
+  audio track) has the keyboard path ⌘K "Audio Track:
+  {name}", where the playing track has a check. The button (with its
+  expanded state), the menu and its rows (radio items, the playing one
+  toggled on) carry roles and labels, not yet checked with VoiceOver. The choice lasts until the video closes.
 - **Rotation**: `R` / `⇧R` rotate the viewer photo or the grid selection
   right / left, also ⌘K Rotate Right / Rotate Left and Image > Rotate
   Right / Rotate Left; the keys type into a focused text field instead.

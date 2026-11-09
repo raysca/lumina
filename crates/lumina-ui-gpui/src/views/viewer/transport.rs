@@ -136,6 +136,22 @@ impl ViewerTransport {
             (start, end - start)
         });
 
+        // Chapter starts as 0..=1 of the track. The first chapter usually
+        // starts at 0, where a tick would only mark the track's edge.
+        let chapter_ticks: Vec<f32> = if duration > 0.0 {
+            this.video
+                .tracks
+                .chapters
+                .iter()
+                .map(|(start, _)| start / duration)
+                .filter(|pct| *pct > 0.0 && *pct < 1.0)
+                .map(|pct| pct as f32)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let menu_open = this.video.speed_menu_open || this.video.tracks.audio_menu_open;
+
         let time_label = |t: f64| {
             div()
                 .w(px(56.0))
@@ -273,6 +289,16 @@ impl ViewerTransport {
                                     .border_color(theme::accent())
                                     .bg(theme::selection_bg())
                             }))
+                            .children(chapter_ticks.into_iter().enumerate().map(|(i, pct)| {
+                                div()
+                                    .absolute()
+                                    .top(px(4.0))
+                                    .bottom(px(4.0))
+                                    .debug_selector(move || format!("video-chapter-tick-{}", i + 1))
+                                    .left(relative(pct))
+                                    .w(px(1.5))
+                                    .bg(theme::text_muted())
+                            }))
                             // Played portion: a 22% amber tint up to the playhead.
                             .child(
                                 div()
@@ -325,8 +351,8 @@ impl ViewerTransport {
                     })
                     .child(time_label(duration)),
             )
-            // Dismiss layer for the speed menu, under the controls.
-            .when(this.video.speed_menu_open, |card| {
+            // Dismiss layer for the speed and audio menus, under the controls.
+            .when(menu_open, |card| {
                 card.child(
                     div()
                         .id("video-speed-dismiss")
@@ -336,6 +362,7 @@ impl ViewerTransport {
                             MouseButton::Left,
                             cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
                                 this.video.speed_menu_open = false;
+                                this.video.tracks.audio_menu_open = false;
                                 cx.notify();
                             }),
                         ),
@@ -400,9 +427,17 @@ impl ViewerTransport {
                                         this.toggle_video_speed_menu(cx);
                                     })),
                             )
+                            .when(this.video.tracks.has_audio_choice(), |zone| {
+                                zone.child(render_audio_button(this, cx))
+                            })
                             .when(this.video.speed_menu_open, |zone| {
                                 zone.child(render_speed_menu(this, cx))
-                            }),
+                            })
+                            .when(
+                                this.video.tracks.audio_menu_open
+                                    && this.video.tracks.has_audio_choice(),
+                                |zone| zone.child(render_audio_menu(this, cx)),
+                            ),
                     )
                     .child(
                         div()
@@ -604,6 +639,104 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .child(format_playback_speed(rate))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.set_video_speed(rate, cx);
+                }))
+        }))
+}
+
+/// The Audio menu button; shown only when the file offers a choice. Its
+/// keyboard path is the palette's "Audio Track: {name}" rows.
+fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let label = crate::i18n::t("video.audio_menu");
+    div()
+        .id("video-audio-btn")
+        .debug_selector(|| "video-audio".to_string())
+        .role(Role::Button)
+        .aria_label(crate::i18n::t("video.audio_menu_tooltip"))
+        .aria_expanded(this.video.tracks.audio_menu_open)
+        .tooltip(theme::tooltip_label(crate::i18n::t(
+            "video.audio_menu_tooltip",
+        )))
+        .h(px(32.0))
+        .px_2()
+        .rounded(theme::RADIUS_MD)
+        .flex()
+        .items_center()
+        .when(this.video.tracks.audio_menu_open, |b| {
+            b.bg(theme::selection_bg())
+        })
+        .hover(|s| s.bg(theme::bg_control_hover()))
+        .cursor_pointer()
+        .text_xs()
+        .text_color(theme::text())
+        .child(label)
+        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+            this.toggle_audio_menu(cx);
+        }))
+}
+
+/// Audio track menu, anchored above the left zone like the speed menu.
+fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let tracks = &this.video.tracks;
+    // Asked while the menu is open, not cached at load (see current_audio_track).
+    let playing = this.current_audio_track();
+    div()
+        .id("video-audio-popover")
+        .debug_selector(|| "video-audio-popover".to_string())
+        .role(Role::Menu)
+        .aria_label(crate::i18n::t("video.audio_menu_tooltip"))
+        .occlude()
+        .absolute()
+        .bottom(px(40.0))
+        .left(px(32.0))
+        .min_w(px(160.0))
+        .max_w(px(280.0))
+        .bg(theme::bg_hud())
+        .border_1()
+        .border_color(theme::border_strong())
+        .rounded(theme::RADIUS_LG)
+        .shadow_2xl()
+        .py_1()
+        .flex()
+        .flex_col()
+        .children((0..tracks.audio.len()).map(|index| {
+            let is_cur = playing == Some(index);
+            let name = tracks.audio_name(index);
+            div()
+                .id(ElementId::NamedInteger("audio-opt".into(), index as u64))
+                .debug_selector(move || format!("video-audio-track-{index}"))
+                .role(Role::MenuItemRadio)
+                .aria_toggled(if is_cur {
+                    Toggled::True
+                } else {
+                    Toggled::False
+                })
+                .aria_label(name.clone())
+                .px_3()
+                .py_1()
+                .hover(|s| s.bg(theme::bg_control_hover()))
+                .cursor_pointer()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1p5()
+                .text_xs()
+                .text_color(if is_cur {
+                    theme::accent()
+                } else {
+                    theme::text()
+                })
+                .child(if is_cur {
+                    div()
+                        .debug_selector(|| "video-audio-check".to_string())
+                        .flex()
+                        .items_center()
+                        .child(render_icon(Icon::Check, px(12.0), theme::accent()))
+                } else {
+                    div().w(px(12.0))
+                })
+                .child(div().truncate().child(name))
+                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                    this.select_audio_track(index, cx);
                 }))
         }))
 }

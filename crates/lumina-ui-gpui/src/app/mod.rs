@@ -46,6 +46,7 @@ pub mod text_input;
 pub mod types;
 pub mod undo;
 pub mod video_actions;
+pub mod video_tracks;
 pub mod viewer_actions;
 pub mod windows;
 

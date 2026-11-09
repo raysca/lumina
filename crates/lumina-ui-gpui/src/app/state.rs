@@ -126,6 +126,8 @@ pub struct VideoPlaybackState {
     pub resume_after_scrub: bool,
     /// In and out points of the open video, for this session only.
     pub loop_range: crate::app::loop_range::LoopRange,
+    /// Audio tracks and chapters of the open video, for this session only.
+    pub tracks: crate::app::video_tracks::VideoTracks,
 }
 
 /// Tag manager modal state.

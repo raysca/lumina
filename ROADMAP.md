@@ -302,7 +302,16 @@ undo restores every touched item in one step; large selections stay responsive.
 **Current:** AVFoundation playback with play/pause, drag-scrub (press, drag,
 release), frame stepping, speed menu, mute, loop, loop range, PiP and
 fullscreen. The loop range (⌥I in, ⌥O out, ⌥X clear) is per session: it belongs
-to the open video and is never saved. Hovering
+to the open video and is never saved. Chapters show as ticks on the scrubber;
+⌥← / ⌥→ go to the previous / next chapter (⌥← restarts the current chapter
+when more than 3 s into it; without chapters they seek 5 s like ← / →).
+Files that offer more than one alternative audio track get an Audio menu
+in the transport and ⌘K "Audio Track: …" rows; the choice is per
+session and not remembered ("remember last choices" is deferred, owner
+decision 7). In a check on generated files, a MOV with a QuickTime chapter
+track showed its chapters and an MP4 written with Nero-style chapters showed
+none. Subtitles are deferred: frames come from a
+video output that never draws captions. Hovering
 or dragging the scrubber shows the time and the nearest frame from a preview
 strip decoded in the background once per open video (up to 48 frames, so a
 long video previews the nearest strip frame; the main picture shows the exact
@@ -310,7 +319,7 @@ seek). A file that cannot be previewed stays time-only. A playing video pauses
 while scrubbing and resumes on release. Resume position is saved per video;
 playback speed and mute are remembered across sessions. The immersive
 fullscreen HUD hides after 2 s idle. Volume is fixed (there is no volume
-control). No buffered range, chapters, or subtitle/audio track selection. Not
+control). No buffered range or subtitles. Not
 checked by hand: scrub previews on a 4K/HEVC file while playing.
 
 **Target:**
@@ -597,7 +606,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P1 | Mid | Curated albums + smart-album polish | 0.6 | Shipped: curated albums (⌘N, ⇧⌘A picker, ⌫ in an album, undo), pin for albums and smart albums, Duplicate Smart Album, rule JSON export/import. Missing: covers, drag to album, smart-album preview of why an item matched. |
 | P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…, compare/survey of 2–9 items with shared zoom (C, View > Compare; plan 5 C1). |
 | P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Missing: map; slideshow music and transitions beyond a fade. |
-| P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. Shipped: loop range (⌥I, ⌥O, ⌥X, ⌘K; per session, never saved). Missing: tracks, chapters, trim. |
+| P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. Shipped: loop range (⌥I, ⌥O, ⌥X, ⌘K; per session, never saved); audio track menu and ⌘K rows (per session, never saved); chapter ticks and ⌥← / ⌥→. Missing: subtitles (deferred), remembering track choices, trim. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. Shipped: exact-copy merge; Similar shots tab in Duplicates (plan 5 D1/D2) for RAW+JPEG pairs and bursts, with Keep picks / Reject all but the first (flags only, one undo; Delete Rejected… removes them), loading, empty and error states. Missing: near-duplicate (visual) matching, collapsing stacks in the grid. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. Shipped: Export Originals… and Export as JPEG… (2048 px, edits applied, no metadata; plan 5 D3); macOS share sheet for the selected originals from the File menu, ⌘K, the context menu and the batch dock (plan 5 D4). Missing: export cancel control. |
 | P1 | Mid | RAW/HEIC validation + basic color handling | 0.6 | Table stakes for photographer credibility. Shipped: format test grid (plan 5 E1), displayed sizes for rotated and HEIC photos with a one-time catalog correction (E2), wide-colour conversion to sRGB at decode on macOS (E3); see README "Supported formats". Missing: checks on real RAW files, wide-gamut display output. |

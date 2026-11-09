@@ -41,4 +41,19 @@ pub trait VideoPlayerBackend: Send {
     fn is_looping(&self) -> bool;
     /// Fetches the latest decoded video frame if available.
     fn next_frame(&mut self) -> Option<VideoFrame>;
+    /// Display names of the loaded file's alternative audio tracks, in order.
+    /// Empty when the file offers no choice. A name can be empty.
+    fn audio_tracks(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Index into `audio_tracks` of the track that plays, when known.
+    fn selected_audio_track(&self) -> Option<usize> {
+        None
+    }
+    /// Plays audio track `index` of `audio_tracks` instead of the current one.
+    fn select_audio_track(&mut self, _index: usize) {}
+    /// Chapter starts in seconds with their titles, as the file stores them.
+    fn chapters(&self) -> Vec<(f64, String)> {
+        Vec::new()
+    }
 }

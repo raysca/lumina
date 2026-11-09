@@ -218,6 +218,8 @@ pub enum PaletteTarget {
     Library(std::path::PathBuf),
     /// Apply Metadata Template…: applies template `index` to the selection.
     Template(usize),
+    /// Audio Track: {name}: plays track `index` of the open video.
+    AudioTrack(usize),
 }
 
 /// One rendered palette row: a command, or a GO TO destination.
@@ -242,7 +244,7 @@ impl PaletteRow {
     /// The heading the row is listed under.
     pub fn group(&self) -> &'static str {
         match self.target {
-            PaletteTarget::Command(_) => "COMMANDS",
+            PaletteTarget::Command(_) | PaletteTarget::AudioTrack(_) => "COMMANDS",
             PaletteTarget::Template(_) => "TEMPLATES",
             _ => "GO TO",
         }
@@ -1092,6 +1094,28 @@ impl LuminaApp {
                 selector: format!("command-item-{}", c.key),
             })
             .collect();
+        // The open video's audio choice (§11: the Audio menu's keyboard path),
+        // within the same row budget as the commands.
+        if self.video.player.is_some() && self.video.tracks.has_audio_choice() {
+            let playing = self.current_audio_track();
+            let audio = (0..self.video.tracks.audio.len())
+                .map(|index| PaletteRow {
+                    target: PaletteTarget::AudioTrack(index),
+                    title: t("command.audio_track")
+                        .replace("{name}", &self.video.tracks.audio_name(index)),
+                    shortcut: "",
+                    icon: if playing == Some(index) {
+                        Icon::Check
+                    } else {
+                        Icon::Volume
+                    },
+                    selector: format!("palette-audio-track-{index}"),
+                })
+                .filter(|row| matches(&words, &row.title, "video sound language"))
+                .take(MAX_COMMANDS.saturating_sub(rows.len()))
+                .collect::<Vec<_>>();
+            rows.extend(audio);
+        }
 
         let go = |selection: AlbumSelection, title: String, icon: Icon, slug: String| PaletteRow {
             target: PaletteTarget::Go(selection),
@@ -1263,6 +1287,10 @@ impl LuminaApp {
             PaletteTarget::Template(index) => {
                 self.close_command_palette(cx);
                 self.apply_template(index, cx);
+            }
+            PaletteTarget::AudioTrack(index) => {
+                self.close_command_palette(cx);
+                self.select_audio_track(index, cx);
             }
             PaletteTarget::Year(year) => {
                 self.close_command_palette(cx);

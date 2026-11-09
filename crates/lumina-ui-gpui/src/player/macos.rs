@@ -45,12 +45,37 @@ extern "C" {
         out_len: *mut c_int,
     ) -> c_int;
     fn lumina_player_free_frame(data: *mut u8);
+    fn lumina_player_audio_track_count(player: *mut c_void) -> c_int;
+    fn lumina_player_audio_track_name(player: *mut c_void, index: c_int) -> *mut c_char;
+    fn lumina_player_selected_audio_track(player: *mut c_void) -> c_int;
+    fn lumina_player_select_audio_track(player: *mut c_void, index: c_int);
+    fn lumina_player_chapter_count(player: *mut c_void) -> c_int;
+    fn lumina_player_chapter_start(player: *mut c_void, index: c_int) -> f64;
+    fn lumina_player_chapter_title(player: *mut c_void, index: c_int) -> *mut c_char;
+    fn lumina_player_free_string(s: *mut c_char);
+}
+
+/// Takes ownership of a malloc'd UTF-8 string from the bridge. Null is "".
+fn take_bridge_string(raw: *mut c_char) -> String {
+    if raw.is_null() {
+        return String::new();
+    }
+    let text = unsafe { std::ffi::CStr::from_ptr(raw) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { lumina_player_free_string(raw) };
+    text
 }
 
 pub struct AvFoundationPlayer {
     handle: *mut c_void,
     cached_width: u32,
     cached_height: u32,
+    /// Test-only audio selection: set by `select_audio_track` and reported
+    /// by `selected_audio_track`. An unloaded player has no tracks, so UI
+    /// tests set or read this instead.
+    #[cfg(test)]
+    pub test_selected_audio: Option<usize>,
 }
 
 unsafe impl Send for AvFoundationPlayer {}
@@ -62,6 +87,8 @@ impl AvFoundationPlayer {
             handle,
             cached_width: 0,
             cached_height: 0,
+            #[cfg(test)]
+            test_selected_audio: None,
         }
     }
 }
@@ -242,6 +269,43 @@ impl VideoPlayerBackend for AvFoundationPlayer {
             data: vec,
         })
     }
+
+    fn audio_tracks(&self) -> Vec<String> {
+        let count = unsafe { lumina_player_audio_track_count(self.handle) };
+        (0..count)
+            .map(|i| take_bridge_string(unsafe { lumina_player_audio_track_name(self.handle, i) }))
+            .collect()
+    }
+
+    fn selected_audio_track(&self) -> Option<usize> {
+        #[cfg(test)]
+        if self.test_selected_audio.is_some() {
+            return self.test_selected_audio;
+        }
+        usize::try_from(unsafe { lumina_player_selected_audio_track(self.handle) }).ok()
+    }
+
+    fn select_audio_track(&mut self, index: usize) {
+        #[cfg(test)]
+        {
+            self.test_selected_audio = Some(index);
+        }
+        if let Ok(index) = c_int::try_from(index) {
+            unsafe { lumina_player_select_audio_track(self.handle, index) };
+        }
+    }
+
+    fn chapters(&self) -> Vec<(f64, String)> {
+        let count = unsafe { lumina_player_chapter_count(self.handle) };
+        (0..count)
+            .map(|i| unsafe {
+                (
+                    lumina_player_chapter_start(self.handle, i),
+                    take_bridge_string(lumina_player_chapter_title(self.handle, i)),
+                )
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -294,5 +358,33 @@ mod tests {
         assert_eq!(f.width, meta.width);
         assert_eq!(f.height, meta.height);
         assert_eq!(f.data.len(), (meta.width * meta.height * 4) as usize);
+    }
+
+    /// The bridge on a real file: three 2 s chapters titled One/Two/Three and
+    /// two audio tracks, English then French. Make it with any local tool and
+    /// run with `--ignored` and LUMINA_TEST_TRACKS_VIDEO set. Track names are
+    /// AVFoundation's display names, which come from the track language.
+    #[test]
+    #[ignore = "needs LUMINA_TEST_TRACKS_VIDEO: two audio tracks and three chapters"]
+    fn bridge_reads_audio_tracks_and_chapters_from_a_real_file() {
+        let path = std::env::var("LUMINA_TEST_TRACKS_VIDEO")
+            .expect("LUMINA_TEST_TRACKS_VIDEO must name the test file");
+        let mut player = AvFoundationPlayer::new();
+        player.load(Path::new(&path)).expect("the test file loads");
+
+        let tracks = player.audio_tracks();
+        assert_eq!(tracks, ["English", "French"], "both audio tracks, named");
+        assert_eq!(player.selected_audio_track(), Some(0), "the first plays");
+        player.select_audio_track(1);
+        // Clear the test record so the read below asks AVFoundation.
+        player.test_selected_audio = None;
+        assert_eq!(player.selected_audio_track(), Some(1), "the switch lands");
+
+        let chapters = player.chapters();
+        let titles: Vec<&str> = chapters.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(titles, ["One", "Two", "Three"], "{chapters:?}");
+        for ((start, _), expected) in chapters.iter().zip([0.0, 2.0, 4.0]) {
+            assert!((start - expected).abs() < 0.05, "{chapters:?}");
+        }
     }
 }

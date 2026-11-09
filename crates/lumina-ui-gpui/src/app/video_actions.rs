@@ -180,6 +180,8 @@ impl LuminaApp {
             player.set_muted(self.video.is_muted);
             player.set_rate(self.video.playback_speed);
             self.video.duration = meta.duration_secs;
+            self.video.tracks =
+                crate::app::video_tracks::VideoTracks::read(&player, meta.duration_secs);
             // The scanner reads MP4/MOV sizes only; for other containers show
             // what the player knows. ponytail: session only.
             for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
@@ -252,6 +254,8 @@ impl LuminaApp {
         self.video.resume_after_scrub = false;
         // A range belongs to one open video.
         self.video.loop_range = Default::default();
+        // So are its tracks, chapters and audio choice.
+        self.video.tracks = Default::default();
         self.clear_scrub_strip();
     }
 
@@ -568,6 +572,7 @@ impl LuminaApp {
 
     pub fn toggle_video_speed_menu(&mut self, cx: &mut Context<Self>) {
         self.video.speed_menu_open = !self.video.speed_menu_open;
+        self.video.tracks.audio_menu_open = false;
         cx.notify();
     }
 
