@@ -529,6 +529,19 @@ impl LuminaApp {
         if self.is_fullscreen_viewer {
             self.close_viewer(cx);
         }
+        // Media ids restart in every library, so another library's resume
+        // points would start the wrong videos and be pruned as missing.
+        // ponytail: one library's points at a time; switching back starts
+        // over. Key the map by library if people switch often.
+        // Canonical, as the engine names catalogs: the same library opened
+        // from Recents and from the folder picker is one library.
+        let canonical = |p: &PathBuf| p.canonicalize().unwrap_or_else(|_| p.clone());
+        let owner = self.config.resume_library.as_ref();
+        let owner = owner.or(self.config.last_library_path.as_ref());
+        if owner.map(canonical) != Some(canonical(&path)) {
+            self.config.resume_positions = Default::default();
+        }
+        self.config.resume_library = Some(path.clone());
         // Only a library that opened becomes the startup library and a recent.
         self.config.last_library_path = Some(path.clone());
         crate::app::recents::push_recent(&mut self.config.recent_libraries, &path);

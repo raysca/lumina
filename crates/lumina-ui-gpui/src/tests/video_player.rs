@@ -1045,3 +1045,57 @@ fn a_library_that_fails_to_open_leaves_the_video_playing() {
         );
     });
 }
+
+#[core::prelude::v1::test]
+fn resume_points_do_not_follow_into_another_library() {
+    let mut cx = crate::tests::TestApp::single();
+    let (fixture, view, vcx) = open_video(&mut cx);
+    let other = fixture.0.join("other_library");
+    std::fs::create_dir_all(&other).expect("create the second library");
+    view.update(vcx, |app, cx| {
+        // Media ids restart in every library: id 2 here is another video there.
+        let id = lumina_core::MediaId(2);
+        app.config.resume_positions.record(id, 30.0, 60.0);
+        app.open_library_inner(other.clone(), cx);
+        let state = app.grid_state.as_ref().expect("the second library is open");
+        assert_eq!(
+            state.video_resume.saved(id),
+            None,
+            "a resume point from one library must not start another library's video"
+        );
+        assert!(
+            app.config.resume_positions.is_empty(),
+            "the saved config must not carry the old library's points"
+        );
+        assert_eq!(app.config.resume_library.as_deref(), Some(other.as_path()));
+        // Reopening the same library, by a different spelling of its path,
+        // keeps its points.
+        app.config.resume_positions.record(id, 30.0, 60.0);
+        app.open_library_inner(other.join("."), cx);
+        let state = app.grid_state.as_ref().expect("the library reopened");
+        assert_eq!(state.video_resume.saved(id), Some(30.0));
+    });
+}
+
+#[core::prelude::v1::test]
+fn an_older_config_keeps_its_resume_points_for_the_last_library() {
+    let mut cx = crate::tests::TestApp::single();
+    let (fixture, view, vcx) = open_video(&mut cx);
+    let last = fixture.0.join("last_library");
+    std::fs::create_dir_all(&last).expect("create the last library");
+    view.update(vcx, |app, cx| {
+        let id = lumina_core::MediaId(2);
+        // A config written before points were tagged with their library.
+        app.config.resume_library = None;
+        app.config.last_library_path = Some(last.clone());
+        app.config.resume_positions.record(id, 30.0, 60.0);
+        app.open_library_inner(last.clone(), cx);
+        let state = app.grid_state.as_ref().expect("the last library is open");
+        assert_eq!(
+            state.video_resume.saved(id),
+            Some(30.0),
+            "opening the library an untagged config was last used with keeps its points"
+        );
+        assert_eq!(app.config.resume_library.as_deref(), Some(last.as_path()));
+    });
+}

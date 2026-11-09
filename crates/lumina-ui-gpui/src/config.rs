@@ -184,7 +184,8 @@ struct ResumeEntry {
     recency: u64,
 }
 
-/// Bounded map of per-video resume positions (seconds), keyed by media id.
+/// Bounded map of per-video resume positions (seconds), keyed by media id,
+/// for one library (`AppConfig::resume_library`).
 ///
 /// The handle is shared by AppConfig and the live grid state so save_config
 /// serializes the latest playback position without adding another flat field
@@ -388,7 +389,8 @@ pub struct AppConfig {
     /// folder or catalog.
     #[serde(default)]
     pub recent_libraries: Vec<PathBuf>,
-    /// Per-video resume positions in seconds, keyed by media id.
+    /// Per-video resume positions in seconds, keyed by media id, for the
+    /// library named by `resume_library`.
     ///
     /// The value is a shared handle: grid playback state updates it in place,
     /// so the existing config save path persists the latest position without a
@@ -396,6 +398,12 @@ pub struct AppConfig {
     /// older config files without this key start empty.
     #[serde(default)]
     pub resume_positions: ResumePositions,
+    /// The library `resume_positions` belongs to. Media ids restart in every
+    /// library, so the points are dropped when another library opens. `None`
+    /// in configs written before this field: they belong to
+    /// `last_library_path`.
+    #[serde(default)]
+    pub resume_library: Option<PathBuf>,
     /// External editor used by "Edit in External Editor": an absolute macOS
     /// application path or a bundle identifier. `None` (the serde default)
     /// means unset. Values are validated when the action runs, so a hand-edited
@@ -504,6 +512,7 @@ impl Default for AppConfig {
             recent_searches: Vec::new(),
             recent_libraries: Vec::new(),
             resume_positions: ResumePositions::default(),
+            resume_library: None,
             external_editor: None,
             video_speed: None,
             video_muted: false,
@@ -943,9 +952,16 @@ mod tests {
         cfg.resume_positions.record(MediaId(7), 41.5, 120.0);
         cfg.resume_positions.record(MediaId(8), 0.5, 120.0);
         cfg.resume_positions.record(MediaId(9), 118.5, 120.0);
+        let mut cfg = cfg;
+        cfg.resume_library = Some(PathBuf::from("/Libraries/Family"));
         cfg.save_to(&path).unwrap();
 
         let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.resume_library.as_deref(),
+            Some(Path::new("/Libraries/Family")),
+            "the library the points belong to must round-trip with them"
+        );
         assert_eq!(
             loaded.resume_positions.get(MediaId(7)),
             Some(41.5),
@@ -968,6 +984,11 @@ mod tests {
         assert!(
             AppConfig::load_from(&path).resume_positions.is_empty(),
             "a missing resume_positions key must default to an empty map"
+        );
+        assert_eq!(
+            AppConfig::load_from(&path).resume_library,
+            None,
+            "an older config has no library tag; it belongs to last_library_path"
         );
 
         let _ = std::fs::remove_file(&path);
