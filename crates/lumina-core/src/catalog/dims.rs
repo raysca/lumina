@@ -53,14 +53,20 @@ impl Catalog {
             rows.collect::<rusqlite::Result<_>>()?
         };
         let mut fixed = 0;
+        let mut unreadable = 0;
         for batch in rows.chunks(BATCH) {
-            if cancel.load(Ordering::Relaxed) {
-                return Ok(fixed);
-            }
             let changes: Vec<_> = batch
                 .iter()
                 .filter_map(|(id, path, w, h)| {
-                    let size = measure(Path::new(path)).filter(|s| s.0 > 0 && s.1 > 0)?;
+                    // Measuring can take seconds per file, so check per file.
+                    if cancel.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    let measured = measure(Path::new(path)).filter(|s| s.0 > 0 && s.1 > 0);
+                    if measured.is_none() {
+                        unreadable += 1;
+                    }
+                    let size = measured?;
                     (size != (*w, *h)).then_some((*id, (*w, *h), size))
                 })
                 .collect();
@@ -77,6 +83,15 @@ impl Catalog {
                 )?;
             }
             tx.commit()?;
+        }
+        // After the loop, so a cancel during the last batch still re-runs.
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(fixed);
+        }
+        if unreadable > 0 {
+            log::warn!(
+                "photo size correction: kept the stored size of {unreadable} unreadable files"
+            );
         }
         self.mark_dims_oriented()?;
         Ok(fixed)

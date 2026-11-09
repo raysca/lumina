@@ -3120,6 +3120,43 @@ fn dims_backfill_never_overwrites_a_concurrent_rescan() {
 }
 
 #[test]
+fn dims_backfill_cancel_stops_mid_batch_and_runs_again_later() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (catalog, _) = dims_backfill_catalog();
+    let cancel = AtomicBool::new(false);
+    let calls = std::cell::Cell::new(0);
+    catalog
+        .backfill_oriented_dims(
+            |path| {
+                calls.set(calls.get() + 1);
+                cancel.store(true, Ordering::Relaxed);
+                measured_dims(path)
+            },
+            &cancel,
+        )
+        .unwrap();
+    assert_eq!(
+        calls.get(),
+        1,
+        "a cancel must stop measuring within a batch"
+    );
+    let again = std::cell::Cell::new(false);
+    catalog
+        .backfill_oriented_dims(
+            |path| {
+                again.set(true);
+                measured_dims(path)
+            },
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+    assert!(
+        again.get(),
+        "a cancelled backfill must not set the done marker"
+    );
+}
+
+#[test]
 fn dims_backfill_skips_missing_files() {
     let (catalog, [portrait, heic, ..]) = dims_backfill_catalog();
     catalog

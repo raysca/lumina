@@ -7,9 +7,7 @@
 //! a correct decode (90 degrees clockwise) shows a 32x64 portrait with the
 //! red quadrant top-left; every upright cell expects red top-left.
 //!
-//! Cells that fail on today's code are `#[ignore]`d with the reason, so the
-//! suite stays green and the failures stay visible:
-//! `cargo test -p lumina-core --test format_matrix -- --ignored`.
+//! Only the RAW cell is `#[ignore]`d: it needs owner-supplied files.
 //! Video is covered by the `video_frame` tests and is not repeated here.
 #![cfg(target_os = "macos")]
 
@@ -360,6 +358,34 @@ fn jpeg_small_p3_color() {
     let spec = Spec { p3: true, ..PLAIN };
     let frame = decode_cell("a.jpg", spec, SMALL_DECODE);
     assert_srgb_red(&frame, "JPEG small, Display P3");
+}
+
+/// The usual phone or camera portrait: a real colour match must not lose the
+/// orientation the sips route reads back from its output.
+fn assert_rotated_p3(name: &str, large: bool, size: u32, cell: &str) {
+    let spec = Spec {
+        p3: true,
+        large,
+        ..ROTATED
+    };
+    let frame = decode_cell(name, spec, size);
+    assert_upright(&frame, true, cell);
+    assert_srgb_red(&frame, cell);
+}
+
+#[test]
+fn jpeg_small_orientation_6_p3() {
+    assert_rotated_p3("a.jpg", false, SMALL_DECODE, "JPEG small, rotated P3");
+}
+
+#[test]
+fn jpeg_large_orientation_6_p3() {
+    assert_rotated_p3("big.jpg", true, LARGE_DECODE, "JPEG large, rotated P3");
+}
+
+#[test]
+fn heic_orientation_6_p3() {
+    assert_rotated_p3("a.heic", false, SMALL_DECODE, "HEIC, rotated P3");
 }
 
 #[test]
