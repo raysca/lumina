@@ -30,6 +30,7 @@ mod inspector;
 mod interaction;
 mod keyword_undo;
 mod keywords;
+mod large_selection;
 mod legacy_catalog;
 mod map;
 mod missing;

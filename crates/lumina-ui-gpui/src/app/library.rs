@@ -414,6 +414,11 @@ impl LuminaApp {
             UiMessage::FloatingInspectorClosed => {
                 self.floating_inspector_closed(cx);
             }
+            UiMessage::BatchSummaryLoaded(loaded) => {
+                if self.apply_batch_summary(*loaded) {
+                    cx.notify();
+                }
+            }
             UiMessage::SelectedTagsLoaded {
                 request,
                 single_tags,

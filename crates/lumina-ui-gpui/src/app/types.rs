@@ -77,6 +77,8 @@ pub enum UiMessage {
     #[cfg_attr(test, allow(dead_code))]
     ImportPicked(Vec<PathBuf>),
     VideoFrameTick,
+    /// A large selection's summary, read off the UI thread.
+    BatchSummaryLoaded(Box<crate::app::batch_summary::LoadedSummary>),
     #[cfg_attr(test, allow(dead_code))]
     SelectedTagsLoaded {
         request: u64,
@@ -110,6 +112,9 @@ pub struct BatchSelectionSummary {
     /// Capture-time range of the selection.
     pub oldest_ms: i64,
     pub newest_ms: i64,
+    /// A large selection's summary is loading off the UI thread: only
+    /// `count` is known yet.
+    pub pending: bool,
 }
 
 /// Test helper: a solid vertical gradient image.

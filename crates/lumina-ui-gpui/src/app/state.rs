@@ -348,6 +348,8 @@ pub struct LuminaApp {
     pub batch_summary: BatchSelectionSummary,
     /// Mixed-value-aware title/caption summary for the batch inspector.
     pub batch_metadata: BatchMetadataSummary,
+    /// The background summary of a large selection.
+    pub(crate) batch_load: crate::app::batch_summary::BatchLoad,
     /// Live pointer drag-selection over the grid (marquee or additive sweep).
     pub grid_drag: GridDragState,
     pub grid_zoom: GridZoomGesture,
@@ -586,6 +588,7 @@ impl LuminaApp {
             selected_tag_counts: Vec::new(),
             batch_summary: BatchSelectionSummary::default(),
             batch_metadata: BatchMetadataSummary::default(),
+            batch_load: crate::app::batch_summary::BatchLoad::new(cx.background_executor().clone()),
             grid_drag: GridDragState::default(),
             grid_zoom: GridZoomGesture::default(),
             viewer_image: None,

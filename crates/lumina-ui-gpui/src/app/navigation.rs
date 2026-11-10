@@ -1,8 +1,9 @@
 use gpui::*;
-use lumina_core::{MediaId, MediaItem, MediaType};
+use lumina_core::{MediaId, MediaItem};
 use std::cmp;
 use std::collections::BTreeSet;
 
+use crate::app::batch_summary::{index_ranges, summarize, BATCH_SYNC_LIMIT};
 use crate::app::history::{NavigationHistory, NavigationSnapshot};
 use crate::app::panels::{parse_edited_timestamp, parse_location_coordinates, DATE_INPUT_ERROR};
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary, GRID_DRAG_THRESHOLD};
@@ -1127,78 +1128,30 @@ impl LuminaApp {
         self.selected_tag_counts.clear();
         self.batch_summary = BatchSelectionSummary::default();
         self.batch_metadata = BatchMetadataSummary::default();
+        self.batch_load.invalidate();
         self.grid_drag.clear();
         self.cancel_batch_edit();
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
     }
 
+    /// Summarises the selection for the batch inspector: on the UI thread
+    /// up to [`BATCH_SYNC_LIMIT`] rows, in the background above it.
     pub fn update_batch_summary(&mut self) {
+        // A summary still loading belongs to the selection before this one.
+        self.batch_load.invalidate();
+        if self.selected_indices.len() > BATCH_SYNC_LIMIT {
+            self.load_batch_summary();
+            return;
+        }
         if self.selected_indices.is_empty() {
-            if let Some(ref it) = self.selected_item {
-                self.batch_summary = BatchSelectionSummary {
-                    count: 1,
-                    total_bytes: it.file_size,
-                    photos_count: if it.media_type == MediaType::Image {
-                        1
-                    } else {
-                        0
-                    },
-                    videos_count: if it.media_type == MediaType::Video {
-                        1
-                    } else {
-                        0
-                    },
-                    raw_count: if it.media_type == MediaType::Raw {
-                        1
-                    } else {
-                        0
-                    },
-                    ids: vec![it.id],
-                    oldest_ms: it.timestamp_epoch_ms,
-                    newest_ms: it.timestamp_epoch_ms,
-                };
-            } else {
-                self.batch_summary = BatchSelectionSummary::default();
-            }
+            let items: Vec<MediaItem> = self.selected_item.iter().cloned().collect();
+            self.batch_summary = summarize(&items);
             self.refresh_batch_metadata(&[]);
             return;
         }
-
         let items = self.get_selected_items();
-        let count = items.len();
-        let total_bytes: u64 = items.iter().map(|i| i.file_size).sum();
-        let photos_count = items
-            .iter()
-            .filter(|i| i.media_type == MediaType::Image)
-            .count();
-        let videos_count = items
-            .iter()
-            .filter(|i| i.media_type == MediaType::Video)
-            .count();
-        let raw_count = items
-            .iter()
-            .filter(|i| i.media_type == MediaType::Raw)
-            .count();
-
-        self.batch_summary = BatchSelectionSummary {
-            count,
-            total_bytes,
-            photos_count,
-            videos_count,
-            raw_count,
-            ids: items.iter().map(|i| i.id).collect(),
-            oldest_ms: items
-                .iter()
-                .map(|i| i.timestamp_epoch_ms)
-                .min()
-                .unwrap_or(0),
-            newest_ms: items
-                .iter()
-                .map(|i| i.timestamp_epoch_ms)
-                .max()
-                .unwrap_or(0),
-        };
+        self.batch_summary = summarize(&items);
         self.refresh_batch_metadata(&items);
     }
 
@@ -1215,29 +1168,7 @@ impl LuminaApp {
         }
 
         let mut items = Vec::with_capacity(self.selected_indices.len());
-        let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
-        let mut current_range: Option<std::ops::Range<usize>> = None;
-
-        for &idx in &self.selected_indices {
-            match current_range.take() {
-                Some(r) => {
-                    if idx == r.end {
-                        current_range = Some(r.start..idx + 1);
-                    } else {
-                        ranges.push(r);
-                        current_range = Some(idx..idx + 1);
-                    }
-                }
-                None => {
-                    current_range = Some(idx..idx + 1);
-                }
-            }
-        }
-        if let Some(r) = current_range {
-            ranges.push(r);
-        }
-
-        for range in ranges {
+        for range in index_ranges(&self.selected_indices) {
             let slice = self.navigation_rows(range);
             items.extend(slice);
         }
@@ -1298,7 +1229,13 @@ impl LuminaApp {
     }
 
     pub fn refresh_selected_tags(&mut self) {
-        let ids = self.get_selected_ids();
+        // A large selection's ids come from its summary (empty while it
+        // loads; landing refreshes the tags), not a second read of the rows.
+        let ids = if self.selected_indices.len() > BATCH_SYNC_LIMIT {
+            self.batch_summary.ids.clone()
+        } else {
+            self.get_selected_ids()
+        };
         self.refresh_tags_for(ids);
     }
 
@@ -1424,7 +1361,7 @@ impl LuminaApp {
 /// `mixed` is true when the items disagree; `common` then carries `None`
 /// because there is no single value to show. An empty iterator (no selection)
 /// yields the default "not set" summary.
-fn summarize_batch_text<I>(values: I) -> BatchFieldSummary
+pub(crate) fn summarize_batch_text<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = Option<String>>,
 {
@@ -1453,7 +1390,7 @@ fn batch_field_display(field: &BatchFieldSummary) -> String {
 ///
 /// A shared timestamp is rendered in the editor's own syntax so the batch row
 /// shows exactly the value typing the same text would restore.
-fn summarize_batch_timestamps<I>(values: I) -> BatchFieldSummary
+pub(crate) fn summarize_batch_timestamps<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = i64>,
 {
@@ -1474,7 +1411,7 @@ where
 
 /// Summarizes coordinates across the batch selection using the single-item
 /// editor's `latitude, longitude` form. Items with no coordinates are "not set".
-fn summarize_batch_locations<I>(values: I) -> BatchFieldSummary
+pub(crate) fn summarize_batch_locations<I>(values: I) -> BatchFieldSummary
 where
     I: IntoIterator<Item = (Option<f64>, Option<f64>)>,
 {

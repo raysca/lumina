@@ -143,7 +143,9 @@ fn render_header(app: &LuminaApp) -> Div {
     let videos = summary.videos_count;
     let plural =
         |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    // A large selection's mix, size and dates are still loading.
     let mix = match (photos, videos) {
+        _ if summary.pending => "…".to_string(),
         (_, 0) => plural(photos, "photo", "photos"),
         (0, _) => plural(videos, "video", "videos"),
         _ => format!(
@@ -208,11 +210,15 @@ fn render_header(app: &LuminaApp) -> Div {
                         .debug_selector(|| "batch-size-range".to_string())
                         .text_xs()
                         .text_color(theme::text_subtle())
-                        .child(format!(
-                            "{} · {}",
-                            format_bytes(summary.total_bytes),
-                            date_range(summary.oldest_ms, summary.newest_ms)
-                        )),
+                        .child(if summary.pending {
+                            "…".to_string()
+                        } else {
+                            format!(
+                                "{} · {}",
+                                format_bytes(summary.total_bytes),
+                                date_range(summary.oldest_ms, summary.newest_ms)
+                            )
+                        }),
                 ),
         )
 }

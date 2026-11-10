@@ -167,6 +167,10 @@ impl ViewerViewport {
                         this.selected_indices.clear();
                         this.selected_indices.extend(this.selected_index);
                         this.selection_anchor = this.selected_index;
+                        // One item now: its own summary and tags (a large
+                        // selection's may still be loading).
+                        this.update_batch_summary();
+                        this.refresh_selected_tags();
                         this.context_menu_state = Some(ContextMenuState {
                             position: e.position,
                             item,

@@ -16,8 +16,6 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::selection_by_id::HeldSelection;
-use crate::app::state::BatchMetadataSummary;
-use crate::app::types::BatchSelectionSummary;
 use crate::app::LuminaApp;
 use crate::i18n::t;
 use crate::theme;
@@ -56,15 +54,13 @@ enum Previous {
     ByPosition(Box<HeldPositions>),
 }
 
-/// A large selection by position, with what was derived from it, so
-/// putting it back reads only the focused row.
+/// A wide selection by position, so putting it back reads only the
+/// focused row (and its batch summary, off the UI thread when large).
 struct HeldPositions {
     indices: BTreeSet<usize>,
     anchor: Option<usize>,
     /// The focused row and its item.
     focus: Option<(usize, MediaItem)>,
-    summary: BatchSelectionSummary,
-    metadata: BatchMetadataSummary,
     /// The catalog's revision at the start: any write since may have moved
     /// rows.
     revision: Option<u64>,
@@ -117,8 +113,6 @@ impl LuminaApp {
                 indices: self.selected_indices.clone(),
                 anchor: self.selection_anchor,
                 focus: self.selected_index.zip(self.selected_item.clone()),
-                summary: self.batch_summary.clone(),
-                metadata: self.batch_metadata.clone(),
                 revision: self.grid_state.as_ref().map(|s| s.engine.data_revision()),
             }))
         };
@@ -229,18 +223,12 @@ impl LuminaApp {
             self.clear_selection(cx);
             return;
         };
-        // The focused item alone first, so showing it reads no batch...
-        self.selected_indices = BTreeSet::from([index]);
-        self.selected_index = Some(index);
-        self.select_item_internal(item, cx);
-        // ...then the rest, with the summaries taken at the start (the rows
-        // are where they were).
         self.selected_indices = held.indices;
+        self.selected_index = Some(index);
         self.selection_anchor = held.anchor;
-        self.batch_summary = held.summary;
-        self.batch_metadata = held.metadata;
-        self.sync_batch_inputs();
-        self.refresh_tags_for(self.batch_summary.ids.clone());
+        // Summarises the batch too (in the background when large).
+        self.select_item_internal(item, cx);
+        self.refresh_selected_tags();
         self.reveal_grid_selection();
         self.schedule_session_save(cx);
         cx.notify();
