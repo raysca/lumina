@@ -65,13 +65,10 @@ pub fn inspect_hls_url(url: &str, cancel: &AtomicBool) -> Result<NetworkMediaInf
         bail!("This is a live broadcast. Only recorded videos can be imported.");
     }
 
-    let path = url.split(['?', '#']).next().unwrap_or(url);
-    let slug = path.rsplit('/').next().unwrap_or("stream");
-    let stem = slug.rsplit_once('.').map(|(base, _)| base).unwrap_or(slug);
     Ok(NetworkMediaInfo {
         url: url.to_string(),
         kind: NetworkSourceKind::HlsStream,
-        title: sanitize_filename(stem),
+        title: stream_title(url),
         duration_secs: None,
         uploader: None,
         expected_bytes: None,
@@ -79,10 +76,134 @@ pub fn inspect_hls_url(url: &str, cancel: &AtomicBool) -> Result<NetworkMediaInf
     })
 }
 
+/// Playlist names that say nothing about the video.
+const GENERIC_NAMES: &[&str] = &[
+    "index",
+    "master",
+    "playlist",
+    "manifest",
+    "prog_index",
+    "main",
+    "stream",
+    "video",
+    "media",
+    "chunklist",
+    "hls",
+    "output",
+    "live",
+    "vod",
+];
+
+/// A stream has no page title, so it is named after its URL: the playlist's
+/// file name, or when that is generic ("index", "master", "1080p"…) the
+/// nearest meaningful folder above it, then the site's address.
+fn stream_title(url: &str) -> String {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    let (authority, path) = path
+        .split_once("://")
+        .map(|(_, rest)| rest.split_once('/').unwrap_or((rest, "")))
+        .unwrap_or(("", path));
+    // Never `user:password@`, and no `:port`.
+    let host = authority.rsplit('@').next().unwrap_or("");
+    let host = match host.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host.split(':').next().unwrap_or(""),
+    };
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    let meaningful = |stem: &String| {
+        let lower = stem.trim().to_ascii_lowercase();
+        // "720p", "1080p": a rendition, not a name.
+        let rendition = lower
+            .strip_suffix('p')
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+        !lower.trim_matches('.').is_empty()
+            && !rendition
+            && !GENERIC_NAMES.contains(&lower.as_str())
+    };
+    let name = path
+        .rsplit('/')
+        .map(|segment| {
+            let segment = percent_decode(segment);
+            match segment.rsplit_once('.') {
+                Some((base, _)) if !base.is_empty() => base.to_string(),
+                _ => segment,
+            }
+        })
+        .find(meaningful)
+        .or_else(|| Some(host.to_string()).filter(|h| !h.is_empty()))
+        .unwrap_or_else(|| "stream".to_string());
+    sanitize_filename(&name)
+}
+
+/// "Big%20Day" -> "Big Day". Invalid escapes stay as they are.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 1..i + 3)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (bytes[i], hex) {
+            (b'%', Some(byte)) => {
+                out.push(byte);
+                i += 3;
+            }
+            (byte, _) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn generic_playlist_names_fall_back_to_the_url() {
+        let cases = [
+            ("https://cdn.example.com/shows/Big%20Day.m3u8", "Big Day"),
+            ("https://cdn.example.com/caf%C3%A9/index.m3u8", "café"),
+            ("https://cdn.example.com/a%2/index.m3u8", "a%2"),
+            (
+                "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                "x36xhzz",
+            ),
+            (
+                "https://cdn.example.com/films/sunset/index.m3u8?t=1",
+                "sunset",
+            ),
+            (
+                "https://cdn.example.com/films/sunset/hls/1080p/master.m3u8",
+                "sunset",
+            ),
+            ("https://www.example.com/index.m3u8", "example.com"),
+            ("https://cdn.example.com/hls/Master.M3U8", "cdn.example.com"),
+            (
+                "https://user:secret@cdn.example.com:8443/index.m3u8",
+                "cdn.example.com",
+            ),
+            ("https://[::1]:8080/index.m3u8", "__1"),
+            ("https://example.com", "example.com"),
+            ("https://cdn.example.com/films/%69ndex.m3u8", "films"),
+            ("https://cdn.example.com/films/%20/index.m3u8", "films"),
+            ("https://cdn.example.com/a%+A/index.m3u8", "a%+A"),
+            ("file:///index.m3u8", "stream"),
+        ];
+        for (url, want) in cases {
+            assert_eq!(
+                stream_title(url),
+                want,
+                "{url}: a stream is named after the meaningful part of its URL"
+            );
+        }
+    }
 
     #[test]
     fn resolve_handles_relative_absolute_and_full_uris() {

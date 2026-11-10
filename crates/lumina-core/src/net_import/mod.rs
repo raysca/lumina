@@ -370,17 +370,6 @@ impl LuminaEngine {
             ))
     }
 
-    /// Where a download of `info` is expected to land, for display. The
-    /// real name is claimed when the download finishes and may get a
-    /// " 2" suffix if the name is taken by then.
-    pub fn preview_network_destination(&self, info: &NetworkMediaInfo) -> PathBuf {
-        self.network_import_dir().join(format!(
-            "{}.{}",
-            sanitize_filename(&info.title),
-            info.extension
-        ))
-    }
-
     /// Downloads `info` into today's import folder and returns the final
     /// path. Blocks; run it off the UI thread. Never replaces an existing
     /// file or a catalogued (even missing) path.

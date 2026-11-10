@@ -24,7 +24,11 @@ catalogue (e.g. WebM) are refused with a message.
    added and move up as others finish or are removed.
 3. Each download stages in a hidden `.…lumina-import` folder inside
    `Imports/YYYY/YYYY-MM-DD/`, then takes a free name there (an existing file
-   or catalogued item is never replaced; the new one gets " 2"). It is
+   or catalogued item is never replaced; the new one gets " 2"). Web videos
+   are named after their title. A stream has no title, so it is named after
+   its URL: the playlist's file name, or when that is generic (`index`,
+   `master`, `1080p`…) the nearest meaningful folder above it, then the
+   site's address. It is
    catalogued with its source URL and uploader, and a hidden `.xmp` sidecar records
    them as `dc:source` and `photoshop:Credit`. Get Info shows the source.
 
