@@ -241,7 +241,7 @@ check on macOS, using files generated at test time.
 | JPEG | jpg, jpeg | Tested, with EXIF rotation | Tested (Display P3) | Tested, with EXIF rotation |
 | PNG, WebP | png, webp | Tested, unrotated only | Tested (Display P3) | Tested |
 | HEIC | heic, heif | Tested, with EXIF rotation | Tested (Display P3) | Tested, with EXIF rotation |
-| TIFF | tiff, tif | Tested at 8 MB or less, with EXIF rotation | Over 8 MB converted, not tested; smaller files use the system preview, colour not checked | Tested, with EXIF rotation |
+| TIFF | tiff, tif | Tested at 8 MB or less, with EXIF rotation | Tested at 8 MB or less (Display P3); larger files take the same conversion, not tested | Tested, with EXIF rotation |
 | RAW | arw, cr2, cr3, nef, dng, raf, rw2, orf | Not yet checked on real files | Not yet checked on real files | Not yet checked on real files |
 
 Video files (mp4, mov, m4v, avi, mkv) are catalogued, and play only if macOS can
@@ -347,7 +347,8 @@ Three layers of UI coverage live alongside the unit tests:
 - **Thumbnail cache budget**: startup cleanup removes entries older than 30 days
   and evicts oldest files down to a 1.5 GB budget (cache keys are format-versioned).
 - **Decode safety**: native `sips`/QuickLook helpers run with a 10 s timeout and
-  are killed if they hang, and the in-process AVFoundation video frame grab is
+  are killed if they hang (an unreadable photo fails at once; only RAW files
+  fall back to QuickLook), and the in-process AVFoundation video frame grab is
   cancelled after 10 s, so a bad file cannot pin a decode worker forever.
 
 ## Continuous integration

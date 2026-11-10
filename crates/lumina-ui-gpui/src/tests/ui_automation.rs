@@ -9,8 +9,7 @@
 use crate::*;
 use lumina_core::{EngineEvent, LuminaEngine};
 
-/// A real 8×8 JPEG: seeded photos must decode in process. A fake one falls
-/// through to QuickLook, which hangs on it until the 10 s tool timeout.
+/// A real 8×8 JPEG, so seeded photos decode in process.
 pub(crate) fn tiny_jpeg() -> &'static [u8] {
     static BYTES: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
     BYTES.get_or_init(|| shaded_jpeg(90))
@@ -35,9 +34,9 @@ pub(crate) fn seed_library(
 }
 
 /// A library of files named `.jpg` that are not images: no size in the
-/// catalog, and their thumbnails never land during a test (the decoder
-/// falls back to QuickLook, which hangs on them until its timeout). Only for
-/// tests about cards and stages that have not decoded.
+/// catalog, and every decode of them fails (fast: sips rejects them), so no
+/// texture ever lands. Only for tests about failed or texture-less cards
+/// and stages; for a card still decoding, see [`app_with_pending`].
 pub(crate) fn seed_library_undecodable(
     prefix: &str,
     count: usize,
@@ -196,6 +195,26 @@ pub(crate) fn app_with_library(
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.grid_state = Some(crate::views::grid::GridState::new(engine));
+        app.refresh_album_counts();
+        cx.notify();
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    (view, vcx)
+}
+
+/// [`app_with_library`] with the decodes of `pending` claimed before the
+/// first draw, so none is queued: their cards stay "still decoding".
+pub(crate) fn app_with_pending<'a>(
+    cx: &'a mut TestAppContext,
+    engine: std::sync::Arc<LuminaEngine>,
+    pending: &[lumina_core::MediaId],
+) -> (Entity<LuminaApp>, &'a mut VisualTestContext) {
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    view.update(vcx, |app, cx| {
+        let state = crate::views::grid::GridState::new(engine);
+        state.in_flight.lock().extend(pending.iter().copied());
+        app.grid_state = Some(state);
         app.refresh_album_counts();
         cx.notify();
     });
@@ -473,17 +492,16 @@ fn ui_automation_tag_double_click_starts_rename() {
 
 #[core::prelude::v1::test]
 fn ui_automation_card_skeleton_selection_and_open() {
-    let (temp_dir, engine) = seed_library_undecodable("card_states", 8);
-    // Seed fixtures contain invalid JPEG bytes, which is exactly the
-    // "texture not decoded yet" state the skeleton exists for.
-    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let (temp_dir, engine) = seed_library("card_states", 8);
+    let first = engine.get_item_slice(0..1)[0].id;
+    let first_id = first.0;
     let card = leak(format!("media-card-{}", first_id));
     let photo = leak(format!("media-card-photo-{}", first_id));
     let skeleton = leak(format!("media-card-skeleton-{}", first_id));
     let selected = leak(format!("media-card-selected-{}", first_id));
 
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
+    let (view, vcx) = app_with_pending(&mut cx, engine, &[first]);
 
     assert!(
         vcx.debug_bounds(skeleton).is_some(),
@@ -596,7 +614,7 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
 
 #[core::prelude::v1::test]
 fn ui_automation_card_texture_replaces_skeleton() {
-    let (temp_dir, engine) = seed_library_undecodable("card_reveal", 1);
+    let (temp_dir, engine) = seed_library("card_reveal", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card_id = item.id.0;
     let photo = leak(format!("media-card-photo-{}", card_id));
@@ -604,7 +622,7 @@ fn ui_automation_card_texture_replaces_skeleton() {
     let thumb = leak(format!("media-card-thumb-{}", card_id));
 
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
+    let (view, vcx) = app_with_pending(&mut cx, engine, &[item.id]);
     assert!(vcx.debug_bounds(skeleton).is_some());
     assert!(vcx.debug_bounds(thumb).is_none());
 

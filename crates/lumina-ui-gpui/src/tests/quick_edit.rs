@@ -41,7 +41,7 @@ pub(crate) fn edit_library(prefix: &str) -> (PathBuf, Arc<LuminaEngine>, Vec<Med
     edit_library_with(prefix, crate::tests::ui_automation::tiny_jpeg())
 }
 
-/// [`edit_library`] with photos that never decode during a test (see
+/// [`edit_library`] with photos whose every decode fails (see
 /// `seed_library_undecodable`).
 pub(crate) fn edit_library_undecodable(
     prefix: &str,

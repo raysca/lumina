@@ -1282,7 +1282,7 @@ fn rotation_test_library(
     ));
     std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
     // Not images: the rotation tests check that a thumbnail is dropped, so
-    // no re-decode may land during the test.
+    // no re-decode may land during the test (every decode of these fails).
     for file in files {
         std::fs::write(temp_dir.join(file), b"test-jpeg-content")
             .expect("temp media file must be writable");

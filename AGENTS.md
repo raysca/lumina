@@ -391,8 +391,8 @@ A change is done only when all applicable items are true:
   implemented. Cloud photo-library accounts (Google/iCloud) and two-way sync are
   out of scope; do not describe them as supported.
 - Photos are converted to sRGB on macOS: wide gamut is clipped, not shown on
-  wide-colour displays. System-preview decodes (TIFF of 8 MB or less, fallbacks)
-  are unchecked, and non-macOS decodes are not converted.
+  wide-colour displays. The QuickLook fallback for RAW is unchecked, and
+  non-macOS decodes are not converted.
 - RAW is the embedded or system rendering, not a develop pipeline, and has not
   been checked on real files (`raw_fixture_matrix` needs
   `LUMINA_RAW_FIXTURES`); do not describe RAW size or colour as verified.

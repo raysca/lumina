@@ -490,7 +490,7 @@ fn webp_scanned_dims() {
     assert_scanned_dims("a.webp", PLAIN, (64, 32));
 }
 
-// HEIC: sips, then QuickLook.
+// HEIC: sips.
 
 #[test]
 fn heic_upright() {
@@ -527,7 +527,20 @@ fn heic_orientation_6_scanned_dims() {
     assert_scanned_dims("a.heic", ROTATED, (32, 64));
 }
 
-// TIFF: no image-crate codec, so QuickLook.
+// TIFF: no image-crate codec, so sips.
+
+#[test]
+fn tiff_srgb_color() {
+    let frame = decode_cell("a.tiff", PLAIN, SMALL_DECODE);
+    assert_srgb_red(&frame, "TIFF, sRGB");
+}
+
+#[test]
+fn tiff_p3_color() {
+    let spec = Spec { p3: true, ..PLAIN };
+    let frame = decode_cell("a.tiff", spec, SMALL_DECODE);
+    assert_srgb_red(&frame, "TIFF, Display P3");
+}
 
 #[test]
 fn tiff_upright() {

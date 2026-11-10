@@ -36,6 +36,15 @@ impl Drop for TempDir {
     }
 }
 
+/// A temp path no other decode uses: `prefix`, this process and a counter.
+/// The clock alone is not enough (macOS reads it in microseconds, and one
+/// item can be decoded twice at once: its grid thumbnail and viewer frame).
+fn temp_path(prefix: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
+}
+
 /// Native helpers (sips, QuickLook, AVFoundation) must never hang a decode worker.
 pub(crate) const NATIVE_TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -330,16 +339,17 @@ impl DecoderPipeline {
             .to_lowercase();
 
         let is_jpeg = ext == "jpg" || ext == "jpeg";
+        // The image crate's TIFF ICC read can come back empty (it did for a
+        // sips-written Display P3 TIFF), so an in-process decode would show
+        // a wide-gamut TIFF unconverted; sips colour matches (and applies
+        // the orientation).
+        let is_tiff = ext == "tif" || ext == "tiff";
 
         // For large non-JPEG files (> 8 MB), decode hardware-scaled via sips first to avoid full decode OOM
         // without reading the entire large file into a heap buffer first.
-        if !is_jpeg {
-            if let Ok(metadata) = fs::metadata(path) {
-                if metadata.len() > 8 * 1024 * 1024 {
-                    if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
-                        return Ok(frame);
-                    }
-                }
+        if is_tiff || (!is_jpeg && fs::metadata(path).is_ok_and(|m| m.len() > 8 * 1024 * 1024)) {
+            if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+                return Ok(frame);
             }
         }
 
@@ -470,11 +480,7 @@ impl DecoderPipeline {
     /// matched to sRGB (frames and the cache hold sRGB; untagged and sRGB
     /// sources come back unchanged).
     pub fn decode_via_sips(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let temp_out = std::env::temp_dir().join(format!("lumina_sips_{}_{}.png", id.0, nanos));
+        let temp_out = temp_path(&format!("lumina_sips_{}", id.0)).with_extension("png");
         let _guard = TempFile(temp_out.clone());
 
         let status = run_with_timeout(
@@ -513,14 +519,11 @@ impl DecoderPipeline {
         crate::video_frame::decode(id, path, target_size, NATIVE_TOOL_TIMEOUT)
     }
 
-    /// QuickLook's thumbnail of `path`, for images the decoders above cannot
-    /// read. (Videos go through [`Self::decode_video`]: qlmanage hung on some.)
+    /// QuickLook's thumbnail of `path`, for RAW files sips cannot read.
+    /// qlmanage hangs on a file it cannot read, so each failure costs the
+    /// tool timeout; images and videos never come here.
     fn decode_via_quicklook(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let temp_dir = std::env::temp_dir().join(format!("lumina_thumb_{}_{}", id.0, nanos));
+        let temp_dir = temp_path(&format!("lumina_thumb_{}", id.0));
         let _guard = TempDir::new(temp_dir.clone());
         let _ = fs::create_dir_all(&temp_dir);
 
@@ -572,18 +575,22 @@ impl DecoderPipeline {
             .to_lowercase();
 
         match media_type {
+            // Every scanned image format is one ImageIO reads, so sips covers
+            // what QuickLook would; and sips fails fast on a broken file,
+            // where qlmanage hangs until the tool timeout.
             MediaType::Image => {
-                // HEIC/HEIF formats lack pure-Rust decoding in image crate; use native sips ImageIO hardware decode first
+                // No pure-Rust HEIC/HEIF decoder: ImageIO through sips.
                 if ext == "heic" || ext == "heif" {
-                    return Self::decode_via_sips(id, path, target_size)
-                        .or_else(|_| Self::decode_via_quicklook(id, path, target_size));
+                    return Self::decode_via_sips(id, path, target_size);
                 }
                 Self::decode_image(id, path, target_size)
-                    .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
+                    .or_else(|_| Self::decode_via_sips(id, path, target_size))
             }
             MediaType::Video => Self::decode_video(id, path, target_size),
             MediaType::Raw => {
-                // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode
+                // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode.
+                // QuickLook stays as the fallback: RAW is unchecked on real
+                // files, and it may render cameras sips does not.
                 Self::decode_via_sips(id, path, target_size)
                     .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
             }
@@ -831,6 +838,84 @@ pub(crate) mod tests {
             !left,
             "an unfinished decode's temp dir must not outlive the process"
         );
+    }
+
+    /// Regression: an unreadable image fails in milliseconds. QuickLook hangs
+    /// on such files, so its fallback held a decode worker for the whole tool
+    /// timeout per broken file.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn unreadable_image_fails_fast() {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_unreadable_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _guard = TempDir::new(dir.clone());
+        fs::create_dir_all(&dir).expect("temp dir");
+        for name in ["broken.jpg", "broken.heic", "broken.tiff"] {
+            let path = dir.join(name);
+            fs::write(&path, b"test-jpeg-content").expect("fixture writes");
+            let started = Instant::now();
+            let decoded = DecoderPipeline::decode_media(MediaId(1), MediaType::Image, &path, 64);
+            let took = started.elapsed();
+            assert!(decoded.is_err(), "{name}: fake bytes are not an image");
+            assert!(
+                took < Duration::from_secs(3),
+                "{name}: an unreadable image must fail fast, not wait out a tool timeout: {took:?}"
+            );
+        }
+    }
+
+    /// Regression: two sips decodes of one item at once (a grid thumbnail and
+    /// the viewer frame) must not share a temp file. The name held only the
+    /// id and the clock, which macOS reads in microseconds, so one decode
+    /// could delete or overwrite the other's output.
+    #[test]
+    fn temp_paths_never_repeat() {
+        assert_ne!(
+            temp_path("x"),
+            temp_path("x"),
+            "two decodes of one item must not share a temp file"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn concurrent_sips_decodes_of_one_item_all_succeed() {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_sips_race_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _guard = TempDir::new(dir.clone());
+        fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("a.png");
+        image::RgbImage::from_pixel(16, 16, image::Rgb([200, 60, 40]))
+            .save(&path)
+            .expect("fixture writes");
+        let failures: usize = (0..16)
+            .map(|_| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    (0..4)
+                        .filter(|_| {
+                            DecoderPipeline::decode_via_sips(MediaId(1), &path, 16).is_err()
+                        })
+                        .count()
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|handle| handle.join().expect("decode thread"))
+            .sum();
+        assert_eq!(failures, 0, "every concurrent decode of one item succeeds");
     }
 
     #[cfg(unix)]

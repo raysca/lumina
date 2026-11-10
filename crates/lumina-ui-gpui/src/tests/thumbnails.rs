@@ -6,7 +6,9 @@
 //! failure through `on_thumbnail_result` (the decode callback's body) and
 //! count requests with `THUMB_REQUESTS`.
 
-use super::ui_automation::{focus_app, keystrokes, leak, render_ui, seed_library_undecodable};
+use super::ui_automation::{
+    focus_app, keystrokes, leak, render_ui, seed_library, seed_library_undecodable,
+};
 use crate::app::command_palette::CommandId;
 use crate::app::state::{on_thumbnail_result, THUMB_REQUESTS};
 use crate::app::types::UiMessage;
@@ -193,11 +195,14 @@ fn conversion_failure_is_marked() {
 
 #[core::prelude::v1::test]
 fn rescan_clears_failures() {
-    let (dir, engine) = seed_library_undecodable("thumb_rescan", 1);
+    let (dir, engine) = seed_library("thumb_rescan", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
 
+    // A real photo, so the retried decode succeeds rather than failing
+    // again before the assertion.
+    assert!(is_failed(&view, vcx, id), "starts failed");
     keystrokes(vcx, "secondary-r");
     assert!(!is_failed(&view, vcx, id), "⌘R retries failed thumbnails");
 
@@ -244,7 +249,15 @@ fn failed_card_keeps_card_size() {
     let items = engine.get_item_slice(0..2);
     let (failed, pending) = (items[0].id, items[1].id);
     let mut cx = crate::tests::TestApp::single();
-    let (_view, vcx) = app_with_failed(&mut cx, engine, &[failed]);
+    // The second card is still decoding (its decode claimed before the first
+    // draw); the first has failed. Either way the first ends failed: its own
+    // decode of the fake file fails too.
+    let (view, vcx) = super::ui_automation::app_with_pending(&mut cx, engine, &[pending]);
+    view.update(vcx, |app, _| {
+        let tx = app.ui_tx.clone();
+        fail(app.grid_state.as_ref().unwrap(), &tx, failed);
+    });
+    render_ui(vcx);
 
     let failed_bounds = vcx
         .debug_bounds(leak(format!("media-card-failed-{}", failed.0)))
