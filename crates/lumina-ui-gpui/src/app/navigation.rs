@@ -43,6 +43,9 @@ impl LuminaApp {
     }
 
     pub fn navigate_back(&mut self, cx: &mut Context<Self>) {
+        if self.compare_holds_view() {
+            return;
+        }
         self.navigation_history
             .sync_pending(self.navigation_snapshot());
         let Some(snapshot) = self.navigation_history.go_back() else {
@@ -55,6 +58,9 @@ impl LuminaApp {
     /// Redoes a Back. Syncing first means a destination reached since the
     /// Back (a typed search, say) drops the Forward entries, like a browser.
     pub fn navigate_forward(&mut self, cx: &mut Context<Self>) {
+        if self.compare_holds_view() {
+            return;
+        }
         self.navigation_history
             .sync_pending(self.navigation_snapshot());
         let Some(snapshot) = self.navigation_history.go_forward() else {

@@ -77,6 +77,8 @@ impl LuminaApp {
         let Some(item) = self.video.item.clone() else {
             return;
         };
+        // Compare shows other items: the viewer must not open over it.
+        self.close_compare(cx);
         // Similar shots holds no selection: show the video from Exact copies.
         if self.similar_shots_shown() {
             self.set_duplicates_tab(crate::app::stacks::DuplicatesTab::Exact, cx);

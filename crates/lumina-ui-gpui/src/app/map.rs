@@ -325,7 +325,7 @@ impl LuminaApp {
     /// under it (the palette and View > Show Map both check this).
     pub(crate) fn map_blocked(&self) -> bool {
         self.grid_state.is_none()
-            || self.compare.is_some()
+            || self.compare_holds_view()
             || self.slideshow.is_some()
             || self.edits.session.is_some()
     }
@@ -334,7 +334,8 @@ impl LuminaApp {
     /// map holds no selection, so nothing acts on hidden grid items.
     /// Showing it reads the points again (after a failed read, too).
     pub(crate) fn show_map(&mut self, cx: &mut Context<Self>) {
-        if self.map_blocked() {
+        // Not part of `map_blocked`: the palette asks that while it is open.
+        if self.map_blocked() || self.import_blocked_by_modal() {
             return;
         }
         if self.is_fullscreen_viewer {

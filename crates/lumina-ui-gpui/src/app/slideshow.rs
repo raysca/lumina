@@ -41,7 +41,13 @@ pub(crate) struct SlideshowState {
 impl LuminaApp {
     /// ⌥⌘S, View > Slideshow, ⌘K Slideshow.
     pub fn start_slideshow(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.slideshow.is_some() || self.compare.is_some() || self.grid_state.is_none() {
+        // Under a dialog or the palette (the menu bar stays reachable), its
+        // keys would act on the slides.
+        if self.slideshow.is_some()
+            || self.compare_holds_view()
+            || self.grid_state.is_none()
+            || self.import_blocked_by_modal()
+        {
             return;
         }
         // Similar shots draws stacks, not the view's items: a slideshow

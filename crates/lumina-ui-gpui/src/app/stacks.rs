@@ -102,6 +102,9 @@ impl LuminaApp {
 
     /// Palette "Show Exact Copies" / "Show Similar Shots", from anywhere.
     pub(crate) fn show_duplicates_tab(&mut self, tab: DuplicatesTab, cx: &mut Context<Self>) {
+        if self.compare_holds_view() {
+            return;
+        }
         if self.selection != AlbumSelection::Duplicates {
             self.select_album(AlbumSelection::Duplicates, cx);
         }

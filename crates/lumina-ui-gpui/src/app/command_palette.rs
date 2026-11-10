@@ -993,8 +993,8 @@ impl LuminaApp {
     fn command_applies(&self, id: CommandId) -> bool {
         match id {
             CommandId::RetryError => self.error_retry.is_some(),
-            CommandId::Back => self.can_navigate_back(),
-            CommandId::Forward => self.can_navigate_forward(),
+            CommandId::Back => self.can_navigate_back() && !self.compare_holds_view(),
+            CommandId::Forward => self.can_navigate_forward() && !self.compare_holds_view(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
             CommandId::SaveSearch => !self.search_query.trim().is_empty(),
@@ -1024,14 +1024,18 @@ impl LuminaApp {
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
-            CommandId::ShowExactCopies | CommandId::ShowSimilarShots => self.grid_state.is_some(),
+            CommandId::ShowExactCopies | CommandId::ShowSimilarShots => {
+                self.grid_state.is_some() && !self.compare_holds_view()
+            }
             CommandId::ShowMap => !self.map_blocked() && !self.map_shown(),
             CommandId::ShowGrid => self.map_shown(),
             CommandId::DeleteRejected => {
-                self.grid_state.is_some() && self.view_query().reject_scope().is_some()
+                self.grid_state.is_some()
+                    && !self.compare_holds_view()
+                    && self.view_query().reject_scope().is_some()
             }
             CommandId::Compare => self.grid_state.is_some() && !self.is_fullscreen_viewer,
-            CommandId::Slideshow => self.grid_state.is_some() && self.compare.is_none(),
+            CommandId::Slideshow => self.grid_state.is_some() && !self.compare_holds_view(),
             CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
             CommandId::ExportSelection | CommandId::ExportJpeg => self.jobs.export.is_none(),

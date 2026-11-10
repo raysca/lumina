@@ -506,6 +506,9 @@ impl Render for LuminaApp {
         // are disabled.
         let slideshow = self.slideshow.is_some();
         let presenting = (self.compare.is_some() && !is_fullscreen_viewer) || slideshow;
+        // The viewer opened from compare, too: these would play, move or
+        // trash the view behind compare (the palette leaves them out).
+        let holds_view = self.compare_holds_view();
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
             cx,
@@ -585,26 +588,11 @@ impl Render for LuminaApp {
                     #[cfg(not(target_os = "macos"))]
                     let _ = (this, cx);
                 }))
-                .on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
-                    this.delete_rejected(cx);
-                }))
                 .on_action(cx.listener(|this, _: &Compare, _w, cx| {
                     this.open_compare(cx);
                 }))
-                .on_action(cx.listener(|this, _: &Slideshow, window, cx| {
-                    this.start_slideshow(window, cx);
-                }))
-                .on_action(cx.listener(|this, _: &ShowMap, _w, cx| {
-                    this.show_map(cx);
-                }))
                 .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
                     this.import_smart_album_rules(cx);
-                }))
-                .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
-                    this.navigate_back(cx);
-                }))
-                .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
-                    this.navigate_forward(cx);
                 }))
                 // The editor opens the file without the draft's edits.
                 .on_action(cx.listener(|this, _: &EditInExternalEditor, _w, cx| {
@@ -615,6 +603,23 @@ impl Render for LuminaApp {
                         this.edit_selected_externally(true, cx);
                     },
                 ))
+            })
+            .when(!editing && !presenting && !holds_view, |root| {
+                root.on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
+                    this.delete_rejected(cx);
+                }))
+                .on_action(cx.listener(|this, _: &Slideshow, window, cx| {
+                    this.start_slideshow(window, cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowMap, _w, cx| {
+                    this.show_map(cx);
+                }))
+                .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
+                    this.navigate_back(cx);
+                }))
+                .on_action(cx.listener(|this, _: &GoForward, _w, cx| {
+                    this.navigate_forward(cx);
+                }))
             })
             .when(!presenting, |root| {
                 root.on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {

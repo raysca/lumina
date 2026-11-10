@@ -192,6 +192,9 @@ impl LuminaApp {
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
+        if self.compare_holds_view() {
+            return;
+        }
         // ↵ meant for another dialog must never reach a Delete dialog.
         if self.import_blocked_by_modal() {
             self.show_toast(crate::i18n::t("album.close_dialog_first"), cx);

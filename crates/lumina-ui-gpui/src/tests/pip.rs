@@ -367,6 +367,41 @@ fn expand_moves_position_based_selection_to_the_pip_video() {
     });
 }
 
+/// Expand leaves what holds no PiP video (Similar shots, the map), and so
+/// compare: the viewer must not open over compare on an item it does not
+/// show, with Esc then returning to compare.
+#[core::prelude::v1::test]
+fn expand_closes_compare_and_shows_the_pip_video() {
+    let lib = pip_library("expand_compare");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+
+    open_pip_for(&view, vcx, &lib.video_a);
+    click(vcx, card(&lib.photo));
+    keystrokes(vcx, "secondary-a");
+    keystrokes(vcx, "c");
+    assert!(
+        view.update(vcx, |app, _| app.compare.is_some()),
+        "C opens compare while PiP plays"
+    );
+
+    view.update(vcx, |app, cx| app.expand_pip_to_viewer(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.compare.is_none(), "expand closes compare");
+        assert_eq!(
+            app.selected_item.as_ref().map(|i| i.id),
+            Some(lib.video_a.id),
+            "the viewer shows the PiP video"
+        );
+    });
+    keystrokes(vcx, "escape");
+    assert!(
+        vcx.debug_bounds("compare-view").is_none(),
+        "Esc does not return to a compare the video was never part of"
+    );
+}
+
 // Needs a real player backend; other platforms use the dummy player.
 #[cfg(target_os = "macos")]
 #[core::prelude::v1::test]

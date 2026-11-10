@@ -90,7 +90,9 @@ impl LuminaApp {
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
-        if self.compare.is_some() || self.is_fullscreen_viewer {
+        // Under a dialog or the palette (the menu bar stays reachable), its
+        // keys would act on compare.
+        if self.compare.is_some() || self.is_fullscreen_viewer || self.import_blocked_by_modal() {
             return;
         }
         // Counted before any row is read: ⌘A on 100k items must not fetch.
@@ -132,6 +134,14 @@ impl LuminaApp {
             moves_seen: self.undo.moves,
         });
         cx.notify();
+    }
+
+    /// Compare is open, shown or under the viewer opened from it. What would
+    /// play, move or trash the view behind it (Back/Forward, Slideshow, Show
+    /// Map, Similar shots, Delete Rejected…) is refused, and the menu bar and
+    /// the palette leave it out, so compare never sits on another view.
+    pub(crate) fn compare_holds_view(&self) -> bool {
+        self.compare.is_some()
     }
 
     /// Closes compare and evicts every texture it holds.

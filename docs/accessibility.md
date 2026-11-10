@@ -49,7 +49,13 @@ Lumina is designed to be usable without a mouse:
   `←`/`→` or `Tab`/`⇧Tab` focus a pane, `P`/`X`/`U` and `0`–`5` mark it, `⌫`
   takes it out (the file stays), `↵` opens it in the viewer (`Esc` returns),
   `+`/`-`/`Z`/`⌘0`–`⌘4` zoom every pane, `⌘Z`/`⇧⌘Z` undo or redo a flag or
-  rating, `Esc` closes. Other keys are absorbed. Roles: the view (group,
+  rating, `Esc` closes. Other keys are absorbed. While compare is open,
+  in the viewer opened from it too, Back/Forward (`⌘[`/`⌘]`, Go menu),
+  Slideshow, Show Map and Delete Rejected… are disabled in the menus, and
+  they and ⌘K Show Similar Shots / Exact Copies are left out of ⌘K, so the
+  view behind compare never changes; expanding PiP closes compare. Compare,
+  Slideshow and Show Map do not open from the menu bar while the ⌘K palette
+  or a dialog is open. Roles: the view (group,
   "Compare"), its close button (button), each pane (image, labelled with the
   item); not yet checked with VoiceOver.
 - **Similar shots**: ⌘K Show Similar Shots / Show Exact Copies switch the
