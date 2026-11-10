@@ -334,7 +334,8 @@ filter without memorizing syntax; tag and album edits are reversible.
 
 **Current**
 
-- Batch dock covers favorite, tags, trash, export and clear; inspector covers
+- Batch dock covers favorite, tags, trash, export, Share… (macOS) and clear;
+  inspector covers
   batch rating and color. No batch title, date, location, caption, keywords or
   metadata templates.
 - Mixed values are not shown; no apply-to-N confirmation.
@@ -342,8 +343,7 @@ filter without memorizing syntax; tag and album edits are reversible.
 - Culling: `P` / `X` / `U` and `0`–`5` flag or rate the selection in one
   undoable batch; Delete Rejected… (File, ⌘K) opens the Delete dialog on the
   open view's rejects.
-- Context menu lacks Share, Copy Image, Edit, Open in External Editor, Move,
-  Rename and curated-album add.
+- Context menu lacks Copy Image, Edit, Move, Rename and curated-album add.
 
 **Target**
 

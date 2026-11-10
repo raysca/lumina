@@ -162,6 +162,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
             ("⌫", "Remove the pane (keeps the file)"),
             ("Enter", "Open in viewer (Esc returns)"),
             ("+ / - / Z / ⌘0–⌘4", "Zoom every pane"),
+            ("⌘Z / ⇧⌘Z", "Undo / redo a flag or rating"),
             ("Esc", "Close compare"),
         ],
     ),

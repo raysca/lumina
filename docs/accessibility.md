@@ -45,6 +45,13 @@ Lumina is designed to be usable without a mouse:
   dialog on the open view's rejects (`↵` Move to Trash, `↑`/`↓` other
   choices, `Esc` cancels), or a toast says there are none. Flag badges are
   drawn, not yet announced to VoiceOver.
+- **Compare**: `C`, View > Compare or ⌘K Compare opens 2–9 selected items.
+  `←`/`→` or `Tab`/`⇧Tab` focus a pane, `P`/`X`/`U` and `0`–`5` mark it, `⌫`
+  takes it out (the file stays), `↵` opens it in the viewer (`Esc` returns),
+  `+`/`-`/`Z`/`⌘0`–`⌘4` zoom every pane, `⌘Z`/`⇧⌘Z` undo or redo a flag or
+  rating, `Esc` closes. Other keys are absorbed. Roles: the view (group,
+  "Compare"), its close button (button), each pane (image, labelled with the
+  item); not yet checked with VoiceOver.
 - **Similar shots**: ⌘K Show Similar Shots / Show Exact Copies switch the
   Duplicates tabs (from the viewer too, which then closes); a click on a
   tab does the same. On Similar shots `↑`/`↓` move the focused stack (drawn

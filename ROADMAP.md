@@ -60,9 +60,9 @@ minimal; no copy-into-library workflow or drag-and-drop import; tags are flat
 and there is no first-class Untagged view; albums are smart-only (no curated
 static albums); batch editing covers ratings/colors/tags/trash but not
 title/date/location/caption; video lacks resume, chapters, subtitle/audio track
-selection, and scrub previews; no map view (compare/survey, the
-slideshow and the offline map landed in plan 5 C1, C2 and C4; resume, scrub
-previews, chapters and audio tracks landed later too); no light
+selection, and scrub previews; no compare, slideshow or map view (these
+landed in plan 5 C1, C2 and C4; resume, scrub previews, chapters and audio
+tracks landed later too); no light
 theme; no on-device semantic search; Windows/Linux are planned but unsupported;
 VoiceOver has no GPUI element tree; no in-app update mechanism.
 
@@ -357,9 +357,9 @@ colour-label index (schema v15) keeps colour filters fast. Timeline buckets,
 sorting, grid density, viewer zoom/pan and keyboard navigation as before.
 Known limits: no value suggestions for cameras, lenses or cities; renaming a
 tag does not rewrite `tag:` inside a saved search; an older app build reads a
-saved search as an album with no rules (the whole library). No map or
-jump-to-date (compare/survey, the slideshow and the offline map came later, in
-plan 5 C1, C2 and C4).
+saved search as an album with no rules (the whole library). No
+jump-to-date. Compare/survey of 2–9 items, the slideshow, and an offline map
+under Places with `within:` box search shipped in plan 5 C1–C4.
 
 **Target:**
 
@@ -367,8 +367,10 @@ plan 5 C1, C2 and C4).
 - Search suggestions/autocomplete for cameras, lenses, cities, tags, and
   structured operators.
 - Quick filter chips for rating and color, not just favorite/video/raw/place.
-- Compare view (2-up and 4-up), synchronized zoom/pan.
-- Slideshow with interval, loop, and optional music-free presentation mode.
+- Compare view, synchronized zoom/pan (shipped: 2–9 items side by side, C /
+  View > Compare, plan 5 C1).
+- Slideshow with interval and loop (shipped: ⌥⌘S, 3/5/10 s, Loop, video
+  posters, plan 5 C2; no music).
 - Map view from GPS metadata on a bundled offline basemap (shipped: Places >
   Map, plan 5 C4; no network tiles).
 - Duplicate detection and burst stacks with a review UI (shipped: Duplicates >
