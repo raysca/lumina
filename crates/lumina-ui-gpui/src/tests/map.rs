@@ -591,8 +591,11 @@ fn map_frame_with_many_points() {
     );
     assert!(clusters > 100, "the points spread over many clusters");
     // Debug budgets only: the release numbers go in the commit body.
+    // Clustering runs on the background executor, so the UI never waits on
+    // it, and under a full parallel test run its wall time swings well past
+    // 1 s (~0.4 s alone). The budget catches a complexity blow-up, not load.
     assert!(
-        cluster_ms < 1000.0,
+        cluster_ms < 10_000.0,
         "clustering 100k points took {cluster_ms:.1} ms"
     );
     assert!(frame_ms < 1000.0, "a map frame took {frame_ms:.1} ms");
