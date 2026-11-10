@@ -774,3 +774,212 @@ fn failed_slideshow_setting_save_reverts_and_shows_the_banner() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// More rows than the slideshow holds by id.
+const LARGE: usize = crate::app::slideshow::BY_ID_LIMIT + 20;
+
+/// Selects all of a view larger than the by-id limit, focused on row 7.
+fn select_all_large(
+    view: &Entity<LuminaApp>,
+    vcx: &mut VisualTestContext,
+    ids: &[lumina_core::MediaId],
+) -> (std::collections::BTreeSet<usize>, Option<usize>) {
+    click(vcx, card(ids[7]));
+    keystrokes(vcx, "secondary-a");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_indices.len(), LARGE, "⌘A selects the view");
+        (app.selected_indices.clone(), app.selected_index)
+    })
+}
+
+fn rows_read() -> usize {
+    crate::app::active_view::ROWS_READ.with(std::cell::Cell::get)
+}
+
+/// ⌥⌘S and Esc after ⌘A on a large view read a bounded number of rows on
+/// the UI thread, not every selected row (twice).
+#[core::prelude::v1::test]
+fn large_selection_slideshow_reads_bounded_rows() {
+    let (dir, engine) = seed_library("slideshow_large_reads", LARGE);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let ids = ids(&view, vcx);
+    select_all_large(&view, vcx, &ids);
+
+    let before = rows_read();
+    keystrokes(vcx, "alt-secondary-s");
+    assert!(playing(&view, vcx));
+    keystrokes(vcx, "escape");
+    assert!(!playing(&view, vcx));
+    let read = rows_read() - before;
+    assert!(
+        read < 64,
+        "starting and ending a slideshow must not read every selected row \
+         on the UI thread: {read} rows read for {LARGE} selected"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A large selection comes back exactly after Esc when nothing moved.
+#[core::prelude::v1::test]
+fn large_selection_is_restored_after_esc() {
+    let (dir, engine) = seed_library("slideshow_large_restore", LARGE);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let ids = ids(&view, vcx);
+    let (indices, index) = select_all_large(&view, vcx, &ids);
+    let summary = view.update(vcx, |app, _| app.batch_summary.count);
+
+    keystrokes(vcx, "alt-secondary-s");
+    idle(vcx, INTERVAL + Duration::from_millis(100));
+    assert_eq!(shown(&view, vcx), Some(8), "the show moved on");
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.is_fullscreen_viewer, "Esc closes the viewer");
+        assert_eq!(app.selected_indices, indices, "every row is selected again");
+        assert_eq!(app.selected_index, index, "the focus comes back");
+        assert_eq!(
+            app.selected_item.as_ref().map(|item| item.id),
+            Some(ids[7]),
+            "the focused item is shown, not the last slide"
+        );
+        assert_eq!(app.selection_anchor, Some(7), "the anchor comes back");
+        assert_eq!(
+            app.batch_summary.count, summary,
+            "the batch summary describes the whole selection"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An outside write that changes the count during the show clears a large
+/// selection (never a wrong item), and the viewer still closes.
+#[core::prelude::v1::test]
+fn large_selection_is_cleared_when_rows_move() {
+    let (dir, engine) = seed_library("slideshow_large_moved", LARGE);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let ids = ids(&view, vcx);
+    select_all_large(&view, vcx, &ids);
+
+    keystrokes(vcx, "alt-secondary-s");
+    // Another writer (the watcher, a scan) removes a row above the focus.
+    engine.set_trashed(ids[0], true).unwrap();
+    view.update(vcx, |app, cx| app.refresh_active_view(cx));
+    vcx.run_until_parked();
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(app.slideshow.is_none(), "Esc ends the slideshow");
+        assert!(!app.is_fullscreen_viewer, "and closes the viewer");
+        assert!(!app.is_immersive_fullscreen, "and leaves immersive mode");
+        assert!(
+            app.selected_indices.is_empty()
+                && app.selected_index.is_none()
+                && app.selected_item.is_none(),
+            "a selection that may have moved is cleared, not put on other rows"
+        );
+    });
+    assert!(
+        !vcx.update(|window, _| window.is_fullscreen()),
+        "the window leaves full screen"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Selects `rows` with the focus on `focus`, as clicks would.
+fn select_rows(
+    view: &Entity<LuminaApp>,
+    vcx: &mut VisualTestContext,
+    rows: impl IntoIterator<Item = usize>,
+    focus: usize,
+) {
+    view.update(vcx, |app, cx| {
+        app.select_index(focus, cx);
+        app.selected_indices = rows.into_iter().collect();
+        app.update_batch_summary();
+    });
+    render_ui(vcx);
+}
+
+/// An outside write that reorders rows at the same count, leaving the
+/// focused row in place, still clears a large selection: its old positions
+/// now hold other items.
+#[core::prelude::v1::test]
+fn large_selection_is_cleared_when_rows_reorder_at_same_count() {
+    let (dir, engine) = seed_library("slideshow_large_reorder", LARGE);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, cx| {
+        app.set_sort(
+            lumina_core::SortField::Rating,
+            lumina_core::SortDirection::Descending,
+            cx,
+        )
+    });
+    render_ui(vcx);
+    let first = ids(&view, vcx);
+    engine.set_rating(first[0], 5).unwrap();
+    view.update(vcx, |app, cx| app.refresh_active_view(cx));
+    vcx.run_until_parked();
+    render_ui(vcx);
+    let rows = ids(&view, vcx);
+    assert_eq!(rows[0], first[0], "test premise: the 5 is the top row");
+    let selected = LARGE - 10;
+    select_rows(&view, vcx, 0..selected, 0);
+
+    keystrokes(vcx, "alt-secondary-s");
+    assert!(playing(&view, vcx));
+    // Another writer rates an unselected row: it moves to row 1, under the
+    // focus, and every row between shifts down by one. The count is the same.
+    let outsider = rows[LARGE - 5];
+    engine.set_rating(outsider, 4).unwrap();
+    view.update(vcx, |app, cx| app.refresh_active_view(cx));
+    vcx.run_until_parked();
+    assert_eq!(
+        ids(&view, vcx)[..2].to_vec(),
+        vec![rows[0], outsider],
+        "test premise: the rated row moved under the unmoved focus"
+    );
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.is_fullscreen_viewer, "Esc closes the viewer");
+        assert!(
+            !app.get_selected_ids().contains(&outsider),
+            "a row that was not selected must never come back selected"
+        );
+        assert!(
+            app.selected_indices.is_empty() && app.selected_item.is_none(),
+            "a selection the write may have moved is cleared"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Two picks far apart (a small count over a large span) read a bounded
+/// number of rows: the by-id re-find reads the whole span.
+#[core::prelude::v1::test]
+fn far_apart_picks_read_bounded_rows() {
+    let (dir, engine) = seed_library("slideshow_far_picks", LARGE);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    select_rows(&view, vcx, [0, LARGE - 1], 0);
+
+    let before = rows_read();
+    keystrokes(vcx, "alt-secondary-s");
+    assert!(playing(&view, vcx));
+    keystrokes(vcx, "escape");
+    let read = rows_read() - before;
+    assert!(
+        read < 64,
+        "a selection spanning the view must not read the span on the UI \
+         thread: {read} rows read"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices,
+            [0, LARGE - 1].into_iter().collect(),
+            "and the picks come back"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

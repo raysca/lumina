@@ -786,6 +786,11 @@ impl LuminaApp {
             date,
             location,
         };
+        self.sync_batch_inputs();
+    }
+
+    /// Shows the batch summary in the inspector fields not being edited.
+    pub(crate) fn sync_batch_inputs(&mut self) {
         if !self.caption.title_input_active {
             self.caption.title_input_buffer = batch_field_display(&self.batch_metadata.title);
         }
@@ -1293,6 +1298,13 @@ impl LuminaApp {
     }
 
     pub fn refresh_selected_tags(&mut self) {
+        let ids = self.get_selected_ids();
+        self.refresh_tags_for(ids);
+    }
+
+    /// [`Self::refresh_selected_tags`] for the selection's `ids`, already
+    /// known (no row reads).
+    pub(crate) fn refresh_tags_for(&mut self, ids: Vec<MediaId>) {
         self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
         let request = self.selected_tags_request;
         let Some(ref state) = self.grid_state else {
@@ -1300,7 +1312,6 @@ impl LuminaApp {
             self.selected_tag_counts = Vec::new();
             return;
         };
-        let ids = self.get_selected_ids();
         if ids.is_empty() {
             self.selected_item_tags = Vec::new();
             self.selected_tag_counts = Vec::new();

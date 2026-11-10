@@ -15,6 +15,12 @@ use lumina_core::{LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, System
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
+#[cfg(test)]
+thread_local! {
+    /// Rows asked of [`LuminaApp::navigation_rows`] on this test thread.
+    pub(crate) static ROWS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Which items the grid shows, in which order.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ViewKey {
@@ -292,6 +298,8 @@ impl LuminaApp {
     /// Items at `range` for keyboard navigation and selection; see
     /// [`Self::navigable`].
     pub(crate) fn navigation_rows(&self, range: Range<usize>) -> Vec<MediaItem> {
+        #[cfg(test)]
+        ROWS_READ.with(|n| n.set(n.get() + range.len()));
         match self.navigable() {
             Some(data) if ActiveView::covers(data, &range) => rows_in(data, &range),
             _ => self.get_active_slice(range),

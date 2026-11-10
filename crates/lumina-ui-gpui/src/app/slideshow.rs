@@ -9,18 +9,27 @@
 //! so no palette, dialog or mark key reaches the slide or the selection
 //! hidden behind it.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::selection_by_id::HeldSelection;
+use crate::app::state::BatchMetadataSummary;
+use crate::app::types::BatchSelectionSummary;
 use crate::app::LuminaApp;
 use crate::i18n::t;
 use crate::theme;
+use lumina_core::MediaItem;
 
 /// How long a slide fades in (skipped under Reduce Motion).
 const SLIDE_IN: Duration = Duration::from_millis(220);
+
+/// Selections spanning up to this many rows are held by id across the
+/// show (re-finding them reads the span); wider ones by position, so ⌥⌘S
+/// after ⌘A on a large view reads no rows.
+pub(crate) const BY_ID_LIMIT: usize = 500;
 
 /// A running slideshow; `None` on the app when there is none.
 pub(crate) struct SlideshowState {
@@ -30,12 +39,35 @@ pub(crate) struct SlideshowState {
     task: Option<Task<()>>,
     /// Bumped per slide, so each one gets its own fade.
     slide: u64,
-    /// The selection before the show, by id, put back by Esc and Back.
-    previous: HeldSelection,
+    /// The selection before the show, put back by Esc and Back.
+    previous: Previous,
     /// The view's row count when the show started.
     count: usize,
     /// The window the slideshow made full screen, if it did.
     fullscreen: Option<AnyWindowHandle>,
+}
+
+/// The selection before a show.
+enum Previous {
+    /// A span of at most [`BY_ID_LIMIT`] rows, re-found by id after rows
+    /// move.
+    ById(HeldSelection),
+    /// A wider span: by position, see [`LuminaApp::restore_positions`].
+    ByPosition(Box<HeldPositions>),
+}
+
+/// A large selection by position, with what was derived from it, so
+/// putting it back reads only the focused row.
+struct HeldPositions {
+    indices: BTreeSet<usize>,
+    anchor: Option<usize>,
+    /// The focused row and its item.
+    focus: Option<(usize, MediaItem)>,
+    summary: BatchSelectionSummary,
+    metadata: BatchMetadataSummary,
+    /// The catalog's revision at the start: any write since may have moved
+    /// rows.
+    revision: Option<u64>,
 }
 
 impl LuminaApp {
@@ -65,9 +97,31 @@ impl LuminaApp {
             self.show_toast(t("slideshow.empty"), cx);
             return;
         }
-        // ponytail: reads the selected rows once (all of them after ⌘A on a
-        // large view); a selection kept by id in core is the upgrade.
-        let previous = self.hold_selection(&self.get_selected_ids(), 0);
+        // Holding by id reads the selected span (at the start and at the
+        // end): fine for a short one, a stall after ⌘A on a large view, so
+        // wider ones are held by position.
+        let span = self
+            .selected_indices
+            .first()
+            .into_iter()
+            .chain(self.selected_indices.last())
+            .chain(self.selected_index.as_ref())
+            .fold(None, |range: Option<(usize, usize)>, &i| match range {
+                Some((lo, hi)) => Some((lo.min(i), hi.max(i))),
+                None => Some((i, i)),
+            });
+        let previous = if span.is_none_or(|(lo, hi)| hi - lo < BY_ID_LIMIT) {
+            Previous::ById(self.hold_selection(&self.get_selected_ids(), 0))
+        } else {
+            Previous::ByPosition(Box::new(HeldPositions {
+                indices: self.selected_indices.clone(),
+                anchor: self.selection_anchor,
+                focus: self.selected_index.zip(self.selected_item.clone()),
+                summary: self.batch_summary.clone(),
+                metadata: self.batch_metadata.clone(),
+                revision: self.grid_state.as_ref().map(|s| s.engine.data_revision()),
+            }))
+        };
         // PiP would take the slides' videos; the slideshow takes the screen.
         self.close_pip(cx);
         self.select_index(self.selected_index.filter(|&i| i < count).unwrap_or(0), cx);
@@ -114,14 +168,21 @@ impl LuminaApp {
     }
 
     /// Esc, Back, or an emptied view: leaves the slideshow and the viewer
-    /// and puts the selection back by id (cleared when none of it is left).
+    /// and puts the selection back: by id, or by position for a large one
+    /// (cleared when it cannot be put back on the same items).
     pub(crate) fn end_slideshow(&mut self, cx: &mut Context<Self>) {
         let Some(state) = self.drop_slideshow(cx) else {
             return;
         };
         self.close_viewer(cx);
-        let mut held = state.previous;
         let count = self.navigation_count();
+        let mut held = match state.previous {
+            Previous::ById(held) => held,
+            Previous::ByPosition(held) => {
+                self.restore_positions(*held, cx);
+                return;
+            }
+        };
         // The show writes nothing (its keys and menus are off), so only
         // another writer (watcher, scan) moved rows: one that added or
         // removed `k` rows moved the rest by at most `k`.
@@ -149,6 +210,40 @@ impl LuminaApp {
         }
         self.refresh_selected_tags();
         self.schedule_session_save(cx);
+    }
+
+    /// Puts a wide selection back at its positions when nothing wrote to
+    /// the catalog during the show and the focused row still holds the
+    /// focused item (one row read); otherwise clears it.
+    /// ponytail: a wide selection is cleared after any catalog write during
+    /// the show (a watcher event, a scan, the post-scan size backfill,
+    /// duplicate hashing), even one that moved no row. A
+    /// core position-of-id query, or a selection kept by id in core, is the
+    /// upgrade.
+    fn restore_positions(&mut self, held: HeldPositions, cx: &mut Context<Self>) {
+        let unwritten = held.revision.is_some()
+            && held.revision == self.grid_state.as_ref().map(|s| s.engine.data_revision());
+        let Some((index, item)) = held.focus.filter(|(index, item)| {
+            unwritten && self.navigation_item(*index).map(|row| row.id) == Some(item.id)
+        }) else {
+            self.clear_selection(cx);
+            return;
+        };
+        // The focused item alone first, so showing it reads no batch...
+        self.selected_indices = BTreeSet::from([index]);
+        self.selected_index = Some(index);
+        self.select_item_internal(item, cx);
+        // ...then the rest, with the summaries taken at the start (the rows
+        // are where they were).
+        self.selected_indices = held.indices;
+        self.selection_anchor = held.anchor;
+        self.batch_summary = held.summary;
+        self.batch_metadata = held.metadata;
+        self.sync_batch_inputs();
+        self.refresh_tags_for(self.batch_summary.ids.clone());
+        self.reveal_grid_selection();
+        self.schedule_session_save(cx);
+        cx.notify();
     }
 
     /// Discards the slideshow without touching the selection (the viewer
