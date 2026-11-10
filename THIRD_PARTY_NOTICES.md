@@ -35,6 +35,18 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
+## Map — Natural Earth
+
+`resources/map/land_110m.bin`, the offline map's land outline, is the
+1:110m land polygons (`ne_110m_land`) of [Natural Earth](https://www.naturalearthdata.com)
+release v5.1.2, converted without simplification to a compact binary by
+`scripts/build_world_basemap.py`, which checks the source file's pinned
+SHA-256. A maintainer runs the script by hand; the build and the app never
+download it, and the file is compiled into the app.
+
+Natural Earth is in the public domain; no permission is needed to use it.
+See <https://www.naturalearthdata.com/about/terms-of-use/>.
+
 ## Bundled helper — yt-dlp
 
 The release app bundle packages the standalone universal macOS build of

@@ -107,7 +107,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 10] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
     (
         "GENERAL",
         &[
@@ -175,6 +175,21 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 10] = [
                 "⌘K Show Similar Shots",
                 "This tab (⌘K Show Exact Copies: the other)",
             ),
+        ],
+    ),
+    (
+        "MAP (PLACES)",
+        &[
+            (
+                "⌘K Show Map / Show Grid",
+                "Places on the map / grid (View > Show Map)",
+            ),
+            ("Tab, → or ↓", "Focus the next place east"),
+            ("⇧Tab, ← or ↑", "Focus the previous place west"),
+            ("Enter", "Show the focused place's photos"),
+            ("⌘+ / ⌘-", "Zoom the map (keeps the focused place centred)"),
+            ("Drag", "Pan the map"),
+            ("Esc", "Back to the grid"),
         ],
     ),
     (
@@ -457,6 +472,7 @@ impl Render for LuminaApp {
         }
 
         self.refresh_active_view(cx);
+        self.refresh_map_points(cx);
         let total_count = self.displayed_count();
 
         let view_label: String = match &self.selection {
@@ -576,6 +592,9 @@ impl Render for LuminaApp {
                 }))
                 .on_action(cx.listener(|this, _: &Slideshow, window, cx| {
                     this.start_slideshow(window, cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowMap, _w, cx| {
+                    this.show_map(cx);
                 }))
                 .on_action(cx.listener(|this, _: &ImportSmartAlbumRules, _w, cx| {
                     this.import_smart_album_rules(cx);
@@ -705,6 +724,8 @@ impl Render for LuminaApp {
                                             total_count,
                                             cx,
                                         )
+                                    } else if self.map_shown() {
+                                        crate::views::map::render(self, cx)
                                     } else {
                                         self.render_browser_grid(total_count, cx).into_any_element()
                                     })

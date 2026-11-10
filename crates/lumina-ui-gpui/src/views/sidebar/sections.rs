@@ -479,6 +479,7 @@ pub(super) fn render_tags_section(
 
 fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) -> AnyElement {
     let is_active = this.selection == entry.selection;
+    let places = entry.key == "places";
     let selection = entry.selection;
     render_nav_item(
         entry.label,
@@ -489,7 +490,50 @@ fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) 
             nav::open_entry(this, &selection, cx);
         }),
     )
+    .when(places && is_active, |row| row.child(map_toggle(this, cx)))
     .into_any_element()
+}
+
+/// The Places row's Map switch: one stable label, "Map", toggled on while
+/// the map shows (filled). ⌘K Show Map / Show Grid and View > Show Map are
+/// the keyboard path.
+fn map_toggle(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let on_map = this.map_shown();
+    let label = crate::i18n::t("map.toggle_label");
+    let tooltip = crate::i18n::t(if on_map {
+        "command.show_grid"
+    } else {
+        "command.show_map"
+    });
+    div()
+        .id("map-toggle")
+        .debug_selector(|| "map-toggle".to_string())
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .aria_toggled(if on_map {
+            Toggled::True
+        } else {
+            Toggled::False
+        })
+        .tooltip(theme::tooltip_label(tooltip))
+        .flex_none()
+        .px_1p5()
+        .rounded(theme::RADIUS_SM)
+        .border_1()
+        .border_color(theme::selection_border())
+        .when(on_map, |t| {
+            t.bg(theme::accent()).text_color(theme::accent_fg())
+        })
+        .when(!on_map, |t| {
+            t.text_color(theme::selection_fg())
+                .hover(|s| s.bg(theme::selection_bg_hover()))
+        })
+        .text_xs()
+        .child(label)
+        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+            cx.stop_propagation();
+            this.toggle_map(cx);
+        }))
 }
 
 /// Label and icon colour of a sidebar row.
@@ -507,7 +551,7 @@ fn render_nav_item(
     count: usize,
     is_active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
+) -> Stateful<Div> {
     let label_text = label.to_string();
     let debug_label = label_text.clone();
     let icon_selector = format!("sidebar-nav-{label_text}-icon");

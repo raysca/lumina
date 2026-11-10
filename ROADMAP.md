@@ -60,8 +60,9 @@ minimal; no copy-into-library workflow or drag-and-drop import; tags are flat
 and there is no first-class Untagged view; albums are smart-only (no curated
 static albums); batch editing covers ratings/colors/tags/trash but not
 title/date/location/caption; video lacks resume, chapters, subtitle/audio track
-selection, and scrub previews; no map view (compare/survey and the
-slideshow landed in plan 5 C1 and C2); no light
+selection, and scrub previews; no map view (compare/survey, the
+slideshow and the offline map landed in plan 5 C1, C2 and C4; resume, scrub
+previews, chapters and audio tracks landed later too); no light
 theme; no on-device semantic search; Windows/Linux are planned but unsupported;
 VoiceOver has no GPUI element tree; no in-app update mechanism.
 
@@ -357,7 +358,8 @@ sorting, grid density, viewer zoom/pan and keyboard navigation as before.
 Known limits: no value suggestions for cameras, lenses or cities; renaming a
 tag does not rewrite `tag:` inside a saved search; an older app build reads a
 saved search as an album with no rules (the whole library). No map or
-jump-to-date (compare/survey and the slideshow came later, in plan 5 C1 and C2).
+jump-to-date (compare/survey, the slideshow and the offline map came later, in
+plan 5 C1, C2 and C4).
 
 **Target:**
 
@@ -367,7 +369,8 @@ jump-to-date (compare/survey and the slideshow came later, in plan 5 C1 and C2).
 - Quick filter chips for rating and color, not just favorite/video/raw/place.
 - Compare view (2-up and 4-up), synchronized zoom/pan.
 - Slideshow with interval, loop, and optional music-free presentation mode.
-- Map view using the existing offline geocoder and GPS metadata.
+- Map view from GPS metadata on a bundled offline basemap (shipped: Places >
+  Map, plan 5 C4; no network tiles).
 - Duplicate detection and burst stacks with a review UI (shipped: Duplicates >
   Similar shots, plan 5 D2).
 - Quick Look/Finder integration and drag-out to Finder.
@@ -605,7 +608,7 @@ credentials, and see no secrets in config, database, logs or diagnostics.
 | P1 | Mid | Private S3-compatible backup (encrypted, OS credentials) | 0.5 | User-owned bucket; no sync/browsing. |
 | P1 | Mid | Curated albums + smart-album polish | 0.6 | Shipped: curated albums (⌘N, ⇧⌘A picker, ⌫ in an album, undo), pin for albums and smart albums, Duplicate Smart Album, rule JSON export/import. Missing: covers, drag to album, smart-album preview of why an item matched. |
 | P1 | Mid | Culling: pick/reject flags, compare/survey | 0.6 | Keyboard-first culling. Shipped: pick/reject flags (schema v20), P/X/U and 0–5 in grid and viewer with auto-advance, `is:pick`/`is:reject`/`is:unflagged`, Show Picks / Show Rejected, Flag smart-album rule, Delete Rejected…, compare/survey of 2–9 items with shared zoom (C, View > Compare; plan 5 C1). |
-| P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Missing: map; slideshow music and transitions beyond a fade. |
+| P1 | Mid | Compare, slideshow and map | 0.6 | UX-3 presentation and geography. Shipped: compare/survey of 2–9 items (C1); slideshow (C2: ⌥⌘S, View > Slideshow, ⌘K; 3/5/10 s interval, Loop, Space/←/→/Esc, video posters, no fade under Reduce Motion). Map (C4: Places > Map toggle, ⌘K Show Map, View > Show Map; bundled Natural Earth land outline, no network; clusters with counts, zoom 1–6, drag, Tab/arrow focus, ↵ filters the grid with `within:`). Missing: slideshow music and transitions beyond a fade; scroll or pinch zoom on the map. |
 | P1 | Mid | Video tracks/chapters/loop range/trim | 0.6 | UX-3 after everyday scrubbing. Shipped: loop range (⌥I, ⌥O, ⌥X, ⌘K; per session, never saved); audio track menu and ⌘K rows (per session, never saved); chapter ticks and ⌥← / ⌥→. Missing: subtitles (deferred), remembering track choices, trim. |
 | P1 | Mid | Duplicate detection and stacks | 0.6 | Large-library cleanup. Shipped: exact-copy merge; Similar shots tab in Duplicates (plan 5 D1/D2) for RAW+JPEG pairs and bursts, with Keep picks / Reject all but the first (flags only, one undo; Delete Rejected… removes them), loading, empty and error states. Missing: near-duplicate (visual) matching, collapsing stacks in the grid. |
 | P1 | Mid | Share sheet and export presets | 0.6 | Distribution workflows. Shipped: Export Originals… and Export as JPEG… (2048 px, edits applied, no metadata; plan 5 D3); macOS share sheet for the selected originals from the File menu, ⌘K, the context menu and the batch dock (plan 5 D4). Missing: export cancel control. |

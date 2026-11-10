@@ -49,6 +49,7 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             MenuItem::action("Show Downloads", ToggleDownloads),
             MenuItem::action(crate::i18n::t("command.compare"), Compare),
             MenuItem::action(crate::i18n::t("command.slideshow"), Slideshow),
+            MenuItem::action(crate::i18n::t("command.show_map"), ShowMap),
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
         ]),

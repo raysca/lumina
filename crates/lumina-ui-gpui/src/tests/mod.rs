@@ -30,6 +30,7 @@ mod interaction;
 mod keyword_undo;
 mod keywords;
 mod legacy_catalog;
+mod map;
 mod missing;
 mod motion;
 mod multi_select;

@@ -28,6 +28,9 @@ pub enum CommandId {
     /// The Duplicates destination on its Exact copies / Similar shots tab.
     ShowExactCopies,
     ShowSimilarShots,
+    /// Places on the map / on the grid.
+    ShowMap,
+    ShowGrid,
     RetryError,
     Shortcuts,
     ToggleSidebar,
@@ -195,6 +198,8 @@ impl Command {
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
+            ShowMap => Icon::MapPin,
+            ShowGrid => Icon::Images,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
@@ -337,6 +342,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.show_similar_shots",
             shortcut: "",
             keywords: "duplicates similar shots stacks raw jpeg pairs bursts",
+        },
+        Command {
+            id: CommandId::ShowMap,
+            key: "command.show_map",
+            shortcut: "",
+            keywords: "map places location gps world where",
+        },
+        Command {
+            id: CommandId::ShowGrid,
+            key: "command.show_grid",
+            shortcut: "",
+            keywords: "grid places photos thumbnails map",
         },
         Command {
             id: CommandId::RetryError,
@@ -1008,6 +1025,8 @@ impl LuminaApp {
                 .is_some_and(|&n| n > 0),
             CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
             CommandId::ShowExactCopies | CommandId::ShowSimilarShots => self.grid_state.is_some(),
+            CommandId::ShowMap => !self.map_blocked() && !self.map_shown(),
+            CommandId::ShowGrid => self.map_shown(),
             CommandId::DeleteRejected => {
                 self.grid_state.is_some() && self.view_query().reject_scope().is_some()
             }
@@ -1325,6 +1344,8 @@ impl LuminaApp {
             CommandId::ShowSimilarShots => {
                 self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Similar, cx)
             }
+            CommandId::ShowMap => self.show_map(cx),
+            CommandId::ShowGrid => self.show_grid(cx),
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),
@@ -1354,6 +1375,9 @@ impl LuminaApp {
                 self.save_config();
                 cx.notify();
             }
+            // On the map they zoom the map, as ⌘= / ⌘- do.
+            CommandId::ZoomInGrid if self.map_shown() => self.zoom_map(1, cx),
+            CommandId::ZoomOutGrid if self.map_shown() => self.zoom_map(-1, cx),
             CommandId::ZoomInGrid => self.zoom_in_grid(cx),
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
             CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),

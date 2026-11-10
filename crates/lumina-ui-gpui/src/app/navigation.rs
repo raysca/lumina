@@ -301,8 +301,8 @@ impl LuminaApp {
     }
 
     pub fn select_index(&mut self, index: usize, cx: &mut Context<Self>) {
-        // Similar shots shows no selection, so it can hold none.
-        if self.similar_shots_shown() {
+        // Similar shots and the map show no selection, so they hold none.
+        if self.similar_shots_shown() || self.map_shown() {
             return;
         }
         let total_count = self.navigation_count();
@@ -442,7 +442,7 @@ impl LuminaApp {
     }
 
     pub(crate) fn select_item_internal(&mut self, item: MediaItem, cx: &mut Context<Self>) {
-        if self.similar_shots_shown() {
+        if self.similar_shots_shown() || self.map_shown() {
             self.clear_selection_fields();
             return;
         }
@@ -1073,7 +1073,7 @@ impl LuminaApp {
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
         let total = self.get_active_count();
-        if total == 0 || self.similar_shots_shown() {
+        if total == 0 || self.similar_shots_shown() || self.map_shown() {
             return;
         }
         self.selected_indices.clear();

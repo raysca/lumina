@@ -66,6 +66,15 @@ core handles cataloguing, decoding, and search.
   Slideshow Interval): `Space` pauses, `←`/`→` step, `Esc` ends it. Videos
   show their poster and do not play; it stops at the end unless ⌘K
   "Slideshow: Loop" is on.
+- **Map** — Places has a Map toggle in the sidebar (also ⌘K "Show
+  Map" / "Show Grid" and View > Show Map). The map is drawn offline from a
+  bundled world outline and never loads tiles or uses the network. Items
+  with a location gather in numbered circles; `Tab` or the arrows focus
+  them west to east, `Enter` (or a click) shows that place's items in the
+  grid, `⌘+`/`⌘-` zoom (six steps, keeping the focused place in the
+  middle as far as the world's edge allows), dragging pans, and `Esc`
+  returns to the grid. If the locations cannot be read, the banner's
+  Retry or showing the map again reads them again.
 - **Similar shots** — Duplicates has a second tab (⌘K "Show Similar Shots")
   listing RAW + JPEG pairs and bursts from one camera. Per stack, "Keep
   picks, reject the rest" (`Enter`) or "Reject all but the first" (`⇧Enter`,
@@ -381,7 +390,8 @@ docs/                Roadmap, system design, technical notes
 
 ## Third-party assets
 
-IBM Plex Sans/Mono fonts (SIL OFL 1.1) and Lucide icons (ISC) are bundled; see
+IBM Plex Sans/Mono fonts (SIL OFL 1.1), Lucide icons (ISC) and the Natural
+Earth 1:110m land outline (public domain, for the offline map) are bundled; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Dependency versions are pinned
 in Cargo.lock; each crate keeps its own license.
 

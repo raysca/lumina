@@ -73,6 +73,15 @@ Lumina is designed to be usable without a mouse:
   selection are off; `⌘,` (which pauses it) and `⌘Q` still work. The slide,
   the Paused label and the Back button set no AccessKit role, so VoiceOver
   does not announce them; the keys and the shortcut sheet are the path.
+- **Map**: ⌘K Show Map / Show Grid and View > Show Map switch Places
+  between the grid and the offline map; the Places row's Map toggle does
+  the same by mouse. On the map `Tab`, `→` or `↓` focus the next place
+  east and `⇧Tab`, `←` or `↑` the previous one west (a focused place near
+  the edge is brought to the middle), `Enter` shows its items in the grid
+  (Back returns to the map), `⌘+`/`⌘-` zoom with the focused place kept in
+  the middle as far as the world's edge allows, and `Esc` returns to the
+  grid. Keys typed in the palette or a
+  field stay there.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
@@ -200,6 +209,13 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   "Favorites · 22") and the toolbar's sidebar toggle (button, labelled
   "Hide Sidebar (⌃⌘S)" or "Show Sidebar (⌃⌘S)"). User smart-album and tag
   rows have no role yet; Untagged (under Smart Albums) does;
+- the map (group, labelled "Map of photo locations"; the land drawing is
+  decorative), each place (button, labelled e.g. "3 items near 35.0,
+  135.8"; focus is drawn as a ring), the zoom buttons (button, labelled "Zoom
+  In (⌘=)" / "Zoom Out (⌘-)"), the empty-state message and the read-error message (both status) and the
+  Places row's Map toggle (button, labelled "Map", toggled on while the
+  map shows). The places are laid out inside the
+  map's canvas, so whether VoiceOver reaches them is not known;
 - the Duplicates tabs (tab list; each tab a tab, labelled "Exact copies" or
   "Similar shots", selected when shown, with a tooltip), the Similar shots
   list (list, labelled "Similar shots"), each stack (list item, labelled

@@ -42,7 +42,8 @@ spaces. Every part must match (AND). The grammar lives in
 
 `within:lat1,lon1,lat2,lon2` finds items whose GPS position lies inside the
 box with corners (`lat1`, `lon1`) and (`lat2`, `lon2`), in decimal degrees
-(south and west are negative).
+(south and west are negative). On the map (Places > Map), ↵ on a place
+applies a `within:` box around it.
 
 - Edges are included: a photo exactly on the border matches.
 - The two latitudes can come in either order.

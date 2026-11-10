@@ -580,6 +580,8 @@ impl LuminaApp {
         self.set_viewer_image(None);
         self.selection = AlbumSelection::AllLibrary;
         self.stacks.reset();
+        // The map's points and clusters belong to the old library.
+        self.map = Default::default();
         // Album and media ids restart with each library: a dialog left open
         // would act on the new library's rows with the old ids (a Delete
         // could trash unrelated files), so every id-holding dialog closes.

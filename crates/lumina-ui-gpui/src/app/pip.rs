@@ -81,6 +81,10 @@ impl LuminaApp {
         if self.similar_shots_shown() {
             self.set_duplicates_tab(crate::app::stacks::DuplicatesTab::Exact, cx);
         }
+        // Nor does the map: show the video from the grid.
+        if self.map_shown() {
+            self.show_grid(cx);
+        }
         // `in_pip` stays set while selecting so the viewer sync leaves the
         // player running. Position-based selection must follow the item; when
         // the current view no longer contains it, nothing stays selected by

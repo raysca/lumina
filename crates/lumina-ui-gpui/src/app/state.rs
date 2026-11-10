@@ -497,6 +497,8 @@ pub struct LuminaApp {
     pub(crate) compare: Option<crate::app::present::CompareState>,
     /// The Duplicates destination's tab and its Similar shots list.
     pub(crate) stacks: crate::app::stacks::StacksState,
+    /// The offline map on Places (toggle, zoom, clusters, focus).
+    pub(crate) map: crate::app::map::MapState,
     /// The running slideshow; `None` when there is none.
     pub(crate) slideshow: Option<crate::app::slideshow::SlideshowState>,
     pub(crate) event_receiver_thread: Option<std::thread::JoinHandle<()>>,
@@ -687,6 +689,7 @@ impl LuminaApp {
             slideshow: None,
             event_receiver_thread: None,
             library_generation: 0,
+            map: Default::default(),
             active_view: Default::default(),
             selected_tags_request: 0,
         };

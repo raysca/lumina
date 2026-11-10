@@ -50,6 +50,10 @@ impl LuminaApp {
             self.show_toast(t("stacks.no_slideshow"), cx);
             return;
         }
+        // The map holds no selection: the show plays Places from the grid.
+        if self.map_shown() {
+            self.show_grid(cx);
+        }
         let count = self.navigation_count();
         if count == 0 {
             self.show_toast(t("slideshow.empty"), cx);

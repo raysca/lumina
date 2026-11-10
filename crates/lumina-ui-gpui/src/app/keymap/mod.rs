@@ -294,6 +294,12 @@ impl LuminaApp {
             return;
         }
 
+        // The map takes Tab/arrows/↵/Esc and ⌘= / ⌘- (which would otherwise
+        // resize the hidden grid) and absorbs the grid's keys.
+        if self.handle_map_key(keystroke, cx) {
+            return;
+        }
+
         // Enter/Return: Close viewer if open, or open selected item
         if key == "enter" || key == "return" {
             if self.is_fullscreen_viewer {

@@ -95,6 +95,9 @@ pub static PLEX_SANS_SEMIBOLD: &[u8] =
     include_bytes!("../../../resources/fonts/IBMPlexSans-SemiBold.otf");
 pub static PLEX_MONO_REGULAR: &[u8] =
     include_bytes!("../../../resources/fonts/IBMPlexMono-Regular.otf");
+/// Natural Earth 1:110m land (public domain), converted by
+/// `scripts/build_world_basemap.py`; parsed by `app::map::parse_basemap`.
+pub static LAND_110M: &[u8] = include_bytes!("../../../resources/map/land_110m.bin");
 
 #[derive(Clone, Default)]
 pub struct LuminaAssets;

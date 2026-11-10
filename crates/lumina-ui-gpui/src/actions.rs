@@ -29,6 +29,7 @@ actions!(
         ShareSelection,
         Compare,
         Slideshow,
+        ShowMap,
         GoBack,
         GoForward,
         RotateLeft,
