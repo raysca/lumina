@@ -4163,6 +4163,7 @@ dependencies = [
  "chrono",
  "dirs",
  "gpui-kit",
+ "gpui-pre-scheduler",
  "image",
  "log",
  "lru",

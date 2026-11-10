@@ -84,8 +84,28 @@ mod zoom_presets;
 pub(crate) struct TestApp(gpui::TestAppContext);
 
 impl TestApp {
+    /// `TestAppContext::single()` with task order kept FIFO.
+    ///
+    /// gpui-pre-scheduler 0.3.11 locks `state` then `rng` when a task is
+    /// scheduled with `randomize_order` on, but `block_until` with a timeout
+    /// (the shutdown in `quit`) locks `rng` then `state`. A decode worker
+    /// waking a task while a test quits then deadlocked both forever (seen
+    /// as a UI run stuck for minutes in `compare_close_drops_textures`).
+    /// With `randomize_order` off, scheduling never takes `rng`. The seed was
+    /// fixed at 0 anyway, so the order was never varied between runs.
     pub(crate) fn single() -> Self {
-        Self(gpui::TestAppContext::single())
+        let scheduler = std::sync::Arc::new(scheduler::TestScheduler::new(
+            scheduler::TestSchedulerConfig {
+                randomize_order: false,
+                // As `TestDispatcher::new` sets it.
+                timeout_ticks: 0..=1000,
+                ..Default::default()
+            },
+        ));
+        Self(gpui::TestAppContext::build(
+            gpui::TestDispatcher::from_scheduler(scheduler),
+            None,
+        ))
     }
 }
 

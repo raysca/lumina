@@ -44,6 +44,9 @@ cc = "1.0"
 [dev-dependencies]
 gpui = { package = "gpui-kit", version = "0.9.0", default-features = false, features = ["test-support"] }
 lumina-core = { path = "../lumina-core", features = ["test-support"] }
+# Already built by gpui (same pinned version, so no new crate): TestApp
+# configures its TestScheduler (see tests/mod.rs).
+scheduler = { package = "gpui-pre-scheduler", version = "=0.3.11" }
 # Builds catalogs in an old layout for upgrade tests; same spec as lumina-core.
 rusqlite = { version = "0.31", features = ["bundled"] }
 
