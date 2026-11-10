@@ -387,8 +387,16 @@ fn test_viewer_player_ux_and_navigation_controls() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
-    std::fs::write(temp_dir.join("photo1.jpg"), b"test-jpeg-content").unwrap();
-    std::fs::write(temp_dir.join("photo2.jpg"), b"test-jpeg-content").unwrap();
+    std::fs::write(
+        temp_dir.join("photo1.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .unwrap();
+    std::fs::write(
+        temp_dir.join("photo2.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .unwrap();
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
         temp_dir.join("catalog.db"),
@@ -678,8 +686,16 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
-    std::fs::write(temp_dir.join("photo1.jpg"), b"test-jpeg-content").unwrap();
-    std::fs::write(temp_dir.join("photo2.jpg"), b"test-jpeg-content").unwrap();
+    std::fs::write(
+        temp_dir.join("photo1.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .unwrap();
+    std::fs::write(
+        temp_dir.join("photo2.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .unwrap();
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
         temp_dir.join("catalog.db"),
@@ -1031,10 +1047,16 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
-    std::fs::write(temp_dir.join("photo1.jpg"), b"test-jpeg-content")
-        .expect("temp photo must be writable");
-    std::fs::write(temp_dir.join("photo2.jpg"), b"test-jpeg-content")
-        .expect("temp photo must be writable");
+    std::fs::write(
+        temp_dir.join("photo1.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .expect("temp photo must be writable");
+    std::fs::write(
+        temp_dir.join("photo2.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .expect("temp photo must be writable");
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
         temp_dir.join("catalog.db"),
@@ -1259,6 +1281,8 @@ fn rotation_test_library(
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
+    // Not images: the rotation tests check that a thumbnail is dropped, so
+    // no re-decode may land during the test.
     for file in files {
         std::fs::write(temp_dir.join(file), b"test-jpeg-content")
             .expect("temp media file must be writable");

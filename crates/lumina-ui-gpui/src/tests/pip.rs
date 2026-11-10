@@ -33,7 +33,11 @@ fn pip_library(prefix: &str) -> PipLibrary {
     let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clip.mp4");
     std::fs::copy(&clip, dir.join("video_a.mp4")).unwrap();
     std::fs::copy(&clip, dir.join("video_b.mp4")).unwrap();
-    std::fs::write(dir.join("photo_a.jpg"), b"test-jpeg-content").unwrap();
+    std::fs::write(
+        dir.join("photo_a.jpg"),
+        crate::tests::ui_automation::tiny_jpeg(),
+    )
+    .unwrap();
     let (engine, rx) =
         LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), Some(dir.join("cache")))
             .unwrap();

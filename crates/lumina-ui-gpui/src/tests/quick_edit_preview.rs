@@ -188,7 +188,7 @@ fn held_exposure_key_renders_at_most_twice() {
 
 #[core::prelude::v1::test]
 fn missing_preview_says_done_still_saves() {
-    let (dir, engine, photos, _) = edit_library("no_preview");
+    let (dir, engine, photos, _) = crate::tests::quick_edit::edit_library_undecodable("no_preview");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);

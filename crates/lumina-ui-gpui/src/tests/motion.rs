@@ -1,7 +1,9 @@
 //! Entrance motion: the touched mark pops, fresh thumbnails fade, and
 //! fading overlays stay fully usable while they animate.
 
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
+use crate::tests::ui_automation::{
+    app_with_library, click, keystrokes, render_ui, seed_library, seed_library_undecodable,
+};
 
 #[core::prelude::v1::test]
 fn clicking_an_inspector_star_pops_that_star_only() {
@@ -29,7 +31,7 @@ fn clicking_an_inspector_star_pops_that_star_only() {
 
 #[core::prelude::v1::test]
 fn only_a_just_decoded_thumbnail_fades_in() {
-    let (dir, engine) = seed_library("motion_thumb", 2);
+    let (dir, engine) = seed_library_undecodable("motion_thumb", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let (fresh, cached) = (lumina_core::MediaId(1), lumina_core::MediaId(2));

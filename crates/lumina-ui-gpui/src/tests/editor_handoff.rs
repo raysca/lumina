@@ -41,7 +41,7 @@ fn seed_library(prefix: &str, count: usize) -> (std::path::PathBuf, std::sync::A
     for i in 0..count {
         std::fs::write(
             temp_dir.join(format!("photo_{:02}.jpg", i)),
-            b"test-jpeg-content",
+            crate::tests::ui_automation::tiny_jpeg(),
         )
         .unwrap();
     }

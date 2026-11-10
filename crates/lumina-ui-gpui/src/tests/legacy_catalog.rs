@@ -22,7 +22,7 @@ fn legacy_library() -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     for name in ["photo_00.jpg", "photo_01.jpg"] {
-        std::fs::write(dir.join(name), b"test-jpeg-content").unwrap();
+        std::fs::write(dir.join(name), crate::tests::ui_automation::tiny_jpeg()).unwrap();
     }
     let db = dir.join("catalog.db");
     {

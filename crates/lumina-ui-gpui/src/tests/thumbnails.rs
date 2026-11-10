@@ -6,7 +6,7 @@
 //! failure through `on_thumbnail_result` (the decode callback's body) and
 //! count requests with `THUMB_REQUESTS`.
 
-use super::ui_automation::{focus_app, keystrokes, leak, render_ui, seed_library};
+use super::ui_automation::{focus_app, keystrokes, leak, render_ui, seed_library_undecodable};
 use crate::app::command_palette::CommandId;
 use crate::app::state::{on_thumbnail_result, THUMB_REQUESTS};
 use crate::app::types::UiMessage;
@@ -59,7 +59,7 @@ fn is_failed(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: MediaId)
 
 #[core::prelude::v1::test]
 fn failed_decode_is_marked_once_and_not_rerequested() {
-    let (dir, engine) = seed_library("thumb_failed", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_failed", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     reset_requests();
@@ -104,7 +104,7 @@ fn failed_decode_is_marked_once_and_not_rerequested() {
 
 #[core::prelude::v1::test]
 fn failure_callback_notifies() {
-    let (dir, engine) = seed_library("thumb_notify", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_notify", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
@@ -163,7 +163,7 @@ fn thumbnail_callback_marks_and_messages_on_none() {
 
 #[core::prelude::v1::test]
 fn conversion_failure_is_marked() {
-    let (dir, engine) = seed_library("thumb_convert", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_convert", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
@@ -193,7 +193,7 @@ fn conversion_failure_is_marked() {
 
 #[core::prelude::v1::test]
 fn rescan_clears_failures() {
-    let (dir, engine) = seed_library("thumb_rescan", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_rescan", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
@@ -217,7 +217,7 @@ fn rescan_clears_failures() {
 
 #[core::prelude::v1::test]
 fn reupserted_item_is_retried() {
-    let (dir, engine) = seed_library("thumb_reupsert", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_reupsert", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let id = item.id;
     let mut cx = crate::tests::TestApp::single();
@@ -240,7 +240,7 @@ fn reupserted_item_is_retried() {
 
 #[core::prelude::v1::test]
 fn failed_card_keeps_card_size() {
-    let (dir, engine) = seed_library("thumb_size", 2);
+    let (dir, engine) = seed_library_undecodable("thumb_size", 2);
     let items = engine.get_item_slice(0..2);
     let (failed, pending) = (items[0].id, items[1].id);
     let mut cx = crate::tests::TestApp::single();
@@ -262,8 +262,8 @@ fn failed_card_keeps_card_size() {
 
 #[core::prelude::v1::test]
 fn library_switch_starts_with_no_failures() {
-    let (dir, engine) = seed_library("thumb_switch", 1);
-    let (other, _) = seed_library("thumb_switch_other", 1);
+    let (dir, engine) = seed_library_undecodable("thumb_switch", 1);
+    let (other, _) = seed_library_undecodable("thumb_switch_other", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);

@@ -5,11 +5,11 @@ use lumina_core::ExportPreset;
 
 use crate::app::library::EXPORT_PICKS;
 use crate::app::types::UiMessage;
-use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+use crate::tests::ui_automation::{app_with_library, render_ui, seed_library_undecodable};
 
 #[core::prelude::v1::test]
 fn export_as_jpeg_uses_picked_folder() {
-    let (dir, engine) = seed_library("export_jpeg", 1);
+    let (dir, engine) = seed_library_undecodable("export_jpeg", 1);
     // The seeded file is a stand-in; the JPEG preset decodes, so make it real.
     let mut bytes = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut bytes)

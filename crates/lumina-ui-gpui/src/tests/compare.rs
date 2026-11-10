@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::app::present::COMPARE_DECODE_SIZES;
 use crate::tests::culling::{card, flags, ids, rating};
 use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, seed_library,
+    app_with_library, click, keystrokes, leak, render_ui, seed_library, seed_library_undecodable,
 };
 use crate::*;
 use lumina_core::{Flag, MediaId};
@@ -296,7 +296,7 @@ fn compare_needs_two_items() {
 
 #[core::prelude::v1::test]
 fn compare_close_drops_textures() {
-    let (dir, engine) = seed_library("compare_textures", 4);
+    let (dir, engine) = seed_library_undecodable("compare_textures", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);

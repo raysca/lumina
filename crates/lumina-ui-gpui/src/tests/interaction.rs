@@ -15,7 +15,7 @@ fn scanned_engine(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEng
     for i in 0..12 {
         std::fs::write(
             temp_dir.join(format!("photo_{:02}.jpg", i)),
-            b"test-jpeg-content",
+            crate::tests::ui_automation::tiny_jpeg(),
         )
         .unwrap();
     }

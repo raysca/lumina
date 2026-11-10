@@ -39,13 +39,19 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
         "shot_2.jpg",
         "shot_3.jpg",
     ];
+    // Real, distinct JPEGs decode in process; the RAW stays a placeholder.
     for (i, name) in names.iter().enumerate() {
-        std::fs::write(dir.join(name), format!("fixture-{i}")).unwrap();
+        let bytes = if name.ends_with(".jpg") {
+            crate::tests::ui_automation::shaded_jpeg(i as u8 * 40)
+        } else {
+            format!("fixture-{i}").into_bytes()
+        };
+        std::fs::write(dir.join(name), bytes).unwrap();
     }
     // An exact-copy pair with no camera (never a stack), so Exact copies
     // has items a hidden selection could take.
     for name in ["copy_a.jpg", "copy_b.jpg"] {
-        std::fs::write(dir.join(name), b"same-bytes").unwrap();
+        std::fs::write(dir.join(name), crate::tests::ui_automation::tiny_jpeg()).unwrap();
     }
     let engine = scanned(&dir);
     let all = engine.get_item_slice(0..100);

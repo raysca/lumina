@@ -35,12 +35,33 @@ pub(crate) fn scanned(dir: &std::path::Path) -> Arc<LuminaEngine> {
     engine
 }
 
-/// Three placeholder photos and a clip in a real catalog; returns the photo
+/// Three real photos and a placeholder clip in a real catalog; returns the photo
 /// ids in catalog order and the clip's id.
 pub(crate) fn edit_library(prefix: &str) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
+    edit_library_with(prefix, crate::tests::ui_automation::tiny_jpeg())
+}
+
+/// [`edit_library`] with photos that never decode during a test (see
+/// `seed_library_undecodable`).
+pub(crate) fn edit_library_undecodable(
+    prefix: &str,
+) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
+    edit_library_with(prefix, b"test-jpeg-content")
+}
+
+fn edit_library_with(
+    prefix: &str,
+    photo: &[u8],
+) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
     let dir = temp_library(prefix);
     for file in ["a.jpg", "b.jpg", "c.jpg", "clip.mp4"] {
-        std::fs::write(dir.join(file), b"test-jpeg-content").expect("temp media must be written");
+        // The clip is a placeholder either way.
+        let bytes: &[u8] = if file.ends_with(".jpg") {
+            photo
+        } else {
+            b"test-jpeg-content"
+        };
+        std::fs::write(dir.join(file), bytes).expect("temp media must be written");
     }
     let engine = scanned(&dir);
     let items = engine.get_item_slice(0..4);
@@ -224,7 +245,7 @@ fn is_marked_edited(
 
 #[core::prelude::v1::test]
 fn done_then_undo_restores_original_once() {
-    let (dir, engine, photos, _) = edit_library("done_undo");
+    let (dir, engine, photos, _) = edit_library_undecodable("done_undo");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);

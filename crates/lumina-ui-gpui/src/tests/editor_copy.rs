@@ -276,7 +276,11 @@ fn edit_copy_finishing_after_a_library_switch_leaves_the_new_library_alone() {
     // next id) names an unrelated photo here.
     let other_dir = crate::tests::quick_edit::temp_library("ext_switch_new");
     for i in 0..8 {
-        std::fs::write(other_dir.join(format!("n{i}.jpg")), b"test-jpeg-content").unwrap();
+        std::fs::write(
+            other_dir.join(format!("n{i}.jpg")),
+            crate::tests::ui_automation::tiny_jpeg(),
+        )
+        .unwrap();
     }
     let other = crate::tests::quick_edit::scanned(&other_dir);
     let next_id = MediaId(

@@ -20,7 +20,7 @@ fn test_e2e_tag_workflow() {
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
     let photo_path = temp_dir.join("photo1.jpg");
-    std::fs::write(&photo_path, b"test-jpeg-content").unwrap();
+    std::fs::write(&photo_path, crate::tests::ui_automation::tiny_jpeg()).unwrap();
 
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),

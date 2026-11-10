@@ -3,7 +3,7 @@
 
 use crate::tests::ui_automation::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
-    type_text,
+    seed_library_undecodable, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
 
@@ -492,7 +492,9 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
 
 #[core::prelude::v1::test]
 fn a_wide_thumbnail_never_widens_its_card() {
-    let (dir, engine) = seed_library("br_wide_thumb", 4);
+    // Undecodable: a real decode landing after the injected wide texture
+    // would replace it, and the test would pass on a square thumbnail.
+    let (dir, engine) = seed_library_undecodable("br_wide_thumb", 4);
     let items = engine.get_item_slice(0..4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);

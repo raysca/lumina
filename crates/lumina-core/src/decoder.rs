@@ -18,11 +18,21 @@ impl Drop for TempFile {
     }
 }
 
-/// RAII guard that removes a directory tree on drop.
+/// RAII guard that removes a directory tree on drop, or at process exit
+/// when its worker never gets to drop it (killed mid-decode by the exit).
 struct TempDir(std::path::PathBuf);
+impl TempDir {
+    /// Guards `path`; create the directory after this, so no exit between
+    /// the two can leave it behind.
+    fn new(path: std::path::PathBuf) -> Self {
+        live_children::add_dir(&path);
+        Self(path)
+    }
+}
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+        live_children::remove_dir(&self.0);
     }
 }
 
@@ -39,7 +49,16 @@ fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Resul
     let _reaper = live_children::track(child.id());
     let deadline = Instant::now() + timeout;
     loop {
-        match child.try_wait()? {
+        let polled = match child.try_wait() {
+            Ok(polled) => polled,
+            Err(err) => {
+                // Not knowing whether it runs is no reason to leave it running.
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(err.into());
+            }
+        };
+        match polled {
             Some(status) => return Ok(status),
             None if Instant::now() >= deadline => {
                 let _ = child.kill();
@@ -80,12 +99,15 @@ pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
     Some((value("pixelWidth:")?, value("pixelHeight:")?))
 }
 
-/// Kills still-running native tools when the process exits.
+/// Kills still-running native tools, and removes the temp dirs of unfinished
+/// decodes, when the process exits.
 ///
 /// The timeout above only fires while the waiting worker is alive. If the
 /// process exits mid-wait (app quit during a scan, a test finishing), the child
 /// is reparented to launchd and qlmanage, which never exits on a file it can't
-/// read, would leak forever. An `atexit` hook kills whatever is still tracked.
+/// read, would leak forever. An `atexit` hook kills whatever is still tracked
+/// and marks the process as exiting: other threads still run during exit,
+/// so a tool a worker starts after the hook is killed as it is tracked.
 /// Network downloads (curl, yt-dlp) run in their own process group and are
 /// tracked by group: the bundled yt-dlp is a PyInstaller launcher whose
 /// Python child (and ffmpeg) would survive a kill of the launcher alone.
@@ -93,44 +115,84 @@ pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
 #[cfg(unix)]
 pub(crate) mod live_children {
     use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
     use std::sync::{Mutex, Once};
 
-    /// Positive: one process. Negative: a whole process group.
-    static PIDS: Mutex<Option<HashSet<i32>>> = Mutex::new(None);
+    #[derive(Default)]
+    struct State {
+        /// Positive: one process. Negative: a whole process group.
+        pids: HashSet<i32>,
+        /// Temp dirs of decodes still running.
+        dirs: HashSet<PathBuf>,
+        /// The exit hook ran.
+        exiting: bool,
+    }
+
+    static STATE: Mutex<Option<State>> = Mutex::new(None);
     static HOOK: Once = Once::new();
+
+    fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
+        let mut state = STATE.lock().unwrap_or_else(|e| e.into_inner());
+        f(state.get_or_insert_with(State::default))
+    }
 
     extern "C" {
         fn atexit(callback: extern "C" fn()) -> i32;
         fn kill(pid: i32, signal: i32) -> i32;
     }
 
-    extern "C" fn kill_tracked() {
-        let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-        for &pid in pids.iter().flatten() {
-            // SAFETY: plain syscall on a pid we spawned and have not reaped.
-            unsafe { kill(pid, 9) };
-        }
+    pub(super) extern "C" fn kill_tracked() {
+        with_state(|state| {
+            state.exiting = true;
+            for &pid in &state.pids {
+                // SAFETY: plain syscall on a pid we spawned and have not reaped.
+                unsafe { kill(pid, 9) };
+            }
+            for dir in state.dirs.drain() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        });
     }
 
     pub(crate) struct Tracked(i32);
 
     impl Drop for Tracked {
         fn drop(&mut self) {
-            let mut pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-            pids.get_or_insert_with(HashSet::new).remove(&self.0);
+            with_state(|state| state.pids.remove(&self.0));
         }
     }
 
-    fn insert(id: i32) -> Tracked {
+    fn hook() {
         // SAFETY: registers a function with no captured state.
         HOOK.call_once(|| unsafe {
             atexit(kill_tracked);
         });
-        let mut pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-        pids.get_or_insert_with(HashSet::new).insert(id);
+    }
+
+    fn insert(id: i32) -> Tracked {
+        hook();
+        with_state(|state| {
+            state.pids.insert(id);
+            if state.exiting {
+                // SAFETY: as in `kill_tracked`.
+                unsafe { kill(id, 9) };
+            }
+        });
         Tracked(id)
     }
 
+    /// Removes `dir` at exit unless [`remove_dir`] is called first.
+    pub(crate) fn add_dir(dir: &Path) {
+        hook();
+        with_state(|state| state.dirs.insert(dir.to_path_buf()));
+    }
+
+    pub(crate) fn remove_dir(dir: &Path) {
+        with_state(|state| state.dirs.remove(dir));
+    }
+
+    /// ponytail: a process that finishes exiting between `spawn` and this
+    /// call leaves its tool running; tracking inside the spawn is the upgrade.
     pub(crate) fn track(pid: u32) -> Tracked {
         insert(pid as i32)
     }
@@ -162,15 +224,15 @@ pub(crate) mod live_children {
 
     #[cfg(test)]
     pub(super) fn is_tracked(pid: u32) -> bool {
-        let pids = PIDS.lock().unwrap_or_else(|e| e.into_inner());
-        pids.as_ref()
-            .is_some_and(|pids| pids.contains(&(pid as i32)))
+        with_state(|state| state.pids.contains(&(pid as i32)))
     }
 }
 
 #[cfg(not(unix))]
 pub(crate) mod live_children {
     pub(crate) fn track(_pid: u32) {}
+    pub(crate) fn add_dir(_dir: &std::path::Path) {}
+    pub(crate) fn remove_dir(_dir: &std::path::Path) {}
     pub(crate) fn track_group(_pid: u32) {}
     pub(crate) fn stop_group(child: &mut std::process::Child) {
         let _ = child.kill();
@@ -459,8 +521,8 @@ impl DecoderPipeline {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let temp_dir = std::env::temp_dir().join(format!("lumina_thumb_{}_{}", id.0, nanos));
+        let _guard = TempDir::new(temp_dir.clone());
         let _ = fs::create_dir_all(&temp_dir);
-        let _guard = TempDir(temp_dir.clone());
 
         let size_arg = target_size.max(256).to_string();
         let status = run_with_timeout(
@@ -684,6 +746,91 @@ pub(crate) mod tests {
                 pid.trim()
             );
         }
+    }
+
+    /// Re-runs the test binary on test `name` with `env` set, as a process
+    /// that exits (running its exit hook) instead of the shared test one.
+    #[cfg(unix)]
+    fn run_as_child(name: &str, env: (&str, &str)) -> ExitStatus {
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", name])
+            .env(env.0, env.1)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("re-run test binary")
+    }
+
+    /// Regression: a worker still decoding while the process exits can start
+    /// a tool after the exit hook killed the tracked ones; that late tool
+    /// must die too, not be reparented to launchd.
+    #[cfg(unix)]
+    #[test]
+    fn native_tool_started_after_the_exit_hook_is_killed() {
+        const CHILD_ENV: &str = "LUMINA_TOOL_AFTER_EXIT_HOOK";
+        if std::env::var_os(CHILD_ENV).is_some() {
+            // Separate process: the hook marks the whole process as exiting.
+            live_children::kill_tracked();
+            let mut child = Command::new("sleep")
+                .arg("30")
+                .spawn()
+                .expect("sleep spawns");
+            let _tracked = live_children::track(child.id());
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < deadline {
+                if let Ok(Some(_)) = child.try_wait() {
+                    std::process::exit(0);
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            std::process::exit(3);
+        }
+        let status = run_as_child(
+            "decoder::tests::native_tool_started_after_the_exit_hook_is_killed",
+            (CHILD_ENV, "1"),
+        );
+        assert!(
+            status.success(),
+            "a tool tracked after the exit hook ran must be killed at once: {status}"
+        );
+    }
+
+    /// Regression: a worker killed by the process exit mid-decode never drops
+    /// its temp dir guard; the exit hook removes the dir instead (thousands
+    /// of empty `lumina_thumb_*` dirs piled up per test run).
+    #[cfg(unix)]
+    #[test]
+    fn temp_dir_of_an_unfinished_decode_is_removed_at_exit() {
+        const CHILD_ENV: &str = "LUMINA_TEMP_DIR_AT_EXIT";
+        if let Some(dir) = std::env::var_os(CHILD_ENV) {
+            let dir = std::path::PathBuf::from(dir);
+            let guard = TempDir::new(dir.clone());
+            fs::create_dir_all(&dir).expect("temp dir");
+            // As a worker thread that never returns: the guard never drops.
+            std::mem::forget(guard);
+            std::process::exit(0);
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_exit_dir_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let status = run_as_child(
+            "decoder::tests::temp_dir_of_an_unfinished_decode_is_removed_at_exit",
+            (CHILD_ENV, dir.to_str().expect("utf-8 temp path")),
+        );
+        assert!(status.success(), "helper process must exit cleanly");
+        let left = dir.exists();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(
+            !left,
+            "an unfinished decode's temp dir must not outlive the process"
+        );
     }
 
     #[cfg(unix)]
@@ -953,7 +1100,7 @@ pub(crate) mod tests {
                 .unwrap_or(0)
         ));
         fs::create_dir_all(&dir).expect("temp dir");
-        let _guard = TempDir(dir.clone());
+        let _guard = TempDir::new(dir.clone());
         let decode = |name: &str, bytes: &[u8]| {
             let path = dir.join(name);
             fs::write(&path, bytes).expect("fixture writes");
@@ -1060,7 +1207,7 @@ pub(crate) mod tests {
                 .unwrap_or(0)
         ));
         fs::create_dir_all(&dir).expect("temp dir");
-        let _guard = TempDir(dir.clone());
+        let _guard = TempDir::new(dir.clone());
         for (name, png) in [
             ("untagged.png", encode(None)),
             ("srgb.png", encode(Some(srgb))),

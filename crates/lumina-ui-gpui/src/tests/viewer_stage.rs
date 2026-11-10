@@ -2,6 +2,7 @@
 
 use super::ui_automation::{
     app_with_library, click, focus_app, keystrokes, render_ui, right_click, seed_library,
+    seed_library_undecodable,
 };
 
 #[core::prelude::v1::test]
@@ -210,7 +211,7 @@ fn viewer_step_without_cache_keeps_stage_size() {
 
 #[core::prelude::v1::test]
 fn viewer_neighbour_ids_are_the_adjacent_items() {
-    let (dir, engine) = seed_library("viewer_neighbours", 6);
+    let (dir, engine) = seed_library_undecodable("viewer_neighbours", 6);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -306,7 +307,7 @@ fn viewer_on_failed_item_shows_failed_stage() {
 
 #[core::prelude::v1::test]
 fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
-    let (dir, engine) = seed_library("viewer_decode_failed", 2);
+    let (dir, engine) = seed_library_undecodable("viewer_decode_failed", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     let id = view.update(vcx, |app, cx| {

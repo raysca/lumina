@@ -9,9 +9,46 @@
 use crate::*;
 use lumina_core::{EngineEvent, LuminaEngine};
 
+/// A real 8×8 JPEG: seeded photos must decode in process. A fake one falls
+/// through to QuickLook, which hangs on it until the 10 s tool timeout.
+pub(crate) fn tiny_jpeg() -> &'static [u8] {
+    static BYTES: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    BYTES.get_or_init(|| shaded_jpeg(90))
+}
+
+/// A real 8×8 JPEG whose bytes differ per `shade` (not an exact copy).
+pub(crate) fn shaded_jpeg(shade: u8) -> Vec<u8> {
+    let image = image::RgbImage::from_pixel(8, 8, image::Rgb([shade, 120, 160]));
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+        .encode_image(&image)
+        .expect("an 8×8 JPEG encodes");
+    bytes
+}
+
+/// A library of `count` real JPEGs in a fresh temp dir, scanned.
 pub(crate) fn seed_library(
     prefix: &str,
     count: usize,
+) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+    seed_with(prefix, count, tiny_jpeg())
+}
+
+/// A library of files named `.jpg` that are not images: no size in the
+/// catalog, and their thumbnails never land during a test (the decoder
+/// falls back to QuickLook, which hangs on them until its timeout). Only for
+/// tests about cards and stages that have not decoded.
+pub(crate) fn seed_library_undecodable(
+    prefix: &str,
+    count: usize,
+) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+    seed_with(prefix, count, b"test-jpeg-content")
+}
+
+fn seed_with(
+    prefix: &str,
+    count: usize,
+    bytes: &[u8],
 ) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
     // The clock alone is not unique: tests start together and macOS reports
     // microseconds, so two could share a catalog ("database is locked").
@@ -27,11 +64,7 @@ pub(crate) fn seed_library(
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
     for i in 0..count {
-        std::fs::write(
-            temp_dir.join(format!("photo_{:02}.jpg", i)),
-            b"test-jpeg-content",
-        )
-        .unwrap();
+        std::fs::write(temp_dir.join(format!("photo_{:02}.jpg", i)), bytes).unwrap();
     }
     let (engine, rx) = LuminaEngine::open_with_paths(
         temp_dir.clone(),
@@ -440,7 +473,7 @@ fn ui_automation_tag_double_click_starts_rename() {
 
 #[core::prelude::v1::test]
 fn ui_automation_card_skeleton_selection_and_open() {
-    let (temp_dir, engine) = seed_library("card_states", 8);
+    let (temp_dir, engine) = seed_library_undecodable("card_states", 8);
     // Seed fixtures contain invalid JPEG bytes, which is exactly the
     // "texture not decoded yet" state the skeleton exists for.
     let first_id = engine.get_item_slice(0..1)[0].id.0;
@@ -563,7 +596,7 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
 
 #[core::prelude::v1::test]
 fn ui_automation_card_texture_replaces_skeleton() {
-    let (temp_dir, engine) = seed_library("card_reveal", 1);
+    let (temp_dir, engine) = seed_library_undecodable("card_reveal", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card_id = item.id.0;
     let photo = leak(format!("media-card-photo-{}", card_id));

@@ -1,7 +1,7 @@
 //! v3 Get Info window (FIXES §5): title bar, header, General, Camera,
 //! Location and Tags tabs, driven in a real floating-inspector window.
 
-use crate::tests::ui_automation::{click, keystrokes, leak, render_ui, seed_library};
+use crate::tests::ui_automation::{click, keystrokes, leak, render_ui, seed_library_undecodable};
 use crate::views::floating_inspector::FloatingInspectorView;
 use crate::LuminaApp;
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -16,7 +16,7 @@ fn get_info<'a>(
     Entity<LuminaApp>,
     &'a mut VisualTestContext,
 ) {
-    let (temp_dir, engine) = seed_library(prefix, 3);
+    let (temp_dir, engine) = seed_library_undecodable(prefix, 3);
     let (view, _) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let tx = cx.update(|cx| {
         view.update(cx, |app, cx| {
