@@ -37,6 +37,10 @@ pub(crate) const CARD_PADDING: f32 = 0.0;
 /// room above it.
 pub(crate) const CARD_ROW_GAP: f32 = 6.0;
 
+/// Space between the month band's (or the results head's) text and the
+/// first row's tiles (frame: 10).
+pub(crate) const BAND_TO_ROW: f32 = 10.0;
+
 /// Opacity of an unselected card while two or more cards are selected
 /// (selection mode, Design 07 `w4zpqh`).
 pub(crate) const UNSELECTED_CARD_OPACITY: f32 = 0.62;

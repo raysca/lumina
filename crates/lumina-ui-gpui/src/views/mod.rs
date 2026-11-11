@@ -21,6 +21,7 @@ pub mod network_import_dialog;
 pub mod onboarding;
 pub mod page_header;
 pub mod preferences;
+pub mod results_head;
 pub mod search_bar;
 pub mod search_controls;
 pub mod search_header;

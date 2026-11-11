@@ -27,11 +27,11 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
 /// The sort field/direction card, 210 wide.
 pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
     let current = app.sort;
-    let fields: [(&str, SortField, &'static str); 4] = [
-        ("Date taken", SortField::DateTaken, "sort-field-date"),
-        ("Name", SortField::FileName, "sort-field-name"),
-        ("File size", SortField::FileSize, "sort-field-size"),
-        ("Rating", SortField::Rating, "sort-field-rating"),
+    let fields: [(SortField, &'static str); 4] = [
+        (SortField::DateTaken, "sort-field-date"),
+        (SortField::FileName, "sort-field-name"),
+        (SortField::FileSize, "sort-field-size"),
+        (SortField::Rating, "sort-field-rating"),
     ];
     div()
         .debug_selector(|| "sort-menu".to_string())
@@ -47,7 +47,8 @@ pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
         .flex_col()
         .gap_1()
         .child(theme::section_label("SORT BY").px_2().py_1())
-        .children(fields.into_iter().map(|(label, field, selector)| {
+        .children(fields.into_iter().map(|(field, selector)| {
+            let label = crate::app::sort::sort_field_name(field);
             let selected = current.field == field;
             div()
                 .id(selector)
@@ -67,7 +68,7 @@ pub fn sort_menu_card(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                     theme::t1()
                 })
                 .hover(|s| s.bg(theme::bg_3()))
-                .child(label.to_string())
+                .child(label)
                 .child(if selected { "✓" } else { "" })
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.set_sort_field(field, cx);

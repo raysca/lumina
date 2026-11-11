@@ -826,3 +826,192 @@ fn arrow_to_a_card_deselects_the_chip() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// Task 6: the Photos section head.
+
+#[core::prelude::v1::test]
+fn results_head_shows_count_and_opens_sort() {
+    let (dir, engine) = seed_library("search_results_head", 3);
+    let video = engine.get_item_slice(0..1)[0].id.0 as i64;
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).expect("catalog opens");
+    conn.execute(
+        "UPDATE media_items SET media_type = 'video' WHERE id = ?1",
+        [video],
+    )
+    .unwrap();
+    drop(conn);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    set_query(&view, vcx, "photo");
+    render_ui(vcx);
+
+    for selector in [
+        "search-results-title",
+        "search-results-count",
+        "search-results-sort",
+    ] {
+        bounds(vcx, selector);
+    }
+    assert!(
+        vcx.debug_bounds("grid-month-header").is_none(),
+        "the head replaces the month band while the search header shows"
+    );
+    let header = bounds(vcx, "search-header");
+    let head = bounds(vcx, "search-results-head");
+    assert!(
+        head.top() >= header.bottom(),
+        "the head sits under the header"
+    );
+    view.update(vcx, |app, _| {
+        let (title, count) = app.results_head();
+        assert_eq!(title, "Photos & Videos", "a mix of photos and a video");
+        assert_eq!(app.displayed_count(), 3);
+        assert_eq!(
+            count,
+            crate::i18n::items(app.displayed_count()),
+            "the count is the grid's displayed count"
+        );
+        assert_eq!(
+            app.results_sort_label(),
+            "Date taken ▾",
+            "the real sort, not Best match"
+        );
+    });
+
+    // The sort label opens the existing sort menu under itself; Esc closes it.
+    focus_app(vcx, &view);
+    click(vcx, "search-results-sort");
+    let sort = bounds(vcx, "search-results-sort");
+    let menu = bounds(vcx, "sort-menu");
+    assert!(
+        vcx.debug_bounds("sort-field-date").is_some(),
+        "the head's sort label opens the sort menu"
+    );
+    assert!(
+        menu.top() >= sort.bottom() && (f32::from(menu.right() - sort.right())).abs() <= 2.0,
+        "the menu hangs from the sort label: {menu:?} under {sort:?}"
+    );
+    assert!(
+        vcx.debug_bounds("search-header").is_some(),
+        "the Search screen stays while its own sort menu is open"
+    );
+    keystrokes(vcx, "escape");
+    assert!(
+        vcx.debug_bounds("sort-menu").is_none(),
+        "Esc closes the menu"
+    );
+
+    set_query(&view, vcx, "photo is:photo");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.results_head().0, "Photos", "photos only");
+        assert_eq!(app.displayed_count(), 2);
+    });
+    set_query(&view, vcx, "photo is:video");
+    render_ui(vcx);
+    view.update(vcx, |app, _| assert_eq!(app.results_head().0, "Videos"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A library of `count` items, the first `videos` of them videos.
+fn kinds_app<'a>(
+    name: &str,
+    count: usize,
+    videos: usize,
+    cx: &'a mut gpui::TestAppContext,
+) -> (
+    std::path::PathBuf,
+    Entity<crate::LuminaApp>,
+    &'a mut VisualTestContext,
+) {
+    let (dir, engine) = seed_library(name, count);
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).expect("catalog opens");
+    for item in engine.get_item_slice(0..videos) {
+        conn.execute(
+            "UPDATE media_items SET media_type = 'video' WHERE id = ?1",
+            [item.id.0 as i64],
+        )
+        .unwrap();
+    }
+    drop(conn);
+    let (view, vcx) = app_with_library(cx, engine);
+    (dir, view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn results_head_counts_kinds_through_an_open_quote_and_all_videos() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = kinds_app("search_results_quote", 3, 1, &mut cx);
+    set_query(&view, vcx, "\"photo");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.displayed_count(), 3, "the open quote still matches all");
+        assert_eq!(
+            app.results_head().0,
+            "Photos & Videos",
+            "is:video is counted outside the unclosed quote"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = kinds_app("search_results_videos", 2, 2, &mut cx);
+    set_query(&view, vcx, "photo");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.results_head().0,
+            "Videos",
+            "every counted result a video, with no is: in the query"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn results_head_gives_way_to_the_page_header_and_the_month_band() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = kinds_app("search_results_fallback", 2, 0, &mut cx);
+
+    // No results: no head to hang from, so the sort menu brings back the
+    // page header and hangs from its Sort button.
+    set_query(&view, vcx, "zzzz");
+    view.update(vcx, |app, cx| app.toggle_sort_menu(cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("search-header").is_none(),
+        "with 0 results the sort menu falls back to the page header"
+    );
+    let (menu, button) = (bounds(vcx, "sort-menu"), bounds(vcx, "sort-menu-button"));
+    assert!(
+        menu.top() >= button.bottom(),
+        "the menu hangs from the page header's Sort button"
+    );
+    view.update(vcx, |app, cx| app.close_sort_menu(cx));
+
+    // A filter-only view shows no head, so it skips the video count.
+    set_query(&view, vcx, "has:location");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.view_loading(), "the fetch landed");
+        assert_eq!(
+            app.displayed_videos(),
+            None,
+            "no free text, no extra video count"
+        )
+    });
+
+    // Clearing the search brings the month band back in place of the head.
+    set_query(&view, vcx, "photo");
+    render_ui(vcx);
+    bounds(vcx, "search-results-head");
+    set_query(&view, vcx, "");
+    render_ui(vcx);
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("search-results-head").is_none());
+    assert!(
+        vcx.debug_bounds("grid-month-header").is_some(),
+        "the month band returns once the search clears"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

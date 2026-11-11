@@ -5,6 +5,16 @@ use lumina_core::{SortDirection, SortField, SortSpec};
 
 use crate::app::LuminaApp;
 
+/// A sort field's name as the sort menu lists it ("Date taken").
+pub(crate) fn sort_field_name(field: SortField) -> String {
+    crate::i18n::t(match field {
+        SortField::DateTaken => "sort.date_taken",
+        SortField::FileName => "sort.name",
+        SortField::FileSize => "sort.file_size",
+        SortField::Rating => "sort.rating",
+    })
+}
+
 impl LuminaApp {
     pub fn sort_field_label(&self) -> &'static str {
         match self.sort.field {

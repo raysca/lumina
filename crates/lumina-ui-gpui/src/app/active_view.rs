@@ -111,6 +111,25 @@ impl ViewQuery {
         engine.view_date_span(&scope)
     }
 
+    /// How many of a search's results are videos: one more count, run only
+    /// for a query with free text (only then does the results head show)
+    /// that does not name a kind (`is:video` would override its
+    /// `is:photo`, and the kind is then known anyway). `is:video` joins the
+    /// closed tokens, so an unclosed quote does not swallow it.
+    pub(crate) fn video_count(&self, engine: &LuminaEngine) -> Option<usize> {
+        let query = &self.key.query;
+        if !crate::app::search::query_has_text(query)
+            || lumina_core::StructuredQuery::parse(query)
+                .media_type
+                .is_some()
+        {
+            return None;
+        }
+        let mut tokens = crate::app::search::query_tokens_closed(query);
+        tokens.push("is:video".to_string());
+        Some(engine.search_query_count(&tokens.join(" ")))
+    }
+
     /// The view's items at `range`, in view order.
     pub(crate) fn slice(&self, engine: &LuminaEngine, range: Range<usize>) -> Vec<MediaItem> {
         let (offset, limit) = (range.start, range.len());
@@ -158,6 +177,9 @@ struct Fetched {
     count: usize,
     /// Read with `count`, so it is stale exactly when the count is.
     span: Option<DateSpan>,
+    /// Videos among a search's results, for the results head's title;
+    /// None outside a search or when the query names a kind itself.
+    videos: Option<usize>,
     start: usize,
     items: Vec<MediaItem>,
 }
@@ -291,6 +313,16 @@ impl LuminaApp {
         }
     }
 
+    /// Videos among the results, from the same fetch as
+    /// [`Self::displayed_count`]. Never queries.
+    pub(crate) fn displayed_videos(&self) -> Option<usize> {
+        let key = self.view_key();
+        match &self.active_view.data {
+            Some(data) if data.key == key => data.videos,
+            _ => None,
+        }
+    }
+
     /// True until the first fetch for the current view lands, so an empty
     /// view is not announced before it is known to be empty.
     pub(crate) fn view_loading(&self) -> bool {
@@ -379,7 +411,7 @@ impl LuminaApp {
         }
         // A scroll past the cached rows keeps the span, as long as nothing
         // is written before the fetch reads its revision (checked there).
-        let known_span = fresh.map(|data| data.span);
+        let known_span = fresh.map(|data| (data.span, data.videos));
         let known_at = revision;
         // ponytail: a panicking fetch would leave this set and freeze the
         // cache; the engine's reads log and return defaults instead of failing.
@@ -393,14 +425,15 @@ impl LuminaApp {
             let end = (wanted.end + WINDOW_PAD).min(count).max(start);
             let items = query.slice(&engine, start..end);
             // After the rows, so a view switch never waits on it for them.
-            let span = known_span
+            let (span, videos) = known_span
                 .filter(|_| revision == known_at)
-                .unwrap_or_else(|| query.date_span(&engine));
+                .unwrap_or_else(|| (query.date_span(&engine), query.video_count(&engine)));
             Fetched {
                 key: query.key,
                 revision,
                 count,
                 span,
+                videos,
                 start,
                 items,
             }

@@ -9,7 +9,7 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, COMPACT_TILE, GRID_CARD_GAP,
+    media_card_tooltip, BAND_TO_ROW, CARD_PADDING, CARD_ROW_GAP, COMPACT_TILE, GRID_CARD_GAP,
     GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT, UNSELECTED_CARD_OPACITY,
 };
 use crate::views::marks::{flag_badge, REJECTED_OPACITY};
@@ -22,8 +22,6 @@ const BADGE_H: f32 = 18.0;
 /// How far the selection ring reaches outside the tile: a 1px gap plus the
 /// 2px border. Half the 6px tile gap, so adjacent selected rings never meet.
 const RING_OUTSET: f32 = 3.0;
-/// Space between the month band's text and the first row's tiles (frame: 10).
-const BAND_TO_ROW: f32 = 10.0;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
 /// can render every state without duplicating click wiring.
@@ -135,7 +133,11 @@ impl LuminaApp {
             .flex_col()
             // ponytail: the band shows the month recorded by the previous
             // frame's processor; the notify below settles it one frame later.
-            .children(self.render_month_header())
+            .children(if self.search_screen_shown() {
+                Some(self.render_results_head(cx))
+            } else {
+                self.render_month_header()
+            })
             .child(
                 uniform_list(
                     "media-grid",

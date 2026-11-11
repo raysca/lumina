@@ -24,9 +24,12 @@ impl LuminaApp {
     /// alone show the Library with its chip row. A header popover (Sort,
     /// Add filter, Downloads) hangs from the page header's buttons, so the
     /// page header comes back while one is open. A click that blurs search
-    /// keeps the screen until the mouse comes up (`held_for_click`).
+    /// keeps the screen until the mouse comes up (`held_for_click`). The
+    /// sort menu hangs from the results head instead while there are
+    /// results to head.
     pub(crate) fn search_screen_shown(&self) -> bool {
-        let popover = self.sort_menu_open || self.filter_menu.is_some() || self.downloads.open;
+        let sort_from_page = self.sort_menu_open && self.displayed_count() == 0;
+        let popover = sort_from_page || self.filter_menu.is_some() || self.downloads.open;
         let focused = self.search_focused || self.query_bar.held_for_click;
         !popover && (focused || query_has_text(&self.search_query))
     }
