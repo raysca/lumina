@@ -555,6 +555,23 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
         card.top() >= band.bottom(),
         "the band sits above the cards, never over them: band={band:?} card={card:?}"
     );
+    // The frame puts the first row 10px below the band's text line.
+    let gap = f32::from(card.top()) - f32::from(band.bottom());
+    assert!(
+        (gap - 10.0).abs() <= 0.5,
+        "the first row sits 10px below the band, got {gap}: band={band:?} card={card:?}"
+    );
+    // The first row's ring (3px outside the tile) stays inside the list,
+    // which starts below the band's 4px bottom margin and clips there.
+    view.update(vcx, |app, cx| app.select_index(0, cx));
+    render_ui(vcx);
+    let ring = vcx
+        .debug_bounds(leak(format!("media-card-selected-{}", first.id.0)))
+        .expect("the selected first card paints its ring");
+    assert!(
+        ring.top() >= band.bottom() + gpui::px(3.5),
+        "the first row's ring must not be clipped by the list's top edge: band={band:?} ring={ring:?}"
+    );
     view.update(vcx, |app, cx| {
         assert_eq!(
             app.month_header.top,

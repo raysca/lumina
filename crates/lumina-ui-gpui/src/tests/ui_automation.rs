@@ -577,15 +577,16 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
     let selected_h = f32::from(selected_bounds.size.height);
     let photo_w = f32::from(photo_bounds.size.width);
     let photo_h = f32::from(photo_bounds.size.height);
-    // v3: a 2px ring with a 2px gap outside the well, so 4px on each side.
+    // A 2px ring with a 1px gap: 3px outside the well, half the 6px tile gap,
+    // so the rings of two adjacent selected tiles never overlap.
     assert!(
-        (selected_w - photo_w - 8.0).abs() <= 1.0 && (selected_h - photo_h - 8.0).abs() <= 1.0,
-        "the ring must sit 4px outside the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
+        (selected_w - photo_w - 6.0).abs() <= 0.5 && (selected_h - photo_h - 6.0).abs() <= 0.5,
+        "the ring must sit 3px outside the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
     );
     assert!(
-        (f32::from(photo_bounds.left()) - f32::from(selected_bounds.left()) - 4.0).abs() <= 1.0
-            && (f32::from(photo_bounds.top()) - f32::from(selected_bounds.top()) - 4.0).abs()
-                <= 1.0,
+        (f32::from(photo_bounds.left()) - f32::from(selected_bounds.left()) - 3.0).abs() <= 0.5
+            && (f32::from(photo_bounds.top()) - f32::from(selected_bounds.top()) - 3.0).abs()
+                <= 0.5,
         "the ring must be centred on the well: photo={photo_bounds:?} selected={selected_bounds:?}"
     );
     assert!(

@@ -10,7 +10,7 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
     media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, COMPACT_TILE, GRID_CARD_GAP,
-    GRID_ROW_PADDING_X, UNSELECTED_CARD_OPACITY,
+    GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT, UNSELECTED_CARD_OPACITY,
 };
 use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
@@ -19,6 +19,11 @@ use crate::views::sidebar::AlbumSelection;
 const BADGE_INSET: f32 = 8.0;
 /// Height of the pill badges (duration, RAW, meta).
 const BADGE_H: f32 = 18.0;
+/// How far the selection ring reaches outside the tile: a 1px gap plus the
+/// 2px border. Half the 6px tile gap, so adjacent selected rings never meet.
+const RING_OUTSET: f32 = 3.0;
+/// Space between the month band's text and the first row's tiles (frame: 10).
+const BAND_TO_ROW: f32 = 10.0;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
 /// can render every state without duplicating click wiring.
@@ -650,10 +655,10 @@ impl LuminaApp {
                                                     well.child(raw_badge(item_id_num))
                                                 })
                                         )
-                                        // Selection: a 2px amber ring with a 2px gap
-                                        // outside the r4 well, so its r8 corners stay
-                                        // concentric. It sits on the card because the
-                                        // well clips.
+                                        // Selection: a 2px amber ring with a 1px gap
+                                        // outside the r4 well; its r7 corners (4 +
+                                        // RING_OUTSET) stay concentric. It sits on the
+                                        // card because the well clips.
                                         .when(is_selected, |card| {
                                             card.child(
                                                 div()
@@ -664,13 +669,13 @@ impl LuminaApp {
                                                         )
                                                     })
                                                     .absolute()
-                                                    .top(px(CARD_PADDING - 4.0))
+                                                    .top(px(CARD_PADDING - RING_OUTSET))
                                                     // left/right trace the well's real
                                                     // width even when photo_side clamps.
-                                                    .left(px(CARD_PADDING - 4.0))
-                                                    .right(px(CARD_PADDING - 4.0))
-                                                    .h(px(photo_side + 8.0))
-                                                    .rounded(theme::RADIUS_LG)
+                                                    .left(px(CARD_PADDING - RING_OUTSET))
+                                                    .right(px(CARD_PADDING - RING_OUTSET))
+                                                    .h(px(photo_side + 2.0 * RING_OUTSET))
+                                                    .rounded(theme::RADIUS_SM + px(RING_OUTSET))
                                                     .border_2()
                                                     .border_color(theme::accent()),
                                             )
@@ -689,7 +694,13 @@ impl LuminaApp {
                                     .id(row_ix)
                                     .w_full()
                                     .h(px(row_h))
-                                    .px(px(GRID_ROW_PADDING_X))
+                                    // The row gap sits above the cards, so the
+                                    // first row's selection ring (RING_OUTSET
+                                    // outside the tile) is never clipped by the
+                                    // list's top edge.
+                                    .pt(px(CARD_ROW_GAP))
+                                    .pl(px(GRID_ROW_PADDING_LEFT))
+                                    .pr(px(GRID_ROW_PADDING_RIGHT))
                                     .flex()
                                     .flex_row()
                                     .gap(px(GRID_CARD_GAP))
@@ -727,25 +738,42 @@ impl LuminaApp {
                 .debug_selector(|| "grid-month-header".to_string())
                 .flex_none()
                 .h(px(36.0))
-                .px(px(GRID_ROW_PADDING_X + 4.0))
+                .pl(px(GRID_ROW_PADDING_LEFT))
+                .pr(px(GRID_ROW_PADDING_RIGHT))
+                // Text sits on the band's bottom edge; this margin plus the
+                // first row's CARD_ROW_GAP make the frame's 10px to the tiles.
+                .mb(px(BAND_TO_ROW - CARD_ROW_GAP))
                 .flex()
-                .flex_row()
-                .items_baseline()
-                .gap_2()
+                .flex_col()
+                .justify_end()
                 .child(
                     div()
-                        .text_size(px(15.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::t1())
-                        .child(month_title(year, month)),
+                        .flex()
+                        .flex_row()
+                        .items_baseline()
+                        .gap(px(9.0))
+                        // ponytail: the design's -0.2 tracking is skipped; GPUI
+                        // 0.3.11 has no letter-spacing style.
+                        .child(
+                            div()
+                                .font_family(theme::FONT_DISPLAY)
+                                .text_size(px(15.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme::t1())
+                                .child(month_title(year, month)),
+                        )
+                        .children(count.map(|n| {
+                            div()
+                                .font_family(theme::FONT_MONO)
+                                .text_size(px(10.0))
+                                .text_color(theme::t3())
+                                .child(if n == 1 {
+                                    "1 item".to_string()
+                                } else {
+                                    format!("{n} items")
+                                })
+                        })),
                 )
-                .children(count.map(|n| {
-                    div().text_xs().text_color(theme::t2()).child(if n == 1 {
-                        "1 item".to_string()
-                    } else {
-                        format!("{n} items")
-                    })
-                }))
                 .into_any_element(),
         )
     }
