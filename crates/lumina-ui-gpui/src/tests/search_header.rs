@@ -486,6 +486,15 @@ fn narrow_chips_toggle_query_tokens() {
         row.top() >= bar.bottom() && row.bottom() <= header.bottom(),
         "the Narrow by row sits under the bar, inside the header: {row:?}"
     );
+    let (rating, edited, raw) = (
+        bounds(vcx, "search-narrow-rating"),
+        bounds(vcx, "search-narrow-edited"),
+        bounds(vcx, "search-narrow-raw"),
+    );
+    assert!(
+        rating.right() <= edited.left() && edited.right() <= raw.left(),
+        "Edited sits after Rated 4+ and before RAW, as in the frame"
+    );
     assert!(
         (f32::from(row.top() - bar.bottom()) - 13.0).abs() <= 0.5,
         "13 between the bar and the row"
@@ -495,6 +504,7 @@ fn narrow_chips_toggle_query_tokens() {
         ("search-narrow-video", "is:video"),
         ("search-narrow-fnumber", "f:<2"),
         ("search-narrow-rating", "rating:>=4"),
+        ("search-narrow-edited", "is:edited"),
         ("search-narrow-raw", "is:raw"),
     ] {
         assert_eq!(f32::from(bounds(vcx, selector).size.height), 28.0);
@@ -522,7 +532,7 @@ fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "tram");
-    for token in ["f:<2", "is:video", "rating:>=4", "is:raw"] {
+    for token in ["f:<2", "is:video", "rating:>=4", "is:edited", "is:raw"] {
         view.update(vcx, |app, cx| {
             app.execute_command(CommandId::QuickFilter(token), cx)
         });
@@ -540,7 +550,7 @@ fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
             .iter()
             .any(|command| command.id == CommandId::QuickFilter(token))
     };
-    for token in ["f:<2", "is:video", "rating:>=4", "is:raw"] {
+    for token in ["f:<2", "is:video", "rating:>=4", "is:edited", "is:raw"] {
         assert!(listed(token), "the palette lists the {token} quick filter");
     }
     view.update(vcx, |app, cx| {

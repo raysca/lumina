@@ -10,12 +10,12 @@ use crate::icons::{render_icon, Icon};
 use crate::theme::{self, ChipKind};
 
 /// The Narrow by chips (Design 03 Task 3), in the frame's order: selector
-/// suffix, the quick-filter token each toggles, icon, label key. "Edited"
-/// joins once the parser has `is:edited` (decision 5).
-const NARROW_CHIPS: [(&str, &str, Icon, &str); 4] = [
+/// suffix, the quick-filter token each toggles, icon, label key.
+const NARROW_CHIPS: [(&str, &str, Icon, &str); 5] = [
     ("fnumber", "f:<2", Icon::Aperture, "search.narrow_fnumber"),
     ("video", "is:video", Icon::Video, "search.narrow_video"),
     ("rating", "rating:>=4", Icon::Star, "search.narrow_rating"),
+    ("edited", "is:edited", Icon::Pencil, "search.narrow_edited"),
     ("raw", "is:raw", Icon::FileImage, "search.narrow_raw"),
 ];
 

@@ -26,6 +26,7 @@ const SEARCH_FIELD_SUGGESTIONS: &[&str] = &[
     "is:favorite",
     "is:video",
     "is:raw",
+    "is:edited",
     "is:trashed",
     "is:photo",
     "is:unrated",
@@ -535,6 +536,10 @@ mod search_suggestion_tests {
             );
         }
         assert!(search_suggestion_items(&[], &[], "mon").contains(&"month:".to_string()));
+        assert!(
+            search_suggestion_items(&[], &[], "is:e").contains(&"is:edited".to_string()),
+            "typing is:e offers is:edited"
+        );
         assert!(search_suggestion_items(&[], &[], "f:").contains(&"f:".to_string()));
     }
 

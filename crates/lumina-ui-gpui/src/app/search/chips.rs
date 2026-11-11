@@ -101,6 +101,8 @@ pub(crate) fn filter_label(token: &str) -> Option<(String, Icon, ChipFamily)> {
             "raw" => (t("filter.raw"), Icon::FileImage, Other),
             _ => (t("filter.photos"), Icon::Image, Other),
         }
+    } else if p.is_edited.is_some() {
+        (explained(), Icon::Pencil, Other)
     } else if p.is_favorite.is_some() {
         (explained(), Icon::Heart, Other)
     } else if p.flag.is_some() {
@@ -291,6 +293,12 @@ mod query_bar_tests {
             filter_chips("rating:>=4")[0].label,
             "Rated 4+",
             "the Library chip row keeps its own label"
+        );
+        let (label, icon, _) = filter_label("is:edited").expect("is:edited is a filter");
+        assert_eq!(
+            (label.as_str(), icon),
+            ("Edited", Icon::Pencil),
+            "is:edited reads Edited with the pencil, like its Narrow chip"
         );
     }
 }

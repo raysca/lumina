@@ -673,7 +673,13 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "filter movies clips",
         },
-        // These four quick filters mirror the search header's Narrow by chips.
+        // These quick filters mirror the search header's Narrow by chips.
+        Command {
+            id: CommandId::QuickFilter("is:edited"),
+            key: "command.filter_edited",
+            shortcut: "",
+            keywords: "filter edited cropped rotated adjusted retouched",
+        },
         Command {
             id: CommandId::QuickFilter("is:raw"),
             key: "command.filter_raw",
