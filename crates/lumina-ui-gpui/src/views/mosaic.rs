@@ -21,9 +21,17 @@ const MIN_SHARE: f32 = 158.0 / 190.0;
 /// Space above every day header but the first (frame: section gap 26).
 pub(crate) const SECTION_GAP: f32 = 26.0;
 
-/// Rendered line of the day header's date (Inter Tight 15/600). The header
-/// row is this plus [`BAND_TO_ROW`].
+/// Line height of the day header's date (Inter Tight 15/600). The header
+/// row is this plus [`BAND_TO_ROW`]. GPUI's default line height is about
+/// 1.618 x the size (about 24 at 15 px), so the header must pin
+/// `line_height(px(20.))` or the paint outgrows the layout.
 pub(crate) const DAY_HEADER_TEXT: f32 = 20.0;
+
+/// A cell's aspect with a 0, negative or NaN value read as 0.01 (core
+/// already clamps to 0.4-3.0; this keeps widths finite and positive).
+fn aspect(cell: &LayoutCell) -> f32 {
+    cell.aspect.max(0.01)
+}
 
 /// Target row height for a saved column count.
 pub(crate) fn target_for_columns(columns: usize) -> f32 {
@@ -73,17 +81,22 @@ impl MosaicLayout {
     /// a header row and ends its last row unstretched; without, the whole
     /// view is one header-less run.
     ///
-    /// Greedy, O(n): a row takes items until its full-width height drops to
-    /// `target`, but closes early when the next item would push it below
-    /// `MIN_SHARE × target`. A full row closed early is capped at
-    /// `target / MIN_SHARE` (a lone portrait in a narrow pane); a section's
-    /// last row keeps `target` unless that would overflow the width (a
-    /// panorama), so no tile ever passes `width`.
+    /// Greedy, O(n): a row takes items while its full-width height stays
+    /// above `target`. Once the next item would bring it to `target` or
+    /// below, the row closes either before or after that item, whichever
+    /// full-width height is closer to `target`. A closed row of two or more
+    /// tiles always fills the width exactly; with wide or mixed aspects, or
+    /// in a narrow pane, its height can leave the 158-224 band (at 190),
+    /// which is accepted. The one ragged closed row is a single tile closed early
+    /// (a lone portrait in a narrow pane): it is capped at
+    /// `target / MIN_SHARE` and left-aligned. A section's last row keeps
+    /// `target`, left-aligned, unless that would overflow the width (a
+    /// panorama shrinks to fit), so no tile ever passes `width`.
     pub(crate) fn justify(cells: &[LayoutCell], width: f32, target: f32, sections: bool) -> Self {
         let width = width.max(1.0);
         let fill = |n: usize, sum: f32| (width - GRID_CARD_GAP * (n - 1) as f32) / sum;
         let mut out = Self {
-            rows: Vec::with_capacity(cells.len() / 3 + 8),
+            rows: Vec::new(),
             tiles: vec![TileSpan::default(); cells.len()],
         };
         let mut y = 0.0;
@@ -115,20 +128,31 @@ impl MosaicLayout {
                 y += height;
             }
             let (mut first, mut sum) = (start, 0.0);
-            for (i, cell) in cells.iter().enumerate().take(end).skip(start) {
-                // Guards a 0, negative or NaN aspect (core clamps to 0.4-3.0).
-                let aspect = cell.aspect.max(0.01);
+            let mut i = start;
+            while i < end {
+                let a = aspect(&cells[i]);
                 let n = i - first;
-                if n > 0 && fill(n + 1, sum + aspect) < target * MIN_SHARE {
-                    let h = fill(n, sum).min(target / MIN_SHARE);
+                let h_with = fill(n + 1, sum + a);
+                if h_with > target {
+                    sum += a;
+                    i += 1;
+                    continue;
+                }
+                // An empty row never closes before its first item, so item
+                // `i` is retried at most once (as the head of a new row).
+                let h_now = if n > 0 { fill(n, sum) } else { f32::INFINITY };
+                if h_now - target < target - h_with {
+                    let h = if n == 1 {
+                        h_now.min(target / MIN_SHARE)
+                    } else {
+                        h_now
+                    };
                     out.push_tiles(cells, first..i, h, &mut y);
                     (first, sum) = (i, 0.0);
-                }
-                sum += aspect;
-                let h = fill(i + 1 - first, sum);
-                if h <= target {
-                    out.push_tiles(cells, first..i + 1, h, &mut y);
+                } else {
+                    out.push_tiles(cells, first..i + 1, h_with, &mut y);
                     (first, sum) = (i + 1, 0.0);
+                    i += 1;
                 }
             }
             if first < end {
@@ -146,7 +170,7 @@ impl MosaicLayout {
         let pad = if after_tiles { GRID_CARD_GAP } else { 0.0 };
         let mut x = 0.0;
         for i in items.clone() {
-            let w = height * cells[i].aspect.max(0.01);
+            let w = height * aspect(&cells[i]);
             self.tiles[i] = TileSpan { x, w };
             x += w + GRID_CARD_GAP;
         }
@@ -163,22 +187,24 @@ impl MosaicLayout {
 
     /// Index of the tile row holding item `index`. A header shares `first`
     /// with the tile row after it, so the last row starting at or before
-    /// `index` is always a tile row.
+    /// `index` is always a tile row. An index past the end clamps to the
+    /// last row; on an empty layout it returns 0, which is not a row, so
+    /// callers check `rows` first.
     pub(crate) fn row_of(&self, index: usize) -> usize {
         self.rows
             .partition_point(|r| r.first <= index)
             .saturating_sub(1)
     }
 
-    /// The item in the next tile row up (`dir < 0`) or down (`dir > 0`)
+    /// The item in the next tile row down (`down`) or up
     /// whose x-centre is nearest item `index`'s; headers are skipped. None
     /// at either end or for an index outside the layout.
-    pub(crate) fn vertical_neighbour(&self, index: usize, dir: isize) -> Option<usize> {
+    pub(crate) fn vertical_neighbour(&self, index: usize, down: bool) -> Option<usize> {
         let tile = self.tiles.get(index)?;
         let centre = tile.x + tile.w / 2.0;
         let mut r = self.row_of(index);
         let row = loop {
-            r = if dir > 0 { r + 1 } else { r.checked_sub(1)? };
+            r = if down { r + 1 } else { r.checked_sub(1)? };
             let row = self.rows.get(r)?;
             if row.kind == RowKind::Tiles {
                 break row;
@@ -355,7 +381,7 @@ mod tests {
             "rows of 3 and 5, then the next day"
         );
         let centre = |i: usize| layout.tiles[i].x + layout.tiles[i].w / 2.0;
-        let down = layout.vertical_neighbour(2, 1).expect("a row below");
+        let down = layout.vertical_neighbour(2, true).expect("a row below");
         let nearest = (3..8)
             .min_by(|&a, &b| {
                 (centre(a) - centre(2))
@@ -366,18 +392,22 @@ mod tests {
         assert_eq!(down, nearest, "↓ lands on the nearest x-centre");
         assert_eq!(down, 7, "the right-most tile sits over the last of 5");
         assert_eq!(
-            layout.vertical_neighbour(0, -1),
+            layout.vertical_neighbour(0, false),
             None,
             "nothing above row 1"
         );
         assert_eq!(
-            layout.vertical_neighbour(7, 1),
+            layout.vertical_neighbour(7, true),
             Some(11),
             "↓ crosses the header"
         );
-        assert_eq!(layout.vertical_neighbour(8, -1), Some(3), "↑ crosses back");
         assert_eq!(
-            layout.vertical_neighbour(11, 1),
+            layout.vertical_neighbour(8, false),
+            Some(3),
+            "↑ crosses back"
+        );
+        assert_eq!(
+            layout.vertical_neighbour(11, true),
             None,
             "nothing below the end"
         );
@@ -439,19 +469,103 @@ mod tests {
             assert!(row.height > row.pad, "every row has a positive height");
         }
 
-        // A lone tall portrait in a narrow pane does not tower over the band.
-        let layout = MosaicLayout::justify(&cells(&[0.4, 3.0, 3.0], 0), 300.0, 190.0, false);
+        // 300 wide: 1.2 alone is 250 high, with a 3.0 it is 70, so the
+        // single tile closes early and is capped (the one ragged full row).
+        let layout = MosaicLayout::justify(&cells(&[1.2, 3.0, 3.0], 0), 300.0, 190.0, false);
         let first = tile_rows(&layout)[0];
+        assert_eq!(first.len, 1, "the single tile closes alone");
         assert!(
-            first.height - first.pad <= 190.0 / MIN_SHARE + 0.01,
-            "a full row is capped near the band: {first:?}"
+            (first.height - first.pad - 190.0 / MIN_SHARE).abs() < 0.01,
+            "a single closed tile is capped at target / MIN_SHARE: {first:?}"
         );
+        assert!(right_edge(&layout, &first) < 300.0, "and left-aligned");
+
+        // NaN, 0 and negative aspects read as slivers: finite, positive, inside.
+        let layout = MosaicLayout::justify(&cells(&[f32::NAN, 0.0, -1.0], 0), 800.0, 190.0, true);
+        for t in &layout.tiles {
+            assert!(
+                t.w.is_finite() && t.w > 0.0 && t.x + t.w <= 800.0,
+                "bad aspect: {t:?}"
+            );
+        }
 
         let empty = MosaicLayout::justify(&[], 800.0, 190.0, true);
         assert!(empty.rows.is_empty() && empty.tiles.is_empty());
         assert_eq!(empty.total_height(), 0.0);
-        assert_eq!(empty.vertical_neighbour(0, 1), None);
+        assert_eq!(empty.vertical_neighbour(0, true), None);
         assert_eq!(empty.rows_in(0.0..100.0), 0..0);
+    }
+
+    /// Deterministic xorshift values in 0..1.
+    fn xorshift(n: usize, mut s: u32) -> Vec<f32> {
+        (0..n)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 17;
+                s ^= s << 5;
+                (s % 10_000) as f32 / 10_000.0
+            })
+            .collect()
+    }
+
+    /// Tile rows that end before their section does (not the last row).
+    fn closed_rows(layout: &MosaicLayout) -> Vec<MosaicRow> {
+        let rows = &layout.rows;
+        (0..rows.len())
+            .filter(|&r| rows[r].kind == RowKind::Tiles)
+            .filter(|&r| rows.get(r + 1).is_some_and(|n| n.kind == RowKind::Tiles))
+            .map(|r| rows[r])
+            .collect()
+    }
+
+    #[core::prelude::v1::test]
+    fn closed_rows_fill_the_width_for_any_aspect_mix() {
+        // Uniform 0.4-3.0, 50-item days: every closed row of 2+ fills.
+        let uniform: Vec<LayoutCell> = xorshift(5_000, 0x1234_5678)
+            .iter()
+            .enumerate()
+            .map(|(i, r)| LayoutCell {
+                id: MediaId(i as u64),
+                aspect: 0.4 + 2.6 * r,
+                day: 20250614 - (i / 50) as u32,
+            })
+            .collect();
+        for width in [800.0, 1200.0] {
+            let layout = MosaicLayout::justify(&uniform, width, 190.0, true);
+            let closed = closed_rows(&layout);
+            assert!(closed.len() > 100, "enough closed rows at {width}");
+            for row in closed.iter().filter(|r| r.len >= 2) {
+                assert!(
+                    (right_edge(&layout, row) - width).abs() <= 0.5,
+                    "a closed row of 2+ fills {width}: {row:?} ends at {}",
+                    right_edge(&layout, row)
+                );
+            }
+        }
+
+        // The real photo mix at 1200: every closed row stays in the band.
+        let mix = [4.0 / 3.0, 1.5, 0.75, 2.0 / 3.0, 16.0 / 9.0, 9.0 / 16.0, 1.0];
+        let photos: Vec<LayoutCell> = xorshift(5_000, 0x0BAD_F00D)
+            .iter()
+            .enumerate()
+            .map(|(i, r)| LayoutCell {
+                id: MediaId(i as u64),
+                aspect: mix[(r * mix.len() as f32) as usize % mix.len()],
+                day: 20250614 - (i / 50) as u32,
+            })
+            .collect();
+        let layout = MosaicLayout::justify(&photos, 1200.0, 190.0, true);
+        for row in closed_rows(&layout) {
+            let h = row.height - row.pad;
+            assert!(
+                (158.0..=224.0).contains(&h),
+                "photo-mix rows stay in the 158-224 band at 1200: {h}"
+            );
+            assert!(
+                (right_edge(&layout, &row) - 1200.0).abs() <= 0.5,
+                "and fill the width"
+            );
+        }
     }
 
     #[core::prelude::v1::test]
