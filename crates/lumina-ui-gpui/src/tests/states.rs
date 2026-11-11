@@ -317,6 +317,16 @@ fn videos_header_reads_clips() {
             "1 clip",
             "a Mosaic day header in Videos counts clips too"
         );
+        let select = app.mosaic_day_header(20250601, 2).select_label;
+        assert!(
+            select.starts_with("Select 2 clips from "),
+            "the day's Select label names clips in Videos: {select}"
+        );
+        let select = app.mosaic_day_header(20250601, 1).select_label;
+        assert!(
+            select.starts_with("Select 1 clip from "),
+            "and the singular too: {select}"
+        );
     });
     assert!(
         vcx.debug_bounds("page-meta").is_some(),

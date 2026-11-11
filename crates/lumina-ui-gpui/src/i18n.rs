@@ -83,9 +83,9 @@ pub fn clips_meta(n: usize, duration_ms: u64, size: &str) -> String {
             .replace("{clips}", &clips)
             .replace("{duration}", &duration)
             .replace("{size}", size),
-        None => t("header.meta")
-            .replace("{items}", &clips)
-            .replace("{range}", size),
+        None => t("header.clips_size")
+            .replace("{clips}", &clips)
+            .replace("{size}", size),
     }
 }
 
@@ -493,6 +493,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.clips_one" => "1 clip",
         "header.clips_other" => "{n} clips",
         "header.clips_meta" => "{clips} · {duration} · {size}",
+        "header.clips_size" => "{clips} · {size}",
         "header.hours_minutes" => "{h} h {m} m",
         "header.minutes" => "{m} m",
         "header.date_range" => "{from} — {to}",
@@ -535,6 +536,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "mosaic.select_updating" => "Updating…",
         "mosaic.select_day_label" => "Select {} items from {}",
         "mosaic.select_day_label_one" => "Select 1 item from {}",
+        "mosaic.select_day_clips_label" => "Select {} clips from {}",
+        "mosaic.select_day_clips_label_one" => "Select 1 clip from {}",
         "header.view_grid" => "Grid",
         "header.view_map" => "Map",
         "header.tags" => "Tags",
@@ -686,6 +689,11 @@ mod tests {
             Some("68 h 12 m")
         );
         assert_eq!(clips_meta(2, 180_000, "1.9 MB"), "2 clips · 3 m · 1.9 MB");
+        assert_eq!(
+            t("header.clips_size"),
+            "{clips} · {size}",
+            "the no-duration line has its own key, not the date-range one"
+        );
         assert_eq!(
             clips_meta(1, 0, "12 B"),
             "1 clip · 12 B",

@@ -81,6 +81,7 @@ fn date_span_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
 /// month: the Videos header's "N clips · H h M m · size" and its month band.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ViewTotals {
+    /// Items in the view: the same rows as the view's count.
     pub count: usize,
     /// Sum of known durations; an unprobed clip (no duration) adds nothing.
     pub duration_ms: u64,
