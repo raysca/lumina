@@ -21,6 +21,7 @@ pub mod library;
 pub mod loop_range;
 pub mod map;
 pub mod missing;
+pub mod mosaic_layout;
 pub mod navigation;
 pub mod network_import;
 pub mod panels;

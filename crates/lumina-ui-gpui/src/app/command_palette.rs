@@ -31,6 +31,8 @@ pub enum CommandId {
     /// Places on the map / on the grid.
     ShowMap,
     ShowGrid,
+    /// The justified Mosaic layout (the Grid / Mosaic choice is saved).
+    ShowMosaic,
     /// Places on the map, centred on the selected item's location.
     ShowOnMap,
     RetryError,
@@ -207,6 +209,7 @@ impl Command {
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
             ShowMap | ShowOnMap => Icon::MapPin,
             ShowGrid => Icon::Images,
+            ShowMosaic => Icon::LayoutDashboard,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
@@ -368,6 +371,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.show_grid",
             shortcut: "",
             keywords: "grid places photos thumbnails map",
+        },
+        Command {
+            id: CommandId::ShowMosaic,
+            key: "command.show_mosaic",
+            shortcut: "",
+            keywords: "mosaic layout justified rows days photos thumbnails",
         },
         Command {
             id: CommandId::RetryError,
@@ -1073,7 +1082,8 @@ impl LuminaApp {
                 self.grid_state.is_some() && !self.compare_holds_view()
             }
             CommandId::ShowMap => !self.map_blocked() && !self.map_shown(),
-            CommandId::ShowGrid => self.map_shown(),
+            CommandId::ShowGrid => self.grid_state.is_some() && !self.view_mode_on().1,
+            CommandId::ShowMosaic => self.grid_state.is_some() && !self.view_mode_on().0,
             CommandId::ShowOnMap => !self.map_blocked() && self.selected_item_location().is_some(),
             CommandId::DeleteRejected => {
                 self.grid_state.is_some()
@@ -1400,7 +1410,10 @@ impl LuminaApp {
                 self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Similar, cx)
             }
             CommandId::ShowMap => self.show_map(cx),
-            CommandId::ShowGrid => self.show_grid(cx),
+            CommandId::ShowGrid => self.set_browse_layout(crate::config::BrowseLayout::Grid, cx),
+            CommandId::ShowMosaic => {
+                self.set_browse_layout(crate::config::BrowseLayout::Mosaic, cx)
+            }
             CommandId::ShowOnMap => self.show_item_on_map(cx),
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),

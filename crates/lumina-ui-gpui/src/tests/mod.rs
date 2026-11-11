@@ -36,6 +36,7 @@ mod legacy_catalog;
 mod library_header;
 mod map;
 mod missing;
+mod mosaic;
 mod motion;
 mod multi_select;
 mod network_import;

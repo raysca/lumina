@@ -412,6 +412,9 @@ pub struct GridState {
     /// removed, and wholesale by Rescan (the retry).
     pub thumb_failures: Arc<Mutex<HashSet<MediaId>>>,
     pub scroll_handle: UniformListScrollHandle,
+    /// The Mosaic body's variable-height list: one item per layout row
+    /// (headers and tile rows), never per media item.
+    pub mosaic: ListState,
     /// Per-video resume positions for the open library.
     pub video_resume: VideoResumeState,
 }
@@ -467,6 +470,9 @@ impl GridState {
             fresh_thumbs: Arc::new(Mutex::new(HashMap::new())),
             thumb_failures: Arc::new(Mutex::new(HashSet::new())),
             scroll_handle: UniformListScrollHandle::new(),
+            // ponytail: a fixed overdraw of about one viewport; the window
+            // height is not known here.
+            mosaic: ListState::new(0, ListAlignment::Top, px(900.0)),
             video_resume: VideoResumeState::default(),
         }
     }

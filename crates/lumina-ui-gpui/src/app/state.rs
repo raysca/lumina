@@ -536,6 +536,8 @@ pub struct LuminaApp {
     pub(crate) library_generation: u64,
     /// The grid's count and rows, fetched off the UI thread.
     pub(crate) active_view: crate::app::active_view::ActiveView,
+    /// The Mosaic body's layout, built off the UI thread.
+    pub(crate) mosaic: crate::app::mosaic_layout::MosaicCache,
     /// Latest selected-item tag load; older results are dropped.
     pub(crate) selected_tags_request: u64,
 }
@@ -727,6 +729,7 @@ impl LuminaApp {
             library_generation: 0,
             map: Default::default(),
             active_view: Default::default(),
+            mosaic: Default::default(),
             selected_tags_request: 0,
         };
 

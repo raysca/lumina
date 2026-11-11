@@ -433,6 +433,31 @@ pub struct AppConfig {
     /// Whether the slideshow wraps to the first item at the end.
     #[serde(default)]
     pub slideshow_loop: bool,
+    /// How the browser lays out a view: the uniform Grid (the default) or
+    /// justified Mosaic rows. An unknown value reads as Grid.
+    #[serde(default, deserialize_with = "lenient_browse_layout")]
+    pub browse_layout: BrowseLayout,
+}
+
+/// The browser body: square tiles in columns, or justified rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BrowseLayout {
+    #[default]
+    Grid,
+    Mosaic,
+}
+
+/// Reads `browse_layout` so a hand-edited or future value falls back to
+/// Grid instead of failing the whole config (which would reset it).
+fn lenient_browse_layout<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<BrowseLayout, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(match value.as_str() {
+        Some("mosaic") => BrowseLayout::Mosaic,
+        _ => BrowseLayout::Grid,
+    })
 }
 
 /// Playback speeds the video speed menu offers.
@@ -524,6 +549,7 @@ impl Default for AppConfig {
             templates: Vec::new(),
             slideshow_interval_secs: default_slideshow_interval_secs(),
             slideshow_loop: false,
+            browse_layout: BrowseLayout::Grid,
         }
     }
 }
@@ -1236,6 +1262,40 @@ mod tests {
             );
         }
 
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn browse_layout_defaults_to_grid_and_round_trips() {
+        let path = temp_config_path("browse_layout");
+        std::fs::write(&path, br#"{"grid_columns":6}"#).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path).browse_layout,
+            BrowseLayout::Grid,
+            "a config without the key starts on Grid"
+        );
+        let cfg = AppConfig {
+            browse_layout: BrowseLayout::Mosaic,
+            ..Default::default()
+        };
+        cfg.save_to(&path).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path).browse_layout,
+            BrowseLayout::Mosaic
+        );
+        for bad in [br#""tiles""#.as_slice(), b"42", b"null"] {
+            let mut json = br#"{"grid_columns":6,"browse_layout":"#.to_vec();
+            json.extend_from_slice(bad);
+            json.push(b'}');
+            std::fs::write(&path, json).unwrap();
+            let loaded = AppConfig::load_from(&path);
+            assert_eq!(
+                loaded.browse_layout,
+                BrowseLayout::Grid,
+                "unknown value reads as Grid"
+            );
+            assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
+        }
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

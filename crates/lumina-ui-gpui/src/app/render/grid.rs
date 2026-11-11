@@ -64,60 +64,7 @@ impl LuminaApp {
             .map(|state| state.scroll_handle.clone())
             .unwrap_or_default();
 
-        div()
-            .id("media-grid-surface")
-            .debug_selector(|| "media-grid-surface".to_string())
-            .flex_1()
-            .h_full()
-            .overflow_hidden()
-            .relative()
-            .pt_2()
-            // A press on the grid background starts a marquee drag instead of
-            // clearing immediately, so a sweep can build a selection. A still
-            // press still clears (see finish_grid_drag).
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                    let mods = window.modifiers();
-                    this.begin_grid_drag(
-                        event.position,
-                        None,
-                        mods.shift || mods.secondary(cx) || mods.control,
-                    );
-                    cx.notify();
-                }),
-            )
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
-                this.grid_pointer_moved(event.position, event.pressed_button, cx);
-            }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
-                    this.finish_grid_drag(cx);
-                }),
-            )
-            .on_mouse_up_out(
-                MouseButton::Left,
-                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
-                    this.finish_grid_drag(cx);
-                }),
-            )
-            // Cmd/Ctrl + wheel changes column density around the pointer. A
-            // plain wheel is left alone so the uniform list keeps scrolling.
-            // The handler runs in the bubble phase after the list's own scroll
-            // listener, and restores the offset it would have scrolled.
-            .on_scroll(cx.listener(|this, event: &ScrollEvent, window, cx| {
-                if this.zoom_grid_with_wheel(event, window, cx) {
-                    cx.stop_propagation();
-                }
-            }))
-            // Pinch walks the same density ladder at the pinch centre.
-            .on_pinch(cx.listener(|this, event: &PinchEvent, _window, cx| {
-                this.zoom_grid_with_pinch(event, cx);
-                cx.stop_propagation();
-            }))
-            .flex()
-            .flex_col()
+        self.grid_surface(cx)
             // ponytail: the band shows the month recorded by the previous
             // frame's processor; the notify below settles it one frame later.
             .children(if self.search_screen_shown() {
@@ -252,6 +199,7 @@ impl LuminaApp {
                     }),
                 )
                 .track_scroll(&scroll_handle)
+                .debug_selector(|| "media-grid".to_string())
                 .flex_1()
                 .min_h_0(),
             )
@@ -261,6 +209,66 @@ impl LuminaApp {
             // this is an additive visual on top.
             .child(self.render_grid_drag_rect())
             .into_any_element()
+    }
+
+    /// The browser body's container, shared by Grid and Mosaic: marquee
+    /// press/move/release, ⌘-wheel and pinch zoom, and a column for its
+    /// children.
+    pub(crate) fn grid_surface(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id("media-grid-surface")
+            .debug_selector(|| "media-grid-surface".to_string())
+            .flex_1()
+            .h_full()
+            .overflow_hidden()
+            .relative()
+            .pt_2()
+            // A press on the grid background starts a marquee drag instead of
+            // clearing immediately, so a sweep can build a selection. A still
+            // press still clears (see finish_grid_drag).
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    let mods = window.modifiers();
+                    this.begin_grid_drag(
+                        event.position,
+                        None,
+                        mods.shift || mods.secondary(cx) || mods.control,
+                    );
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
+                this.grid_pointer_moved(event.position, event.pressed_button, cx);
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                    this.finish_grid_drag(cx);
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                    this.finish_grid_drag(cx);
+                }),
+            )
+            // Cmd/Ctrl + wheel changes column density around the pointer. A
+            // plain wheel is left alone so the uniform list keeps scrolling.
+            // The handler runs in the bubble phase after the list's own scroll
+            // listener, and restores the offset it would have scrolled.
+            .on_scroll(cx.listener(|this, event: &ScrollEvent, window, cx| {
+                if this.zoom_grid_with_wheel(event, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            // Pinch walks the same density ladder at the pinch centre.
+            .on_pinch(cx.listener(|this, event: &PinchEvent, _window, cx| {
+                this.zoom_grid_with_pinch(event, cx);
+                cx.stop_propagation();
+            }))
+            .flex()
+            .flex_col()
     }
 
     /// V3Grid section header, as a band pinned above the date-sorted grid
@@ -334,7 +342,7 @@ impl LuminaApp {
     ///
     /// The canvas is non-interactive, so it never steals hover or click events
     /// from the cards underneath.
-    fn render_grid_drag_rect(&self) -> AnyElement {
+    pub(crate) fn render_grid_drag_rect(&self) -> AnyElement {
         let (Some(start), Some(current)) = (self.grid_drag.start, self.grid_drag.current) else {
             return Empty.into_any_element();
         };

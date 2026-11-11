@@ -388,7 +388,8 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// ⌘K Show Grid, Esc on the map, the header's Grid segment.
+    /// Leaves the map for the browse layout (Grid or Mosaic): Esc on the
+    /// map, and the first step of the Mosaic / Grid segments and commands.
     pub(crate) fn show_grid(&mut self, cx: &mut Context<Self>) {
         self.map.shown = false;
         self.map.drag = None;

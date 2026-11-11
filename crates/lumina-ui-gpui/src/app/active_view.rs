@@ -102,14 +102,26 @@ impl ViewQuery {
     /// ponytail: one engine query for All Media too (two index seeks), not
     /// the cached month buckets, so every view reads undated the same way.
     pub(crate) fn date_span(&self, engine: &LuminaEngine) -> Option<DateSpan> {
-        let scope = match self.reject_scope() {
-            Some(scope) => scope,
+        engine.view_date_span(&self.layout_scope()?)
+    }
+
+    /// The view as one WHERE with the rows and order of [`Self::slice`]:
+    /// [`Self::reject_scope`] plus the Trash. `None` for Duplicates (not one
+    /// WHERE) and a smart album that is gone; the Mosaic draws the Grid body
+    /// there, and the header shows no date span.
+    pub(crate) fn layout_scope(&self) -> Option<ViewScope> {
+        match self.reject_scope() {
+            Some(scope) => Some(scope),
             None if self.key.selection == AlbumSelection::Trash => {
-                ViewScope::System(SystemAlbum::RecentlyDeleted)
+                Some(ViewScope::System(SystemAlbum::RecentlyDeleted))
             }
-            None => return None,
-        };
-        engine.view_date_span(&scope)
+            None => None,
+        }
+    }
+
+    /// Which view this is.
+    pub(crate) fn key(&self) -> &ViewKey {
+        &self.key
     }
 
     /// How many of a search's results are videos: one more count, run only

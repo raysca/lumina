@@ -2,9 +2,6 @@
 //! [`LayoutCell`]s to header and tile rows. It runs off the UI thread once
 //! per (view, revision, width, level); a frame only reads the result.
 
-// The Mosaic body, keys and rail consume this API (plan 01b Tasks 4-6).
-#![cfg_attr(not(test), allow(dead_code))]
-
 use crate::views::grid::{BAND_TO_ROW, GRID_CARD_GAP};
 use crate::views::search_bar::{size_level, SIZE_COLUMNS};
 use lumina_core::LayoutCell;
@@ -199,6 +196,8 @@ impl MosaicLayout {
     /// The item in the next tile row down (`down`) or up
     /// whose x-centre is nearest item `index`'s; headers are skipped. None
     /// at either end or for an index outside the layout.
+    // Unused until the Mosaic arrow keys land (plan 01b Task 6).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn vertical_neighbour(&self, index: usize, down: bool) -> Option<usize> {
         let tile = self.tiles.get(index)?;
         let centre = tile.x + tile.w / 2.0;
@@ -222,6 +221,8 @@ impl MosaicLayout {
     }
 
     /// Height of the whole layout.
+    // Unused until the Mosaic rail and zoom anchor land (plan 01b Task 6).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn total_height(&self) -> f32 {
         self.rows.last().map_or(0.0, |r| r.y + r.height)
     }

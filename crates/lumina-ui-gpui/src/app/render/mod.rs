@@ -14,6 +14,7 @@ use crate::views::viewer_state::ViewerRotation;
 
 mod card;
 mod grid;
+mod mosaic;
 pub(crate) mod overlays;
 pub(crate) mod rail;
 mod status_bar;
@@ -755,6 +756,8 @@ impl Render for LuminaApp {
                                                             )
                                                         } else if self.map_shown() {
                                                             crate::views::map::render(self, cx)
+                                                        } else if self.mosaic_shown() {
+                                                            self.render_mosaic(total_count, cx)
                                                         } else {
                                                             self.render_browser_grid(
                                                                 total_count,

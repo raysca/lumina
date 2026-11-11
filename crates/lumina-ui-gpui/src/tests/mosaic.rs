@@ -1,0 +1,337 @@
+//! Mosaic layout (plan 01b Task 4): the header's Mosaic segment swaps the
+//! uniform grid for justified rows, persisted as `browse_layout`. The
+//! layout is fetched and justified off the UI thread; scrolling reads only
+//! the cached layout and rows.
+
+use std::sync::Arc;
+
+use gpui::{px, size, Bounds, Pixels, VisualTestContext};
+use lumina_core::{LuminaEngine, MediaId};
+
+use crate::app::active_view::ROWS_READ;
+use crate::app::mosaic_layout::LAYOUT_FETCHES;
+use crate::config::BrowseLayout;
+use crate::tests::duplicates::run_palette_command;
+use crate::tests::ui_automation::{
+    app_with_library, click, leak, render_ui, seed_library, seed_library_undecodable,
+};
+use crate::views::sidebar::AlbumSelection;
+
+fn layout(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) -> BrowseLayout {
+    view.update(vcx, |app, _| app.config.browse_layout)
+}
+
+fn card(vcx: &mut VisualTestContext, id: MediaId) -> Bounds<Pixels> {
+    let selector = leak(format!("media-card-{}", id.0));
+    vcx.debug_bounds(selector)
+        .unwrap_or_else(|| panic!("{selector} must be drawn"))
+}
+
+#[core::prelude::v1::test]
+fn mosaic_segment_switches_layout_and_persists_in_config() {
+    let (dir, engine) = seed_library("mosaic_segment", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    // GPUI's test window builds no accessibility tree, so `aria_toggled`
+    // is read through the state it mirrors (`view_mode_on`).
+    assert_eq!(
+        layout(&view, vcx),
+        BrowseLayout::Grid,
+        "Grid is the default"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.view_mode_on(),
+            (false, true, false),
+            "the Grid segment is the toggled one by default"
+        )
+    });
+    assert!(vcx.debug_bounds("media-grid").is_some(), "the uniform grid");
+    assert!(vcx.debug_bounds("mosaic-list").is_none());
+    let mosaic = vcx
+        .debug_bounds("view-mode-mosaic")
+        .expect("Mosaic segment");
+    let grid = vcx.debug_bounds("view-mode-grid").expect("Grid segment");
+    assert!(
+        mosaic.origin.x < grid.origin.x,
+        "Mosaic is the first segment"
+    );
+
+    click(vcx, "view-mode-mosaic");
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(
+        layout(&view, vcx),
+        BrowseLayout::Mosaic,
+        "the segment sets the config's browse_layout, which the next save writes"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.view_mode_on(), (true, false, false), "Mosaic is on")
+    });
+    assert!(vcx.debug_bounds("mosaic-list").is_some(), "the mosaic list");
+    assert!(vcx.debug_bounds("media-grid").is_none(), "no uniform grid");
+    assert!(
+        vcx.debug_bounds("grid-month-header").is_none(),
+        "the month band is hidden in Mosaic"
+    );
+
+    click(vcx, "view-mode-grid");
+    render_ui(vcx);
+    assert_eq!(layout(&view, vcx), BrowseLayout::Grid);
+    assert!(vcx.debug_bounds("media-grid").is_some(), "Grid comes back");
+    assert!(vcx.debug_bounds("mosaic-list").is_none());
+
+    // A failed save keeps the screen on the saved layout and says so.
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    click(vcx, "view-mode-mosaic");
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.browse_layout,
+            BrowseLayout::Grid,
+            "a failed save reverts the layout"
+        );
+        assert!(
+            app.error_message.is_some(),
+            "the failure is in the error banner"
+        );
+        app.error_message = None;
+    });
+
+    // Keyboard path: ⌘K Show Mosaic and Show Grid.
+    run_palette_command(vcx, &view, "Show Mosaic");
+    render_ui(vcx);
+    assert_eq!(layout(&view, vcx), BrowseLayout::Mosaic, "⌘K Show Mosaic");
+    run_palette_command(vcx, &view, "Show Grid");
+    render_ui(vcx);
+    assert_eq!(layout(&view, vcx), BrowseLayout::Grid, "⌘K Show Grid");
+
+    // Views with no layout scope fall back to the Grid body.
+    run_palette_command(vcx, &view, "Show Mosaic");
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::User(987_654), cx)
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.view_query().layout_scope().is_none(),
+            "a missing smart album has no layout scope"
+        )
+    });
+    assert!(
+        vcx.debug_bounds("mosaic-list").is_none(),
+        "a view without a layout scope draws the Grid body"
+    );
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Duplicates, cx)
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.view_query().layout_scope().is_none());
+        assert_eq!(app.config.browse_layout, BrowseLayout::Mosaic, "kept");
+    });
+    assert!(
+        vcx.debug_bounds("mosaic-list").is_none(),
+        "Duplicates keeps its own screen in Mosaic"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn mosaic_tiles_keep_aspect_and_fill_rows() {
+    let (dir, engine) = seed_library("mosaic_tiles", 6);
+    let ids: Vec<MediaId> = engine.get_item_slice(0..6).iter().map(|i| i.id).collect();
+    let sizes = [(3000, 2000), (2000, 3000), (1000, 1000)];
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).expect("catalog opens");
+    for (n, id) in ids.iter().enumerate() {
+        let (w, h) = sizes[n % 3];
+        conn.execute(
+            "UPDATE media_items SET width = ?1, height = ?2 WHERE id = ?3",
+            [w, h, id.0 as i64],
+        )
+        .unwrap();
+    }
+    drop(conn);
+    crate::app::state::TEST_CONFIG.with(|c| {
+        *c.borrow_mut() = Some(crate::config::AppConfig {
+            browse_layout: BrowseLayout::Mosaic,
+            ..Default::default()
+        })
+    });
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(size(px(1440.0), px(900.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("mosaic-list").is_some(), "restored Mosaic");
+    let surface = vcx.debug_bounds("media-grid-surface").expect("surface");
+    let mut cards: Vec<(usize, Bounds<Pixels>)> = ids
+        .iter()
+        .enumerate()
+        .map(|(n, &id)| (n, card(vcx, id)))
+        .collect();
+    for (n, b) in &cards {
+        let (w, h) = sizes[n % 3];
+        let want = w as f32 / h as f32;
+        let got = f32::from(b.size.width) / f32::from(b.size.height);
+        assert!(
+            (got / want - 1.0).abs() < 0.02,
+            "tile {n} keeps its {want:.3} aspect: {got:.3}"
+        );
+    }
+    cards.sort_by(|a, b| {
+        (a.1.origin.y, a.1.origin.x)
+            .partial_cmp(&(b.1.origin.y, b.1.origin.x))
+            .unwrap()
+    });
+    let mut rows: Vec<Vec<Bounds<Pixels>>> = Vec::new();
+    for (_, b) in cards {
+        match rows.last_mut() {
+            Some(row) if (row[0].origin.y - b.origin.y).abs() < px(0.5) => row.push(b),
+            _ => rows.push(vec![b]),
+        }
+    }
+    assert!(rows.len() >= 2, "six tiles make a full row and a last row");
+    let left = f32::from(surface.origin.x) + 28.0;
+    let right = f32::from(surface.origin.x + surface.size.width) - 20.0;
+    for (r, row) in rows.iter().enumerate() {
+        let h = row[0].size.height;
+        assert!(
+            row.iter().all(|b| b.size.height == h),
+            "tiles in row {r} share a height"
+        );
+        assert!(
+            (f32::from(row[0].origin.x) - left).abs() <= 1.0,
+            "row {r} starts at the surface's left padding (28)"
+        );
+        if r + 1 < rows.len() {
+            let end = row.last().unwrap();
+            assert!(
+                (f32::from(end.origin.x + end.size.width) - right).abs() <= 1.0,
+                "full row {r} ends at the surface's right padding (20)"
+            );
+            assert!(
+                (158.0..=224.0).contains(&f32::from(h)),
+                "full row {r} is 158-224 high: {h:?}"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A Mosaic app on `count` texture-less items (aspect 1.0), layout landed.
+fn mosaic_app(
+    cx: &mut gpui::TestAppContext,
+    engine: Arc<LuminaEngine>,
+) -> (gpui::Entity<crate::LuminaApp>, &mut VisualTestContext) {
+    crate::app::state::TEST_CONFIG.with(|c| {
+        *c.borrow_mut() = Some(crate::config::AppConfig {
+            browse_layout: BrowseLayout::Mosaic,
+            ..Default::default()
+        })
+    });
+    let (view, vcx) = app_with_library(cx, engine);
+    render_ui(vcx);
+    render_ui(vcx);
+    (view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn mosaic_scroll_reads_no_sql() {
+    let (dir, engine) = seed_library_undecodable("mosaic_scroll", 300);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    let rows = view.update(vcx, |app, _| {
+        app.mosaic_layout()
+            .expect("the layout has landed")
+            .rows
+            .len()
+    });
+    assert!(rows > 50, "300 items make many rows: {rows}");
+    let fetches = LAYOUT_FETCHES.with(|n| n.get());
+    let read = ROWS_READ.with(|n| n.get());
+    let first = view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().unwrap();
+        state.mosaic.scroll_to(gpui::ListOffset {
+            item_ix: 40,
+            offset_in_item: px(0.0),
+        });
+        app.mosaic_layout().unwrap().rows[40].first
+    });
+    // Each pass must park: a list that re-asks for rows every frame would
+    // hang here (the uniform_list regression in grid_scroll.rs).
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(
+        LAYOUT_FETCHES.with(|n| n.get()),
+        fetches,
+        "scrolling never fetches the layout again"
+    );
+    assert_eq!(
+        ROWS_READ.with(|n| n.get()),
+        read,
+        "scrolling never reads rows synchronously"
+    );
+    view.update(vcx, |app, _| {
+        let top = app.grid_state.as_ref().unwrap().mosaic.logical_scroll_top();
+        assert_eq!(top.item_ix, 40, "the scroll held at row 40");
+        assert!(
+            !app.displayed_rows(first..first + 1).is_empty(),
+            "the visible rows were fetched in the background (want_view_rows)"
+        );
+    });
+    let id = view.update(vcx, |app, _| app.displayed_rows(first..first + 1)[0].id);
+    card(vcx, id);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn mosaic_layout_refetch_coalesces_scan_writes() {
+    let (dir, engine) = seed_library_undecodable("mosaic_coalesce", 12);
+    let writer = engine.clone();
+    let ids: Vec<MediaId> = engine.get_item_slice(0..12).iter().map(|i| i.id).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    let fetches = LAYOUT_FETCHES.with(|n| n.get());
+    let headers = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| {
+            let layout = app.mosaic_layout().unwrap();
+            layout.rows.len() - layout.rows.iter().filter(|r| r.len > 0).count()
+        })
+    };
+    let before = headers(&view, vcx);
+    // A scan writes from its own thread, three times in a row.
+    for (n, chunk) in ids.chunks(4).enumerate() {
+        let writer = writer.clone();
+        let changes: Vec<(MediaId, i64)> = chunk
+            .iter()
+            .map(|&id| (id, 1_700_000_000_000 - n as i64 * 86_400_000 * 3))
+            .collect();
+        std::thread::spawn(move || writer.set_timestamps(&changes).unwrap())
+            .join()
+            .unwrap();
+        render_ui(vcx);
+    }
+    assert_eq!(
+        LAYOUT_FETCHES.with(|n| n.get()),
+        fetches,
+        "scan writes right after a fetch wait for the cool-down"
+    );
+    vcx.executor()
+        .advance_clock(crate::app::mosaic_layout::SCAN_REFETCH_COOLDOWN);
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(
+        LAYOUT_FETCHES.with(|n| n.get()),
+        fetches + 1,
+        "the three writes coalesce into one refetch"
+    );
+    assert!(
+        headers(&view, vcx) == 3 && before != 3,
+        "the refetched layout has the three new days"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

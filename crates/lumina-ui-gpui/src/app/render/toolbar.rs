@@ -2,6 +2,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::config::BrowseLayout;
 use crate::icons::Icon;
 use crate::theme;
 use crate::views::page_header::{
@@ -291,11 +292,11 @@ fn progress_ring(fraction: f32) -> impl IntoElement {
 }
 
 impl LuminaApp {
-    /// Grid / Map segments (frame `t0zQL`; Mosaic waits on design 01
-    /// decision 1). Map runs Show Map, which moves to Places, the view the
-    /// map plots; Grid is on whenever the map is not. Not on Recently
-    /// Deleted or Duplicates: neither is a view the map could show, and
-    /// their own actions fill the header.
+    /// Mosaic / Grid / Map segments (frame `t0zQL`). Mosaic and Grid set
+    /// the saved browse layout and leave the map; Map runs Show Map, which
+    /// moves to Places, the view the map plots. Not on Recently Deleted or
+    /// Duplicates: neither is a view the map could show, and their own
+    /// actions fill the header.
     fn render_view_mode(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         if matches!(
             self.selection,
@@ -303,7 +304,7 @@ impl LuminaApp {
         ) {
             return None;
         }
-        let on_map = self.map_shown();
+        let (on_mosaic, on_grid, on_map) = self.view_mode_on();
         let segment = |selector: &'static str, icon, label: &str, tooltip: &str, on: bool| {
             theme::segmented_item(selector, on)
                 .group(selector)
@@ -339,14 +340,26 @@ impl LuminaApp {
                 .flex_shrink_0()
                 .child(
                     segment(
+                        "view-mode-mosaic",
+                        Icon::LayoutDashboard,
+                        &crate::i18n::t("header.view_mosaic"),
+                        &crate::i18n::t("command.show_mosaic"),
+                        on_mosaic,
+                    )
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.set_browse_layout(BrowseLayout::Mosaic, cx);
+                    })),
+                )
+                .child(
+                    segment(
                         "view-mode-grid",
                         Icon::Grid3x3,
                         &crate::i18n::t("header.view_grid"),
                         &crate::i18n::t("command.show_grid"),
-                        !on_map,
+                        on_grid,
                     )
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.show_grid(cx);
+                        this.set_browse_layout(BrowseLayout::Grid, cx);
                     })),
                 )
                 .child(
