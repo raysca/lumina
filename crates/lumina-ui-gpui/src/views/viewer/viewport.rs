@@ -34,11 +34,10 @@ fn pinch_zoom_delta(pinch_delta: f32, scale: f32) -> f32 {
 pub(super) const VIDEO_FRAME_MAX_WIDTH: f32 = 1040.0;
 
 /// V3Video: the video frame contain-fitted to at most 1040 wide and to the
-/// stage left after the top bar, the info drawer and the transport, so the
+/// stage left after the top bar, the docked info panel and the transport, so the
 /// transport sits right below the picture and always stays on screen.
 /// `None` for photos and immersive fullscreen, which fill the stage.
 pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
-    const TOP_BAR: f32 = 52.0;
     // ponytail: measured transport card (98) + its 12px top and 16px bottom
     // margins; update if the card grows.
     const TRANSPORT_BLOCK: f32 = 126.0;
@@ -63,15 +62,13 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
         })
         .unwrap_or(16.0 / 9.0);
     let (_, _, win_w, win_h) = this.window_bounds.unwrap_or((0.0, 0.0, 1280.0, 840.0));
-    let drawer = if this.inspector_open {
-        super::DRAWER_WIDTH + super::DRAWER_INSET * 2.0
+    let panel = if super::info_panel_shown(this) && !this.is_immersive_fullscreen {
+        super::INFO_PANEL_WIDTH
     } else {
         0.0
     };
-    let max_w = VIDEO_FRAME_MAX_WIDTH
-        .min(win_w - drawer - NAV_ROOM)
-        .max(1.0);
-    let max_h = (win_h - TOP_BAR - TOP_GAP - TRANSPORT_BLOCK).max(1.0);
+    let max_w = VIDEO_FRAME_MAX_WIDTH.min(win_w - panel - NAV_ROOM).max(1.0);
+    let max_h = (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - TRANSPORT_BLOCK).max(1.0);
     let w = max_w.min(max_h * aspect);
     Some((w, w / aspect))
 }

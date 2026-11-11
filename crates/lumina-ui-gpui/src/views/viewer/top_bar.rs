@@ -9,6 +9,9 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 
+/// Viewer top bar height; the floating immersive info panel starts below it.
+pub(super) const TOP_BAR_HEIGHT: f32 = 52.0;
+
 pub struct ViewerTopBar;
 
 /// Transparent 28px icon button with a tooltip.
@@ -101,7 +104,7 @@ impl ViewerTopBar {
             .debug_selector(|| "viewer-top-bar".to_string())
             .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
             .w_full()
-            .h(px(52.0))
+            .h(px(TOP_BAR_HEIGHT))
             .px_4()
             .bg(theme::bg_0())
             .border_b_1()

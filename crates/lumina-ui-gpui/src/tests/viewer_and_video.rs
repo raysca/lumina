@@ -1951,7 +1951,8 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
         "2x must enlarge the painted media height, not only zoom_scale: fit={fit:?} zoomed={zoomed:?}"
     );
 
-    // With the info drawer open the navigator moves left of it.
+    // With the docked info panel open the navigator keeps its 16px inset
+    // from the stage's right edge, which is the panel's left edge.
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();
@@ -1961,9 +1962,10 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
     let drawer = vcx
         .debug_bounds("viewer-info-drawer")
         .expect("the info drawer must paint");
-    assert!(
-        nav.right() <= drawer.left(),
-        "the navigator must not sit under the info drawer: nav={nav:?} drawer={drawer:?}"
+    assert_eq!(
+        drawer.left() - nav.right(),
+        gpui::px(16.0),
+        "the navigator sits 16px left of the docked panel: nav={nav:?} drawer={drawer:?}"
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -2413,6 +2415,11 @@ fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
     render_viewer_ui(vcx);
 
     let drawer = vcx.debug_bounds("viewer-info-drawer").unwrap();
+    assert_eq!(
+        (drawer.top(), drawer.right(), drawer.size.height),
+        (gpui::px(0.0), gpui::px(1440.0), gpui::px(900.0)),
+        "the info panel is docked full height at the right edge: {drawer:?}"
+    );
     for selector in ["viewer-media", "viewer-next", "viewer-viewport"] {
         let b = vcx
             .debug_bounds(selector)

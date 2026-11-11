@@ -516,6 +516,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",
         "viewer.open_default_hint" => "Press O to open it in its default app.",
+        "viewer.info_panel" => "Info",
         "jobs.export_running" => "An export is already running",
         "export.videos_as_originals_one" => "{n} video exported as the original",
         "export.videos_as_originals_other" => "{n} videos exported as originals",

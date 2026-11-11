@@ -3,6 +3,7 @@ use gpui::*;
 use lumina_core::MediaType;
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
@@ -20,9 +21,19 @@ pub use top_bar::ViewerTopBar;
 pub use transport::ViewerTransport;
 pub use viewport::ViewerViewport;
 
-/// Floating info drawer width and its gap to the window edge.
-pub(super) const DRAWER_WIDTH: f32 = 340.0;
-pub(super) const DRAWER_INSET: f32 = 16.0;
+/// Docked info panel width (Design 02 "Detail").
+pub(super) const INFO_PANEL_WIDTH: f32 = 340.0;
+
+/// Whether the viewer shows the info panel. Edit mode and a slideshow hide
+/// it, and immersive mode hides it with the HUD. Windowed, it is docked
+/// beside the stage; immersive, it floats over the stage below the top bar,
+/// so the photo does not resize each time the HUD wakes.
+pub(super) fn info_panel_shown(this: &LuminaApp) -> bool {
+    this.inspector_open
+        && (!this.is_immersive_fullscreen || this.immersive_hud_visible)
+        && this.edits.session.is_none()
+        && this.slideshow.is_none()
+}
 
 pub struct MediaViewer;
 
@@ -34,19 +45,16 @@ impl MediaViewer {
         };
 
         let is_video = item.media_type == MediaType::Video;
-        // The viewer is always the fullscreen overlay, so the inspector drawer
-        // simply follows the app's inspector state.
-        let is_inspector_open = this.inspector_open;
         let is_immersive = this.is_immersive_fullscreen;
         let hud_visible = this.immersive_hud_visible;
         let show_chrome = !is_immersive || hud_visible;
         // Edit mode swaps the top bar for the edit bar and hides what could
-        // step to, or act on, another photo (nav buttons, info drawer).
+        // step to, or act on, another photo (nav buttons, info panel).
         let editing = this.edits.session.is_some();
         // A slideshow keeps only Back: no step, mark, zoom, play or PiP
         // control acts behind its timer (its keys are Space, ←/→ and Esc).
         let presenting = this.slideshow.is_some();
-        let show_drawer = is_inspector_open && show_chrome && !editing && !presenting;
+        let show_panel = info_panel_shown(this);
 
         let backdrop = div()
             .id("viewer-backdrop")
@@ -57,23 +65,18 @@ impl MediaViewer {
                 theme::bg_stage()
             })
             .flex()
-            .flex_col()
-            .justify_between()
-            .items_center()
+            .flex_row()
             .overflow_hidden();
 
-        backdrop
-            .on_mouse_move(cx.listener(|this, _e: &MouseMoveEvent, _w, cx| {
-                this.wake_immersive_hud(cx);
-            }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _e: &MouseUpEvent, _w, cx| {
-                    if this.viewer_state.is_dragging {
-                        this.end_viewer_drag(cx);
-                    }
-                }),
-            )
+        // Stage column: top bar, then the media with its controls.
+        let stage = div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .overflow_hidden()
             // 1. Top Bar
             .child(if editing {
                 edit_bar::render(this, cx)
@@ -95,15 +98,9 @@ impl MediaViewer {
                 div()
                     .relative()
                     .flex_1()
+                    .min_h_0()
                     .w_full()
                     .overflow_hidden()
-                    // The info drawer floats at the right; reserve its width
-                    // so it never covers the media, next button or transport.
-                    // Not in immersive mode: the drawer hides with the HUD
-                    // there, and the photo must not resize each time.
-                    .when(is_inspector_open && !is_immersive && !editing, |stage| {
-                        stage.pr(px(DRAWER_WIDTH + DRAWER_INSET * 2.0))
-                    })
                     .flex()
                     .flex_col()
                     .items_center()
@@ -157,25 +154,46 @@ impl MediaViewer {
                     } else {
                         Empty.into_any_element()
                     }),
+            );
+
+        backdrop
+            .on_mouse_move(cx.listener(|this, _e: &MouseMoveEvent, _w, cx| {
+                this.wake_immersive_hud(cx);
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseUpEvent, _w, cx| {
+                    if this.viewer_state.is_dragging {
+                        this.end_viewer_drag(cx);
+                    }
+                }),
             )
-            // 4. Floating Inspector Drawer (when opened)
-            .child(if show_drawer {
+            .child(stage)
+            // 3. Info panel: a full-height column beside the stage.
+            .child(if show_panel {
                 div()
                     .id("viewer-info-drawer")
                     .debug_selector(|| "viewer-info-drawer".to_string())
-                    // The drawer floats over the viewport; keep clicks inside it
-                    // from reaching the media canvas or the grid behind.
+                    // Keep clicks inside the panel from reaching the media
+                    // canvas or the grid behind.
                     .occlude()
-                    .absolute()
-                    .top(px(60.0))
-                    .right(px(DRAWER_INSET))
-                    .bottom(px(DRAWER_INSET))
-                    .w(px(DRAWER_WIDTH))
-                    .bg(theme::bg_float())
-                    .border_1()
-                    .border_color(theme::line_2())
-                    .rounded(theme::RADIUS_LG)
-                    .shadow_2xl()
+                    .flex_none()
+                    .w(px(INFO_PANEL_WIDTH))
+                    .when(!is_immersive, |panel| panel.h_full())
+                    .role(Role::Complementary)
+                    .aria_label(t("viewer.info_panel"))
+                    // Immersive: float over the stage below the top bar, so
+                    // its Favourite and Info buttons stay clickable.
+                    .when(is_immersive, |panel| {
+                        panel
+                            .absolute()
+                            .top(px(top_bar::TOP_BAR_HEIGHT))
+                            .bottom_0()
+                            .right_0()
+                    })
+                    .bg(theme::bg_1())
+                    .border_l_1()
+                    .border_color(theme::line())
                     .overflow_hidden()
                     .child(InspectorView::render(this, cx))
                     .into_any_element()

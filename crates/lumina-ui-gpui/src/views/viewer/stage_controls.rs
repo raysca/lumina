@@ -59,6 +59,8 @@ pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Op
 }
 
 const NAVIGATOR_EDGE: f32 = 180.0;
+/// Gap from the navigator to the stage's top-right corner.
+const NAVIGATOR_INSET: f32 = 16.0;
 
 /// Overview (long edge 180px) of the picture with an amber rect on the
 /// visible region, and the Fit · Fill · 1:1 preset buttons below it.
@@ -73,11 +75,12 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
     } else {
         ((NAVIGATOR_EDGE * aspect).max(24.0), NAVIGATOR_EDGE)
     };
-    // Keep clear of the floating info drawer.
-    let right = if this.inspector_open {
-        super::DRAWER_WIDTH + super::DRAWER_INSET * 2.0
+    // Windowed, the info panel is docked beside the stage; immersive, it
+    // floats over the stage's right edge, so the navigator moves left of it.
+    let right = if this.is_immersive_fullscreen && super::info_panel_shown(this) {
+        super::INFO_PANEL_WIDTH + NAVIGATOR_INSET
     } else {
-        super::DRAWER_INSET
+        NAVIGATOR_INSET
     };
     let presets = [
         (ViewerZoomPreset::Fit, "fit", "zoom.preset_fit"),
@@ -140,7 +143,7 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
             // Clicks on the navigator or its buttons must not start a pan.
             .occlude()
             .absolute()
-            .top(px(16.0))
+            .top(px(NAVIGATOR_INSET))
             .right(px(right))
             .flex()
             .flex_col()

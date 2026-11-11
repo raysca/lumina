@@ -339,3 +339,253 @@ fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- Docked InfoPanel (Design 02 Task 1) --------------------------------
+
+#[core::prelude::v1::test]
+fn viewer_info_panel_is_docked_full_height() {
+    let (dir, engine) = seed_library_undecodable("viewer_docked_panel", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    view.update(vcx, |app, cx| {
+        open_at(app, 0, cx);
+        detach_decoder_answers(app);
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    let panel = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("an open inspector paints the docked info panel");
+    assert_eq!(
+        (
+            panel.right(),
+            panel.size.width,
+            panel.top(),
+            panel.size.height
+        ),
+        (
+            gpui::px(1600.0),
+            gpui::px(340.0),
+            gpui::px(0.0),
+            gpui::px(1000.0)
+        ),
+        "the info panel docks at the right edge, 340 wide and full height: {panel:?}"
+    );
+    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar paints");
+    assert_eq!(
+        bar.right(),
+        gpui::px(1260.0),
+        "the top bar belongs to the stage column, left of the panel: {bar:?}"
+    );
+
+    // Panel closed (I): the stage takes the full width.
+    view.update(vcx, |app, cx| {
+        app.inspector_open = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("viewer-info-drawer").is_none());
+    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar paints");
+    assert_eq!(
+        bar.right(),
+        gpui::px(1600.0),
+        "with the panel closed the stage spans the window: {bar:?}"
+    );
+
+    // Immersive: the panel floats over the stage below the top bar with the
+    // HUD, so the stage keeps the full width, and it hides with the HUD.
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.is_immersive_fullscreen = true;
+        app.immersive_hud_visible = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let panel = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("the visible HUD shows the open panel");
+    let viewport = vcx.debug_bounds("viewer-viewport").expect("viewport");
+    assert_eq!(
+        (panel.right(), viewport.right()),
+        (gpui::px(1600.0), gpui::px(1600.0)),
+        "immersive keeps a full-width stage under the floating panel"
+    );
+    view.update(vcx, |app, cx| {
+        app.immersive_hud_visible = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-info-drawer").is_none(),
+        "the panel hides with the immersive HUD"
+    );
+
+    // Narrow window: the panel keeps 340, the stage gets the rest and its
+    // controls stay inside it.
+    view.update(vcx, |app, cx| {
+        app.is_immersive_fullscreen = false;
+        cx.notify();
+    });
+    // The window's minimum size is 960x600.
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(700.0)));
+    render_ui(vcx);
+    let panel = vcx.debug_bounds("viewer-info-drawer").expect("panel");
+    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar");
+    let next = vcx.debug_bounds("viewer-next").expect("next button");
+    assert_eq!(
+        (panel.left(), panel.size.width, bar.right()),
+        (gpui::px(620.0), gpui::px(340.0), gpui::px(620.0)),
+        "a narrow window shrinks the stage, not the panel"
+    );
+    assert!(
+        next.right() <= panel.left(),
+        "the next button stays on the stage: {next:?} panel={panel:?}"
+    );
+    let info = vcx.debug_bounds("viewer-info-btn").expect("info button");
+    assert!(
+        info.right() <= bar.right(),
+        "the top bar's buttons stay left of the panel: {info:?} bar={bar:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Opens item 0 of a one-item undecodable library at 1600x1000 with the
+/// info panel open.
+fn viewer_with_panel<'a>(
+    cx: &'a mut TestAppContext,
+    prefix: &str,
+) -> (
+    std::path::PathBuf,
+    Entity<LuminaApp>,
+    &'a mut VisualTestContext,
+) {
+    let (dir, engine) = seed_library_undecodable(prefix, 1);
+    let (view, vcx) = app_without_decodes(cx, engine, &[]);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    view.update(vcx, |app, cx| {
+        open_at(app, 0, cx);
+        detach_decoder_answers(app);
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    (dir, view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn viewer_immersive_panel_leaves_the_top_bar_buttons_clickable() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_immersive_panel_bar");
+    view.update(vcx, |app, cx| {
+        app.is_immersive_fullscreen = true;
+        app.immersive_hud_visible = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    let panel = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("the visible HUD shows the open panel");
+    for selector in ["viewer-info-btn", "viewer-fav-btn"] {
+        let button = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} paints"));
+        assert!(
+            !button.intersects(&panel),
+            "the floating panel must not cover {selector}: {button:?} panel={panel:?}"
+        );
+    }
+    click(vcx, "viewer-info-btn");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.inspector_open,
+            "clicking Info in immersive mode must close the panel"
+        );
+    });
+    assert!(vcx.debug_bounds("viewer-info-drawer").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_immersive_panel_clears_the_zoom_navigator() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = super::viewer_and_video::viewer_with_gradient(
+        &mut cx,
+        "viewer_immersive_nav",
+        1600.0,
+        1000.0,
+    );
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.is_immersive_fullscreen = true;
+        app.immersive_hud_visible = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-2");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.viewer_state.zoom_scale > 1.0,
+            "test premise: ⌘2 zooms in"
+        );
+        assert!(
+            app.immersive_hud_visible,
+            "test premise: the HUD is visible"
+        );
+    });
+
+    let nav = vcx
+        .debug_bounds("viewer-navigator")
+        .expect("zoomed, the navigator shows");
+    let panel = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("the visible HUD shows the open panel");
+    assert!(
+        !nav.intersects(&panel),
+        "the zoom navigator must not sit under the floating panel: nav={nav:?} panel={panel:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_i_key_closes_and_reopens_the_docked_panel() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_panel_key");
+    focus_app(vcx, &view);
+    let docked = vcx.debug_bounds("viewer-viewport").expect("viewport");
+
+    keystrokes(vcx, "i");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-info-drawer").is_none(),
+        "I closes the docked panel"
+    );
+    let full = vcx.debug_bounds("viewer-viewport").expect("viewport");
+    assert_eq!(
+        full.size.width - docked.size.width,
+        gpui::px(340.0),
+        "closing the panel widens the stage by its width: docked={docked:?} full={full:?}"
+    );
+
+    keystrokes(vcx, "i");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-info-drawer").is_some(),
+        "I reopens the panel"
+    );
+    let reopened = vcx.debug_bounds("viewer-viewport").expect("viewport");
+    assert_eq!(
+        reopened.size.width, docked.size.width,
+        "reopening the panel narrows the stage again"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer, "I must not close the viewer")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
