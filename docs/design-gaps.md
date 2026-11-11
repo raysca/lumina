@@ -18,10 +18,16 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
   zero). `make ui-smoke` does not open PiP. Its keys work only after the window is clicked.
 - **VoiceOver.** Roles and labels were added to new controls, but none were checked with
   VoiceOver (AGENTS §11, §15).
-- **Live interaction.** `make ui-e2e` has never run its interaction steps here. Without Screen
-  Recording it FAILS at "could not capture the window" (`scripts/live_ui_automation.sh:263`,
-  since dff8d3d) before its Accessibility check can report SKIP; the script should map a
-  capture failure to SKIP unless `LUMINA_REQUIRE_UI_PERMISSIONS=1`.
+- **Live interaction.** With Screen Recording and Accessibility granted (2026-11-11),
+  `make ui-e2e` passes all steps (7/7 runs after 3f4a5ed, which keeps the PiP panel visible
+  while Lumina is inactive; before it, the PiP hid on app switch and the e2e passed about 1 in
+  3). The new "PiP stayed on screen with another app active" step does not assert that Finder
+  really became frontmost, and uses a fixed 1 s sleep. It covers the inspector, shortcut
+  sheet, viewer, PiP open/keep/close, a favourite and a smart album; it does not open Mosaic,
+  Videos tiles, the 4K chip or the PiP card's controls. Without Screen Recording it still
+  FAILS at "could not capture the window" (`scripts/live_ui_automation.sh:263`) before its
+  Accessibility check can report SKIP; the script should map a capture failure to SKIP unless
+  `LUMINA_REQUIRE_UI_PERMISSIONS=1`.
 - **Release-mode bench.** Most `make bench` runs were debug; only the `is:edited` and FTS fixes
   have release numbers.
 
@@ -92,6 +98,10 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Filmstrip:** shows for a one-item view; video thumbs untested directly; a clicked item that
   vanished in the meantime opens nothing. (02 Task 6)
 - **Map:** neither the card nor Places wraps across the date line.
+- **PiP and Spaces:** the PiP stays in its own Space; it does not follow the user across
+  Spaces or over full-screen apps like the system PiP (would need
+  `CanJoinAllSpaces | FullScreenAuxiliary`). The floating Inspector window still hides while
+  Lumina is inactive (same NSPanel default), which seems right for an inspector.
 - **Videos tiles and filters (04 Tasks 2–4):** caption line heights (16/13 px) are estimates;
   at 124–135 px tile width a rated clip's meta pill can touch the top badge row. The column
   count still comes only from zoom (2–8), so at 8 columns in a narrow window thumbs are tiny.
