@@ -353,6 +353,29 @@ fn benchmark_scale_and_gates() {
         })
         .collect();
     catalog.set_flags(&flags).expect("seed bench flags");
+    // Edits: 1% with an edits row, 1% rotated only (`is:edited` ~2%, rare).
+    let edits: Vec<(MediaId, lumina_core::Edits)> = ids
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &id)| match i % 100 {
+            7 => Some((
+                id,
+                lumina_core::Edits {
+                    exposure_ev: 0.5,
+                    ..Default::default()
+                },
+            )),
+            8 => Some((
+                id,
+                lumina_core::Edits {
+                    rotation: 1,
+                    ..Default::default()
+                },
+            )),
+            _ => None,
+        })
+        .collect();
+    catalog.set_edits(&edits).expect("seed bench edits");
 
     // Recompute timeline buckets
     catalog
@@ -455,6 +478,9 @@ fn benchmark_scale_and_gates() {
         ("is:pick", 0),
         ("is:reject", 0),
         ("is:reject", 450),
+        ("is:edited", 0),
+        ("is:edited", 450),
+        ("-is:edited", 0),
         // `within:`: a rare box (~10 rows), the dense home city (~1,700
         // rows) on page 0 and a deep page, an old dense trip (~2,500 rows,
         // all older than every other row), and the whole world.

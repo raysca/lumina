@@ -7,7 +7,7 @@ impl StructuredQuery {
     /// Parses a user search query string containing keywords and structured tokens.
     /// Example: "sunset in Kyoto camera:Sony is:favorite year:2026 iso:>400 date:2026-09-01..2026-10-10"
     ///
-    /// A leading `-` negates a word, a quoted phrase, `tag:`, `is:favorite`
+    /// A leading `-` negates a word, a quoted phrase, `tag:`, `is:favorite|edited`
     /// and `has:location|tag|color` (not `within:`). Bad filter values and unsupported
     /// negations land in [`StructuredQuery::unrecognized`].
     pub fn parse(input: &str) -> Self {
@@ -53,6 +53,7 @@ impl StructuredQuery {
                 self.exclude_tags.push(filter_value(tag))
             }
             ("is", "favorite" | "favourite" | "fav") => self.is_favorite = Some(false),
+            ("is", "edited") => self.is_edited = Some(false),
             ("has", "location" | "geo" | "gps") => self.has_location = Some(false),
             ("has", "tag" | "tags" | "label") => self.has_tag = Some(false),
             ("has", "color" | "color_label") => self.has_color_label = Some(false),
@@ -92,6 +93,7 @@ impl StructuredQuery {
                     "pick" => self.flag = Some(crate::Flag::Pick),
                     "reject" => self.flag = Some(crate::Flag::Reject),
                     "unflagged" => self.flag = Some(crate::Flag::Unflagged),
+                    "edited" => self.is_edited = Some(true),
                     _ => return false,
                 }
                 true

@@ -6512,3 +6512,152 @@ fn view_date_span_ignores_undated_items() {
         "a trashed item leaves the library's span, as it leaves its count"
     );
 }
+
+#[test]
+fn is_edited_matches_items_with_edits_or_rotation() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/cropped.jpg", MediaType::Image, 3, None, None),
+            sample_media_item("/p/rotated.jpg", MediaType::Image, 2, None, None),
+            sample_media_item("/p/plain.jpg", MediaType::Image, 1, None, None),
+        ])
+        .expect("insert items")
+        .iter()
+        .map(|item| item.id)
+        .collect();
+    catalog
+        .set_edits(&[(
+            ids[0],
+            lumina_core::Edits {
+                exposure_ev: 0.5,
+                ..Default::default()
+            },
+        )])
+        .expect("store an edits row");
+    catalog
+        .set_rotations(&[(ids[1], 1)])
+        .expect("rotate a quarter turn");
+
+    let names = |text: &str| -> Vec<String> {
+        let mut names: Vec<String> = catalog
+            .search_structured(&StructuredQuery::parse(text), 50, 0)
+            .expect("search runs")
+            .into_iter()
+            .map(|m| m.file_name)
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        names("is:edited"),
+        ["cropped.jpg", "rotated.jpg"],
+        "is:edited matches an edits row or a rotation"
+    );
+    assert_eq!(
+        names("-is:edited"),
+        ["plain.jpg"],
+        "-is:edited matches only items with neither edits nor rotation"
+    );
+    assert_eq!(StructuredQuery::parse("is:edited").explain(), ["Edited"]);
+    assert_eq!(
+        StructuredQuery::parse("-is:edited").explain(),
+        ["Not edited"]
+    );
+
+    // A saved-search album compiles through the same parser.
+    let mut album: Vec<String> = catalog
+        .query_smart_album(&query_rule_album("is:edited"), 50, 0)
+        .expect("a saved search accepts is:edited")
+        .into_iter()
+        .map(|m| m.file_name)
+        .collect();
+    album.sort();
+    assert_eq!(album, ["cropped.jpg", "rotated.jpg"]);
+
+    // The plan drives from the edited ids (rowid lookups into media_items),
+    // never a walk of the whole timeline index or a scan of media_items.
+    let (sql, params) = StructuredQuery::parse("is:edited").synthesize_query(50, 0);
+    let rows = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .expect("explain");
+    let plan = rows.join(" | ");
+    assert!(
+        plan.contains("SEARCH m USING INTEGER PRIMARY KEY (rowid=?)"),
+        "is:edited must look up media_items by rowid from the edited ids, got: {plan}"
+    );
+    assert!(
+        plan.contains("idx_media_rotated"),
+        "rotated ids must come from the partial rotation index, got: {plan}"
+    );
+    assert!(
+        rows.iter()
+            .filter(|row| row.starts_with("SCAN "))
+            .all(|row| row == "SCAN media_edits" || row.contains("idx_media_rotated")),
+        "is:edited may scan only media_edits and the rotation index, got: {plan}"
+    );
+}
+
+#[test]
+fn migration_adds_rotation_index_idempotently() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_rotation_index_migration_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    // Removes the temp dir even when an assertion below panics.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(tmp_dir.clone());
+    let db_path = tmp_dir.join("catalog.db");
+    {
+        let catalog = Catalog::open(&db_path).expect("open fresh catalog");
+        let id = catalog
+            .insert_or_update_batch(&[sample_media_item(
+                "/p/turned.jpg",
+                MediaType::Image,
+                1,
+                None,
+                None,
+            )])
+            .expect("insert")[0]
+            .id;
+        catalog.set_rotations(&[(id, 1)]).expect("rotate");
+    }
+    // Back to the v20 layout: no rotation index.
+    raw_catalog(&db_path)
+        .execute_batch("DROP INDEX idx_media_rotated; PRAGMA user_version = 20;")
+        .expect("downgrade to v20");
+    for pass in 0..2 {
+        let catalog = Catalog::open(&db_path).expect("a v20 catalog must open and migrate");
+        assert_eq!(
+            catalog.schema_version().unwrap(),
+            SCHEMA_VERSION,
+            "pass {pass}: opening stamps the current schema version"
+        );
+        let (sql, params) = StructuredQuery::parse("is:edited").synthesize_query(50, 0);
+        let plan = catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ");
+        assert!(
+            plan.contains("idx_media_rotated"),
+            "pass {pass}: the upgrade creates the rotation index, got: {plan}"
+        );
+        assert_eq!(
+            catalog
+                .search_structured(&StructuredQuery::parse("is:edited"), 50, 0)
+                .expect("search")
+                .len(),
+            1,
+            "pass {pass}: the rotated item still matches is:edited"
+        );
+    }
+}

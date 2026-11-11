@@ -1375,7 +1375,10 @@ mod tests {
         catalog
             .conn
             .lock()
-            .execute("ALTER TABLE media_items DROP COLUMN rotation_quarters;", [])
+            .execute_batch(
+                "DROP INDEX idx_media_rotated;
+                 ALTER TABLE media_items DROP COLUMN rotation_quarters;",
+            )
             .expect("pre-migration schema must be reproducible");
         drop(catalog);
 

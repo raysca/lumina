@@ -35,6 +35,7 @@ spaces. Every part must match (AND). The grammar lives in
 | `is:untagged` | No tags |
 | `is:unlabeled`, `color:none` (`color:0`) | No color label |
 | `is:pick`, `is:reject`, `is:unflagged` | Culling flag: picked, rejected, or neither |
+| `is:edited` | Rotated, cropped, exposure-adjusted or auto-enhanced in Lumina |
 | `has:location`, `has:tag`, `has:color`, `has:rating` | Has GPS, any tag, any color label, any rating |
 | `within:34.9,135.6,35.1,135.9` | GPS inside a box, see below |
 
@@ -68,6 +69,7 @@ A leading `-` excludes:
 - `-"two words"` hides a phrase.
 - `-tag:work` hides items tagged `work` or a sub-keyword such as `work/clients`.
 - `-is:favorite` shows only non-favorites.
+- `-is:edited` shows only items with no rotation or edit.
 - `-has:location`, `-has:tag`, `-has:color` show items without GPS, tags or a
   color label.
 

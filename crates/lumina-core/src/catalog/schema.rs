@@ -634,6 +634,15 @@ impl Catalog {
         )
         .context("creating the culling flag index")?;
 
+        // v21: `is:edited` lists rotated items from this partial index (only
+        // rotated rows, so it stays tiny) instead of scanning media_items.
+        // Created after the guarded ALTER that adds `rotation_quarters`.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_rotated ON media_items(rotation_quarters) WHERE rotation_quarters != 0;",
+            [],
+        )
+        .context("creating the rotation index")?;
+
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
         // v16: the tag and duplicate-merge paths used to send the contentless

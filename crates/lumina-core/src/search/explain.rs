@@ -142,6 +142,9 @@ impl StructuredQuery {
                 .into(),
             );
         }
+        if let Some(edited) = self.is_edited {
+            out.push(if edited { "Edited" } else { "Not edited" }.into());
+        }
         if let Some(tagged) = self.has_tag {
             out.push(if tagged { "Tagged" } else { "Untagged" }.into());
         }
@@ -240,6 +243,7 @@ mod tests {
             has_color_label: _,
             flag: _,
             within: _,
+            is_edited: _,
         } = StructuredQuery::default();
 
         assert!(
@@ -279,6 +283,7 @@ mod tests {
             ("flag", "is:pick", "Picks"),
             ("flag", "is:reject", "Rejects"),
             ("flag", "is:unflagged", "Unflagged"),
+            ("is_edited", "is:edited", "Edited"),
             (
                 "within",
                 "within:34.5,135,35.5,136",

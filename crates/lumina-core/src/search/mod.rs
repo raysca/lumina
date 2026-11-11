@@ -52,6 +52,10 @@ pub struct StructuredQuery {
     /// (inclusive). `west > east` means the box crosses the antimeridian.
     #[serde(default)]
     pub within: Option<[f64; 4]>,
+    /// `is:edited`: rotated or with a `media_edits` row (crop, exposure,
+    /// auto-enhance). `Some(false)` from `-is:edited`.
+    #[serde(default)]
+    pub is_edited: Option<bool>,
 }
 
 /// How the free-text FTS match is written into the WHERE clause.
@@ -250,6 +254,20 @@ impl StructuredQuery {
 
         if let Some(within) = self.within {
             push_within(&mut clauses, &mut params, within, geo);
+        }
+
+        // Edited items are rare, so the plan drives from them: the id list is
+        // media_edits (one row per edited item) plus the partial
+        // idx_media_rotated, then rowid lookups and a sort of the matches. A
+        // correlated EXISTS instead walked the whole date index on every page.
+        // ponytail: the sort is of every match; if most of a library is
+        // edited, a timeline-ordered index would be the upgrade.
+        if let Some(edited) = self.is_edited {
+            let op = if edited { "IN" } else { "NOT IN" };
+            clauses.push(format!(
+                "m.id {op} (SELECT media_id FROM media_edits \
+                 UNION ALL SELECT id FROM media_items WHERE rotation_quarters != 0)"
+            ));
         }
 
         if let Some(has_tag) = self.has_tag {
