@@ -31,6 +31,7 @@ pub mod stacks;
 pub mod tag_manager;
 pub mod template_editor;
 pub mod toast;
+pub mod top_matches;
 pub mod viewer;
 pub mod viewer_state;
 pub mod zoom_pill;

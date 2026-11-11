@@ -471,6 +471,7 @@ impl Render for LuminaApp {
         }
 
         self.refresh_active_view(cx);
+        self.refresh_top_matches(cx);
         self.refresh_map_points(cx);
         self.close_header_popovers_under_modals();
         // A mouse-up outside an inactive window never reaches the root.
@@ -751,6 +752,7 @@ impl Render for LuminaApp {
                                             .flex_col()
                                             .children(self.render_trash_note())
                                             .children(self.render_filter_bar(cx))
+                                            .children(self.render_top_matches(window, cx))
                                             .child(
                                                 div()
                                                     .relative()

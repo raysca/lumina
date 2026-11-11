@@ -405,6 +405,7 @@ pub struct LuminaApp {
     pub search_focused: bool,
     pub search_suggestions: SearchSuggestionState,
     pub query_bar: QueryBarState,
+    pub(crate) top_matches: crate::app::search::TopMatchesState,
     pub active_year: Option<i32>,
     /// Bounded Back trail of browsing destinations (album, search, year,
     /// selection, viewer). Transient overlays are never recorded.
@@ -638,6 +639,7 @@ impl LuminaApp {
             search_focused: false,
             search_suggestions: SearchSuggestionState::default(),
             query_bar: QueryBarState::default(),
+            top_matches: Default::default(),
             active_year: None,
             navigation_history: NavigationHistory::new(NavigationSnapshot::default()),
             pending_restore: Some(config.restored_session()),

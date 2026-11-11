@@ -442,7 +442,7 @@ impl LuminaApp {
         // 6. Sidebar search field input focus
         if self.search_focused {
             // ←/→/⌫ on the query bar's chips (passed on by the input).
-            if self.search_bar_key(key, cx) {
+            if self.search_bar_key(key, cx) || self.top_match_key(key, cx) {
                 return true;
             }
             if key == "escape" {

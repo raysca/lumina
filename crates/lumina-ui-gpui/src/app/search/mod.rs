@@ -7,9 +7,12 @@ use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
 mod chips;
+mod top_match_open;
+mod top_matches;
 pub(crate) use chips::{
     filter_chips, filter_label, query_bar_parts, query_with_typed, remove_query_tokens, FilterChip,
 };
+pub(crate) use top_matches::{TopMatch, TopMatchKind, TopMatchesState};
 
 /// Maximum number of committed queries kept in recent-search history.
 pub(crate) const MAX_RECENT_SEARCHES: usize = 10;
@@ -280,6 +283,7 @@ impl LuminaApp {
         self.search_suggestions.dismissed = false;
         self.search_suggestions.selected = None;
         self.query_bar.chip = None;
+        self.top_matches.highlight = None;
     }
 
     /// Hides the dropdown without leaving the search field.

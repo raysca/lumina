@@ -580,3 +580,239 @@ fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// Task 5: Top matches.
+
+/// Lets the matches' debounced fetch run and land.
+fn settle(vcx: &mut VisualTestContext) {
+    render_ui(vcx);
+    vcx.executor()
+        .advance_clock(std::time::Duration::from_millis(300));
+    render_ui(vcx);
+}
+
+/// Two items: one in Lisbon taken in June 2025, one in Porto; a smart album
+/// titled "Lisbon trips"; a `lisbon2025` tag.
+fn top_match_app<'a>(
+    name: &str,
+    cx: &'a mut gpui::TestAppContext,
+) -> (
+    std::path::PathBuf,
+    Entity<crate::LuminaApp>,
+    &'a mut VisualTestContext,
+    i64,
+) {
+    let (dir, engine) = seed_library(name, 2);
+    let ids: Vec<u64> = engine
+        .get_item_slice(0..2)
+        .iter()
+        .map(|item| item.id.0)
+        .collect();
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).expect("catalog opens");
+    conn.execute(
+        "UPDATE media_items SET city = 'Lisbon', country_code = 'PT' WHERE id = ?1",
+        [ids[0] as i64],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE media_items SET city = 'Porto', country_code = 'PT' WHERE id = ?1",
+        [ids[1] as i64],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO timeline_buckets (bucket_type, bucket_key, start_timestamp, end_timestamp, item_count, cover_media_id)
+         VALUES ('month', '2025-06', 0, 0, 1, NULL)",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    engine
+        .add_tags_batch(&[lumina_core::MediaId(ids[1])], &["lisbon2025".to_string()])
+        .unwrap();
+    let album = engine
+        .create_smart_album("Lisbon trips", "folder", lumina_core::MatchMode::All, &[])
+        .expect("album saves");
+    let (view, vcx) = app_with_library(cx, engine);
+    view.update(vcx, |app, _| {
+        app.refresh_album_counts();
+        app.refresh_tag_counts();
+    });
+    render_ui(vcx);
+    (dir, view, vcx, album.id)
+}
+
+#[core::prelude::v1::test]
+fn top_matches_show_place_album_month_and_navigate() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx, album) = top_match_app("search_top_matches", &mut cx);
+
+    set_query(&view, vcx, "lisbon june");
+    settle(vcx);
+    let header = bounds(vcx, "search-header");
+    let row = bounds(vcx, "top-matches");
+    assert!(
+        row.top() >= header.bottom(),
+        "the matches sit under the 131.5 header, above the grid: {row:?}"
+    );
+    for selector in [
+        "top-match-place-0",
+        "top-match-album-0",
+        "top-match-month-0",
+        "top-match-tag-0",
+    ] {
+        let card = bounds(vcx, selector);
+        assert_eq!(f32::from(card.size.height), 64.0, "{selector} is 64 high");
+    }
+    assert!(
+        vcx.debug_bounds("top-match-place-1").is_none(),
+        "Porto does not match"
+    );
+    let (place, album_card, month, tag) = (
+        bounds(vcx, "top-match-place-0"),
+        bounds(vcx, "top-match-album-0"),
+        bounds(vcx, "top-match-month-0"),
+        bounds(vcx, "top-match-tag-0"),
+    );
+    assert!(
+        place.left() < album_card.left() && album_card.left() < month.left(),
+        "Place, Smart Album, Moment, Tag, in that order"
+    );
+    assert!(
+        f32::from(row.size.width) >= 1100.0
+            && month.right() < tag.left()
+            && tag.top() == place.top(),
+        "four in one row in a wide window: {row:?}"
+    );
+
+    click(vcx, "top-match-place-0");
+    assert_eq!(
+        query(&view, vcx),
+        "city:Lisbon june",
+        "the place card turns its word into a city: token"
+    );
+
+    set_query(&view, vcx, "lisbon june");
+    settle(vcx);
+    click(vcx, "top-match-month-0");
+    assert_eq!(
+        query(&view, vcx),
+        "lisbon month:jun year:2025",
+        "the month card turns its word into month: and year: tokens"
+    );
+
+    set_query(&view, vcx, "lisbon june");
+    settle(vcx);
+    click(vcx, "top-match-album-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::User(album),
+            "the album card opens the smart album"
+        )
+    });
+
+    set_query(&view, vcx, "zzzz");
+    settle(vcx);
+    assert!(
+        vcx.debug_bounds("top-matches").is_none(),
+        "no match, no row"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn top_matches_take_two_columns_when_narrow_and_arrows_from_the_bar() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx, _) = top_match_app("search_top_matches_keys", &mut cx);
+    vcx.simulate_resize(gpui::size(px(1100.0), px(800.0)));
+    set_query(&view, vcx, "lisbon june");
+    settle(vcx);
+    let (place, album, month) = (
+        bounds(vcx, "top-match-place-0"),
+        bounds(vcx, "top-match-album-0"),
+        bounds(vcx, "top-match-month-0"),
+    );
+    assert!(
+        place.top() == album.top() && month.top() > place.bottom(),
+        "two cards per row below 1100 px of content"
+    );
+
+    // Keyboard: with no suggestions showing (Esc hides them), ↓ from the
+    // bar walks the cards and ↵ opens one.
+    focus_app(vcx, &view);
+    click(vcx, "search-typed-text");
+    if view.update(vcx, |app, _| !app.search_suggestion_items().is_empty()) {
+        keystrokes(vcx, "escape");
+    }
+    view.update(vcx, |app, _| assert!(app.search_focused));
+    keystrokes(vcx, "down");
+    assert!(
+        vcx.debug_bounds("top-match-place-0-highlight").is_some(),
+        "↓ from the bar highlights the first card"
+    );
+    keystrokes(vcx, "down down");
+    assert!(vcx.debug_bounds("top-match-month-0-highlight").is_some());
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        query(&view, vcx),
+        "lisbon month:jun year:2025",
+        "↵ opens the highlighted card"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn top_matches_stay_up_while_typing_and_stale_cards_do_nothing() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx, _) = top_match_app("search_top_matches_typing", &mut cx);
+    set_query(&view, vcx, "lisbon june");
+    settle(vcx);
+    assert!(vcx.debug_bounds("top-match-place-0").is_some());
+
+    // One more keystroke: the new fetch waits for the debounce, and the
+    // last cards stay meanwhile instead of the row vanishing.
+    set_query(&view, vcx, "lisbon jun");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("top-matches").is_some(),
+        "the row stays up while the newer fetch runs, so the grid does not jump"
+    );
+    settle(vcx);
+    assert!(vcx.debug_bounds("top-match-month-0").is_some());
+
+    // A card whose words left the query does nothing on click.
+    set_query(&view, vcx, "porto");
+    render_ui(vcx);
+    click(vcx, "top-match-month-0");
+    assert_eq!(
+        query(&view, vcx),
+        "porto",
+        "a stale card does not put its tokens into a query that no longer names it"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn arrow_to_a_card_deselects_the_chip() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx, _) = top_match_app("search_top_matches_chip", &mut cx);
+    set_query(&view, vcx, "is:raw lisbon");
+    settle(vcx);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| {
+        app.search_focused = true;
+        app.search_suggestions.dismissed = true;
+        app.query_bar.chip = Some(0);
+        cx.notify();
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "down");
+    assert!(vcx.debug_bounds("top-match-place-0-highlight").is_some());
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.query_bar.chip, None,
+            "one thing selected at a time: highlighting a card drops the chip"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -861,6 +861,7 @@ impl LuminaApp {
             self.search_suggestions.dismissed = false;
             self.search_suggestions.selected = None;
             self.query_bar.chip = None;
+            self.top_matches.highlight = None;
             cx.notify();
         }
     }

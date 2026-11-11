@@ -35,8 +35,8 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{
     Album, Catalog, CropRect, DateSpan, DeletionTarget, DownloadRow, DownloadState, Edits,
-    GeoPoint, PriorDownload, RejectedItems, Rights, TagChange, TagReplay, TemplateChange,
-    ViewScope, SCHEMA_VERSION,
+    GeoPoint, PlaceCount, PriorDownload, RejectedItems, Rights, TagChange, TagReplay,
+    TemplateChange, ViewScope, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -1293,6 +1293,16 @@ impl LuminaEngine {
                 log::warn!("tag counts for selection failed: {err:#}");
                 Vec::new()
             })
+    }
+
+    /// Cities starting with `prefix`, with their active item counts, most
+    /// items first (search top matches). Scans the catalog: call it off the
+    /// UI thread.
+    pub fn matching_places(&self, prefix: &str, limit: usize) -> Vec<PlaceCount> {
+        self.read(
+            "matching places",
+            self.catalog.matching_places(prefix, limit),
+        )
     }
 
     pub fn query_tag_counts(&self) -> Vec<(String, usize)> {

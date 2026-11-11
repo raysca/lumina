@@ -21,6 +21,8 @@ pub use files::MissingChange;
 pub use sources::PriorDownload;
 mod media;
 pub use media::GeoPoint;
+mod places;
+pub use places::PlaceCount;
 mod rights;
 pub use rights::Rights;
 mod schema;
