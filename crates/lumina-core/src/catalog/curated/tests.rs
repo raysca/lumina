@@ -500,9 +500,9 @@ fn album_cards_plan_seeks_members_per_album() {
         "album cards must look media rows up by id, got: {text}"
     );
     assert!(
-        !plan
-            .iter()
-            .any(|row| row.starts_with("SCAN ai") || row.starts_with("SCAN m")),
+        !plan.iter().any(|row| row.starts_with("SCAN ai")
+            || row.starts_with("SCAN m")
+            || row.starts_with("SCAN c")),
         "album cards must scan neither album_items nor media_items, got: {text}"
     );
     assert!(

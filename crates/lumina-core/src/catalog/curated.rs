@@ -40,8 +40,8 @@ pub struct AlbumCard {
 ///
 /// Per album, a correlated `ORDER BY … LIMIT 1` seeks that album's members
 /// through the `album_items` primary key (`SEARCH ai USING PRIMARY KEY
-/// (album_id=?)`), looks each media row up by id, and keeps only the top
-/// row while sorting; the cover row is then read by id. `m.id DESC` breaks
+/// (album_id=?)`), looks each media row up by id, sorts that album's active
+/// members and takes the first; the cover row is then read by id. `m.id DESC` breaks
 /// timestamp ties deterministically, which `MAX()` with bare columns would
 /// not. Nothing is materialised.
 ///
