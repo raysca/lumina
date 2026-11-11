@@ -6674,6 +6674,13 @@ fn view_layout_follows_the_view_order_and_aspect() {
     };
     let mut undated = sized("/layout/undated.jpg", 0, 1000, 1000);
     (undated.year, undated.month, undated.day) = (0, 0, 0);
+    // What the scanner writes for a capture time of 0: 1970-01-01.
+    let mut scanned_undated = sized("/layout/scanned_undated.jpg", 0, 1000, 1000);
+    (
+        scanned_undated.year,
+        scanned_undated.month,
+        scanned_undated.day,
+    ) = (1970, 1, 1);
     let stored = catalog
         .insert_or_update_batch(&[
             sized("/layout/landscape.jpg", 5_000, 4000, 3000),
@@ -6681,25 +6688,57 @@ fn view_layout_follows_the_view_order_and_aspect() {
             sized("/layout/unprobed.mov", 3_000, 0, 0),
             sized("/layout/panorama.jpg", 2_000, 10_000, 1000),
             undated,
+            scanned_undated,
         ])
         .unwrap();
     catalog
         .set_rotations(&[(stored[1].id, 1)])
         .expect("rotate a quarter turn");
 
+    let ids = |cells: Vec<lumina_core::LayoutCell>| cells.iter().map(|c| c.id).collect::<Vec<_>>();
+    let item_ids = |items: Vec<MediaItem>| items.iter().map(|m| m.id).collect::<Vec<_>>();
     let cells = catalog
         .view_layout(&ViewScope::Library, SortSpec::default())
         .unwrap();
-    let slice: Vec<MediaId> = catalog
-        .get_item_slice(0, 5)
-        .unwrap()
-        .iter()
-        .map(|m| m.id)
-        .collect();
     assert_eq!(
-        cells.iter().map(|c| c.id).collect::<Vec<_>>(),
-        slice,
+        ids(cells.clone()),
+        item_ids(catalog.get_item_slice(0, 10).unwrap()),
         "layout cells come in the grid's own order"
+    );
+    let by_name = SortSpec {
+        field: SortField::FileName,
+        direction: SortDirection::Ascending,
+    };
+    assert_eq!(
+        ids(catalog.view_layout(&ViewScope::Library, by_name).unwrap()),
+        item_ids(catalog.get_item_slice_sorted(0, 10, by_name).unwrap()),
+        "a non-default sort lays out in the grid's name order"
+    );
+    let jpg = StructuredQuery::parse("jpg");
+    let search = catalog
+        .search_structured_sorted(&jpg, 10, 0, SortSpec::default())
+        .unwrap();
+    assert_eq!(search.len(), 5, "the FTS term matches every .jpg");
+    assert_eq!(
+        ids(catalog
+            .view_layout(&ViewScope::Search("jpg".into()), SortSpec::default())
+            .unwrap()),
+        item_ids(search),
+        "a search layout matches the search grid's rows and order"
+    );
+    let album = catalog
+        .create_album_with("Some", &[stored[3].id, stored[0].id, stored[5].id])
+        .unwrap();
+    assert_eq!(
+        ids(catalog
+            .view_layout(&ViewScope::Album(album.id), by_name)
+            .unwrap()),
+        item_ids(
+            catalog
+                .query_album_sorted(album.id, 10, 0, by_name)
+                .unwrap()
+        ),
+        "an album layout holds only its members, in the album grid's order"
     );
     let cell = |i: usize| {
         *cells
@@ -6719,6 +6758,11 @@ fn view_layout_follows_the_view_order_and_aspect() {
     assert_eq!(cell(3).aspect, 3.0, "a 10:1 panorama is clamped to 3.0");
     assert_eq!(cell(0).day, 20260307, "day is yyyymmdd");
     assert_eq!(cell(4).day, 0, "an undated item has day 0");
+    assert_eq!(
+        cell(5).day,
+        0,
+        "a capture time of 0 is undated even though the scanner stores 1970-01-01"
+    );
 }
 
 #[test]
@@ -6742,9 +6786,22 @@ fn day_places_picks_the_most_common_city_per_day() {
             at("/p/5.jpg", 2, Some(("Porto", "PT"))),
             at("/p/6.jpg", 2, Some(("Faro", "PT"))),
             at("/p/7.jpg", 3, None),
+            {
+                // A capture time of 0 with a city, as the scanner stores it.
+                let mut undated = at("/p/undated.jpg", 1, lisbon);
+                undated.timestamp_epoch_ms = 0;
+                (undated.year, undated.month, undated.day) = (1970, 1, 1);
+                undated
+            },
         ])
         .unwrap();
     let places = catalog.day_places(&ViewScope::Library).unwrap();
+    assert_eq!(
+        places.len(),
+        2,
+        "only the two placed dated days have a place; the undated item (capture time 0, \
+         stored 1970-01-01) has none: {places:?}"
+    );
     assert_eq!(
         places.get(&20260501),
         Some(&("Lisbon".to_string(), Some("PT".to_string()))),

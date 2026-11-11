@@ -37,6 +37,9 @@ pub(crate) fn view_where(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
     const ACTIVE: &str = "m.is_trashed = 0 AND m.is_hidden = 0";
     Ok(match scope {
         ViewScope::Library => (ACTIVE.into(), Vec::new()),
+        // Unsorted form: the `+` only pays off for a LIMIT page that stops
+        // early on the sort index; a count or a full read (the Mosaic
+        // layout) is cheaper driven from the FTS rowids.
         ViewScope::Search(text) => StructuredQuery::parse(text).build_where_subquery(false),
         ViewScope::System(album) => (album.build_where_clause().into(), Vec::new()),
         ViewScope::Smart(album) => album.where_sql(false)?,
@@ -77,20 +80,25 @@ fn date_span_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
 /// One item of a view as the Mosaic lays it out.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutCell {
+    /// The item; its position in the layout is its index in the grid.
     pub id: MediaId,
     /// Width over height as shown: a 0x0 (unprobed) item is 1.0, an odd
     /// `rotation_quarters` swaps it, and it is clamped to 0.4-3.0 so a
     /// panorama or a sliver cannot take over a row.
     pub aspect: f32,
-    /// Capture day as `yyyymmdd`, or 0 when undated.
+    /// Capture day as `yyyymmdd`, or 0 when undated (capture time 0).
     pub day: u32,
 }
 
 /// The most common place of one day in a view: (city, country code).
 pub type DayPlace = (String, Option<String>);
 
-/// `yyyymmdd`, or 0 for an undated row (year 0).
-const DAY_KEY: &str = "CASE WHEN m.year > 0 THEN m.year * 10000 + m.month * 100 + m.day ELSE 0 END";
+/// `yyyymmdd`, or 0 for an undated row. Undated is a capture time of 0, as
+/// in [`date_span_sql`]: the scanner stores such a row as 1970-01-01, so
+/// the date columns alone would key it as 19700101. Year 0 (hand-written
+/// rows) also counts as undated.
+const DAY_KEY: &str = "CASE WHEN m.timestamp_epoch_ms <> 0 AND m.year > 0 \
+     THEN m.year * 10000 + m.month * 100 + m.day ELSE 0 END";
 
 /// Every row of the view in its sort order: same WHERE as the count, same
 /// ORDER BY as the slice, so a cell index is a grid index. Date sort walks
@@ -157,8 +165,10 @@ impl Catalog {
     }
 
     /// The most common place of each dated day in the view, keyed by
-    /// `yyyymmdd`. A tie goes to the alphabetically first city. Days with
-    /// no city, and undated items, are absent.
+    /// `yyyymmdd`. Items are counted by (city, country code), so the same
+    /// city with and without a country code is two places. A tie goes to
+    /// the alphabetically first city. Days with no city, and undated items
+    /// (capture time 0), are absent.
     pub fn day_places(&self, scope: &ViewScope) -> Result<HashMap<u32, DayPlace>> {
         let (sql, params) = day_places_sql(scope)?;
         let conn = self.conn.lock();
@@ -173,9 +183,9 @@ impl Catalog {
         let mut best: HashMap<u32, (i64, DayPlace)> = HashMap::new();
         for row in rows {
             let (day, count, place) = row.context("reading the day places")?;
-            // Undated rows (day 0) are dropped here, not in the WHERE: a
-            // `year > 0` there makes the planner seek idx_media_year_month
-            // and look up nearly every row.
+            // Undated rows (DAY_KEY 0) are dropped here, not in the WHERE:
+            // a date filter there makes the planner seek an index (such as
+            // idx_media_year_month) and look up nearly every row.
             if day == 0 {
                 continue;
             }
