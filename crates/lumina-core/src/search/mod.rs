@@ -62,6 +62,12 @@ pub struct StructuredQuery {
 #[derive(Clone, Copy)]
 enum FtsMatch {
     /// `media_search_fts MATCH ?`: the query joins `media_search_fts`.
+    /// The join is a CROSS JOIN, which SQLite never reorders, so the FTS
+    /// rowids drive and each is one primary-key lookup. With a plain JOIN
+    /// and no statistics (the app never runs ANALYZE), an equality filter
+    /// with an index (`is:video`, `is:favorite`, `is:pick`, `color:`,
+    /// `country:`, `year:`) could drive instead and re-run the MATCH for
+    /// every row it yields: seconds for a common word at 25k items.
     Joined,
     /// `m.id IN (SELECT rowid …)`: for SQL that selects from `media_items`
     /// alone, such as a smart album. `sorted` adds the unary `+` that SQL
@@ -80,7 +86,8 @@ pub(crate) enum GeoIndex {
 
 impl StructuredQuery {
     /// Builds a parameterized SQL WHERE clause and parameters. The FTS match
-    /// needs `media_search_fts` joined, as [`Self::synthesize_query`] does.
+    /// needs `media_search_fts` joined, as [`Self::synthesize_query`] does;
+    /// CROSS JOIN it first so an equality index never drives the MATCH per row.
     pub fn build_sql(&self) -> (String, Vec<rusqlite::types::Value>) {
         self.where_clause(FtsMatch::Joined, GeoIndex::Use)
     }
@@ -407,7 +414,7 @@ impl StructuredQuery {
                     m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
                     m.is_favorite, m.is_hidden, m.is_trashed, m.title
                 FROM media_search_fts
-                JOIN media_items m ON media_search_fts.rowid = m.id
+                CROSS JOIN media_items m ON media_search_fts.rowid = m.id
                 WHERE {}
                 ORDER BY {}
                 LIMIT ? OFFSET ?;
@@ -451,7 +458,7 @@ impl StructuredQuery {
                 r#"
                 SELECT COUNT(*)
                 FROM media_search_fts
-                JOIN media_items m ON media_search_fts.rowid = m.id
+                CROSS JOIN media_items m ON media_search_fts.rowid = m.id
                 WHERE {};
                 "#,
                 where_clause
@@ -516,6 +523,62 @@ fn build_fts5_expression(terms: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Free text with an indexed filter: the plan must start from the FTS
+    /// rowids. Driven from the filter's index instead, SQLite re-runs the
+    /// MATCH for every row the index yields (seconds for a common word).
+    #[test]
+    fn text_with_indexed_filters_drives_from_fts() {
+        let dir = std::env::temp_dir().join(format!(
+            "lumina_fts_drive_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("catalog.db");
+        drop(crate::catalog::Catalog::open(&path).expect("catalog opens"));
+        let conn = rusqlite::Connection::open(&path).expect("catalog reopens");
+        for text in [
+            "photo is:video",
+            "photo is:favorite",
+            "photo is:pick",
+            "photo color:red",
+            "photo country:PT",
+            "photo year:2018",
+        ] {
+            let q = StructuredQuery::parse(text);
+            let shapes = [
+                ("count", q.synthesize_count_query()),
+                (
+                    "page",
+                    q.synthesize_query_sorted(100, 20_000, crate::SortSpec::default()),
+                ),
+            ];
+            for (shape, (sql, params)) in shapes {
+                let mut stmt = conn
+                    .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+                    .expect("plan prepares");
+                let plan: Vec<String> = stmt
+                    .query_map(rusqlite::params_from_iter(params.iter()), |row| row.get(3))
+                    .expect("plan runs")
+                    .map(|row| row.expect("plan row"))
+                    .collect();
+                assert!(
+                    plan.first()
+                        .is_some_and(|row| row.starts_with("SCAN media_search_fts")),
+                    "`{text}` {shape} must drive from FTS: {plan:?}"
+                );
+                assert!(
+                    plan.iter().all(|row| !row.contains("idx_media")),
+                    "`{text}` {shape} must not seek a media index: {plan:?}"
+                );
+            }
+        }
+        drop(conn);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn test_empty_and_special_fts_terms() {

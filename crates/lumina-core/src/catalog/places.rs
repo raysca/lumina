@@ -42,7 +42,7 @@ impl Catalog {
         let mut stmt = conn.prepare_cached(
             r#"SELECT m.city, COALESCE(m.country_code, ''), COUNT(*) AS n
                FROM media_search_fts f
-               JOIN media_items m ON m.id = f.rowid
+               CROSS JOIN media_items m ON m.id = f.rowid
                WHERE media_search_fts MATCH ?1
                  AND m.is_trashed = 0 AND m.is_hidden = 0
                  AND m.city LIKE ?2 ESCAPE '\'

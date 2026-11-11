@@ -517,6 +517,29 @@ fn benchmark_scale_and_gates() {
             "`{text}` count must resolve in < {query_budget}ms (got {ms:.3}ms)"
         );
     }
+    // The search results head's video count (Design 03 Task 6): free text
+    // plus `is:video`, counted once per search fetch. `photo` matches most
+    // rows (a common term); `beach` rows are all videos. (`sunset` would
+    // count 0: no sunset row is a video in this seed.)
+    for text in ["photo is:video", "beach is:video"] {
+        let q = StructuredQuery::parse(text);
+        let n = catalog.search_structured_count(&q).expect("video count");
+        assert!(n > 0, "`{text}` must count some rows");
+        let start = Instant::now();
+        for _ in 0..iterations {
+            catalog
+                .search_structured_count(&q)
+                .expect("video count must keep running");
+        }
+        let ms = (start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+        println!(
+            "Gate 2 - Structured Query Latency `{text}` count ({n} rows): {ms:.3} ms/query (< {query_budget:.1} ms target)"
+        );
+        assert!(
+            ms < query_budget,
+            "`{text}` count must resolve in < {query_budget}ms (got {ms:.3}ms)"
+        );
+    }
     let q = StructuredQuery::parse(EMPTY_BOX);
     let start = Instant::now();
     for _ in 0..iterations {
