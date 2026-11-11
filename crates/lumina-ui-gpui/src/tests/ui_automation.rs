@@ -2157,6 +2157,7 @@ fn ui_automation_grid_zoom_anchor_preserves_pointer_row_and_fraction() {
         scroll_y: -100.0,
         row_height: 200.0,
         columns: 4,
+        column_gap: crate::views::grid::GRID_CARD_GAP,
         item_count: 40,
     };
     // Window y=300 maps to content y=300: row 1, half way down the row.
@@ -2205,6 +2206,7 @@ fn ui_automation_grid_zoom_anchor_clamps_partial_rows_and_invalid_geometry() {
         scroll_y: 0.0,
         row_height: 200.0,
         columns: 4,
+        column_gap: crate::views::grid::GRID_CARD_GAP,
         item_count: 5,
     };
     let anchor = GridZoomAnchor::at_pointer(880.0, 350.0, geometry)
@@ -2312,6 +2314,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
             scroll_y: f32::from(state.base_handle.offset().y),
             row_height: app.row_height(),
             columns: app.grid_columns,
+            column_gap: app.grid_metrics().column_gap,
             item_count: app.get_active_count(),
         };
         drop(state);

@@ -266,6 +266,7 @@ impl LuminaApp {
             scroll_y: f32::from(scroll_y_before),
             row_height: self.row_height(),
             columns,
+            column_gap: self.grid_metrics().column_gap,
             item_count,
         };
         let selected = self.selected_index.filter(|&index| index < item_count);

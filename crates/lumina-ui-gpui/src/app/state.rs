@@ -13,7 +13,7 @@ use crate::config::LastView;
 use crate::config::{AppConfig, RestoredSession};
 use crate::player;
 use crate::views::context_menu::ContextMenuState;
-use crate::views::grid::{grid_metrics, GridMetrics, GridState, DEFAULT_WINDOW_WIDTH};
+use crate::views::grid::{grid_metrics, GridMetrics, GridState, TileShape, DEFAULT_WINDOW_WIDTH};
 use crate::views::sidebar::AlbumSelection;
 use crate::views::viewer::ViewerState;
 
@@ -860,6 +860,11 @@ impl LuminaApp {
             .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width);
         let inspector_width =
             (self.inspector_open && !self.is_fullscreen_viewer).then_some(self.inspector_width);
+        let shape = if self.captioned_tiles() {
+            TileShape::Captioned
+        } else {
+            TileShape::Square
+        };
         grid_metrics(
             window_width,
             self.sidebar_width,
@@ -867,7 +872,16 @@ impl LuminaApp {
             self.timeline_rail_shown(),
             inspector_width,
             self.grid_columns,
+            shape,
         )
+    }
+
+    /// True where the Grid draws 16:9 captioned tiles: the Videos view in
+    /// Grid layout (its Mosaic keeps true-aspect rows). Navigation, the rail
+    /// and zoom all read the row height through [`Self::grid_metrics`], so
+    /// they follow.
+    pub(crate) fn captioned_tiles(&self) -> bool {
+        self.videos_view() && self.config.browse_layout == crate::config::BrowseLayout::Grid
     }
 
     pub fn row_height(&self) -> f32 {

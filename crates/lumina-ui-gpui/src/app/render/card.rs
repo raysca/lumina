@@ -11,7 +11,9 @@ use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::grid::{media_card_tooltip, CARD_PADDING, COMPACT_TILE, UNSELECTED_CARD_OPACITY};
+use crate::views::grid::{
+    media_card_tooltip, CAPTION_HEIGHT, CARD_PADDING, COMPACT_TILE, UNSELECTED_CARD_OPACITY,
+};
 use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
 
@@ -22,11 +24,16 @@ const BADGE_H: f32 = 18.0;
 /// How far the selection ring reaches outside the tile: a 1px gap plus the
 /// 2px border. Half the 6px tile gap, so adjacent selected rings never meet.
 const RING_OUTSET: f32 = 3.0;
+/// Corner radius of a captioned Videos thumb (frame `DoXZy`: 5; the theme
+/// has 4 and 6 only).
+const VIDEO_THUMB_RADIUS: f32 = 5.0;
 
 impl LuminaApp {
     /// Renders the card for `item` at view position `index`. `size` is the
     /// photo well: its height sets the card's height and its smaller side
     /// picks the compact badge set. The card's width comes from its parent.
+    /// Where [`Self::captioned_tiles`] holds, a caption follows the well and
+    /// the selection outline sits on the well itself.
     pub(crate) fn render_media_card(
         &mut self,
         item: &MediaItem,
@@ -64,10 +71,22 @@ impl LuminaApp {
         let dur_text = format_duration_badge(item.duration_secs());
         let has_duration = is_video && !dur_text.is_empty();
         let has_type_badge = has_duration || is_raw;
-        let compact = size.width.min(size.height) < COMPACT_TILE;
+        let captioned = self.captioned_tiles();
+        // COMPACT_TILE guards the top badge rows' width. A captioned 16:9 thumb
+        // is wide but short; its ~120px still clears the top and bottom rows.
+        let compact = if captioned {
+            size.width
+        } else {
+            size.width.min(size.height)
+        } < COMPACT_TILE;
         let show_fav = is_fav && !compact;
         let show_edited = is_edited && !compact;
         let fit_mode = self.card_fit_mode;
+        let (well_radius, ring_outset) = if captioned {
+            (px(VIDEO_THUMB_RADIUS), 0.0)
+        } else {
+            (theme::RADIUS_SM, RING_OUTSET)
+        };
         let in_trash = self.selection == AlbumSelection::Trash;
         let has_texture = tex.is_some();
         let thumb_failed = !has_texture
@@ -102,7 +121,9 @@ impl LuminaApp {
             // An img's min-content width is its height times its aspect; without this a landscape
             // thumbnail widens its column.
             .min_w_0()
-            .h(px(size.height + 2.0 * CARD_PADDING))
+            .h(px(size.height
+                + 2.0 * CARD_PADDING
+                + if captioned { CAPTION_HEIGHT } else { 0.0 }))
             .p(px(CARD_PADDING))
             .relative()
             // No card surface and no border: the thumbnail sits directly on the library
@@ -193,8 +214,8 @@ impl LuminaApp {
                     .when(flag == lumina_core::Flag::Reject, |well| {
                         well.opacity(REJECTED_OPACITY)
                     })
-                    // Tiles are r4 (design 01 Library).
-                    .rounded(theme::RADIUS_SM)
+                    // Tiles are r4 (design 01 Library); Videos thumbs r5.
+                    .rounded(well_radius)
                     .overflow_hidden()
                     .relative()
                     .child(if let Some(render_img) = tex {
@@ -365,19 +386,23 @@ impl LuminaApp {
                     // RAW (bottom-right).
                     .when(is_raw, |well| well.child(raw_badge(item_id_num))),
             )
+            .when(captioned, |card| {
+                card.child(super::video_caption::video_caption(item, is_selected))
+            })
             // Selection: a 2px amber ring with a 1px gap outside the r4 well; its r7 corners (4 +
-            // RING_OUTSET) stay concentric. It sits on the card because the well clips.
+            // RING_OUTSET) stay concentric. A captioned thumb instead takes the 2px outline on
+            // itself (design 04). It sits on the card because the well clips.
             .when(is_selected, |card| {
                 card.child(
                     div()
                         .debug_selector(move || format!("media-card-selected-{}", item_id_num))
                         .absolute()
-                        .top(px(CARD_PADDING - RING_OUTSET))
+                        .top(px(CARD_PADDING - ring_outset))
                         // left/right trace the well's real width, which the parent sets.
-                        .left(px(CARD_PADDING - RING_OUTSET))
-                        .right(px(CARD_PADDING - RING_OUTSET))
-                        .h(px(size.height + 2.0 * RING_OUTSET))
-                        .rounded(theme::RADIUS_SM + px(RING_OUTSET))
+                        .left(px(CARD_PADDING - ring_outset))
+                        .right(px(CARD_PADDING - ring_outset))
+                        .h(px(size.height + 2.0 * ring_outset))
+                        .rounded(well_radius + px(ring_outset))
                         .border_2()
                         .border_color(theme::accent()),
                 )

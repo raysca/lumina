@@ -190,6 +190,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.toggle_fit" => "Toggle Fit / Square Cards",
         "command.zoom_in" => "Zoom Grid In",
         "command.zoom_out" => "Zoom Grid Out",
+        "grid.caption_date" => "%-d %b %Y",
         "grid.zoom_in" => "Larger thumbnails (⌘+)",
         "grid.zoom_out" => "Smaller thumbnails (⌘-)",
         "grid.zoom_limit" => "Not available at this size",

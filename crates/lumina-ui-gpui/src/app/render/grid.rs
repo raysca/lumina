@@ -8,7 +8,7 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    BAND_TO_ROW, CARD_ROW_GAP, GRID_CARD_GAP, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT,
+    BAND_TO_ROW, CARD_ROW_GAP, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT,
 };
 use crate::views::sidebar::AlbumSelection;
 
@@ -55,7 +55,8 @@ impl LuminaApp {
         let cols = self.grid_columns.clamp(2, 8);
         let metrics = self.grid_metrics();
         let row_h = metrics.row_height;
-        let photo_side = metrics.photo_side;
+        let photo = size(metrics.photo_side, metrics.photo_height);
+        let column_gap = metrics.column_gap;
         let total_rows = effective_count.div_ceil(cols);
 
         let scroll_handle = self
@@ -161,19 +162,14 @@ impl LuminaApp {
                                 row_cards.push(this.render_media_card(
                                     item,
                                     start + offset_in_row,
-                                    size(photo_side, photo_side),
+                                    photo,
                                     texture,
                                     cx,
                                 ));
                             }
 
                             while row_cards.len() < cols {
-                                row_cards.push(
-                                    div()
-                                        .flex_1()
-                                        .h(px(row_h - CARD_ROW_GAP))
-                                        .into_any_element(),
-                                );
+                                row_cards.push(div().flex_1().into_any_element());
                             }
 
                             rows.push(
@@ -190,7 +186,10 @@ impl LuminaApp {
                                     .pr(px(GRID_ROW_PADDING_RIGHT))
                                     .flex()
                                     .flex_row()
-                                    .gap(px(GRID_CARD_GAP))
+                                    .gap(px(column_gap))
+                                    // Cards keep their own height; a captioned
+                                    // row's spare bottom is its row gap.
+                                    .items_start()
                                     .children(row_cards),
                             );
                         }

@@ -163,6 +163,7 @@ fn grid_pinch_steps_one_level_per_threshold_and_anchors() {
             scroll_y: f32::from(state.base_handle.offset().y),
             row_height: app.row_height(),
             columns: app.grid_columns,
+            column_gap: app.grid_metrics().column_gap,
             item_count: app.get_active_count(),
         };
         GridZoomAnchor::at_pointer(f32::from(pointer.x), f32::from(pointer.y), geometry)

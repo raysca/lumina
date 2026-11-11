@@ -20,6 +20,7 @@ pub(crate) mod overlays;
 pub(crate) mod rail;
 mod status_bar;
 mod toolbar;
+mod video_caption;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 

@@ -325,20 +325,44 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
         app.is_fullscreen_viewer = false;
         app.window_bounds = Some((0.0, 0.0, 1280.0, 840.0));
 
-        let base = grid_metrics(1280.0, 230.0, false, false, None, 4);
+        let base = grid_metrics(
+            1280.0,
+            230.0,
+            false,
+            false,
+            None,
+            4,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.grid_metrics(), base);
         assert_eq!(app.row_height(), base.row_height);
 
         // The collapsed sidebar is a 48px rail with no resizer, so the grid
         // gets wider and the square well grows.
         app.sidebar_collapsed = true;
-        let collapsed = grid_metrics(1280.0, 230.0, true, false, None, 4);
+        let collapsed = grid_metrics(
+            1280.0,
+            230.0,
+            true,
+            false,
+            None,
+            4,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.row_height(), collapsed.row_height);
         assert!(collapsed.row_height > base.row_height);
 
         // Density changes the card width, so it also changes the square side.
         app.grid_columns = 8;
-        let dense = grid_metrics(1280.0, 230.0, true, false, None, 8);
+        let dense = grid_metrics(
+            1280.0,
+            230.0,
+            true,
+            false,
+            None,
+            8,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.row_height(), dense.row_height);
         assert!(dense.row_height < collapsed.row_height);
 
@@ -346,7 +370,15 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
         // viewer overlay hides the inspector again.
         app.selected_item = get_sample_items().into_iter().next();
         app.inspector_open = true;
-        let with_inspector = grid_metrics(1280.0, 230.0, true, false, Some(app.inspector_width), 8);
+        let with_inspector = grid_metrics(
+            1280.0,
+            230.0,
+            true,
+            false,
+            Some(app.inspector_width),
+            8,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.row_height(), with_inspector.row_height);
         assert!(with_inspector.row_height < dense.row_height);
 
@@ -359,10 +391,26 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
         // The timeline rail only takes space when it shows (months exist,
         // All Media, date sort, no query).
         app.grid_columns = 2;
-        let without_rail = grid_metrics(1280.0, 230.0, true, false, None, 2);
+        let without_rail = grid_metrics(
+            1280.0,
+            230.0,
+            true,
+            false,
+            None,
+            2,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.row_height(), without_rail.row_height);
         app.rail.set_counts(&[((2024, 3), 3)].into_iter().collect());
-        let with_rail = grid_metrics(1280.0, 230.0, true, true, None, 2);
+        let with_rail = grid_metrics(
+            1280.0,
+            230.0,
+            true,
+            true,
+            None,
+            2,
+            crate::views::grid::TileShape::Square,
+        );
         assert_eq!(app.row_height(), with_rail.row_height);
         assert!(with_rail.row_height < without_rail.row_height);
     });

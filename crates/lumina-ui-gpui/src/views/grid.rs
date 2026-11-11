@@ -77,12 +77,37 @@ pub(crate) const PHOTO_SIDE_MIN: f32 = 48.0;
 /// Largest photo well side, so a very wide window cannot produce huge rows.
 pub(crate) const PHOTO_SIDE_MAX: f32 = 640.0;
 
+/// Column gap between Videos tiles (frame `DoXZy`: 14).
+pub(crate) const VIDEO_COLUMN_GAP: f32 = 14.0;
+
+/// Row gap between Videos tiles, caption to next thumb (frame: 22).
+pub(crate) const VIDEO_ROW_GAP: f32 = 22.0;
+
+/// Fixed height of a Videos tile's caption, so every `uniform_list` row is
+/// the same: gap 9, title line 16 (Inter 12.5), gap 3, meta line 13
+/// (JetBrains Mono 10). Each line truncates, so it never wraps taller.
+pub(crate) const CAPTION_HEIGHT: f32 = 9.0 + 16.0 + 3.0 + 13.0;
+
+/// Shape of a Grid tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TileShape {
+    /// A square well (every view but Videos).
+    Square,
+    /// A 16:9 thumb over a two-line caption (Videos, design 04).
+    Captioned,
+}
+
 /// Grid layout derived from the window width and the chrome beside the grid.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct GridMetrics {
-    /// Side of the square photo well, in pixels.
+    /// Width of the photo well, in pixels (also its height when square).
     pub photo_side: f32,
-    /// Full uniform-list row height: the card plus [`CARD_ROW_GAP`].
+    /// Height of the photo well: `photo_side`, or 9/16 of it when captioned.
+    pub photo_height: f32,
+    /// Gap between the cards of a row.
+    pub column_gap: f32,
+    /// Full uniform-list row height: [`CARD_ROW_GAP`] above the card, the
+    /// well, the caption when captioned, and the rest of the row gap below.
     pub row_height: f32,
 }
 
@@ -118,6 +143,10 @@ pub(crate) fn center_pane_width(
 /// row padding and `(columns - 1) * GRID_CARD_GAP` before the
 /// remaining width is split between the columns. The photo well is the card's
 /// content width, and the row is the well plus the gap above the card.
+///
+/// A captioned tile uses the Videos column gap, a 16:9 well (floored, like
+/// the width, to whole pixels) and a fixed caption, and its row ends with
+/// the rest of the 22px row gap.
 pub(crate) fn grid_metrics(
     window_width: f32,
     sidebar_width: f32,
@@ -125,7 +154,12 @@ pub(crate) fn grid_metrics(
     year_rail_visible: bool,
     inspector_width: Option<f32>,
     columns: usize,
+    shape: TileShape,
 ) -> GridMetrics {
+    let column_gap = match shape {
+        TileShape::Square => GRID_CARD_GAP,
+        TileShape::Captioned => VIDEO_COLUMN_GAP,
+    };
     let columns = columns.clamp(2, 8) as f32;
     let grid_width = center_pane_width(
         window_width,
@@ -137,7 +171,7 @@ pub(crate) fn grid_metrics(
     let card_width = (grid_width
         - GRID_ROW_PADDING_LEFT
         - GRID_ROW_PADDING_RIGHT
-        - GRID_CARD_GAP * (columns - 1.0))
+        - column_gap * (columns - 1.0))
         .max(0.0)
         / columns;
     // Whole pixels: GPUI snaps the list's row height to the pixel grid, and
@@ -146,9 +180,18 @@ pub(crate) fn grid_metrics(
     let photo_side = (card_width - 2.0 * CARD_PADDING)
         .floor()
         .clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
+    let (photo_height, below) = match shape {
+        TileShape::Square => (photo_side, 0.0),
+        TileShape::Captioned => (
+            (photo_side * 9.0 / 16.0).floor(),
+            CAPTION_HEIGHT + VIDEO_ROW_GAP - CARD_ROW_GAP,
+        ),
+    };
     GridMetrics {
-        row_height: photo_side + 2.0 * CARD_PADDING + CARD_ROW_GAP,
+        row_height: CARD_ROW_GAP + photo_height + 2.0 * CARD_PADDING + below,
         photo_side,
+        photo_height,
+        column_gap,
     }
 }
 
@@ -211,6 +254,8 @@ pub struct GridZoomGeometry {
     pub row_height: f32,
     /// Columns rendered before the density change.
     pub columns: usize,
+    /// Gap between the cards of a row ([`GridMetrics::column_gap`]).
+    pub column_gap: f32,
     /// Flat item count in the active view.
     pub item_count: usize,
 }
@@ -266,7 +311,13 @@ impl GridZoomAnchor {
         let row = ((content_y / geometry.row_height).floor() as usize).min(total_rows - 1);
         let row_top = row as f32 * geometry.row_height;
         let fraction_within_row = ((content_y - row_top) / geometry.row_height).clamp(0.0, 1.0);
-        let column = column_at_pointer(pointer_x, geometry.left, geometry.width, columns);
+        let column = column_at_pointer(
+            pointer_x,
+            geometry.left,
+            geometry.width,
+            columns,
+            geometry.column_gap,
+        );
         let item = (row * columns + column).min(geometry.item_count - 1);
 
         Some(Self {
@@ -331,9 +382,9 @@ impl GridZoomAnchor {
 }
 
 /// Column under `pointer_x` for a row laid out with the grid's padding and gap.
-fn column_at_pointer(pointer_x: f32, left: f32, width: f32, columns: usize) -> usize {
+fn column_at_pointer(pointer_x: f32, left: f32, width: f32, columns: usize, gap: f32) -> usize {
     let inner_width = width - GRID_ROW_PADDING_LEFT - GRID_ROW_PADDING_RIGHT;
-    let card_space = inner_width - columns.saturating_sub(1) as f32 * GRID_CARD_GAP;
+    let card_space = inner_width - columns.saturating_sub(1) as f32 * gap;
     if !card_space.is_finite() || card_space <= 0.0 {
         return 0;
     }
@@ -342,8 +393,8 @@ fn column_at_pointer(pointer_x: f32, left: f32, width: f32, columns: usize) -> u
         return 0;
     }
     let relative = pointer_x - left - GRID_ROW_PADDING_LEFT;
-    ((relative / (card_width + GRID_CARD_GAP)).floor() as isize)
-        .clamp(0, columns.saturating_sub(1) as isize) as usize
+    ((relative / (card_width + gap)).floor() as isize).clamp(0, columns.saturating_sub(1) as isize)
+        as usize
 }
 
 /// Grid-owned playback resume state.
@@ -500,7 +551,7 @@ mod tests {
         // 1280px window, expanded sidebar (230 + 4px), year rail (83.5px), no
         // inspector: 962.5px pane, less 28 + 20 row padding and 6px gaps,
         // floored to whole pixels (224.125 -> 224).
-        let four = grid_metrics(1280.0, 230.0, false, true, None, 4);
+        let four = grid_metrics(1280.0, 230.0, false, true, None, 4, TileShape::Square);
         assert!(
             (four.photo_side - 224.0).abs() < 0.01,
             "got {}",
@@ -516,25 +567,73 @@ mod tests {
             "the row pitch is the tile plus the frame's 6px gap"
         );
 
-        let two = grid_metrics(1280.0, 230.0, false, true, None, 2);
+        let two = grid_metrics(1280.0, 230.0, false, true, None, 2, TileShape::Square);
         assert!(
             (two.photo_side - 454.0).abs() < 0.01,
             "got {}",
             two.photo_side
         );
 
-        let eight = grid_metrics(1280.0, 230.0, false, true, None, 8);
+        let eight = grid_metrics(1280.0, 230.0, false, true, None, 8, TileShape::Square);
         assert!(
             (eight.photo_side - 109.0).abs() < 0.01,
             "got {}",
             eight.photo_side
         );
+
+        // Videos (Grid): 14px column gaps, a 16:9 thumb and a fixed caption.
+        // (962.5 - 48 - 3 * 14) / 4 = 218.125 -> 218 wide, 218 * 9/16 =
+        // 122.6 -> 122 high; the row adds the 6px top gap, the caption and
+        // the 16px that makes the frame's 22px row gap.
+        let wide = grid_metrics(1280.0, 230.0, false, true, None, 4, TileShape::Captioned);
+        assert_eq!(
+            (wide.photo_side, wide.photo_height, wide.column_gap),
+            (218.0, 122.0, VIDEO_COLUMN_GAP),
+            "a Videos thumb is 16:9 at the design's column gap"
+        );
+        assert_eq!(
+            wide.row_height,
+            CARD_ROW_GAP + 122.0 + CAPTION_HEIGHT + (VIDEO_ROW_GAP - CARD_ROW_GAP),
+            "the row is the thumb, the fixed caption and the 22px row gap"
+        );
+        assert_eq!(
+            (four.photo_height, four.column_gap),
+            (four.photo_side, GRID_CARD_GAP),
+            "the square shape keeps a square well and the 6px gap"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn captioned_rows_stay_whole_pixels_and_uniform() {
+        for width in [640.0, 960.0, 1280.0, 1600.0, 3008.0] {
+            for columns in 2..=8 {
+                let m = grid_metrics(
+                    width,
+                    230.0,
+                    false,
+                    true,
+                    None,
+                    columns,
+                    TileShape::Captioned,
+                );
+                assert_eq!(m.photo_height, m.photo_height.floor(), "whole-pixel thumb");
+                assert_eq!(
+                    m.row_height,
+                    m.row_height.floor(),
+                    "whole-pixel rows for the scroll math"
+                );
+                assert!(
+                    (m.photo_height - (m.photo_side * 9.0 / 16.0).floor()).abs() < 0.01,
+                    "16:9 at {width}px, {columns} columns: {m:?}"
+                );
+            }
+        }
     }
 
     #[core::prelude::v1::test]
     fn metrics_account_for_each_layout_chrome() {
         // Hidden year rail: the grid gains its 83.5px.
-        let no_rail = grid_metrics(1280.0, 230.0, false, false, None, 4);
+        let no_rail = grid_metrics(1280.0, 230.0, false, false, None, 4, TileShape::Square);
         assert!(
             (no_rail.photo_side - 245.0).abs() < 0.01,
             "got {}",
@@ -542,7 +641,7 @@ mod tests {
         );
 
         // Collapsed sidebar is a 48px rail with no resizer.
-        let collapsed = grid_metrics(1280.0, 230.0, true, true, None, 4);
+        let collapsed = grid_metrics(1280.0, 230.0, true, true, None, 4, TileShape::Square);
         assert!(
             (collapsed.photo_side - 270.0).abs() < 0.01,
             "got {}",
@@ -550,7 +649,15 @@ mod tests {
         );
 
         // Open inspector: its width plus the 4px resizer are gone from the grid.
-        let with_inspector = grid_metrics(1280.0, 230.0, false, true, Some(310.0), 4);
+        let with_inspector = grid_metrics(
+            1280.0,
+            230.0,
+            false,
+            true,
+            Some(310.0),
+            4,
+            TileShape::Square,
+        );
         assert!(
             (with_inspector.photo_side - 145.0).abs() < 0.01,
             "got {}",
@@ -560,18 +667,19 @@ mod tests {
 
     #[core::prelude::v1::test]
     fn metrics_clamp_extreme_windows_and_keep_the_row_identity() {
-        let narrow = grid_metrics(700.0, 230.0, false, false, None, 8);
+        let narrow = grid_metrics(700.0, 230.0, false, false, None, 8, TileShape::Square);
         assert_eq!(narrow.photo_side, PHOTO_SIDE_MIN);
         assert!((narrow.row_height - narrow.photo_side - CARD_CHROME).abs() < 0.01);
 
-        let wide = grid_metrics(6000.0, 230.0, false, true, None, 2);
+        let wide = grid_metrics(6000.0, 230.0, false, true, None, 2, TileShape::Square);
         assert_eq!(wide.photo_side, PHOTO_SIDE_MAX);
         assert!((wide.row_height - wide.photo_side - CARD_CHROME).abs() < 0.01);
 
         for width in [640.0, 960.0, 1280.0, 1920.0, 3008.0] {
             for columns in 2..=8 {
                 for rail in [false, true] {
-                    let metrics = grid_metrics(width, 230.0, false, rail, None, columns);
+                    let metrics =
+                        grid_metrics(width, 230.0, false, rail, None, columns, TileShape::Square);
                     assert!(metrics.photo_side >= PHOTO_SIDE_MIN);
                     assert!(metrics.photo_side <= PHOTO_SIDE_MAX);
                     assert!((metrics.row_height - metrics.photo_side - CARD_CHROME).abs() < 0.01);
@@ -584,14 +692,20 @@ mod tests {
     fn column_at_pointer_follows_the_asymmetric_row_padding() {
         // 1000px row, 4 columns: 28 left + 20 right padding, three 6px gaps,
         // so cards are 233.5px wide and column 1 starts at 28 + 239.5 = 267.5.
-        assert_eq!(column_at_pointer(100.0 + 265.0, 100.0, 1000.0, 4), 0);
         assert_eq!(
-            column_at_pointer(100.0 + 268.0, 100.0, 1000.0, 4),
+            column_at_pointer(100.0 + 265.0, 100.0, 1000.0, 4, GRID_CARD_GAP),
+            0
+        );
+        assert_eq!(
+            column_at_pointer(100.0 + 268.0, 100.0, 1000.0, 4, GRID_CARD_GAP),
             1,
             "column 1 starts 28px plus one card and one gap from the left edge"
         );
         // The last card ends 20px before the right edge.
-        assert_eq!(column_at_pointer(100.0 + 979.0, 100.0, 1000.0, 4), 3);
+        assert_eq!(
+            column_at_pointer(100.0 + 979.0, 100.0, 1000.0, 4, GRID_CARD_GAP),
+            3
+        );
     }
 
     #[core::prelude::v1::test]
