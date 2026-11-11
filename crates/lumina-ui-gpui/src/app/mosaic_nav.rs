@@ -7,14 +7,17 @@ use std::ops::Range;
 
 use gpui::{px, Context, ListOffset, ListState, Pixels, Point};
 
+use crate::app::active_view::ViewKey;
 use crate::app::LuminaApp;
 use crate::views::grid::GRID_ROW_PADDING_LEFT;
 use crate::views::mosaic::{MosaicLayout, RowKind};
 use crate::views::search_bar::{size_level, SIZE_COLUMNS};
 
 /// Where a zoomed item should sit once the layout at the new level lands.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct ZoomAnchor {
+    /// The view zoomed: a layout for another view drops the anchor.
+    pub key: ViewKey,
     pub item: usize,
     /// The size level the anchor waits for.
     pub level: usize,
@@ -41,10 +44,13 @@ pub(crate) fn offset_for_y(layout: &MosaicLayout, target: f32) -> ListOffset {
         .rows_in(target..target + 0.01)
         .start
         .min(layout.rows.len().saturating_sub(1));
-    let y = layout.rows.get(r).map_or(0.0, |row| row.y);
+    let (y, height) = layout
+        .rows
+        .get(r)
+        .map_or((0.0, 0.0), |row| (row.y, row.height));
     ListOffset {
         item_ix: r,
-        offset_in_item: px(target - y),
+        offset_in_item: px((target - y).min(height)),
     }
 }
 
@@ -214,6 +220,7 @@ impl LuminaApp {
                 }
             };
             Some(ZoomAnchor {
+                key: self.view_key(),
                 item,
                 level,
                 frac,

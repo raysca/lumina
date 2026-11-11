@@ -283,10 +283,10 @@ impl LuminaApp {
                             .aria_label(SharedString::from(header.select_label))
                             // Dimmed while the layout catches up: Select
                             // does nothing until then.
-                            .when_some(header.select_updating, |button, why| {
-                                button.opacity(0.5).aria_description(why)
+                            .map(|button| match header.select_updating {
+                                Some(why) => button.opacity(0.5).aria_description(why),
+                                None => button.cursor_pointer(),
                             })
-                            .cursor_pointer()
                             .flex()
                             .flex_row()
                             .items_center()

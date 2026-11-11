@@ -60,6 +60,9 @@ pub(crate) struct MosaicCache {
     cooling: bool,
     /// Where a zoom's anchor item goes once its level's layout lands.
     pub(crate) zoom_anchor: Option<crate::app::mosaic_nav::ZoomAnchor>,
+    /// A relaunch's saved scroll item, put on top once its view's first
+    /// layout lands (the session restore runs before any layout exists).
+    pub(crate) pending_scroll: Option<(ViewKey, usize)>,
 }
 
 impl LuminaApp {
@@ -294,17 +297,34 @@ impl LuminaApp {
             });
         list.reset(built.layout.rows.len());
         let layout = &built.layout;
-        let zoom = self
+        // An anchor for another view is dropped; one for another level
+        // waits for that level's layout.
+        let zoom = match self.mosaic.zoom_anchor.take() {
+            Some(a) if a.key == built.key && a.level != built.level => {
+                self.mosaic.zoom_anchor = Some(a);
+                None
+            }
+            Some(a) if a.key == built.key && restore.is_some() => Some(a),
+            _ => None,
+        };
+        let pending = self
             .mosaic
-            .zoom_anchor
-            .filter(|a| a.level == built.level && restore.is_some());
-        if let Some(anchor) = zoom.filter(|_| !layout.rows.is_empty()) {
+            .pending_scroll
+            .take_if(|(key, _)| *key == built.key)
+            .map(|(_, item)| item);
+        if layout.rows.is_empty() {
+            // Nothing to scroll.
+        } else if let Some(item) = pending {
+            list.scroll_to(ListOffset {
+                item_ix: row_for_item(layout, item.min(layout.tiles.len().saturating_sub(1))),
+                offset_in_item: px(0.0),
+            });
+        } else if let Some(anchor) = zoom {
             // A zoom: the anchor item's point stays at the same screen y.
-            self.mosaic.zoom_anchor = None;
             let row = layout.rows[layout.row_of(anchor.item)];
             let y = row.y + row.pad + anchor.frac * (row.height - row.pad) - anchor.screen_y;
             list.scroll_to(offset_for_y(layout, y));
-        } else if let Some((item, header, offset)) = restore.filter(|_| !layout.rows.is_empty()) {
+        } else if let Some((item, header, offset)) = restore {
             // `row_of` is the tile row; a header on top stays on top.
             let item_ix = if header {
                 row_for_item(layout, item)

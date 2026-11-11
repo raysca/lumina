@@ -441,3 +441,151 @@ fn select_dims_while_the_layout_is_updating() {
     assert!(vcx.debug_bounds("mosaic-day-select-20250614").is_some());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn arrows_at_the_first_and_last_tile_rows_keep_the_selection() {
+    let (dir, engine) = uneven_library("mosaic_arrow_ends", 30);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    let layout = layout(&view, vcx);
+    select(&view, vcx, 1);
+    keystrokes(vcx, "up");
+    render_ui(vcx);
+    assert_eq!(selected(&view, vcx), Some(1), "↑ on the top tile row stays");
+    let last = layout.tiles.len() - 1;
+    select(&view, vcx, last);
+    keystrokes(vcx, "down");
+    render_ui(vcx);
+    assert_eq!(
+        selected(&view, vcx),
+        Some(last),
+        "↓ on the bottom tile row stays"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_zoom_anchor_never_outlives_its_view() {
+    let (dir, engine) = seed_library_undecodable("mosaic_anchor_view", 200);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    // Zoom, then switch view (the sort) before the zoomed layout lands.
+    view.update(vcx, |app, cx| {
+        app.select_index(150, cx);
+        app.zoom_in_grid(cx);
+        app.sort.direction = match app.sort.direction {
+            lumina_core::SortDirection::Ascending => lumina_core::SortDirection::Descending,
+            lumina_core::SortDirection::Descending => lumina_core::SortDirection::Ascending,
+        };
+        app.clear_selection(cx);
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.mosaic.zoom_anchor.is_none(),
+            "the other view's layout drops the anchor"
+        )
+    });
+    // A relayout of the new view at the same level keeps its top row.
+    view.update(vcx, |app, _| {
+        app.grid_state
+            .as_ref()
+            .unwrap()
+            .mosaic
+            .scroll_to(gpui::ListOffset {
+                item_ix: 3,
+                offset_in_item: px(0.0),
+            });
+    });
+    render_ui(vcx);
+    let first = layout(&view, vcx).rows[top_ix(&view, vcx)].first;
+    vcx.simulate_resize(size(px(1400.0), px(1000.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    let layout = layout(&view, vcx);
+    let top = top_ix(&view, vcx);
+    assert_eq!(
+        top,
+        layout.row_of(first),
+        "the relayout keeps the top item; no stale zoom jump"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Before and after the view's first layout lands.
+#[core::prelude::v1::test]
+fn relaunch_in_mosaic_restores_the_scroll_anchor() {
+    for before_layout in [true, false] {
+        relaunch_in_mosaic(before_layout);
+    }
+}
+
+fn relaunch_in_mosaic(before_layout: bool) {
+    use crate::app::types::UiMessage;
+    use crate::config::{LastView, RestoredSession};
+    let (dir, engine) = seed_library_undecodable("mosaic_relaunch", 200);
+    let ids: Vec<MediaId> = engine.get_item_slice(0..200).iter().map(|i| i.id).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    let anchor = view.update(vcx, |app, cx| {
+        if before_layout {
+            // A new view key: the landed layout is not this view's.
+            app.sort.direction = match app.sort.direction {
+                lumina_core::SortDirection::Ascending => lumina_core::SortDirection::Descending,
+                lumina_core::SortDirection::Descending => lumina_core::SortDirection::Ascending,
+            };
+        }
+        assert_eq!(app.mosaic_layout().is_none(), before_layout);
+        app.pending_restore = Some(RestoredSession {
+            view: LastView::All,
+            search_query: String::new(),
+            active_year: None,
+            selected_media_id: Some(ids[95].0),
+            scroll_anchor_id: Some(ids[90].0),
+        });
+        let total = app.grid_state.as_ref().map_or(0, |s| s.total_count);
+        app.handle_ui_message(
+            UiMessage::Engine(lumina_core::EngineEvent::ScanComplete { total_items: total }),
+            cx,
+        );
+        app.find_active_index(ids[90]).expect("anchor in view")
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    let layout = layout(&view, vcx);
+    let top = top_ix(&view, vcx);
+    assert_eq!(
+        top,
+        crate::app::mosaic_nav::row_for_item(&layout, anchor),
+        "Mosaic opens with the saved anchor's row on top (before layout: {before_layout})"
+    );
+    assert!(top > 0, "the anchor is below the first screen");
+    click(vcx, "view-mode-grid");
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.grid_top_row(),
+            0,
+            "no restore was queued on the hidden Grid"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn offset_past_the_end_stays_inside_the_last_row() {
+    let (dir, engine) = uneven_library("mosaic_offset_end", 30);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    let layout = layout(&view, vcx);
+    let offset = crate::app::mosaic_nav::offset_for_y(&layout, 1.0e9);
+    let last = layout.rows.len() - 1;
+    assert_eq!(offset.item_ix, last);
+    assert!(
+        f32::from(offset.offset_in_item) <= layout.rows[last].height,
+        "the offset is clamped to the row height"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

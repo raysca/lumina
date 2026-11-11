@@ -969,7 +969,7 @@ impl LuminaApp {
                 }
             }
         }
-        self.restore_grid_scroll(restored.scroll_anchor_id.map(MediaId));
+        self.restore_grid_scroll(restored.scroll_anchor_id.map(MediaId), cx);
         // The startup restore is a jump, not user navigation: seed the trail
         // with the restored destination so Back cannot return to pre-restore state.
         self.reset_navigation_history();
@@ -984,8 +984,22 @@ impl LuminaApp {
     /// GPUI keeps one deferred scroll, so revealing the selection afterwards
     /// would replace the anchor scroll: the selection is revealed only when
     /// the anchor is gone or the selected row falls outside the anchored
-    /// viewport.
-    fn restore_grid_scroll(&self, anchor: Option<MediaId>) {
+    /// viewport. In Mosaic the hidden Grid list is left alone: the anchor
+    /// (else the selection) goes on top now when the view's layout is
+    /// there, else once it lands.
+    fn restore_grid_scroll(&mut self, anchor: Option<MediaId>, cx: &mut Context<Self>) {
+        if self.mosaic_shown() {
+            let item = anchor
+                .and_then(|id| self.find_active_index(id))
+                .or(self.selected_index);
+            match item {
+                Some(item) if self.mosaic_layout().is_some() => {
+                    self.scroll_mosaic_to_item(item, cx)
+                }
+                _ => self.mosaic.pending_scroll = item.map(|item| (self.view_key(), item)),
+            }
+            return;
+        }
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };
