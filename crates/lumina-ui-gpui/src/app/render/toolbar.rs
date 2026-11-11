@@ -86,11 +86,12 @@ fn window_controls(window: &Window) -> Div {
 }
 
 impl LuminaApp {
-    /// The page header's meta line: the current view's item count. None
-    /// until a count is known, so a loading view never reads "0 items".
+    /// The page header's meta line: the current view's item count and the
+    /// months its items span. None until a count is known, so a loading
+    /// view never reads "0 items"; the span joins once its fetch lands.
     pub(crate) fn page_meta(&self) -> Option<String> {
         (!self.view_loading() || self.cached_active_count().is_some())
-            .then(|| crate::i18n::items(self.displayed_count()))
+            .then(|| crate::i18n::items_in_span(self.displayed_count(), self.displayed_span()))
     }
 
     pub(crate) fn render_toolbar(

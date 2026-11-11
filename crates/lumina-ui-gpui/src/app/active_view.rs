@@ -10,7 +10,9 @@ use std::ops::Range;
 use gpui::Context;
 use std::collections::HashSet;
 
-use lumina_core::{LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum, ViewScope};
+use lumina_core::{
+    DateSpan, LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum, ViewScope,
+};
 
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
@@ -94,6 +96,21 @@ impl ViewQuery {
         })
     }
 
+    /// The capture months of the view's dated items, over the rows of
+    /// [`Self::count`]; `None` for Duplicates, which is not one WHERE.
+    /// ponytail: one engine query for All Media too (two index seeks), not
+    /// the cached month buckets, so every view reads undated the same way.
+    pub(crate) fn date_span(&self, engine: &LuminaEngine) -> Option<DateSpan> {
+        let scope = match self.reject_scope() {
+            Some(scope) => scope,
+            None if self.key.selection == AlbumSelection::Trash => {
+                ViewScope::System(SystemAlbum::RecentlyDeleted)
+            }
+            None => return None,
+        };
+        engine.view_date_span(&scope)
+    }
+
     /// The view's items at `range`, in view order.
     pub(crate) fn slice(&self, engine: &LuminaEngine, range: Range<usize>) -> Vec<MediaItem> {
         let (offset, limit) = (range.start, range.len());
@@ -139,6 +156,8 @@ struct Fetched {
     key: ViewKey,
     revision: u64,
     count: usize,
+    /// Read with `count`, so it is stale exactly when the count is.
+    span: Option<DateSpan>,
     start: usize,
     items: Vec<MediaItem>,
 }
@@ -255,6 +274,16 @@ impl LuminaApp {
         }
     }
 
+    /// Date span to draw, from the same fetch as [`Self::displayed_count`];
+    /// `None` until this view's first fetch lands. Never queries.
+    pub(crate) fn displayed_span(&self) -> Option<DateSpan> {
+        let key = self.view_key();
+        match &self.active_view.data {
+            Some(data) if data.key == key => data.span,
+            _ => None,
+        }
+    }
+
     /// True until the first fetch for the current view lands, so an empty
     /// view is not announced before it is known to be empty.
     pub(crate) fn view_loading(&self) -> bool {
@@ -337,13 +366,14 @@ impl LuminaApp {
         }
         let wanted = self.active_view.wanted.clone();
         let revision = engine.data_revision();
-        if self
-            .active_view
-            .fresh(&query.key, revision)
-            .is_some_and(|data| ActiveView::covers(data, &wanted))
-        {
+        let fresh = self.active_view.fresh(&query.key, revision);
+        if fresh.is_some_and(|data| ActiveView::covers(data, &wanted)) {
             return;
         }
+        // A scroll past the cached rows keeps the span, as long as nothing
+        // is written before the fetch reads its revision (checked there).
+        let known_span = fresh.map(|data| data.span);
+        let known_at = revision;
         // ponytail: a panicking fetch would leave this set and freeze the
         // cache; the engine's reads log and return defaults instead of failing.
         self.active_view.in_flight = true;
@@ -355,10 +385,15 @@ impl LuminaApp {
             let start = wanted.start.saturating_sub(WINDOW_PAD).min(count);
             let end = (wanted.end + WINDOW_PAD).min(count).max(start);
             let items = query.slice(&engine, start..end);
+            // After the rows, so a view switch never waits on it for them.
+            let span = known_span
+                .filter(|_| revision == known_at)
+                .unwrap_or_else(|| query.date_span(&engine));
             Fetched {
                 key: query.key,
                 revision,
                 count,
+                span,
                 start,
                 items,
             }

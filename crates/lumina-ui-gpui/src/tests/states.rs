@@ -152,9 +152,11 @@ fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(
-            app.page_meta().as_deref(),
+            app.page_meta()
+                .as_deref()
+                .and_then(|meta| meta.split(" · ").next()),
             Some("1 item"),
-            "the meta line counts the trash"
+            "the meta line counts the trash (the seed's date is its file time)"
         )
     });
     for selector in [

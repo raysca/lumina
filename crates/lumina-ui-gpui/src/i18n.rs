@@ -47,6 +47,36 @@ pub fn items(n: usize) -> String {
     }
 }
 
+/// "Jun 2018" (en-US short month and year); the year alone for a month
+/// outside 1-12.
+pub fn month_year(year: i32, month: u32) -> String {
+    if !(1..=12).contains(&month) {
+        return year.to_string();
+    }
+    t("date.month_year")
+        .replace("{month}", &t(&format!("date.month_short_{month}")))
+        .replace("{year}", &year.to_string())
+}
+
+/// The page header's meta line with the view's capture months: "3 items ·
+/// Jun 2018 — Nov 2026", one month when they match, the count alone without
+/// a span.
+pub fn items_in_span(n: usize, span: Option<lumina_core::DateSpan>) -> String {
+    let Some(span) = span else {
+        return items(n);
+    };
+    let range = if span.first == span.last {
+        month_year(span.first.0, span.first.1)
+    } else {
+        t("header.date_range")
+            .replace("{from}", &month_year(span.first.0, span.first.1))
+            .replace("{to}", &month_year(span.last.0, span.last.1))
+    };
+    t("header.meta")
+        .replace("{items}", &items(n))
+        .replace("{range}", &range)
+}
+
 /// Accessible name of a collection button, e.g. "Favorites, 22 items".
 pub fn nav_aria_label(label: &str, count: usize) -> String {
     t(if count == 1 {
@@ -386,6 +416,21 @@ fn en_us(key: &str) -> Option<&'static str> {
         "search.placeholder" => "Search library",
         "header.items_one" => "1 item",
         "header.items_other" => "{n} items",
+        "header.meta" => "{items} · {range}",
+        "header.date_range" => "{from} — {to}",
+        "date.month_year" => "{month} {year}",
+        "date.month_short_1" => "Jan",
+        "date.month_short_2" => "Feb",
+        "date.month_short_3" => "Mar",
+        "date.month_short_4" => "Apr",
+        "date.month_short_5" => "May",
+        "date.month_short_6" => "Jun",
+        "date.month_short_7" => "Jul",
+        "date.month_short_8" => "Aug",
+        "date.month_short_9" => "Sep",
+        "date.month_short_10" => "Oct",
+        "date.month_short_11" => "Nov",
+        "date.month_short_12" => "Dec",
         "header.import" => "Import",
         "header.import_tooltip" => "Import… (⇧⌘I)",
         "header.filter" => "Filter",
@@ -437,5 +482,25 @@ mod tests {
         assert_eq!(items(0), "0 items");
         assert_eq!(items(1), "1 item");
         assert_eq!(items(1_284_503), "1,284,503 items");
+    }
+
+    #[test]
+    fn items_in_span_names_one_month_or_a_range() {
+        use lumina_core::DateSpan;
+        let span = |first, last| Some(DateSpan { first, last });
+        assert_eq!(
+            items_in_span(48_291, span((2018, 6), (2026, 11))),
+            "48,291 items · Jun 2018 — Nov 2026"
+        );
+        assert_eq!(
+            items_in_span(1, span((2018, 6), (2018, 6))),
+            "1 item · Jun 2018"
+        );
+        assert_eq!(items_in_span(2, None), "2 items", "no span, no range part");
+        assert_eq!(
+            month_year(2018, 13),
+            "2018",
+            "a bad month never shows a raw key"
+        );
     }
 }

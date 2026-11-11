@@ -34,9 +34,9 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Album, Catalog, CropRect, DeletionTarget, DownloadRow, DownloadState, Edits, GeoPoint,
-    PriorDownload, RejectedItems, Rights, TagChange, TagReplay, TemplateChange, ViewScope,
-    SCHEMA_VERSION,
+    Album, Catalog, CropRect, DateSpan, DeletionTarget, DownloadRow, DownloadState, Edits,
+    GeoPoint, PriorDownload, RejectedItems, Rights, TagChange, TagReplay, TemplateChange,
+    ViewScope, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -773,6 +773,14 @@ impl LuminaEngine {
     /// is returned, not hidden as "no rejects".
     pub fn rejected_in(&self, scope: &ViewScope) -> Result<RejectedItems> {
         self.catalog.rejected_in(scope)
+    }
+
+    /// The first and last capture month of the view's dated items, over
+    /// the same rows as the view's count; `None` when none is dated. A read
+    /// error is logged and reads as `None`, so the header shows only the
+    /// count.
+    pub fn view_date_span(&self, scope: &ViewScope) -> Option<DateSpan> {
+        self.read("view date span", self.catalog.view_date_span(scope))
     }
 
     /// Every picked or rejected item; unflagged items are left out.

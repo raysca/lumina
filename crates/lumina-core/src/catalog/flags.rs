@@ -3,24 +3,12 @@
 //! unchanged. Flags stay in the catalog, not XMP (Lightroom does not
 //! round-trip picks, and `xmp:Rating=-1` would overwrite stars).
 
+use super::view_scope::{view_where, ViewScope};
 use super::Catalog;
-use crate::{Flag, MediaId, SmartAlbum, StructuredQuery, SystemAlbum};
+use crate::{Flag, MediaId};
 use anyhow::{Context, Result};
 use rusqlite::types::Value;
 use std::collections::HashMap;
-
-/// The view "Delete Rejected…" acts on: each kind of grid view whose rows
-/// are a WHERE over `media_items m`. A search, a year and a tag are all
-/// search text (`year:2024`, `tag:beach`), as the grid runs them.
-#[derive(Debug, Clone)]
-pub enum ViewScope {
-    Library,
-    Search(String),
-    System(SystemAlbum),
-    Smart(SmartAlbum),
-    Album(i64),
-    Untagged,
-}
 
 /// The rejected items of one view, with the Delete dialog's header summary.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -35,20 +23,7 @@ pub struct RejectedItems {
 /// hidden items are left out (a trashed reject is already deleted), and
 /// those two terms also let SQLite seek the partial `idx_media_flag`.
 pub(crate) fn rejected_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
-    let (view, mut params): (String, Vec<Value>) = match scope {
-        ViewScope::Library => ("1".into(), Vec::new()),
-        ViewScope::Search(text) => StructuredQuery::parse(text).build_where_subquery(false),
-        ViewScope::System(album) => (album.build_where_clause().into(), Vec::new()),
-        ViewScope::Smart(album) => album.where_sql(false)?,
-        ViewScope::Album(id) => (
-            "m.id IN (SELECT media_id FROM album_items WHERE album_id = ?)".into(),
-            vec![(*id).into()],
-        ),
-        ViewScope::Untagged => (
-            "NOT EXISTS (SELECT 1 FROM media_tags mt WHERE mt.media_id = m.id)".into(),
-            Vec::new(),
-        ),
-    };
+    let (view, mut params) = view_where(scope)?;
     params.insert(0, (Flag::Reject as i64).into());
     Ok((
         format!(

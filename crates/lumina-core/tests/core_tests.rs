@@ -6455,3 +6455,60 @@ fn reopening_an_old_catalog_fixes_portrait_dims_once() {
     drop(engine);
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn view_date_span_ignores_undated_items() {
+    use lumina_core::{DateSpan, ViewScope};
+    let catalog = Catalog::open_in_memory().unwrap();
+    let dated = |path: &str, ts: i64, year: i32, month: u32| {
+        let mut item = sample_media_item(path, MediaType::Image, ts, None, None);
+        (item.year, item.month, item.day) = (year, month, 1);
+        item
+    };
+    let mut undated = dated("/span/undated.jpg", 0, 0, 0);
+    undated.day = 0;
+    let stored = catalog
+        .insert_or_update_batch(&[
+            dated("/span/old.jpg", 1_528_000_000_000, 2018, 6),
+            dated("/span/new.jpg", 1_794_000_000_000, 2026, 11),
+            undated,
+        ])
+        .unwrap();
+    let span = Some(DateSpan {
+        first: (2018, 6),
+        last: (2026, 11),
+    });
+    assert_eq!(
+        catalog.view_date_span(&ViewScope::Library).unwrap(),
+        span,
+        "the library spans its oldest and newest dated items; the undated one is left out"
+    );
+    assert_eq!(
+        catalog
+            .view_date_span(&ViewScope::Search("year:2018".into()))
+            .unwrap(),
+        Some(DateSpan {
+            first: (2018, 6),
+            last: (2018, 6),
+        }),
+        "a filtered view spans only its own items"
+    );
+
+    let album = catalog
+        .create_album_with("Undated only", &[stored[2].id])
+        .unwrap();
+    assert_eq!(
+        catalog.view_date_span(&ViewScope::Album(album.id)).unwrap(),
+        None,
+        "an all-undated view has no span"
+    );
+    catalog.batch_set_trashed(&[stored[0].id], true).unwrap();
+    assert_eq!(
+        catalog.view_date_span(&ViewScope::Library).unwrap(),
+        Some(DateSpan {
+            first: (2026, 11),
+            last: (2026, 11),
+        }),
+        "a trashed item leaves the library's span, as it leaves its count"
+    );
+}

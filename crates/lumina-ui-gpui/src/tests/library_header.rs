@@ -49,9 +49,11 @@ fn header_sits_in_the_main_column_with_title_meta_and_actions() {
     );
     view.update(vcx, |app, _| {
         assert_eq!(
-            app.page_meta().as_deref(),
+            app.page_meta()
+                .as_deref()
+                .and_then(|meta| meta.split(" · ").next()),
             Some("1 item"),
-            "the meta line counts the view"
+            "the meta line counts the view (the seed's date is its file time)"
         );
     });
 
@@ -293,4 +295,90 @@ fn headerless_screens_drop_the_header_popovers() {
             "the sort menu must not outlive its header and shadow Welcome's keys"
         )
     });
+}
+
+#[core::prelude::v1::test]
+fn header_meta_shows_count_and_date_range() {
+    use super::ui_automation::seed_library;
+    use crate::views::sidebar::AlbumSelection;
+    let (dir, engine) = seed_library("lh_range", 3);
+    let _cleanup = super::downloads::TempLibrary(dir);
+    let ids: Vec<_> = engine
+        .get_item_slice(0..3)
+        .iter()
+        .map(|item| item.id)
+        .collect();
+    // Mid-month noon UTC: Jun 2018, Mar 2022, Nov 2026.
+    let times = [1_529_064_000_000_i64, 1_647_345_600_000, 1_794_744_000_000];
+    engine
+        .set_timestamps(&ids.iter().copied().zip(times).collect::<Vec<_>>())
+        .unwrap();
+    let album = engine.create_album_with("June", &ids[..1]).unwrap();
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("3 items · Jun 2018 — Nov 2026"),
+            "All Media reads its count and the months of its oldest and newest items"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("page-meta").is_some(),
+        "the meta line is painted"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Album(album.id), cx)
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("1 item · Jun 2018"),
+            "a view within one month names that month once"
+        );
+    });
+
+    view.update(vcx, |app, cx| app.set_search_query("year:2026", cx));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.page_meta().is_none_or(|meta| !meta.contains('·')),
+            "a view whose span has not landed shows no range, not the last view's"
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("1 item · Nov 2026"),
+            "a search spans only its matches"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn date_span_rereads_after_a_write_before_a_scroll_fetch() {
+    use super::ui_automation::seed_library;
+    let (dir, engine) = seed_library("lh_span_race", 80);
+    let _cleanup = super::downloads::TempLibrary(dir);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let span = |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.displayed_span());
+    let before = span(vcx).expect("the seed is dated");
+    assert_ne!(before.first, (2010, 1), "the seed is not from 2010");
+
+    // Rows past the cached window: this fetch would reuse the cached span.
+    view.update(vcx, |app, cx| app.want_view_rows(76..80, cx));
+    // A write lands after the fetch is scheduled, before it runs.
+    let id = engine.get_item_slice(0..1)[0].id;
+    engine.set_timestamps(&[(id, 1_263_556_800_000)]).unwrap(); // 15 Jan 2010
+    vcx.run_until_parked();
+    render_ui(vcx);
+    assert_eq!(
+        span(vcx).map(|s| s.first),
+        Some((2010, 1)),
+        "a span reused across a write would show the old months until the next edit"
+    );
 }
