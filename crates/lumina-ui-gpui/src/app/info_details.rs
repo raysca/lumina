@@ -6,8 +6,12 @@ use gpui::*;
 use lumina_core::scanner::{read_media_details, MediaDetails};
 use lumina_core::{MediaId, MediaItem, Rights};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::app::LuminaApp;
+
+/// How long the docked panel waits for the selection to rest before reading.
+pub const INFO_DETAILS_SETTLE: Duration = Duration::from_millis(150);
 
 /// Details for one item. Keyed by id and path: ids restart per catalog, so
 /// an id alone could show another library's facts. Fields stay empty until the
@@ -33,6 +37,17 @@ impl LuminaApp {
     /// in flight. The catalog and file reads run on the background executor
     /// (UI never blocks on IO); a reply for an item no longer shown is dropped.
     pub fn ensure_info_details(&mut self, cx: &mut Context<Self>) {
+        self.request_info_details(None, cx);
+    }
+
+    /// [`Self::ensure_info_details`] for the docked panel: the read starts
+    /// once the selection has rested for [`INFO_DETAILS_SETTLE`], so
+    /// arrow-scrubbing the grid reads only the item it stops on.
+    pub fn ensure_info_details_settled(&mut self, cx: &mut Context<Self>) {
+        self.request_info_details(Some(INFO_DETAILS_SETTLE), cx);
+    }
+
+    fn request_info_details(&mut self, settle: Option<Duration>, cx: &mut Context<Self>) {
         let Some(item) = self.selected_item.as_ref() else {
             return;
         };
@@ -50,7 +65,7 @@ impl LuminaApp {
             rights: Rights::default(),
         });
         let read_path = path.clone();
-        let read = cx.background_executor().spawn(async move {
+        let read = async move {
             let (added, source, rights) = engine
                 .as_ref()
                 .map(|engine| {
@@ -77,9 +92,23 @@ impl LuminaApp {
                 })
                 .unwrap_or_default();
             (added, source, rights, read_media_details(&read_path))
-        });
+        };
         cx.spawn(async move |this, cx| {
-            let (added, source, rights, file) = read.await;
+            if let Some(settle) = settle {
+                cx.background_executor().timer(settle).await;
+                // A newer selection replaced the placeholder: skip this read.
+                let current = this
+                    .read_with(cx, |this, _| {
+                        this.info_details
+                            .as_ref()
+                            .is_some_and(|d| d.id == id && d.path == path)
+                    })
+                    .unwrap_or(false);
+                if !current {
+                    return;
+                }
+            }
+            let (added, source, rights, file) = cx.background_executor().spawn(read).await;
             // The app may be gone; nothing to show then.
             let _ = this.update(cx, |this, cx| {
                 if let Some(details) = this

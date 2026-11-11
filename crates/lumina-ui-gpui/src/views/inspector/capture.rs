@@ -1,10 +1,12 @@
 //! Capture rows for the docked inspector: the camera facts a file has, in
 //! the Detail design order.
 
+use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
 use crate::app::types::format_duration_badge;
 use crate::i18n::{t, t_with};
+use crate::theme;
 use crate::views::inspector::summary::resolution_label;
 
 /// One Capture row: its localised key, automation name and value.
@@ -14,20 +16,35 @@ pub(crate) struct CaptureRow {
     pub value: String,
 }
 
-/// The capture facts the file has, in design order. Unknown values are left
-/// out, so an item with no EXIF gets no rows.
+/// A text EXIF field with something in it: the scanner stores `Some("")`
+/// for an empty tag.
+fn filled(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+}
+
+/// The capture facts the file has, in design order. Unknown or blank values
+/// are left out, so an item with no EXIF gets no rows.
 pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<CaptureRow> {
-    // Many makers repeat the make in the model ("Canon" + "Canon EOS R5").
-    let camera = match (&item.make, &item.model) {
-        (Some(make), Some(model)) if model.to_lowercase().starts_with(&make.to_lowercase()) => {
-            Some(model.clone())
+    let camera = match (filled(&item.make), filled(&item.model)) {
+        (Some(make), Some(model)) => {
+            // Makers repeat their name in the model, often only its first
+            // word ("NIKON CORPORATION" + "NIKON D850").
+            let brand = make.split_whitespace().next().unwrap_or(&make);
+            if model.to_lowercase().starts_with(&brand.to_lowercase()) {
+                Some(model)
+            } else {
+                Some(format!("{make} {model}"))
+            }
         }
-        (Some(make), Some(model)) => Some(format!("{make} {model}")),
-        (make, model) => make.clone().or_else(|| model.clone()),
+        (make, model) => make.or(model),
     };
     let exposure = [
         item.f_number.map(|f| format!("ƒ/{f:.1}")),
-        item.exposure_time.clone(),
+        filled(&item.exposure_time),
         item.iso.map(|iso| format!("ISO {iso}")),
     ]
     .into_iter()
@@ -57,7 +74,7 @@ pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<Cap
         (
             "inspector.lens",
             "inspector-capture-lens",
-            item.lens.clone(),
+            filled(&item.lens),
         ),
         (
             "inspector.exposure",
@@ -81,4 +98,40 @@ pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<Cap
         })
     })
     .collect()
+}
+
+/// Capture row (Detail design): 19px, key Inter 11.5 `t3`, value mono 11
+/// `t1` right-aligned. A long value (lens names) truncates; its tooltip
+/// holds the full text.
+pub(crate) fn render_capture_row(row: CaptureRow) -> Stateful<Div> {
+    let selector = row.selector;
+    div()
+        .id(selector)
+        .debug_selector(move || selector.to_string())
+        .h(px(19.0))
+        .flex()
+        .flex_row()
+        .justify_between()
+        .items_center()
+        .gap_2()
+        .tooltip(theme::tooltip_label(row.value.clone()))
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(11.5))
+                .text_color(theme::t3())
+                .child(row.key),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .text_size(px(11.0))
+                .font_family(theme::FONT_MONO)
+                .text_color(theme::t1())
+                .text_right()
+                .child(row.value),
+        )
 }

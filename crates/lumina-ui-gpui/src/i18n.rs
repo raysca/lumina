@@ -543,6 +543,15 @@ fn en_us(key: &str) -> Option<&'static str> {
         "inspector.get_info" => "Get Info…",
         "inspector.get_info_tooltip" => "Open the full inspector window",
         "inspector.reveal" => "Reveal",
+        "inspector.nothing_selected" => "Nothing selected.",
+        "inspector.star_one" => "1 star",
+        "inspector.star_other" => "{} stars",
+        "inspector.format_label" => "{} file",
+        "inspector.format_label_dims" => "{} file, {} pixels",
+        "inspector.tag_label" => "Tag {}",
+        "inspector.tag_add_label" => "Add a tag",
+        "inspector.filter_tag_label" => "Show items tagged {}",
+        "inspector.remove_tag_label" => "Remove tag {}",
         _ => return None,
     })
 }

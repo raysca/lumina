@@ -44,37 +44,6 @@ impl InspectorTab {
     }
 }
 
-/// Capture row (Detail design): 19px, key Inter 11.5 `t3`, value mono 11
-/// `t1` right-aligned; a long value (lens names) truncates.
-pub fn render_meta_row(label: &str, value: &str) -> Div {
-    div()
-        .h(px(19.0))
-        .flex()
-        .flex_row()
-        .justify_between()
-        .items_center()
-        .gap_2()
-        .child(
-            div()
-                .flex_none()
-                .text_size(px(11.5))
-                .text_color(theme::t3())
-                .child(label.to_string()),
-        )
-        .child(
-            div()
-                .min_w_0()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .text_ellipsis()
-                .text_size(px(11.0))
-                .font_family(theme::FONT_MONO)
-                .text_color(theme::t1())
-                .text_right()
-                .child(value.to_string()),
-        )
-}
-
 /// Inspector heading: the user title, then the place, then the filename stem.
 pub(crate) fn display_title(item: &MediaItem) -> String {
     if let Some(ref title) = item.title {

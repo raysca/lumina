@@ -7,11 +7,11 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
-use crate::i18n::t;
+use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme::{self, ChipKind};
-use crate::views::inspector::body::{format_bytes, render_meta_row};
-use crate::views::inspector::capture::capture_rows;
+use crate::views::inspector::body::format_bytes;
+use crate::views::inspector::capture::{capture_rows, render_capture_row};
 use crate::views::inspector::tabs::tags::{render_suggestions, Suggestion};
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
@@ -56,11 +56,7 @@ pub fn render_summary_body(
                     div()
                         .flex()
                         .flex_col()
-                        .children(capture.into_iter().map(|row| {
-                            let selector = row.selector;
-                            render_meta_row(&row.key, &row.value)
-                                .debug_selector(move || selector.to_string())
-                        })),
+                        .children(capture.into_iter().map(render_capture_row)),
                 )
                 .debug_selector(|| "inspector-capture".to_string()),
             )
@@ -161,6 +157,7 @@ pub fn render_summary_body(
 fn render_file_header(item: &MediaItem) -> Div {
     let dims =
         (item.width > 0 && item.height > 0).then(|| format!("{} × {}", item.width, item.height));
+    let badge = format_badge(item);
     div()
         .flex()
         .flex_col()
@@ -183,26 +180,35 @@ fn render_file_header(item: &MediaItem) -> Div {
                         .text_color(theme::t1())
                         .child(item.file_name.clone()),
                 )
-                .child(
-                    div()
-                        .id("inspector-format-badge")
-                        .debug_selector(|| "inspector-format-badge".to_string())
-                        .flex_none()
-                        .h(px(18.0))
-                        .px(px(6.0))
-                        .rounded(px(4.0))
-                        .bg(theme::accent_soft())
-                        .flex()
-                        .items_center()
-                        .text_size(px(9.5))
-                        .font_family(theme::FONT_MONO)
-                        .text_color(theme::accent())
-                        .child(format_badge(item))
-                        // Dimensions moved here from the old footer.
-                        .when_some(dims, |badge, dims| {
-                            badge.tooltip(theme::tooltip_label(dims))
-                        }),
-                ),
+                // No badge for a file without an extension.
+                .when(!badge.is_empty(), |row| {
+                    let label = match &dims {
+                        Some(dims) => t_with("inspector.format_label_dims", &[&badge, dims]),
+                        None => t_with("inspector.format_label", &[&badge]),
+                    };
+                    row.child(
+                        div()
+                            .id("inspector-format-badge")
+                            .debug_selector(|| "inspector-format-badge".to_string())
+                            .role(Role::Label)
+                            .aria_label(label)
+                            .flex_none()
+                            .h(px(18.0))
+                            .px(px(6.0))
+                            .rounded(px(4.0))
+                            .bg(theme::accent_soft())
+                            .flex()
+                            .items_center()
+                            .text_size(px(9.5))
+                            .font_family(theme::FONT_MONO)
+                            .text_color(theme::accent())
+                            .child(badge)
+                            // Dimensions moved here from the old footer.
+                            .when_some(dims, |badge, dims| {
+                                badge.tooltip(theme::tooltip_label(dims))
+                            }),
+                    )
+                }),
         )
         .child(
             div()
@@ -227,10 +233,11 @@ pub(crate) fn format_badge(item: &MediaItem) -> String {
 
 /// "Sat 14 Jun 2025 · 18:42:09 · 48.2 MB" (UTC, like the rest of the app).
 pub(crate) fn when_line(item: &MediaItem) -> String {
-    let when = chrono::DateTime::from_timestamp_millis(item.timestamp_epoch_ms)
-        .map(|dt| dt.format("%a %-d %b %Y · %H:%M:%S").to_string())
-        .unwrap_or_else(|| format!("{:04}-{:02}-{:02}", item.year, item.month, item.day));
-    format!("{when} · {}", format_bytes(item.file_size))
+    format!(
+        "{} · {}",
+        item.format_timestamp("%a %-d %b %Y · %H:%M:%S"),
+        format_bytes(item.file_size)
+    )
 }
 
 /// Section with the design title: 9.5/600 `t3`, uppercase in the catalog.
@@ -276,9 +283,9 @@ pub(super) fn render_stars(
                 ))
                 .debug_selector(move || format!("inspector-star-{star}"))
                 .tooltip(theme::tooltip_label(if star == 1 {
-                    "1 star".to_string()
+                    t("inspector.star_one")
                 } else {
-                    format!("{star} stars")
+                    t_with("inspector.star_other", &[&star.to_string()])
                 }))
                 .size(px(22.0))
                 .flex()
@@ -369,6 +376,8 @@ fn render_tags(
             let selector = format!("tag-chip-{tag}");
             theme::chip(ElementId::Name(selector.clone().into()), ChipKind::Normal)
                 .debug_selector(move || selector.clone())
+                .role(Role::Group)
+                .aria_label(t_with("inspector.tag_label", &[tag]))
                 // A long tag truncates inside one panel-wide chip.
                 .max_w_full()
                 .child(
@@ -384,6 +393,8 @@ fn render_tags(
         .child({
             let add = theme::chip("tag-add", ChipKind::Ghost)
                 .debug_selector(|| "tag-add".to_string())
+                .role(Role::Button)
+                .aria_label(t("inspector.tag_add_label"))
                 .border_color(theme::line_2())
                 .text_color(theme::t3());
             match field_input.filter(|_| input_active) {
@@ -424,6 +435,8 @@ fn render_tag_filter(weak_app: WeakEntity<LuminaApp>, tag: &str) -> Stateful<Div
         .overflow_hidden()
         .whitespace_nowrap()
         .text_ellipsis()
+        .role(Role::Button)
+        .aria_label(t_with("inspector.filter_tag_label", &[tag]))
         .tooltip(theme::tooltip_label(t("inspector.filter_tag")))
         .cursor_pointer()
         .child(tag.to_string())
@@ -440,6 +453,8 @@ fn render_tag_remove(weak_app: WeakEntity<LuminaApp>, tag: String) -> Stateful<D
     div()
         .id(ElementId::Name(selector.clone().into()))
         .debug_selector(move || selector.clone())
+        .role(Role::Button)
+        .aria_label(t_with("inspector.remove_tag_label", &[&tag]))
         .tooltip(theme::tooltip_label(t("inspector.remove_tag")))
         .flex_none()
         .size(px(14.0))

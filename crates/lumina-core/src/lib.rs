@@ -158,13 +158,14 @@ impl MediaItem {
 
     /// Formats `timestamp_epoch_ms` as a human-readable date/time string.
     pub fn formatted_timestamp(&self) -> String {
+        self.format_timestamp("%a %-d %b %Y · %H:%M")
+    }
+
+    /// Formats `timestamp_epoch_ms` (UTC) with a chrono `fmt`, falling back
+    /// to the catalog's year-month-day when the timestamp is out of range.
+    pub fn format_timestamp(&self, fmt: &str) -> String {
         chrono::DateTime::from_timestamp_millis(self.timestamp_epoch_ms)
-            .map(|dt| {
-                dt.format("%a %-d %b %Y · %H:%M")
-                    .to_string()
-                    .trim()
-                    .to_string()
-            })
+            .map(|dt| dt.format(fmt).to_string().trim().to_string())
             .unwrap_or_else(|| format!("{:04}-{:02}-{:02}", self.year, self.month, self.day))
     }
 
