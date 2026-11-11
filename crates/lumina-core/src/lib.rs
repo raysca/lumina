@@ -36,7 +36,7 @@ pub use cache::DiskCache;
 pub use catalog::{
     Album, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget, DownloadRow, DownloadState,
     Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload, RejectedItems, Rights, TagChange,
-    TagReplay, TemplateChange, ViewScope, SCHEMA_VERSION,
+    TagReplay, TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -782,6 +782,14 @@ impl LuminaEngine {
     /// count.
     pub fn view_date_span(&self, scope: &ViewScope) -> Option<DateSpan> {
         self.read("view date span", self.catalog.view_date_span(scope))
+    }
+
+    /// The view's count, summed duration and size, and items per capture
+    /// month. One grouped pass: call it off the UI thread, once per
+    /// revision. A read error is logged and reads as `None`, so the header
+    /// shows the plain count.
+    pub fn view_totals(&self, scope: &ViewScope) -> Option<ViewTotals> {
+        self.read("view totals", self.catalog.view_totals(scope).map(Some))
     }
 
     /// Every item of the view as a Mosaic layout cell, in the view's sort

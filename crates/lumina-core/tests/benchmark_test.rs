@@ -882,6 +882,28 @@ fn benchmark_scale_and_gates() {
         "day_places over the library must load in < {places_budget} ms (got {places_ms:.1} ms)"
     );
 
+    // Videos header totals: one grouped pass over the Videos view (the
+    // ~2,300 active clips of the main rows) per catalog revision, off the UI thread.
+    // Release gate is about 2x the measured release number (1.0 ms on an
+    // M-series Mac, 2026-11-11).
+    let videos = lumina_core::ViewScope::System(lumina_core::SystemAlbum::Videos);
+    let totals_start = Instant::now();
+    let totals = catalog.view_totals(&videos).expect("view totals must load");
+    let totals_ms = totals_start.elapsed().as_secs_f64() * 1000.0;
+    assert!(
+        totals.count >= 2_000 && totals.duration_ms == totals.count as u64 * 15_000,
+        "the totals bench must sum every clip's duration, got {totals:?}"
+    );
+    let totals_budget = if cfg!(debug_assertions) { 25.0 } else { 2.5 };
+    println!(
+        "Videos - view_totals: {} clips in {totals_ms:.2} ms (< {totals_budget} ms)",
+        totals.count
+    );
+    assert!(
+        totals_ms < totals_budget,
+        "view_totals over Videos must load in < {totals_budget} ms (got {totals_ms:.2} ms)"
+    );
+
     // Stacks: 100k more rows in groups of ten, 10 s apart. Each group is
     // nine JPEGs 100 ms apart plus a RAW twin of the first, so one burst of
     // nine and one pair. find_stacks reads every active row (~225k here).

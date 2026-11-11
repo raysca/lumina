@@ -279,7 +279,7 @@ impl LuminaApp {
             return None;
         }
         let (year, month) = self.month_header.top?;
-        let count = self.month_header_count();
+        let count = self.month_header_count_label();
         Some(
             div()
                 .id("grid-month-header")
@@ -310,32 +310,35 @@ impl LuminaApp {
                                 .text_color(theme::t1())
                                 .child(month_title(year, month)),
                         )
-                        .children(count.map(|n| {
+                        .children(count.map(|label| {
                             div()
                                 .font_family(theme::FONT_MONO)
                                 .text_size(px(10.0))
                                 .text_color(theme::t3())
-                                .child(if n == 1 {
-                                    "1 item".to_string()
-                                } else {
-                                    format!("{n} items")
-                                })
+                                .child(label)
                         })),
                 )
                 .into_any_element(),
         )
     }
 
-    /// Item count for the band's month. Month counts cover the whole library,
-    /// so only the unfiltered view shows one.
+    /// The band's count text: "N items", or "N clips" in Videos.
+    pub(crate) fn month_header_count_label(&self) -> Option<String> {
+        self.month_header_count().map(|n| self.count_label(n))
+    }
+
+    /// Item count for the band's month. The cached month counts cover the
+    /// whole library, so only the unfiltered view shows them; Videos reads
+    /// its own per-month counts from the view totals fetch.
     pub(crate) fn month_header_count(&self) -> Option<usize> {
+        let top = self.month_header.top?;
+        if self.videos_view() {
+            return self.displayed_totals()?.months.get(&top).copied();
+        }
         if self.selection != AlbumSelection::AllLibrary || !self.search_query.is_empty() {
             return None;
         }
-        self.month_header
-            .counts
-            .get(&self.month_header.top?)
-            .copied()
+        self.month_header.counts.get(&top).copied()
     }
 
     /// Paints the drag selection rectangle while a moved gesture is live.

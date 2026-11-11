@@ -6457,6 +6457,58 @@ fn reopening_an_old_catalog_fixes_portrait_dims_once() {
 }
 
 #[test]
+fn view_totals_sum_duration_and_size() {
+    use lumina_core::{SystemAlbum, ViewScope};
+    let catalog = Catalog::open_in_memory().unwrap();
+    let clip = |path: &str, duration: Option<u64>, size: u64, month: u32| {
+        let mut item = sample_media_item(path, MediaType::Video, 1_700_000_000_000, None, None);
+        item.duration_ms = duration;
+        item.file_size = size;
+        (item.year, item.month) = (2025, month);
+        item
+    };
+    let stored = catalog
+        .insert_or_update_batch(&[
+            clip("/totals/a.mov", Some(3_600_000), 1_000_000, 6),
+            clip("/totals/b.mov", Some(120_500), 2_500_000, 6),
+            // An unprobed clip has no duration: it adds its size only.
+            clip("/totals/c.mov", None, 500, 7),
+            sample_media_item("/totals/photo.jpg", MediaType::Image, 1, None, None),
+        ])
+        .unwrap();
+    let videos = ViewScope::System(SystemAlbum::Videos);
+    let totals = catalog.view_totals(&videos).unwrap();
+    assert_eq!(
+        (totals.count, totals.duration_ms, totals.bytes),
+        (3, 3_720_500, 3_500_500),
+        "Videos totals cover exactly its three clips, not the photo"
+    );
+    assert_eq!(
+        (totals.months.get(&(2025, 6)), totals.months.get(&(2025, 7))),
+        (Some(&2), Some(&1)),
+        "per-month counts follow the view's rows, for the month band"
+    );
+    catalog.batch_set_trashed(&[stored[0].id], true).unwrap();
+    let totals = catalog.view_totals(&videos).unwrap();
+    assert_eq!(
+        (totals.count, totals.duration_ms, totals.bytes),
+        (2, 120_500, 2_500_500),
+        "a trashed clip leaves the totals, as it leaves the count"
+    );
+    let empty = catalog.view_totals(&ViewScope::Album(999)).unwrap();
+    assert_eq!(
+        (
+            empty.count,
+            empty.duration_ms,
+            empty.bytes,
+            empty.months.len()
+        ),
+        (0, 0, 0, 0),
+        "an empty view sums to zero, not NULL"
+    );
+}
+
+#[test]
 fn view_date_span_ignores_undated_items() {
     use lumina_core::{DateSpan, ViewScope};
     let catalog = Catalog::open_in_memory().unwrap();

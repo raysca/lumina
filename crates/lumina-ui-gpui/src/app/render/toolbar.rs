@@ -88,11 +88,25 @@ fn window_controls(window: &Window) -> Div {
 
 impl LuminaApp {
     /// The page header's meta line: the current view's item count and the
-    /// months its items span. None until a count is known, so a loading
-    /// view never reads "0 items"; the span joins once its fetch lands.
+    /// months its items span; in Videos "N clips · H h M m · size" instead.
+    /// None until a count is known, so a loading view never reads "0 items";
+    /// the span (or the Videos totals) joins once its fetch lands.
     pub(crate) fn page_meta(&self) -> Option<String> {
-        (!self.view_loading() || self.cached_active_count().is_some())
-            .then(|| crate::i18n::items_in_span(self.displayed_count(), self.displayed_span()))
+        if self.view_loading() && self.cached_active_count().is_none() {
+            return None;
+        }
+        let count = self.displayed_count();
+        if !self.videos_view() {
+            return Some(crate::i18n::items_in_span(count, self.displayed_span()));
+        }
+        Some(match self.displayed_totals() {
+            Some(totals) => crate::i18n::clips_meta(
+                count,
+                totals.duration_ms,
+                &crate::app::types::format_bytes(totals.bytes),
+            ),
+            None => crate::i18n::clips(count),
+        })
     }
 
     /// The header's Hide/Show Sidebar button; `SIDEBAR_SHORTCUT` is its keyboard path.

@@ -195,7 +195,7 @@ impl LuminaApp {
     pub(crate) fn mosaic_day_header(&self, day: u32, count: usize) -> DayHeader {
         let date = day_title(day);
         let place = self.mosaic_day_place(day).map(place_label);
-        let count_text = crate::i18n::items(count);
+        let count_text = self.count_label(count);
         let aria_label = [Some(date.clone()), place.clone(), Some(count_text.clone())]
             .into_iter()
             .flatten()

@@ -47,6 +47,48 @@ pub fn items(n: usize) -> String {
     }
 }
 
+/// The Videos view's count: "1 clip", "4,183 clips".
+pub fn clips(n: usize) -> String {
+    if n == 1 {
+        t("header.clips_one")
+    } else {
+        t("header.clips_other").replace("{n}", &count(n))
+    }
+}
+
+/// A total running time to the nearest minute: "68 h 12 m", "3 m" under an
+/// hour. `None` for zero (no clip has a known duration); any other total
+/// reads at least "1 m", so a few seconds of video never shows as nothing.
+pub fn hours_minutes(ms: u64) -> Option<String> {
+    if ms == 0 {
+        return None;
+    }
+    let minutes = (ms.saturating_add(30_000) / 60_000).max(1);
+    let (h, m) = (minutes / 60, minutes % 60);
+    Some(if h == 0 {
+        t("header.minutes").replace("{m}", &m.to_string())
+    } else {
+        t("header.hours_minutes")
+            .replace("{h}", &count(h as usize))
+            .replace("{m}", &m.to_string())
+    })
+}
+
+/// The Videos meta line: "4,183 clips · 68 h 12 m · 211.0 GB", without the
+/// duration when none is known. `size` is already formatted.
+pub fn clips_meta(n: usize, duration_ms: u64, size: &str) -> String {
+    let clips = clips(n);
+    match hours_minutes(duration_ms) {
+        Some(duration) => t("header.clips_meta")
+            .replace("{clips}", &clips)
+            .replace("{duration}", &duration)
+            .replace("{size}", size),
+        None => t("header.meta")
+            .replace("{items}", &clips)
+            .replace("{range}", size),
+    }
+}
+
 /// The filter row's count: "1 match", "1,284 matches".
 pub fn matches(n: usize) -> String {
     if n == 1 {
@@ -448,6 +490,11 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.items_one" => "1 item",
         "header.items_other" => "{n} items",
         "header.meta" => "{items} · {range}",
+        "header.clips_one" => "1 clip",
+        "header.clips_other" => "{n} clips",
+        "header.clips_meta" => "{clips} · {duration} · {size}",
+        "header.hours_minutes" => "{h} h {m} m",
+        "header.minutes" => "{m} m",
         "header.date_range" => "{from} — {to}",
         "date.month_year" => "{month} {year}",
         "timeline.label" => "TIMELINE",
@@ -615,6 +662,35 @@ mod tests {
         assert_eq!(items(0), "0 items");
         assert_eq!(items(1), "1 item");
         assert_eq!(items(1_284_503), "1,284,503 items");
+    }
+
+    #[test]
+    fn clips_meta_reads_count_hours_minutes_and_size() {
+        assert_eq!(clips(1), "1 clip");
+        assert_eq!(clips(4_183), "4,183 clips");
+        assert_eq!(hours_minutes(0), None, "no known duration, no part");
+        assert_eq!(
+            hours_minutes(5_000).as_deref(),
+            Some("1 m"),
+            "seconds round up to a minute"
+        );
+        assert_eq!(hours_minutes(89_999).as_deref(), Some("1 m"));
+        assert_eq!(
+            hours_minutes(90_000).as_deref(),
+            Some("2 m"),
+            "half a minute rounds up"
+        );
+        assert_eq!(hours_minutes(3_600_000).as_deref(), Some("1 h 0 m"));
+        assert_eq!(
+            hours_minutes((68 * 60 + 12) * 60_000).as_deref(),
+            Some("68 h 12 m")
+        );
+        assert_eq!(clips_meta(2, 180_000, "1.9 MB"), "2 clips · 3 m · 1.9 MB");
+        assert_eq!(
+            clips_meta(1, 0, "12 B"),
+            "1 clip · 12 B",
+            "unprobed clips drop the duration, not the size"
+        );
     }
 
     #[test]

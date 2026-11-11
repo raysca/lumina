@@ -260,3 +260,102 @@ fn empty_smart_album_offers_only_edit_rules_and_library_path_is_mono() {
     );
     let _ = std::fs::remove_dir_all(&empty_dir);
 }
+
+/// Three clips (1 h + 2 m + 1 m, 1,000,000 bytes each) in June 2025 beside
+/// the seed's photo, as rows only: no file, so no watcher rescan resets them.
+fn library_with_clips(
+    prefix: &str,
+) -> (
+    std::path::PathBuf,
+    std::sync::Arc<lumina_core::LuminaEngine>,
+    Vec<lumina_core::MediaId>,
+) {
+    let (dir, engine) = seed_library(prefix, 1);
+    let tpl = engine.get_item_slice(0..1)[0].clone();
+    let clips: Vec<_> = [3_600_000, 120_000, 60_000]
+        .into_iter()
+        .enumerate()
+        .map(|(i, duration)| {
+            let mut clip = tpl.clone();
+            clip.file_name = format!("clip_{i}.mov");
+            clip.path = dir.join(&clip.file_name);
+            clip.media_type = lumina_core::MediaType::Video;
+            clip.duration_ms = Some(duration);
+            clip.file_size = 1_000_000;
+            (clip.year, clip.month) = (2025, 6);
+            clip
+        })
+        .collect();
+    let stored = engine.catalog().insert_or_update_batch(&clips).unwrap();
+    (dir, engine, stored.iter().map(|clip| clip.id).collect())
+}
+
+#[core::prelude::v1::test]
+fn videos_header_reads_clips() {
+    let (dir, engine, _clips) = library_with_clips("states_videos_meta");
+    let _cleanup = super::downloads::TempLibrary(dir);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::System(lumina_core::SystemAlbum::Videos), cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("3 clips · 1 h 3 m · 2.9 MB"),
+            "Videos counts clips and sums their duration and size, not the photo's"
+        );
+        assert_eq!(
+            app.month_header_count_label().as_deref(),
+            Some("3 clips"),
+            "the month band counts the view's clips in that month, as clips"
+        );
+        assert_eq!(
+            app.mosaic_day_header(20250601, 1).count,
+            "1 clip",
+            "a Mosaic day header in Videos counts clips too"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("page-meta").is_some(),
+        "the meta line is painted"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::AllLibrary, cx)
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.page_meta()
+                .is_some_and(|meta| meta.starts_with("4 items")),
+            "other views keep counting items: {:?}",
+            app.page_meta()
+        );
+        assert_eq!(app.mosaic_day_header(20250601, 2).count, "2 items");
+    });
+}
+
+#[core::prelude::v1::test]
+fn videos_meta_updates_after_a_clip_is_trashed() {
+    let (dir, engine, clips) = library_with_clips("states_videos_trash");
+    let _cleanup = super::downloads::TempLibrary(dir);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::System(lumina_core::SystemAlbum::Videos), cx)
+    });
+    render_ui(vcx);
+    engine.batch_set_trashed(&clips[..1], true).unwrap();
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("2 clips · 3 m · 1.9 MB"),
+            "a trashed clip leaves the totals at the next revision; under an hour reads minutes only"
+        );
+    });
+}

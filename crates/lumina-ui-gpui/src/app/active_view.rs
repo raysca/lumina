@@ -12,6 +12,7 @@ use std::collections::HashSet;
 
 use lumina_core::{
     DateSpan, LuminaEngine, MediaId, MediaItem, SmartAlbum, SortSpec, SystemAlbum, ViewScope,
+    ViewTotals,
 };
 
 use crate::app::LuminaApp;
@@ -143,6 +144,17 @@ impl ViewQuery {
         Some(engine.search_query_count(&tokens.join(" ")))
     }
 
+    /// Count, duration, size and month counts of the Videos view, for its
+    /// header and month band; `None` for every other view (including a
+    /// search or year picked while Videos is selected), which never shows
+    /// them.
+    pub(crate) fn totals(&self, engine: &LuminaEngine) -> Option<ViewTotals> {
+        let scope = self.layout_scope()?;
+        matches!(scope, ViewScope::System(SystemAlbum::Videos))
+            .then(|| engine.view_totals(&scope))
+            .flatten()
+    }
+
     /// The view's items at `range`, in view order.
     pub(crate) fn slice(&self, engine: &LuminaEngine, range: Range<usize>) -> Vec<MediaItem> {
         let (offset, limit) = (range.start, range.len());
@@ -193,6 +205,8 @@ struct Fetched {
     /// Videos among a search's results, for the results head's title;
     /// None outside a search or when the query names a kind itself.
     videos: Option<usize>,
+    /// Videos-view totals, read with `count`; None in other views.
+    totals: Option<ViewTotals>,
     start: usize,
     items: Vec<MediaItem>,
 }
@@ -284,6 +298,25 @@ impl LuminaApp {
         }
     }
 
+    /// The Videos view proper: Videos selected with no search or year over
+    /// it (those show the whole library's matches). Its counts read
+    /// "clips".
+    pub(crate) fn videos_view(&self) -> bool {
+        self.selection == AlbumSelection::System(SystemAlbum::Videos)
+            && self.search_query.is_empty()
+            && self.active_year.is_none()
+    }
+
+    /// A count as this view names its items: "N clips" in Videos, else
+    /// "N items".
+    pub(crate) fn count_label(&self, n: usize) -> String {
+        if self.videos_view() {
+            crate::i18n::clips(n)
+        } else {
+            crate::i18n::items(n)
+        }
+    }
+
     pub(crate) fn view_key(&self) -> ViewKey {
         ViewKey {
             library: self.library_generation,
@@ -360,6 +393,16 @@ impl LuminaApp {
         let key = self.view_key();
         match &self.active_view.data {
             Some(data) if data.key == key => data.videos,
+            _ => None,
+        }
+    }
+
+    /// Videos-view totals, from the same fetch as
+    /// [`Self::displayed_count`]. Never queries.
+    pub(crate) fn displayed_totals(&self) -> Option<&ViewTotals> {
+        let key = self.view_key();
+        match &self.active_view.data {
+            Some(data) if data.key == key => data.totals.as_ref(),
             _ => None,
         }
     }
@@ -452,7 +495,7 @@ impl LuminaApp {
         }
         // A scroll past the cached rows keeps the span, as long as nothing
         // is written before the fetch reads its revision (checked there).
-        let known_span = fresh.map(|data| (data.span, data.videos));
+        let known_span = fresh.map(|data| (data.span, data.videos, data.totals.clone()));
         let known_at = revision;
         // ponytail: a panicking fetch would leave this set and freeze the
         // cache; the engine's reads log and return defaults instead of failing.
@@ -466,15 +509,22 @@ impl LuminaApp {
             let end = (wanted.end + WINDOW_PAD).min(count).max(start);
             let items = query.slice(&engine, start..end);
             // After the rows, so a view switch never waits on it for them.
-            let (span, videos) = known_span
+            let (span, videos, totals) = known_span
                 .filter(|_| revision == known_at)
-                .unwrap_or_else(|| (query.date_span(&engine), query.video_count(&engine)));
+                .unwrap_or_else(|| {
+                    (
+                        query.date_span(&engine),
+                        query.video_count(&engine),
+                        query.totals(&engine),
+                    )
+                });
             Fetched {
                 key: query.key,
                 revision,
                 count,
                 span,
                 videos,
+                totals,
                 start,
                 items,
             }

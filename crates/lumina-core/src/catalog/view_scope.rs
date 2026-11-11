@@ -1,6 +1,6 @@
 //! A grid view as SQL: the WHERE over `media_items m` that its count uses,
-//! shared by Delete Rejected…, the header's date span and the Mosaic
-//! layout and day places.
+//! shared by Delete Rejected…, the header's date span and totals, and the
+//! Mosaic layout and day places.
 
 use super::Catalog;
 use crate::{MediaId, SmartAlbum, SortSpec, StructuredQuery, SystemAlbum};
@@ -75,6 +75,36 @@ fn date_span_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
     let mut both = params.clone();
     both.extend(params);
     Ok((format!("SELECT {}, {};", end("ASC"), end("DESC")), both))
+}
+
+/// A view's item count, summed duration and size, and items per capture
+/// month: the Videos header's "N clips · H h M m · size" and its month band.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ViewTotals {
+    pub count: usize,
+    /// Sum of known durations; an unprobed clip (no duration) adds nothing.
+    pub duration_ms: u64,
+    /// Sum of file sizes.
+    pub bytes: u64,
+    /// Items per (year, month), keyed as the grid's month band reads an
+    /// item's `year` and `month` columns.
+    pub months: HashMap<(i32, u32), usize>,
+}
+
+/// Per (year, month) count and sums over the view, so one pass gives the
+/// totals and the month band counts. Videos plan: `SEARCH m USING INDEX
+/// idx_media_type (media_type=?)` then `USE TEMP B-TREE FOR GROUP BY`
+/// (an album seeks `album_items`). Accepted: one background pass per
+/// revision, not a frame query.
+fn totals_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+    let (view, params) = view_where(scope)?;
+    Ok((
+        format!(
+            "SELECT m.year, m.month, COUNT(*), COALESCE(SUM(m.duration_ms), 0), \
+             SUM(m.file_size) FROM media_items m WHERE ({view}) GROUP BY 1, 2"
+        ),
+        params,
+    ))
 }
 
 /// One item of a view as the Mosaic lays it out.
@@ -203,6 +233,30 @@ impl Catalog {
             .collect())
     }
 
+    /// The view's count, summed duration and size, and items per month.
+    pub fn view_totals(&self, scope: &ViewScope) -> Result<ViewTotals> {
+        let (sql, params) = totals_sql(scope)?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            Ok((
+                (row.get::<_, i32>(0)?, row.get::<_, i64>(1)?.max(0) as u32),
+                row.get::<_, i64>(2)? as usize,
+                row.get::<_, i64>(3)?.max(0) as u64,
+                row.get::<_, i64>(4)?.max(0) as u64,
+            ))
+        })?;
+        let mut totals = ViewTotals::default();
+        for row in rows {
+            let (month, count, duration_ms, bytes) = row.context("reading the view totals")?;
+            totals.count += count;
+            totals.duration_ms += duration_ms;
+            totals.bytes += bytes;
+            totals.months.insert(month, count);
+        }
+        Ok(totals)
+    }
+
     /// The capture months the view spans, for the page header. `None` when
     /// it has no dated items (empty, or every capture time is 0).
     pub fn view_date_span(&self, scope: &ViewScope) -> Result<Option<DateSpan>> {
@@ -266,6 +320,25 @@ mod tests {
         assert!(
             album.contains("album_items USING PRIMARY KEY"),
             "an album's span is driven by its members, not a library walk: {album}"
+        );
+    }
+
+    #[test]
+    fn totals_seek_the_view_not_the_library() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let videos = explain(
+            &catalog,
+            totals_sql(&ViewScope::System(SystemAlbum::Videos)).unwrap(),
+        );
+        let album = explain(&catalog, totals_sql(&ViewScope::Album(1)).unwrap());
+        println!("totals videos: {videos}\ntotals album: {album}");
+        assert!(
+            videos.contains("idx_media_type") && videos.matches("TEMP B-TREE").count() <= 1,
+            "Videos totals seek the kind index, at most one GROUP BY b-tree: {videos}"
+        );
+        assert!(
+            album.contains("album_items USING PRIMARY KEY"),
+            "an album's totals are driven by its members: {album}"
         );
     }
 
