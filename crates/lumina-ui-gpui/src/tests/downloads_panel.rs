@@ -411,3 +411,24 @@ fn long_failure_reason_wraps() {
         "a long reason wraps onto more lines instead of losing its last sentence"
     );
 }
+
+#[core::prelude::v1::test]
+fn downloads_row_follows_the_queue() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_sidebar_row");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("sidebar-nav-downloads").is_none(),
+        "no Downloads row while the download list is empty"
+    );
+    queue(&view, vcx, &[A, B]);
+    assert!(
+        vcx.debug_bounds("sidebar-nav-downloads-count").is_some(),
+        "the row shows the unfinished count once something is queued"
+    );
+    click(vcx, "sidebar-nav-downloads");
+    view.update(vcx, |app, _| {
+        assert!(app.downloads.open, "the row opens the downloads panel");
+    });
+}

@@ -360,7 +360,7 @@ fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
             "the EVENTS section is gone"
         );
     }
-    let untagged = vcx.debug_bounds("sidebar-nav-Untagged").expect("Untagged");
+    let untagged = vcx.debug_bounds("sidebar-nav-untagged").expect("Untagged");
     let new_album = vcx.debug_bounds("new-smart-album").expect("+");
     let tags_header = vcx
         .debug_bounds("sidebar-tags-header")

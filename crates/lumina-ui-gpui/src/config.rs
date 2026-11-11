@@ -20,6 +20,7 @@ pub enum LastView {
     All,
     Favorites,
     Videos,
+    RecentlyAdded,
     Screenshots,
     Places,
     Trash,
@@ -37,6 +38,7 @@ impl LastView {
             LastView::All => "all".to_string(),
             LastView::Favorites => "favorites".to_string(),
             LastView::Videos => "videos".to_string(),
+            LastView::RecentlyAdded => "recently-added".to_string(),
             LastView::Screenshots => "screenshots".to_string(),
             LastView::Places => "places".to_string(),
             LastView::Trash => "trash".to_string(),
@@ -53,6 +55,7 @@ impl LastView {
             "all" | "" => LastView::All,
             "favorites" => LastView::Favorites,
             "videos" => LastView::Videos,
+            "recently-added" => LastView::RecentlyAdded,
             "screenshots" => LastView::Screenshots,
             "places" => LastView::Places,
             "trash" => LastView::Trash,
@@ -86,6 +89,7 @@ impl LastView {
             AlbumSelection::AllLibrary => LastView::All,
             AlbumSelection::System(SystemAlbum::Favorites) => LastView::Favorites,
             AlbumSelection::System(SystemAlbum::Videos) => LastView::Videos,
+            AlbumSelection::System(SystemAlbum::RecentlyAdded) => LastView::RecentlyAdded,
             AlbumSelection::System(SystemAlbum::Screenshots) => LastView::Screenshots,
             AlbumSelection::System(SystemAlbum::Places) => LastView::Places,
             AlbumSelection::System(SystemAlbum::RecentlyDeleted) | AlbumSelection::Trash => {
@@ -111,6 +115,7 @@ impl LastView {
             LastView::All => AlbumSelection::AllLibrary,
             LastView::Favorites => AlbumSelection::System(SystemAlbum::Favorites),
             LastView::Videos => AlbumSelection::System(SystemAlbum::Videos),
+            LastView::RecentlyAdded => AlbumSelection::System(SystemAlbum::RecentlyAdded),
             LastView::Screenshots => AlbumSelection::System(SystemAlbum::Screenshots),
             LastView::Places => AlbumSelection::System(SystemAlbum::Places),
             LastView::Trash => AlbumSelection::Trash,
@@ -656,6 +661,19 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recently_added_last_view_round_trips() {
+        use super::LastView;
+        let selection =
+            crate::views::sidebar::AlbumSelection::System(lumina_core::SystemAlbum::RecentlyAdded);
+        let view = LastView::from_selection(&selection);
+        assert_eq!(
+            LastView::from_token(&view.token()).to_selection(),
+            selection,
+            "Recently Added is a sidebar view, so it reopens after a restart"
+        );
+    }
+
     use super::*;
 
     fn temp_config_path(name: &str) -> PathBuf {

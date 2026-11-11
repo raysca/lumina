@@ -1019,6 +1019,51 @@ mod tests {
     }
 
     #[test]
+    fn recently_added_counts_last_30_days() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let stored = catalog
+            .insert_or_update_batch(&(0..6).map(sample_item).collect::<Vec<_>>())
+            .unwrap();
+        let day_ms = 86_400_000_i64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        let conn = catalog.conn.lock();
+        let set = |id: MediaId, added: Option<i64>| {
+            conn.execute(
+                "UPDATE media_items SET added_epoch_ms = ?1 WHERE id = ?2",
+                params![added, id.0],
+            )
+            .unwrap();
+        };
+        set(stored[0].id, Some(now - day_ms));
+        set(stored[1].id, Some(now - 29 * day_ms));
+        set(stored[2].id, Some(now - 31 * day_ms));
+        set(stored[3].id, None);
+        set(stored[4].id, Some(now - 29 * day_ms));
+        set(stored[5].id, Some(now - day_ms));
+        conn.execute(
+            "UPDATE media_items SET is_trashed = 1 WHERE id = ?1",
+            params![stored[1].id.0],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE media_items SET is_hidden = 1 WHERE id = ?1",
+            params![stored[5].id.0],
+        )
+        .unwrap();
+        drop(conn);
+        assert_eq!(
+            catalog
+                .query_system_album_count(crate::SystemAlbum::RecentlyAdded)
+                .unwrap(),
+            2,
+            "items added 1 and 29 days ago count; 31 days, trashed, hidden and undated rows do not"
+        );
+    }
+
+    #[test]
     fn items_by_ids_keeps_order_skips_unknown_and_spans_chunks() {
         let (dir, db) = temp_catalog("items_by_ids");
         let catalog = Catalog::open(&db).expect("catalog must open");

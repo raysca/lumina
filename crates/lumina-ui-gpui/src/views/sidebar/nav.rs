@@ -17,6 +17,8 @@ pub(crate) struct NavEntry {
     pub icon: Icon,
     pub selection: AlbumSelection,
     pub count: usize,
+    /// Draw the count in the accent: something here wants attention.
+    pub attention: bool,
 }
 
 /// The visible default collections, in order. Downloaded and Missing appear
@@ -39,11 +41,12 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
         icon,
         selection,
         count,
+        attention: false,
     };
     [
         Some(entry(
             "all",
-            "All Photos & Videos",
+            "All Media",
             Icon::Images,
             AlbumSelection::AllLibrary,
             live(app.total_library_count, 22),
@@ -58,9 +61,16 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
         Some(entry(
             "videos",
             "Videos",
-            Icon::Film,
+            Icon::Video,
             AlbumSelection::System(SystemAlbum::Videos),
             live(system(SystemAlbum::Videos), 7),
+        )),
+        Some(entry(
+            "recently-added",
+            "Recently Added",
+            Icon::Clock,
+            AlbumSelection::System(SystemAlbum::RecentlyAdded),
+            live(system(SystemAlbum::RecentlyAdded), 5),
         )),
         // Only once something was downloaded from a link.
         (downloaded > 0).then(|| {
@@ -86,13 +96,17 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
             AlbumSelection::System(SystemAlbum::Places),
             system(SystemAlbum::Places),
         )),
-        Some(entry(
-            "duplicates",
-            "Duplicates",
-            Icon::Copy,
-            AlbumSelection::Duplicates,
-            app.duplicate_items_count,
-        )),
+        // Copies waiting for review: the count is drawn as attention.
+        Some(NavEntry {
+            attention: app.duplicate_items_count > 0,
+            ..entry(
+                "duplicates",
+                "Duplicates",
+                Icon::Copy,
+                AlbumSelection::Duplicates,
+                app.duplicate_items_count,
+            )
+        }),
         // Only while something is missing: there is nothing to do otherwise.
         (missing > 0).then(|| {
             entry(

@@ -36,22 +36,23 @@ fn every_default_collection_row_has_an_icon() {
     });
     render_ui(vcx);
 
-    for label in [
-        "All Photos & Videos",
-        "Favorites",
-        "Videos",
-        "Downloaded",
-        "Screenshots",
-        "Places",
-        "Duplicates",
-        "Missing",
-        "Recently Deleted",
-        "Untagged",
+    for key in [
+        "all",
+        "favorites",
+        "videos",
+        "recently-added",
+        "downloaded",
+        "screenshots",
+        "places",
+        "duplicates",
+        "missing",
+        "recently-deleted",
+        "untagged",
     ] {
         assert!(
-            vcx.debug_bounds(leak(format!("sidebar-nav-{label}-icon")))
+            vcx.debug_bounds(leak(format!("sidebar-nav-{key}-icon")))
                 .is_some(),
-            "the {label} row must show its icon"
+            "the {key} row must show its icon"
         );
     }
     assert!(
@@ -78,6 +79,7 @@ fn nav_entries_keep_order_and_conditional_rows() {
                 "all",
                 "favorites",
                 "videos",
+                "recently-added",
                 "screenshots",
                 "places",
                 "duplicates",
@@ -97,6 +99,7 @@ fn nav_entries_keep_order_and_conditional_rows() {
                 "all",
                 "favorites",
                 "videos",
+                "recently-added",
                 "downloaded",
                 "screenshots",
                 "places",
@@ -128,7 +131,7 @@ fn nav_rows_keep_their_click_rules() {
         // After select_album, which clears the year itself.
         app.active_year = Some(2020);
     });
-    click(vcx, "sidebar-nav-All Photos & Videos");
+    click(vcx, "sidebar-nav-all");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
         assert_eq!(
@@ -137,11 +140,11 @@ fn nav_rows_keep_their_click_rules() {
         );
     });
 
-    click(vcx, "sidebar-nav-Untagged");
+    click(vcx, "sidebar-nav-untagged");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Untagged)
     });
-    click(vcx, "sidebar-nav-Untagged");
+    click(vcx, "sidebar-nav-untagged");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
@@ -169,7 +172,7 @@ fn one_back_after_all_photos_returns_to_the_year_view() {
         app.set_active_year(Some(year), cx);
         year
     });
-    click(vcx, "sidebar-nav-All Photos & Videos");
+    click(vcx, "sidebar-nav-all");
     view.update(vcx, |app, cx| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
         app.navigate_back(cx);
@@ -504,5 +507,77 @@ fn toggle_label_follows_state() {
         view_menu_names(vcx).iter().any(|n| n == "Hide Sidebar"),
         "View offers Hide Sidebar while the sidebar is shown"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn new_album_is_last_album_row() {
+    let (dir, engine) = seed_library("sb_new_album", 2);
+    let album = engine.create_album("Trip").unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let row = vcx
+        .debug_bounds(leak(format!("album-row-{}", album.id)))
+        .expect("album row");
+    let new_album = vcx.debug_bounds("new-album").expect("New Album row");
+    assert!(
+        new_album.top() >= row.bottom(),
+        "New Album is the last row of the Albums section, not a header button"
+    );
+    assert_eq!(
+        f32::from(new_album.size.height),
+        32.0,
+        "New Album is a NavItem row"
+    );
+    let before = view.update(vcx, |app, _| app.albums.list.len());
+    click(vcx, "new-album");
+    assert_eq!(
+        view.update(vcx, |app, _| app.albums.list.len()),
+        before + 1,
+        "clicking New Album still creates an album"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn places_row_is_under_tags() {
+    let (dir, engine) = seed_library("sb_places", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let places = vcx.debug_bounds("sidebar-nav-places").expect("Places row");
+    let tags = vcx
+        .debug_bounds("sidebar-tags-header")
+        .expect("TAGS header");
+    assert!(
+        places.top() > tags.bottom(),
+        "Places lists under TAGS, as in the design"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn recently_added_row_opens_its_album() {
+    let (dir, engine) = seed_library("sb_recent", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let videos = vcx.debug_bounds("sidebar-nav-videos").expect("Videos row");
+    let recent = vcx
+        .debug_bounds("sidebar-nav-recently-added")
+        .expect("Recently Added row");
+    assert!(
+        recent.top() >= videos.bottom(),
+        "Recently Added follows Videos"
+    );
+    click(vcx, "sidebar-nav-recently-added");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::System(SystemAlbum::RecentlyAdded),
+            "the row opens the Recently Added album"
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }

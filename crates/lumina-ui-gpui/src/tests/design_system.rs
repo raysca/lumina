@@ -70,14 +70,10 @@ fn nav_item_is_32px_with_right_count() {
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
-    let row = vcx
-        .debug_bounds("sidebar-nav-All Photos & Videos")
-        .expect("library row");
-    let icon = vcx
-        .debug_bounds("sidebar-nav-All Photos & Videos-icon")
-        .expect("row icon");
+    let row = vcx.debug_bounds("sidebar-nav-all").expect("library row");
+    let icon = vcx.debug_bounds("sidebar-nav-all-icon").expect("row icon");
     let count = vcx
-        .debug_bounds("sidebar-nav-All Photos & Videos-count")
+        .debug_bounds("sidebar-nav-all-count")
         .expect("row count");
     assert_eq!(
         f32::from(row.size.height),

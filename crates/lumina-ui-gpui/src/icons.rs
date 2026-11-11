@@ -49,6 +49,8 @@ pub enum Icon {
     Copy,
     PanelLeftClose,
     PanelLeftOpen,
+    Video,
+    Clock,
 }
 
 impl Icon {
@@ -102,6 +104,8 @@ impl Icon {
         Icon::Copy,
         Icon::PanelLeftClose,
         Icon::PanelLeftOpen,
+        Icon::Video,
+        Icon::Clock,
     ];
 
     pub fn path(self) -> &'static str {
@@ -152,6 +156,8 @@ impl Icon {
             Self::Copy => "icons/copy.svg",
             Self::PanelLeftClose => "icons/panel-left-close.svg",
             Self::PanelLeftOpen => "icons/panel-left-open.svg",
+            Self::Video => "icons/video.svg",
+            Self::Clock => "icons/clock.svg",
         }
     }
 }

@@ -83,8 +83,9 @@ fn pinned_albums_render_first() {
     );
     // debug_bounds keeps one entry per selector, so count by height: the
     // Pinned group holds its header and exactly two rows, ALBUMS its header
-    // and exactly one. A pinned row drawn twice would add a row to ALBUMS.
-    let row = 26.0;
+    // and exactly one plus the New Album row. A pinned row drawn twice
+    // would add a row to ALBUMS.
+    let row = 32.0;
     let height = |vcx: &mut gpui::VisualTestContext, selector: &'static str| {
         f32::from(vcx.debug_bounds(selector).expect(selector).size.height)
     };
@@ -95,8 +96,8 @@ fn pinned_albums_render_first() {
         "the Pinned group draws each pinned row once: {pinned_rows}px of rows"
     );
     assert!(
-        (row..2.0 * row).contains(&album_rows),
-        "ALBUMS draws only the unpinned album, once: {album_rows}px of rows"
+        (2.0 * row..3.0 * row).contains(&album_rows),
+        "ALBUMS draws only the unpinned album, once, then New Album: {album_rows}px of rows"
     );
 
     // Keyboard path: open the loose album, ⌘K Pin Album.

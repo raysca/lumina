@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub enum SystemAlbum {
     Favorites,
     Videos,
+    /// Items added to the catalog in the last 30 days.
+    RecentlyAdded,
     /// Items Lumina downloaded from a URL.
     Downloaded,
     Raw,
@@ -23,6 +25,7 @@ impl SystemAlbum {
         &[
             SystemAlbum::Favorites,
             SystemAlbum::Videos,
+            SystemAlbum::RecentlyAdded,
             SystemAlbum::Downloaded,
             SystemAlbum::Raw,
             SystemAlbum::Screenshots,
@@ -39,6 +42,7 @@ impl SystemAlbum {
         match self {
             SystemAlbum::Favorites => "Favorites",
             SystemAlbum::Videos => "Videos",
+            SystemAlbum::RecentlyAdded => "Recently Added",
             SystemAlbum::Downloaded => "Downloaded",
             SystemAlbum::Raw => "RAW Media",
             SystemAlbum::Screenshots => "Screenshots",
@@ -55,6 +59,7 @@ impl SystemAlbum {
         match self {
             SystemAlbum::Favorites => "heart",
             SystemAlbum::Videos => "video",
+            SystemAlbum::RecentlyAdded => "clock",
             SystemAlbum::Downloaded => "arrow-down-to-line",
             SystemAlbum::Raw => "aperture",
             SystemAlbum::Screenshots => "camera",
@@ -74,6 +79,12 @@ impl SystemAlbum {
             }
             SystemAlbum::Videos => {
                 "m.media_type = 'video' AND m.is_trashed = 0 AND m.is_hidden = 0"
+            }
+            SystemAlbum::RecentlyAdded => {
+                // ponytail: no index on added_epoch_ms, so this scans like Places and
+                // Screenshots do. The core_tests gate runs on a tiny catalog and won't
+                // see it; add an index if large libraries feel it.
+                "m.added_epoch_ms >= (CAST(strftime('%s', 'now') AS INTEGER) - 30 * 86400) * 1000 AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
             SystemAlbum::Downloaded => {
                 // ponytail: every page sorts all downloads, fine for URL imports (past the

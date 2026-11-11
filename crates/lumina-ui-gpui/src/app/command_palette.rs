@@ -1169,7 +1169,7 @@ impl LuminaApp {
         go_to.extend([
             go(
                 AlbumSelection::AllLibrary,
-                "All Photos".into(),
+                "All Media".into(),
                 Icon::Images,
                 "all".into(),
             ),
@@ -1182,8 +1182,14 @@ impl LuminaApp {
             go(
                 AlbumSelection::System(lumina_core::SystemAlbum::Videos),
                 "Videos".into(),
-                Icon::Film,
+                Icon::Video,
                 "videos".into(),
+            ),
+            go(
+                AlbumSelection::System(lumina_core::SystemAlbum::RecentlyAdded),
+                "Recently Added".into(),
+                Icon::Clock,
+                "recently added new".into(),
             ),
             go(
                 AlbumSelection::System(lumina_core::SystemAlbum::Downloaded),

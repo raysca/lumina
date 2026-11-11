@@ -783,7 +783,7 @@ fn downloaded_album_appears_after_a_download() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, _| assert_eq!(downloaded_count(app), 0));
     assert!(
-        vcx.debug_bounds("sidebar-nav-Downloaded").is_none(),
+        vcx.debug_bounds("sidebar-nav-downloaded").is_none(),
         "a sidecar source alone is not a download"
     );
 
@@ -795,7 +795,7 @@ fn downloaded_album_appears_after_a_download() {
     render_ui(vcx);
     view.update(vcx, |app, _| assert_eq!(downloaded_count(app), 1));
     assert!(
-        vcx.debug_bounds("sidebar-nav-Downloaded").is_some(),
+        vcx.debug_bounds("sidebar-nav-downloaded").is_some(),
         "the sidebar lists Downloaded once something was downloaded"
     );
 }

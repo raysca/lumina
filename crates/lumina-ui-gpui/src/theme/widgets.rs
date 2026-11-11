@@ -7,13 +7,15 @@ use gpui::{div, px, rgba, ElementId, FontWeight, Role, Stateful};
 /// Sidebar navigation row (NavItem): 32px, 10px padding, 8px radius, icon 16
 /// and label 13 in t2, or bg-3 with a t1/500 label and an accent icon while
 /// active. A non-zero `count` sits on the right in mono 10 t3 (t2 on the
-/// active row, where t3 would fall below 4.5:1). `selector` names the row;
+/// active row, where t3 would fall below 4.5:1), or accent when
+/// `attention` (unfinished downloads, copies to review). `selector` names the row;
 /// its icon and count are `{selector}-icon` and `{selector}-count`.
 pub fn nav_item(
     selector: String,
     icon: Icon,
     label: &str,
     count: usize,
+    attention: bool,
     active: bool,
 ) -> Stateful<Div> {
     let (icon_selector, count_selector) = (format!("{selector}-icon"), format!("{selector}-count"));
@@ -64,7 +66,13 @@ pub fn nav_item(
                     .flex_none()
                     .text_size(px(10.0))
                     .font_family(FONT_MONO)
-                    .text_color(if active { t2() } else { t3() })
+                    .text_color(if attention {
+                        accent()
+                    } else if active {
+                        t2()
+                    } else {
+                        t3()
+                    })
                     .child(crate::i18n::count(count)),
             )
         })

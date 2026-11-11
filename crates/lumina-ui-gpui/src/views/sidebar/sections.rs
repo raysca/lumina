@@ -53,9 +53,29 @@ pub(super) fn render_library_section(
         .children(
             nav_entries(this)
                 .into_iter()
-                .filter(|entry| entry.selection != AlbumSelection::Untagged)
+                // Untagged lists under Smart Albums, Places under Tags.
+                .filter(|entry| !matches!(entry.key, "untagged" | "places"))
                 .map(|entry| render_entry(this, entry, cx)),
         )
+        .children(render_downloads_row(this, cx))
+}
+
+/// Downloads: shown while the download list has rows, with the count of
+/// unfinished ones as attention. Opens the downloads panel (⌥⌘L).
+fn render_downloads_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
+    if this.downloads.entries.is_empty() {
+        return None;
+    }
+    let unfinished = this.download_badge_count();
+    Some(render_nav_item(
+        "downloads",
+        "Downloads",
+        Icon::ArrowDownToLine,
+        unfinished,
+        unfinished > 0,
+        this.downloads.open,
+        cx.listener(|this, _e: &ClickEvent, _w, cx| this.toggle_downloads_panel(cx)),
+    ))
 }
 
 pub(super) fn render_user_smart_album_row(
@@ -67,98 +87,60 @@ pub(super) fn render_user_smart_album_row(
 ) -> impl IntoElement {
     let album_id = album.id;
     let edit_album = album.clone();
-    div()
-        .id(("smart-album-row", album_id as u64))
-        .group("smart-album-row")
-        .debug_selector(move || format!("smart-album-row-{album_id}"))
-        .role(Role::ListItem)
-        .aria_label(crate::i18n::nav_aria_label(&album.title, count))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .px_2()
-        .h(px(26.0))
-        .rounded(theme::RADIUS_MD)
-        .cursor_pointer()
-        .bg(if is_active {
-            theme::bg_3()
-        } else {
-            gpui::rgba(0x00000000)
-        })
-        .hover(move |s| {
-            if is_active {
-                s.bg(theme::bg_3())
-            } else {
-                s.bg(theme::bg_2())
-            }
-        })
-        .child(
-            render_icon(Icon::Sparkles, px(16.0), text_color(is_active))
-                .flex_none()
-                .debug_selector(move || format!("smart-album-row-{album_id}-icon")),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(theme::TEXT_BODY)
-                .text_color(text_color(is_active))
-                .child(album.title.clone()),
-        )
-        .child(
-            div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
-                .text_color(theme::t2())
-                .child(crate::i18n::count(count)),
-        )
-        .child(
-            div()
-                .id(("smart-album-edit", album_id as u64))
-                .debug_selector(move || format!("smart-album-edit-{album_id}"))
-                // Row actions appear on hover only (v3 sidebar).
-                .opacity(0.0)
-                .group_hover("smart-album-row", |s| s.opacity(1.0))
-                .px_1()
-                .rounded(theme::RADIUS_SM)
-                .cursor_pointer()
-                .tooltip(theme::tooltip_label("Edit rules"))
-                .child(crate::icons::render_icon(
-                    crate::icons::Icon::Pencil,
-                    px(11.0),
-                    theme::t2(),
-                ))
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    cx.stop_propagation();
-                    this.open_album_builder_for_edit(edit_album.clone(), cx);
-                })),
-        )
-        .child(
-            div()
-                .id(("smart-album-delete", album_id as u64))
-                .debug_selector(move || format!("smart-album-delete-{album_id}"))
-                // Row actions appear on hover only (v3 sidebar).
-                .opacity(0.0)
-                .group_hover("smart-album-row", |s| s.opacity(1.0))
-                .px_1()
-                .rounded(theme::RADIUS_SM)
-                .cursor_pointer()
-                .tooltip(theme::tooltip_label("Delete smart album"))
-                .child(crate::icons::render_icon(
-                    crate::icons::Icon::X,
-                    px(11.0),
-                    theme::t2(),
-                ))
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    cx.stop_propagation();
-                    this.prompt_delete_smart_album(album_id, cx);
-                })),
-        )
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.select_album(AlbumSelection::User(album_id), cx);
-        }))
+    theme::nav_item(
+        format!("smart-album-row-{album_id}"),
+        Icon::Sparkles,
+        &album.title,
+        count,
+        false,
+        is_active,
+    )
+    .group("smart-album-row")
+    .child(
+        div()
+            .id(("smart-album-edit", album_id as u64))
+            .debug_selector(move || format!("smart-album-edit-{album_id}"))
+            // Row actions appear on hover only (v3 sidebar).
+            .opacity(0.0)
+            .group_hover("smart-album-row", |s| s.opacity(1.0))
+            .px_1()
+            .rounded(theme::RADIUS_SM)
+            .cursor_pointer()
+            .tooltip(theme::tooltip_label("Edit rules"))
+            .child(crate::icons::render_icon(
+                crate::icons::Icon::Pencil,
+                px(11.0),
+                theme::t2(),
+            ))
+            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                cx.stop_propagation();
+                this.open_album_builder_for_edit(edit_album.clone(), cx);
+            })),
+    )
+    .child(
+        div()
+            .id(("smart-album-delete", album_id as u64))
+            .debug_selector(move || format!("smart-album-delete-{album_id}"))
+            // Row actions appear on hover only (v3 sidebar).
+            .opacity(0.0)
+            .group_hover("smart-album-row", |s| s.opacity(1.0))
+            .px_1()
+            .rounded(theme::RADIUS_SM)
+            .cursor_pointer()
+            .tooltip(theme::tooltip_label("Delete smart album"))
+            .child(crate::icons::render_icon(
+                crate::icons::Icon::X,
+                px(11.0),
+                theme::t2(),
+            ))
+            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                cx.stop_propagation();
+                this.prompt_delete_smart_album(album_id, cx);
+            })),
+    )
+    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+        this.select_album(AlbumSelection::User(album_id), cx);
+    }))
 }
 
 pub(super) fn render_smart_albums_section(
@@ -207,9 +189,11 @@ pub(super) fn render_smart_albums_section(
         .children(if user_albums.is_empty() {
             if this.grid_state.is_none() {
                 vec![render_nav_item(
+                    "sample-smart-album",
                     "Fast Glass",
                     Icon::Sparkles,
                     0,
+                    false,
                     false,
                     cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.open_album_builder(cx);
@@ -467,6 +451,13 @@ pub(super) fn render_tags_section(
                 })
                 .collect::<Vec<_>>(),
         )
+        // Places sits under Tags, as in the design.
+        .children(
+            nav_entries(this)
+                .into_iter()
+                .filter(|entry| entry.key == "places")
+                .map(|entry| render_entry(this, entry, cx)),
+        )
 }
 
 fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) -> AnyElement {
@@ -474,9 +465,11 @@ fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) 
     let places = entry.key == "places";
     let selection = entry.selection;
     render_nav_item(
+        entry.key,
         entry.label,
         entry.icon,
         entry.count,
+        entry.attention,
         is_active,
         cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             nav::open_entry(this, &selection, cx);
@@ -527,27 +520,22 @@ fn map_toggle(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement
         }))
 }
 
-/// Label and icon colour of a sidebar row.
-pub(super) fn text_color(is_active: bool) -> Rgba {
-    if is_active {
-        theme::t1()
-    } else {
-        theme::t2()
-    }
-}
-
+/// A NavItem named `sidebar-nav-{key}` (stable whatever the label says).
 fn render_nav_item(
+    key: &str,
     label: &str,
     icon: Icon,
     count: usize,
+    attention: bool,
     is_active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
     theme::nav_item(
-        format!("sidebar-nav-{label}"),
+        format!("sidebar-nav-{key}"),
         icon,
         label,
         count,
+        attention,
         is_active,
     )
     .on_click(on_click)

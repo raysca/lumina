@@ -3044,11 +3044,11 @@ fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
     assert!(
-        vcx.debug_bounds("sidebar-nav-Untagged").is_some(),
+        vcx.debug_bounds("sidebar-nav-untagged").is_some(),
         "the TAGS section must paint a live Untagged row"
     );
 
-    click(vcx, "sidebar-nav-Untagged");
+    click(vcx, "sidebar-nav-untagged");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Untagged);
         assert_eq!(
@@ -3065,11 +3065,11 @@ fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
     });
 
     // Clicking the active row toggles back to All; selecting it again restores.
-    click(vcx, "sidebar-nav-Untagged");
+    click(vcx, "sidebar-nav-untagged");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary)
     });
-    click(vcx, "sidebar-nav-Untagged");
+    click(vcx, "sidebar-nav-untagged");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Untagged)
     });

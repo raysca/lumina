@@ -194,7 +194,7 @@ fn deleted_album_selection_falls_back_on_back_navigation() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     click(vcx, leak(format!("album-row-{}", album.id)));
-    click(vcx, "sidebar-nav-Favorites");
+    click(vcx, "sidebar-nav-favorites");
     // Deleted from the catalog behind the app (another window, say).
     engine.delete_album(album.id).unwrap();
     view.update(vcx, |app, _| app.refresh_album_counts());

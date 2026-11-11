@@ -6,7 +6,7 @@
 use gpui::*;
 use lumina_core::Album;
 
-use super::sections::{self, text_color};
+use super::sections;
 use super::AlbumSelection;
 use crate::app::text_input::TextTarget;
 use crate::i18n::t;
@@ -37,27 +37,7 @@ pub(super) fn render_albums_section(
                 .px_2()
                 .pt(px(16.0))
                 .pb_1()
-                .child(theme::section_label(t("sidebar.albums")))
-                .child(
-                    div()
-                        .id("new-album-btn")
-                        .debug_selector(|| "new-album".to_string())
-                        .role(Role::Button)
-                        .aria_label(t("command.new_album"))
-                        .w(px(20.0))
-                        .h(px(20.0))
-                        .rounded(theme::RADIUS_SM)
-                        .hover(|s| s.bg(theme::bg_2()))
-                        .flex()
-                        .justify_center()
-                        .items_center()
-                        .cursor_pointer()
-                        .tooltip(theme::tooltip_label(t("album.new_tooltip")))
-                        .child(render_icon(Icon::Plus, px(12.0), theme::t2()))
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.new_album(cx);
-                        })),
-                ),
+                .child(theme::section_label(t("sidebar.albums"))),
         )
         .children(
             this.albums
@@ -65,6 +45,22 @@ pub(super) fn render_albums_section(
                 .iter()
                 .filter(|album| !album.pinned)
                 .map(|album| render_album_or_rename(this, album, cx)),
+        )
+        .child(
+            theme::nav_item(
+                "new-album".to_string(),
+                Icon::Plus,
+                &t("command.new_album"),
+                0,
+                false,
+                false,
+            )
+            // An action, not a collection: no "0 items" in its name.
+            .aria_label(t("command.new_album"))
+            .tooltip(theme::tooltip_label(t("album.new_tooltip")))
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.new_album(cx);
+            })),
         )
         .into_any_element()
 }
@@ -138,74 +134,40 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
             .child(render_icon(icon, px(11.0), theme::t2()))
     };
 
-    div()
-        .id(("album-row", id as u64))
-        .group("album-row")
-        .debug_selector(move || format!("album-row-{id}"))
-        .role(Role::ListItem)
-        .aria_label(crate::i18n::nav_aria_label(&album.title, count))
-        .tooltip(theme::tooltip_label(t("album.row_tooltip")))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .px_2()
-        .h(px(26.0))
-        .rounded(theme::RADIUS_MD)
-        .cursor_pointer()
-        .bg(if is_active {
-            theme::bg_3()
-        } else {
-            gpui::rgba(0x00000000)
-        })
-        .hover(move |s| {
-            if is_active {
-                s.bg(theme::bg_3())
-            } else {
-                s.bg(theme::bg_2())
-            }
-        })
-        .child(render_icon(Icon::Image, px(16.0), text_color(is_active)).flex_none())
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(theme::TEXT_BODY)
-                .text_color(text_color(is_active))
-                .child(album.title.clone()),
-        )
-        .child(
-            div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
-                .text_color(theme::t2())
-                .child(crate::i18n::count(count)),
-        )
-        .child(
-            action("album-rename", "album.rename_tooltip", Icon::Pencil).on_click(cx.listener(
-                move |this, _e: &ClickEvent, _w, cx| {
-                    cx.stop_propagation();
-                    this.start_album_rename(id, cx);
-                },
-            )),
-        )
-        .child(
-            action("album-delete", "album.delete_tooltip", Icon::X).on_click(cx.listener(
-                move |this, _e: &ClickEvent, _w, cx| {
-                    cx.stop_propagation();
-                    this.prompt_delete_album(id, cx);
-                },
-            )),
-        )
-        .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
-            if e.click_count() >= 2 {
+    theme::nav_item(
+        format!("album-row-{id}"),
+        Icon::Folder,
+        &album.title,
+        count,
+        false,
+        is_active,
+    )
+    .group("album-row")
+    .tooltip(theme::tooltip_label(t("album.row_tooltip")))
+    .child(
+        action("album-rename", "album.rename_tooltip", Icon::Pencil).on_click(cx.listener(
+            move |this, _e: &ClickEvent, _w, cx| {
+                cx.stop_propagation();
                 this.start_album_rename(id, cx);
-            } else {
-                this.select_album(AlbumSelection::Album(id), cx);
-            }
-        }))
-        .into_any_element()
+            },
+        )),
+    )
+    .child(
+        action("album-delete", "album.delete_tooltip", Icon::X).on_click(cx.listener(
+            move |this, _e: &ClickEvent, _w, cx| {
+                cx.stop_propagation();
+                this.prompt_delete_album(id, cx);
+            },
+        )),
+    )
+    .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
+        if e.click_count() >= 2 {
+            this.start_album_rename(id, cx);
+        } else {
+            this.select_album(AlbumSelection::Album(id), cx);
+        }
+    }))
+    .into_any_element()
 }
 
 /// The inline name field, as the tag rename draws it.
@@ -225,8 +187,9 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
     };
     div()
         .debug_selector(|| "album-rename-field".to_string())
-        .px_2()
-        .py_1()
+        // The row's own height, so starting a rename doesn't move the rows below.
+        .h(px(32.0))
+        .px(px(10.0))
         .rounded(theme::RADIUS_MD)
         .bg(theme::bg_1())
         .border_1()

@@ -142,7 +142,7 @@ fn show_similar_shots_from_the_viewer_leaves_no_selection() {
     let f = stacked_library("stacks_from_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, f.engine.clone());
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
     view.update(vcx, |app, cx| {
         let item = app.duplicate_groups[0].items[0].clone();
         app.open_viewer(item, cx);

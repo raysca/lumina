@@ -79,7 +79,7 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
 }
 
 pub(crate) fn open_similar_shots(vcx: &mut VisualTestContext) {
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
     click(vcx, "stacks-tab");
 }
 
@@ -113,7 +113,7 @@ fn stacks_tab_lists_raw_jpeg_pair() {
     let f = stacked_library("stacks_list");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, f.engine.clone());
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
     assert!(
         vcx.debug_bounds("exact-copies-tab").is_some() && vcx.debug_bounds("stacks-tab").is_some(),
         "the Duplicates destination shows both tabs"
@@ -406,7 +406,7 @@ fn stale_stacks_result_dropped_after_library_switch() {
     let other = temp_library("stacks_stale_other");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, f.engine.clone());
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
 
     // The read for this library is still running when another one opens.
     view.update(vcx, |app, cx| {

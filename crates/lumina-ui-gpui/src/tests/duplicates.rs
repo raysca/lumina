@@ -32,7 +32,7 @@ fn duplicates_navigation_and_empty_state() {
     render_ui(vcx);
 
     // Click "Duplicates" in the sidebar
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
 
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -57,7 +57,7 @@ fn duplicates_view_renders_group_and_merges() {
     render_ui(vcx);
 
     // Navigate to duplicates
-    click(vcx, "sidebar-nav-Duplicates");
+    click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
 
     view.update(vcx, |app, _| {

@@ -33,7 +33,7 @@ fn missing_item_shows_badge_and_view() {
         "a present item has no badge"
     );
 
-    click(vcx, "sidebar-nav-Missing");
+    click(vcx, "sidebar-nav-missing");
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -63,7 +63,7 @@ fn missing_row_hidden_when_nothing_is_missing() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     assert!(
-        vcx.debug_bounds("sidebar-nav-Missing").is_none(),
+        vcx.debug_bounds("sidebar-nav-missing").is_none(),
         "the Missing row only shows while something is missing"
     );
     drop(view);

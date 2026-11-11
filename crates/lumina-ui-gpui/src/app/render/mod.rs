@@ -470,7 +470,7 @@ impl Render for LuminaApp {
         let total_count = self.displayed_count();
 
         let view_label: String = match &self.selection {
-            AlbumSelection::AllLibrary => "All Photos & Videos".into(),
+            AlbumSelection::AllLibrary => "All Media".into(),
             AlbumSelection::System(album) => album.title().into(),
             AlbumSelection::User(id) => self
                 .user_smart_albums

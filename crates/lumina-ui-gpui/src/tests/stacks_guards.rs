@@ -122,7 +122,7 @@ fn back_and_forward_onto_duplicates_start_on_exact_copies() {
     };
     check(&view, vcx, "Back then Forward");
     click(vcx, "stacks-tab");
-    click(vcx, "sidebar-nav-Favorites");
+    click(vcx, "sidebar-nav-favorites");
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
     check(&view, vcx, "Back");
@@ -153,7 +153,7 @@ fn stale_list_never_flags_trashed_members_and_rereads() {
 
     // Leaving and coming Back re-reads too.
     f.engine.batch_set_trashed(&[f.raw], true).unwrap();
-    click(vcx, "sidebar-nav-Favorites");
+    click(vcx, "sidebar-nav-favorites");
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
     click(vcx, "stacks-tab");

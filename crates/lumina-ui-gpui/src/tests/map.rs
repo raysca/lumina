@@ -416,7 +416,7 @@ fn map_toggle_reachable_from_palette() {
     view.update(vcx, |app, _| assert_eq!(app.selection, PLACES));
 
     // Leaving Places and coming back keeps the choice.
-    click(vcx, "sidebar-nav-All Photos & Videos");
+    click(vcx, "sidebar-nav-all");
     assert!(
         vcx.debug_bounds("map-view").is_none(),
         "other views show the grid"
@@ -425,7 +425,7 @@ fn map_toggle_reachable_from_palette() {
         vcx.debug_bounds("map-toggle").is_none(),
         "the toggle lives on Places"
     );
-    click(vcx, "sidebar-nav-Places");
+    click(vcx, "sidebar-nav-places");
     render_ui(vcx);
     assert!(shown(&view, vcx), "Places comes back on the map");
     assert!(vcx.debug_bounds("map-view").is_some());
