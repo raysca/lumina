@@ -966,3 +966,85 @@ fn view_mode_segments_switch_grid_and_map() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn location_card_open_map_focuses_places() {
+    let (dir, engine) = seed_library("location_card", 2);
+    let items = engine.get_item_slice(0..2);
+    let (lat, lon) = (35.01, 135.76);
+    engine
+        .set_location(items[0].id, Some(lat), Some(lon))
+        .expect("test location write");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(size(px(1440.0), px(900.0)));
+    render_ui(vcx);
+    let open_card = |vcx: &mut VisualTestContext, id: MediaId| {
+        click(vcx, "sidebar-nav-all");
+        click(vcx, leak(format!("media-card-{}", id.0)));
+        render_ui(vcx);
+    };
+    let assert_centred = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, how: &str| {
+        view.update(vcx, |app, _| {
+            assert_eq!(app.selection, PLACES, "{how} switches to Places");
+            assert!(app.map_shown(), "{how} shows the map");
+            let (clon, clat) = app.map.center;
+            assert!(
+                (clon - lon as f32).abs() < 0.01 && (clat - lat as f32).abs() < 0.01,
+                "{how} centres the map on the item, got {:?}",
+                app.map.center
+            );
+            assert!(app.map.zoom > 1, "{how} zooms in on the item");
+        });
+    };
+
+    open_card(vcx, items[0].id);
+    click(vcx, "inspector-toggle");
+    render_ui(vcx);
+    let card = vcx
+        .debug_bounds("inspector-location-map")
+        .expect("a geotagged item shows the location card");
+    assert_eq!(f32::from(card.size.height), 132.0, "the card is 132 high");
+    assert!(
+        vcx.debug_bounds("inspector-location-label").is_some(),
+        "the card names the place and coordinates"
+    );
+    click(vcx, "inspector-open-map");
+    render_ui(vcx);
+    assert_centred(&view, vcx, "Open map");
+
+    // No GPS: no card and no action (no "—" placeholder).
+    open_card(vcx, items[1].id);
+    assert!(
+        vcx.debug_bounds("inspector-summary").is_some(),
+        "the panel is docked for the second item"
+    );
+    assert!(vcx.debug_bounds("inspector-location-map").is_none());
+    assert!(vcx.debug_bounds("inspector-open-map").is_none());
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k s h o w space o n space m a p");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.palette_rows().iter().any(|row| matches!(
+                row.target,
+                crate::app::command_palette::PaletteTarget::Command(
+                    crate::app::command_palette::CommandId::ShowOnMap
+                )
+            )),
+            "Show on Map is not offered for an item without a location"
+        )
+    });
+    keystrokes(vcx, "escape");
+
+    // The keyboard path: ⌘K Show on Map.
+    open_card(vcx, items[0].id);
+    view.update(vcx, |app, cx| {
+        app.map.zoom = 1;
+        app.map.center = (0.0, 0.0);
+        cx.notify();
+    });
+    run_palette_command(vcx, &view, "Show on Map");
+    render_ui(vcx);
+    assert_centred(&view, vcx, "⌘K Show on Map");
+    let _ = std::fs::remove_dir_all(&dir);
+}

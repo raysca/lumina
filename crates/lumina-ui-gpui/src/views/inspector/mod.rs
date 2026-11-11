@@ -2,6 +2,7 @@ pub mod batch;
 pub mod batch_template;
 pub mod body;
 pub mod capture;
+pub mod location_card;
 pub mod summary;
 pub mod tabs;
 

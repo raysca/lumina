@@ -12,6 +12,7 @@ use crate::icons::{render_icon, Icon};
 use crate::theme::{self, ChipKind};
 use crate::views::inspector::body::format_bytes;
 use crate::views::inspector::capture::{capture_rows, render_capture_row};
+use crate::views::inspector::location_card::render_location_section;
 use crate::views::inspector::tabs::tags::{render_suggestions, Suggestion};
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
@@ -32,7 +33,6 @@ pub fn render_summary_body(
     color_label: Option<u8>,
     focal_35mm: Option<u32>,
 ) -> AnyElement {
-    let place = place_line(item);
     let capture = capture_rows(item, focal_35mm);
     let app_info = weak_app.clone();
     let app_reveal = weak_app.clone();
@@ -71,12 +71,7 @@ pub fn render_summary_body(
                 .child(div().flex_1())
                 .child(render_label_dots(weak_app.clone(), color_label)),
         ))
-        .children(place.map(|place| {
-            section(
-                "inspector.location",
-                div().text_xs().text_color(theme::t2()).child(place),
-            )
-        }))
+        .children(render_location_section(weak_app.clone(), item))
         .child(section(
             "inspector.tags",
             div()
@@ -247,14 +242,17 @@ fn section(title_key: &str, content: impl IntoElement) -> Div {
         .flex()
         .flex_col()
         .gap_2()
-        .child(
-            div()
-                .text_size(px(9.5))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::t3())
-                .child(t(title_key)),
-        )
+        .child(section_title(title_key))
         .child(content)
+}
+
+/// A section's title text, for sections with an action beside it.
+pub(crate) fn section_title(title_key: &str) -> Div {
+    div()
+        .text_size(px(9.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme::t3())
+        .child(t(title_key))
 }
 
 /// `pop` is the star just set and its pop id (`motion::MarkPop`).

@@ -209,6 +209,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
         "command.show_map" => "Show Map",
         "command.show_grid" => "Show Grid",
+        "command.show_on_map" => "Show on Map",
         "map.label" => "Map of photo locations",
         "map.empty_title" => "No photos with a location yet",
         "map.empty_body" => "Photos and videos with a location, from the camera or set in the inspector, show here.",
@@ -564,6 +565,9 @@ fn en_us(key: &str) -> Option<&'static str> {
         "inspector.tag_add_label" => "Add a tag",
         "inspector.filter_tag_label" => "Show items tagged {}",
         "inspector.remove_tag_label" => "Remove tag {}",
+        "inspector.open_map" => "Open map",
+        "inspector.open_map_tooltip" => "Show on the Places map (⌘K Show on Map)",
+        "inspector.location_map_label" => "Map: {}",
         _ => return None,
     })
 }

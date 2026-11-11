@@ -128,6 +128,9 @@ pub(crate) static BASEMAP: LazyLock<Option<Basemap>> = LazyLock::new(|| {
     })
 });
 
+/// Zoom Show on Map opens Places at, centred on the item.
+const FOCUS_ZOOM: u8 = 5;
+
 /// `path` (degree space) scaled by `scale` and moved by `offset`.
 pub(crate) fn place(path: &Path<Pixels>, scale: f32, offset: Point<Pixels>) -> Path<Pixels> {
     let at = |p: Point<Pixels>| point(offset.x + p.x * scale, offset.y + p.y * scale);
@@ -356,6 +359,31 @@ impl LuminaApp {
         self.map.failed = false;
         self.map.loaded = None;
         self.clear_selection(cx);
+        cx.notify();
+    }
+
+    /// The selected item's (lat, lon), when it has both.
+    pub(crate) fn selected_item_location(&self) -> Option<(f64, f64)> {
+        let item = self.selected_item.as_ref()?;
+        item.latitude.zip(item.longitude)
+    }
+
+    /// ⌘K Show on Map, the location card's Open map: Places on the map,
+    /// zoomed in and centred on the selected item. The map takes the
+    /// selection away (`show_map`), so the location is read first.
+    pub(crate) fn show_item_on_map(&mut self, cx: &mut Context<Self>) {
+        let Some((lat, lon)) = self.selected_item_location() else {
+            return;
+        };
+        self.show_map(cx);
+        if !self.map_shown() {
+            return;
+        }
+        self.map.zoom = FOCUS_ZOOM;
+        self.map.focus = None;
+        self.map.set_center((lon as f32, lat as f32));
+        // A read in flight clustered at the old zoom; this drops it.
+        self.recluster_map(false, cx);
         cx.notify();
     }
 

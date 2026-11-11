@@ -31,6 +31,8 @@ pub enum CommandId {
     /// Places on the map / on the grid.
     ShowMap,
     ShowGrid,
+    /// Places on the map, centred on the selected item's location.
+    ShowOnMap,
     RetryError,
     Shortcuts,
     ToggleSidebar,
@@ -203,7 +205,7 @@ impl Command {
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
-            ShowMap => Icon::MapPin,
+            ShowMap | ShowOnMap => Icon::MapPin,
             ShowGrid => Icon::Images,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
@@ -347,6 +349,13 @@ pub fn commands() -> &'static [Command] {
             key: "command.show_similar_shots",
             shortcut: "",
             keywords: "duplicates similar shots stacks raw jpeg pairs bursts",
+        },
+        // Before Show Map: "show on map" matches both, and the item wins.
+        Command {
+            id: CommandId::ShowOnMap,
+            key: "command.show_on_map",
+            shortcut: "",
+            keywords: "map places location gps where pin open",
         },
         Command {
             id: CommandId::ShowMap,
@@ -1065,6 +1074,7 @@ impl LuminaApp {
             }
             CommandId::ShowMap => !self.map_blocked() && !self.map_shown(),
             CommandId::ShowGrid => self.map_shown(),
+            CommandId::ShowOnMap => !self.map_blocked() && self.selected_item_location().is_some(),
             CommandId::DeleteRejected => {
                 self.grid_state.is_some()
                     && !self.compare_holds_view()
@@ -1391,6 +1401,7 @@ impl LuminaApp {
             }
             CommandId::ShowMap => self.show_map(cx),
             CommandId::ShowGrid => self.show_grid(cx),
+            CommandId::ShowOnMap => self.show_item_on_map(cx),
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),
