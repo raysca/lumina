@@ -26,6 +26,25 @@ fn clock(seconds: f64) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Window moves a test started; the test platform cannot move windows.
+    pub(crate) static TEST_WINDOW_MOVES: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// Drags the PiP window: a press anywhere on the video that no control
+/// claims moves it.
+fn start_drag(window: &Window) {
+    #[cfg(test)]
+    {
+        let _ = window;
+        TEST_WINDOW_MOVES.with(|moves| moves.set(moves.get() + 1));
+    }
+    #[cfg(not(test))]
+    window.start_window_move();
+}
+
 /// The player keys while the PiP window is key (the viewer's bindings):
 /// Space/K play, J/← back 5 s, → forward 5 s, ⌥←/⌥→ chapter or 5 s,
 /// L loop, M mute. Returns whether the key was handled.
@@ -95,7 +114,7 @@ fn pip_chrome_button(id: &'static str, icon: Icon, label: String) -> Stateful<Di
     pip_control(id, icon, 12.0, label)
         .rounded(theme::RADIUS_MD)
         .bg(theme::media_scrim())
-        .hover(|s| s.bg(theme::bg_3()))
+        .hover(|s| s.bg(theme::media_scrim().alpha(0.85)))
 }
 
 impl FloatingPipPlayerView {
@@ -144,7 +163,7 @@ impl Render for FloatingPipPlayerView {
                     .items_center()
                     .text_sm()
                     .text_color(theme::t2())
-                    .child("Main library window closed")
+                    .child(t("pip.main_window_closed"))
                     .into_any_element();
             }
         };
@@ -302,7 +321,7 @@ impl Render for FloatingPipPlayerView {
                 div()
                     .size_full()
                     .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
-                        window.start_window_move();
+                        start_drag(window);
                     })
                     .child(if let Some(img_render) = preview_image {
                         div()
@@ -317,11 +336,11 @@ impl Render for FloatingPipPlayerView {
                             .items_center()
                             .text_xs()
                             .text_color(theme::t2())
-                            .child(if has_player {
-                                "Loading video…"
+                            .child(t(if has_player {
+                                "pip.loading"
                             } else {
-                                "This video can't be played"
-                            })
+                                "pip.unplayable"
+                            }))
                             .into_any_element()
                     }),
             )
@@ -338,8 +357,9 @@ impl Render for FloatingPipPlayerView {
                         linear_color_stop(theme::media_scrim(), 0.0),
                         linear_color_stop(transparent_black(), 1.0),
                     ))
-                    .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
-                        window.start_window_move();
+                    .on_mouse_down(MouseButton::Left, |_e, window, cx| {
+                        start_drag(window);
+                        cx.stop_propagation();
                     })
                     .flex()
                     .flex_row()
@@ -415,7 +435,11 @@ impl Render for FloatingPipPlayerView {
                         linear_color_stop(theme::media_scrim(), 0.0),
                         linear_color_stop(transparent_black(), 1.0),
                     ))
-                    .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
+                    // The fade drags like the video; only the controls claim the press.
+                    .on_mouse_down(MouseButton::Left, |_e, window, cx| {
+                        start_drag(window);
+                        cx.stop_propagation();
+                    })
                     .flex()
                     .flex_col()
                     .justify_end()
@@ -434,6 +458,8 @@ impl Render for FloatingPipPlayerView {
                     )
                     .child(
                         div()
+                            .debug_selector(|| "pip-controls".to_string())
+                            .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
                             .flex()
                             .flex_row()
                             .items_center()

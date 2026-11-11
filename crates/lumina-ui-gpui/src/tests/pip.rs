@@ -707,4 +707,110 @@ fn pip_window_takes_the_player_keys() {
         view.update(vcx, |app, _| app.video.is_playing),
         "Space in the PiP window must play"
     );
+    pip.simulate_keystrokes("k");
+    pip.run_until_parked();
+    assert!(
+        !view.update(vcx, |app, _| app.video.is_playing),
+        "K in the PiP window must pause"
+    );
+
+    let looping = view.update(vcx, |app, _| app.video.is_looping);
+    pip.simulate_keystrokes("l");
+    pip.run_until_parked();
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.is_looping),
+        !looping,
+        "L in the PiP window toggles loop, as in the viewer"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.video.tracks.chapters = vec![(0.0, "Intro".to_string()), (20.0, "Middle".to_string())];
+        app.video.playback_time = 10.0;
+        cx.notify();
+    });
+    pip.simulate_keystrokes("alt-right");
+    pip.run_until_parked();
+    assert_eq!(pip_time(&view, vcx), 20.0, "⌥→ jumps to the next chapter");
+    view.update(vcx, |app, _| app.video.playback_time = 10.0);
+    pip.simulate_keystrokes("alt-left");
+    pip.run_until_parked();
+    assert_eq!(pip_time(&view, vcx), 0.0, "⌥← jumps to the chapter start");
+
+    let muted = view.update(vcx, |app, _| app.video.is_muted);
+    pip.simulate_keystrokes("cmd-m ctrl-j shift-right");
+    pip.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(app.video.is_muted, muted, "⌘M is not the PiP mute key");
+        assert_eq!(app.video.playback_time, 0.0, "modified keys never seek");
+    });
+}
+
+#[core::prelude::v1::test]
+fn pip_drags_from_the_fades_but_not_from_the_controls() {
+    use crate::views::floating_pip::TEST_WINDOW_MOVES;
+    let lib = pip_library("drag");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+    let moves = || TEST_WINDOW_MOVES.with(|m| m.get());
+    let none = gpui::Modifiers::default();
+    let press = |pip: &mut gpui::VisualTestContext, selector: &'static str| {
+        let at = pip.debug_bounds(selector).unwrap().center();
+        pip.simulate_mouse_down(at, gpui::MouseButton::Left, none);
+        pip.simulate_mouse_up(at, gpui::MouseButton::Left, none);
+        pip.run_until_parked();
+    };
+
+    let before = moves();
+    press(&mut pip, "pip-title");
+    assert_eq!(
+        moves(),
+        before + 1,
+        "a press on the title (bottom fade) must start one window move"
+    );
+    press(&mut pip, "pip-badge");
+    assert_eq!(
+        moves(),
+        before + 2,
+        "a press on the top fade must start one window move"
+    );
+    for control in ["pip-mute", "pip-skip-back", "pip-scrub-track"] {
+        press(&mut pip, control);
+        assert_eq!(moves(), before + 2, "{control} must not drag the window");
+    }
+}
+
+#[core::prelude::v1::test]
+fn pip_scrub_released_off_the_track_ends_the_scrub() {
+    let lib = pip_library("scrub_out");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+    let track = pip.debug_bounds("pip-scrub-track").unwrap();
+    let title = pip.debug_bounds("pip-title").unwrap();
+    let none = gpui::Modifiers::default();
+    let x = |fraction: f32| track.origin.x + track.size.width * fraction;
+
+    pip.simulate_mouse_down(
+        gpui::point(x(0.25), track.center().y),
+        gpui::MouseButton::Left,
+        none,
+    );
+    pip.run_until_parked();
+    let off_track = gpui::point(x(0.5), title.center().y);
+    pip.simulate_mouse_move(off_track, gpui::MouseButton::Left, none);
+    pip.run_until_parked();
+    pip.simulate_mouse_up(off_track, gpui::MouseButton::Left, none);
+    pip.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.video.is_scrubbing,
+            "a release off the track must end the scrub"
+        );
+        assert!(
+            (app.video.playback_time - 30.0).abs() < 1.0,
+            "the release commits the dragged position, got {}",
+            app.video.playback_time
+        );
+    });
 }

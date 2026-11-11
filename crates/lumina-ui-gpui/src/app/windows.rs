@@ -106,7 +106,7 @@ pub fn open_floating_pip_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id,
             titlebar: Some(TitlebarOptions {
-                title: Some("Picture-in-Picture".into()),
+                title: Some(crate::i18n::t("pip.window_title").into()),
                 appears_transparent: true,
                 ..Default::default()
             }),
@@ -157,8 +157,10 @@ fn pip_window_size(width: u32, height: u32) -> Size<Pixels> {
 
 /// Where the PiP window opens: `PIP_INSET` in from the main window's
 /// bottom-right corner, kept inside `display` (the main window's display, so
-/// a second monitor works). `None` (the caller centres it) when there is no
-/// main window or it is too small to hold the PiP plus the inset.
+/// a second monitor works). The clamp keeps the inset from the display's
+/// right and bottom edges only; on the left and top it stops at the edge.
+/// `None` (the caller centres it) when there is no main window or it is too
+/// small to hold the PiP plus the inset.
 fn pip_window_origin(
     pip: Size<Pixels>,
     main: Option<Bounds<Pixels>>,
