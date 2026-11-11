@@ -30,6 +30,7 @@ actions!(
         Compare,
         Slideshow,
         ShowMap,
+        ShowAlbums,
         GoBack,
         GoForward,
         RotateLeft,

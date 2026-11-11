@@ -66,6 +66,8 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
         Menu::new("Go").items([
             MenuItem::action("Back", GoBack),
             MenuItem::action("Forward", GoForward),
+            MenuItem::separator(),
+            MenuItem::action(crate::i18n::t("albums.title"), ShowAlbums),
         ]),
         Menu::new("Help").items([
             MenuItem::action("Keyboard Shortcuts", ShowShortcuts),
@@ -124,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn go_menu_has_back_and_forward() {
+    fn go_menu_has_back_forward_and_albums() {
         let menus = build_menus(false);
         let go = menus
             .iter()
@@ -138,6 +140,10 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(names, vec!["Back", "Forward"], "Go lists Back then Forward");
+        assert_eq!(
+            names,
+            vec!["Back", "Forward", "Albums"],
+            "Go lists Back, Forward, then the Albums overview"
+        );
     }
 }

@@ -605,6 +605,9 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &ShowMap, _w, cx| {
                     this.show_map(cx);
                 }))
+                .on_action(cx.listener(|this, _: &ShowAlbums, _w, cx| {
+                    this.show_albums_overview(cx);
+                }))
                 .on_action(cx.listener(|this, _: &GoBack, _w, cx| {
                     this.navigate_back(cx);
                 }))
@@ -730,7 +733,18 @@ impl Render for LuminaApp {
                                     // overlay above it (see render_viewer_modal).
                                     // The filter and status bars belong to this column; the
                                     // inspector sits beside it, under the header.
-                                    .child(
+                                    // The Albums overview replaces the whole
+                                    // column: no grid, status bar or dock.
+                                    .child(if self.albums_overview_shown() {
+                                        div()
+                                            .relative()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .child(crate::views::albums_overview::render(self, cx))
+                                            .child(self.render_toast_overlay(cx))
+                                            .into_any_element()
+                                    } else {
                                         div()
                                             .flex_1()
                                             .min_w_0()
@@ -776,8 +790,9 @@ impl Render for LuminaApp {
                                                     .child(self.render_action_dock(cx))
                                                     .child(self.render_toast_overlay(cx)),
                                             )
-                                            .child(self.render_status_bar(total_count, cx)),
-                                    )
+                                            .child(self.render_status_bar(total_count, cx))
+                                            .into_any_element()
+                                    })
                                     // Inspector Resizer Drag Handle (260–380px)
                                     .child(if inspector_open && !is_fullscreen_viewer {
                                         div()

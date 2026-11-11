@@ -27,9 +27,18 @@ pub(super) fn render_albums_section(
         .flex()
         .flex_col()
         .gap(px(3.0))
+        // The label opens the Albums overview (also ⌘K Show Albums, Go > Albums).
         .child(
             div()
+                .id("sidebar-albums-header")
                 .debug_selector(|| "sidebar-albums-header".to_string())
+                .role(Role::Button)
+                .aria_label(t("command.show_albums"))
+                .tooltip(theme::tooltip_label(t("command.show_albums")))
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.show_albums_overview(cx);
+                }))
                 .flex()
                 .flex_row()
                 .justify_between()

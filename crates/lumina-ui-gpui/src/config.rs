@@ -101,8 +101,9 @@ impl LastView {
             AlbumSelection::Album(id) => LastView::Album(*id),
             AlbumSelection::Tag(tag) => LastView::Tag(tag.clone()),
             AlbumSelection::Untagged => LastView::Untagged,
-            // Duplicates has no persisted token; it restores as All.
-            AlbumSelection::Duplicates => LastView::All,
+            // Duplicates and the Albums overview have no persisted token;
+            // they restore as All.
+            AlbumSelection::Duplicates | AlbumSelection::AlbumsOverview => LastView::All,
         }
     }
 

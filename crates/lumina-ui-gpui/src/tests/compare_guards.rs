@@ -24,9 +24,10 @@ fn open_compare_on_first(vcx: &mut VisualTestContext, ids: &[lumina_core::MediaI
 }
 
 /// The palette commands that would play, move or trash the view.
-const VIEW_COMMANDS: [(&str, CommandId); 6] = [
+const VIEW_COMMANDS: [(&str, CommandId); 7] = [
     ("slideshow", CommandId::Slideshow),
     ("show map", CommandId::ShowMap),
+    ("show albums", CommandId::ShowAlbums),
     ("back", CommandId::Back),
     ("similar shots", CommandId::ShowSimilarShots),
     ("exact copies", CommandId::ShowExactCopies),
@@ -84,9 +85,10 @@ fn viewer_from_compare_refuses_what_would_change_the_view_behind_it() {
     });
 
     // The menu bar: an item is enabled when the root handles its action.
-    let menu: [(&str, Box<dyn gpui::Action>); 5] = [
+    let menu: [(&str, Box<dyn gpui::Action>); 6] = [
         ("Slideshow", Box::new(crate::actions::Slideshow)),
         ("Show Map", Box::new(crate::actions::ShowMap)),
+        ("Albums", Box::new(crate::actions::ShowAlbums)),
         ("Back", Box::new(crate::actions::GoBack)),
         ("Forward", Box::new(crate::actions::GoForward)),
         ("Delete Rejected…", Box::new(crate::actions::DeleteRejected)),

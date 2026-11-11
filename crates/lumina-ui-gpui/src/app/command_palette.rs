@@ -28,6 +28,8 @@ pub enum CommandId {
     /// The Duplicates destination on its Exact copies / Similar shots tab.
     ShowExactCopies,
     ShowSimilarShots,
+    /// The Albums overview page.
+    ShowAlbums,
     /// Places on the map / on the grid.
     ShowMap,
     ShowGrid,
@@ -216,6 +218,7 @@ impl Command {
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
             ShowMap | ShowOnMap => Icon::MapPin,
+            ShowAlbums => Icon::Folder,
             ShowGrid => Icon::Images,
             ShowMosaic => Icon::LayoutDashboard,
             SelectDay | ShowYears | ShowMonths | ShowDays => Icon::Calendar,
@@ -361,6 +364,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.show_similar_shots",
             shortcut: "",
             keywords: "duplicates similar shots stacks raw jpeg pairs bursts",
+        },
+        Command {
+            id: CommandId::ShowAlbums,
+            key: "command.show_albums",
+            shortcut: "",
+            keywords: "albums overview collections folders go",
         },
         // Before Show Map: "show on map" matches both, and the item wins.
         Command {
@@ -1124,6 +1133,11 @@ impl LuminaApp {
                 self.grid_state.is_some() && !self.compare_holds_view()
             }
             CommandId::ShowMap => !self.map_blocked() && !self.map_shown(),
+            CommandId::ShowAlbums => {
+                self.grid_state.is_some()
+                    && !self.compare_holds_view()
+                    && !self.albums_overview_shown()
+            }
             CommandId::ShowGrid => self.grid_state.is_some() && !self.view_mode_on().1,
             CommandId::ShowMosaic => self.grid_state.is_some() && !self.view_mode_on().0,
             CommandId::SelectDay => {
@@ -1468,6 +1482,7 @@ impl LuminaApp {
                 self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Similar, cx)
             }
             CommandId::ShowMap => self.show_map(cx),
+            CommandId::ShowAlbums => self.show_albums_overview(cx),
             CommandId::ShowGrid => self.set_browse_layout(crate::config::BrowseLayout::Grid, cx),
             CommandId::ShowMosaic => {
                 self.set_browse_layout(crate::config::BrowseLayout::Mosaic, cx)

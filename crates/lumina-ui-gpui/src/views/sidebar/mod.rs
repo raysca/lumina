@@ -21,6 +21,8 @@ pub enum AlbumSelection {
     Untagged,
     Duplicates,
     Trash,
+    /// The Albums overview page: album and smart album cards, no media grid.
+    AlbumsOverview,
 }
 
 pub fn tag_color(name: &str) -> Rgba {

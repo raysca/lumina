@@ -74,6 +74,8 @@ impl ViewQuery {
             AlbumSelection::Tag(tag) => engine.search_query_count(&tag_query(tag)),
             AlbumSelection::Untagged => engine.query_untagged_count(),
             AlbumSelection::Duplicates => engine.query_duplicate_count(),
+            // Cards, not media: no grid rows to count.
+            AlbumSelection::AlbumsOverview => 0,
         }
     }
 
@@ -95,7 +97,9 @@ impl ViewQuery {
             AlbumSelection::Album(id) => ViewScope::Album(*id),
             AlbumSelection::Tag(tag) => ViewScope::Search(tag_query(tag)),
             AlbumSelection::Untagged => ViewScope::Untagged,
-            AlbumSelection::Trash | AlbumSelection::Duplicates => return None,
+            AlbumSelection::Trash | AlbumSelection::Duplicates | AlbumSelection::AlbumsOverview => {
+                return None
+            }
         })
     }
 
@@ -188,6 +192,7 @@ impl ViewQuery {
             }
             AlbumSelection::Untagged => engine.query_untagged_sorted(limit, offset, sort),
             AlbumSelection::Duplicates => engine.query_duplicate_items_slice(offset, limit),
+            AlbumSelection::AlbumsOverview => Vec::new(),
         }
     }
 }
@@ -301,6 +306,7 @@ impl LuminaApp {
             AlbumSelection::Untagged => t("view.untagged"),
             AlbumSelection::Duplicates => t("duplicates.title"),
             AlbumSelection::Trash => t("view.recently_deleted"),
+            AlbumSelection::AlbumsOverview => t("albums.title"),
         }
     }
 

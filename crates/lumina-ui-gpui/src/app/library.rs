@@ -727,6 +727,7 @@ impl LuminaApp {
             // Cached by refresh_album_counts.
             AlbumSelection::Untagged => Some(self.untagged_count),
             AlbumSelection::Duplicates => Some(self.duplicate_items_count),
+            AlbumSelection::AlbumsOverview => Some(0),
         }
     }
 

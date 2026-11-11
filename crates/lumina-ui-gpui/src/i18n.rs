@@ -256,6 +256,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.tab_similar" => "Similar shots",
         "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
         "command.show_map" => "Show Map",
+        "command.show_albums" => "Show Albums",
         "command.show_grid" => "Show Grid",
         "command.show_mosaic" => "Show Mosaic",
         "command.select_day" => "Select Day",
@@ -454,6 +455,7 @@ fn en_us(key: &str) -> Option<&'static str> {
             If it is on a drive, connect the drive. If you moved it, open it from its new place."
         }
         "sidebar.albums" => "ALBUMS",
+        "albums.title" => "Albums",
         "sidebar.pinned" => "PINNED",
         "album.pin_failed" => "Could not pin album",
         "album.unpin_failed" => "Could not unpin album",
