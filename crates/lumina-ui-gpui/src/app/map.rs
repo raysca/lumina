@@ -128,8 +128,9 @@ pub(crate) static BASEMAP: LazyLock<Option<Basemap>> = LazyLock::new(|| {
     })
 });
 
-/// Zoom Show on Map opens Places at, centred on the item.
-const FOCUS_ZOOM: u8 = 5;
+/// Zoom Show on Map opens Places at, centred on the item (also the
+/// inspector location card's zoom).
+pub(crate) const FOCUS_ZOOM: u8 = 5;
 
 /// `path` (degree space) scaled by `scale` and moved by `offset`.
 pub(crate) fn place(path: &Path<Pixels>, scale: f32, offset: Point<Pixels>) -> Path<Pixels> {

@@ -67,7 +67,9 @@ core handles cataloguing, decoding, and search.
   show their poster and do not play; it stops at the end unless ⌘K
   "Slideshow: Loop" is on.
 - **Map** — Places has a Map toggle in the sidebar (also ⌘K "Show
-  Map" / "Show Grid" and View > Show Map). The map is drawn offline from a
+  Map" / "Show Grid" and View > Show Map). ⌘K "Show on Map", or "Open
+  map" on the info panel's location card, opens it centred on the selected
+  item. The map is drawn offline from a
   bundled world outline and never loads tiles or uses the network. Items
   with a location gather in numbered circles; `Tab` or the arrows focus
   them west to east, `Enter` (or a click) shows that place's items in the

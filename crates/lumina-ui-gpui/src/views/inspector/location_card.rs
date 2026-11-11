@@ -25,13 +25,12 @@ pub(crate) fn render_location_section(
         Some(place) => format!("{place} · {coords}"),
         None => coords,
     };
-    let open_label = t("inspector.open_map_tooltip");
     let open = div()
         .id("inspector-open-map")
         .debug_selector(|| "inspector-open-map".to_string())
         .role(Role::Button)
-        .aria_label(open_label.clone())
-        .tooltip(theme::tooltip_label(open_label))
+        .aria_label(t("inspector.open_map"))
+        .tooltip(theme::tooltip_label(t("inspector.open_map_tooltip")))
         .text_size(px(11.0))
         .text_color(theme::accent())
         .cursor_pointer()
@@ -204,8 +203,9 @@ fn land_crop(lon: f32, lat: f32) -> Option<Rc<LandCrop>> {
     })
 }
 
-/// Zoom of the inspector's location card: about 25° of longitude.
-const CARD_ZOOM: u8 = 5;
+/// Zoom of the inspector's location card: about 25° of longitude, the
+/// same zoom Open map lands on, so the map continues what the card showed.
+const CARD_ZOOM: u8 = crate::app::map::FOCUS_ZOOM;
 
 #[cfg(test)]
 mod tests {

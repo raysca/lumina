@@ -52,7 +52,8 @@ Lumina is designed to be usable without a mouse:
   rating, `Esc` closes. Other keys are absorbed. While compare is open,
   in the viewer opened from it too, Back/Forward (`⌘[`/`⌘]`, Go menu),
   Slideshow, Show Map and Delete Rejected… are disabled in the menus, and
-  they and ⌘K Show Similar Shots / Exact Copies are left out of ⌘K, so the
+  they and ⌘K Show on Map and Show Similar Shots / Exact Copies are left
+  out of ⌘K, so the
   view behind compare never changes; expanding PiP closes compare. Compare,
   Slideshow and Show Map do not open from the menu bar while the ⌘K palette
   or a dialog is open. Roles: the view (group,
@@ -88,7 +89,9 @@ Lumina is designed to be usable without a mouse:
   does not announce them; the keys and the shortcut sheet are the path.
 - **Map**: ⌘K Show Map / Show Grid and View > Show Map switch Places
   between the grid and the offline map; the Places row's Map toggle does
-  the same by mouse. On the map `Tab`, `→` or `↓` focus the next place
+  the same by mouse. ⌘K Show on Map (offered when the selected item has a
+  location) opens the map centred on that item, the keyboard path for the
+  info panel's "Open map" (button, labelled "Open map"). On the map `Tab`, `→` or `↓` focus the next place
   east and `⇧Tab`, `←` or `↑` the previous one west (a focused place near
   the edge is brought to the middle), `Enter` shows its items in the grid
   (Back returns to the map), `⌘+`/`⌘-` zoom with the focused place kept in
