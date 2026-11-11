@@ -124,8 +124,10 @@ nothing is dimmed.
 - Filter: 4K Videos, and the 4K chip above the Videos view, set the search
   to `is:video is:4k`. The page keeps the Videos title, "clips" counts and
   totals, and the Videos chip row (All clips, 4K, Clear all) for exactly
-  that query. Running it again, All clips, Clear all or Clear Filters
-  returns to Videos.
+  that query. Running it again, All clips, Clear all, Clear Filters or Back
+  returns to Videos. The palette lists it only in the Videos view (plain or
+  4K), so it never replaces a search typed elsewhere. Clear all shows only
+  while 4K is on.
 - The palette shows 8 rows, so typing "filter" alone does not list the color
   filters or Clear Filters; type "color red" or "clear filters".
 

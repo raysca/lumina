@@ -66,8 +66,8 @@ impl LuminaApp {
     }
 
     /// The Videos chip row, in place of the Library's: "All clips" and
-    /// "4K" toggle buttons, the clip count, and Clear all. Shown with no
-    /// filter too, so the chips are always there to pick.
+    /// "4K" toggle buttons, the clip count, and Clear all (only while 4K is
+    /// on). Shown with no filter too, so the chips are always there to pick.
     pub(crate) fn render_videos_filter_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {
         let uhd = self.videos_4k_active();
         let chip = |name: &'static str, label: String, on: bool| {
@@ -138,21 +138,24 @@ impl LuminaApp {
                     .text_color(theme::t3())
                     .child(label)
             }))
-            .child(
-                div()
-                    .id("filter-clear-all")
-                    .debug_selector(|| "filter-clear-all".to_string())
-                    .role(Role::Button)
-                    .aria_label(SharedString::from(t("filter.clear_all")))
-                    .flex_shrink_0()
-                    .cursor_pointer()
-                    .text_size(px(11.5))
-                    .text_color(theme::accent())
-                    .hover(|s| s.text_color(theme::accent_hover()))
-                    .child(t("filter.clear_all"))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.show_all_clips(cx);
-                    })),
-            )
+            // Plain Videos has nothing to clear: Clear all shows with 4K on.
+            .when(uhd, |row| {
+                row.child(
+                    div()
+                        .id("filter-clear-all")
+                        .debug_selector(|| "filter-clear-all".to_string())
+                        .role(Role::Button)
+                        .aria_label(SharedString::from(t("filter.clear_all")))
+                        .flex_shrink_0()
+                        .cursor_pointer()
+                        .text_size(px(11.5))
+                        .text_color(theme::accent())
+                        .hover(|s| s.text_color(theme::accent_hover()))
+                        .child(t("filter.clear_all"))
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.show_all_clips(cx);
+                        })),
+                )
+            })
     }
 }

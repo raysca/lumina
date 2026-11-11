@@ -1112,6 +1112,9 @@ impl LuminaApp {
             }
             CommandId::ImportSmartAlbumRules => self.grid_state.is_some(),
             CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
+            // Only in Videos (plain or 4K): elsewhere it would replace a
+            // typed search with the 4K one.
+            CommandId::Videos4k => self.videos_view(),
             CommandId::EmptyTrash | CommandId::RestoreAll => self
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)

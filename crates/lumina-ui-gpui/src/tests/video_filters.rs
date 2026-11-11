@@ -1,7 +1,7 @@
 //! Design 04 Task 4: the Videos chip row. Only "All clips" and "4K" ship;
 //! HDR, slow motion and Live Photos wait for catalog data.
 
-use super::ui_automation::{click, render_ui};
+use super::ui_automation::{click, focus_app, keystrokes, render_ui, type_text};
 use super::video_tiles::{library_with_clips, open_videos};
 use crate::app::command_palette::CommandId;
 use crate::app::LuminaApp;
@@ -73,12 +73,16 @@ fn videos_4k_chip_filters_by_width() {
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
     open_videos(&view, vcx);
 
-    for selector in ["filter-chip-all", "filter-chip-4k", "filter-clear-all"] {
+    for selector in ["filter-chip-all", "filter-chip-4k"] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
             "{selector}: the Videos chip row is painted"
         );
     }
+    assert!(
+        vcx.debug_bounds("filter-clear-all").is_none(),
+        "plain Videos has nothing to clear, so Clear all is hidden"
+    );
     for selector in ["filter-chip-hdr", "filter-chip-slowmo", "filter-chip-live"] {
         assert!(
             vcx.debug_bounds(selector).is_none(),
@@ -105,6 +109,13 @@ fn videos_4k_chip_filters_by_width() {
             app.sidebar_highlights(&AlbumSelection::System(SystemAlbum::Videos)),
             "the sidebar keeps Videos highlighted"
         );
+    });
+    assert!(
+        vcx.debug_bounds("sidebar-nav-videos-active").is_some()
+            && vcx.debug_bounds("sidebar-nav-all-active").is_none(),
+        "the painted sidebar shows Videos as the active row while 4K is on"
+    );
+    view.update(vcx, |app, _| {
         let meta = app.page_meta().unwrap_or_default();
         assert!(
             meta.starts_with("1 clip · 1 m · "),
@@ -132,17 +143,14 @@ fn videos_4k_chip_filters_by_width() {
     click(vcx, "filter-chip-all");
     assert_all_clips(&view, vcx, "All clips");
 
-    // The keyboard path: the palette command toggles the same filter.
-    view.update(vcx, |app, cx| app.execute_command(CommandId::Videos4k, cx));
-    render_ui(vcx);
+    // The keyboard path: ⌘K, type, Enter runs Filter: 4K Videos.
+    palette_4k(&view, vcx);
     assert_eq!(shown(&view, vcx), [clips[0]], "Filter: 4K Videos");
-    assert!(
-        crate::app::command_palette::commands()
-            .iter()
-            .any(|c| c.id == CommandId::Videos4k && c.title() == "Filter: 4K Videos"),
-        "the palette lists Filter: 4K Videos"
-    );
-    view.update(vcx, |app, cx| app.execute_command(CommandId::Videos4k, cx));
+    // Back undoes the filter like any search: plain Videos again.
+    view.update(vcx, |app, cx| app.navigate_back(cx));
+    assert_all_clips(&view, vcx, "Back after 4K");
+    palette_4k(&view, vcx);
+    palette_4k(&view, vcx);
     assert_all_clips(&view, vcx, "Filter: 4K Videos a second time");
 
     // Clear Filters (the palette's Clear all) lands in Videos, not All Media.
@@ -151,6 +159,53 @@ fn videos_4k_chip_filters_by_width() {
         app.execute_command(CommandId::ClearFilters, cx)
     });
     assert_all_clips(&view, vcx, "Clear Filters");
+}
+
+/// Runs Filter: 4K Videos through the palette as a user does: ⌘K, type
+/// its name, Enter.
+fn palette_4k(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
+    focus_app(vcx, view);
+    keystrokes(vcx, "secondary-k");
+    type_text(vcx, "4k videos");
+    view.update(vcx, |app, _| {
+        assert!(app.command_palette_open, "⌘K opens the palette");
+        assert_eq!(
+            app.palette_rows()
+                .first()
+                .map(|row| row.title.clone())
+                .as_deref(),
+            Some("Filter: 4K Videos"),
+            "typing its name puts Filter: 4K Videos first"
+        );
+    });
+    keystrokes(vcx, "enter");
+    render_ui(vcx);
+}
+
+#[core::prelude::v1::test]
+fn filter_4k_videos_is_offered_only_in_videos() {
+    let (_dir, engine, _clips) = library_with_clips("vf_4k_scope", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
+    let offered = |app: &LuminaApp| app.command_applies(CommandId::Videos4k);
+    view.update(vcx, |app, cx| {
+        assert!(
+            !offered(app),
+            "not in All Media, where it would replace the search"
+        );
+        app.set_search_query("beach", cx);
+        assert!(!offered(app), "not over a typed search either");
+        app.set_search_query("", cx);
+    });
+    open_videos(&view, vcx);
+    view.update(vcx, |app, cx| {
+        assert!(offered(app), "plain Videos offers it");
+        app.toggle_videos_4k(cx);
+        assert!(offered(app), "and 4K Videos, to turn it off");
+    });
+    // A search typed in Videos leaves the Videos view: no offer to wipe it.
+    view.update(vcx, |app, cx| app.set_search_query("is:video beach", cx));
+    view.update(vcx, |app, _| assert!(!offered(app)));
 }
 
 #[core::prelude::v1::test]
