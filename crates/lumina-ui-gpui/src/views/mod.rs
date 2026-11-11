@@ -31,3 +31,4 @@ pub mod template_editor;
 pub mod toast;
 pub mod viewer;
 pub mod viewer_state;
+pub mod zoom_pill;

@@ -12,16 +12,26 @@ use crate::views::sidebar::AlbumSelection;
 use crate::views::tag_manager::TagManagerModal;
 use crate::views::viewer::MediaViewer;
 
+/// The selection dock's offset above the status bar.
+pub(crate) const DOCK_BOTTOM: f32 = 20.0;
+/// The dock's height: 28px buttons, 5px padding, 1px border.
+pub(crate) const DOCK_HEIGHT: f32 = 40.0;
+/// Gap between the floating layers stacked over the grid (dock, zoom pill, toast).
+pub(crate) const STACK_GAP: f32 = 8.0;
+/// Bottom offset of a layer stacked directly above the dock.
+pub(crate) const ABOVE_DOCK: f32 = DOCK_BOTTOM + DOCK_HEIGHT + STACK_GAP;
+
 impl LuminaApp {
-    /// Selection dock: centred over the grid column, 20px above its bottom
-    /// (so it never covers the status bar), for any selection.
-    pub(crate) fn render_action_dock(
-        &self,
-        is_fullscreen_viewer: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let nothing = self.selected_item.is_none() && self.selected_indices.is_empty();
-        if nothing || is_fullscreen_viewer {
+    /// The selection dock shows: any selection, outside the fullscreen viewer.
+    pub(crate) fn selection_dock_shown(&self) -> bool {
+        (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            && !self.is_fullscreen_viewer
+    }
+
+    /// Selection dock: centred over the grid column, `DOCK_BOTTOM` above its
+    /// bottom (so it never covers the status bar), for any selection.
+    pub(crate) fn render_action_dock(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.selection_dock_shown() {
             return Empty.into_any_element();
         }
         let in_trash = self.selection == AlbumSelection::Trash;
@@ -122,7 +132,7 @@ impl LuminaApp {
 
         div()
             .absolute()
-            .bottom(px(20.0))
+            .bottom(px(DOCK_BOTTOM))
             .left_0()
             .right_0()
             // Centre on the grid, not the grid plus the year rail.

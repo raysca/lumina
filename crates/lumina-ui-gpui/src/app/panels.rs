@@ -177,6 +177,14 @@ impl LuminaApp {
         self.step_grid_size(-1, cx);
     }
 
+    /// Whether one `step` along the ladder (positive: larger) would change
+    /// the size; false at the ladder's ends, where the pill's button disables.
+    pub(crate) fn grid_zoom_enabled(&self, step: isize) -> bool {
+        use crate::views::search_bar::{size_level, SIZE_COLUMNS};
+        let level = size_level(self.grid_columns) as isize + step;
+        (0..SIZE_COLUMNS.len() as isize).contains(&level)
+    }
+
     /// ⌘= / ⌘- and the palette: anchored on the selected item, which stays on
     /// screen, or on the item at the viewport's top-left.
     fn step_grid_size(&mut self, step: isize, cx: &mut Context<Self>) {

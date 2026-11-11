@@ -191,8 +191,6 @@ impl LuminaApp {
             Empty.into_any_element()
         };
 
-        let dock_showing = (self.selected_item.is_some() || !self.selected_indices.is_empty())
-            && !self.is_fullscreen_viewer;
         let toast = div()
             .id("toast")
             .debug_selector(|| "toast".to_string())
@@ -243,12 +241,19 @@ impl LuminaApp {
                         this.dismiss_toast(cx);
                     })),
             );
-        // ponytail: 48px = dock height (40) + 8px gap; derive it if the dock grows.
+        // The toast is the top layer: above the zoom pill when it shows,
+        // else above the dock, else at the dock's own offset.
+        use crate::app::render::overlays::{ABOVE_DOCK, DOCK_BOTTOM, STACK_GAP};
+        let bottom = match self.zoom_pill_bottom() {
+            Some(pill) => pill + crate::views::zoom_pill::PILL_HEIGHT + STACK_GAP,
+            None if self.selection_dock_shown() => ABOVE_DOCK,
+            None => DOCK_BOTTOM,
+        };
         div()
             .absolute()
             .left_0()
             .right_0()
-            .bottom(px(if dock_showing { 20.0 + 48.0 } else { 20.0 }))
+            .bottom(px(bottom))
             .when(self.timeline_rail_shown(), |d| {
                 d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
             })

@@ -245,3 +245,154 @@ fn saved_off_ladder_columns_snap_and_small_scrolls_keep_them() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn zoom_pill_buttons_walk_the_size_ladder() {
+    use super::ui_automation::click;
+    use crate::views::sidebar::AlbumSelection;
+
+    let (dir, engine) = seed_library("gz_pill", 6);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    grid_at(&view, vcx, 4);
+
+    let pill = vcx
+        .debug_bounds("grid-zoom-pill")
+        .expect("the pill shows on the grid");
+    let status = vcx.debug_bounds("status-bar").expect("status bar");
+    // The content column is the grid surface up to the timeline rail; the
+    // rail and the inspector are its siblings.
+    let assert_centred = |vcx: &mut VisualTestContext, when: &str| {
+        let pill = vcx.debug_bounds("grid-zoom-pill").expect("pill");
+        let surface = vcx
+            .debug_bounds("media-grid-surface")
+            .expect("grid surface");
+        let rail = vcx
+            .debug_bounds("timeline-rail")
+            .expect("the seeded library shows the timeline rail");
+        let centre = (f32::from(surface.left()) + f32::from(rail.left())) / 2.0;
+        assert!(
+            (f32::from(pill.center().x) - centre).abs() < 1.0,
+            "{when}: the pill centres in the grid area, excluding the rail: \
+             pill={pill:?} grid={surface:?} rail={rail:?}"
+        );
+        surface
+    };
+    let wide = assert_centred(vcx, "inspector closed");
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let narrow = assert_centred(vcx, "inspector open");
+    assert!(
+        narrow.right() < wide.right(),
+        "the inspector takes width from the grid column: {narrow:?} vs {wide:?}"
+    );
+    view.update(vcx, |app, cx| {
+        app.inspector_open = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        (f32::from(status.top()) - f32::from(pill.bottom()) - 24.0).abs() < 1.0,
+        "the pill sits 24 above the status bar: pill={pill:?} status={status:?}"
+    );
+    assert_eq!(f32::from(pill.size.height), 42.0, "the pill is 42 tall");
+
+    click(vcx, "grid-zoom-in");
+    assert_eq!(columns(&view, vcx), 3, "grid-zoom-in walks 4 → 3");
+    click(vcx, "grid-zoom-out");
+    assert_eq!(columns(&view, vcx), 4, "grid-zoom-out walks 3 → 4");
+
+    // A click on the pill's padding is absorbed: it must not reach the grid
+    // and clear the selection.
+    view.update(vcx, |app, cx| app.select_index(0, cx));
+    render_ui(vcx);
+    let pill = vcx.debug_bounds("grid-zoom-pill").unwrap();
+    let dock = vcx
+        .debug_bounds("multi-select-action-dock")
+        .expect("the selection dock shows");
+    assert!(
+        (f32::from(dock.size.height) - crate::app::render::overlays::DOCK_HEIGHT).abs() <= 0.5,
+        "DOCK_HEIGHT matches the drawn dock, which the pill and toast stack on: dock={dock:?}"
+    );
+    assert!(
+        pill.bottom() <= dock.top(),
+        "the pill stacks above the selection dock: pill={pill:?} dock={dock:?}"
+    );
+    vcx.simulate_click(
+        gpui::point(pill.left() + gpui::px(2.0), pill.center().y),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    assert!(
+        view.update(vcx, |app, _| app.selected_item.is_some()),
+        "a click on the pill must not fall through to the grid"
+    );
+
+    // A toast stacks above the pill and the dock.
+    view.update(vcx, |app, cx| app.show_toast("Saved", cx));
+    render_ui(vcx);
+    let toast = vcx.debug_bounds("toast").expect("toast");
+    assert!(
+        toast.bottom() <= pill.top(),
+        "the toast stacks above the pill: toast={toast:?} pill={pill:?}"
+    );
+    view.update(vcx, |app, cx| {
+        app.clear_selection(cx);
+        app.dismiss_toast(cx);
+    });
+    render_ui(vcx);
+
+    // At 2 columns, zoom in is disabled: no change. The button's aria
+    // description can't be read here (GPUI's test window builds no
+    // AccessKit tree), so the state is read through `grid_zoom_enabled`.
+    grid_at(&view, vcx, 2);
+    assert!(
+        view.update(vcx, |app, _| !app.grid_zoom_enabled(1)),
+        "zoom in is disabled at the largest size"
+    );
+    click(vcx, "grid-zoom-in");
+    assert_eq!(columns(&view, vcx), 2, "a disabled zoom in changes nothing");
+    grid_at(&view, vcx, 8);
+    assert!(
+        view.update(vcx, |app, _| !app.grid_zoom_enabled(-1)),
+        "zoom out is disabled at the smallest size"
+    );
+    click(vcx, "grid-zoom-out");
+    assert_eq!(
+        columns(&view, vcx),
+        8,
+        "a disabled zoom out changes nothing"
+    );
+
+    // Hidden on the map, on Duplicates and in an empty state.
+    view.update(vcx, |app, cx| app.set_search_query("zzz-no-match", cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("empty-state").is_some(),
+        "empty state shows"
+    );
+    assert!(
+        vcx.debug_bounds("grid-zoom-pill").is_none(),
+        "no pill over an empty state"
+    );
+    view.update(vcx, |app, cx| {
+        app.set_search_query("", cx);
+        app.select_album(AlbumSelection::Duplicates, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("grid-zoom-pill").is_none(),
+        "no pill on Duplicates"
+    );
+    view.update(vcx, |app, cx| app.show_map(cx));
+    render_ui(vcx);
+    assert!(view.update(vcx, |app, _| app.map_shown()), "the map shows");
+    assert!(
+        vcx.debug_bounds("grid-zoom-pill").is_none(),
+        "no pill on the map"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

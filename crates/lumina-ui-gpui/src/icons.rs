@@ -59,6 +59,8 @@ pub enum Icon {
     Map,
     Calendar,
     FileImage,
+    ZoomIn,
+    ZoomOut,
 }
 
 impl Icon {
@@ -122,6 +124,8 @@ impl Icon {
         Icon::Map,
         Icon::Calendar,
         Icon::FileImage,
+        Icon::ZoomIn,
+        Icon::ZoomOut,
     ];
 
     pub fn path(self) -> &'static str {
@@ -182,6 +186,8 @@ impl Icon {
             Self::Map => "icons/map.svg",
             Self::Calendar => "icons/calendar.svg",
             Self::FileImage => "icons/file-image.svg",
+            Self::ZoomIn => "icons/zoom-in.svg",
+            Self::ZoomOut => "icons/zoom-out.svg",
         }
     }
 }

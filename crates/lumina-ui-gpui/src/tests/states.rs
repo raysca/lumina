@@ -23,10 +23,18 @@ fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
     let status = vcx.debug_bounds("status-bar").unwrap();
     let off = f32::from(toast.center().x - grid.center().x).abs();
     assert!(off < 2.0, "toast is centred over the grid, off by {off}");
+    // Over the grid the zoom pill sits 24 above the status bar; the toast
+    // stacks 8 above the pill's 42.
+    let pill = vcx.debug_bounds("grid-zoom-pill").expect("zoom pill");
+    let gap = f32::from(pill.top() - toast.bottom());
+    assert!(
+        (gap - 8.0).abs() < 1.0,
+        "8px above the zoom pill, got {gap}"
+    );
     let gap = f32::from(status.top() - toast.bottom());
     assert!(
-        (gap - 20.0).abs() < 1.0,
-        "20px above the status bar, got {gap}"
+        (gap - 74.0).abs() < 1.0,
+        "74px above the status bar, got {gap}"
     );
     let dismiss = vcx.debug_bounds("toast-dismiss").unwrap();
     assert_eq!(f32::from(dismiss.size.width), 26.0, "26px dismiss button");

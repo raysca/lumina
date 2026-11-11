@@ -67,6 +67,8 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "volume-x",
     "x",
     "zap",
+    "zoom-in",
+    "zoom-out",
 );
 
 /// Lucide is outline-only; these render solid (transport controls).

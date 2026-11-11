@@ -14,7 +14,7 @@ use crate::views::sidebar::{AlbumSelection, SidebarView};
 use crate::views::viewer_state::ViewerRotation;
 
 mod grid;
-mod overlays;
+pub(crate) mod overlays;
 pub(crate) mod rail;
 mod status_bar;
 mod toolbar;
@@ -759,11 +759,10 @@ impl Render for LuminaApp {
                                                     )
                                                     // Pinned Vertical Year Rail
                                                     .child(self.render_year_rail(cx))
-                                                    // Selection dock and toast, over the grid column only
-                                                    .child(self.render_action_dock(
-                                                        is_fullscreen_viewer,
-                                                        cx,
-                                                    ))
+                                                    // Zoom pill, selection dock and toast, over the grid
+                                                    // column only, stacked bottom-up: dock, pill, toast.
+                                                    .child(self.render_zoom_pill(cx))
+                                                    .child(self.render_action_dock(cx))
                                                     .child(self.render_toast_overlay(cx)),
                                             )
                                             .child(self.render_status_bar(total_count, cx)),
