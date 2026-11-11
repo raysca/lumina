@@ -4169,6 +4169,7 @@ dependencies = [
  "lru",
  "lumina-core",
  "parking_lot",
+ "raw-window-handle",
  "rfd",
  "rusqlite",
  "serde",

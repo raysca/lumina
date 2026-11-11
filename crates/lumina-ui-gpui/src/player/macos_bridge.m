@@ -664,3 +664,18 @@ int lumina_reduce_motion(void) {
         return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion] ? 1 : 0;
     }
 }
+
+/// GPUI opens floating windows as NSPanels, which AppKit hides whenever the
+/// app is inactive. A PiP must stay up while the user works in another app,
+/// so turn that off, and show the panel if it opened while Lumina was
+/// inactive (it was ordered front already, then hidden straight away).
+void lumina_window_keep_visible_when_inactive(void *ns_view) {
+    NSWindow *window = [(__bridge NSView *)ns_view window];
+    if (window == nil) {
+        return;
+    }
+    window.hidesOnDeactivate = NO;
+    if (!window.isVisible) {
+        [window orderFront:nil];
+    }
+}

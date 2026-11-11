@@ -112,7 +112,12 @@ pub fn open_floating_pip_window(
             }),
             ..Default::default()
         },
-        |window, cx| cx.new(|cx| FloatingPipPlayerView::new(weak_app_clone, tx_clone, window, cx)),
+        |window, cx| {
+            // macOS hides floating panels while the app is inactive; PiP must stay up.
+            #[cfg(target_os = "macos")]
+            crate::player::macos::keep_window_visible_when_inactive(window);
+            cx.new(|cx| FloatingPipPlayerView::new(weak_app_clone, tx_clone, window, cx))
+        },
     ) {
         Ok(handle) => {
             if let Some(app) = weak_app.upgrade() {

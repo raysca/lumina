@@ -318,6 +318,12 @@ inject home
 inject p alt
 wait_windows 2 || fail "Option-P on the selected video did not open the PiP window"
 echo "PASS: Option-P opened the PiP window"
+# PiP is a floating panel, which macOS hides while its app is inactive
+# unless told otherwise; it must stay up while the user is in another app.
+osascript -e 'tell application "Finder" to activate' >/dev/null 2>&1 || fail "could not activate Finder"
+sleep 1
+wait_windows 2 || fail "the PiP window hid when another app became active"
+echo "PASS: PiP stayed on screen with another app active"
 inject right
 capture pip_viewer_before || fail "screenshot failed"
 inject space
