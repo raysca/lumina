@@ -1332,15 +1332,9 @@ impl LuminaApp {
             }
             PaletteTarget::Year(year) => {
                 self.close_command_palette(cx);
-                // One history entry: Back returns to where the jump started.
-                let departing = self.navigation_snapshot();
-                self.selection = AlbumSelection::AllLibrary;
-                self.stacks.reset();
-                self.active_year = Some(year);
-                self.search_query.clear();
-                self.search_focused = false;
-                self.clear_selection(cx);
-                self.record_navigation_change(departing);
+                // The year filter; the rail scrolls instead. One history
+                // entry: Back returns to where the jump started.
+                self.set_active_year(Some(year), cx);
             }
         }
     }

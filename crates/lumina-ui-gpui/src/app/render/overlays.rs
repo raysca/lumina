@@ -126,7 +126,7 @@ impl LuminaApp {
             .left_0()
             .right_0()
             // Centre on the grid, not the grid plus the year rail.
-            .when(!self.timeline_year_buckets.is_empty(), |d| {
+            .when(self.timeline_rail_shown(), |d| {
                 d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
             })
             .flex()

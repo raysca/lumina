@@ -478,6 +478,8 @@ pub struct LuminaApp {
     pub templates: crate::app::templates::TemplateState,
     pub timeline_year_buckets: Vec<(i32, usize)>,
     pub month_header: MonthHeader,
+    /// Timeline rail months and the grid range it tracks.
+    pub rail: crate::app::render::rail::TimelineRail,
     pub item_ratings: HashMap<MediaId, u8>,
     pub item_color_labels: HashMap<MediaId, u8>,
     /// Picked and rejected items (unflagged ones are left out).
@@ -678,6 +680,7 @@ impl LuminaApp {
             templates: Default::default(),
             timeline_year_buckets: Vec::new(),
             month_header: MonthHeader::default(),
+            rail: Default::default(),
             item_ratings: HashMap::new(),
             item_color_labels: HashMap::new(),
             item_flags: HashMap::new(),
@@ -828,7 +831,7 @@ impl LuminaApp {
             window_width,
             self.sidebar_width,
             self.sidebar_collapsed,
-            !self.timeline_year_buckets.is_empty(),
+            self.timeline_rail_shown(),
             inspector_width,
             self.grid_columns,
         )

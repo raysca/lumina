@@ -90,6 +90,10 @@ tokens! {
     focus_ring = 0xAAAAA8;
     /// Border of a danger panel or button. Invalid-value outlines use `danger`.
     danger_border = 0x45211E;
+    /// Timeline rail month bar.
+    rail_bar = 0x32323A;
+    /// Timeline rail month bar in the year on screen.
+    rail_bar_current = 0x4A4A56;
 
     // Metadata marks. Grid cards draw them white on a scrim over the photo.
     rating = 0xE9A23B;

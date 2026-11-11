@@ -15,7 +15,7 @@ use crate::views::viewer_state::ViewerRotation;
 
 mod grid;
 mod overlays;
-mod rail;
+pub(crate) mod rail;
 mod status_bar;
 mod toolbar;
 #[cfg(test)]

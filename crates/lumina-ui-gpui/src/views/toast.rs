@@ -249,7 +249,7 @@ impl LuminaApp {
             .left_0()
             .right_0()
             .bottom(px(if dock_showing { 20.0 + 48.0 } else { 20.0 }))
-            .when(!self.timeline_year_buckets.is_empty(), |d| {
+            .when(self.timeline_rail_shown(), |d| {
                 d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
             })
             .flex()

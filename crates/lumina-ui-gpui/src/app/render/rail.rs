@@ -1,77 +1,585 @@
+//! Timeline rail: a scroll scrubber beside the date-sorted All Media grid.
+//! One bar per month (width ∝ its count), a lens over the months on screen,
+//! and a click on a year or bar scrolls the grid to that month's first item.
+//! Everything is derived from the cached month buckets; nothing queries
+//! SQLite per frame.
+
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::ops::Range;
+use std::rc::Rc;
+
 use gpui::*;
+use lumina_core::{SortDirection, SortField};
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::theme;
+use crate::views::grid::YEAR_RAIL_WIDTH;
 use crate::views::sidebar::AlbumSelection;
 
+/// "TIMELINE" label top.
+const LABEL_TOP: f32 = 8.0;
+/// First year row.
+const FIRST_ROW: f32 = 26.0;
+/// Month bar height and the step between bars.
+const BAR_H: f32 = 4.0;
+const BAR_PITCH: f32 = 9.0;
+/// Year label line height; a year with one month still takes this much.
+const YEAR_H: f32 = 14.0;
+const YEAR_GAP: f32 = 8.0;
+/// Bars are right-aligned to this x; the longest is `BAR_MAX` wide.
+const BAR_RIGHT: f32 = 70.0;
+const BAR_MAX: f32 = 36.0;
+const LENS_W: f32 = 52.0;
+const LENS_MIN_H: f32 = 29.0;
+/// Height of the "{year} ↓" row.
+const OLDER_H: f32 = 16.0;
+
+/// One month with items.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RailMonth {
+    pub year: i32,
+    pub month: u32,
+    pub count: usize,
+    /// Items in newer months: the month's first index in a newest-first view.
+    pub newer: usize,
+}
+
+/// The rail's cached months.
+#[derive(Default)]
+pub struct TimelineRail {
+    /// Every month with items, newest first. Rebuilt with the month buckets.
+    pub months: Vec<RailMonth>,
+    /// Items in all months.
+    pub total: usize,
+    /// The pointer is over the rail (shows the bubble).
+    pub hovered: bool,
+    /// The rail's painted height, measured at prepaint (0 before the first
+    /// frame). Years past it collapse into the "{year} ↓" row.
+    pub height: Rc<Cell<f32>>,
+}
+
+impl TimelineRail {
+    /// Rebuilds the months from the month buckets (keys `(year, month)`).
+    /// Bucket keys come from the same UTC timestamp the date sort orders by,
+    /// so newest-first keys match the grid's order.
+    pub fn set_counts(&mut self, counts: &HashMap<(i32, u32), usize>) {
+        let mut keys: Vec<_> = counts.iter().filter(|(_, n)| **n > 0).collect();
+        keys.sort_by(|a, b| b.0.cmp(a.0));
+        let mut newer = 0;
+        self.months = keys
+            .into_iter()
+            .map(|(&(year, month), &count)| {
+                let m = RailMonth {
+                    year,
+                    month,
+                    count,
+                    newer,
+                };
+                newer += count;
+                m
+            })
+            .collect();
+        self.total = newer;
+    }
+
+    /// First grid index of `month` under `direction`.
+    fn offset(&self, month: &RailMonth, direction: SortDirection) -> usize {
+        match direction {
+            SortDirection::Descending => month.newer,
+            SortDirection::Ascending => self.total - month.newer - month.count,
+        }
+    }
+
+    /// First grid index of `year` (its newest month descending, oldest
+    /// ascending).
+    fn year_offset(&self, year: i32, direction: SortDirection) -> Option<usize> {
+        self.months
+            .iter()
+            .filter(|m| m.year == year)
+            .map(|m| self.offset(m, direction))
+            .min()
+    }
+
+    /// Indices into `months` (newest, oldest) of the months whose items
+    /// overlap the grid indices `items`.
+    fn visible_months(
+        &self,
+        direction: SortDirection,
+        items: &Range<usize>,
+    ) -> Option<(usize, usize)> {
+        let mut on = self.months.iter().enumerate().filter(|(_, m)| {
+            let start = self.offset(m, direction);
+            start < items.end && start + m.count > items.start
+        });
+        let first = on.next()?.0;
+        let last = on.next_back().map_or(first, |(i, _)| i);
+        Some((first, last))
+    }
+}
+
+/// "JUN 2025", "MAY — JUL 2025" or "DEC 2024 — FEB 2025", oldest first.
+fn range_label(oldest: &RailMonth, newest: &RailMonth) -> String {
+    let short = |m: &RailMonth| t(&format!("date.month_short_{}", m.month)).to_uppercase();
+    if (oldest.year, oldest.month) == (newest.year, newest.month) {
+        format!("{} {}", short(newest), newest.year)
+    } else if oldest.year == newest.year {
+        format!("{} — {} {}", short(oldest), short(newest), newest.year)
+    } else {
+        format!(
+            "{} {} — {} {}",
+            short(oldest),
+            oldest.year,
+            short(newest),
+            newest.year
+        )
+    }
+}
+
+enum RailRow {
+    Year {
+        year: i32,
+        y: f32,
+    },
+    Bar {
+        index: usize,
+        y: f32,
+    },
+    /// Every month from `first` on (the newest hidden year and older).
+    Older {
+        year: i32,
+        first: usize,
+        y: f32,
+    },
+}
+
+/// Lays out years top-down until `height` runs out; the rest collapse into
+/// one "{year} ↓" row.
+fn layout(months: &[RailMonth], height: f32) -> Vec<RailRow> {
+    let mut rows = Vec::new();
+    let mut y = FIRST_ROW;
+    let mut i = 0;
+    while i < months.len() {
+        let year = months[i].year;
+        let n = months[i..].iter().take_while(|m| m.year == year).count();
+        let block = (n as f32 * BAR_PITCH).max(YEAR_H);
+        let is_last = i + n == months.len();
+        // Keep room for the older row unless this is the last year.
+        let needed = block + if is_last { 0.0 } else { YEAR_GAP + OLDER_H };
+        if y + needed > height && !rows.is_empty() {
+            rows.push(RailRow::Older { year, first: i, y });
+            return rows;
+        }
+        rows.push(RailRow::Year { year, y });
+        for k in 0..n {
+            rows.push(RailRow::Bar {
+                index: i + k,
+                y: y + k as f32 * BAR_PITCH + (YEAR_H - BAR_H) / 2.0,
+            });
+        }
+        y += block + YEAR_GAP;
+        i += n;
+    }
+    rows
+}
+
+/// Vertical centre of month `index`'s row: its bar, or the "{year} ↓" row
+/// when it is collapsed.
+fn month_y(rows: &[RailRow], index: usize) -> Option<f32> {
+    rows.iter().find_map(|row| match *row {
+        RailRow::Bar { index: i, y } if i == index => Some(y + BAR_H / 2.0),
+        RailRow::Older { first, y, .. } if index >= first => Some(y + OLDER_H / 2.0),
+        _ => None,
+    })
+}
+
 impl LuminaApp {
+    /// The rail scrubs library-wide month offsets, so it shows only where
+    /// those offsets are the grid's: All Media, date sort, no query, no year
+    /// filter. That also hides it on the map (Places) and Duplicates.
+    pub(crate) fn timeline_rail_shown(&self) -> bool {
+        self.selection == AlbumSelection::AllLibrary
+            && self.sort.field == SortField::DateTaken
+            && self.search_query.is_empty()
+            && self.active_year.is_none()
+            && !self.rail.months.is_empty()
+    }
+
+    /// Grid indices of the rows on screen, from the scroll handle as
+    /// [`Self::grid_top_row`] reads it, never from what a frame drew. Before
+    /// the list's first layout (no viewport height) it is the top row.
+    pub(crate) fn grid_visible_items(&self) -> Range<usize> {
+        let Some(state) = self.grid_state.as_ref() else {
+            return 0..0;
+        };
+        let (offset_y, view_h) = {
+            let handle = state.scroll_handle.0.borrow();
+            let view_h = handle
+                .last_item_size
+                .map_or(0.0, |size| f32::from(size.item.height));
+            (f32::from(handle.base_handle.offset().y), view_h)
+        };
+        let row_h = self.row_height().max(1.0);
+        let cols = self.grid_columns.clamp(2, 8);
+        let total = self.rail.total;
+        let top = self.grid_top_row();
+        // Half a pixel of slack, as in `grid_top_row`.
+        let bottom = (((view_h - offset_y - 0.5) / row_h).ceil().max(0.0) as usize).max(top + 1);
+        (top * cols).min(total)..(bottom * cols).min(total)
+    }
+
+    /// The bubble's text: the months on screen.
+    pub(crate) fn timeline_bubble_label(&self) -> Option<String> {
+        let (newest, oldest) = self
+            .rail
+            .visible_months(self.sort.direction, &self.grid_visible_items())?;
+        Some(range_label(
+            &self.rail.months[oldest],
+            &self.rail.months[newest],
+        ))
+    }
+
+    /// Scrolls the grid so item `offset`'s row is at the top: offset /
+    /// columns × row height, written to the handle now (not a deferred
+    /// scroll) so this frame's rail lens already reads it. Clamped to the
+    /// last layout's range; the list's prepaint clamps it again.
+    fn scroll_grid_to_offset(&mut self, offset: usize, cx: &mut Context<Self>) {
+        let Some(state) = self.grid_state.as_ref() else {
+            return;
+        };
+        let cols = self.grid_columns.clamp(2, 8);
+        let mut y = (offset / cols) as f32 * self.row_height();
+        let handle = state.scroll_handle.0.borrow();
+        let base = &handle.base_handle;
+        let max = f32::from(base.max_offset().y);
+        if max > 0.0 {
+            y = y.min(max);
+        }
+        base.set_offset(point(base.offset().x, px(-y)));
+        cx.notify();
+    }
+
+    /// Scrolls to the first item of `year` in the current sort direction.
+    pub(crate) fn scroll_to_year(&mut self, year: i32, cx: &mut Context<Self>) {
+        if let Some(offset) = self.rail.year_offset(year, self.sort.direction) {
+            self.scroll_grid_to_offset(offset, cx);
+        }
+    }
+
     pub(crate) fn render_year_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.timeline_year_buckets.is_empty()
-            || self.selection == AlbumSelection::Duplicates
-            || self.map_shown()
-        {
+        if !self.timeline_rail_shown() {
             return Empty.into_any_element();
         }
+        let direction = self.sort.direction;
+        let rail = &self.rail;
+        // Unmeasured: lay out everything (the rows clip), then the measured
+        // height collapses the overflow on the next frame.
+        let height = match rail.height.get() {
+            h if h > 0.0 => h,
+            _ => f32::INFINITY,
+        };
+        let rows = layout(&rail.months, height);
+        let visible = rail.visible_months(direction, &self.grid_visible_items());
+        let current_year = visible.map(|(newest, _)| rail.months[newest].year);
+        let max = rail.months.iter().map(|m| m.count).max().unwrap_or(1) as f32;
 
-        let years: Vec<i32> = self.timeline_year_buckets.iter().map(|(y, _)| *y).collect();
+        // Lens from the newest to the oldest visible month; collapsed months
+        // land on the "{year} ↓" row.
+        let lens = visible.and_then(|(newest, oldest)| {
+            let top = month_y(&rows, newest)?;
+            let bottom = month_y(&rows, oldest)?;
+            let h = (bottom - top + BAR_H + 8.0).max(LENS_MIN_H);
+            let mid = (top + bottom) / 2.0;
+            Some(mid - h / 2.0..mid + h / 2.0)
+        });
+
+        let mut children: Vec<AnyElement> = Vec::with_capacity(rows.len() + 2);
+        children.push(
+            div()
+                .debug_selector(|| "timeline-label".to_string())
+                .absolute()
+                .left(px(10.0))
+                .top(px(LABEL_TOP))
+                .text_size(px(8.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::t3())
+                .child(t("timeline.label"))
+                .into_any_element(),
+        );
+        if let Some(lens) = &lens {
+            children.push(
+                div()
+                    .debug_selector(|| "timeline-lens".to_string())
+                    .absolute()
+                    .left(px(BAR_RIGHT + 4.0 - LENS_W))
+                    .top(px(lens.start))
+                    .w(px(LENS_W))
+                    .h(px(lens.end - lens.start))
+                    .rounded(px(5.0))
+                    .bg(theme::accent_soft())
+                    .border_1()
+                    .border_color(theme::accent())
+                    .into_any_element(),
+            );
+        }
+        for row in &rows {
+            children.push(match *row {
+                RailRow::Year { year, y } => {
+                    let is_current = current_year == Some(year);
+                    let label = t("timeline.scroll_to").replace("{year}", &year.to_string());
+                    div()
+                        .id(ElementId::NamedInteger("timeline-year".into(), year as u64))
+                        .debug_selector(move || format!("timeline-year-{year}"))
+                        .role(Role::Button)
+                        .aria_label(label.clone())
+                        .tooltip(theme::tooltip_label(label))
+                        .absolute()
+                        .left(px(10.0))
+                        .top(px(y))
+                        .h(px(YEAR_H))
+                        .flex()
+                        .items_center()
+                        .cursor_pointer()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(px(9.5))
+                        .text_color(if is_current { theme::t1() } else { theme::t3() })
+                        .hover(|s| s.text_color(theme::t1()))
+                        .child(year.to_string())
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.scroll_to_year(year, cx);
+                        }))
+                        .into_any_element()
+                }
+                RailRow::Bar { index, y } => {
+                    let m = rail.months[index];
+                    let offset = rail.offset(&m, direction);
+                    let on_screen = visible.is_some_and(|(a, b)| (a..=b).contains(&index));
+                    let color = if on_screen {
+                        theme::accent()
+                    } else if current_year == Some(m.year) {
+                        theme::rail_bar_current()
+                    } else {
+                        theme::rail_bar()
+                    };
+                    let (year, month) = (m.year, m.month);
+                    let width = (m.count as f32 / max * BAR_MAX).max(2.0);
+                    let label = t("timeline.month")
+                        .replace("{month}", &crate::i18n::month_year(year, month))
+                        .replace("{items}", &crate::i18n::items(m.count));
+                    let group: SharedString = format!("timeline-bar-{year}-{month}").into();
+                    // A taller hit target than the 4 px bar, so it is clickable.
+                    div()
+                        .id(ElementId::NamedInteger(
+                            "timeline-bar".into(),
+                            (year as u64) * 100 + month as u64,
+                        ))
+                        .debug_selector(move || format!("timeline-bar-{year}-{month:02}"))
+                        .group(group.clone())
+                        .role(Role::Button)
+                        .aria_label(label.clone())
+                        .tooltip(theme::tooltip_label(label))
+                        .absolute()
+                        .left(px(BAR_RIGHT - BAR_MAX))
+                        .top(px(y - (BAR_PITCH - BAR_H) / 2.0))
+                        .w(px(BAR_MAX))
+                        .h(px(BAR_PITCH))
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .cursor_pointer()
+                        .child(
+                            div()
+                                .debug_selector(move || {
+                                    format!("timeline-bar-fill-{year}-{month:02}")
+                                })
+                                .w(px(width))
+                                .h(px(BAR_H))
+                                .rounded(px(2.0))
+                                .bg(color)
+                                .group_hover(group, |s| s.bg(theme::accent_hover())),
+                        )
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.scroll_grid_to_offset(offset, cx);
+                        }))
+                        .into_any_element()
+                }
+                RailRow::Older { year, first, y } => {
+                    let on_screen = visible.is_some_and(|(_, oldest)| oldest >= first);
+                    let label = t("timeline.scroll_to_older").replace("{year}", &year.to_string());
+                    div()
+                        .id("timeline-older")
+                        .debug_selector(|| "timeline-older".to_string())
+                        .role(Role::Button)
+                        .aria_label(label.clone())
+                        .tooltip(theme::tooltip_label(label))
+                        .absolute()
+                        .left(px(10.0))
+                        .top(px(y))
+                        .h(px(OLDER_H))
+                        .flex()
+                        .items_center()
+                        .cursor_pointer()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(px(9.5))
+                        .text_color(if on_screen {
+                            theme::accent()
+                        } else {
+                            theme::t3()
+                        })
+                        .hover(|s| s.text_color(theme::t1()))
+                        .child(format!("{year} ↓"))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.scroll_to_year(year, cx);
+                        }))
+                        .into_any_element()
+                }
+            });
+        }
+
+        // The rail's real height, for the next layout. A change asks for one
+        // more frame (a refresh during a draw is ignored, so it waits).
+        let measured = rail.height.clone();
+        let measure = canvas(
+            move |bounds, window, _| {
+                let h = f32::from(bounds.size.height);
+                if (measured.get() - h).abs() > 0.5 {
+                    measured.set(h);
+                    window.on_next_frame(|window, _| window.refresh());
+                }
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .size_full();
+
+        let bubble = rail
+            .hovered
+            .then(|| self.timeline_bubble_label())
+            .flatten()
+            .map(|label| {
+                let top = lens
+                    .as_ref()
+                    .map_or(FIRST_ROW, |l| l.start)
+                    .min(height - 23.0);
+                div()
+                    .debug_selector(|| "timeline-bubble".to_string())
+                    .absolute()
+                    .right(px(YEAR_RAIL_WIDTH + 6.0))
+                    .top(px(top.max(0.0)))
+                    .h(px(23.0))
+                    .px(px(9.0))
+                    .flex()
+                    .items_center()
+                    .whitespace_nowrap()
+                    .bg(theme::bg_3())
+                    .rounded(theme::RADIUS_MD)
+                    .border_1()
+                    .border_color(theme::line_2())
+                    .shadow_md()
+                    .font_family(theme::FONT_MONO)
+                    .text_size(px(9.5))
+                    .text_color(theme::accent())
+                    .child(label)
+            });
 
         div()
-            .w(px(crate::views::grid::YEAR_RAIL_WIDTH))
+            .id("timeline-rail")
+            .debug_selector(|| "timeline-rail".to_string())
+            .relative()
+            .w(px(YEAR_RAIL_WIDTH))
             .h_full()
             .flex_shrink_0()
+            .bg(theme::bg_1())
             .border_l_1()
             .border_color(theme::line())
-            .flex()
-            .flex_col()
-            .items_center()
-            .pt_3()
-            .gap(px(18.0))
-            .children(years.into_iter().map(|year| {
-                let short_year = format!("'{:02}", year.rem_euclid(100));
-                let is_active = self.active_year == Some(year);
-                div()
-                    .id(ElementId::NamedInteger(
-                        "year-rail-item".into(),
-                        year as u64,
-                    ))
-                    .debug_selector(move || format!("year-rail-{year}"))
-                    .px_1p5()
-                    .py_0p5()
-                    .rounded(theme::RADIUS_SM)
-                    .bg(if is_active {
-                        theme::accent()
-                    } else {
-                        rgba(0x00000000)
-                    })
-                    .cursor_pointer()
-                    .text_size(px(11.0))
-                    .font_family(theme::FONT_MONO)
-                    .font_weight(if is_active {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .text_color(if is_active {
-                        theme::on_accent()
-                    } else {
-                        theme::t2()
-                    })
-                    .hover(move |s| {
-                        if !is_active {
-                            s.text_color(theme::t1())
-                        } else {
-                            s
-                        }
-                    })
-                    .child(short_year)
-                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                        if this.active_year == Some(year) {
-                            this.set_active_year(None, cx);
-                        } else {
-                            this.set_active_year(Some(year), cx);
-                        }
-                    }))
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                this.rail.hovered = *hovered;
+                cx.notify();
             }))
+            .child(measure)
+            // Rows clip to the rail, so they never paint over the status bar
+            // or a banner; the bubble sits outside the rail and is not clipped.
+            .child(
+                div()
+                    .absolute()
+                    .size_full()
+                    .overflow_hidden()
+                    .children(children),
+            )
+            .children(bubble)
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rail(counts: &[((i32, u32), usize)]) -> TimelineRail {
+        let mut r = TimelineRail::default();
+        r.set_counts(&counts.iter().copied().collect());
+        r
+    }
+
+    #[core::prelude::v1::test]
+    fn offsets_follow_the_sort_direction() {
+        // Undated items are timestamp 0: the 1970-01 bucket, oldest.
+        let r = rail(&[((2025, 6), 4), ((2024, 3), 2), ((1970, 1), 1)]);
+        let june = r.months[0];
+        assert_eq!((june.year, june.newer), (2025, 0), "newest first");
+        assert_eq!(r.year_offset(2024, SortDirection::Descending), Some(4));
+        assert_eq!(r.year_offset(2024, SortDirection::Ascending), Some(1));
+        assert_eq!(r.year_offset(1970, SortDirection::Ascending), Some(0));
+        assert_eq!(r.year_offset(2025, SortDirection::Ascending), Some(3));
+    }
+
+    #[core::prelude::v1::test]
+    fn visible_months_and_label() {
+        let r = rail(&[((2025, 7), 2), ((2025, 5), 2), ((2024, 12), 2)]);
+        let (newest, oldest) = r
+            .visible_months(SortDirection::Descending, &(1..4))
+            .unwrap();
+        assert_eq!(
+            range_label(&r.months[oldest], &r.months[newest]),
+            "MAY — JUL 2025"
+        );
+        let (newest, oldest) = r
+            .visible_months(SortDirection::Descending, &(3..6))
+            .unwrap();
+        assert_eq!(
+            range_label(&r.months[oldest], &r.months[newest]),
+            "DEC 2024 — MAY 2025"
+        );
+        let (newest, oldest) = r.visible_months(SortDirection::Ascending, &(0..1)).unwrap();
+        assert_eq!(
+            range_label(&r.months[oldest], &r.months[newest]),
+            "DEC 2024"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn overflow_years_collapse_into_one_row() {
+        let months: Vec<_> = (1970..=2026).map(|y| ((y, 1), 1)).collect();
+        let r = rail(&months);
+        let rows = layout(&r.months, 300.0);
+        let older: Vec<_> = rows
+            .iter()
+            .filter_map(|row| match row {
+                RailRow::Older { year, y, .. } => Some((*year, *y)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(older.len(), 1, "one older row");
+        assert!(older[0].1 + OLDER_H <= 300.0, "it fits");
+        let shown = rows
+            .iter()
+            .filter(|row| matches!(row, RailRow::Year { .. }))
+            .count();
+        assert_eq!(
+            older[0].0,
+            2026 - shown as i32,
+            "it names the newest hidden year"
+        );
     }
 }

@@ -356,11 +356,12 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
         app.inspector_open = false;
         app.selected_item = None;
 
-        // The year rail only takes space when the timeline has buckets.
+        // The timeline rail only takes space when it shows (months exist,
+        // All Media, date sort, no query).
         app.grid_columns = 2;
         let without_rail = grid_metrics(1280.0, 230.0, true, false, None, 2);
         assert_eq!(app.row_height(), without_rail.row_height);
-        app.timeline_year_buckets = vec![(2024, 3)];
+        app.rail.set_counts(&[((2024, 3), 3)].into_iter().collect());
         let with_rail = grid_metrics(1280.0, 230.0, true, true, None, 2);
         assert_eq!(app.row_height(), with_rail.row_height);
         assert!(with_rail.row_height < without_rail.row_height);

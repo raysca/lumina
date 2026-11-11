@@ -1,4 +1,4 @@
-//! Guards around album membership (plan 5, Task A3 review): the year rail
+//! Guards around album membership (plan 5, Task A3 review): a year filter
 //! never shows the library under an album, Remove records only what it
 //! removed, and Trash offers no Add to Album.
 
@@ -17,7 +17,7 @@ fn members(engine: &lumina_core::LuminaEngine, album: i64) -> Vec<MediaId> {
 }
 
 #[core::prelude::v1::test]
-fn year_rail_in_album_scopes_to_library_and_back_returns() {
+fn palette_year_in_album_scopes_to_library_and_back_returns() {
     let (dir, engine) = seed_library("album_year_scope", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 1);
     let mut cx = crate::tests::TestApp::single();
@@ -25,7 +25,9 @@ fn year_rail_in_album_scopes_to_library_and_back_returns() {
     let year = view.update(vcx, |app, _| app.timeline_year_buckets[0].0);
 
     click(vcx, leak(format!("album-row-{}", album.id)));
-    click(vcx, leak(format!("year-rail-{year}")));
+    // The rail is hidden in an album; the palette's year target filters.
+    view.update(vcx, |app, cx| app.set_active_year(Some(year), cx));
+    render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(
             (app.selection.clone(), app.active_year),

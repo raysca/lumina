@@ -1079,6 +1079,7 @@ impl LuminaApp {
                     Some(((year.parse().ok()?, month.parse().ok()?), b.item_count))
                 })
                 .collect();
+            self.rail.set_counts(&self.month_header.counts);
             let buckets = engine.get_timeline_buckets("year");
             self.timeline_year_buckets = buckets
                 .into_iter()
