@@ -530,6 +530,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "viewer.edit_tooltip" => "Edit (E)",
         "viewer.share_tooltip" => "Share",
         "viewer.info_tooltip" => "Info (I)",
+        "viewer.prev_tooltip" => "Previous ([)",
+        "viewer.next_tooltip" => "Next (])",
         "jobs.export_running" => "An export is already running",
         "export.videos_as_originals_one" => "{n} video exported as the original",
         "export.videos_as_originals_other" => "{n} videos exported as originals",

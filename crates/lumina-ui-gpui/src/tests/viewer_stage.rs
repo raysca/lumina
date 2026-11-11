@@ -880,3 +880,57 @@ fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- Stage chrome (Design 02 Task 3) --------------------------------------
+
+#[core::prelude::v1::test]
+fn viewer_nav_buttons_sit_26px_from_stage_edges() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_nav_edges");
+    let px = gpui::px;
+
+    let check = |vcx: &mut VisualTestContext, stage_right: f32, case: &str| {
+        let prev = vcx.debug_bounds("viewer-prev").expect("prev paints");
+        let next = vcx.debug_bounds("viewer-next").expect("next paints");
+        let viewport = vcx.debug_bounds("viewer-viewport").expect("viewport");
+        assert_eq!(
+            (prev.left(), next.right()),
+            (px(26.0), px(stage_right - 26.0)),
+            "{case}: the arrows sit 26 from the stage edges: prev={prev:?} next={next:?}"
+        );
+        for b in [prev, next] {
+            assert_eq!(b.size, gpui::size(px(40.0), px(40.0)), "{case}: 40x40");
+            assert!(
+                (b.center().y - viewport.center().y).abs() <= px(0.5),
+                "{case}: centred on the viewport: {b:?} viewport={viewport:?}"
+            );
+        }
+    };
+    check(vcx, 1260.0, "panel docked");
+
+    view.update(vcx, |app, cx| {
+        app.inspector_open = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+    check(vcx, 1600.0, "panel closed");
+
+    // Immersive: the panel floats over the stage, so Next moves left of it.
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.is_immersive_fullscreen = true;
+        app.immersive_hud_visible = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let panel = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("panel floats");
+    let next = vcx.debug_bounds("viewer-next").expect("next paints");
+    assert_eq!(
+        panel.left() - next.right(),
+        px(26.0),
+        "immersive: Next keeps 26 from the floating panel: next={next:?} panel={panel:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

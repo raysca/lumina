@@ -44,7 +44,8 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     // The stage centres frame + transport, so a height-limited frame gets
     // 12px above it (the same as frame to transport) and 12px of slack below.
     const TOP_GAP: f32 = 24.0;
-    // Room for the 40px prev/next buttons 40px from each edge.
+    // Room for the 40px prev/next buttons 26px from each edge, plus a 14px
+    // gap to the frame.
     const NAV_ROOM: f32 = 160.0;
     let is_video = this
         .selected_item
@@ -71,6 +72,38 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     let max_h = (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - TRANSPORT_BLOCK).max(1.0);
     let w = max_w.min(max_h * aspect);
     Some((w, w / aspect))
+}
+
+/// Corner radius of the photo at Fit (Design 02 "Detail").
+const PHOTO_RADIUS: f32 = 3.0;
+
+/// The photo's drop shadow (0 16 48) under the contain-fitted picture. The
+/// media element fills the letterboxed canvas, so a box shadow on it would
+/// outline the canvas; this paints under the fitted rect, measured in the
+/// same frame. Fit only: a zoomed photo overflows the stage, which clips it.
+fn photo_shadow(image_size: Size<DevicePixels>) -> impl IntoElement {
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            if image_size.width.0 <= 0 || image_size.height.0 <= 0 {
+                return;
+            }
+            let picture = ObjectFit::Contain.get_bounds(bounds, image_size);
+            window.paint_drop_shadows(
+                picture,
+                Corners::all(px(PHOTO_RADIUS)),
+                &[BoxShadow {
+                    color: theme::media_scrim().into(),
+                    offset: point(px(0.0), px(16.0)),
+                    blur_radius: px(48.0),
+                    spread_radius: px(0.0),
+                    inset: false,
+                }],
+            );
+        },
+    )
+    .absolute()
+    .size_full()
 }
 
 pub struct ViewerViewport;
@@ -242,10 +275,14 @@ impl ViewerViewport {
                         // Img fills the scaled wrapper (which is scale x the
                         // canvas) while keeping ObjectFit::Contain. At Fit the
                         // Img fills the canvas itself.
+                        let image_size = render_img.size(0);
                         let media = img(render_img)
                             .id("viewer-media")
                             .debug_selector(|| "viewer-media".to_string())
                             .object_fit(ObjectFit::Contain)
+                            // GPUI rounds the fitted picture, not the
+                            // letterboxed element.
+                            .when(!is_video, |m| m.rounded(px(PHOTO_RADIUS)))
                             .on_click(cx.listener(|this, e: &ClickEvent, _w, cx| {
                                 // The element fills the canvas; only the
                                 // visible media (not its letterbox) toggles.
@@ -278,10 +315,12 @@ impl ViewerViewport {
                                 .into_any_element()
                         } else {
                             div()
+                                .relative()
                                 .size_full()
                                 .flex()
                                 .items_center()
                                 .justify_center()
+                                .when(!is_video, |fit| fit.child(photo_shadow(image_size)))
                                 // Fit fills the canvas (contain), enlarging
                                 // small media like Photos does.
                                 .child(media.size_full())

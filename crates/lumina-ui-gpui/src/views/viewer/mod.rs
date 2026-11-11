@@ -137,7 +137,7 @@ impl MediaViewer {
                             .justify_center()
                             .child(ViewerViewport::render(this, cx))
                             .when(show_chrome && !editing && !presenting, |frame| {
-                                frame.children(stage_controls::render_nav_buttons(cx))
+                                frame.children(stage_controls::render_nav_buttons(this, cx))
                             }),
                     )
                     .when(show_chrome && !is_video && !presenting, |stage| {

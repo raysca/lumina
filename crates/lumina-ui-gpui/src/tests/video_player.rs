@@ -210,17 +210,17 @@ fn video_top_bar_has_no_edit_and_actions_live_in_the_right_click_menu() {
 }
 
 #[core::prelude::v1::test]
-fn prev_next_sit_40px_inside_the_frame_and_centred_on_it() {
+fn prev_next_sit_26px_from_the_stage_edges_and_centred_on_the_frame() {
     let mut cx = crate::tests::TestApp::single();
     let (_dir, _view, vcx) = open_video(&mut cx);
 
-    // V3Video: 40px from the window edges, centred on the (narrower) frame.
+    // Design 02: 26px from the stage edges, centred on the (narrower) frame.
     let frame = bounds(vcx, "viewer-viewport");
     let prev = bounds(vcx, "viewer-prev");
     let next = bounds(vcx, "viewer-next");
     let window_w = vcx.update(|window, _| window.viewport_size().width);
-    assert_eq!(f32::from(prev.left()), 40.0);
-    assert_eq!(f32::from(window_w - next.right()), 40.0);
+    assert_eq!(f32::from(prev.left()), 26.0);
+    assert_eq!(f32::from(window_w - next.right()), 26.0);
     for b in [prev, next] {
         assert!(
             (center_y(b) - center_y(frame)).abs() < 1.0,
@@ -343,6 +343,18 @@ fn video_frame_is_1040_wide_with_the_transport_right_below() {
         (8.0..=16.0).contains(&gap),
         "the transport sits right below the video, got a {gap}px gap"
     );
+    // The arrows centre on the video, beside it and above the transport.
+    for arrow in ["viewer-prev", "viewer-next"] {
+        let b = bounds(vcx, arrow);
+        assert!(
+            !b.intersects(&transport) && !b.intersects(&media),
+            "{arrow} must clear the video and its transport: {b:?} media={media:?} transport={transport:?}"
+        );
+        assert!(
+            (b.center().y - media.center().y).abs() <= gpui::px(1.0),
+            "{arrow} centres on the video: {b:?} media={media:?}"
+        );
+    }
     assert!(
         (f32::from(transport.left() - media.left())).abs() < 1.0
             && (size(transport).0 - w).abs() < 1.0,

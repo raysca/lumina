@@ -155,22 +155,44 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
     )
 }
 
-/// Round previous/next buttons centred on the stage's left and right edges.
-/// They call the same navigation as [ and ] (←/→ seek on video).
-pub fn render_nav_buttons(cx: &mut Context<LuminaApp>) -> [AnyElement; 2] {
+/// Gap from the previous/next buttons to the stage edges.
+const NAV_INSET: f32 = 26.0;
+
+/// Round previous/next buttons 26 from the stage's left and right edges,
+/// vertically centred on the media frame. They call the same navigation as
+/// [ and ] (←/→ seek on video).
+pub fn render_nav_buttons(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> [AnyElement; 2] {
+    // Immersive, the info panel floats over the stage's right edge.
+    let right = if this.is_immersive_fullscreen && super::info_panel_shown(this) {
+        super::INFO_PANEL_WIDTH + NAV_INSET
+    } else {
+        NAV_INSET
+    };
     [
-        nav_button("viewer-prev", "Previous ([)", Icon::ChevronLeft, -1, cx)
-            .left(px(40.0))
-            .into_any_element(),
-        nav_button("viewer-next", "Next (])", Icon::ChevronRight, 1, cx)
-            .right(px(40.0))
-            .into_any_element(),
+        nav_button(
+            "viewer-prev",
+            t("viewer.prev_tooltip"),
+            Icon::ChevronLeft,
+            -1,
+            cx,
+        )
+        .left(px(NAV_INSET))
+        .into_any_element(),
+        nav_button(
+            "viewer-next",
+            t("viewer.next_tooltip"),
+            Icon::ChevronRight,
+            1,
+            cx,
+        )
+        .right(px(right))
+        .into_any_element(),
     ]
 }
 
 fn nav_button(
     id: &'static str,
-    tooltip: &'static str,
+    label: String,
     icon: Icon,
     delta: isize,
     cx: &mut Context<LuminaApp>,
@@ -178,22 +200,24 @@ fn nav_button(
     div()
         .id(id)
         .debug_selector(move || id.to_string())
-        .tooltip(theme::tooltip_label(tooltip))
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(label))
         .occlude()
         .absolute()
         .top(relative(0.5))
         .mt(px(-20.0))
         .size(px(40.0))
         .rounded_full()
-        .bg(theme::bg_0())
+        .bg(theme::bg_float())
         .border_1()
-        .border_color(theme::line())
-        .hover(|s| s.bg(theme::bg_2()))
+        .border_color(theme::line_2())
+        .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(icon, px(16.0), theme::t2()))
+        .child(render_icon(icon, px(16.0), theme::t1()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.navigate_selection(delta, cx);
         }))
