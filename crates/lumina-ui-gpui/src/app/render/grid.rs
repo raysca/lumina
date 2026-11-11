@@ -409,7 +409,13 @@ impl LuminaApp {
             path,
             primary,
             secondary,
-        } = if !search_terms.is_empty() {
+        } = if let Some((title, body)) = self.videos_empty_copy() {
+            // The chip row's Clear all (or All clips) is the way back.
+            EmptyCopy {
+                primary: (!self.videos_4k_active()).then(show_all).flatten(),
+                ..copy(Icon::Video, title, body)
+            }
+        } else if !search_terms.is_empty() {
             // The chips are the only actions: removing one widens the search.
             copy(
                 Icon::Search,

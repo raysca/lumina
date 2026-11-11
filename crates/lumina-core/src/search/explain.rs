@@ -145,6 +145,9 @@ impl StructuredQuery {
         if let Some(edited) = self.is_edited {
             out.push(if edited { "Edited" } else { "Not edited" }.into());
         }
+        if let Some(uhd) = self.is_4k {
+            out.push(if uhd { "4K" } else { "Not 4K" }.into());
+        }
         if let Some(tagged) = self.has_tag {
             out.push(if tagged { "Tagged" } else { "Untagged" }.into());
         }
@@ -244,6 +247,7 @@ mod tests {
             flag: _,
             within: _,
             is_edited: _,
+            is_4k: _,
         } = StructuredQuery::default();
 
         assert!(
@@ -284,6 +288,7 @@ mod tests {
             ("flag", "is:reject", "Rejects"),
             ("flag", "is:unflagged", "Unflagged"),
             ("is_edited", "is:edited", "Edited"),
+            ("is_4k", "is:4k", "4K"),
             (
                 "within",
                 "within:34.5,135,35.5,136",

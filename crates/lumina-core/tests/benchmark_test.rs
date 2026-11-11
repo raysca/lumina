@@ -482,6 +482,10 @@ fn benchmark_scale_and_gates() {
         ("is:edited", 450),
         ("-is:edited", 0),
         ("-is:edited", 450),
+        // The Videos 4K chip: every seeded row is 3840 wide, so all ~2,500
+        // clips match, first and a deep page (the sort-every-match worst case).
+        ("is:video is:4k", 0),
+        ("is:video is:4k", 2_000),
         // `within:`: a rare box (~10 rows), the dense home city (~1,700
         // rows) on page 0 and a deep page, an old dense trip (~2,500 rows,
         // all older than every other row), and the whole world.
@@ -902,6 +906,23 @@ fn benchmark_scale_and_gates() {
     assert!(
         totals_ms < totals_budget,
         "view_totals over Videos must load in < {totals_budget} ms (got {totals_ms:.2} ms)"
+    );
+    // The same totals under the 4K chip, over its search WHERE.
+    let uhd = lumina_core::ViewScope::Search("is:video is:4k".into());
+    let uhd_start = Instant::now();
+    let uhd_totals = catalog.view_totals(&uhd).expect("4K totals must load");
+    let uhd_ms = uhd_start.elapsed().as_secs_f64() * 1000.0;
+    assert_eq!(
+        uhd_totals.count, totals.count,
+        "every seeded clip is 3840 wide, so the 4K totals are the Videos totals"
+    );
+    println!(
+        "Videos - view_totals 4K: {} clips in {uhd_ms:.2} ms (< {totals_budget} ms)",
+        uhd_totals.count
+    );
+    assert!(
+        uhd_ms < totals_budget,
+        "view_totals under the 4K chip must load in < {totals_budget} ms (got {uhd_ms:.2} ms)"
     );
 
     // Stacks: 100k more rows in groups of ten, 10 s apart. Each group is

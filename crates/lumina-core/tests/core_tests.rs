@@ -6651,6 +6651,85 @@ fn is_edited_matches_items_with_edits_or_rotation() {
 }
 
 #[test]
+fn is_4k_matches_long_edge_3840() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let sized = |path: &str, width: u32, height: u32| MediaItem {
+        width,
+        height,
+        ..sample_media_item(path, MediaType::Video, 1, None, None)
+    };
+    catalog
+        .insert_or_update_batch(&[
+            sized("/v/landscape.mov", 3840, 2160),
+            sized("/v/portrait.mov", 2160, 3840),
+            sized("/v/hd.mov", 1920, 1080),
+            sized("/v/almost.mov", 3839, 2160),
+        ])
+        .expect("insert items");
+
+    let names = |text: &str| -> Vec<String> {
+        let mut names: Vec<String> = catalog
+            .search_structured(&StructuredQuery::parse(text), 50, 0)
+            .expect("search runs")
+            .into_iter()
+            .map(|m| m.file_name)
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        names("is:4k"),
+        ["landscape.mov", "portrait.mov"],
+        "is:4k matches a long edge of 3840 or more, either orientation"
+    );
+    assert_eq!(
+        names("-is:4k"),
+        ["almost.mov", "hd.mov"],
+        "-is:4k matches only items whose long edge is under 3840"
+    );
+    assert_eq!(
+        names("IS:4K is:video"),
+        ["landscape.mov", "portrait.mov"],
+        "the token is case-insensitive like the other is: values"
+    );
+    assert_eq!(StructuredQuery::parse("is:4k").explain(), ["4K"]);
+    assert_eq!(StructuredQuery::parse("-is:4k").explain(), ["Not 4K"]);
+
+    // A saved-search album compiles through the same parser.
+    let mut album: Vec<String> = catalog
+        .query_smart_album(&query_rule_album("is:4k"), 50, 0)
+        .expect("a saved search accepts is:4k")
+        .into_iter()
+        .map(|m| m.file_name)
+        .collect();
+    album.sort();
+    assert_eq!(album, ["landscape.mov", "portrait.mov"]);
+
+    // An expression filter on the row, not a new access path: adding it
+    // leaves the plan of the query without it unchanged, alone (the
+    // timeline walk) and beside `is:video` (the Videos chip's query).
+    let plan = |text: &str| {
+        let (sql, params) = StructuredQuery::parse(text).synthesize_query_sorted(
+            50,
+            0,
+            lumina_core::SortSpec::default(),
+        );
+        catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ")
+    };
+    for (with, without) in [("is:4k", ""), ("is:video is:4k", "is:video")] {
+        let (with_plan, without_plan) = (plan(with), plan(without));
+        println!("EXPLAIN `{with}`: {with_plan}");
+        assert_eq!(
+            with_plan, without_plan,
+            "`{with}` must filter the rows of `{without:?}`'s plan, not change it"
+        );
+    }
+}
+
+#[test]
 fn migration_adds_rotation_index_idempotently() {
     let tmp_dir = std::env::temp_dir().join(format!(
         "lumina_rotation_index_migration_{}",

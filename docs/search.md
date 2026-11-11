@@ -36,6 +36,7 @@ spaces. Every part must match (AND). The grammar lives in
 | `is:unlabeled`, `color:none` (`color:0`) | No color label |
 | `is:pick`, `is:reject`, `is:unflagged` | Culling flag: picked, rejected, or neither |
 | `is:edited` | Rotated, cropped, exposure-adjusted or auto-enhanced in Lumina |
+| `is:4k` | Long edge (the larger of width and height) of 3840 pixels or more, in either orientation. Photos count too; add `is:video` for clips |
 | `has:location`, `has:tag`, `has:color`, `has:rating` | Has GPS, any tag, any color label, any rating |
 | `within:34.9,135.6,35.1,135.9` | GPS inside a box, see below |
 
@@ -70,6 +71,7 @@ A leading `-` excludes:
 - `-tag:work` hides items tagged `work` or a sub-keyword such as `work/clients`.
 - `-is:favorite` shows only non-favorites.
 - `-is:edited` shows only items with no rotation or edit.
+- `-is:4k` shows only items whose long edge is under 3840 pixels.
 - `-has:location`, `-has:tag`, `-has:color` show items without GPS, tags or a
   color label.
 
@@ -107,6 +109,7 @@ nothing is dimmed.
 | Show Unrated | `is:unrated` |
 | Show Color: Red … Purple | `color:red` … `color:purple` |
 | Show Unlabeled | `is:unlabeled` |
+| Filter: 4K Videos | `is:video is:4k` (see below) |
 
 - Running a quick filter whose token is already in the query (or one with the
   same effect, such as `is:fav`) removes it.
@@ -118,6 +121,11 @@ nothing is dimmed.
 - Clear Filters removes every filter token, negated and not-understood ones
   included, and keeps free text and `-word` exclusions. It is listed only
   when the query has a filter.
+- Filter: 4K Videos, and the 4K chip above the Videos view, set the search
+  to `is:video is:4k`. The page keeps the Videos title, "clips" counts and
+  totals, and the Videos chip row (All clips, 4K, Clear all) for exactly
+  that query. Running it again, All clips, Clear all or Clear Filters
+  returns to Videos.
 - The palette shows 8 rows, so typing "filter" alone does not list the color
   filters or Clear Filters; type "color red" or "clear filters".
 

@@ -101,6 +101,8 @@ pub(crate) fn filter_label(token: &str) -> Option<(String, Icon, ChipFamily)> {
             "raw" => (t("filter.raw"), Icon::FileImage, Other),
             _ => (t("filter.photos"), Icon::Image, Other),
         }
+    } else if p.is_4k.is_some() {
+        (explained(), Icon::Video, Other)
     } else if p.is_edited.is_some() {
         (explained(), Icon::Pencil, Other)
     } else if p.is_favorite.is_some() {

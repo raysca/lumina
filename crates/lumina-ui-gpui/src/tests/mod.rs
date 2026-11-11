@@ -72,6 +72,7 @@ mod thumbnails;
 mod toasts;
 mod ui_automation;
 mod ui_thread;
+mod video_filters;
 mod video_player;
 mod video_scrub;
 mod video_tiles;

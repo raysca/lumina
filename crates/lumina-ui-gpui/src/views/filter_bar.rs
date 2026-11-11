@@ -180,7 +180,13 @@ impl LuminaApp {
     /// the match count and Clear all. None without filter tokens.
     pub(crate) fn render_filter_bar(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         // On the Search screen the query bar shows the chips.
-        if !query_has_filters(&self.search_query) || self.search_screen_shown() {
+        if self.search_screen_shown() {
+            return None;
+        }
+        if self.videos_view() {
+            return Some(self.render_videos_filter_bar(cx));
+        }
+        if !query_has_filters(&self.search_query) {
             return None;
         }
         let menu_here = self.filter_menu.is_some() && !self.filter_menu_under_header();

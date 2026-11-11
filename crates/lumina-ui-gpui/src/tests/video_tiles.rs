@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 /// `n` square 1000x1000 clips beside the seed's photo, as rows only (no
 /// file, so no watcher rescan resets them). Clip 0 has a long title.
-fn library_with_clips(
+pub(super) fn library_with_clips(
     prefix: &str,
     n: usize,
 ) -> (
@@ -45,7 +45,7 @@ fn bounds(vcx: &mut VisualTestContext, selector: String) -> Bounds<Pixels> {
         .unwrap_or_else(|| panic!("{selector} must be painted"))
 }
 
-fn open_videos(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
+pub(super) fn open_videos(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
     view.update(vcx, |app, cx| {
         app.grid_columns = 4;
         app.select_album(AlbumSelection::System(SystemAlbum::Videos), cx)

@@ -18,6 +18,7 @@ use lumina_core::{
 use crate::app::LuminaApp;
 use crate::i18n::t;
 use crate::views::sidebar::AlbumSelection;
+use crate::views::video_filters::is_videos_scope;
 
 #[cfg(test)]
 thread_local! {
@@ -144,15 +145,16 @@ impl ViewQuery {
         Some(engine.search_query_count(&tokens.join(" ")))
     }
 
-    /// Count, duration, size and month counts of the Videos view, for its
-    /// header and month band; `None` for every other view (including a
-    /// search or year picked while Videos is selected), which never shows
-    /// them.
+    /// Count, duration, size and month counts of the Videos view (with or
+    /// without its 4K chip), for its header and month band; `None` for every
+    /// other view, which never shows them. Read over the view's own WHERE
+    /// (`layout_scope`), so they total exactly the rows shown.
     pub(crate) fn totals(&self, engine: &LuminaEngine) -> Option<ViewTotals> {
-        let scope = self.layout_scope()?;
-        matches!(scope, ViewScope::System(SystemAlbum::Videos))
-            .then(|| engine.view_totals(&scope))
-            .flatten()
+        let key = &self.key;
+        if !is_videos_scope(&key.selection, &key.query, key.year) {
+            return None;
+        }
+        engine.view_totals(&self.layout_scope()?)
     }
 
     /// The view's items at `range`, in view order.
@@ -279,6 +281,10 @@ impl ActiveView {
 impl LuminaApp {
     /// The active view's name: the page title and the viewer's Back label.
     pub(crate) fn view_label(&self) -> String {
+        // The 4K chip's search still reads as Videos.
+        if self.videos_4k_active() {
+            return SystemAlbum::Videos.title().into();
+        }
         match &self.selection {
             AlbumSelection::AllLibrary => t("view.all_media"),
             AlbumSelection::System(album) => album.title().into(),
@@ -299,12 +305,10 @@ impl LuminaApp {
     }
 
     /// The Videos view proper: Videos selected with no search or year over
-    /// it (those show the whole library's matches). Its counts read
-    /// "clips".
+    /// it (those show the whole library's matches), or its 4K chip's
+    /// search. Its counts read "clips".
     pub(crate) fn videos_view(&self) -> bool {
-        self.selection == AlbumSelection::System(SystemAlbum::Videos)
-            && self.search_query.is_empty()
-            && self.active_year.is_none()
+        is_videos_scope(&self.selection, &self.search_query, self.active_year)
     }
 
     /// A count as this view names its items: "N clips" in Videos, else

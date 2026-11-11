@@ -64,6 +64,8 @@ pub enum CommandId {
     ViewerZoom(ViewerZoomPreset),
     /// Quick filter: toggles this query token in the search (D8).
     QuickFilter(&'static str),
+    /// Filter: 4K Videos: the Videos view's 4K chip.
+    Videos4k,
     /// Removes every filter token from the search, keeping its text.
     ClearFilters,
     /// Opens the Add filter menu under the header's Filter button.
@@ -182,7 +184,7 @@ impl Command {
             ZoomOutGrid => Icon::Minus,
             ViewerZoom(ViewerZoomPreset::Fit) => Icon::Minimize,
             ViewerZoom(_) => Icon::Maximize,
-            QuickFilter(_) => Icon::Search,
+            QuickFilter(_) | Videos4k => Icon::Search,
             ClearFilters => Icon::X,
             AddFilter => Icon::SlidersHorizontal,
             Rate(0) | RateMenu => Icon::Star,
@@ -729,6 +731,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.filter_videos",
             shortcut: "",
             keywords: "filter movies clips",
+        },
+        Command {
+            id: CommandId::Videos4k,
+            key: "command.filter_videos_4k",
+            shortcut: "",
+            keywords: "filter movies clips uhd 2160p resolution",
         },
         // These quick filters mirror the search header's Narrow by chips.
         Command {
@@ -1502,6 +1510,7 @@ impl LuminaApp {
             CommandId::ZoomOutGrid => self.zoom_out_grid(cx),
             CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),
             CommandId::QuickFilter(token) => self.toggle_quick_filter(token, cx),
+            CommandId::Videos4k => self.toggle_videos_4k(cx),
             CommandId::ClearFilters => self.clear_quick_filters(cx),
             CommandId::AddFilter => self.open_filter_menu(false, cx),
             CommandId::Rate(rating) => {

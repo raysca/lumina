@@ -355,8 +355,11 @@ impl LuminaApp {
     /// Whether the sidebar row for `selection` shows as active. While a
     /// query shows no row does: the results span the library, even though
     /// the selection stays `AllLibrary` for Back and navigation.
+    /// The 4K chip's search keeps Videos highlighted: it is a Videos chip.
     pub(crate) fn sidebar_highlights(&self, selection: &AlbumSelection) -> bool {
-        self.search_query.is_empty() && &self.selection == selection
+        (self.search_query.is_empty() && &self.selection == selection)
+            || (*selection == AlbumSelection::System(lumina_core::SystemAlbum::Videos)
+                && self.videos_4k_active())
     }
 
     /// Runs a quick filter: toggles its token in the query (D8).
@@ -365,8 +368,12 @@ impl LuminaApp {
         self.set_search_query(&query, cx);
     }
 
-    /// Removes every filter token from the query, keeping its text.
+    /// Removes every filter token from the query, keeping its text. Over
+    /// the Videos 4K chip it returns to Videos, as the row's Clear all does.
     pub(crate) fn clear_quick_filters(&mut self, cx: &mut Context<Self>) {
+        if self.videos_4k_active() {
+            return self.show_all_clips(cx);
+        }
         let query = clear_query_filters(&self.search_query);
         self.set_search_query(&query, cx);
     }

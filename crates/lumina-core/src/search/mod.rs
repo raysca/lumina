@@ -56,7 +56,15 @@ pub struct StructuredQuery {
     /// auto-enhance). `Some(false)` from `-is:edited`.
     #[serde(default)]
     pub is_edited: Option<bool>,
+    /// `is:4k`: long edge (`MAX(width, height)`) of at least
+    /// [`UHD_LONG_EDGE`] pixels, either orientation. `Some(false)` from
+    /// `-is:4k`.
+    #[serde(default)]
+    pub is_4k: Option<bool>,
 }
+
+/// The long edge, in pixels, from which `is:4k` counts an item as 4K (UHD).
+pub const UHD_LONG_EDGE: u32 = 3840;
 
 /// How the free-text FTS match is written into the WHERE clause.
 #[derive(Clone, Copy)]
@@ -277,6 +285,14 @@ impl StructuredQuery {
                 "m.id {op} (SELECT media_id FROM media_edits \
                  UNION ALL SELECT id FROM media_items WHERE rotation_quarters != 0)"
             ));
+        }
+
+        // An expression on the row with no index: it filters whatever access
+        // path the other clauses pick (the timeline walk when alone).
+        if let Some(uhd) = self.is_4k {
+            let op = if uhd { ">=" } else { "<" };
+            clauses.push(format!("MAX(m.width, m.height) {op} ?"));
+            params.push((UHD_LONG_EDGE as i64).into());
         }
 
         if let Some(has_tag) = self.has_tag {
