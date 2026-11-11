@@ -1110,7 +1110,9 @@ impl LuminaApp {
     }
 
     /// Selects exactly `range` (a Mosaic day), its first item as the
-    /// selected item and anchor, and refreshes the batch summary.
+    /// selected item and anchor, and refreshes the batch summary. The item
+    /// goes through `select_item_internal`, so open tag, caption and batch
+    /// inputs and a draft for another photo are dropped.
     pub(crate) fn select_range(&mut self, range: std::ops::Range<usize>, cx: &mut Context<Self>) {
         if range.is_empty() || self.similar_shots_shown() || self.map_shown() {
             return;
@@ -1119,10 +1121,11 @@ impl LuminaApp {
         self.selected_indices.extend(range.clone());
         self.selected_index = Some(range.start);
         self.selection_anchor = Some(range.start);
-        if let Some(item) = self.navigation_item(range.start) {
-            self.selected_item = Some(item);
+        match self.navigation_item(range.start) {
+            // Also refreshes the batch summary.
+            Some(item) => self.select_item_internal(item, cx),
+            None => self.update_batch_summary(),
         }
-        self.update_batch_summary();
         self.refresh_selected_tags();
         self.schedule_session_save(cx);
         cx.notify();

@@ -140,8 +140,28 @@ impl LuminaApp {
             return;
         };
         if let Some(range) = self.mosaic_day_range(index) {
-            self.select_range(range, cx);
+            self.select_mosaic_range(range, cx);
         }
+    }
+
+    /// A header's Select and ⌘K Select Day. Does nothing in the full-screen
+    /// viewer (the photo shown must stay the selected one) or while the
+    /// layout is behind the catalog (a scan, the cool-down): its day ranges
+    /// may then name another day's items. The next layout makes it work.
+    pub(crate) fn select_mosaic_range(&mut self, range: Range<usize>, cx: &mut Context<Self>) {
+        if self.is_fullscreen_viewer || !self.mosaic_layout_current() {
+            return;
+        }
+        self.select_range(range, cx);
+    }
+
+    /// The built layout is this view's at the catalog's current revision.
+    pub(crate) fn mosaic_layout_current(&self) -> bool {
+        let (Some(engine), Some(built)) = (self.grid_state.as_ref(), self.mosaic.built.as_ref())
+        else {
+            return false;
+        };
+        built.key == self.view_key() && built.revision == engine.engine.data_revision()
     }
 
     /// Width of the Mosaic's content: the center pane less the row padding.

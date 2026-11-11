@@ -1094,7 +1094,10 @@ impl LuminaApp {
             CommandId::ShowGrid => self.grid_state.is_some() && !self.view_mode_on().1,
             CommandId::ShowMosaic => self.grid_state.is_some() && !self.view_mode_on().0,
             CommandId::SelectDay => {
-                self.mosaic_shown() && self.sort.field == lumina_core::SortField::DateTaken
+                self.mosaic_shown()
+                    && self.sort.field == lumina_core::SortField::DateTaken
+                    && !self.is_fullscreen_viewer
+                    && self.mosaic_layout_current()
             }
             CommandId::ShowOnMap => !self.map_blocked() && self.selected_item_location().is_some(),
             CommandId::DeleteRejected => {

@@ -728,3 +728,111 @@ fn place_label_joins_city_and_country_code() {
     );
     assert_eq!(place_label(&("Lisbon".into(), None)), "Lisbon");
 }
+
+#[core::prelude::v1::test]
+fn select_day_does_nothing_in_the_full_screen_viewer() {
+    use crate::app::command_palette::CommandId;
+    let (dir, engine) = day_library("mosaic_select_viewer");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = day_app(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_index(4, cx);
+        let item = app.selected_item.clone().expect("item 4 selected");
+        app.open_viewer(item, cx);
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        assert!(app.is_fullscreen_viewer, "the viewer is open");
+        let shown = app.selected_item.as_ref().map(|i| i.id);
+        assert!(
+            !app.command_applies(CommandId::SelectDay),
+            "Select Day is not offered over the viewer"
+        );
+        app.execute_command(CommandId::SelectDay, cx);
+        assert_eq!(
+            app.selected_item.as_ref().map(|i| i.id),
+            shown,
+            "the photo on screen stays the selected one"
+        );
+        assert_eq!(
+            app.selected_indices.iter().copied().collect::<Vec<_>>(),
+            vec![4],
+            "the selection is unchanged"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn select_waits_for_a_layout_behind_the_catalog() {
+    use crate::app::command_palette::CommandId;
+    let (dir, engine) = day_library("mosaic_select_stale");
+    let writer = engine.clone();
+    let id = engine.get_item_slice(0..1)[0].id;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = day_app(&mut cx, engine);
+    // A scan writes from its own thread inside the cool-down: the layout
+    // stays a revision behind.
+    std::thread::spawn(move || writer.toggle_favorite(id, true).unwrap())
+        .join()
+        .unwrap();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.mosaic_layout_current(), "the layout is behind");
+        assert!(
+            !app.command_applies(CommandId::SelectDay),
+            "Select Day waits for the next layout"
+        );
+    });
+    click(vcx, "mosaic-day-select-20250613");
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.selected_indices.is_empty(),
+            "Select on a stale layout selects nothing"
+        );
+        app.execute_command(CommandId::SelectDay, cx);
+        assert!(app.selected_indices.is_empty(), "nor does ⌘K Select Day");
+    });
+    vcx.executor()
+        .advance_clock(crate::app::mosaic_layout::SCAN_REFETCH_COOLDOWN);
+    render_ui(vcx);
+    render_ui(vcx);
+    click(vcx, "mosaic-day-select-20250613");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices.iter().copied().collect::<Vec<_>>(),
+            vec![3, 4],
+            "once the layout catches up, Select works"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn select_day_closes_open_inputs() {
+    let (dir, engine) = day_library("mosaic_select_inputs");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = day_app(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        app.tag_input_active = true;
+        app.tag_input_buffer = "half typed".into();
+        app.caption.input_active = true;
+        app.caption.input_buffer = "draft".into();
+    });
+    click(vcx, "mosaic-day-select-20250614");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_indices.len(), 3);
+        assert!(
+            !app.tag_input_active && app.tag_input_buffer.is_empty(),
+            "the tag input belongs to the old selection"
+        );
+        assert!(
+            !app.caption.input_active && app.caption.input_buffer.is_empty(),
+            "so does the caption input"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

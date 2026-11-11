@@ -282,7 +282,7 @@ impl LuminaApp {
                             // marquee, whose still release clears the selection.
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
-                                this.select_range(items.clone(), cx);
+                                this.select_mosaic_range(items.clone(), cx);
                             })),
                     ),
             )
