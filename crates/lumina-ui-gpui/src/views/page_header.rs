@@ -95,6 +95,97 @@ pub(crate) fn page_header(
         )
 }
 
+/// One tab of [`page_tabs`]: `id` makes the `page-tab-{id}` selector.
+pub(crate) struct PageTab {
+    pub id: &'static str,
+    pub label: SharedString,
+    pub count: usize,
+    pub active: bool,
+}
+
+/// The tab bar under the page header (Albums frame `a0sLrG`): 51.5 high,
+/// tabs 34 high with a mono count. The active tab sits on bg-2; it takes
+/// the focus ring while the bar has keyboard focus (`focused`). A click
+/// calls `on_select` with the tab's id.
+pub(crate) fn page_tabs(
+    label: impl Into<SharedString>,
+    tabs: &[PageTab],
+    focused: bool,
+    on_select: impl Fn(&&'static str, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    let on_select = std::rc::Rc::new(on_select);
+    div()
+        .id("page-tabs")
+        .debug_selector(|| "page-tabs".to_string())
+        .role(Role::TabList)
+        .aria_label(label.into())
+        .w_full()
+        .h(px(51.5))
+        .flex_shrink_0()
+        .px(px(28.0))
+        .border_b_1()
+        .border_color(theme::line())
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(4.0))
+        .children(tabs.iter().map(|tab| {
+            let id = tab.id;
+            let on_select = on_select.clone();
+            let bg = if tab.active {
+                theme::bg_2()
+            } else {
+                theme::bg_0()
+            };
+            div()
+                .id(id)
+                .debug_selector(move || format!("page-tab-{id}"))
+                .role(Role::Tab)
+                .aria_label(tab.label.clone())
+                .aria_selected(tab.active)
+                .h(px(34.0))
+                .px(px(12.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(7.0))
+                .rounded(theme::RADIUS_LG)
+                .bg(bg)
+                // Always a border, so the focus ring never shifts the tabs.
+                .border_1()
+                .border_color(if focused && tab.active {
+                    theme::focus_ring()
+                } else {
+                    bg
+                })
+                .hover(|s| s.bg(theme::bg_2()))
+                .cursor_pointer()
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .font_weight(if tab.active {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if tab.active { theme::t1() } else { theme::t2() })
+                        .child(tab.label.clone()),
+                )
+                .child(
+                    div()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(px(9.5))
+                        .text_color(if tab.active {
+                            theme::accent()
+                        } else {
+                            theme::t3()
+                        })
+                        .child(crate::i18n::count(tab.count)),
+                )
+                .on_click(move |_, window, cx| on_select(&id, window, cx))
+        }))
+}
+
 /// 32×32 header button: bg-2, 8px radius, `line` outline, 15px icon; bg-3
 /// and t1 while `on`. `selector` doubles as the element id. `label` is the
 /// accessible name; the tooltip adds the `shortcut`.

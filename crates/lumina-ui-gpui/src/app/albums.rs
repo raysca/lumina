@@ -29,6 +29,8 @@ pub struct AlbumsState {
     pub confirm_delete: Option<i64>,
     /// The Add to Album picker (⇧⌘A), while it is open.
     pub picker: Option<AlbumPicker>,
+    /// The Albums overview page's tab and keyboard focus.
+    pub overview: crate::app::albums_overview::OverviewState,
 }
 
 /// The Add to Album picker: the items it adds, the typed filter, and the
@@ -84,29 +86,6 @@ impl LuminaApp {
         let rows = engine.list_albums_with_counts();
         self.albums.counts = rows.iter().map(|(album, n)| (album.id, *n)).collect();
         self.albums.list = rows.into_iter().map(|(album, _)| album).collect();
-    }
-
-    /// The Albums overview is what the main column shows: selected, with
-    /// no search or year over it (those show their matches instead).
-    pub(crate) fn albums_overview_shown(&self) -> bool {
-        self.selection == AlbumSelection::AlbumsOverview
-            && self.search_query.is_empty()
-            && self.active_year.is_none()
-    }
-
-    /// The sidebar ALBUMS label, ⌘K Show Albums and Go > Albums: the
-    /// overview page, one Back entry. Not while compare holds the view.
-    pub(crate) fn show_albums_overview(&mut self, cx: &mut Context<Self>) {
-        if self.grid_state.is_none() || self.compare_holds_view() {
-            return;
-        }
-        if self.is_fullscreen_viewer {
-            self.close_viewer(cx);
-        }
-        if !self.albums_overview_shown() {
-            self.select_album(AlbumSelection::AlbumsOverview, cx);
-        }
-        cx.notify();
     }
 
     pub(crate) fn album_title(&self, id: i64) -> Option<&str> {

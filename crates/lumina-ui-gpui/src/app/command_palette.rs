@@ -28,8 +28,10 @@ pub enum CommandId {
     /// The Duplicates destination on its Exact copies / Similar shots tab.
     ShowExactCopies,
     ShowSimilarShots,
-    /// The Albums overview page.
+    /// The Albums overview page, and the page on one of its tabs.
     ShowAlbums,
+    ShowAlbumsTab,
+    ShowSmartAlbumsTab,
     /// Places on the map / on the grid.
     ShowMap,
     ShowGrid,
@@ -218,7 +220,7 @@ impl Command {
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
             ShowMap | ShowOnMap => Icon::MapPin,
-            ShowAlbums => Icon::Folder,
+            ShowAlbums | ShowAlbumsTab | ShowSmartAlbumsTab => Icon::Folder,
             ShowGrid => Icon::Images,
             ShowMosaic => Icon::LayoutDashboard,
             SelectDay | ShowYears | ShowMonths | ShowDays => Icon::Calendar,
@@ -370,6 +372,18 @@ pub fn commands() -> &'static [Command] {
             key: "command.show_albums",
             shortcut: "",
             keywords: "albums overview collections folders go",
+        },
+        Command {
+            id: CommandId::ShowAlbumsTab,
+            key: "command.show_albums_tab",
+            shortcut: "",
+            keywords: "albums overview tab",
+        },
+        Command {
+            id: CommandId::ShowSmartAlbumsTab,
+            key: "command.show_smart_albums_tab",
+            shortcut: "",
+            keywords: "albums overview tab smart rules",
         },
         // Before Show Map: "show on map" matches both, and the item wins.
         Command {
@@ -1138,6 +1152,10 @@ impl LuminaApp {
                     && !self.compare_holds_view()
                     && !self.albums_overview_shown()
             }
+            // Listed on either tab, so typing a tab's name always finds it.
+            CommandId::ShowAlbumsTab | CommandId::ShowSmartAlbumsTab => {
+                self.grid_state.is_some() && !self.compare_holds_view()
+            }
             CommandId::ShowGrid => self.grid_state.is_some() && !self.view_mode_on().1,
             CommandId::ShowMosaic => self.grid_state.is_some() && !self.view_mode_on().0,
             CommandId::SelectDay => {
@@ -1483,6 +1501,12 @@ impl LuminaApp {
             }
             CommandId::ShowMap => self.show_map(cx),
             CommandId::ShowAlbums => self.show_albums_overview(cx),
+            CommandId::ShowAlbumsTab => {
+                self.show_albums_tab(crate::app::albums_overview::AlbumsTab::Albums, cx)
+            }
+            CommandId::ShowSmartAlbumsTab => {
+                self.show_albums_tab(crate::app::albums_overview::AlbumsTab::SmartAlbums, cx)
+            }
             CommandId::ShowGrid => self.set_browse_layout(crate::config::BrowseLayout::Grid, cx),
             CommandId::ShowMosaic => {
                 self.set_browse_layout(crate::config::BrowseLayout::Mosaic, cx)

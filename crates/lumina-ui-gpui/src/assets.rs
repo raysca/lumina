@@ -29,6 +29,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "file-image",
     "film",
     "folder",
+    "folder-plus",
     "grid-3x3",
     "heart",
     "image",

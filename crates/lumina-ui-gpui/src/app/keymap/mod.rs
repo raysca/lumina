@@ -300,6 +300,12 @@ impl LuminaApp {
             return;
         }
 
+        // The Albums overview takes Tab/arrows/↵/Esc and absorbs the grid's
+        // keys (it shows no grid).
+        if self.handle_albums_overview_key(keystroke, cx) {
+            return;
+        }
+
         // Mosaic's Years and Months take arrows/↵/Esc and absorb the grid's
         // keys (the selection is not on screen).
         if self.handle_bucket_cards_key(keystroke, cx) {

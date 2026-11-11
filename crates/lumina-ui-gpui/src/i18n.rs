@@ -47,6 +47,24 @@ pub fn items(n: usize) -> String {
     }
 }
 
+/// The Albums overview's counts: "1 album", "24 albums".
+pub fn albums(n: usize) -> String {
+    if n == 1 {
+        t("albums.count_one")
+    } else {
+        t("albums.count_other").replace("{n}", &count(n))
+    }
+}
+
+/// "1 smart album", "12 smart albums".
+pub fn smart_albums(n: usize) -> String {
+    if n == 1 {
+        t("albums.smart_count_one")
+    } else {
+        t("albums.smart_count_other").replace("{n}", &count(n))
+    }
+}
+
 /// The Videos view's count: "1 clip", "4,183 clips".
 pub fn clips(n: usize) -> String {
     if n == 1 {
@@ -257,6 +275,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
         "command.show_map" => "Show Map",
         "command.show_albums" => "Show Albums",
+        "command.show_albums_tab" => "Show Albums Tab",
+        "command.show_smart_albums_tab" => "Show Smart Albums Tab",
         "command.show_grid" => "Show Grid",
         "command.show_mosaic" => "Show Mosaic",
         "command.select_day" => "Select Day",
@@ -456,6 +476,11 @@ fn en_us(key: &str) -> Option<&'static str> {
         }
         "sidebar.albums" => "ALBUMS",
         "albums.title" => "Albums",
+        "albums.tab_smart" => "Smart Albums",
+        "albums.count_one" => "1 album",
+        "albums.count_other" => "{n} albums",
+        "albums.smart_count_one" => "1 smart album",
+        "albums.smart_count_other" => "{n} smart albums",
         "sidebar.pinned" => "PINNED",
         "album.pin_failed" => "Could not pin album",
         "album.unpin_failed" => "Could not unpin album",

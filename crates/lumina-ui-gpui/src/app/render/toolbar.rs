@@ -92,6 +92,9 @@ impl LuminaApp {
     /// None until a count is known, so a loading view never reads "0 items";
     /// the span (or the Videos totals) joins once its fetch lands.
     pub(crate) fn page_meta(&self) -> Option<String> {
+        if self.albums_overview_shown() {
+            return Some(self.albums_overview_meta());
+        }
         if self.view_loading() && self.cached_active_count().is_none() {
             return None;
         }
@@ -148,6 +151,23 @@ impl LuminaApp {
             None => view_label.to_string(),
         };
         let toggle = self.render_sidebar_toggle(cx);
+        // The Albums overview has its own actions: no grid to sort or filter.
+        if self.albums_overview_shown() {
+            let actions = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(10.0))
+                .child(crate::views::albums_overview::new_album_button(self, cx))
+                .when(own_controls, |bar| bar.child(window_controls(window)));
+            return self.clear_traffic_lights(page_header(
+                toggle,
+                title,
+                self.page_meta().map(Into::into),
+                actions,
+                own_controls,
+            ));
+        }
         // Back/Forward are ⌘[ / ⌘], the Go menu and ⌘K; the design has no
         // header buttons for them.
         let actions = div()
@@ -257,16 +277,19 @@ impl LuminaApp {
                 })),
             )
             .when(own_controls, |bar| bar.child(window_controls(window)));
-        page_header(
+        self.clear_traffic_lights(page_header(
             toggle,
             title,
             self.page_meta().map(Into::into),
             actions,
             own_controls,
-        )
-        // The traffic lights sit over the sidebar's brand row; with the
-        // sidebar collapsed to its rail they reach past it into the header.
-        .when(
+        ))
+    }
+
+    /// The traffic lights sit over the sidebar's brand row; with the
+    /// sidebar collapsed to its rail they reach past it into the header.
+    fn clear_traffic_lights(&self, header: Div) -> Div {
+        header.when(
             cfg!(target_os = "macos") && self.sidebar_collapsed,
             |header| header.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
         )
