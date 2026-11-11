@@ -29,6 +29,24 @@ pub(crate) const CARD_PADDING: f32 = 8.0;
 /// Empty space below each card inside its uniform-list row, in pixels.
 pub(crate) const CARD_ROW_GAP: f32 = 10.0;
 
+/// Opacity of an unselected card while two or more cards are selected
+/// (selection mode, Design 07 `w4zpqh`).
+pub(crate) const UNSELECTED_CARD_OPACITY: f32 = 0.62;
+
+/// Below this photo side the top rows (check + edited, flag + heart +
+/// missing: 46 + 62 + 2 insets) would collide, so the heart, edited badge and
+/// meta pill hide. ponytail: under ~86 px (8 columns, narrow window, inspector
+/// open) check + flag + missing can still touch; shrink badges if that matters.
+pub(crate) const COMPACT_TILE: f32 = 124.0;
+
+#[cfg(test)]
+thread_local! {
+    /// Test hook: the opacity each drawn card was given, by item id. Colour
+    /// and opacity are not readable from a headless frame.
+    pub(crate) static CARD_OPACITY: std::cell::RefCell<HashMap<usize, f32>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
 /// Width of the pinned year rail when the timeline has buckets.
 pub(crate) const YEAR_RAIL_WIDTH: f32 = 44.0;
 

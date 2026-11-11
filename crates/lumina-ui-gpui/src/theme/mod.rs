@@ -112,6 +112,8 @@ tokens_alpha! {
     modal_dim = 0x00000066;
     /// Badges and buttons drawn over media.
     media_scrim = 0x000000A6;
+    /// Unselected check circle on a tile in selection mode (Design 07).
+    check_idle = 0x00000059;
     /// Library card surface. Cards are transparent by request: thumbnails sit
     /// directly on the library background; selection shows as an outline.
     card_surface = 0x00000000;

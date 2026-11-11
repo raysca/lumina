@@ -455,3 +455,112 @@ fn batch_date_rewrites_sidecars() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Selection mode (design 01 Task 5, from Design 07): while two or more
+/// items are selected every card shows a check circle, selected ones
+/// with the check mark, and unselected cards dim to 0.62.
+#[core::prelude::v1::test]
+fn selection_mode_shows_check_circles_and_dims_unselected() {
+    use crate::views::grid::CARD_OPACITY;
+    let (temp_dir, engine) = seed_library("multi_checks", 4);
+    let items = engine.get_item_slice(0..4);
+    let ids: Vec<usize> = items.iter().map(|i| i.id.0 as usize).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    let opacity = |vcx: &mut gpui::VisualTestContext, id: usize| {
+        CARD_OPACITY.with(|m| m.borrow_mut().clear());
+        render_ui(vcx);
+        CARD_OPACITY.with(|m| {
+            *m.borrow()
+                .get(&id)
+                .expect("every drawn card records its opacity")
+        })
+    };
+    let check = |id: usize| leak(format!("media-card-check-{id}"));
+    let mark = |id: usize| leak(format!("media-card-check-mark-{id}"));
+
+    // debug_bounds accumulates across frames, so absence is checked first.
+    for &id in &ids {
+        assert_eq!(opacity(vcx, id), 1.0, "with no selection no card is dimmed");
+        assert!(
+            vcx.debug_bounds(check(id)).is_none(),
+            "with no selection there are no check circles"
+        );
+    }
+    click(vcx, leak(format!("media-card-{}", ids[0])));
+    assert_eq!(
+        opacity(vcx, ids[1]),
+        1.0,
+        "a single plain selection is browsing, not selection mode: nothing dims"
+    );
+    assert!(
+        vcx.debug_bounds(check(ids[1])).is_none(),
+        "a single plain selection shows no check circles"
+    );
+
+    let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
+    vcx.simulate_click(second, gpui::Modifiers::command());
+    render_ui(vcx);
+    for (n, &id) in ids.iter().enumerate() {
+        let circle = vcx
+            .debug_bounds(check(id))
+            .unwrap_or_else(|| panic!("card {n} must show a check circle in selection mode"));
+        assert_eq!(
+            f32::from(circle.size.width),
+            22.0,
+            "check circles are 22 px"
+        );
+        let selected = n < 2;
+        assert_eq!(
+            vcx.debug_bounds(mark(id)).is_some(),
+            selected,
+            "only selected cards show the check mark (card {n})"
+        );
+        assert_eq!(
+            opacity(vcx, id),
+            if selected { 1.0 } else { 0.62 },
+            "unselected cards dim to 0.62, selected stay opaque (card {n})"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// A check circle toggles its own item, like ⌘-click, without collapsing
+/// the selection to that card.
+#[core::prelude::v1::test]
+fn check_circle_click_toggles_that_item() {
+    let (temp_dir, engine) = seed_library("multi_check_click", 4);
+    let ids: Vec<u64> = engine.get_item_slice(0..4).iter().map(|i| i.id.0).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    click(vcx, leak(format!("media-card-{}", ids[0])));
+    let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
+    vcx.simulate_click(second, gpui::Modifiers::command());
+    render_ui(vcx);
+    let count =
+        |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.selected_indices.len());
+    assert_eq!(count(vcx), 2, "setup: two items selected");
+
+    click(vcx, leak(format!("media-card-check-{}", ids[2])));
+    assert_eq!(
+        count(vcx),
+        3,
+        "clicking an unselected card's circle adds it to the selection"
+    );
+    click(vcx, leak(format!("media-card-check-{}", ids[0])));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_indices.len(),
+            2,
+            "clicking a selected card's check removes only that card"
+        );
+        assert!(
+            !app.selected_indices.contains(&0),
+            "the first card is the one removed"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

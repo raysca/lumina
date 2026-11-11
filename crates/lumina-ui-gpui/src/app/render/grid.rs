@@ -9,10 +9,16 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, GRID_CARD_GAP, GRID_ROW_PADDING_X,
+    media_card_tooltip, CARD_PADDING, CARD_ROW_GAP, COMPACT_TILE, GRID_CARD_GAP,
+    GRID_ROW_PADDING_X, UNSELECTED_CARD_OPACITY,
 };
 use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
+
+/// Inset of the badges from the tile's edges.
+const BADGE_INSET: f32 = 8.0;
+/// Height of the pill badges (duration, RAW, meta).
+const BADGE_H: f32 = 18.0;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
 /// can render every state without duplicating click wiring.
@@ -224,12 +230,26 @@ impl LuminaApp {
                                 let is_missing = this.missing_items.contains(&item.id);
                                 let is_edited = this.edits.edited_ids.contains(&item.id);
                                 let flag = this.item_flag(item.id);
+                                let is_raw = item.media_type == MediaType::Raw;
+                                // Selection mode: two or more selected. A single
+                                // plain selection is browsing and dims nothing.
+                                let selection_mode = this.selected_indices.len() > 1;
+                                let card_opacity = if selection_mode && !is_selected {
+                                    UNSELECTED_CARD_OPACITY
+                                } else {
+                                    1.0
+                                };
 
                                 let texture = row_textures.get(offset_in_row).cloned().flatten();
 
                                 let item_for_click = item.clone();
                                 let item_for_context = item.clone();
                                 let dur_text = format_duration_badge(item.duration_secs());
+                                let has_duration = is_video && !dur_text.is_empty();
+                                let has_type_badge = has_duration || is_raw;
+                                let compact = photo_side < COMPACT_TILE;
+                                let show_fav = is_fav && !compact;
+                                let show_edited = is_edited && !compact;
                                 let fit_mode = this.card_fit_mode;
                                 let in_trash = this.selection == AlbumSelection::Trash;
                                 let has_texture = texture.is_some();
@@ -274,9 +294,27 @@ impl LuminaApp {
                                         .relative()
                                         // No card surface and no border: the thumbnail sits
                                         // directly on the library background (FIXES.md).
-                                        // Selection is the only chrome, drawn as a full-card
-                                        // accent outline when the card is selected.
+                                        // Badges sit on the photo; selection adds an accent
+                                        // ring and, in selection mode, check circles.
                                         .bg(theme::card_surface())
+                                        .map(|card| {
+                                            // The hook records what each branch applies.
+                                            #[cfg(test)]
+                                            let record = |o: f32| {
+                                                crate::views::grid::CARD_OPACITY.with(|m| {
+                                                    m.borrow_mut().insert(item_id_num, o);
+                                                })
+                                            };
+                                            if card_opacity < 1.0 {
+                                                #[cfg(test)]
+                                                record(card_opacity);
+                                                card.opacity(card_opacity)
+                                            } else {
+                                                #[cfg(test)]
+                                                record(1.0);
+                                                card
+                                            }
+                                        })
                                         .cursor_pointer()
                                         // The full filename lives on the tooltip now
                                         // that the card no longer prints it below
@@ -366,7 +404,7 @@ impl LuminaApp {
                                                     format!("media-card-photo-{}", item_id_num)
                                                 })
                                                 .w_full()
-                                                // Square well: the height is the
+                                                // Square well (r4): the height is the
                                                 // card's content width, derived by
                                                 // `LuminaApp::grid_metrics`.
                                                 .h(px(photo_side))
@@ -380,8 +418,8 @@ impl LuminaApp {
                                                 .when(flag == lumina_core::Flag::Reject, |well| {
                                                     well.opacity(REJECTED_OPACITY)
                                                 })
-                                                // Square well and square highlight: no
-                                                // corner radius on the thumbnail (FIXES.md).
+                                                // Tiles are r4 (design 01 Library).
+                                                .rounded(theme::RADIUS_SM)
                                                 .overflow_hidden()
                                                 .relative()
                                                 .child(if let Some(render_img) = texture {
@@ -505,18 +543,22 @@ impl LuminaApp {
                                                         )
                                                         .into_any_element()
                                                 })
-                                                // Meta pill (bottom-left): favorite, stars and
-                                                // colour label sit on the photo so the card has
-                                                // no band below it (v3 grid).
-                                                .child(if is_fav || item_rating > 0 || item_color.is_some() {
+                                                // Meta pill (bottom-left): stars and colour
+                                                // label. It sits above the duration or RAW
+                                                // badge so the two never collide.
+                                                .child(if !compact && (item_rating > 0 || item_color.is_some()) {
                                                     div()
                                                         .debug_selector(move || {
                                                             format!("media-card-meta-{}", item_id_num)
                                                         })
                                                         .absolute()
-                                                        .bottom_1()
-                                                        .left_1()
-                                                        .h(px(18.0))
+                                                        .left(px(BADGE_INSET))
+                                                        .bottom(px(if has_type_badge {
+                                                            BADGE_INSET + BADGE_H + 4.0
+                                                        } else {
+                                                            BADGE_INSET
+                                                        }))
+                                                        .h(px(BADGE_H))
                                                         .px(px(5.0))
                                                         .rounded(theme::RADIUS_SM)
                                                         .bg(theme::media_scrim())
@@ -524,13 +566,6 @@ impl LuminaApp {
                                                         .flex_row()
                                                         .items_center()
                                                         .gap(px(5.0))
-                                                        .when(is_fav, |d| {
-                                                            d.child(render_icon(
-                                                                Icon::HeartFilled,
-                                                                px(10.0),
-                                                                theme::on_media(),
-                                                            ))
-                                                        })
                                                         .when(item_rating > 0, |d| {
                                                             d.child(div().flex().flex_row().gap(px(1.0)).children(
                                                                 (0..item_rating).map(|_| {
@@ -549,68 +584,76 @@ impl LuminaApp {
                                                 } else {
                                                     Empty.into_any_element()
                                                 })
-                                                // Missing file (top-right).
-                                                .when(is_missing, |card| {
-                                                    card.child(
-                                                        div()
-                                                            .id(("grid-missing-badge", item_id_num as u64))
-                                                            .debug_selector(move || {
-                                                                format!("grid-missing-badge-{}", item_id_num)
+                                                // Top-left row: the check circle in
+                                                // selection mode, then the edited badge.
+                                                .when(selection_mode || show_edited, |well| {
+                                                    well.child(
+                                                        badge_row()
+                                                            .left(px(BADGE_INSET))
+                                                            .when(selection_mode, |row| {
+                                                                let item = item.clone();
+                                                                row.child(
+                                                                    check_circle(item_id_num, is_selected)
+                                                                        // Keep the press from starting
+                                                                        // the card's marquee drag.
+                                                                        .on_mouse_down(
+                                                                            MouseButton::Left,
+                                                                            |_, _, cx| cx.stop_propagation(),
+                                                                        )
+                                                                        .on_click(cx.listener(
+                                                                            move |this, _: &ClickEvent, _w, cx| {
+                                                                                cx.stop_propagation();
+                                                                                // The ⌘-click path: toggle this item.
+                                                                                this.handle_card_click(
+                                                                                    item.clone(),
+                                                                                    card_index,
+                                                                                    false,
+                                                                                    true,
+                                                                                    cx,
+                                                                                );
+                                                                            },
+                                                                        )),
+                                                                )
                                                             })
-                                                            .absolute()
-                                                            .top_1()
-                                                            .right_1()
-                                                            .size(px(20.0))
-                                                            .rounded(theme::RADIUS_SM)
-                                                            .bg(theme::media_scrim())
-                                                            .flex()
-                                                            .items_center()
-                                                            .justify_center()
-                                                            .tooltip(theme::tooltip_label("File is missing"))
-                                                            .child(render_icon(
-                                                                Icon::TriangleAlert,
-                                                                px(12.0),
-                                                                theme::danger(),
-                                                            )),
+                                                            .when(show_edited, |row| {
+                                                                row.child(edited_badge(item_id_num))
+                                                            }),
                                                     )
                                                 })
-                                                // Picked or rejected (top-right).
-                                                .child(flag_badge(item_id_num, flag, is_missing))
-                                                // Edited or rotated in Lumina (top-left).
-                                                .when(is_edited, |card| {
-                                                    card.child(edited_badge(item_id_num))
+                                                // Top-right row, left to right: flag,
+                                                // favourite heart, missing file. One flex
+                                                // row, so no mark can cover another.
+                                                .when(
+                                                    show_fav
+                                                        || is_missing
+                                                        || flag != lumina_core::Flag::Unflagged,
+                                                    |well| {
+                                                        well.child(
+                                                            badge_row()
+                                                                .right(px(BADGE_INSET))
+                                                                .child(flag_badge(item_id_num, flag))
+                                                                .when(show_fav, |row| {
+                                                                    row.child(fav_badge(item_id_num))
+                                                                })
+                                                                .when(is_missing, |row| {
+                                                                    row.child(missing_badge(item_id_num))
+                                                                }),
+                                                        )
+                                                    },
+                                                )
+                                                // Video duration (bottom-left).
+                                                .when(has_duration, |well| {
+                                                    well.child(duration_badge(item_id_num, dur_text))
                                                 })
-                                                // Video Duration Overlay (bottom-right)
-                                                .child(if is_video && !dur_text.is_empty() {
-                                                    div()
-                                                        .absolute()
-                                                        .bottom_1()
-                                                        .right_1()
-                                                        .h(px(18.0))
-                                                        .px(px(5.0))
-                                                        .rounded(theme::RADIUS_SM)
-                                                        .bg(theme::media_scrim())
-                                                        .text_size(px(11.0))
-                                                        .font_family(theme::FONT_MONO)
-                                                        .flex()
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap(px(3.0))
-                                                        .text_color(theme::on_media())
-                                                        .child(render_icon(
-                                                            Icon::Play,
-                                                            px(9.0),
-                                                            theme::on_media(),
-                                                        ))
-                                                        .child(dur_text)
-                                                        .into_any_element()
-                                                } else {
-                                                    Empty.into_any_element()
+                                                // RAW (bottom-right).
+                                                .when(is_raw, |well| {
+                                                    well.child(raw_badge(item_id_num))
                                                 })
                                         )
                                         // Selection: a 2px amber ring with a 2px gap
-                                        // outside the square well (v3 grid). It sits
-                                        // on the card because the well clips.
+                                        // outside the r4 well, so its r8 corners stay
+                                        // concentric. It sits on the card because the
+                                        // well clips.
                                         .when(is_selected, |card| {
                                             card.child(
                                                 div()
@@ -627,6 +670,7 @@ impl LuminaApp {
                                                     .left(px(CARD_PADDING - 4.0))
                                                     .right(px(CARD_PADDING - 4.0))
                                                     .h(px(photo_side + 8.0))
+                                                    .rounded(theme::RADIUS_LG)
                                                     .border_2()
                                                     .border_color(theme::accent()),
                                             )
@@ -1083,25 +1127,134 @@ fn month_title(year: i32, month: u32) -> String {
     }
 }
 
-/// Top-left card badge for an item with Lumina edits or a rotation; reads
-/// the cached `edited_ids`, never the catalog.
-fn edited_badge(item_id_num: usize) -> impl IntoElement {
+/// An absolute row of badges along a tile's top edge; callers pin it
+/// left or right. A flex row keeps its badges from covering each other.
+fn badge_row() -> Div {
     div()
-        .id(("grid-edited-badge", item_id_num as u64))
-        .debug_selector(move || format!("grid-edited-badge-{item_id_num}"))
-        .role(Role::Image)
-        .aria_label("Edited")
         .absolute()
-        .top_1()
-        .left_1()
+        .top(px(BADGE_INSET))
+        .h(px(20.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(4.0))
+}
+
+/// A 20 px square badge on the media scrim with a tooltip and an image role.
+fn square_badge(id: ElementId, label: &'static str, icon: Icon, color: Rgba) -> Stateful<Div> {
+    div()
+        .id(id)
+        .role(Role::Image)
+        .aria_label(label)
         .size(px(20.0))
         .rounded(theme::RADIUS_SM)
         .bg(theme::media_scrim())
         .flex()
         .items_center()
         .justify_center()
-        .tooltip(theme::tooltip_label("Edited"))
-        .child(render_icon(Icon::Sliders, px(12.0), theme::on_media()))
+        .tooltip(theme::tooltip_label(label))
+        .child(render_icon(icon, px(12.0), color))
+}
+
+/// Badge for an item with Lumina edits or a rotation; reads the cached
+/// `edited_ids`, never the catalog.
+fn edited_badge(item_id_num: usize) -> impl IntoElement {
+    square_badge(
+        ("grid-edited-badge", item_id_num as u64).into(),
+        "Edited",
+        Icon::Sliders,
+        theme::on_media(),
+    )
+    .debug_selector(move || format!("grid-edited-badge-{item_id_num}"))
+}
+
+/// Badge for an item whose file is missing.
+fn missing_badge(item_id_num: usize) -> impl IntoElement {
+    square_badge(
+        ("grid-missing-badge", item_id_num as u64).into(),
+        "File is missing",
+        Icon::TriangleAlert,
+        theme::danger(),
+    )
+    .debug_selector(move || format!("grid-missing-badge-{item_id_num}"))
+}
+
+/// Favourite: an outline heart on the photo with no backing (design 01).
+fn fav_badge(item_id_num: usize) -> impl IntoElement {
+    div()
+        .id(("media-card-fav", item_id_num as u64))
+        .debug_selector(move || format!("media-card-fav-{item_id_num}"))
+        .role(Role::Image)
+        .aria_label("Favorite")
+        .child(render_icon(Icon::Heart, px(14.0), theme::on_media()))
+}
+
+/// Selection-mode check circle: accent with a check when selected, a
+/// faint circle otherwise. The caller wires the click (a ⌘-click toggle).
+fn check_circle(item_id_num: usize, selected: bool) -> Stateful<Div> {
+    div()
+        .id(("media-card-check", item_id_num as u64))
+        .debug_selector(move || format!("media-card-check-{item_id_num}"))
+        .role(Role::CheckBox)
+        .aria_label("Select")
+        .aria_toggled(if selected {
+            Toggled::True
+        } else {
+            Toggled::False
+        })
+        .size(px(22.0))
+        .rounded_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .when(selected, |d| {
+            d.bg(theme::accent()).child(
+                div()
+                    .debug_selector(move || format!("media-card-check-mark-{item_id_num}"))
+                    .child(render_icon(Icon::Check, px(13.0), theme::on_accent())),
+            )
+        })
+        .when(!selected, |d| d.bg(theme::check_idle()))
+}
+
+/// A mono pill badge pinned to the bottom of the tile (duration, RAW).
+fn pill_badge(id: ElementId) -> Stateful<Div> {
+    div()
+        .id(id)
+        .role(Role::Image)
+        .absolute()
+        .bottom(px(BADGE_INSET))
+        .h(px(BADGE_H))
+        .px(px(6.0))
+        .rounded(theme::RADIUS_SM)
+        .bg(theme::media_scrim())
+        .font_family(theme::FONT_MONO)
+        .text_size(px(9.5))
+        .flex()
+        .flex_row()
+        .items_center()
+}
+
+/// Video duration, bottom-left: play icon and the mono time.
+fn duration_badge(item_id_num: usize, text: String) -> impl IntoElement {
+    pill_badge(("media-card-duration", item_id_num as u64).into())
+        .debug_selector(move || format!("media-card-duration-{item_id_num}"))
+        .aria_label(format!("Video, {text}"))
+        .left(px(BADGE_INSET))
+        .gap(px(4.0))
+        .text_color(theme::on_media())
+        .child(render_icon(Icon::Play, px(9.0), theme::on_media()))
+        .child(text)
+}
+
+/// RAW file, bottom-right: "RAW" in mono accent.
+fn raw_badge(item_id_num: usize) -> impl IntoElement {
+    pill_badge(("media-card-raw", item_id_num as u64).into())
+        .debug_selector(move || format!("media-card-raw-{item_id_num}"))
+        .aria_label("RAW")
+        .right(px(BADGE_INSET))
+        .text_color(theme::accent())
+        .child("RAW")
 }
 
 #[cfg(test)]

@@ -704,8 +704,12 @@ fn ui_automation_card_photo_well_is_square_at_all_densities() {
             "the rendered well ({height}) must use the derived side ({expected}) at {columns} columns"
         );
 
-        // v3 grid: no band under the photo. Rating, favorite and label ride
-        // in a pill on the thumbnail, and only when there is something to show.
+        // v3 grid: no band under the photo. Rating and label ride in a pill
+        // on the thumbnail, and only when there is something to show. Compact
+        // tiles hide the pill (small_tiles_keep_state_badges_apart).
+        if expected < crate::views::grid::COMPACT_TILE {
+            continue;
+        }
         let meta_bounds = vcx.debug_bounds(meta).unwrap_or_else(|| {
             panic!("a rated card must paint its meta pill at {columns} columns")
         });

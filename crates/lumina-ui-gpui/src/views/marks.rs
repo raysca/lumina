@@ -6,7 +6,6 @@ use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
-use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{Flag, MediaItem};
 
@@ -148,9 +147,9 @@ pub fn flag_row(app: &LuminaApp, item: &MediaItem, cx: &mut Context<LuminaApp>) 
     )
 }
 
-/// Top-right card badge for a picked or rejected item (left of the
-/// missing-file badge when there is one).
-pub fn flag_badge(item_id_num: usize, flag: Flag, beside_missing: bool) -> AnyElement {
+/// Badge for a picked or rejected item; callers position it (the grid puts
+/// it in the tile's top-right row, left of the heart and missing badge).
+pub fn flag_badge(item_id_num: usize, flag: Flag) -> AnyElement {
     let (icon, color, label) = match flag {
         Flag::Pick => (Icon::Check, theme::accent(), "Picked"),
         Flag::Reject => (Icon::X, theme::danger(), "Rejected"),
@@ -161,10 +160,6 @@ pub fn flag_badge(item_id_num: usize, flag: Flag, beside_missing: bool) -> AnyEl
         .debug_selector(move || format!("grid-flag-badge-{item_id_num}"))
         .role(Role::Image)
         .aria_label(label)
-        .absolute()
-        .top_1()
-        .when(beside_missing, |d| d.right(px(28.0)))
-        .when(!beside_missing, |d| d.right_1())
         .size(px(20.0))
         .rounded(theme::RADIUS_SM)
         .bg(theme::media_scrim())
