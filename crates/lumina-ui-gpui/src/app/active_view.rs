@@ -199,6 +199,13 @@ pub(crate) struct ActiveView {
 const WINDOW_PAD: usize = 64;
 
 impl ActiveView {
+    /// Holds off refetches, as a slow fetch would: the cached rows go stale
+    /// while the app keeps working.
+    #[cfg(test)]
+    pub(crate) fn hold_fetch(&mut self) {
+        self.in_flight = true;
+    }
+
     /// The cached rows for `key`, if they are for that view and current.
     fn fresh(&self, key: &ViewKey, revision: u64) -> Option<&Fetched> {
         self.data

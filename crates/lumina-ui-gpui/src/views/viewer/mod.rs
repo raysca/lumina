@@ -9,6 +9,7 @@ use crate::views::inspector::InspectorView;
 
 pub mod crop_overlay;
 pub mod edit_bar;
+pub mod filmstrip;
 pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;
@@ -166,7 +167,9 @@ impl MediaViewer {
                     } else {
                         Empty.into_any_element()
                     }),
-            );
+            )
+            // 3. The filmstrip under the media.
+            .children(filmstrip::render(this, cx));
 
         backdrop
             .on_mouse_move(cx.listener(|this, _e: &MouseMoveEvent, _w, cx| {
@@ -181,7 +184,7 @@ impl MediaViewer {
                 }),
             )
             .child(stage)
-            // 3. Info panel: a full-height column beside the stage.
+            // 4. Info panel: a full-height column beside the stage.
             .child(if show_panel {
                 div()
                     .id("viewer-info-drawer")

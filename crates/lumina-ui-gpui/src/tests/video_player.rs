@@ -1115,3 +1115,44 @@ fn an_older_config_keeps_its_resume_points_for_the_last_library() {
         assert_eq!(app.config.resume_library.as_deref(), Some(last.as_path()));
     });
 }
+
+#[core::prelude::v1::test]
+fn video_and_transport_fit_above_the_filmstrip_at_the_minimum_window() {
+    let mut cx = crate::tests::TestApp::single();
+    let (fixture, view, vcx) = open_video(&mut cx);
+    // The sample video sits outside the seeded view; give it a position so
+    // the strip shows (its slots are the seeded items, which is enough for
+    // layout).
+    view.update(vcx, |app, cx| {
+        app.selected_index = Some(0);
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        app.window_bounds = Some((0.0, 0.0, 960.0, 600.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(600.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    let _fixture = fixture;
+    let media = bounds(vcx, "viewer-media");
+    let transport = bounds(vcx, "video-transport");
+    let strip = bounds(vcx, "viewer-filmstrip");
+    assert!(
+        media.top() >= gpui::px(60.0) && transport.top() >= media.bottom(),
+        "the frame sits under the top bar with the transport below: {media:?} {transport:?}"
+    );
+    assert!(
+        transport.bottom() <= strip.top(),
+        "the transport stays above the filmstrip at 960x600: {transport:?} strip={strip:?}"
+    );
+    for arrow in ["viewer-prev", "viewer-next"] {
+        assert!(
+            !bounds(vcx, arrow).intersects(&media),
+            "{arrow} stays beside the video at 960x600"
+        );
+    }
+}

@@ -69,7 +69,13 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
         0.0
     };
     let max_w = VIDEO_FRAME_MAX_WIDTH.min(win_w - panel - NAV_ROOM).max(1.0);
-    let max_h = (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - TRANSPORT_BLOCK).max(1.0);
+    let strip = if super::filmstrip::filmstrip_shown(this) {
+        super::filmstrip::FILMSTRIP_HEIGHT
+    } else {
+        0.0
+    };
+    let max_h =
+        (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - TRANSPORT_BLOCK - strip).max(1.0);
     let w = max_w.min(max_h * aspect);
     Some((w, w / aspect))
 }

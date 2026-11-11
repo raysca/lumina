@@ -73,6 +73,7 @@ mod video_player;
 mod video_scrub;
 mod video_tracks;
 mod viewer_and_video;
+mod viewer_filmstrip;
 mod viewer_stage;
 mod welcome;
 mod windows_and_layout;

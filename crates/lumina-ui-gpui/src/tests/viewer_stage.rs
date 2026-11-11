@@ -88,7 +88,7 @@ use std::sync::Arc;
 
 /// Opens the app with every item claimed in flight and `failed` failed
 /// before the first draw, so no real grid decode is ever queued.
-fn app_without_decodes<'a>(
+pub(super) fn app_without_decodes<'a>(
     cx: &'a mut TestAppContext,
     engine: Arc<LuminaEngine>,
     failed: &[MediaId],
@@ -115,7 +115,7 @@ fn app_without_decodes<'a>(
 
 /// Sends later decoder answers nowhere, so a seed fixture's real (failed)
 /// decode cannot change the stage at an unpredictable moment.
-fn detach_decoder_answers(app: &mut LuminaApp) {
+pub(super) fn detach_decoder_answers(app: &mut LuminaApp) {
     app.ui_tx = async_channel::unbounded().0;
 }
 
@@ -130,7 +130,11 @@ fn stage_size(vcx: &mut VisualTestContext) -> gpui::Size<gpui::Pixels> {
     )
 }
 
-fn open_at(app: &mut LuminaApp, index: usize, cx: &mut gpui::Context<LuminaApp>) -> MediaId {
+pub(super) fn open_at(
+    app: &mut LuminaApp,
+    index: usize,
+    cx: &mut gpui::Context<LuminaApp>,
+) -> MediaId {
     let item = app.get_active_slice(index..index + 1)[0].clone();
     app.select_item_at(item.clone(), index, cx);
     app.open_viewer(item.clone(), cx);
