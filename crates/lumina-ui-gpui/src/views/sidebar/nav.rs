@@ -5,7 +5,6 @@ use gpui::Context;
 use lumina_core::SystemAlbum;
 
 use super::AlbumSelection;
-use crate::i18n::t;
 use crate::icons::Icon;
 use crate::LuminaApp;
 
@@ -139,15 +138,4 @@ pub(crate) fn open_entry(
         }
         other => this.select_album(other.clone(), cx),
     }
-}
-
-/// Accessible name of a collection button, e.g. "Favorites, 22 items".
-pub(crate) fn aria_label(label: &str, count: usize) -> String {
-    t(if count == 1 {
-        "sidebar.nav_label_one"
-    } else {
-        "sidebar.nav_label_other"
-    })
-    .replace("{label}", label)
-    .replace("{n}", &count.to_string())
 }

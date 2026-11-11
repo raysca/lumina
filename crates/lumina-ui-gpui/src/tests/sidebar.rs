@@ -3,11 +3,12 @@
 
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule, SystemAlbum};
 
+use crate::i18n::nav_aria_label as aria_label;
 use crate::tests::ui_automation::{
     app_with_library, bounds_center, click, leak, render_ui, seed_library,
 };
 use crate::views::grid::SIDEBAR_COLLAPSED_WIDTH;
-use crate::views::sidebar::nav::{aria_label, nav_entries};
+use crate::views::sidebar::nav::nav_entries;
 use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]

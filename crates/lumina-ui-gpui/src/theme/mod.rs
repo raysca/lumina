@@ -8,7 +8,9 @@
 use gpui::{div, prelude::*, px, rgb, rgba, Div, Pixels, Rgba, SharedString};
 
 mod controls;
+mod widgets;
 pub use controls::*;
+pub use widgets::*;
 
 /// Body text: sidebar rows, fields and menus (v3.1 type scale).
 pub const TEXT_BODY: Pixels = px(13.0);

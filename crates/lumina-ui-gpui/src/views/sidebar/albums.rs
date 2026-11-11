@@ -6,7 +6,6 @@
 use gpui::*;
 use lumina_core::Album;
 
-use super::nav;
 use super::sections::{self, text_color};
 use super::AlbumSelection;
 use crate::app::text_input::TextTarget;
@@ -144,7 +143,7 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
         .group("album-row")
         .debug_selector(move || format!("album-row-{id}"))
         .role(Role::ListItem)
-        .aria_label(nav::aria_label(&album.title, count))
+        .aria_label(crate::i18n::nav_aria_label(&album.title, count))
         .tooltip(theme::tooltip_label(t("album.row_tooltip")))
         .flex()
         .flex_row()
@@ -181,7 +180,7 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .text_color(theme::t2())
-                .child(count.to_string()),
+                .child(crate::i18n::count(count)),
         )
         .child(
             action("album-rename", "album.rename_tooltip", Icon::Pencil).on_click(cx.listener(

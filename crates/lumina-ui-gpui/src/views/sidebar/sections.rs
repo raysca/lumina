@@ -72,7 +72,7 @@ pub(super) fn render_user_smart_album_row(
         .group("smart-album-row")
         .debug_selector(move || format!("smart-album-row-{album_id}"))
         .role(Role::ListItem)
-        .aria_label(nav::aria_label(&album.title, count))
+        .aria_label(crate::i18n::nav_aria_label(&album.title, count))
         .flex()
         .flex_row()
         .items_center()
@@ -112,7 +112,7 @@ pub(super) fn render_user_smart_album_row(
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .text_color(theme::t2())
-                .child(count.to_string()),
+                .child(crate::i18n::count(count)),
         )
         .child(
             div()
@@ -460,7 +460,7 @@ pub(super) fn render_tags_section(
                                     .text_xs()
                                     .font_family(theme::FONT_MONO)
                                     .text_color(theme::t2())
-                                    .child(tag_count.map_or(String::new(), |n| n.to_string())),
+                                    .child(tag_count.map_or(String::new(), crate::i18n::count)),
                             )
                             .into_any_element()
                     }
@@ -543,66 +543,12 @@ fn render_nav_item(
     is_active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
-    let label_text = label.to_string();
-    let debug_label = label_text.clone();
-    let icon_selector = format!("sidebar-nav-{label_text}-icon");
-    let aria_label = nav::aria_label(&label_text, count);
-    let bg_color = if is_active {
-        theme::bg_3()
-    } else {
-        gpui::rgba(0x00000000)
-    };
-    let count_color = theme::t2();
-
-    div()
-        .id(ElementId::Name(label_text.clone().into()))
-        .debug_selector(move || format!("sidebar-nav-{debug_label}"))
-        .role(Role::Button)
-        .aria_label(aria_label)
-        .px_2()
-        .h(px(26.0))
-        .rounded(theme::RADIUS_MD)
-        .bg(bg_color)
-        .hover(move |s| {
-            if is_active {
-                s.bg(theme::bg_3())
-            } else {
-                s.bg(theme::bg_2())
-            }
-        })
-        .cursor_pointer()
-        .flex()
-        .flex_row()
-        .gap_2()
-        .items_center()
-        .on_click(on_click)
-        .child(
-            render_icon(icon, px(16.0), text_color(is_active))
-                .flex_none()
-                .debug_selector(move || icon_selector),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(theme::TEXT_BODY)
-                .font_weight(if is_active {
-                    FontWeight::MEDIUM
-                } else {
-                    FontWeight::NORMAL
-                })
-                .text_color(text_color(is_active))
-                .child(label_text),
-        )
-        .child(if count > 0 {
-            div()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
-                .text_color(count_color)
-                .child(count.to_string())
-                .into_any_element()
-        } else {
-            Empty.into_any_element()
-        })
+    theme::nav_item(
+        format!("sidebar-nav-{label}"),
+        icon,
+        label,
+        count,
+        is_active,
+    )
+    .on_click(on_click)
 }

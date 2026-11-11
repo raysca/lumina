@@ -340,27 +340,19 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
     let remove_selector = format!("batch-{kind}-remove-{tag}");
     let (add_app, add_tag) = (weak_app.clone(), tag.clone());
     let remove_tag = tag.clone();
-    let chip = div()
-        .id(ElementId::Name(selector.clone().into()))
-        .debug_selector(move || selector.clone())
-        .h(px(24.0))
-        .px(px(9.0))
-        .rounded_full()
-        .border_1()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(6.0))
-        .text_xs();
-    let chip = if on_all {
-        chip.bg(theme::bg_2())
-            .border_color(theme::line())
-            .text_color(theme::t1())
-            .child(tag.clone())
+    let chip_kind = if on_all {
+        theme::ChipKind::Normal
     } else {
+        theme::ChipKind::Ghost
+    };
+    let chip = theme::chip(ElementId::Name(selector.clone().into()), chip_kind)
+        .debug_selector(move || selector.clone());
+    let chip = if on_all {
+        chip.child(tag.clone())
+    } else {
+        // Dashed, with a brighter outline than Ghost's, so "partial" reads at a glance.
         chip.border_dashed()
             .border_color(theme::t3())
-            .text_color(theme::t2())
             .cursor_pointer()
             .hover(|s| s.bg(theme::bg_3()))
             .tooltip(theme::tooltip_label(format!(

@@ -72,7 +72,7 @@ fn render_rail_button(
         .id(ElementId::Name(format!("sidebar-rail-{key}").into()))
         .debug_selector(move || format!("sidebar-rail-{key}"))
         .role(Role::Button)
-        .aria_label(nav::aria_label(entry.label, entry.count))
+        .aria_label(crate::i18n::nav_aria_label(entry.label, entry.count))
         .tooltip(theme::tooltip_label(tooltip))
         .flex_none()
         .size(px(32.0))

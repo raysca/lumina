@@ -24,6 +24,31 @@ pub fn t(key: &str) -> String {
     }
 }
 
+/// A count grouped by thousands for display, e.g. 48291 -> "48,291" (en-US,
+/// the only shipped locale).
+pub fn count(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Accessible name of a collection button, e.g. "Favorites, 22 items".
+pub fn nav_aria_label(label: &str, count: usize) -> String {
+    t(if count == 1 {
+        "sidebar.nav_label_one"
+    } else {
+        "sidebar.nav_label_other"
+    })
+    .replace("{label}", label)
+    .replace("{n}", &count.to_string())
+}
+
 /// [`t`] with each `{}` in the text replaced by the next of `args`.
 pub fn t_with(key: &str, args: &[&str]) -> String {
     let mut out = t(key);
@@ -375,5 +400,15 @@ mod tests {
         assert_eq!(t("command.preferences"), "Preferences…");
         assert_eq!(t("missing.key"), "missing.key");
         assert_eq!(current_locale(), Locale::EnUs);
+    }
+
+    #[test]
+    fn count_groups_thousands() {
+        assert_eq!(count(0), "0");
+        assert_eq!(count(999), "999");
+        assert_eq!(count(1_000), "1,000");
+        assert_eq!(count(100_000), "100,000");
+        assert_eq!(count(48_291), "48,291");
+        assert_eq!(count(1_234_567), "1,234,567");
     }
 }

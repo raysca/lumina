@@ -2,7 +2,7 @@
 //! toolbar, modals dim the library lightly, and shared rows use the tokens.
 
 use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library,
+    app_with_library, bounds_center, click, keystrokes, leak, render_ui, right_click, seed_library,
 };
 
 const TOOLBAR_HEIGHT: f32 = 52.0;
@@ -65,7 +65,7 @@ fn hovered_menu_row_is_tracked_for_dark_on_amber_text() {
 }
 
 #[core::prelude::v1::test]
-fn sidebar_rows_are_26px() {
+fn nav_item_is_32px_with_right_count() {
     let (dir, engine) = seed_library("ds_rows", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
@@ -73,6 +73,58 @@ fn sidebar_rows_are_26px() {
     let row = vcx
         .debug_bounds("sidebar-nav-All Photos & Videos")
         .expect("library row");
-    assert_eq!(f32::from(row.size.height), 26.0, "list rows are 26px tall");
+    let icon = vcx
+        .debug_bounds("sidebar-nav-All Photos & Videos-icon")
+        .expect("row icon");
+    let count = vcx
+        .debug_bounds("sidebar-nav-All Photos & Videos-count")
+        .expect("row count");
+    assert_eq!(
+        f32::from(row.size.height),
+        32.0,
+        "NavItem rows are 32px tall"
+    );
+    assert_eq!(
+        f32::from(icon.left() - row.left()),
+        10.0,
+        "NavItem has 10px side padding"
+    );
+    assert_eq!(
+        f32::from(row.right() - count.right()),
+        10.0,
+        "the count sits at the row's right edge, inside the padding"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn chip_is_28px_pill() {
+    let (dir, engine) = seed_library("ds_chips", 3);
+    let items = engine.get_item_slice(0..2);
+    let (a, b) = (items[0].clone(), items[1].clone());
+    let catalog = engine.catalog();
+    catalog
+        .add_tags_batch(&[a.id, b.id], &["trip".to_string()])
+        .unwrap();
+    catalog
+        .add_tags_batch(&[a.id], &["street".to_string()])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    click(vcx, leak(format!("media-card-{}", a.id.0)));
+    let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
+    vcx.simulate_click(second, gpui::Modifiers::command());
+    click(vcx, "inspector-toggle");
+    render_ui(vcx);
+    for selector in ["batch-tag-trip", "batch-partial-tag-street"] {
+        let chip = vcx.debug_bounds(selector).expect(selector);
+        assert_eq!(
+            f32::from(chip.size.height),
+            28.0,
+            "{selector}: chips are 28px tall"
+        );
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
