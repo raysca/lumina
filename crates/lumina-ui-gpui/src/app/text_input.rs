@@ -17,8 +17,8 @@
 
 use gpui::base::input::{
     Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
-    InputEditorStyle, InputEvent, InputModeKind, InputState, OutdentInline, Paste, Redo, SelectAll,
-    Textarea, TextareaState, Undo,
+    InputEditorStyle, InputEvent, InputModeKind, InputState, MoveLeft, MoveRight, OutdentInline,
+    Paste, Redo, SelectAll, Textarea, TextareaState, Undo,
 };
 use gpui::*;
 use lumina_core::text::{is_disallowed, MAX_NAME_CHARS, MAX_TEXT_CHARS};
@@ -409,14 +409,14 @@ impl LuminaApp {
     fn field_key(
         &mut self,
         key: &'static str,
-        wanted: fn(&mut Self, TextTarget) -> bool,
+        wanted: fn(&mut Self, TextTarget, &App) -> bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(target) = self.text_target() else {
             return;
         };
-        if !wanted(self, target) {
+        if !wanted(self, target, cx) {
             return;
         }
         // `Keystroke::parse` needs the OS to read "secondary" (⌘ on macOS).
@@ -573,6 +573,12 @@ impl LuminaApp {
             TagManagerRename => &mut self.tag_manager.editing_buffer,
             TagManagerAlias => &mut self.tag_manager.alias_buffer,
             TagManagerSearch => &mut self.tag_manager.search,
+            // The query bar edits the text after its chips (Design 03);
+            // the sidebar field, the whole query.
+            Search if self.search_screen_shown() => {
+                self.query_bar.typed = self.search_bar_parts().1;
+                &mut self.query_bar.typed
+            }
             Search => &mut self.search_query,
             NetworkImportUrl => {
                 if let Some(crate::app::network_import::NetworkImportStage::Input {
@@ -599,6 +605,17 @@ impl LuminaApp {
             }
             Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
+            // The bar edits the text after its chips; the whole query stays
+            // within the cap.
+            Search if self.search_screen_shown() => {
+                let chips = crate::app::search::query_with_typed(
+                    &self.search_query,
+                    self.search_typing(),
+                    "",
+                );
+                let used = chips.chars().count() + usize::from(!chips.is_empty());
+                MAX_TEXT_CHARS.saturating_sub(used)
+            }
             _ => MAX_TEXT_CHARS,
         }
     }
@@ -623,6 +640,17 @@ impl LuminaApp {
                 self.refresh_draft_preview();
             }
             TextTarget::Search => {
+                if self.search_screen_shown() {
+                    // Split as `text_buffer` split it, before this edit.
+                    self.search_query = crate::app::search::query_with_typed(
+                        &self.search_query,
+                        self.search_typing(),
+                        &self.query_bar.typed,
+                    );
+                    // Emptied, the text holds no token being typed: the chips stay.
+                    self.query_bar.open_token = !self.query_bar.typed.is_empty();
+                    self.scroll_query_bar_to_caret();
+                }
                 self.reset_search_suggestions();
                 self.scope_search_to_library();
                 self.clear_selection(cx);
@@ -667,22 +695,33 @@ impl LuminaApp {
 
 /// Sends Tab to the keymap (smart-album focus), Backspace in an empty field (it removes the last
 /// tag), ⌘Z/⇧⌘Z in an empty tag filter, and ⌘V to the app. Each window root that draws fields calls this.
+/// In the search query bar, ← and ⌫ at the caret's start, and → with a chip
+/// selected, go to the keymap too: they select and remove chips.
 pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
-    fn always(_: &mut LuminaApp, _: TextTarget) -> bool {
+    fn always(_: &mut LuminaApp, _: TextTarget, _: &App) -> bool {
         true
     }
-    fn empty(app: &mut LuminaApp, target: TextTarget) -> bool {
+    fn empty(app: &mut LuminaApp, target: TextTarget, _: &App) -> bool {
         app.text_buffer(target).is_some_and(|text| text.is_empty())
     }
+    fn at_chips(app: &mut LuminaApp, target: TextTarget, cx: &App) -> bool {
+        target == TextTarget::Search && app.search_caret_at_chips(cx)
+    }
+    fn empty_or_at_chips(app: &mut LuminaApp, target: TextTarget, cx: &App) -> bool {
+        empty(app, target, cx) || at_chips(app, target, cx)
+    }
+    fn chip_selected(app: &mut LuminaApp, target: TextTarget, _: &App) -> bool {
+        target == TextTarget::Search && app.query_bar.chip.is_some()
+    }
     // ⌘A checks every shown tag, as it did before the filter took a caret.
-    fn tag_filter(_: &mut LuminaApp, target: TextTarget) -> bool {
+    fn tag_filter(_: &mut LuminaApp, target: TextTarget, _: &App) -> bool {
         target == TextTarget::TagManagerSearch
     }
     fn reroute<A: Action>(
         root: Div,
         app: &Entity<LuminaApp>,
         key: &'static str,
-        wanted: fn(&mut LuminaApp, TextTarget) -> bool,
+        wanted: fn(&mut LuminaApp, TextTarget, &App) -> bool,
     ) -> Div {
         let app = app.clone();
         root.capture_action(move |_: &A, window, cx| {
@@ -691,13 +730,15 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     }
     let root = reroute::<IndentInline>(root, app, "tab", always);
     let root = reroute::<OutdentInline>(root, app, "shift-tab", always);
-    let root = reroute::<Backspace>(root, app, "backspace", empty);
+    let root = reroute::<Backspace>(root, app, "backspace", empty_or_at_chips);
+    let root = reroute::<MoveLeft>(root, app, "left", at_chips);
+    let root = reroute::<MoveRight>(root, app, "right", chip_selected);
     let root = reroute::<DeleteToBeginningOfLine>(root, app, "secondary-backspace", empty);
     let root = reroute::<SelectAll>(root, app, "secondary-a", tag_filter);
     // ⌘Z / ⇧⌘Z in an empty tag filter undo the catalog (rename, merge,
     // delete happen in that sheet); with text they edit the filter.
-    fn empty_tag_filter(app: &mut LuminaApp, target: TextTarget) -> bool {
-        tag_filter(app, target) && empty(app, target)
+    fn empty_tag_filter(app: &mut LuminaApp, target: TextTarget, cx: &App) -> bool {
+        tag_filter(app, target, cx) && empty(app, target, cx)
     }
 
     let root = reroute::<Undo>(root, app, "secondary-z", empty_tag_filter);

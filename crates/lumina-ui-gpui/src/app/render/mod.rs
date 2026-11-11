@@ -473,6 +473,10 @@ impl Render for LuminaApp {
         self.refresh_active_view(cx);
         self.refresh_map_points(cx);
         self.close_header_popovers_under_modals();
+        // A mouse-up outside an inactive window never reaches the root.
+        if !window.is_window_active() {
+            self.query_bar.held_for_click = false;
+        }
         let total_count = self.displayed_count();
 
         let view_label: String = match &self.selection {
@@ -639,9 +643,20 @@ impl Render for LuminaApp {
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
                     // Any click outside the search field should return keyboard
                     // shortcuts to the app. The field's own click re-focuses it.
+                    // The Search screen waits for the mouse-up to go, so the
+                    // header does not shrink under the click.
+                    if this.search_focused && this.search_screen_shown() {
+                        this.query_bar.held_for_click = true;
+                    }
                     this.blur_search(cx);
                 }),
             )
+            // Capture: runs whatever the click hits, which may stop it.
+            .capture_any_mouse_up(cx.listener(|this, _e: &MouseUpEvent, _w, cx| {
+                if std::mem::take(&mut this.query_bar.held_for_click) {
+                    cx.notify();
+                }
+            }))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, window, cx| {
                 if this.is_dragging_sidebar_resizer {
                     let x: f32 = e.position.x.into();
@@ -709,7 +724,12 @@ impl Render for LuminaApp {
                             .flex()
                             .flex_col()
                             .child(self.render_error_banner(cx))
-                            .child(self.render_toolbar(&view_label, window, cx))
+                            .child(if self.search_screen_shown() {
+                                self.render_search_header(cx).into_any_element()
+                            } else {
+                                self.render_toolbar(&view_label, window, cx)
+                                    .into_any_element()
+                            })
                             .child(
                                 div()
                                     .flex_1()

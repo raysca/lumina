@@ -56,6 +56,15 @@ pub fn matches(n: usize) -> String {
     }
 }
 
+/// The search header's count: "1 result", "1,284 results".
+pub fn results(n: usize) -> String {
+    if n == 1 {
+        t("search.results_one")
+    } else {
+        t("search.results_other").replace("{n}", &count(n))
+    }
+}
+
 /// "Jun 2018" (en-US short month and year); the year alone for a month
 /// outside 1-12.
 pub fn month_year(year: i32, month: u32) -> String {
@@ -469,6 +478,15 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.downloads" => "Downloads",
         "header.sort" => "Sort: {}",
         "search.shortcut" => "⌘F",
+        "search.results_one" => "1 result",
+        "search.results_other" => "{n} results",
+        "search.connector_in" => "in",
+        "search.connector_during" => "during",
+        "search.connector_with" => "with",
+        "search.connector_rated" => "rated",
+        "search.rating_value" => "{n}+",
+        "search.header" => "Search",
+        "search.clear" => "Clear search",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",

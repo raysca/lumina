@@ -121,7 +121,7 @@ fn cmd_v_pastes_into_the_search_field_as_one_line() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The sidebar search, focused and drawn so its input takes keys.
+/// Search focused and drawn so its input (in the query bar) takes keys.
 fn focused_search<'a>(
     name: &str,
     cx: &'a mut gpui::TestAppContext,
@@ -155,15 +155,17 @@ fn search_inserts_typed_text_at_the_caret() {
             "← moves the caret and typing lands there, not at the end"
         );
     });
+    // Focused, the Search screen shows and its query bar holds the input
+    // (Design 03 Task 2); the sidebar field mirrors the query.
     let field = vcx
-        .debug_bounds("search-input")
-        .expect("search field drawn");
+        .debug_bounds("search-query-bar")
+        .expect("query bar drawn");
     let text = field_bounds(&view, vcx, TextTarget::Search);
     assert!(
         text.size.height > gpui::px(0.0)
             && field.contains(&text.origin)
             && field.contains(&text.bottom_right()),
-        "the input draws inside the search field: {text:?} in {field:?}"
+        "the input draws inside the query bar: {text:?} in {field:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

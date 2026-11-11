@@ -11,13 +11,18 @@ impl SearchBarView {
     pub fn render_field(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
         let active = !this.search_query.is_empty();
         let focused = this.search_focused;
-        let input = this.field_input_for(crate::app::text_input::TextTarget::Search);
+        // One search input: the query bar holds it while the Search screen
+        // shows (always, once focused), and this field mirrors the query.
+        let in_bar = this.search_screen_shown();
+        let input = (!in_bar)
+            .then(|| this.field_input_for(crate::app::text_input::TextTarget::Search))
+            .flatten();
 
         let field = div()
             .id("search-input-box")
             .debug_selector(|| "search-input".to_string())
-            // Focused, the inner text input carries the role; one field, not two.
-            .when(!focused, |d| {
+            // With the input inside, it carries the role; one field, not two.
+            .when(input.is_none(), |d| {
                 d.role(Role::TextInput)
                     .aria_label(crate::i18n::t("search.placeholder"))
             })
@@ -42,9 +47,11 @@ impl SearchBarView {
             })
             .cursor_text()
             .text_size(px(12.5))
+            // Keeps the app root from blurring search under the click (the
+            // Search screen would shrink the header between down and up).
+            .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.search_focused = true;
-                this.reset_search_suggestions();
+                this.enter_search_field();
                 cx.notify();
             }))
             .child(
@@ -97,7 +104,7 @@ impl SearchBarView {
                         div()
                             .id("clear-search-btn")
                             .debug_selector(|| "clear-search".to_string())
-                            .tooltip(theme::tooltip_label("Clear search"))
+                            .tooltip(theme::tooltip_label(crate::i18n::t("search.clear")))
                             .w(px(16.0))
                             .h(px(16.0))
                             .rounded_full()
@@ -128,14 +135,24 @@ impl SearchBarView {
             .flex_none()
             .w_full()
             .child(field)
-            .children(Self::render_suggestions(this, cx))
+            .children(
+                (!in_bar)
+                    .then(|| Self::render_suggestions(this, px(38.0), cx))
+                    .flatten(),
+            )
     }
 
-    /// Compact suggestion dropdown anchored under the focused search field.
+    /// Compact suggestion dropdown anchored `top` below the top of the
+    /// focused field's `relative` wrapper: the sidebar field, or the query
+    /// bar while the Search screen shows.
     ///
-    /// The panel is deferred so it paints over the sidebar rows that follow
-    /// the field; the occluding card keeps pointer events off them.
-    fn render_suggestions(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
+    /// The panel is deferred so it paints over the rows that follow the
+    /// field; the occluding card keeps pointer events off them.
+    pub(crate) fn render_suggestions(
+        this: &LuminaApp,
+        top: Pixels,
+        cx: &mut Context<LuminaApp>,
+    ) -> Option<AnyElement> {
         if !this.search_focused {
             return None;
         }
@@ -156,7 +173,7 @@ impl SearchBarView {
             .id("search-suggestions-panel")
             .debug_selector(|| "search-suggestions".to_string())
             .absolute()
-            .top(px(38.0))
+            .top(top)
             .left_0()
             .right_0()
             .p(px(4.0))

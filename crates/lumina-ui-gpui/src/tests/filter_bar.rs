@@ -230,8 +230,12 @@ fn menu_rows_take_clicks_above_the_backdrop() {
 
     // Camera… starts a camera: token, outside an unclosed quote, and
     // focuses the search field for its value.
+    // Free text shows the Search screen, whose header has no Filter button
+    // (Design 03 Task 2): the palette's Add Filter opens the menu, and the
+    // page header comes back to carry it.
     set_query(&view, vcx, r#""golden hour"#);
-    click(vcx, "header-filter");
+    view.update(vcx, |app, cx| app.execute_command(CommandId::AddFilter, cx));
+    render_ui(vcx);
     let camera_row = 8; // eight toggle rows, then Camera…
     click(vcx, leak(format!("filter-menu-row-{camera_row}")));
     view.update(vcx, |app, _| {

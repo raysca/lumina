@@ -847,8 +847,7 @@ impl LuminaApp {
                 return false;
             }
         }
-        self.search_focused = true;
-        self.reset_search_suggestions();
+        self.enter_search_field();
         cx.notify();
         true
     }
@@ -861,6 +860,7 @@ impl LuminaApp {
             // dismissal flag so the next focus starts with suggestions again.
             self.search_suggestions.dismissed = false;
             self.search_suggestions.selected = None;
+            self.query_bar.chip = None;
             cx.notify();
         }
     }

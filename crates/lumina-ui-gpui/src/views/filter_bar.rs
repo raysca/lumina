@@ -80,7 +80,10 @@ impl MenuRow {
     fn label_and_icon(&self) -> (String, Icon) {
         match self {
             MenuRow::Remove(chip) => (chip.label.clone(), chip.icon),
-            MenuRow::Toggle(token) => filter_label(token).expect("menu tokens are filter tokens"),
+            MenuRow::Toggle(token) => {
+                let (label, icon, _) = filter_label(token).expect("menu tokens are filter tokens");
+                (label, icon)
+            }
             MenuRow::Field(_, key, icon) => (t(key), *icon),
         }
     }
@@ -176,7 +179,8 @@ impl LuminaApp {
     /// The chip row: one chip per filter token, the Add filter chip, then
     /// the match count and Clear all. None without filter tokens.
     pub(crate) fn render_filter_bar(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
-        if !query_has_filters(&self.search_query) {
+        // On the Search screen the query bar shows the chips.
+        if !query_has_filters(&self.search_query) || self.search_screen_shown() {
             return None;
         }
         let menu_here = self.filter_menu.is_some() && !self.filter_menu_under_header();

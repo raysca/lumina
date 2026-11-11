@@ -68,6 +68,26 @@ pub struct SearchSuggestionState {
     pub selected: Option<usize>,
 }
 
+/// The search header's query bar (Design 03).
+#[derive(Debug, Default)]
+pub struct QueryBarState {
+    /// The typed text after the chips: the search input's buffer, rebuilt
+    /// from the query each time it is read (`text_buffer`).
+    pub typed: String,
+    /// The chip ← selected for ⌫ to remove.
+    pub chip: Option<usize>,
+    /// The user has typed since focusing, so the last token may still be
+    /// being typed (see `LuminaApp::search_typing`). Entering the field
+    /// clears it: the query's tokens show as chips until the next edit.
+    pub open_token: bool,
+    /// Scrolls the token row to the caret or the selected chip.
+    pub scroll: gpui::ScrollHandle,
+    /// The pointer went down outside the bar and blurred search: the
+    /// Search screen stays until it comes up, so the click lands on what
+    /// was under it rather than on a layout that moved.
+    pub held_for_click: bool,
+}
+
 /// Hardware-accelerated video playback state.
 #[derive(Default)]
 pub struct VideoPlaybackState {
@@ -384,6 +404,7 @@ pub struct LuminaApp {
     pub search_query: String,
     pub search_focused: bool,
     pub search_suggestions: SearchSuggestionState,
+    pub query_bar: QueryBarState,
     pub active_year: Option<i32>,
     /// Bounded Back trail of browsing destinations (album, search, year,
     /// selection, viewer). Transient overlays are never recorded.
@@ -616,6 +637,7 @@ impl LuminaApp {
             search_query: String::new(),
             search_focused: false,
             search_suggestions: SearchSuggestionState::default(),
+            query_bar: QueryBarState::default(),
             active_year: None,
             navigation_history: NavigationHistory::new(NavigationSnapshot::default()),
             pending_restore: Some(config.restored_session()),

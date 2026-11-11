@@ -7,7 +7,9 @@ use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
 mod chips;
-pub(crate) use chips::{filter_chips, filter_label, remove_query_tokens, FilterChip};
+pub(crate) use chips::{
+    filter_chips, filter_label, query_bar_parts, query_with_typed, remove_query_tokens, FilterChip,
+};
 
 /// Maximum number of committed queries kept in recent-search history.
 pub(crate) const MAX_RECENT_SEARCHES: usize = 10;
@@ -246,6 +248,14 @@ pub(crate) fn clear_query_filters(query: &str) -> String {
     tokens.join(" ")
 }
 
+/// Whether `query` has free text (a term, phrase or `-word`), which shows
+/// the Search screen (Design 03).
+pub(crate) fn query_has_text(query: &str) -> bool {
+    lumina_core::search::tokenize_query(query)
+        .iter()
+        .any(|token| !is_filter_token(token))
+}
+
 /// Whether Clear Filters would change `query`.
 pub(crate) fn query_has_filters(query: &str) -> bool {
     lumina_core::search::tokenize_query(query)
@@ -264,16 +274,19 @@ impl LuminaApp {
         )
     }
 
-    /// Reopens the dropdown and clears the keyboard highlight.
+    /// Reopens the dropdown and clears the keyboard highlight and the
+    /// query bar's chip selection.
     pub(crate) fn reset_search_suggestions(&mut self) {
         self.search_suggestions.dismissed = false;
         self.search_suggestions.selected = None;
+        self.query_bar.chip = None;
     }
 
     /// Hides the dropdown without leaving the search field.
     pub(crate) fn dismiss_search_suggestions(&mut self) {
         self.search_suggestions.dismissed = true;
         self.search_suggestions.selected = None;
+        self.query_bar.chip = None;
     }
 
     /// Moves the suggestion highlight without editing the query.

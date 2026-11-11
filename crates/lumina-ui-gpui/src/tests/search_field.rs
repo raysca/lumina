@@ -78,15 +78,17 @@ fn cmd_f_focuses_the_sidebar_field_and_typing_searches() {
     view.update(vcx, |app, _| {
         assert!(app.search_focused, "⌘F focuses search")
     });
-    let field = vcx.debug_bounds("search-input").expect("search field");
+    // Focus shows the Search screen (Design 03 Task 2): the dropdown hangs
+    // under its query bar, which takes the typing.
+    let bar = vcx.debug_bounds("search-query-bar").expect("query bar");
     let panel = vcx
         .debug_bounds("search-suggestions")
         .expect("focusing the field opens the suggestions");
     assert!(
-        panel.origin.y >= field.bottom()
-            && panel.origin.x == field.origin.x
-            && panel.size.width == field.size.width,
-        "the dropdown anchors under the sidebar field, full width: {panel:?} under {field:?}"
+        panel.origin.y >= bar.bottom()
+            && panel.origin.x == bar.origin.x
+            && panel.size.width == bar.size.width,
+        "the dropdown anchors under the query bar, full width: {panel:?} under {bar:?}"
     );
 
     type_text(vcx, "city:Lisbon");
