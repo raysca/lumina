@@ -243,7 +243,9 @@ fn grid_keys_change_nothing_under_years() {
             "⌫ opens no Delete dialog"
         );
         assert_eq!(app.get_active_count(), count, "nothing went to the trash");
-        let item = app.displayed_rows(5..6)[0].clone();
+        // `selected_item` is updated in place by a favourite toggle; the
+        // cached row is not refetched while the Mosaic body is hidden.
+        let item = app.selected_item.clone().expect("selection stays");
         assert_eq!(item.id, id);
         assert!(!item.is_favorite, "F does not favourite");
         assert_eq!(app.get_item_rating(&item), 0, "3 does not rate");
