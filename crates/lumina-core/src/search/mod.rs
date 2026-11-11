@@ -260,8 +260,10 @@ impl StructuredQuery {
         // media_edits (one row per edited item) plus the partial
         // idx_media_rotated, then rowid lookups and a sort of the matches. A
         // correlated EXISTS instead walked the whole date index on every page.
-        // ponytail: the sort is of every match; if most of a library is
-        // edited, a timeline-ordered index would be the upgrade.
+        // ponytail: the sort is of every match, and `-is:edited` builds the
+        // whole edited-id list on every query, so both grow with the number
+        // of edited items; if most of a library is edited, a timeline-ordered
+        // index (or an `edited` column) would be the upgrade.
         if let Some(edited) = self.is_edited {
             let op = if edited { "IN" } else { "NOT IN" };
             clauses.push(format!(

@@ -20,6 +20,10 @@ const GET_EDITS_SQL: &str = "SELECT m.rotation_quarters, e.crop_x, e.crop_y, e.c
  FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id
  WHERE m.id = ?1;";
 
+/// Ids of every rotated or edited item; see [`Catalog::edited_ids`].
+const EDITED_IDS_SQL: &str = "SELECT id FROM media_items WHERE rotation_quarters != 0
+ UNION SELECT media_id FROM media_edits;";
+
 /// A crop in normalized `[0, 1]` coordinates of the unrotated decoded frame,
 /// so a later rotation never needs to remap it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -157,13 +161,10 @@ impl Catalog {
     /// Every item with an edits row or a non-zero rotation (grid badge).
     pub fn edited_ids(&self) -> Result<HashSet<MediaId>> {
         let conn = self.conn.lock();
-        // ponytail: full scan of media_items (~8 ms warm at 100k items). If it
-        // shows in view-load timings, add a partial index WHERE
-        // rotation_quarters != 0 and query `!= 0` (no index serves `% 4`).
-        let mut stmt = conn.prepare_cached(
-            "SELECT id FROM media_items WHERE rotation_quarters % 4 != 0
-             UNION SELECT media_id FROM media_edits;",
-        )?;
+        // `!= 0` (writers normalize to 0..=3) so the partial idx_media_rotated
+        // serves it. ponytail: cost grows with the number of edited items;
+        // a cached set would be the upgrade if that shows in view loads.
+        let mut stmt = conn.prepare_cached(EDITED_IDS_SQL)?;
         let ids = stmt
             .query_map([], |row| row.get::<_, i64>(0))?
             .map(|id| id.map(|id| MediaId(id as u64)))
@@ -339,6 +340,14 @@ mod tests {
         assert_eq!(edit_rows(&catalog), 0, "default edits delete the row");
         assert_eq!(catalog.get_edits(&[a]).unwrap()[&a], Edits::default());
         assert_eq!(catalog.edited_ids().unwrap(), HashSet::from([b]));
+        let plan = catalog
+            .explain_query_plan(EDITED_IDS_SQL)
+            .unwrap()
+            .join(" | ");
+        assert!(
+            plan.contains("idx_media_rotated") && !plan.contains("SCAN media_items |"),
+            "edited_ids must read rotated ids from idx_media_rotated, got: {plan}"
+        );
     }
 
     #[test]

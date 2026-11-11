@@ -481,6 +481,7 @@ fn benchmark_scale_and_gates() {
         ("is:edited", 0),
         ("is:edited", 450),
         ("-is:edited", 0),
+        ("-is:edited", 450),
         // `within:`: a rare box (~10 rows), the dense home city (~1,700
         // rows) on page 0 and a deep page, an old dense trip (~2,500 rows,
         // all older than every other row), and the whole world.
