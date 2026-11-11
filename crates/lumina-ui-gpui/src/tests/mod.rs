@@ -24,6 +24,7 @@ mod filter_bar;
 mod get_info;
 mod grid_scroll;
 mod grid_zoom;
+mod group_levels;
 mod history;
 mod immersive_hud;
 mod import;

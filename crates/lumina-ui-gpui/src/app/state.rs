@@ -538,6 +538,8 @@ pub struct LuminaApp {
     pub(crate) active_view: crate::app::active_view::ActiveView,
     /// The Mosaic body's layout, built off the UI thread.
     pub(crate) mosaic: crate::app::mosaic_layout::MosaicCache,
+    /// The Mosaic's Years and Months cards: covers and keyboard focus.
+    pub(crate) levels: crate::app::render::bucket_cards::GroupLevels,
     /// Latest selected-item tag load; older results are dropped.
     pub(crate) selected_tags_request: u64,
 }
@@ -730,6 +732,7 @@ impl LuminaApp {
             map: Default::default(),
             active_view: Default::default(),
             mosaic: Default::default(),
+            levels: Default::default(),
             selected_tags_request: 0,
         };
 

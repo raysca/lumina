@@ -437,6 +437,34 @@ pub struct AppConfig {
     /// justified Mosaic rows. An unknown value reads as Grid.
     #[serde(default, deserialize_with = "lenient_browse_layout")]
     pub browse_layout: BrowseLayout,
+    /// The Mosaic's grouping level on the zoom pill: year or month cards,
+    /// or the day rows (the default). An unknown value reads as Days.
+    #[serde(default, deserialize_with = "lenient_group_level")]
+    pub group_level: GroupLevel,
+}
+
+/// The zoom pill's grouping level in Mosaic. Years and Months apply only
+/// where the timeline rail is; elsewhere the body is Days.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GroupLevel {
+    Years,
+    Months,
+    #[default]
+    Days,
+}
+
+/// Reads `group_level` so a hand-edited or future value (such as
+/// "moments") falls back to Days instead of failing the whole config.
+fn lenient_group_level<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<GroupLevel, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(match value.as_str() {
+        Some("years") => GroupLevel::Years,
+        Some("months") => GroupLevel::Months,
+        _ => GroupLevel::Days,
+    })
 }
 
 /// The browser body: square tiles in columns, or justified rows.
@@ -550,6 +578,7 @@ impl Default for AppConfig {
             slideshow_interval_secs: default_slideshow_interval_secs(),
             slideshow_loop: false,
             browse_layout: BrowseLayout::Grid,
+            group_level: GroupLevel::Days,
         }
     }
 }
@@ -1293,6 +1322,39 @@ mod tests {
                 loaded.browse_layout,
                 BrowseLayout::Grid,
                 "unknown value reads as Grid"
+            );
+            assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
+        }
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn group_level_defaults_to_days_and_round_trips() {
+        let path = temp_config_path("group_level");
+        std::fs::write(&path, br#"{"grid_columns":6}"#).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path).group_level,
+            GroupLevel::Days,
+            "a config without the key starts on Days"
+        );
+        for level in [GroupLevel::Years, GroupLevel::Months, GroupLevel::Days] {
+            let cfg = AppConfig {
+                group_level: level,
+                ..Default::default()
+            };
+            cfg.save_to(&path).unwrap();
+            assert_eq!(AppConfig::load_from(&path).group_level, level);
+        }
+        for bad in [br#""moments""#.as_slice(), b"3", b"null"] {
+            let mut json = br#"{"grid_columns":6,"group_level":"#.to_vec();
+            json.extend_from_slice(bad);
+            json.push(b'}');
+            std::fs::write(&path, json).unwrap();
+            let loaded = AppConfig::load_from(&path);
+            assert_eq!(
+                loaded.group_level,
+                GroupLevel::Days,
+                "unknown value reads as Days"
             );
             assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
         }

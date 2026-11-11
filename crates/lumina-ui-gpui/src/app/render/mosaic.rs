@@ -28,7 +28,12 @@ impl LuminaApp {
             // Loading and empty states are the Grid's.
             return self.render_browser_grid(0, cx).into_any_element();
         }
+        // The day layout keeps building under Years and Months, so a card
+        // opens Days at once.
         self.refresh_mosaic_layout(cx);
+        if self.group_level() != crate::config::GroupLevel::Days {
+            return self.render_bucket_cards(cx);
+        }
         let Some(list_state) = self.grid_state.as_ref().map(|s| s.mosaic.clone()) else {
             return Empty.into_any_element();
         };

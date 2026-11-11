@@ -1090,9 +1090,9 @@ impl LuminaApp {
             self.item_flags = engine.get_flags_map();
             self.item_captions = engine.get_captions_map();
             self.missing_items = engine.get_missing_ids();
-            self.month_header.counts = engine
-                .get_timeline_buckets("month")
-                .into_iter()
+            let months = engine.get_timeline_buckets("month");
+            self.month_header.counts = months
+                .iter()
                 .filter_map(|b| {
                     let (year, month) = b.bucket_key.split_once('-')?;
                     Some(((year.parse().ok()?, month.parse().ok()?), b.item_count))
@@ -1100,8 +1100,9 @@ impl LuminaApp {
                 .collect();
             self.rail.set_counts(&self.month_header.counts);
             let buckets = engine.get_timeline_buckets("year");
+            self.levels.set_covers(&buckets, &months);
             self.timeline_year_buckets = buckets
-                .into_iter()
+                .iter()
                 .filter_map(|b| {
                     let yr = b.bucket_key.parse::<i32>().ok()?;
                     Some((yr, b.item_count))

@@ -48,7 +48,7 @@ fn uneven_library(prefix: &str, count: usize) -> (std::path::PathBuf, Arc<Lumina
     (dir, engine)
 }
 
-fn tall_mosaic(
+pub(crate) fn tall_mosaic(
     cx: &mut gpui::TestAppContext,
     engine: Arc<LuminaEngine>,
 ) -> (Entity<LuminaApp>, &mut VisualTestContext) {
@@ -59,7 +59,7 @@ fn tall_mosaic(
     (view, vcx)
 }
 
-fn layout(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Arc<MosaicLayout> {
+pub(crate) fn layout(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Arc<MosaicLayout> {
     view.update(vcx, |app, _| {
         app.mosaic_layout().expect("the layout landed")
     })
@@ -69,7 +69,7 @@ fn item_id(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, index: usize) 
     view.update(vcx, |app, _| app.displayed_rows(index..index + 1)[0].id)
 }
 
-fn top_ix(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> usize {
+pub(crate) fn top_ix(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> usize {
     view.update(vcx, |app, _| {
         app.grid_state
             .as_ref()
@@ -202,7 +202,7 @@ fn marquee_selects_the_reading_order_range() {
 
 /// Months seeded newest first: 2025-06 (20), 2025-05 (8), 2024-12 (8),
 /// 2024-03 (24). The first 2024 item is index 28.
-fn rail_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+pub(crate) fn rail_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
     let months = [
         ("2025-06-15", 20usize),
         ("2025-05-15", 8),

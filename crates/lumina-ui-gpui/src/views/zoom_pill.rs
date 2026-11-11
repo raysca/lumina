@@ -1,6 +1,7 @@
 //! Floating zoom pill over the grid: − and + walk the thumbnail-size ladder
-//! (`SIZE_COLUMNS`), as ⌘- / ⌘= do. Labelled grouping segments (Years,
-//! Months, Days) wait on the semantic-zoom decision (Design 01, decision 2).
+//! (`SIZE_COLUMNS`), as ⌘- / ⌘= do. In Mosaic where the timeline rail is,
+//! the Years · Months · Days segments come first (`app/render/bucket_cards.rs`);
+//! Moments was dropped (plan 01b, decision 2).
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -54,6 +55,7 @@ impl LuminaApp {
             .border_1()
             .border_color(theme::line_2())
             .shadow_lg()
+            .children(self.render_group_segments(cx))
             .child(self.zoom_pill_button("grid-zoom-out", Icon::ZoomOut, -1, cx))
             .child(self.zoom_pill_button("grid-zoom-in", Icon::ZoomIn, 1, cx));
         // The wrapper has no hitbox, so the grid around the pill still gets

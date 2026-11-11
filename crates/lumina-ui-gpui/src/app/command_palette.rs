@@ -35,6 +35,10 @@ pub enum CommandId {
     ShowMosaic,
     /// Selects every item of a Mosaic day.
     SelectDay,
+    /// The Mosaic's grouping levels (where the zoom pill shows them).
+    ShowYears,
+    ShowMonths,
+    ShowDays,
     /// Places on the map, centred on the selected item's location.
     ShowOnMap,
     RetryError,
@@ -212,7 +216,7 @@ impl Command {
             ShowMap | ShowOnMap => Icon::MapPin,
             ShowGrid => Icon::Images,
             ShowMosaic => Icon::LayoutDashboard,
-            SelectDay => Icon::Calendar,
+            SelectDay | ShowYears | ShowMonths | ShowDays => Icon::Calendar,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
             CancelImport => Icon::X,
@@ -380,6 +384,24 @@ pub fn commands() -> &'static [Command] {
             key: "command.select_day",
             shortcut: "",
             keywords: "select day date mosaic all items",
+        },
+        Command {
+            id: CommandId::ShowYears,
+            key: "command.show_years",
+            shortcut: "",
+            keywords: "years zoom group mosaic timeline overview",
+        },
+        Command {
+            id: CommandId::ShowMonths,
+            key: "command.show_months",
+            shortcut: "",
+            keywords: "months zoom group mosaic timeline overview",
+        },
+        Command {
+            id: CommandId::ShowDays,
+            key: "command.show_days",
+            shortcut: "",
+            keywords: "days zoom group mosaic timeline",
         },
         Command {
             id: CommandId::ShowMosaic,
@@ -1099,6 +1121,16 @@ impl LuminaApp {
                     && !self.is_fullscreen_viewer
                     && self.mosaic_layout_current()
             }
+            CommandId::ShowYears | CommandId::ShowMonths | CommandId::ShowDays => {
+                let level = match id {
+                    CommandId::ShowYears => crate::config::GroupLevel::Years,
+                    CommandId::ShowMonths => crate::config::GroupLevel::Months,
+                    _ => crate::config::GroupLevel::Days,
+                };
+                self.group_levels_shown()
+                    && !self.is_fullscreen_viewer
+                    && self.config.group_level != level
+            }
             CommandId::ShowOnMap => !self.map_blocked() && self.selected_item_location().is_some(),
             CommandId::DeleteRejected => {
                 self.grid_state.is_some()
@@ -1430,6 +1462,9 @@ impl LuminaApp {
                 self.set_browse_layout(crate::config::BrowseLayout::Mosaic, cx)
             }
             CommandId::SelectDay => self.select_mosaic_day(cx),
+            CommandId::ShowYears => self.set_group_level(crate::config::GroupLevel::Years, cx),
+            CommandId::ShowMonths => self.set_group_level(crate::config::GroupLevel::Months, cx),
+            CommandId::ShowDays => self.set_group_level(crate::config::GroupLevel::Days, cx),
             CommandId::ShowOnMap => self.show_item_on_map(cx),
             CommandId::RetryError => self.retry_error(cx),
             CommandId::ShowAcknowledgements => self.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),

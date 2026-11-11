@@ -12,6 +12,7 @@ use crate::views::onboarding::OnboardingView;
 use crate::views::sidebar::{AlbumSelection, SidebarView};
 use crate::views::viewer_state::ViewerRotation;
 
+pub(crate) mod bucket_cards;
 mod card;
 mod grid;
 pub(crate) mod mosaic;

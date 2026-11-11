@@ -85,7 +85,7 @@ impl TimelineRail {
     }
 
     /// First grid index of `month` under `direction`.
-    fn offset(&self, month: &RailMonth, direction: SortDirection) -> usize {
+    pub(crate) fn offset(&self, month: &RailMonth, direction: SortDirection) -> usize {
         match direction {
             SortDirection::Descending => month.newer,
             SortDirection::Ascending => self.total - month.newer - month.count,
@@ -94,7 +94,7 @@ impl TimelineRail {
 
     /// First grid index of `year` (its newest month descending, oldest
     /// ascending).
-    fn year_offset(&self, year: i32, direction: SortDirection) -> Option<usize> {
+    pub(crate) fn year_offset(&self, year: i32, direction: SortDirection) -> Option<usize> {
         self.months
             .iter()
             .filter(|m| m.year == year)
@@ -248,8 +248,12 @@ impl LuminaApp {
     /// columns × row height, written to the handle now (not a deferred
     /// scroll) so this frame's rail lens already reads it. Clamped to the
     /// last layout's range; the list's prepaint clamps it again.
-    fn scroll_grid_to_offset(&mut self, offset: usize, cx: &mut Context<Self>) {
+    pub(crate) fn scroll_grid_to_offset(&mut self, offset: usize, cx: &mut Context<Self>) {
         if self.mosaic_shown() {
+            // From Years or Months (a rail click) this opens Days there.
+            if self.group_level() != crate::config::GroupLevel::Days {
+                self.set_group_level(crate::config::GroupLevel::Days, cx);
+            }
             // The item's day header (its first row) at the top.
             self.scroll_mosaic_to_item(offset, cx);
             return;
