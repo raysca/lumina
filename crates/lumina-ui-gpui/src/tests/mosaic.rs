@@ -532,3 +532,199 @@ fn marquee_in_mosaic_selects_the_reading_order_range() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Seven items: three on 2025-06-14 (two in Lisbon, PT, one in Porto,
+/// PT), two on 2025-06-13 with no city, two undated. In view order (date,
+/// newest first): 0-2 the 14th, 3-4 the 13th, 5-6 undated.
+fn day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+    let (dir, engine) = seed_library_undecodable(prefix, 7);
+    let ids: Vec<MediaId> = engine.get_item_slice(0..7).iter().map(|i| i.id).collect();
+    let noon = |d: &str| {
+        chrono::NaiveDateTime::parse_from_str(&format!("{d} 12:00:00"), "%Y-%m-%d %H:%M:%S")
+            .unwrap()
+            .and_utc()
+            .timestamp_millis()
+    };
+    let days = [
+        "2025-06-14",
+        "2025-06-14",
+        "2025-06-14",
+        "2025-06-13",
+        "2025-06-13",
+    ];
+    let mut changes: Vec<(MediaId, i64)> =
+        ids.iter().zip(days).map(|(&id, d)| (id, noon(d))).collect();
+    changes.extend(ids[5..].iter().map(|&id| (id, 0)));
+    engine.set_timestamps(&changes).unwrap();
+    let conn = rusqlite::Connection::open(dir.join("catalog.db")).expect("catalog opens");
+    for (id, city) in [(ids[0], "Lisbon"), (ids[1], "Porto"), (ids[2], "Lisbon")] {
+        conn.execute(
+            "UPDATE media_items SET city = ?1, country_code = 'PT' WHERE id = ?2",
+            rusqlite::params![city, id.0 as i64],
+        )
+        .unwrap();
+    }
+    drop(conn);
+    (dir, engine)
+}
+
+fn day_app(
+    cx: &mut gpui::TestAppContext,
+    engine: Arc<LuminaEngine>,
+) -> (gpui::Entity<crate::LuminaApp>, &mut VisualTestContext) {
+    let (view, vcx) = mosaic_app(cx, engine);
+    vcx.simulate_resize(size(px(1440.0), px(1400.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    (view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn day_header_shows_date_place_and_count() {
+    let (dir, engine) = day_library("mosaic_day_header");
+    let ids: Vec<MediaId> = engine.get_item_slice(0..7).iter().map(|i| i.id).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = day_app(&mut cx, engine);
+    let order: Vec<MediaId> = view.update(vcx, |app, _| {
+        app.displayed_rows(0..7).iter().map(|i| i.id).collect()
+    });
+    assert_eq!(order, ids, "the view order is the seeded order");
+
+    view.update(vcx, |app, _| {
+        let h = app.mosaic_day_header(20250614, 3);
+        assert_eq!(h.date, "Sat, Jun 14, 2025");
+        assert_eq!(
+            h.place.as_deref(),
+            Some("Lisbon, PT"),
+            "the most common city"
+        );
+        assert_eq!(h.count, "3 items");
+        assert_eq!(h.aria_label, "Sat, Jun 14, 2025, Lisbon, PT, 3 items");
+        assert_eq!(h.select_label, "Select 3 items from Sat, Jun 14, 2025");
+        let h = app.mosaic_day_header(20250613, 2);
+        assert_eq!(h.place, None, "a day with no city has no place");
+        assert_eq!(h.aria_label, "Fri, Jun 13, 2025, 2 items");
+        let h = app.mosaic_day_header(0, 2);
+        assert_eq!(h.date, "Undated");
+        assert_eq!(h.place, None);
+        let layout = app.mosaic_layout().unwrap();
+        let last_header = layout.rows.iter().rev().find_map(|r| match r.kind {
+            crate::views::mosaic::RowKind::Header { day, .. } => Some(day),
+            _ => None,
+        });
+        assert_eq!(last_header, Some(0), "Undated comes last");
+    });
+
+    for selector in [
+        "mosaic-day-20250614",
+        "mosaic-day-place-20250614",
+        "mosaic-day-count-20250614",
+        "mosaic-day-select-20250614",
+        "mosaic-day-20250613",
+        "mosaic-day-count-20250613",
+        "mosaic-day-0",
+    ] {
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector} is drawn");
+    }
+    assert!(
+        vcx.debug_bounds("mosaic-day-place-20250613").is_none(),
+        "no place element for a day with no city"
+    );
+    assert!(
+        vcx.debug_bounds("mosaic-day-place-0").is_none(),
+        "Undated has no place"
+    );
+
+    let tiles_bottom = ids[..3]
+        .iter()
+        .map(|&id| {
+            let b = card(vcx, id);
+            f32::from(b.origin.y + b.size.height)
+        })
+        .fold(0.0, f32::max);
+    let second = vcx.debug_bounds("mosaic-day-20250613").unwrap();
+    assert!(
+        (f32::from(second.origin.y) - tiles_bottom - 26.0).abs() <= 1.0,
+        "the second header sits 26 below the tiles above it: {second:?} vs {tiles_bottom}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn select_day_selects_exactly_that_days_items() {
+    use crate::app::command_palette::CommandId;
+    let (dir, engine) = day_library("mosaic_select_day");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = day_app(&mut cx, engine);
+    let selected = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| {
+            app.selected_indices.iter().copied().collect::<Vec<_>>()
+        })
+    };
+
+    click(vcx, "mosaic-day-select-20250613");
+    render_ui(vcx);
+    assert_eq!(
+        selected(&view, vcx),
+        vec![3, 4],
+        "Select picks that day's items"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(3));
+        assert_eq!(app.batch_summary.count, 2, "the batch summary follows");
+    });
+
+    view.update(vcx, |app, cx| app.select_index(1, cx));
+    render_ui(vcx);
+    run_palette_command(vcx, &view, "Select Day");
+    render_ui(vcx);
+    assert_eq!(
+        selected(&view, vcx),
+        vec![0, 1, 2],
+        "⌘K Select Day picks the selected item's day"
+    );
+    view.update(vcx, |app, _| assert_eq!(app.batch_summary.count, 3));
+
+    crate::tests::ui_automation::keystrokes(vcx, "escape");
+    render_ui(vcx);
+    assert!(
+        selected(&view, vcx).is_empty(),
+        "Escape clears the selection"
+    );
+
+    view.update(vcx, |app, cx| app.clear_selection(cx));
+    run_palette_command(vcx, &view, "Select Day");
+    render_ui(vcx);
+    assert_eq!(
+        selected(&view, vcx),
+        vec![0, 1, 2],
+        "with nothing selected, the top visible day"
+    );
+
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.command_applies(CommandId::SelectDay),
+            "in Mosaic, date sort"
+        );
+        app.sort.field = lumina_core::SortField::FileName;
+        cx.notify();
+        assert!(
+            !app.command_applies(CommandId::SelectDay),
+            "not under a non-date sort"
+        );
+        app.sort.field = lumina_core::SortField::DateTaken;
+        app.set_browse_layout(BrowseLayout::Grid, cx);
+        assert!(!app.command_applies(CommandId::SelectDay), "not in Grid");
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn place_label_joins_city_and_country_code() {
+    use crate::app::render::mosaic::place_label;
+    assert_eq!(
+        place_label(&("Lisbon".into(), Some("PT".into()))),
+        "Lisbon, PT"
+    );
+    assert_eq!(place_label(&("Lisbon".into(), None)), "Lisbon");
+}

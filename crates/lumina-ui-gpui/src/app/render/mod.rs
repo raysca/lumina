@@ -14,7 +14,7 @@ use crate::views::viewer_state::ViewerRotation;
 
 mod card;
 mod grid;
-mod mosaic;
+pub(crate) mod mosaic;
 pub(crate) mod overlays;
 pub(crate) mod rail;
 mod status_bar;

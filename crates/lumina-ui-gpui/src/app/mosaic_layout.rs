@@ -6,11 +6,13 @@
 //! scrolling issues no SQL. A width or level change re-justifies the cached
 //! cells without reading the catalog again.
 
+use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{px, Context, ListOffset};
-use lumina_core::{LayoutCell, SortField};
+use lumina_core::{DayPlace, LayoutCell, SortField};
 
 use crate::app::active_view::ViewKey;
 use crate::app::LuminaApp;
@@ -41,6 +43,9 @@ struct Built {
     width: u32,
     level: usize,
     cells: Arc<Vec<LayoutCell>>,
+    /// Each dated day's most common place, read with `cells` (date sort
+    /// only: other sorts have no day headers).
+    places: Arc<HashMap<u32, DayPlace>>,
     layout: Arc<MosaicLayout>,
 }
 
@@ -98,6 +103,47 @@ impl LuminaApp {
             .map(|built| built.layout.clone())
     }
 
+    /// The most common place of `day` in the current view, from the same
+    /// build as [`Self::mosaic_layout`]. Never queries.
+    pub(crate) fn mosaic_day_place(&self, day: u32) -> Option<&DayPlace> {
+        let key = self.view_key();
+        self.mosaic
+            .built
+            .as_ref()
+            .filter(|built| built.key == key)?
+            .places
+            .get(&day)
+    }
+
+    /// Item range of the day holding item `index`: its header's run.
+    /// `None` without a layout or under a non-date sort (no headers).
+    fn mosaic_day_range(&self, index: usize) -> Option<Range<usize>> {
+        let layout = self.mosaic_layout()?;
+        let rows = layout.rows.get(..=layout.row_of(index))?;
+        rows.iter().rev().find_map(|row| match row.kind {
+            RowKind::Header { count, .. } => Some(row.first..row.first + count),
+            RowKind::Tiles => None,
+        })
+    }
+
+    /// First item of the top visible row, from the list's scroll position.
+    fn mosaic_top_item(&self) -> Option<usize> {
+        let layout = self.mosaic_layout()?;
+        let top = self.grid_state.as_ref()?.mosaic.logical_scroll_top();
+        layout.rows.get(top.item_ix).map(|row| row.first)
+    }
+
+    /// ⌘K Select Day: every item of the selected item's day, or of the top
+    /// visible day when nothing is selected.
+    pub(crate) fn select_mosaic_day(&mut self, cx: &mut Context<Self>) {
+        let Some(index) = self.selected_index.or_else(|| self.mosaic_top_item()) else {
+            return;
+        };
+        if let Some(range) = self.mosaic_day_range(index) {
+            self.select_range(range, cx);
+        }
+    }
+
     /// Width of the Mosaic's content: the center pane less the row padding.
     fn mosaic_width(&self) -> f32 {
         let window_width = self.window_bounds.map_or(
@@ -152,7 +198,7 @@ impl LuminaApp {
         }
         let cells = same_view
             .filter(|b| b.revision == revision)
-            .map(|b| b.cells.clone());
+            .map(|b| (b.cells.clone(), b.places.clone()));
         #[cfg(test)]
         if cells.is_none() {
             LAYOUT_FETCHES.with(|n| n.set(n.get() + 1));
@@ -165,14 +211,20 @@ impl LuminaApp {
         // and justify takes any cells.
         self.mosaic.in_flight = true;
         let task = cx.background_executor().spawn(async move {
-            let (revision, cells) = match cells {
-                Some(cells) => (revision, cells),
+            let (revision, (cells, places)) = match cells {
+                Some(read) => (revision, read),
                 // Read before querying: a write that lands meanwhile
                 // leaves this revision behind, and a later frame refetches.
-                None => (
-                    engine.data_revision(),
-                    Arc::new(engine.view_layout(&scope, sort)),
-                ),
+                None => {
+                    let revision = engine.data_revision();
+                    let cells = Arc::new(engine.view_layout(&scope, sort));
+                    let places = if sections {
+                        engine.day_places(&scope)
+                    } else {
+                        HashMap::new()
+                    };
+                    (revision, (cells, Arc::new(places)))
+                }
             };
             let layout = Arc::new(MosaicLayout::justify(&cells, width, target, sections));
             Built {
@@ -181,6 +233,7 @@ impl LuminaApp {
                 width: width as u32,
                 level,
                 cells,
+                places,
                 layout,
             }
         });

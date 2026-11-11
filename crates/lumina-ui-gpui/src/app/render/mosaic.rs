@@ -2,11 +2,13 @@
 //! (day headers and justified tile rows). A frame reads only the cached
 //! layout (`app/mosaic_layout.rs`) and the active view's cached rows.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT};
 use crate::views::mosaic::{MosaicLayout, RowKind, DAY_HEADER_TEXT};
@@ -112,23 +114,9 @@ impl LuminaApp {
             .pl(px(GRID_ROW_PADDING_LEFT))
             .pr(px(GRID_ROW_PADDING_RIGHT));
         match row.kind {
-            // ponytail: the date only; place, count and Select come with
-            // plan 01b Task 5.
-            RowKind::Header { day, .. } => base
-                .debug_selector(move || format!("mosaic-day-row-{day}"))
-                .child(
-                    div()
-                        .debug_selector(move || format!("mosaic-day-{day}"))
-                        .h(px(DAY_HEADER_TEXT))
-                        // Pinned so the paint matches the layout's row height.
-                        .line_height(px(DAY_HEADER_TEXT))
-                        .font_family(theme::FONT_DISPLAY)
-                        .text_size(px(15.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::t1())
-                        .child(day_title(day)),
-                )
-                .into_any_element(),
+            RowKind::Header { day, count } => {
+                self.render_day_header(base, day, row.first..row.first + count, cx)
+            }
             RowKind::Tiles => {
                 let items = self.displayed_rows(row.first..row.first + row.len);
                 let height = row.height - row.pad;
@@ -171,6 +159,143 @@ impl LuminaApp {
             self.queue_thumbnail_request_item(item);
         }
         texture
+    }
+}
+
+/// What a day header says, and its accessible labels.
+#[derive(Debug)]
+pub(crate) struct DayHeader {
+    pub date: String,
+    pub place: Option<String>,
+    pub count: String,
+    pub aria_label: String,
+    pub select_label: String,
+}
+
+impl LuminaApp {
+    /// The header of `day` with `count` items: its date, the day's most
+    /// common place from the cached layout build, and the accessible labels.
+    pub(crate) fn mosaic_day_header(&self, day: u32, count: usize) -> DayHeader {
+        let date = day_title(day);
+        let place = self.mosaic_day_place(day).map(place_label);
+        let count_text = crate::i18n::items(count);
+        let aria_label = [Some(date.clone()), place.clone(), Some(count_text.clone())]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let select_label = if count == 1 {
+            crate::i18n::t_with("mosaic.select_day_label_one", &[&date])
+        } else {
+            crate::i18n::t_with(
+                "mosaic.select_day_label",
+                &[&crate::i18n::count(count), &date],
+            )
+        };
+        DayHeader {
+            date,
+            place,
+            count: count_text,
+            aria_label,
+            select_label,
+        }
+    }
+
+    /// A day header row (frame `t0zQL`): date · pin + place · count, and
+    /// "Select >" on the right, all on one line of [`DAY_HEADER_TEXT`] so
+    /// the row is exactly its layout height.
+    fn render_day_header(
+        &mut self,
+        base: Div,
+        day: u32,
+        items: Range<usize>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let header = self.mosaic_day_header(day, items.len());
+        let line = px(DAY_HEADER_TEXT);
+        base.id(SharedString::from(format!("mosaic-day-row-{day}")))
+            .debug_selector(move || format!("mosaic-day-row-{day}"))
+            .role(Role::Heading)
+            .aria_label(SharedString::from(header.aria_label))
+            .child(
+                div()
+                    .h(line)
+                    .line_height(line)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(9.0))
+                    // ponytail: the design's -0.2 tracking is skipped; GPUI
+                    // 0.3.11 has no letter-spacing style.
+                    .child(
+                        div()
+                            .debug_selector(move || format!("mosaic-day-{day}"))
+                            .font_family(theme::FONT_DISPLAY)
+                            .text_size(px(15.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::t1())
+                            .child(header.date),
+                    )
+                    .children(header.place.map(|place| {
+                        div()
+                            .debug_selector(move || format!("mosaic-day-place-{day}"))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(render_icon(Icon::MapPin, px(11.0), theme::t2()))
+                            .child(
+                                div()
+                                    .font_family(theme::FONT_SANS)
+                                    .text_size(px(12.0))
+                                    .text_color(theme::t2())
+                                    .child(place),
+                            )
+                    }))
+                    .child(
+                        div()
+                            .debug_selector(move || format!("mosaic-day-count-{day}"))
+                            .font_family(theme::FONT_MONO)
+                            .text_size(px(10.0))
+                            .text_color(theme::t3())
+                            .child(header.count),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("mosaic-day-select-{day}")))
+                            .debug_selector(move || format!("mosaic-day-select-{day}"))
+                            .role(Role::Button)
+                            .aria_label(SharedString::from(header.select_label))
+                            .cursor_pointer()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(2.0))
+                            .font_family(theme::FONT_SANS)
+                            .text_size(px(11.5))
+                            .text_color(theme::t3())
+                            .hover(|s| s.text_color(theme::t1()))
+                            .child(crate::i18n::t("mosaic.select"))
+                            .child(render_icon(Icon::ChevronRight, px(12.0), theme::t3()))
+                            // Keep the press from starting the surface's
+                            // marquee, whose still release clears the selection.
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _w, cx| {
+                                this.select_range(items.clone(), cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+}
+
+/// "Lisbon, PT", or "Lisbon" without a country code (as the inspector
+/// summary joins them; there is no country-name table).
+pub(crate) fn place_label(place: &lumina_core::DayPlace) -> String {
+    match &place.1 {
+        Some(code) => format!("{}, {code}", place.0),
+        None => place.0.clone(),
     }
 }
 

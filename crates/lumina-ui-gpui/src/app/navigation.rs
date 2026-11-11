@@ -1109,6 +1109,25 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Selects exactly `range` (a Mosaic day), its first item as the
+    /// selected item and anchor, and refreshes the batch summary.
+    pub(crate) fn select_range(&mut self, range: std::ops::Range<usize>, cx: &mut Context<Self>) {
+        if range.is_empty() || self.similar_shots_shown() || self.map_shown() {
+            return;
+        }
+        self.selected_indices.clear();
+        self.selected_indices.extend(range.clone());
+        self.selected_index = Some(range.start);
+        self.selection_anchor = Some(range.start);
+        if let Some(item) = self.navigation_item(range.start) {
+            self.selected_item = Some(item);
+        }
+        self.update_batch_summary();
+        self.refresh_selected_tags();
+        self.schedule_session_save(cx);
+        cx.notify();
+    }
+
     pub fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.clear_selection_fields();
         // Clearing selection must forget the persisted item too (view/search
