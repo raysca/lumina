@@ -54,7 +54,10 @@ fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStat
 }
 
 /// Waits for `child`, killing it after `timeout`.
-fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Result<ExitStatus> {
+pub(crate) fn wait_with_timeout(
+    mut child: std::process::Child,
+    timeout: Duration,
+) -> Result<ExitStatus> {
     let _reaper = live_children::track(child.id());
     let deadline = Instant::now() + timeout;
     loop {

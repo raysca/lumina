@@ -663,31 +663,37 @@ pub fn extract_video_size(path: &Path) -> Option<(u32, u32)> {
     scan_movie_header(path, parse_tkhd_size)
 }
 
+/// Duration of a video as `(ms, seconds)`: from MP4/MOV headers, else from
+/// Spotlight (bounded by the native tool timeout). `None` when neither knows.
 pub fn extract_video_duration(path: &Path) -> Option<(u64, f64)> {
+    use std::io::Read;
     if let Some(res) = scan_movie_header(path, parse_mvhd_duration) {
         return Some(res);
     }
 
-    if let Ok(out) = std::process::Command::new("mdls")
+    // Spotlight's value, for containers the header parser can't read (MKV,
+    // AVI, WebM). Empty until the file is indexed. The output is one short
+    // line, far below a pipe buffer, so reading it after the exit cannot
+    // deadlock.
+    let mut child = std::process::Command::new("mdls")
         .arg("-name")
         .arg("kMDItemDurationSeconds")
         .arg(path)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdout = child.stdout.take()?;
+    if !crate::decoder::wait_with_timeout(child, crate::decoder::NATIVE_TOOL_TIMEOUT)
+        .ok()?
+        .success()
     {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout);
-            if let Some(val_str) = s.split('=').nth(1) {
-                if let Ok(secs) = val_str.trim().parse::<f64>() {
-                    if secs > 0.0 {
-                        let ms = (secs * 1000.0) as u64;
-                        return Some((ms, secs));
-                    }
-                }
-            }
-        }
+        return None;
     }
-
-    None
+    let mut text = String::new();
+    stdout.read_to_string(&mut text).ok()?;
+    let secs = text.split('=').nth(1)?.trim().parse::<f64>().ok()?;
+    (secs > 0.0).then_some(((secs * 1000.0) as u64, secs))
 }
 
 #[cfg(test)]

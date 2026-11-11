@@ -20,9 +20,10 @@ pub struct GeoPoint {
 impl Catalog {
     /// Upserts scanned items by path; scans and the watcher both land here.
     /// A date or place the user edited (`date_edited` / `place_edited`) is
-    /// kept over the file's. Returned items carry the scanned metadata plus
-    /// the row's id, favorite/hidden/trashed and title; read the row for
-    /// edited values.
+    /// kept over the file's, and so is a duration while a rescan of the
+    /// unchanged file fails to probe one. Returned items carry the scanned
+    /// metadata plus the row's id, favorite/hidden/trashed, title and
+    /// duration; read the row for edited values.
     /// ponytail: undoing an edit keeps its flag, so that item then ignores
     /// a later in-file date change; clear the flag on undo if that matters.
     ///
@@ -96,12 +97,20 @@ impl Catalog {
                 )
                 -- added_epoch_ms is set once, on first insert, never on update.
                 -- A date or place the user edited outlives the file's own.
+                -- A failed duration probe (0 or NULL; container formats the
+                -- header parser can't read fall back to Spotlight, which may
+                -- not have indexed the file) keeps the stored duration while
+                -- the file is unchanged. SET reads the old row on the right.
                 ON CONFLICT(file_path) DO UPDATE SET
                     file_size = excluded.file_size,
                     mtime_epoch_ms = excluded.mtime_epoch_ms,
                     width = excluded.width,
                     height = excluded.height,
-                    duration_ms = excluded.duration_ms,
+                    duration_ms = CASE
+                        WHEN COALESCE(excluded.duration_ms, 0) = 0
+                         AND file_size = excluded.file_size
+                         AND mtime_epoch_ms = excluded.mtime_epoch_ms
+                        THEN duration_ms ELSE excluded.duration_ms END,
                     timestamp_epoch_ms = CASE WHEN date_edited THEN timestamp_epoch_ms ELSE excluded.timestamp_epoch_ms END,
                     year = CASE WHEN date_edited THEN year ELSE excluded.year END,
                     month = CASE WHEN date_edited THEN month ELSE excluded.month END,
@@ -119,7 +128,7 @@ impl Catalog {
                     f_number = excluded.f_number,
                     iso = excluded.iso,
                     exposure_time = excluded.exposure_time
-                RETURNING id, is_favorite, is_hidden, is_trashed, title;
+                RETURNING id, is_favorite, is_hidden, is_trashed, title, duration_ms;
                 "#,
             )?;
 
@@ -164,13 +173,8 @@ impl Catalog {
                     ])?;
                 }
 
-                let (row_id, db_fav, db_hid, db_trash, db_title): (
-                    i64,
-                    i32,
-                    i32,
-                    i32,
-                    Option<String>,
-                ) = stmt.query_row(
+                let mut updated = item.clone();
+                let row_id: i64 = stmt.query_row(
                     params![
                         path_str,
                         item.parent_dir,
@@ -204,24 +208,18 @@ impl Catalog {
                         item.title,
                     ],
                     |row| {
-                        Ok((
-                            row.get(0)?,
-                            row.get(1)?,
-                            row.get(2)?,
-                            row.get(3)?,
-                            row.get(4)?,
-                        ))
+                        updated.is_favorite = row.get::<_, i32>(1)? != 0;
+                        updated.is_hidden = row.get::<_, i32>(2)? != 0;
+                        updated.is_trashed = row.get::<_, i32>(3)? != 0;
+                        updated.title = row.get(4)?;
+                        updated.duration_ms = row.get(5)?;
+                        row.get(0)
                     },
                 )?;
 
                 mark_present.execute(params![row_id, inode.map(|inode| inode as i64)])?;
 
-                let mut updated = item.clone();
                 updated.id = MediaId(row_id as u64);
-                updated.is_favorite = db_fav != 0;
-                updated.is_hidden = db_hid != 0;
-                updated.is_trashed = db_trash != 0;
-                updated.title = db_title;
                 inserted.push(updated);
             }
         }
@@ -1016,6 +1014,66 @@ mod tests {
             .lock()
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("user_version must be readable")
+    }
+
+    /// Upserts `item` and returns (the returned item's, the stored row's) duration.
+    fn upsert_duration(catalog: &Catalog, item: &MediaItem) -> (Option<u64>, Option<u64>) {
+        let returned = catalog
+            .insert_or_update_batch(std::slice::from_ref(item))
+            .expect("upsert must succeed")
+            .remove(0);
+        let stored = catalog.get_item_by_id(returned.id).unwrap().unwrap();
+        (returned.duration_ms, stored.duration_ms)
+    }
+
+    fn sample_video(duration_ms: Option<u64>) -> MediaItem {
+        let mut item = sample_item(0);
+        item.media_type = MediaType::Video;
+        item.duration_ms = duration_ms;
+        item
+    }
+
+    #[test]
+    fn rescan_with_failed_probe_keeps_duration_of_unchanged_file() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        upsert_duration(&catalog, &sample_video(Some(42_000)));
+        for failed in [Some(0), None] {
+            assert_eq!(
+                upsert_duration(&catalog, &sample_video(failed)),
+                (Some(42_000), Some(42_000)),
+                "a failed probe ({failed:?}) of an unchanged file must keep the stored duration"
+            );
+        }
+    }
+
+    #[test]
+    fn rescan_of_changed_file_takes_new_duration() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        upsert_duration(&catalog, &sample_video(Some(42_000)));
+        let mut changed = sample_video(Some(50_000));
+        changed.file_size += 1;
+        changed.mtime_epoch_ms += 1_000;
+        assert_eq!(
+            upsert_duration(&catalog, &changed),
+            (Some(50_000), Some(50_000)),
+            "a changed file's successful probe must replace the duration"
+        );
+    }
+
+    #[test]
+    fn failed_probe_of_file_with_new_size_or_mtime_takes_zero() {
+        for (what, size_delta, mtime_delta) in [("size", 1, 0), ("mtime", 0, 1_000)] {
+            let catalog = Catalog::open_in_memory().unwrap();
+            upsert_duration(&catalog, &sample_video(Some(42_000)));
+            let mut changed = sample_video(Some(0));
+            changed.file_size += size_delta;
+            changed.mtime_epoch_ms += mtime_delta;
+            assert_eq!(
+                upsert_duration(&catalog, &changed),
+                (Some(0), Some(0)),
+                "a file with only a new {what} that no longer probes must not keep the old duration"
+            );
+        }
     }
 
     #[test]
