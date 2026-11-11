@@ -730,6 +730,7 @@ impl Render for LuminaApp {
                                             .flex()
                                             .flex_col()
                                             .children(self.render_trash_note())
+                                            .children(self.render_filter_bar(cx))
                                             .child(
                                                 div()
                                                     .relative()
@@ -872,6 +873,12 @@ impl Render for LuminaApp {
                 self.sort_menu_open,
                 crate::views::sort_menu::render_sort_menu_overlay(self, cx),
                 "sort-menu-in",
+            ))
+            // 9c. Add filter menu backdrop (the card hangs from its opener)
+            .child(motion::overlay_in(
+                self.filter_menu.is_some(),
+                crate::views::filter_bar::render_filter_menu_overlay(self, cx),
+                "filter-menu-in",
             ))
             // 10. Tag Manager Modal Overlay
             .child(motion::overlay_in(

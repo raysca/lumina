@@ -264,6 +264,13 @@ impl LuminaApp {
         ActiveView::covers(data, range).then(|| rows_in(data, range))
     }
 
+    /// The latest fetched count, this view's or (while its fetch runs) the
+    /// previous view's, so a count can stay put instead of blinking out.
+    /// Never queries.
+    pub(crate) fn last_fetched_count(&self) -> Option<usize> {
+        self.active_view.data.as_ref().map(|data| data.count)
+    }
+
     /// Count to draw: the cache's for this view even if a newer revision is
     /// on its way, else the sidebar's cached count. Never queries.
     pub(crate) fn displayed_count(&self) -> usize {

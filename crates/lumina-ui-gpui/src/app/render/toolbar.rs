@@ -186,18 +186,24 @@ impl LuminaApp {
                     this.toggle_inspector(cx);
                 })),
             )
-            // ponytail: until the Add filter menu (Design 01 Task 4), the
-            // filter button opens the search field and its filter suggestions.
+            // Opens the Add filter menu, as the chip row's Add filter does.
             .child(
                 header_icon_button(
                     "header-filter",
                     Icon::SlidersHorizontal,
                     crate::i18n::t("header.filter"),
                     None,
-                    false,
+                    self.filter_menu_under_header(),
                 )
+                .relative()
+                .when(self.filter_menu_under_header(), |button| {
+                    button.child(popover_under(
+                        Anchor::TopRight,
+                        crate::views::filter_bar::filter_menu_card(self, cx),
+                    ))
+                })
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.focus_search_field(cx);
+                    this.toggle_filter_menu(false, cx);
                 })),
             )
             .child(
@@ -210,9 +216,10 @@ impl LuminaApp {
                 )
                 .relative()
                 .when(self.sort_menu_open, |button| {
-                    button.child(popover_under(crate::views::sort_menu::sort_menu_card(
-                        self, cx,
-                    )))
+                    button.child(popover_under(
+                        Anchor::TopRight,
+                        crate::views::sort_menu::sort_menu_card(self, cx),
+                    ))
                 })
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.toggle_sort_menu(cx);
@@ -374,9 +381,10 @@ impl LuminaApp {
             )
             .relative()
             .when(open, |button| {
-                button.child(popover_under(crate::views::downloads_panel::panel_card(
-                    self, window, cx,
-                )))
+                button.child(popover_under(
+                    Anchor::TopRight,
+                    crate::views::downloads_panel::panel_card(self, window, cx),
+                ))
             })
             .children(self.download_progress().map(|fraction| {
                 div()

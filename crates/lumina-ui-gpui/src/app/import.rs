@@ -77,7 +77,7 @@ impl LuminaApp {
     }
 
     /// A dialog, sheet, menu or the viewer is up. The header's Sort and
-    /// Downloads cards are deferred, so they would paint above it.
+    /// Downloads cards (and the Add filter menu) are deferred, so they would paint above it.
     fn modal_covers_header(&self) -> bool {
         self.dialog_open()
             || self.import.dialog.is_some()
@@ -86,7 +86,7 @@ impl LuminaApp {
             || self.slideshow.is_some()
     }
 
-    /// Closes the Sort and Downloads popovers once anything modal opens over
+    /// Closes the Sort, Add filter and Downloads popovers once anything modal opens over
     /// them. Run from render, so every opener (menus, palette, actions,
     /// clicks) is covered without each one knowing about the header.
     pub(crate) fn close_header_popovers_under_modals(&mut self) {
@@ -98,6 +98,7 @@ impl LuminaApp {
     /// Plain field resets, no notify: called from render.
     pub(crate) fn close_header_popovers(&mut self) {
         self.sort_menu_open = false;
+        self.filter_menu = None;
         if self.downloads.open {
             self.downloads.open = false;
             self.downloads.focused = None;
@@ -109,7 +110,10 @@ impl LuminaApp {
     /// ones drawn above it, and ↵ would go to the ones whose keys come first
     /// (a delete confirmation), so imports wait until it is closed.
     pub(crate) fn import_blocked_by_modal(&self) -> bool {
-        self.dialog_open() || self.sort_menu_open || self.downloads.open
+        self.dialog_open()
+            || self.sort_menu_open
+            || self.filter_menu.is_some()
+            || self.downloads.open
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

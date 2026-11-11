@@ -104,35 +104,11 @@ fn import_button_and_sort_button_run_their_actions() {
         assert!(!app.sort_menu_open, "Escape closes the sort menu")
     });
 
-    // Until the Add filter menu exists, the filter button opens the search
-    // field with its filter suggestions.
-    view.update(vcx, |app, cx| {
-        app.toggle_sidebar(cx);
-        assert!(app.sidebar_collapsed);
-    });
-    render_ui(vcx);
+    // The filter button opens the Add filter menu under it (Design 01
+    // Task 4, `tests/filter_bar.rs`).
     click(vcx, "header-filter");
-    view.update(vcx, |app, _| {
-        assert!(
-            !app.sidebar_collapsed && app.search_focused,
-            "the filter button shows the sidebar and focuses its search field"
-        );
-    });
-    assert!(
-        vcx.debug_bounds("search-suggestions").is_some(),
-        "the filter suggestions show"
-    );
-    // Unlike ⌘F, it keeps the query: a filter adds to it.
-    view.update(vcx, |app, cx| {
-        app.set_search_query("is:video", cx);
-        app.blur_search(cx);
-    });
     render_ui(vcx);
-    click(vcx, "header-filter");
-    view.update(vcx, |app, _| {
-        assert!(app.search_focused, "the field is focused again");
-        assert_eq!(app.search_query, "is:video", "the query is kept");
-    });
+    assert_under(vcx, "filter-add-menu", "header-filter");
 }
 
 /// A popover's right edge lines up with its button's, and it opens below it.

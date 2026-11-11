@@ -8,6 +8,7 @@ pub mod delete_modal;
 pub mod downloads_confirm;
 pub mod downloads_panel;
 pub mod duplicates;
+pub mod filter_bar;
 pub mod first_scan;
 pub mod floating_inspector;
 pub mod floating_pip;

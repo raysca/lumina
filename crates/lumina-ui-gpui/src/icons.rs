@@ -57,6 +57,8 @@ pub enum Icon {
     Import,
     Grid3x3,
     Map,
+    Calendar,
+    FileImage,
 }
 
 impl Icon {
@@ -118,6 +120,8 @@ impl Icon {
         Icon::Import,
         Icon::Grid3x3,
         Icon::Map,
+        Icon::Calendar,
+        Icon::FileImage,
     ];
 
     pub fn path(self) -> &'static str {
@@ -176,6 +180,8 @@ impl Icon {
             Self::Import => "icons/import.svg",
             Self::Grid3x3 => "icons/grid-3x3.svg",
             Self::Map => "icons/map.svg",
+            Self::Calendar => "icons/calendar.svg",
+            Self::FileImage => "icons/file-image.svg",
         }
     }
 }

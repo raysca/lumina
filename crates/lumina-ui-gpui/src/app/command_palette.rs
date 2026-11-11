@@ -56,6 +56,8 @@ pub enum CommandId {
     QuickFilter(&'static str),
     /// Removes every filter token from the search, keeping its text.
     ClearFilters,
+    /// Opens the Add filter menu under the header's Filter button.
+    AddFilter,
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
     /// Picks, rejects or unflags the selection (P / X / U).
@@ -170,6 +172,7 @@ impl Command {
             ViewerZoom(_) => Icon::Maximize,
             QuickFilter(_) => Icon::Search,
             ClearFilters => Icon::X,
+            AddFilter => Icon::SlidersHorizontal,
             Rate(0) => Icon::Star,
             Rate(_) => Icon::StarFilled,
             Flag(lumina_core::Flag::Pick) => Icon::Check,
@@ -747,6 +750,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.filter_unlabeled",
             shortcut: "",
             keywords: "filter colour color label none no",
+        },
+        Command {
+            id: CommandId::AddFilter,
+            key: "command.add_filter",
+            shortcut: "",
+            keywords: "filter menu narrow refine",
         },
         Command {
             id: CommandId::ClearFilters,
@@ -1393,6 +1402,7 @@ impl LuminaApp {
             CommandId::ViewerZoom(preset) => self.apply_viewer_zoom_preset(preset, cx),
             CommandId::QuickFilter(token) => self.toggle_quick_filter(token, cx),
             CommandId::ClearFilters => self.clear_quick_filters(cx),
+            CommandId::AddFilter => self.open_filter_menu(false, cx),
             CommandId::Rate(rating) => {
                 self.set_rating_selected(rating, cx);
             }

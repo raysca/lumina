@@ -47,6 +47,15 @@ pub fn items(n: usize) -> String {
     }
 }
 
+/// The filter row's count: "1 match", "1,284 matches".
+pub fn matches(n: usize) -> String {
+    if n == 1 {
+        t("filter.matches_one")
+    } else {
+        t("filter.matches_other").replace("{n}", &count(n))
+    }
+}
+
 /// "Jun 2018" (en-US short month and year); the year alone for a month
 /// outside 1-12.
 pub fn month_year(year: i32, month: u32) -> String {
@@ -157,6 +166,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.filter_color_purple" => "Show Color: Purple",
         "command.filter_unlabeled" => "Show Unlabeled",
         "command.filter_clear" => "Clear Filters",
+        "command.add_filter" => "Add Filter…",
         "command.rate_1" => "Rate 1 Star",
         "command.rate_2" => "Rate 2 Stars",
         "command.rate_3" => "Rate 3 Stars",
@@ -433,6 +443,18 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.import" => "Import",
         "header.import_tooltip" => "Import… (⇧⌘I)",
         "header.filter" => "Filter",
+        "filter.matches_one" => "1 match",
+        "filter.matches_other" => "{n} matches",
+        "filter.clear_all" => "Clear all",
+        "filter.add" => "Add filter",
+        "filter.remove" => "Remove {label}",
+        "filter.rated" => "Rated {n}+",
+        "filter.videos" => "Videos",
+        "filter.photos" => "Photos",
+        "filter.raw" => "RAW",
+        "filter.camera" => "Camera…",
+        "filter.place" => "Place…",
+        "filter.date" => "Date…",
         "header.view_grid" => "Grid",
         "header.view_map" => "Map",
         "header.tags" => "Tags",

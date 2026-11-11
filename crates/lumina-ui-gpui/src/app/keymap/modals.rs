@@ -181,6 +181,19 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d4. Add filter menu: ↑/↓ move, ↵ chooses, Escape closes; other
+        // keys stay here, so ⌫ never trashes the selection behind it.
+        if self.filter_menu.is_some() {
+            match key {
+                "escape" => self.close_filter_menu(cx),
+                "up" => self.move_filter_menu_highlight(-1, cx),
+                "down" => self.move_filter_menu_highlight(1, cx),
+                "enter" | "return" => self.activate_filter_menu_highlight(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {

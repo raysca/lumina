@@ -167,23 +167,23 @@ pub(crate) fn header_primary_button(
         .child(label)
 }
 
-/// Hangs `card` under the `relative` header button it is a child of: right
-/// edges aligned, 6px below, kept inside the window. Deferred, so it paints
-/// (and takes clicks) above the rest of the window, its dismiss backdrop
-/// included.
-pub(crate) fn popover_under(card: impl IntoElement) -> Div {
-    // A zero-size point at the button's bottom-right corner, past its 1px
-    // border.
-    div()
-        .absolute()
-        .right(px(-1.0))
-        .bottom(px(-1.0))
-        .size_0()
-        .child(deferred(
-            anchored()
-                .anchor(Anchor::TopRight)
-                .offset(point(px(0.0), px(6.0)))
-                .snap_to_window_with_margin(px(8.0))
-                .child(card),
-        ))
+/// Hangs `card` under the `relative` control it is a child of, 6px below
+/// and kept inside the window: right edges aligned for `Anchor::TopRight`
+/// (header buttons), left edges for `Anchor::TopLeft` (the chip row's Add
+/// filter). Deferred, so it paints (and takes clicks) above the rest of the
+/// window, its dismiss backdrop included.
+pub(crate) fn popover_under(anchor: Anchor, card: impl IntoElement) -> Div {
+    // A zero-size point at the control's bottom corner, past its 1px border.
+    let point_at = div().absolute().bottom(px(-1.0)).size_0();
+    match anchor {
+        Anchor::TopLeft => point_at.left(px(-1.0)),
+        _ => point_at.right(px(-1.0)),
+    }
+    .child(deferred(
+        anchored()
+            .anchor(anchor)
+            .offset(point(px(0.0), px(6.0)))
+            .snap_to_window_with_margin(px(8.0))
+            .child(card),
+    ))
 }

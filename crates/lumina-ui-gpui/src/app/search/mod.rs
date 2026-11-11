@@ -6,6 +6,9 @@ use std::collections::HashSet;
 use crate::app::LuminaApp;
 use crate::views::sidebar::AlbumSelection;
 
+mod chips;
+pub(crate) use chips::{filter_chips, filter_label, remove_query_tokens, FilterChip};
+
 /// Maximum number of committed queries kept in recent-search history.
 pub(crate) const MAX_RECENT_SEARCHES: usize = 10;
 
@@ -205,6 +208,16 @@ fn is_filter_token(token: &str) -> bool {
     parsed.fts_terms.is_empty() && parsed.fts_exclude.is_empty()
 }
 
+/// `query`'s tokens, an unclosed quote closed first so a token appended
+/// after them stays outside it.
+pub(crate) fn query_tokens_closed(query: &str) -> Vec<String> {
+    if query.matches('"').count() % 2 == 1 {
+        lumina_core::search::tokenize_query(&format!("{query}\""))
+    } else {
+        lumina_core::search::tokenize_query(query)
+    }
+}
+
 /// Toggles a quick-filter `token` in `query` (D8). A token with the same
 /// parsed effect is removed; otherwise tokens of the same family (favorite,
 /// rating, colour, media type, flag) are replaced and `token` is appended. Quoted phrases
@@ -213,15 +226,7 @@ pub(crate) fn toggle_query_token(query: &str, token: &str) -> String {
     use lumina_core::StructuredQuery;
     let wanted = StructuredQuery::parse(token);
     let family = filter_family(&wanted);
-    // Close an unclosed quote so the appended token stays outside it.
-    let closed;
-    let query = if query.matches('"').count() % 2 == 1 {
-        closed = format!("{query}\"");
-        closed.as_str()
-    } else {
-        query
-    };
-    let mut tokens = lumina_core::search::tokenize_query(query);
+    let mut tokens = query_tokens_closed(query);
     let before = tokens.len();
     tokens.retain(|existing| StructuredQuery::parse(existing) != wanted);
     if tokens.len() == before {
