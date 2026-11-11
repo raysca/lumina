@@ -98,6 +98,34 @@ Lumina is designed to be usable without a mouse:
   the middle as far as the world's edge allows, and `Esc` returns to the
   grid. Keys typed in the palette or a
   field stay there.
+- **Mosaic**: ⌘K Show Mosaic / Show Grid or the toolbar's view-mode
+  segments switch the browser between justified rows and the square grid
+  (the choice is kept; Grid is the default). Duplicates and a smart album
+  that no longer exists always show the grid; the segments are not drawn in
+  Duplicates or Recently Deleted, where ⌘K still switches. In Mosaic, `↑`/`↓` move to the tile nearest in x in the row above
+  or below, across day headers, and stay put on the first or last row;
+  `⇧↑`/`⇧↓` extend the same way; PageUp/PageDown move by the visible rows
+  less one; Home/End and `←`/`→` work as in the grid. A drag selects the
+  reading-order range between the two tiles. `⌘=`/`⌘-`, ⌘-scroll and pinch
+  step the row height and keep the item under the pointer (or the
+  selection) in place. Under date sort each day has a header (heading,
+  labelled with the date, place and count) and a Select button (button,
+  labelled e.g. "Select 3 items from Sat, Jun 14, 2025"; dimmed, described
+  "Updating…", while the layout catches up with a scan); ⌘K Select Day
+  selects the selected item's day, or the top visible day. Undated items
+  form their own "Undated" section, last in newest-first order and first
+  in oldest-first. ⌘K Select Day is hidden in the viewer and while the
+  layout is updating. In All Media under date sort with no search, the zoom
+  pill also offers
+  Years · Months · Days (buttons, toggled; ⌘K Show Years / Show Months /
+  Show Days): `←`/`→`/`↑`/`↓` move the focus ring over the cards (button,
+  labelled e.g. "2025, 1,234 items"), `↵` opens that period in Days with
+  its first day on top, `Esc` returns to Days, `⌘=`/`⌘-` still step the
+  size, and a timeline-rail click opens Days there. While cards show, the
+  grid keys that act on the hidden selection are absorbed; ⌘A, the other
+  ⌘ shortcuts (⇧⌘A, ⇧⌘R, ⌥⌘C, ⌘E, ⌘I), ⌘K and menu commands still act
+  on it. Undated items have no year or month
+  card. None of this is checked with VoiceOver yet.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
@@ -241,6 +269,11 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   loading, empty and error notices (status).
 - the batch dock's Share… button (button, labelled "Share the selected
   originals", with the same tooltip).
+- Mosaic: the view-mode segments (button, toggled), each day header
+  (heading, labelled with date, place and count) and its Select button
+  (button, inside the heading), the zoom pill's Years / Months / Days
+  segments (button, toggled, with a tooltip) and the year and month cards
+  (button, labelled e.g. "2025, 1,234 items").
 
 The recent-search history icon and the scrub preview card have no role.
 

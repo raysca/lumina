@@ -5,7 +5,7 @@ and `2026-11-11-design-01b-mosaic.md`) skipped, dropped or left unverified, so w
 to it. Each line names where it came from. Remove an entry when it lands; add one whenever a
 task defers something.
 
-Last updated: 2026-11-11 (after plans 00–03 and 02 landed; 01b accepted).
+Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 
 ## Never verified (applies to everything)
 - **Visual check against the frames.** No screen has been compared by eye with its `.pen`
@@ -13,7 +13,10 @@ Last updated: 2026-11-11 (after plans 00–03 and 02 landed; 01b accepted).
   shows the Welcome screen.
 - **VoiceOver.** Roles and labels were added to new controls, but none were checked with
   VoiceOver (AGENTS §11, §15).
-- **Live interaction.** `make ui-e2e` skips without Accessibility permission.
+- **Live interaction.** `make ui-e2e` has never run its interaction steps here. Without Screen
+  Recording it FAILS at "could not capture the window" (`scripts/live_ui_automation.sh:263`,
+  since dff8d3d) before its Accessibility check can report SKIP; the script should map a
+  capture failure to SKIP unless `LUMINA_REQUIRE_UI_PERMISSIONS=1`.
 - **Release-mode bench.** Most `make bench` runs were debug; only the `is:edited` and FTS fixes
   have release numbers.
 
@@ -80,9 +83,30 @@ Last updated: 2026-11-11 (after plans 00–03 and 02 landed; 01b accepted).
   vanished in the meantime opens nothing. (02 Task 6)
 - **Map:** neither the card nor Places wraps across the date line.
 
+- **Mosaic (01b):**
+  - Rows leave the 158–224 band in narrow panes or with very mixed aspects (the tests hold real
+    photo shapes in band at 1200 px; uniform 0.4–3.0 aspects leave it often at 800 px). A lone
+    portrait in a narrow pane is the one row that stops short of the right edge. (Task 3)
+  - Switching view shows an empty list until that view's first layout lands (~30 ms at
+    125k, release); outside writes refresh the layout after a 750 ms cool-down, and Select / Select
+    Day do nothing until then. (Tasks 4–5)
+  - Grid ↔ Mosaic does not carry the scroll position across. ⌘-scroll over the empty area
+    below the last row may scroll; ⌘-scroll and pinch do nothing over Years/Months cards.
+  - Under Years/Months, ⌘A and ⌘K/menu commands still act on the hidden selection (same as
+    the map). Undated items have no year/month card. The rail lens follows the hidden Days
+    list. (Task 7)
+  - Year/month card sizes (3 × 200 px, 4 × 150 px covers) are not in the frame; unchecked.
+  - Select Day, Show Mosaic / Show Grid and Show Years / Months / Days are in ⌘K only: not
+    in the menu bar (Show Map is) or the shortcut sheet. Undated sorts first in oldest-first.
+  - Bench covers the Library scope only; album/search layout checked by EXPLAIN. No test of
+    a 3,000-item day. `day_places` release gate is 110 ms (measured 53); the fix if it
+    grows is a `(year, month, day, city)` index. (Task 2)
+
 ## Code health
-- Files over the ~500-line guideline: `app/render/grid.rs` (~1300), `app/text_input.rs`,
-  `app/keymap/modals.rs`, `views/inspector/body.rs`, `app/map.rs` (~680). 01b Task 1 starts on
-  `grid.rs`.
-- Docs not yet updated for user-visible changes from these plans (README / accessibility.md /
-  CHANGELOG), except Show on Map.
+- Files over the ~500-line guideline: `app/navigation.rs` (~1500), `app/text_input.rs`,
+  `app/render/grid.rs` (~710, down from 1300), `app/map.rs` (~710), `app/keymap/modals.rs`,
+  `views/mosaic.rs` (~600 with tests), `views/inspector/body.rs`, `app/command_palette.rs`
+  (~1580), `app/library.rs` (~1425), `config.rs` (~1360, mostly tests), `app/state.rs`
+  (~1070), `i18n.rs` (~640).
+- There is no CHANGELOG; user-visible changes from these plans are only in accessibility.md
+  (Mosaic, Show on Map). README not updated.
