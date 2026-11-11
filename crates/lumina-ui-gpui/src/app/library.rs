@@ -836,7 +836,7 @@ impl LuminaApp {
         .detach();
     }
 
-    /// Drops keyboard focus from the toolbar search field.
+    /// Drops keyboard focus from the sidebar search field.
     pub fn blur_search(&mut self, cx: &mut Context<Self>) {
         if self.search_focused {
             self.search_focused = false;
@@ -848,7 +848,7 @@ impl LuminaApp {
         }
     }
 
-    /// Current suggestion rows for the toolbar search field.
+    /// Clears the sidebar search field's query.
     pub fn clear_search(&mut self, cx: &mut Context<Self>) {
         let departing = self.navigation_snapshot();
         self.search_query.clear();

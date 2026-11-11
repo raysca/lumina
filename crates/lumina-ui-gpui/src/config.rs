@@ -384,8 +384,8 @@ pub struct AppConfig {
     /// density changes and new photos shifting indices.
     #[serde(default)]
     pub last_scroll_anchor_id: Option<u64>,
-    /// Most recent committed toolbar searches, newest first. The app trims and
-    /// bounds this list when recording; `serde(default)` keeps existing config
+    /// Most recent committed searches from the sidebar field, newest first.
+    /// The app trims and bounds this list when recording; `serde(default)` keeps existing config
     /// files loading and keeps tests off the real config path.
     #[serde(default)]
     pub recent_searches: Vec<String>,

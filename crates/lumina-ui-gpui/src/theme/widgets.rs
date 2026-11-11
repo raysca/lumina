@@ -19,6 +19,7 @@ pub fn nav_item(
     active: bool,
 ) -> Stateful<Div> {
     let (icon_selector, count_selector) = (format!("{selector}-icon"), format!("{selector}-count"));
+    let active_selector = format!("{selector}-active");
     let aria = crate::i18n::nav_aria_label(label, count);
     div()
         .id(ElementId::Name(selector.clone().into()))
@@ -47,6 +48,10 @@ pub fn nav_item(
         )
         .child(
             div()
+                // Tests read which row is active from this selector.
+                .when(active, |label| {
+                    label.debug_selector(move || active_selector)
+                })
                 .flex_1()
                 .min_w_0()
                 .truncate()

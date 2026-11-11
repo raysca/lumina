@@ -47,6 +47,7 @@ mod quick_edit_crop_mouse;
 mod quick_edit_guards;
 mod quick_edit_preview;
 mod regressions;
+mod search_field;
 mod session_restore;
 #[cfg(target_os = "macos")]
 mod share;

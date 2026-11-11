@@ -3,7 +3,6 @@ use gpui::*;
 
 use crate::app::LuminaApp;
 use crate::theme;
-use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
 /// Height of the main column's header. Sheets hang from its bottom edge.
@@ -204,7 +203,6 @@ impl LuminaApp {
                         })
                     }),
             )
-            .child(SearchBarView::render_field(self, cx))
             // Trash bulk actions
             .children((trash_count > 0).then(|| {
                 div()

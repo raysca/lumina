@@ -94,7 +94,7 @@ pub(super) fn render_pinned_section(
                 .map(|album| render_album_or_rename(this, album, cx)),
         )
         .children(smart.into_iter().map(|album| {
-            let is_active = this.selection == AlbumSelection::User(album.id);
+            let is_active = this.sidebar_highlights(&AlbumSelection::User(album.id));
             let count = this.user_album_counts.get(&album.id).copied().unwrap_or(0);
             sections::render_user_smart_album_row(this, album, count, is_active, cx)
                 .into_any_element()
@@ -117,7 +117,7 @@ fn render_album_or_rename(
 fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>) -> AnyElement {
     let id = album.id;
     let count = this.albums.counts.get(&id).copied().unwrap_or(0);
-    let is_active = this.selection == AlbumSelection::Album(id);
+    let is_active = this.sidebar_highlights(&AlbumSelection::Album(id));
     let action = |name: &'static str, tooltip: &'static str, icon: Icon| {
         div()
             .id((name, id as u64))

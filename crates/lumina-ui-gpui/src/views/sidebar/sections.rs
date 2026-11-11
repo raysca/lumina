@@ -209,7 +209,7 @@ pub(super) fn render_smart_albums_section(
                 // Pinned ones are drawn in the Pinned group instead.
                 .filter(|album| !album.pinned)
                 .map(|album| {
-                    let is_active = this.selection == AlbumSelection::User(album.id);
+                    let is_active = this.sidebar_highlights(&AlbumSelection::User(album.id));
                     let count = this.user_album_counts.get(&album.id).copied().unwrap_or(0);
                     render_user_smart_album_row(this, album, count, is_active, cx)
                         .into_any_element()
@@ -268,7 +268,7 @@ pub(super) fn render_tags_section(
                     let label = row.label().to_string();
                     let is_editing = this.editing_tag.as_ref() == Some(&tag_str);
                     let is_active =
-                        matches!(&this.selection, AlbumSelection::Tag(t) if t == &tag_str);
+                        this.sidebar_highlights(&AlbumSelection::Tag(tag_str.clone()));
                     let tag_count = row.count;
                     let tag_for_select = tag_str.clone();
 
@@ -461,7 +461,7 @@ pub(super) fn render_tags_section(
 }
 
 fn render_entry(this: &LuminaApp, entry: NavEntry, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let is_active = this.selection == entry.selection;
+    let is_active = this.sidebar_highlights(&entry.selection);
     let places = entry.key == "places";
     let selection = entry.selection;
     render_nav_item(

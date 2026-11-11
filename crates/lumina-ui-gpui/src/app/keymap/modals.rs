@@ -417,7 +417,7 @@ impl LuminaApp {
             return true;
         }
 
-        // 6. Toolbar search bar input focus
+        // 6. Sidebar search field input focus
         if self.search_focused {
             if key == "escape" {
                 // Escape layers: first hide the suggestion dropdown, then blur.

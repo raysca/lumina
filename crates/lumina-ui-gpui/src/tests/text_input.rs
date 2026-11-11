@@ -121,7 +121,7 @@ fn cmd_v_pastes_into_the_search_field_as_one_line() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The toolbar search, focused and drawn so its input takes keys.
+/// The sidebar search, focused and drawn so its input takes keys.
 fn focused_search<'a>(
     name: &str,
     cx: &'a mut gpui::TestAppContext,

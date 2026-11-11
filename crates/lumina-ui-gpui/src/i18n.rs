@@ -374,6 +374,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "sidebar.rail_tooltip" => "{label} · {n}",
         "sidebar.hide" => "Hide Sidebar",
         "sidebar.show" => "Show Sidebar",
+        "search.placeholder" => "Search library",
+        "search.shortcut" => "⌘F",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",

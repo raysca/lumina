@@ -48,7 +48,7 @@ fn render_rail_button(
     entry: NavEntry,
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
-    let is_active = this.selection == entry.selection;
+    let is_active = this.sidebar_highlights(&entry.selection);
     let key = entry.key;
     let tooltip = t("sidebar.rail_tooltip")
         .replace("{label}", entry.label)

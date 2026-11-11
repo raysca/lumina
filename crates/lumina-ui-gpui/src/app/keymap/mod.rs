@@ -240,6 +240,14 @@ impl LuminaApp {
         }
 
         if cmd_or_ctrl && !ctrl_cmd && key.eq_ignore_ascii_case("f") {
+            // The field lives in the sidebar; the rail has none, so show it.
+            if self.sidebar_collapsed {
+                self.toggle_sidebar(cx);
+                // A failed save puts the rail back: no field to focus.
+                if self.sidebar_collapsed {
+                    return;
+                }
+            }
             self.search_focused = true;
             self.search_query.clear();
             cx.notify();

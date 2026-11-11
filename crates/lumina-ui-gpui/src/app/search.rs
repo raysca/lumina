@@ -1,4 +1,4 @@
-//! Toolbar search suggestions and recent-search history.
+//! Sidebar search suggestions and recent-search history.
 
 use gpui::Context;
 use std::collections::HashSet;
@@ -327,6 +327,13 @@ impl LuminaApp {
         self.navigation_history.sync_pending(album);
         self.selection = AlbumSelection::AllLibrary;
         self.stacks.reset();
+    }
+
+    /// Whether the sidebar row for `selection` shows as active. While a
+    /// query shows no row does: the results span the library, even though
+    /// the selection stays `AllLibrary` for Back and navigation.
+    pub(crate) fn sidebar_highlights(&self, selection: &AlbumSelection) -> bool {
+        self.search_query.is_empty() && &self.selection == selection
     }
 
     /// Runs a quick filter: toggles its token in the query (D8).

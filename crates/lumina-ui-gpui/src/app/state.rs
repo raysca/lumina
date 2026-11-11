@@ -55,7 +55,7 @@ impl SessionSaveState {
     }
 }
 
-/// Toolbar search suggestion dropdown state.
+/// Sidebar search suggestion dropdown state.
 ///
 /// Candidate suggestions are derived on demand from the cached recent-search
 /// list and cached library tag counts, so nothing here requires SQL. Only the

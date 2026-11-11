@@ -1,68 +1,85 @@
 use crate::theme;
 use crate::LuminaApp;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 pub struct SearchBarView;
 
 impl SearchBarView {
-    /// Search field that lives in the toolbar.
+    /// Search field in the sidebar's search slot (Design 03): idle on
+    /// `bg_0` with a `line` outline, focused on `bg_3` with an accent one.
     pub fn render_field(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
         let active = !this.search_query.is_empty();
         let focused = this.search_focused;
         let input = this.field_input_for(crate::app::text_input::TextTarget::Search);
-        let query_text = if active {
-            this.search_query.clone()
-        } else {
-            "Search — try camera:sony iso:>3200".to_string()
-        };
 
         let field = div()
             .id("search-input-box")
             .debug_selector(|| "search-input".to_string())
-            .w(px(300.0))
-            .h(px(28.0))
-            .px_2()
+            // Focused, the inner text input carries the role; one field, not two.
+            .when(!focused, |d| {
+                d.role(Role::TextInput)
+                    .aria_label(crate::i18n::t("search.placeholder"))
+            })
+            .w_full()
+            .h(px(34.0))
+            .px(px(10.0))
             .flex()
             .flex_row()
             .items_center()
-            .gap_2()
-            .rounded(theme::RADIUS_MD)
+            .gap(px(8.0))
+            .rounded(theme::RADIUS_LG)
             .border_1()
             .border_color(if focused {
-                theme::focus_ring()
-            } else if active {
-                theme::line_2()
+                theme::accent()
             } else {
                 theme::line()
             })
-            .bg(theme::bg_stage())
+            .bg(if focused {
+                theme::bg_3()
+            } else {
+                theme::bg_0()
+            })
             .cursor_text()
-            .text_size(theme::TEXT_BODY)
+            .text_size(px(12.5))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.search_focused = true;
                 this.reset_search_suggestions();
                 cx.notify();
             }))
-            .child(crate::icons::render_icon(
-                crate::icons::Icon::Search,
-                px(13.0),
-                theme::t2(),
-            ))
+            .child(
+                crate::icons::render_icon(crate::icons::Icon::Search, px(14.0), theme::t3())
+                    .flex_none(),
+            )
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
                     .overflow_hidden()
                     .whitespace_nowrap()
-                    .text_color(if focused || active {
-                        theme::t1()
-                    } else {
-                        theme::t2()
-                    })
+                    .text_color(theme::t1())
                     .child(match input {
                         Some(input) => input.into_any_element(),
-                        None => query_text.into_any_element(),
+                        None if active => this.search_query.clone().into_any_element(),
+                        None => div()
+                            .debug_selector(|| "search-placeholder".to_string())
+                            .truncate()
+                            .text_color(theme::t3())
+                            .child(crate::i18n::t("search.placeholder"))
+                            .into_any_element(),
                     }),
             )
+            .when(!active, |field| {
+                field.child(
+                    div()
+                        .debug_selector(|| "search-shortcut".to_string())
+                        .flex_none()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(px(10.0))
+                        .text_color(theme::t3())
+                        .child(crate::i18n::t("search.shortcut")),
+                )
+            })
             .children(active.then(|| {
                 div()
                     .flex()
@@ -71,8 +88,10 @@ impl SearchBarView {
                     .gap_1p5()
                     .child(
                         div()
-                            .text_color(theme::t2())
-                            .child(format!("{}", this.displayed_count())),
+                            .font_family(theme::FONT_MONO)
+                            .text_size(px(10.0))
+                            .text_color(theme::t3())
+                            .child(crate::i18n::count(this.displayed_count())),
                     )
                     .child(
                         div()
@@ -102,19 +121,20 @@ impl SearchBarView {
             }));
 
         // Relative wrapper so the suggestion dropdown can anchor under the
-        // field and paint above the filter bar.
+        // field and paint above the sidebar rows.
         div()
+            .debug_selector(|| "sidebar-search-slot".to_string())
             .relative()
-            .w(px(300.0))
+            .flex_none()
+            .w_full()
             .child(field)
             .children(Self::render_suggestions(this, cx))
     }
 
     /// Compact suggestion dropdown anchored under the focused search field.
     ///
-    /// The panel is deferred so it paints after the filter bar even though it is
-    /// a toolbar child; the occluding card keeps pointer events off the grid
-    /// beneath it.
+    /// The panel is deferred so it paints over the sidebar rows that follow
+    /// the field; the occluding card keeps pointer events off them.
     fn render_suggestions(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElement> {
         if !this.search_focused {
             return None;
@@ -136,9 +156,9 @@ impl SearchBarView {
             .id("search-suggestions-panel")
             .debug_selector(|| "search-suggestions".to_string())
             .absolute()
-            .top(px(30.0))
-            .right(px(0.0))
-            .w(px(320.0))
+            .top(px(38.0))
+            .left_0()
+            .right_0()
             .p(px(4.0))
             .bg(theme::bg_1())
             .border_1()
@@ -186,12 +206,12 @@ impl SearchBarView {
                             theme::t2(),
                         ))
                 }));
-                row.child(suggestion).on_click(cx.listener(
-                    move |this, _event: &ClickEvent, _window, cx| {
+                // A long entry ends in an ellipsis in the narrow sidebar.
+                row.child(div().flex_1().min_w_0().truncate().child(suggestion))
+                    .on_click(cx.listener(move |this, _event: &ClickEvent, _window, cx| {
                         cx.stop_propagation();
                         this.apply_search_suggestion_at(index, cx);
-                    },
-                ))
+                    }))
             }))
             .children(explanation.map(|text| {
                 div()

@@ -30,8 +30,6 @@ fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
         f32::from(title.size.height) >= 24.0,
         "the page title is 15px (v3), not 12px breadcrumb text: {title:?}"
     );
-    let search = vcx.debug_bounds("search-input").expect("search");
-    assert_eq!(f32::from(search.size.width), 300.0, "search is 300px");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

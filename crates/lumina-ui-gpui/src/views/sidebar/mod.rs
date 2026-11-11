@@ -70,13 +70,9 @@ impl SidebarView {
             .px(px(12.0))
             .text_color(theme::t1())
             .child(render_brand())
-            // Plan 03 puts the search field here.
-            .child(
-                div()
-                    .debug_selector(|| "sidebar-search-slot".to_string())
-                    .flex_none()
-                    .h(px(34.0)),
-            )
+            .child(crate::views::search_bar::SearchBarView::render_field(
+                this, cx,
+            ))
             .child(
                 div()
                     .id("sidebar-scroll")
