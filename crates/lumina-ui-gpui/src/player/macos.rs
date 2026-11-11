@@ -53,7 +53,7 @@ extern "C" {
     fn lumina_player_chapter_start(player: *mut c_void, index: c_int) -> f64;
     fn lumina_player_chapter_title(player: *mut c_void, index: c_int) -> *mut c_char;
     fn lumina_player_free_string(s: *mut c_char);
-    fn lumina_window_keep_visible_when_inactive(ns_view: *mut c_void);
+    fn lumina_window_set_up_pip(ns_view: *mut c_void);
 }
 
 /// Takes ownership of a malloc'd UTF-8 string from the bridge. Null is "".
@@ -309,10 +309,11 @@ impl VideoPlayerBackend for AvFoundationPlayer {
     }
 }
 
-/// Keeps `window` on screen while Lumina is inactive. GPUI makes floating
-/// windows NSPanels, which macOS hides when the app loses focus; the PiP
-/// window must stay visible. No-op without a native AppKit window (tests).
-pub fn keep_window_visible_when_inactive(window: &gpui::Window) {
+/// Sets up the PiP window: keeps it on screen while Lumina is inactive (GPUI
+/// makes floating windows NSPanels, which macOS hides when the app loses
+/// focus) and hides the window buttons, since the card draws its own Close.
+/// No-op without a native AppKit window (tests).
+pub fn set_up_pip_window(window: &gpui::Window) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     let Ok(handle) = HasWindowHandle::window_handle(window) else {
         return;
@@ -320,7 +321,7 @@ pub fn keep_window_visible_when_inactive(window: &gpui::Window) {
     if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
         // SAFETY: GPUI hands out its live NSView, borrowed for this call on
         // the main thread; the bridge only reads its window and sets flags.
-        unsafe { lumina_window_keep_visible_when_inactive(appkit.ns_view.as_ptr()) };
+        unsafe { lumina_window_set_up_pip(appkit.ns_view.as_ptr()) };
     }
 }
 

@@ -581,6 +581,12 @@ fn pip_card_has_design_controls() {
             "the PiP card must always show {selector}"
         );
     }
+    let badge = pip.debug_bounds("pip-badge").expect("badge renders");
+    assert_eq!(
+        (badge.left(), badge.top()),
+        (gpui::px(12.0), gpui::px(12.0)),
+        "the window buttons are hidden, so the badge sits at the frame's 12 px corner: {badge:?}"
+    );
 
     let main = vcx.update(|window, _| window.bounds());
     let card = pip.update(|window, _| window.bounds());
@@ -743,6 +749,13 @@ fn pip_window_takes_the_player_keys() {
         assert_eq!(app.video.is_muted, muted, "⌘M is not the PiP mute key");
         assert_eq!(app.video.playback_time, 0.0, "modified keys never seek");
     });
+
+    pip.simulate_keystrokes("escape");
+    pip.run_until_parked();
+    assert!(
+        !view.update(vcx, |app, _| app.video.in_pip),
+        "Escape closes the PiP: its window has no window buttons"
+    );
 }
 
 #[core::prelude::v1::test]

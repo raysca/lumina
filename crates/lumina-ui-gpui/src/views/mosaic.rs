@@ -1,4 +1,4 @@
-//! Mosaic justified-row layout: a pure, O(n) pass from the view's
+//! Mosaic justified-row layout: a pure, near-linear pass from the view's
 //! [`LayoutCell`]s to header and tile rows. It runs off the UI thread once
 //! per (view, revision, width, level); a frame only reads the result.
 
@@ -14,6 +14,13 @@ pub(crate) const MOSAIC_TARGETS: [f32; SIZE_COLUMNS.len()] = [110.0, 150.0, 190.
 /// A full row may not be shorter than this share of the target: the
 /// frame's 158-224 band at 190, about 0.83.
 const MIN_SHARE: f32 = 158.0 / 190.0;
+
+/// The band's top as a share of the target: 224 at 190.
+const MAX_SHARE: f32 = 224.0 / 190.0;
+
+/// A section's short last row is re-flowed with up to this many rows above
+/// it so that every row fills the width ([`MosaicLayout::reflow_tail`]).
+const TAIL_ROWS: usize = 3;
 
 /// Space above every day header but the first (frame: section gap 26).
 pub(crate) const SECTION_GAP: f32 = 26.0;
@@ -75,20 +82,21 @@ pub(crate) struct MosaicLayout {
 impl MosaicLayout {
     /// Lays `cells` out in justified rows `width` wide around `target`
     /// height. With `sections`, each run of equal `day` (0 = undated) gets
-    /// a header row and ends its last row unstretched; without, the whole
-    /// view is one header-less run.
+    /// a header row; without, the whole view is one header-less run.
     ///
-    /// Greedy, O(n): a row takes items while its full-width height stays
-    /// above `target`. Once the next item would bring it to `target` or
+    /// Greedy, O(n), plus a small re-flow of each section's tail: a row
+    /// takes items while its full-width height stays above `target`. Once the next item would bring it to `target` or
     /// below, the row closes either before or after that item, whichever
     /// full-width height is closer to `target`. A closed row of two or more
     /// tiles always fills the width exactly; with wide or mixed aspects, or
     /// in a narrow pane, its height can leave the 158-224 band (at 190),
     /// which is accepted. The one ragged closed row is a single tile closed early
     /// (a lone portrait in a narrow pane): it is capped at
-    /// `target / MIN_SHARE` and left-aligned. A section's last row keeps
-    /// `target`, left-aligned, unless that would overflow the width (a
-    /// panorama shrinks to fit), so no tile ever passes `width`.
+    /// `target / MIN_SHARE` and left-aligned. A section's last row that
+    /// fills the width at or under the band top (`target * MAX_SHARE`) does
+    /// so (a panorama shrinks to fit). A shorter one is re-flowed with the rows above it so all fill
+    /// the width ([`Self::reflow_tail`]); when no split fits (a small day)
+    /// it keeps `target`, left-aligned. No tile ever passes `width`.
     pub(crate) fn justify(cells: &[LayoutCell], width: f32, target: f32, sections: bool) -> Self {
         let width = width.max(1.0);
         let fill = |n: usize, sum: f32| (width - GRID_CARD_GAP * (n - 1) as f32) / sum;
@@ -153,12 +161,85 @@ impl MosaicLayout {
                 }
             }
             if first < end {
-                let h = fill(end - first, sum).min(target);
-                out.push_tiles(cells, first..end, h, &mut y);
+                let h = fill(end - first, sum);
+                if h <= target * MAX_SHARE {
+                    out.push_tiles(cells, first..end, h, &mut y);
+                } else if !out.reflow_tail(cells, first..end, width, target, &mut y) {
+                    out.push_tiles(cells, first..end, target, &mut y);
+                }
             }
             start = end;
         }
         out
+    }
+
+    /// Re-flows a section's short last row (`last`) together with up to
+    /// [`TAIL_ROWS`] tile rows above it (a day header stops it) into rows
+    /// that all fill the width, each between `target * MIN_SHARE` and
+    /// `target * MAX_SHARE` high (the 158-224 band at 190), picking the split with the least
+    /// squared distance from `target`. Returns false, changing nothing, when
+    /// no such split exists (a small day). O(m²) in the tail's item count.
+    fn reflow_tail(
+        &mut self,
+        cells: &[LayoutCell],
+        last: Range<usize>,
+        width: f32,
+        target: f32,
+        y: &mut f32,
+    ) -> bool {
+        let closed = self.rows.len();
+        let mut keep = closed;
+        while keep > 0 && closed - keep < TAIL_ROWS && self.rows[keep - 1].kind == RowKind::Tiles {
+            keep -= 1;
+        }
+        let end = last.end;
+        // With no closed rows to borrow from, the last row alone.
+        let tail = if keep < closed {
+            self.rows[keep].first
+        } else {
+            last.start
+        };
+        let mut prefix = vec![0.0f32; end - tail + 1];
+        for (k, cell) in cells[tail..end].iter().enumerate() {
+            prefix[k + 1] = prefix[k] + aspect(cell);
+        }
+        let (lo, hi) = (target * MIN_SHARE, target * MAX_SHARE);
+        let height = |i: usize, j: usize| {
+            (width - GRID_CARD_GAP * (j - i - 1) as f32) / (prefix[j] - prefix[i])
+        };
+        // best[j]: least cost laying out the first j tail items, and where
+        // its last row starts.
+        let m = end - tail;
+        let mut best = vec![(f32::INFINITY, 0usize); m + 1];
+        best[0].0 = 0.0;
+        for j in 1..=m {
+            for i in 0..j {
+                let h = height(i, j);
+                if best[i].0.is_finite() && (lo..=hi).contains(&h) {
+                    let cost = best[i].0 + (h - target).powi(2);
+                    if cost < best[j].0 {
+                        best[j] = (cost, i);
+                    }
+                }
+            }
+        }
+        if !best[m].0.is_finite() {
+            return false;
+        }
+        let mut splits = vec![m];
+        while let Some(&j) = splits.last().filter(|&&j| j > 0) {
+            splits.push(best[j].1);
+        }
+        splits.reverse();
+        if keep < closed {
+            *y = self.rows[keep].y;
+            self.rows.truncate(keep);
+        }
+        for pair in splits.windows(2) {
+            let h = height(pair[0], pair[1]);
+            self.push_tiles(cells, tail + pair[0]..tail + pair[1], h, y);
+        }
+        true
     }
 
     /// Appends a tile row of `items` at `height`, left to right from x 0.
@@ -291,6 +372,80 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[core::prelude::v1::test]
+    fn a_short_last_row_reflows_with_the_rows_above() {
+        // Greedy closes five tiles at ~194, leaving four that would need
+        // ~232 to fill: re-flowed, both rows fill the width inside the band.
+        let cs = cells(
+            &[
+                1.5,
+                16.0 / 9.0,
+                0.667,
+                1.5,
+                0.667,
+                16.0 / 9.0,
+                1.0,
+                1.5,
+                0.5625,
+            ],
+            20250614,
+        );
+        let layout = MosaicLayout::justify(&cs, 1212.0, 190.0, true);
+        let rows = tile_rows(&layout);
+        assert_eq!(rows.len(), 2, "two rows: {rows:?}");
+        for row in &rows {
+            let h = row.height - row.pad;
+            assert!((158.0..=224.0).contains(&h), "row in the band: {row:?}");
+            assert!(
+                (right_edge(&layout, row) - 1212.0).abs() <= 0.5,
+                "the last row fills the width too: {row:?}"
+            );
+        }
+        assert_eq!(rows[1].y, rows[0].y + rows[0].height, "rows stack");
+        assert_eq!(rows[1].pad, GRID_CARD_GAP, "tile rows keep their gap");
+    }
+
+    #[core::prelude::v1::test]
+    fn a_tail_reflow_never_borrows_from_the_previous_day() {
+        // Day 1 alone lays out as before; day 2 is one square that can only
+        // fill by borrowing, and must not take day 1's rows.
+        let day1 = cells(
+            &[
+                1.5,
+                16.0 / 9.0,
+                0.667,
+                1.5,
+                0.667,
+                16.0 / 9.0,
+                1.0,
+                1.5,
+                0.5625,
+            ],
+            20250614,
+        );
+        let alone = MosaicLayout::justify(&day1, 1212.0, 190.0, true);
+        let mut both = day1.clone();
+        both.extend(cells(&[1.0], 20250613));
+        let layout = MosaicLayout::justify(&both, 1212.0, 190.0, true);
+        assert_eq!(
+            &layout.rows[..alone.rows.len()],
+            &alone.rows[..],
+            "day 1's rows are unchanged by day 2"
+        );
+        assert_eq!(&layout.tiles[..day1.len()], &alone.tiles[..]);
+        let last = *layout.rows.last().unwrap();
+        assert_eq!(
+            (last.first, last.len),
+            (day1.len(), 1),
+            "day 2 keeps its own row"
+        );
+        assert_eq!(
+            last.height - last.pad,
+            190.0,
+            "a lone square keeps the target"
+        );
     }
 
     #[core::prelude::v1::test]

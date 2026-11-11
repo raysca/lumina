@@ -47,7 +47,8 @@ fn start_drag(window: &Window) {
 
 /// The player keys while the PiP window is key (the viewer's bindings):
 /// Space/K play, J/← back 5 s, → forward 5 s, ⌥←/⌥→ chapter or 5 s,
-/// L loop, M mute. Returns whether the key was handled.
+/// L loop, M mute; Escape closes the PiP (its window has no window buttons).
+/// Returns whether the key was handled.
 fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<LuminaApp>) -> bool {
     let m = keystroke.modifiers;
     if m.platform || m.control || m.shift {
@@ -62,6 +63,7 @@ fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<L
         "right" => app.seek_video_relative(5.0, cx),
         "l" => app.toggle_video_loop(cx),
         "m" => app.toggle_video_mute(cx),
+        "escape" => app.close_pip(cx),
         _ => return false,
     }
     true
@@ -364,15 +366,11 @@ impl Render for FloatingPipPlayerView {
                     .flex()
                     .flex_row()
                     .items_start()
-                    .pt(px(12.0))
-                    // ponytail: the traffic lights own the top-left corner, so
-                    // the badge starts after them, not at the design's 12px.
-                    .pl(px(if cfg!(target_os = "macos") {
-                        72.0
-                    } else {
-                        12.0
-                    }))
-                    .pr(px(12.0))
+                    // Frame: badge 12 px from the card's outer edge; this fade
+                    // starts inside the 1 px outline. The window buttons are
+                    // hidden (`set_up_pip_window`).
+                    .pt(px(11.0))
+                    .px(px(11.0))
                     .gap(px(6.0))
                     .child(
                         // ponytail: GPUI has no letter-spacing; the design's

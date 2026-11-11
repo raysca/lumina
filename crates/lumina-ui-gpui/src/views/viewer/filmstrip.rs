@@ -157,7 +157,8 @@ fn thumb(
             if is_current {
                 thumb.border_2().border_color(theme::accent())
             } else {
-                thumb.child(div().absolute().inset_0().bg(theme::media_scrim()))
+                // Frame: the other thumbs show their picture at 55%.
+                thumb.opacity(0.55)
             }
         })
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

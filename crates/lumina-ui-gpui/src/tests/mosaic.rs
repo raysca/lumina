@@ -194,7 +194,7 @@ fn mosaic_tiles_keep_aspect_and_fill_rows() {
             _ => rows.push(vec![b]),
         }
     }
-    assert!(rows.len() >= 2, "six tiles make a full row and a last row");
+    assert!(!rows.is_empty(), "six tiles make at least one row");
     let left = f32::from(surface.origin.x) + 28.0;
     let right = f32::from(surface.origin.x + surface.size.width) - 20.0;
     for (r, row) in rows.iter().enumerate() {
@@ -207,17 +207,16 @@ fn mosaic_tiles_keep_aspect_and_fill_rows() {
             (f32::from(row[0].origin.x) - left).abs() <= 1.0,
             "row {r} starts at the surface's left padding (28)"
         );
-        if r + 1 < rows.len() {
-            let end = row.last().unwrap();
-            assert!(
-                (f32::from(end.origin.x + end.size.width) - right).abs() <= 1.0,
-                "full row {r} ends at the surface's right padding (20)"
-            );
-            assert!(
-                (158.0..=224.0).contains(&f32::from(h)),
-                "full row {r} is 158-224 high: {h:?}"
-            );
-        }
+        // The day's last row is re-flowed to fill too (frame: no ragged rows).
+        let end = row.last().unwrap();
+        assert!(
+            (f32::from(end.origin.x + end.size.width) - right).abs() <= 1.0,
+            "row {r} ends at the surface's right padding (20), the last row included"
+        );
+        assert!(
+            (158.0..=224.0).contains(&f32::from(h)),
+            "row {r} is 158-224 high: {h:?}"
+        );
     }
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -8,12 +8,15 @@ task defers something.
 Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 
 ## Never verified (applies to everything)
-- **Visual check against the frames.** No screen has been compared by eye with its `.pen`
-  frame. `make ui-smoke` skips its screenshot without Screen Recording permission and only
-  shows the Welcome screen.
-- **PiP window (04 Task 5).** Not seen on a real screen: whether radius 10 and the `line_2`
-  outline sit cleanly on the OS window's corners, the fade directions, the traffic lights
-  against the badge at x 72, the OS shadow standing in for the design's, and placement 56 px
+- **Visual check against the frames.** Library (Mosaic), Detail, Search, Videos and the PiP
+  window were captured at 1600×1000 on generated photos and compared with their frames
+  (2026-11-11). Four problems found were fixed: the PiP window buttons, the info panel's
+  right gap, the filmstrip dimming and ragged Mosaic last rows. No capture script is checked
+  in; frames from plan 05 on are not compared. Remaining small differences are listed under
+  "Visual departures".
+- **PiP window (04 Task 5).** Seen once on a real screen (window buttons now hidden, badge at
+  12 px). Not checked closely: whether radius 10 and the `line_2` outline sit cleanly on the
+  OS window's corners, the fade directions, the OS shadow standing in for the design's, and placement 56 px
   in from the main window (only the math is tested; no test uses a display whose origin is not
   zero). `make ui-smoke` does not open PiP. Its keys work only after the window is clicked.
 - **VoiceOver.** Roles and labels were added to new controls, but none were checked with
@@ -67,12 +70,22 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 
 ## Visual departures (no matching token or API)
 - Letter-spacing/tracking everywhere (section titles, headers, results title): GPUI has none.
-- Photo shadow and filmstrip scrim use `media_scrim` (~65%) instead of 80% / 55%. (02 Tasks 3, 6)
+- Photo shadow uses `media_scrim` (~65%) instead of 80%. (02 Task 3) Other filmstrip thumbs
+  now draw at the frame's 55% opacity.
 - Filmstrip current thumb: the 2 px accent border sits inside the 74 px box (picture is 70 px).
 - Location card land is clipped to a square, not the 6 px rounded corners.
 - Long filenames in the info panel wrap instead of truncating (a viewer test asserts wrap).
 - Additions not in the frames: the sidebar toggle in the search header when collapsed; the
-  "Videos" results title for all-video results.
+  "Videos" results title for all-video results; the header's Tag and Info buttons; the
+  "N of M selected" status bar; the selection action bar with one item selected; the info
+  panel's Rating row and Get Info / Reveal buttons; Screenshots, Duplicates and Recently
+  Deleted sidebar rows.
+- Small copy/format differences seen in the 2026-11-11 capture: day headers read
+  "Wed, Nov 11, 2026" (frame "Saturday, 14 June"); the zoom pill puts − and + together on the
+  right; "Save Search as Smart Album" (frame "Save as Smart Album"); capitalised Narrow chips;
+  no accent border on the sidebar search field while searching; Videos header rounds 12 s of
+  clips up to "1 m"; the "All clips" chip has no icon; Videos/Search grids keep a 20 px right
+  gutter (frame 28).
 
 ## Behaviour limits to revisit
 - **Search token bar:** history stores the query reordered (chips first); caret jumps to the
@@ -118,7 +131,9 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Mosaic (01b):**
   - Rows leave the 158–224 band in narrow panes or with very mixed aspects (the tests hold real
     photo shapes in band at 1200 px; uniform 0.4–3.0 aspects leave it often at 800 px). A lone
-    portrait in a narrow pane is the one row that stops short of the right edge. (Task 3)
+    portrait in a narrow pane stops short of the right edge. A day's short last row is re-flowed
+    with up to three rows above it so all fill the width in band; a day too small for that
+    (a few photos, or shapes no split can fit) still ends in a ragged row. (Task 3)
   - Switching view shows an empty list until that view's first layout lands (~30 ms at
     125k, release); outside writes refresh the layout after a 750 ms cool-down, and Select / Select
     Day do nothing until then. (Tasks 4–5)

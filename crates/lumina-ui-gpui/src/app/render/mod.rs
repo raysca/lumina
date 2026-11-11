@@ -800,6 +800,11 @@ impl Render for LuminaApp {
                                     // Right Slide-out Metadata & Location Inspector
                                     .child(if inspector_open && !is_fullscreen_viewer {
                                         div()
+                                            .flex_none()
+                                            .w(px(self.inspector_width))
+                                            .h_full()
+                                            .border_l_1()
+                                            .border_color(theme::line())
                                             .child(InspectorView::render(self, cx))
                                             .into_any_element()
                                     } else {

@@ -18,11 +18,9 @@ pub struct InspectorView;
 impl InspectorView {
     pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         let weak_app = cx.entity().downgrade();
-        let panel = div()
-            .w(px(this.inspector_width))
-            .h_full()
-            .border_l_1()
-            .border_color(theme::line());
+        // The caller sizes and borders the panel: the docked inspector at
+        // its saved width, the viewer's info drawer at 340.
+        let panel = div().size_full();
 
         // v3: a single item gets the one-column summary with no header strip;
         // Info / I closes it; ⌘I or Get Info… opens the full tabbed window.
@@ -34,7 +32,6 @@ impl InspectorView {
         let Some(item) = this.selected_item.as_ref() else {
             return panel
                 .debug_selector(|| "inspector-empty".to_string())
-                .flex_shrink_0()
                 .bg(theme::bg_1())
                 .p_4()
                 .text_sm()

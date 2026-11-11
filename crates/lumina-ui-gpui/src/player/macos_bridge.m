@@ -669,10 +669,15 @@ int lumina_reduce_motion(void) {
 /// app is inactive. A PiP must stay up while the user works in another app,
 /// so turn that off, and show the panel if it opened while Lumina was
 /// inactive (it was ordered front already, then hidden straight away).
-void lumina_window_keep_visible_when_inactive(void *ns_view) {
+/// The card draws its own Close and Expand, so the window buttons are hidden.
+void lumina_window_set_up_pip(void *ns_view) {
     NSWindow *window = [(__bridge NSView *)ns_view window];
     if (window == nil) {
         return;
+    }
+    NSWindowButton kinds[] = {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton};
+    for (size_t i = 0; i < sizeof kinds / sizeof *kinds; i++) {
+        [[window standardWindowButton:kinds[i]] setHidden:YES];
     }
     window.hidesOnDeactivate = NO;
     if (!window.isVisible) {

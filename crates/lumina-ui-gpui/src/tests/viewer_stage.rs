@@ -376,6 +376,13 @@ fn viewer_info_panel_is_docked_full_height() {
         ),
         "the info panel docks at the right edge, 340 wide and full height: {panel:?}"
     );
+    let summary = vcx
+        .debug_bounds("inspector-summary")
+        .expect("the docked panel paints the item summary");
+    assert!(
+        summary.right() == panel.right() && summary.size.width >= gpui::px(339.0),
+        "the summary fills the 340 wide panel, not the docked inspector's saved width: {summary:?}"
+    );
     let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar paints");
     assert_eq!(
         bar.right(),
