@@ -653,8 +653,9 @@ impl LuminaApp {
     }
 
     /// Replaces the selection with the drag base plus the grid rectangle
-    /// spanned by the anchor and target cards, matching the marquee. The base
-    /// preserves a multi-selection the drag started inside.
+    /// spanned by the anchor and target cards, matching the marquee (in
+    /// Mosaic, the reading-order range between them). The base preserves a
+    /// multi-selection the drag started inside.
     fn apply_grid_drag_range(&mut self, target: usize, cx: &mut Context<Self>) {
         let total = self.get_active_count();
         if total == 0 {
@@ -664,17 +665,22 @@ impl LuminaApp {
             return;
         };
         let target = target.min(total - 1);
-        // Must match the column count `render_browser_grid` lays out.
-        let cols = self.grid_columns.clamp(2, 8);
-        let (rows, columns) = (
-            cmp::min(anchor / cols, target / cols)..=cmp::max(anchor / cols, target / cols),
-            cmp::min(anchor % cols, target % cols)..=cmp::max(anchor % cols, target % cols),
-        );
         let mut next = self.grid_drag.base.clone();
-        next.extend(
-            rows.flat_map(|row| columns.clone().map(move |col| row * cols + col))
-                .filter(|&index| index < total),
-        );
+        if self.mosaic_shown() {
+            // Uneven rows have no columns: the reading-order range.
+            next.extend(cmp::min(anchor, target)..=cmp::max(anchor, target));
+        } else {
+            // Must match the column count `render_browser_grid` lays out.
+            let cols = self.grid_columns.clamp(2, 8);
+            let (rows, columns) = (
+                cmp::min(anchor / cols, target / cols)..=cmp::max(anchor / cols, target / cols),
+                cmp::min(anchor % cols, target % cols)..=cmp::max(anchor % cols, target % cols),
+            );
+            next.extend(
+                rows.flat_map(|row| columns.clone().map(move |col| row * cols + col))
+                    .filter(|&index| index < total),
+            );
+        }
         if next == self.selected_indices && self.selected_index == Some(target) {
             return;
         }

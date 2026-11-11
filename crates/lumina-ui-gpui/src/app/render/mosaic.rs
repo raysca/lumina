@@ -115,6 +115,7 @@ impl LuminaApp {
             // ponytail: the date only; place, count and Select come with
             // plan 01b Task 5.
             RowKind::Header { day, .. } => base
+                .debug_selector(move || format!("mosaic-day-row-{day}"))
                 .child(
                     div()
                         .debug_selector(move || format!("mosaic-day-{day}"))

@@ -335,3 +335,200 @@ fn mosaic_layout_refetch_coalesces_scan_writes() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// 120 texture-less items over two days, 60 each (newest day first), so
+/// either day's header can scroll to the top.
+fn two_day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>, Vec<MediaId>) {
+    let (dir, engine) = seed_library_undecodable(prefix, 120);
+    let ids: Vec<MediaId> = engine.get_item_slice(0..120).iter().map(|i| i.id).collect();
+    let changes: Vec<(MediaId, i64)> = ids
+        .iter()
+        .enumerate()
+        .map(|(n, &id)| (id, 1_700_000_000_000 - (n / 60) as i64 * 86_400_000 * 3))
+        .collect();
+    engine.set_timestamps(&changes).unwrap();
+    (dir, engine, ids)
+}
+
+fn top_row(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut VisualTestContext,
+) -> (usize, crate::views::mosaic::MosaicRow) {
+    view.update(vcx, |app, _| {
+        let ix = app
+            .grid_state
+            .as_ref()
+            .unwrap()
+            .mosaic
+            .logical_scroll_top()
+            .item_ix;
+        (ix, app.mosaic_layout().unwrap().rows[ix])
+    })
+}
+
+fn is_header(row: &crate::views::mosaic::MosaicRow) -> bool {
+    matches!(row.kind, crate::views::mosaic::RowKind::Header { .. })
+}
+
+#[core::prelude::v1::test]
+fn relayout_keeps_a_header_on_top() {
+    let (dir, engine, _) = two_day_library("mosaic_relayout");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    let relayout = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, cx| {
+            app.grid_columns = if app.grid_columns == 4 { 3 } else { 4 };
+            cx.notify();
+        });
+        render_ui(vcx);
+        render_ui(vcx);
+    };
+    relayout(&view, vcx);
+    let (ix, row) = top_row(&view, vcx);
+    assert!(
+        ix == 0 && is_header(&row),
+        "a relayout at the top keeps the first day header on top: row {ix} {row:?}"
+    );
+
+    let (second, first_item) = view.update(vcx, |app, _| {
+        let layout = app.mosaic_layout().unwrap();
+        let r = (1..layout.rows.len())
+            .find(|&r| is_header(&layout.rows[r]))
+            .expect("a second day header");
+        app.grid_state
+            .as_ref()
+            .unwrap()
+            .mosaic
+            .scroll_to(gpui::ListOffset {
+                item_ix: r,
+                offset_in_item: px(0.0),
+            });
+        (r, layout.rows[r].first)
+    });
+    render_ui(vcx);
+    assert_eq!(
+        top_row(&view, vcx).0,
+        second,
+        "scrolled to the second header"
+    );
+    relayout(&view, vcx);
+    let (_, row) = top_row(&view, vcx);
+    assert!(
+        is_header(&row) && row.first == first_item,
+        "a mid-list header on top stays the top row: {row:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn header_rows_are_their_layout_height_and_absent_without_date_sort() {
+    let (dir, engine, _) = two_day_library("mosaic_headers");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    let headers: Vec<(u32, f32)> = view.update(vcx, |app, _| {
+        app.mosaic_layout()
+            .unwrap()
+            .rows
+            .iter()
+            .filter_map(|r| match r.kind {
+                crate::views::mosaic::RowKind::Header { day, .. } => Some((day, r.height)),
+                _ => None,
+            })
+            .collect()
+    });
+    assert_eq!(headers.len(), 2, "two days, two headers");
+    // The second header is below the fold at the default size; bring the
+    // first day's last row and the second header on screen.
+    for (n, (day, height)) in headers.iter().enumerate() {
+        if n == 1 {
+            view.update(vcx, |app, _| {
+                let layout = app.mosaic_layout().unwrap();
+                let r = layout.rows.iter().rposition(is_header).unwrap();
+                app.grid_state
+                    .as_ref()
+                    .unwrap()
+                    .mosaic
+                    .scroll_to(gpui::ListOffset {
+                        item_ix: r,
+                        offset_in_item: px(0.0),
+                    });
+            });
+            render_ui(vcx);
+        }
+        let row = vcx
+            .debug_bounds(leak(format!("mosaic-day-row-{day}")))
+            .unwrap_or_else(|| panic!("header row {day} drawn"));
+        assert!(
+            (f32::from(row.size.height) - height).abs() < 0.5,
+            "the header element is exactly its layout row's height: {row:?} vs {height}"
+        );
+    }
+
+    view.update(vcx, |app, cx| {
+        app.sort.field = lumina_core::SortField::FileName;
+        cx.notify();
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.mosaic_layout()
+                .unwrap()
+                .rows
+                .iter()
+                .all(|r| !is_header(r)),
+            "no sections under a non-date sort"
+        )
+    });
+    for (day, _) in &headers {
+        assert!(
+            vcx.debug_bounds(leak(format!("mosaic-day-{day}")))
+                .is_none(),
+            "no day header drawn under a non-date sort"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn own_write_refetches_the_layout_without_the_cool_down() {
+    let (dir, engine) = seed_library_undecodable("mosaic_own_write", 12);
+    let writer = engine.clone();
+    let id = engine.get_item_slice(0..1)[0].id;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    let fetches = LAYOUT_FETCHES.with(|n| n.get());
+    let tiles = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| app.mosaic_layout().unwrap().tiles.len())
+    };
+    assert_eq!(tiles(&view, vcx), 12);
+    // The UI thread trashes an item (as Delete does), inside the cool-down.
+    writer.set_trashed(id, true).unwrap();
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(
+        LAYOUT_FETCHES.with(|n| n.get()),
+        fetches + 1,
+        "the app's own write refetches at once"
+    );
+    assert_eq!(tiles(&view, vcx), 11, "the trashed item left the layout");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn marquee_in_mosaic_selects_the_reading_order_range() {
+    let (dir, engine) = seed_library_undecodable("mosaic_marquee", 12);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = mosaic_app(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.begin_grid_drag(gpui::point(px(100.0), px(100.0)), Some(2), false);
+        app.drag_over_card(7, gpui::point(px(400.0), px(400.0)), cx);
+        let selected: Vec<usize> = app.selected_indices.iter().copied().collect();
+        assert_eq!(
+            selected,
+            (2..=7).collect::<Vec<_>>(),
+            "a sweep selects the contiguous range, not a grid rectangle"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -16,14 +16,16 @@ use crate::app::active_view::ViewKey;
 use crate::app::LuminaApp;
 use crate::config::BrowseLayout;
 use crate::views::grid::{center_pane_width, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT};
-use crate::views::mosaic::{target_for_columns, MosaicLayout};
+use crate::views::mosaic::{target_for_columns, MosaicLayout, RowKind};
 use crate::views::search_bar::size_level;
 
-/// After a layout lands, a refetch caused only by other threads' writes (a
-/// scan) waits this long, so a scan's stream of revisions costs one layout
-/// read per interval instead of holding the catalog lock back to back
-/// against the grid's row reads. View, width and level changes, and the
-/// app's own writes, refetch at once.
+/// After a layout lands, a refetch caused only by writes from other threads
+/// waits this long, so a scan's stream of revisions costs one layout read
+/// per interval instead of holding the catalog lock back to back against
+/// the grid's row reads. View, width and level changes, and writes made on
+/// the UI thread (trash, favourite, rotate), refetch at once. The app's own
+/// background writes (quick edit, jobs) count as other threads' and wait
+/// like a scan.
 pub(crate) const SCAN_REFETCH_COOLDOWN: Duration = Duration::from_millis(750);
 
 #[cfg(test)]
@@ -60,7 +62,9 @@ impl LuminaApp {
             && self.view_query().layout_scope().is_some()
     }
 
-    /// Which view-mode segment is on: (Mosaic, Grid, Map).
+    /// Which view-mode segment is on: (Mosaic, Grid, Map). Mosaic reads as
+    /// on wherever it is the saved layout, even in a view that draws the
+    /// Grid body as its fallback (see [`Self::mosaic_shown`]).
     pub(crate) fn view_mode_on(&self) -> (bool, bool, bool) {
         let map = self.map_shown();
         let mosaic = self.config.browse_layout == BrowseLayout::Mosaic;
@@ -156,6 +160,9 @@ impl LuminaApp {
         let sort = self.sort;
         let sections = sort.field == SortField::DateTaken;
         let target = target_for_columns(self.grid_columns);
+        // ponytail: a panicking build would leave this set and freeze the
+        // layout; view_layout logs and returns no cells instead of failing,
+        // and justify takes any cells.
         self.mosaic.in_flight = true;
         let task = cx.background_executor().spawn(async move {
             let (revision, cells) = match cells {
@@ -206,11 +213,21 @@ impl LuminaApp {
             .and_then(|old| {
                 let top = list.logical_scroll_top();
                 let row = old.layout.rows.get(top.item_ix)?;
-                Some((row.first, top.offset_in_item))
+                let header = matches!(row.kind, RowKind::Header { .. });
+                Some((row.first, header, top.offset_in_item))
             });
         list.reset(built.layout.rows.len());
-        if let Some((item, offset)) = restore.filter(|_| !built.layout.rows.is_empty()) {
-            let item_ix = built.layout.row_of(item);
+        if let Some((item, header, offset)) = restore.filter(|_| !built.layout.rows.is_empty()) {
+            let rows = &built.layout.rows;
+            // `row_of` is the tile row; a header on top stays on top.
+            let mut item_ix = built.layout.row_of(item);
+            if header
+                && item_ix > 0
+                && matches!(rows[item_ix - 1].kind, RowKind::Header { .. })
+                && rows[item_ix - 1].first == item
+            {
+                item_ix -= 1;
+            }
             let height = px(built.layout.rows[item_ix].height);
             list.scroll_to(ListOffset {
                 item_ix,
