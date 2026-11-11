@@ -25,9 +25,6 @@ pub(crate) fn video_caption(item: &MediaItem, selected: bool) -> Div {
         .child(
             div()
                 .debug_selector(move || format!("media-card-caption-title-{id}"))
-                .when(selected, |title| {
-                    title.debug_selector(move || format!("media-card-caption-title-selected-{id}"))
-                })
                 .h(px(16.0))
                 .min_w_0()
                 .truncate()
@@ -38,7 +35,16 @@ pub(crate) fn video_caption(item: &MediaItem, selected: bool) -> Div {
                 } else {
                     theme::t1()
                 })
-                .child(crate::views::inspector::body::display_title(item)),
+                .child(crate::views::inspector::body::display_title(item))
+                // An element has one debug selector: the accent marker is a
+                // zero-size child, so the title keeps its own.
+                .when(selected, |title| {
+                    title.child(
+                        div().debug_selector(move || {
+                            format!("media-card-caption-title-selected-{id}")
+                        }),
+                    )
+                }),
         )
         .child(
             div()

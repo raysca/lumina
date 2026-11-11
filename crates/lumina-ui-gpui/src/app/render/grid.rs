@@ -177,10 +177,11 @@ impl LuminaApp {
                                     .id(row_ix)
                                     .w_full()
                                     .h(px(row_h))
-                                    // The row gap sits above the cards, so the
-                                    // first row's selection ring (RING_OUTSET in
+                                    // A 6px gap sits above the cards, so the first
+                                    // row's square-tile selection ring (RING_OUTSET in
                                     // card.rs, outside the tile) is never clipped by the
-                                    // list's top edge.
+                                    // list's top edge. Captioned tiles have no outset
+                                    // ring (their outline is on the thumb).
                                     .pt(px(CARD_ROW_GAP))
                                     .pl(px(GRID_ROW_PADDING_LEFT))
                                     .pr(px(GRID_ROW_PADDING_RIGHT))

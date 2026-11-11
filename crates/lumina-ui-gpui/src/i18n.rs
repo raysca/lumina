@@ -190,7 +190,12 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.toggle_fit" => "Toggle Fit / Square Cards",
         "command.zoom_in" => "Zoom Grid In",
         "command.zoom_out" => "Zoom Grid Out",
+        // ponytail: chrono's %b is always the English month (no locale
+        // feature); fine while en-US is the only locale, swap for the
+        // date.month_short_* keys when another ships.
         "grid.caption_date" => "%-d %b %Y",
+        "grid.badge_video" => "Video, {}",
+        "grid.badge_playing" => "Playing in Picture in Picture, {}",
         "grid.zoom_in" => "Larger thumbnails (⌘+)",
         "grid.zoom_out" => "Smaller thumbnails (⌘-)",
         "grid.zoom_limit" => "Not available at this size",

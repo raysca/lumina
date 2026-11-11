@@ -57,6 +57,10 @@ thread_local! {
     /// and opacity are not readable from a headless frame.
     pub(crate) static CARD_OPACITY: std::cell::RefCell<HashMap<usize, f32>> =
         std::cell::RefCell::new(HashMap::new());
+    /// Test hook: whether each drawn thumbnail was contain-fit (else cover),
+    /// by item id; like opacity, it is not readable from a headless frame.
+    pub(crate) static CARD_CONTAIN: std::cell::RefCell<HashMap<usize, bool>> =
+        std::cell::RefCell::new(HashMap::new());
 }
 
 /// Width of the pinned year rail when the timeline has buckets.
@@ -704,6 +708,21 @@ mod tests {
         // The last card ends 20px before the right edge.
         assert_eq!(
             column_at_pointer(100.0 + 979.0, 100.0, 1000.0, 4, GRID_CARD_GAP),
+            3
+        );
+        // Captioned (14px gaps): cards are 227.5px, so column 1 starts at
+        // 28 + 241.5 = 269.5; at the 6px gap 268 would already be column 1.
+        assert_eq!(
+            column_at_pointer(100.0 + 268.0, 100.0, 1000.0, 4, VIDEO_COLUMN_GAP),
+            0,
+            "the wider Videos gap moves the column boundaries"
+        );
+        assert_eq!(
+            column_at_pointer(100.0 + 270.0, 100.0, 1000.0, 4, VIDEO_COLUMN_GAP),
+            1
+        );
+        assert_eq!(
+            column_at_pointer(100.0 + 979.0, 100.0, 1000.0, 4, VIDEO_COLUMN_GAP),
             3
         );
     }

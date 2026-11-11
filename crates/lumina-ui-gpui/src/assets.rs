@@ -16,6 +16,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "aperture",
     "arrow-down-to-line",
     "arrow-up-narrow-wide",
+    "audio-lines",
     "calendar",
     "camera",
     "check",

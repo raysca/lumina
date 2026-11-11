@@ -77,8 +77,13 @@ fn videos_view_uses_wide_captioned_tiles() {
     let title = bounds(vcx, format!("media-card-caption-title-{first}"));
     let meta = bounds(vcx, format!("media-card-caption-meta-{first}"));
     assert!(
-        f32::from(title.size.height) < 20.0 && title.right() <= photo.right() + gpui::px(0.5),
-        "a long title truncates to one line inside the tile: {title:?}"
+        title.size.width <= photo.size.width + gpui::px(0.5)
+            && title.right() <= photo.right() + gpui::px(0.5),
+        "a long title truncates within the thumb's width: {title:?} vs {photo:?}"
+    );
+    assert!(
+        f32::from(title.size.height) < 20.0,
+        "and stays one line: {title:?}"
     );
     assert!(meta.top() >= title.bottom(), "meta sits under the title");
 
@@ -113,6 +118,11 @@ fn videos_view_uses_wide_captioned_tiles() {
         vcx.debug_bounds(leak(format!("media-card-caption-title-selected-{first}")))
             .is_some(),
         "the selected tile's title is drawn in accent"
+    );
+    assert!(
+        vcx.debug_bounds(leak(format!("media-card-caption-title-{first}")))
+            .is_some(),
+        "the accent marker does not take over the title's own selector"
     );
 
     // All Media keeps square wells with no caption.
@@ -220,4 +230,40 @@ fn arrow_keys_reveal_captioned_rows() {
         photo.top() >= grid.top() && caption.bottom() <= grid.bottom() + gpui::px(0.5),
         "the selected tile and its caption are scrolled into view: {photo:?} {caption:?} in {grid:?}"
     );
+}
+
+#[core::prelude::v1::test]
+fn portrait_clips_cover_fit_and_the_fit_toggle_contains_them() {
+    use crate::views::grid::CARD_CONTAIN;
+    let (_dir, engine, clips) = library_with_clips("vt_fit", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    open_videos(&view, vcx);
+    let tall = Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(200, 2000),
+    )]));
+    // A fresh clip per mode: debug_bounds keeps an element's first-frame
+    // entry, so only a thumbnail painted for the first time shows its layout.
+    for (contain, clip) in [(false, clips[0]), (true, clips[1])] {
+        view.update(vcx, |app, cx| {
+            app.card_fit_mode = contain;
+            let state = app.grid_state.as_ref().expect("grid state");
+            state.texture_cache.lock().put(clip, tall.clone());
+            cx.notify();
+        });
+        render_ui(vcx);
+        let photo = bounds(vcx, format!("media-card-photo-{}", clip.0));
+        let thumb = bounds(vcx, format!("media-card-thumb-{}", clip.0));
+        assert!(
+            (thumb.size.width - photo.size.width).abs() < gpui::px(1.0)
+                && (thumb.size.height - photo.size.height).abs() < gpui::px(1.0),
+            "contain={contain}: a portrait thumbnail fills the 16:9 well's box: {thumb:?} vs {photo:?}"
+        );
+        assert_eq!(
+            CARD_CONTAIN.with(|m| m.borrow().get(&(clip.0 as usize)).copied()),
+            Some(contain),
+            "a portrait clip cover-fits; the fit toggle switches it to contain"
+        );
+    }
 }

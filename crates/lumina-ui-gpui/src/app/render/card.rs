@@ -72,6 +72,7 @@ impl LuminaApp {
         let has_duration = is_video && !dur_text.is_empty();
         let has_type_badge = has_duration || is_raw;
         let captioned = self.captioned_tiles();
+        let in_pip = self.video.in_pip && self.video.item.as_ref().is_some_and(|v| v.id == item.id);
         // COMPACT_TILE guards the top badge rows' width. A captioned 16:9 thumb
         // is wide but short; its ~120px still clears the top and bottom rows.
         let compact = if captioned {
@@ -219,6 +220,10 @@ impl LuminaApp {
                     .overflow_hidden()
                     .relative()
                     .child(if let Some(render_img) = tex {
+                        #[cfg(test)]
+                        crate::views::grid::CARD_CONTAIN.with(|m| {
+                            m.borrow_mut().insert(item_id_num, fit_mode);
+                        });
                         let thumb = div()
                             .debug_selector(move || format!("media-card-thumb-{}", item_id_num))
                             .size_full()
@@ -379,9 +384,10 @@ impl LuminaApp {
                             )
                         },
                     )
-                    // Video duration (bottom-left).
+                    // Video duration (bottom-left); the clip playing in PiP
+                    // shows audio lines and accent text instead.
                     .when(has_duration, |well| {
-                        well.child(duration_badge(item_id_num, dur_text))
+                        well.child(duration_badge(item_id_num, dur_text, in_pip))
                     })
                     // RAW (bottom-right).
                     .when(is_raw, |well| well.child(raw_badge(item_id_num))),
@@ -519,15 +525,29 @@ fn pill_badge(id: ElementId) -> Stateful<Div> {
         .items_center()
 }
 
-/// Video duration, bottom-left: play icon and the mono time.
-fn duration_badge(item_id_num: usize, text: String) -> impl IntoElement {
+/// Video duration, bottom-left: play icon and the mono time. The clip
+/// playing in PiP (`in_pip`) shows audio lines and the time in accent
+/// (design 04); its icon carries `media-card-playing-<id>` (an element has
+/// one debug selector, and the pill keeps `media-card-duration-<id>`).
+fn duration_badge(item_id_num: usize, text: String, in_pip: bool) -> impl IntoElement {
+    let (icon, color, label) = if in_pip {
+        (Icon::AudioLines, theme::accent(), "grid.badge_playing")
+    } else {
+        (Icon::Play, theme::on_media(), "grid.badge_video")
+    };
     pill_badge(("media-card-duration", item_id_num as u64).into())
         .debug_selector(move || format!("media-card-duration-{item_id_num}"))
-        .aria_label(format!("Video, {text}"))
+        .aria_label(crate::i18n::t_with(label, &[&text]))
         .left(px(BADGE_INSET))
         .gap(px(4.0))
-        .text_color(theme::on_media())
-        .child(render_icon(Icon::Play, px(9.0), theme::on_media()))
+        .text_color(color)
+        .child(
+            div()
+                .when(in_pip, |icon| {
+                    icon.debug_selector(move || format!("media-card-playing-{item_id_num}"))
+                })
+                .child(render_icon(icon, px(9.0), color)),
+        )
         .child(text)
 }
 

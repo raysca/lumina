@@ -201,15 +201,18 @@ impl LuminaApp {
             .flatten()
             .collect::<Vec<_>>()
             .join(", ");
-        let key = if self.videos_view() {
-            "mosaic.select_day_clips_label"
+        let (one, other) = if self.videos_view() {
+            (
+                "mosaic.select_day_clips_label_one",
+                "mosaic.select_day_clips_label",
+            )
         } else {
-            "mosaic.select_day_label"
+            ("mosaic.select_day_label_one", "mosaic.select_day_label")
         };
         let select_label = if count == 1 {
-            crate::i18n::t_with(&format!("{key}_one"), &[&date])
+            crate::i18n::t_with(one, &[&date])
         } else {
-            crate::i18n::t_with(key, &[&crate::i18n::count(count), &date])
+            crate::i18n::t_with(other, &[&crate::i18n::count(count), &date])
         };
         DayHeader {
             date,

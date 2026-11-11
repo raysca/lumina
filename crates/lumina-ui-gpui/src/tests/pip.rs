@@ -814,3 +814,59 @@ fn pip_scrub_released_off_the_track_ends_the_scrub() {
         );
     });
 }
+
+// Needs a real player backend; other platforms use the dummy player.
+#[cfg(target_os = "macos")]
+#[core::prelude::v1::test]
+fn video_badge_marks_the_clip_playing_in_pip() {
+    let lib = pip_library("badge");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let playing = |id: u64| leak(format!("media-card-playing-{id}"));
+    let (a, b) = (lib.video_a.id.0, lib.video_b.id.0);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(playing(a)).is_none() && vcx.debug_bounds(playing(b)).is_none(),
+        "no card is marked playing before PiP opens"
+    );
+
+    open_pip_for(&view, vcx, &lib.video_a);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(playing(a)).is_some(),
+        "the clip playing in PiP marks its duration badge"
+    );
+    let badge = vcx
+        .debug_bounds(leak(format!("media-card-duration-{a}")))
+        .expect("the duration badge");
+    assert!(
+        vcx.debug_bounds(playing(b)).is_none(),
+        "only the clip in PiP is marked"
+    );
+    let photo = vcx
+        .debug_bounds(leak(format!("media-card-photo-{a}")))
+        .expect("the card's thumb");
+    assert!(
+        (f32::from(badge.left() - photo.left()) - 8.0).abs() < 0.5
+            && (f32::from(photo.bottom() - badge.bottom()) - 8.0).abs() < 0.5,
+        "the badge sits 8/8 in from the thumb's bottom-left: {badge:?} vs {photo:?}"
+    );
+
+    // Opening the other video moves the mark; closing PiP drops it.
+    click(vcx, card(&lib.video_b));
+    keystrokes(vcx, "space");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(playing(b)).is_some(),
+        "the mark follows the PiP video"
+    );
+    view.update(vcx, |app, cx| app.close_pip(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.video.in_pip);
+    });
+    assert!(
+        vcx.debug_bounds(playing(b)).is_none(),
+        "closing PiP drops the mark"
+    );
+}
