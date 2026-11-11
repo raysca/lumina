@@ -11,6 +11,11 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Visual check against the frames.** No screen has been compared by eye with its `.pen`
   frame. `make ui-smoke` skips its screenshot without Screen Recording permission and only
   shows the Welcome screen.
+- **PiP window (04 Task 5).** Not seen on a real screen: whether radius 10 and the `line_2`
+  outline sit cleanly on the OS window's corners, the fade directions, the traffic lights
+  against the badge at x 72, the OS shadow standing in for the design's, and placement 56 px
+  in from the main window (only the math is tested; no test uses a display whose origin is not
+  zero). `make ui-smoke` does not open PiP. Its keys work only after the window is clicked.
 - **VoiceOver.** Roles and labels were added to new controls, but none were checked with
   VoiceOver (AGENTS §11, §15).
 - **Live interaction.** `make ui-e2e` has never run its interaction steps here. Without Screen
@@ -35,6 +40,11 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | Moments grouping level | 01b dec. 2 | Dropped; pill shows Years · Months · Days |
 | Per-view Years/Months cards | 01b dec. 3 | Only where the timeline rail shows |
 | Street-level map in the location card | 02 | Impossible offline; ask design to redraw without streets |
+| Video chips HDR, Slow motion, Live Photos | 04 dec. 1 | Hidden; need scanner fields, migration and query (separate core plan, L). Only "All clips" and "4K" ship |
+| "Play all" on the Videos section | 04 dec. 3 | Omitted; needs a video queue (separate plan, M) |
+| "Recently captured" per-section headers in Videos | 04 dec. 4 | Month band with "clips" count instead |
+| PiP as a card inside the main window | 04 dec. 5 | Kept as a floating OS window, restyled to the card |
+| PiP buffered-range bar | 04 | Dropped: local files have no buffering |
 
 ## Keyboard and accessibility gaps
 - **No Tab traversal** for the top bar buttons, filmstrip thumbs, tag chips, search chips,
@@ -82,6 +92,18 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Filmstrip:** shows for a one-item view; video thumbs untested directly; a clicked item that
   vanished in the meantime opens nothing. (02 Task 6)
 - **Map:** neither the card nor Places wraps across the date line.
+- **Videos tiles and filters (04 Tasks 2–4):** caption line heights (16/13 px) are estimates;
+  at 124–135 px tile width a rated clip's meta pill can touch the top badge row. The column
+  count still comes only from zoom (2–8), so at 8 columns in a narrow window thumbs are tiny.
+  Grid scroll offset is kept in pixels across a view switch, now that Videos rows are taller
+  than square rows. The now-playing badge marks a clip in PiP whether playing or paused. Typing
+  exactly `is:video is:4k` from any view shows the Videos page. An empty Videos view reads
+  "0 clips · 0 B" and still shows its chip row. The "No 4K clips" empty-state copy hard-codes 3840.
+- **Videos header (04 Task 1):** unprobed clips add their size but not their duration, so the
+  total running time is understated with no hint. `format_bytes` divides by 1024 but prints
+  "MB"/"GB" and always one decimal ("211.0 GB" vs the design's "211 GB"). Undated items
+  (capture time 0, stored as 1970-01-01) are titled "January 1970" in the month band in every
+  view, not "Undated".
 
 - **Mosaic (01b):**
   - Rows leave the 158–224 band in narrow panes or with very mixed aspects (the tests hold real

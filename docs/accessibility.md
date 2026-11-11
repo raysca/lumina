@@ -126,6 +126,24 @@ Lumina is designed to be usable without a mouse:
   ⌘ shortcuts (⇧⌘A, ⇧⌘R, ⌥⌘C, ⌘E, ⌘I), ⌘K and menu commands still act
   on it. Undated items have no year or month
   card. None of this is checked with VoiceOver yet.
+- **Videos**: the Videos view shows 16:9 tiles with a title and a date ·
+  resolution · duration line (Grid only; Mosaic keeps true shapes). Its
+  chip row has All clips and 4K (buttons, toggled), a clip count (status)
+  and, while 4K is on, Clear all. ⌘K Filter: 4K Videos (offered only in
+  Videos) turns 4K on or off, and Back returns to plain Videos. The duration
+  badge (image, labelled "Video, 1:18", or "In Picture in Picture, 1:18" for
+  the clip in PiP) marks that clip with a sound icon.
+- **Picture in Picture**: `⌥P` (or ⌘K Toggle Picture-in-Picture) opens the
+  selected video in a floating window and closes it again. Once that window has been clicked it takes `Space`/`K`
+  (play/pause), `J`/`←` and `→` (5 s back or forward), `⌥←`/`⌥→`
+  (back to the chapter start, or on to the next chapter; 5 s without
+  chapters; the chapter name shows in the main window), `M` (mute) and `L`
+  (loop). Its Expand, Close, skip, play/pause and mute controls are
+  buttons with labels and tooltips; the timeline is a slider, with no value
+  reported yet. Expand hands the
+  video back to the viewer at the same position; closing the window stops
+  it. Not checked with
+  VoiceOver.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
