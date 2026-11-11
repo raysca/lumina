@@ -27,7 +27,7 @@ fn time_badge(time: f64) -> Stateful<Div> {
         .shadow_lg()
         .text_xs()
         .font_family(theme::FONT_MONO)
-        .font_weight(FontWeight::BOLD)
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::text())
         .child(format_time_fractional(time))
 }

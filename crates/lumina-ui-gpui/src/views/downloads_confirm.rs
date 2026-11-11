@@ -81,7 +81,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(
                             div()
                                 .text_base()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::text())
                                 .child(format!("{running} {question}")),
                         )
@@ -109,7 +109,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             button("downloads-confirm-ok", action)
                                 .bg(theme::accent())
                                 .hover(|s| s.bg(theme::accent_hover()))
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::accent_fg())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {

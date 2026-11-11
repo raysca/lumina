@@ -260,7 +260,7 @@ fn render_single_body(
                             div()
                                 .w_full()
                                 .text_base()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::text())
                                 .child(display_title.clone()),
                         )

@@ -103,7 +103,7 @@ pub(crate) fn confirm_dialog(
                         .child(
                             div()
                                 .text_base()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::text())
                                 .truncate()
                                 .child(heading),
@@ -130,7 +130,7 @@ pub(crate) fn confirm_dialog(
                             button("confirm", buttons.1)
                                 .bg(theme::danger())
                                 .hover(|s| s.opacity(0.9))
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::text())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

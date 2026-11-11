@@ -338,7 +338,7 @@ pub(super) fn render_tags_section(
                                             })
                                             .cursor_pointer()
                                             .text_xs()
-                                            .font_weight(FontWeight::BOLD)
+                                            .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(theme::accent_fg())
                                             .child(render_icon(
                                                 Icon::Check,

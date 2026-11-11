@@ -98,7 +98,7 @@ impl OnboardingView {
                         .child(
                             div()
                                 .text_3xl()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .child(t("welcome.title")),
                         )
                         .child(

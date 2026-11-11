@@ -47,7 +47,7 @@ impl LuminaApp {
                     .text_size(px(11.0))
                     .font_family(theme::FONT_MONO)
                     .font_weight(if is_active {
-                        FontWeight::BOLD
+                        FontWeight::SEMIBOLD
                     } else {
                         FontWeight::NORMAL
                     })

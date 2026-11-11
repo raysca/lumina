@@ -109,7 +109,7 @@ impl DuplicatesView {
                             .hover(|s| s.bg(theme::accent_hover()))
                             .cursor_pointer()
                             .text_xs()
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::accent_fg())
                             .child("Merge All Duplicates")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -305,7 +305,7 @@ impl DuplicatesView {
                                 theme::bg_raised()
                             })
                             .text_xs()
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if is_keeper {
                                 theme::accent_fg()
                             } else {

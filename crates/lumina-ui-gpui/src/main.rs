@@ -50,14 +50,11 @@ fn main() {
             // The text fields' input key bindings and globals.
             gpui::init(cx);
 
-            // Register bundled IBM Plex fonts
-            if let Err(e) = cx.text_system().add_fonts(vec![
-                std::borrow::Cow::Borrowed(assets::PLEX_SANS_REGULAR),
-                std::borrow::Cow::Borrowed(assets::PLEX_SANS_MEDIUM),
-                std::borrow::Cow::Borrowed(assets::PLEX_SANS_SEMIBOLD),
-                std::borrow::Cow::Borrowed(assets::PLEX_MONO_REGULAR),
-            ]) {
-                log::warn!("failed to load bundled IBM Plex fonts: {e:?}");
+            if let Err(e) = cx
+                .text_system()
+                .add_fonts(assets::FONTS.map(std::borrow::Cow::Borrowed).to_vec())
+            {
+                log::warn!("failed to load bundled fonts: {e:?}");
             }
 
             let restored = crate::config::AppConfig::load().restored_window_bounds();

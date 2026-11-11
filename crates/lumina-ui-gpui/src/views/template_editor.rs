@@ -149,7 +149,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(
                             div()
                                 .text_base()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::text())
                                 .child(t("template.title")),
                         )
@@ -226,7 +226,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             button("template-save", t("template.save"))
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme::accent_fg())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {

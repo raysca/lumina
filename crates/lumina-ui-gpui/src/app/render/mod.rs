@@ -322,7 +322,7 @@ impl LuminaApp {
                             .child(
                                 div()
                                     .text_sm()
-                                    .font_weight(FontWeight::BOLD)
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme::text())
                                     .child("Keyboard Shortcuts"),
                             )

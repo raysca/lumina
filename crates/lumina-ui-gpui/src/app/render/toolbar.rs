@@ -332,7 +332,7 @@ impl LuminaApp {
                             .bg(theme::accent())
                             .text_color(theme::accent_fg())
                             .text_size(px(9.0))
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .flex()
                             .items_center()
                             .justify_center()

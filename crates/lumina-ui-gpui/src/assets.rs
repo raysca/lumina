@@ -87,14 +87,17 @@ static ICONS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     m
 });
 
-pub static PLEX_SANS_REGULAR: &[u8] =
-    include_bytes!("../../../resources/fonts/IBMPlexSans-Regular.otf");
-pub static PLEX_SANS_MEDIUM: &[u8] =
-    include_bytes!("../../../resources/fonts/IBMPlexSans-Medium.otf");
-pub static PLEX_SANS_SEMIBOLD: &[u8] =
-    include_bytes!("../../../resources/fonts/IBMPlexSans-SemiBold.otf");
-pub static PLEX_MONO_REGULAR: &[u8] =
-    include_bytes!("../../../resources/fonts/IBMPlexMono-Regular.otf");
+/// Bundled fonts (SIL OFL 1.1, see `THIRD_PARTY_NOTICES.md`), registered at
+/// startup: Inter 400/500/600 (`theme::FONT_SANS`), Inter Tight 600 (the
+/// wordmark and page titles, whose views name it) and JetBrains Mono 400
+/// (`theme::FONT_MONO`).
+pub static FONTS: [&[u8]; 5] = [
+    include_bytes!("../../../resources/fonts/Inter-Regular.otf"),
+    include_bytes!("../../../resources/fonts/Inter-Medium.otf"),
+    include_bytes!("../../../resources/fonts/Inter-SemiBold.otf"),
+    include_bytes!("../../../resources/fonts/InterTight-SemiBold.ttf"),
+    include_bytes!("../../../resources/fonts/JetBrainsMono-Regular.ttf"),
+];
 /// Natural Earth 1:110m land (public domain), converted by
 /// `scripts/build_world_basemap.py`; parsed by `app::map::parse_basemap`.
 pub static LAND_110M: &[u8] = include_bytes!("../../../resources/map/land_110m.bin");
@@ -104,17 +107,7 @@ pub struct LuminaAssets;
 
 impl AssetSource for LuminaAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
-        if let Some(svg) = ICONS.get(path) {
-            return Ok(Some(Cow::Borrowed(svg.as_bytes())));
-        }
-
-        match path {
-            "fonts/IBMPlexSans-Regular.otf" => Ok(Some(Cow::Borrowed(PLEX_SANS_REGULAR))),
-            "fonts/IBMPlexSans-Medium.otf" => Ok(Some(Cow::Borrowed(PLEX_SANS_MEDIUM))),
-            "fonts/IBMPlexSans-SemiBold.otf" => Ok(Some(Cow::Borrowed(PLEX_SANS_SEMIBOLD))),
-            "fonts/IBMPlexMono-Regular.otf" => Ok(Some(Cow::Borrowed(PLEX_MONO_REGULAR))),
-            _ => Ok(None),
-        }
+        Ok(ICONS.get(path).map(|svg| Cow::Borrowed(svg.as_bytes())))
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
@@ -126,5 +119,34 @@ impl AssetSource for LuminaAssets {
             }
         }
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FONTS;
+
+    fn utf16be(s: &str) -> Vec<u8> {
+        s.encode_utf16().flat_map(u16::to_be_bytes).collect()
+    }
+
+    #[core::prelude::v1::test]
+    fn bundled_fonts_carry_their_family_names() {
+        assert_eq!(FONTS.len(), 5, "Inter x3, Inter Tight and JetBrains Mono");
+        for (font, family) in
+            FONTS
+                .iter()
+                .zip(["Inter", "Inter", "Inter", "Inter Tight", "JetBrains Mono"])
+        {
+            assert!(
+                font.starts_with(b"OTTO") || font.starts_with(&[0, 1, 0, 0]),
+                "{family}: every bundled font must be an OpenType/TrueType file"
+            );
+            let name = utf16be(family);
+            assert!(
+                font.windows(name.len()).any(|w| w == name),
+                "{family}: the name table must carry the family theme.rs asks for"
+            );
+        }
     }
 }

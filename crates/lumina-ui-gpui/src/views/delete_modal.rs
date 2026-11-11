@@ -111,7 +111,7 @@ impl DeleteConfirmModal {
                             .id("delete-title")
                             .debug_selector(|| "delete-title".to_string())
                             .text_base()
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::text())
                             .child(title),
                     )
@@ -200,7 +200,7 @@ impl DeleteConfirmModal {
                     .flex()
                     .items_center()
                     .text_xs()
-                    .font_weight(FontWeight::BOLD)
+                    .font_weight(FontWeight::SEMIBOLD)
                     .bg(if destructive {
                         theme::danger()
                     } else {
@@ -390,7 +390,7 @@ fn render_option_card(
                         .child(
                             div()
                                 .text_xs()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 // The permanent option's title is always red.
                                 .text_color(if is_destructive {
                                     theme::label_red()

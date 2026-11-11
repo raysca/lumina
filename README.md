@@ -391,7 +391,7 @@ docs/                Roadmap, system design, technical notes
 
 ## Third-party assets
 
-IBM Plex Sans/Mono fonts (SIL OFL 1.1), Lucide icons (ISC) and the Natural
+Inter, Inter Tight and JetBrains Mono fonts (SIL OFL 1.1), Lucide icons (ISC) and the Natural
 Earth 1:110m land outline (public domain, for the offline map) are bundled; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Dependency versions are pinned
 in Cargo.lock; each crate keeps its own license.

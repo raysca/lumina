@@ -72,7 +72,7 @@ pub fn render_trash_lifecycle(weak_app: WeakEntity<LuminaApp>) -> AnyElement {
                         .justify_center()
                         .gap_1p5()
                         .text_xs()
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::text())
                         .child(render_icon(Icon::X, px(12.0), theme::text()))
                         .child("Delete Now")

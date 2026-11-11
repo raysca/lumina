@@ -78,7 +78,7 @@ impl ViewerTopBar {
                 .debug_selector(|| "viewer-filename".to_string())
                 .min_w(px(40.0))
                 .truncate()
-                .font_weight(FontWeight::BOLD)
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::text())
                 .child(date_title),
         );

@@ -484,7 +484,7 @@ fn render_batch_metadata_row(
                 .child(
                     div()
                         .text_xs()
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::text_subtle())
                         .child(label),
                 )
@@ -498,7 +498,7 @@ fn render_batch_metadata_row(
                         .border_color(theme::border_strong())
                         .bg(theme::bg_control())
                         .text_xs()
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::text_muted())
                         .child("Mixed")
                         .into_any_element()

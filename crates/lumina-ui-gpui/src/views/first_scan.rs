@@ -62,7 +62,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                         .child(
                             div()
                                 .text_2xl()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::SEMIBOLD)
                                 .child("Building your library"),
                         )
                         .child(div().text_sm().text_color(theme::text_muted()).child(root)),

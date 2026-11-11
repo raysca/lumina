@@ -187,8 +187,10 @@ pub fn card_surface() -> Rgba {
     rgba(0x00000000)
 }
 
-pub const FONT_SANS: &str = "IBM Plex Sans";
-pub const FONT_MONO: &str = "IBM Plex Mono";
+/// Body and UI text.
+pub const FONT_SANS: &str = "Inter";
+/// Counts, sizes, durations and shortcut hints.
+pub const FONT_MONO: &str = "JetBrains Mono";
 
 /// Text input field: 28px tall, 6px radius, 1px border.
 pub fn field(id: impl Into<ElementId>) -> Stateful<Div> {
