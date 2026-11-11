@@ -520,3 +520,191 @@ fn the_pip_window_expand_button_returns_the_video_to_the_viewer() {
         );
     });
 }
+
+/// Opens PiP on video A, then swaps in an unloaded player on a 60 s clock so
+/// seeks land exactly on `playback_time` (as `tests/video_tracks.rs` does).
+/// Returns the PiP window's context, drawn and parked.
+fn pip_with_stub_player(
+    view: &gpui::Entity<crate::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    lib: &PipLibrary,
+) -> gpui::VisualTestContext {
+    open_pip_for(view, vcx, &lib.video_a);
+    view.update(vcx, |app, cx| {
+        app.stop_video_ticker();
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.is_playing = false;
+        app.video.duration = 60.0;
+        app.video.playback_time = 0.0;
+        cx.notify();
+    });
+    let handle = view
+        .update(vcx, |app, _| app.floating_pip_window)
+        .expect("the PiP window must open");
+    let pip = gpui::VisualTestContext::from_window(handle, &vcx.cx);
+    pip.run_until_parked();
+    pip
+}
+
+fn pip_click(pip: &mut gpui::VisualTestContext, selector: &'static str) {
+    let bounds = pip
+        .debug_bounds(selector)
+        .unwrap_or_else(|| panic!("the PiP card must render {selector}"));
+    pip.simulate_click(bounds.center(), gpui::Modifiers::default());
+    pip.run_until_parked();
+}
+
+fn pip_time(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext) -> f64 {
+    view.update(vcx, |app, _| app.video.playback_time)
+}
+
+#[core::prelude::v1::test]
+fn pip_card_has_design_controls() {
+    let lib = pip_library("card");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+
+    for selector in [
+        "pip-badge",
+        "pip-expand",
+        "pip-close",
+        "pip-title",
+        "pip-skip-back",
+        "pip-play-pause",
+        "pip-skip-forward",
+        "pip-scrub-track",
+        "pip-mute",
+    ] {
+        assert!(
+            pip.debug_bounds(selector).is_some(),
+            "the PiP card must always show {selector}"
+        );
+    }
+
+    let main = vcx.update(|window, _| window.bounds());
+    let card = pip.update(|window, _| window.bounds());
+    assert_eq!(
+        (card.right(), card.bottom()),
+        (
+            main.right() - gpui::px(56.0),
+            main.bottom() - gpui::px(56.0)
+        ),
+        "PiP opens 56 px in from the main window's bottom-right ({main:?} vs {card:?})"
+    );
+
+    // No chapters: the skip buttons seek 5 s, like ⌥← / ⌥→.
+    pip_click(&mut pip, "pip-skip-forward");
+    assert_eq!(pip_time(&view, vcx), 5.0, "skip forward must match ⌥→");
+
+    // With chapters they jump between chapter starts, like ⌥← / ⌥→.
+    view.update(vcx, |app, cx| {
+        app.video.tracks.chapters = vec![
+            (0.0, "Intro".to_string()),
+            (20.0, "Middle".to_string()),
+            (40.0, "End".to_string()),
+        ];
+        app.video.playback_time = 10.0;
+        cx.notify();
+    });
+    pip.run_until_parked();
+    pip_click(&mut pip, "pip-skip-forward");
+    assert_eq!(pip_time(&view, vcx), 20.0, "skip forward must match ⌥→");
+    view.update(vcx, |app, _| app.video.playback_time = 30.0);
+    pip_click(&mut pip, "pip-skip-back");
+    assert_eq!(pip_time(&view, vcx), 20.0, "skip back must match ⌥←");
+}
+
+#[core::prelude::v1::test]
+fn pip_mute_button_toggles_mute() {
+    let lib = pip_library("mute");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+
+    let before = view.update(vcx, |app, _| app.video.is_muted);
+    pip_click(&mut pip, "pip-mute");
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.is_muted),
+        !before,
+        "the PiP mute button must toggle mute"
+    );
+    pip_click(&mut pip, "pip-mute");
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.is_muted),
+        before,
+        "a second click must restore it"
+    );
+}
+
+#[core::prelude::v1::test]
+fn pip_scrub_track_seeks_by_click_and_drag() {
+    let lib = pip_library("scrub");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+
+    let track = pip
+        .debug_bounds("pip-scrub-track")
+        .expect("the PiP card must render its scrub track");
+    let at = |fraction: f32| {
+        gpui::point(
+            track.origin.x + track.size.width * fraction,
+            track.center().y,
+        )
+    };
+    let none = gpui::Modifiers::default();
+
+    pip.simulate_click(at(0.75), none);
+    pip.run_until_parked();
+    let time = pip_time(&view, vcx);
+    assert!(
+        (time - 45.0).abs() < 1.0,
+        "a click at 75% of the track must seek to 45 s, got {time}"
+    );
+
+    pip.simulate_mouse_down(at(0.25), gpui::MouseButton::Left, none);
+    pip.run_until_parked();
+    pip.simulate_mouse_move(at(0.5), gpui::MouseButton::Left, none);
+    pip.run_until_parked();
+    pip.simulate_mouse_up(at(0.5), gpui::MouseButton::Left, none);
+    pip.run_until_parked();
+    let time = pip_time(&view, vcx);
+    assert!(
+        (time - 30.0).abs() < 1.0,
+        "a drag released at 50% must seek to 30 s, got {time}"
+    );
+    assert!(
+        !view.update(vcx, |app, _| app.video.is_scrubbing),
+        "release must end the scrub"
+    );
+}
+
+#[core::prelude::v1::test]
+fn pip_window_takes_the_player_keys() {
+    let lib = pip_library("keys");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+    let mut pip = pip_with_stub_player(&view, vcx, &lib);
+
+    let muted = view.update(vcx, |app, _| app.video.is_muted);
+    pip.simulate_keystrokes("m");
+    pip.run_until_parked();
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.is_muted),
+        !muted,
+        "M in the PiP window must toggle mute"
+    );
+    pip.simulate_keystrokes("right");
+    pip.run_until_parked();
+    assert_eq!(pip_time(&view, vcx), 5.0, "→ in the PiP window seeks 5 s");
+    pip.simulate_keystrokes("j");
+    pip.run_until_parked();
+    assert_eq!(pip_time(&view, vcx), 0.0, "J in the PiP window seeks back");
+    pip.simulate_keystrokes("space");
+    pip.run_until_parked();
+    assert!(
+        view.update(vcx, |app, _| app.video.is_playing),
+        "Space in the PiP window must play"
+    );
+}

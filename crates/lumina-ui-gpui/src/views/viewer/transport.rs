@@ -12,7 +12,7 @@ use crate::theme;
 /// Convert a window-space pointer position into a 0..=1 fraction of the scrub
 /// track. Bounds are captured during prepaint, so drag mapping stays correct
 /// across resizes and layout changes without hard-coded geometry.
-fn scrub_fraction(
+pub(crate) fn scrub_fraction(
     position: Point<Pixels>,
     track_bounds: &Rc<RefCell<Option<Bounds<Pixels>>>>,
 ) -> Option<f64> {
@@ -29,7 +29,7 @@ fn scrub_fraction(
 /// While `active`, forwards every pressed-button mouse move in the window to
 /// `on_move`. `on_mouse_move` only fires while its element is hovered, so a
 /// drag on a thin track would freeze as soon as the pointer drifted off it.
-fn drag_tracker(
+pub(crate) fn drag_tracker(
     active: bool,
     app: Entity<LuminaApp>,
     on_move: impl Fn(&mut LuminaApp, Point<Pixels>, &mut Context<LuminaApp>) + 'static,

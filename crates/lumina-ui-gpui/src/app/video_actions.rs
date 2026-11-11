@@ -375,6 +375,9 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Test helper: seek to `pct` of the duration (PiP now scrubs through
+    /// `begin_video_scrub` like the viewer).
+    #[cfg(test)]
     pub fn seek_video_percent(&mut self, pct: f64, cx: &mut Context<Self>) {
         if self.video.player.is_none() {
             return;

@@ -1,10 +1,12 @@
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::inspector::body::display_title;
+use crate::views::viewer::transport::{drag_tracker, scrub_fraction};
 use crate::{LuminaApp, UiMessage};
 use gpui::*;
-
-/// Number of clickable segments in the PiP scrubber hit row.
-const PIP_SCRUB_SEGMENTS: usize = 16;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Fraction (0..=1) of the scrub track filled by the playback position.
 ///
@@ -18,10 +20,32 @@ fn scrub_progress_fraction(current_time: f64, duration: f64) -> f32 {
     }
 }
 
-/// Centre percentage (0..1) of segment `index` in a click-to-seek row.
-fn scrub_segment_percent(index: usize, segments: usize) -> f64 {
-    debug_assert!(segments > 0);
-    (index as f64 + 0.5) / segments as f64
+/// "m:ss" for the PiP time readouts.
+fn clock(seconds: f64) -> String {
+    let s = seconds.max(0.0) as u64;
+    format!("{}:{:02}", s / 60, s % 60)
+}
+
+/// The player keys while the PiP window is key (the viewer's bindings):
+/// Space/K play, J/← back 5 s, → forward 5 s, ⌥←/⌥→ chapter or 5 s,
+/// L loop, M mute. Returns whether the key was handled.
+fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<LuminaApp>) -> bool {
+    let m = keystroke.modifiers;
+    if m.platform || m.control || m.shift {
+        return false;
+    }
+    let key = keystroke.key.to_ascii_lowercase();
+    match key.as_str() {
+        "left" | "right" if m.alt => app.jump_chapter(key == "right", cx),
+        _ if m.alt => return false,
+        "space" | "k" => app.toggle_video_play(cx),
+        "j" | "left" => app.seek_video_relative(-5.0, cx),
+        "right" => app.seek_video_relative(5.0, cx),
+        "l" => app.toggle_video_loop(cx),
+        "m" => app.toggle_video_mute(cx),
+        _ => return false,
+    }
+    true
 }
 
 pub struct FloatingPipPlayerView {
@@ -29,30 +53,56 @@ pub struct FloatingPipPlayerView {
     /// This window's id, sent on close so the app can ignore a stale window.
     pub window_id: WindowId,
     pub ui_tx: async_channel::Sender<UiMessage>,
+    /// Holds focus so the player keys reach this window when it is key.
+    focus_handle: FocusHandle,
     pub _subscription: Option<Subscription>,
 }
 
-/// 20px icon-only PiP control; the tooltip names it.
-fn pip_icon_button(id: &'static str, icon: Icon, tooltip: &'static str) -> Stateful<Div> {
+/// 24px icon-only control over the video. Role, label and tooltip carry
+/// the same text; the press never starts a window drag.
+fn pip_control(
+    id: &'static str,
+    icon: Icon,
+    icon_size: f32,
+    label: impl Into<SharedString>,
+) -> Stateful<Div> {
+    let label = label.into();
     div()
         .id(id)
+        .debug_selector(move || id.to_string())
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(label))
         .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
-        .tooltip(theme::tooltip_label(tooltip))
-        .size(px(20.0))
-        .rounded(theme::RADIUS_MD)
+        .size(px(24.0))
+        .flex_none()
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
+        .child(render_icon(icon, px(icon_size), theme::on_media()))
+}
+
+/// Round transport control (skip, play, mute).
+fn pip_button(id: &'static str, icon: Icon, icon_size: f32, label: String) -> Stateful<Div> {
+    pip_control(id, icon, icon_size, label)
+        .rounded_full()
+        .hover(|s| s.bg(theme::media_scrim()))
+}
+
+/// Square top-right control on a scrim (Expand, Close).
+fn pip_chrome_button(id: &'static str, icon: Icon, label: String) -> Stateful<Div> {
+    pip_control(id, icon, 12.0, label)
+        .rounded(theme::RADIUS_MD)
+        .bg(theme::media_scrim())
         .hover(|s| s.bg(theme::bg_3()))
-        .child(render_icon(icon, px(12.0), theme::t1()))
 }
 
 impl FloatingPipPlayerView {
     pub fn new(
         app: WeakEntity<LuminaApp>,
         ui_tx: async_channel::Sender<UiMessage>,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let _subscription = app.upgrade().map(|app_entity| {
@@ -60,10 +110,14 @@ impl FloatingPipPlayerView {
                 cx.notify();
             })
         });
+        let focus_handle = cx.focus_handle();
+        // Focus within this window only: the window opens without taking key.
+        window.focus(&focus_handle, cx);
         Self {
             app,
             window_id: window.window_handle().window_id(),
             ui_tx,
+            focus_handle,
             _subscription,
         }
     }
@@ -101,38 +155,149 @@ impl Render for FloatingPipPlayerView {
         crate::app::viewer_actions::evict_retired_images(retired, window, cx);
 
         let app_read = app.read(cx);
-        let preview_image = app_read.video.pip_frame.clone();
-        let has_player = app_read.video.player.is_some();
-        let title = app_read
-            .video
-            .item
-            .as_ref()
-            .map(|item| item.file_name.clone())
-            .unwrap_or_default();
-        let is_playing = app_read.video.is_playing;
-        let current_time = app_read.video.playback_time;
-        let duration = app_read.video.duration;
-        let time_progress = scrub_progress_fraction(current_time, duration);
+        let video = &app_read.video;
+        let preview_image = video.pip_frame.clone();
+        let has_player = video.player.is_some();
+        let title = video.item.as_ref().map(display_title).unwrap_or_default();
+        let is_playing = video.is_playing;
+        let is_muted = video.is_muted;
+        let is_scrubbing = video.is_scrubbing;
+        let has_chapters = !video.tracks.chapters.is_empty();
+        // While scrubbing, the destination owns the playhead and readout.
+        let current_time = video.scrub_time.unwrap_or(video.playback_time);
+        let duration = video.duration;
+        let progress = scrub_progress_fraction(current_time, duration);
 
-        let time_display = format!(
-            "{}:{:02} / {}:{:02}",
-            (current_time.max(0.0) as u64) / 60,
-            (current_time.max(0.0) as u64) % 60,
-            (duration.max(0.0) as u64) / 60,
-            (duration.max(0.0) as u64) % 60
-        );
-
-        let app_toggle_play = self.app.clone();
-        let app_return_viewer = self.app.clone();
+        let on_app = |f: fn(&mut LuminaApp, &mut Context<LuminaApp>)| {
+            let app = app.downgrade();
+            move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+                if let Some(app) = app.upgrade() {
+                    app.update(cx, f);
+                }
+            }
+        };
+        let app_expand = self.app.clone();
         let app_close = self.app.clone();
+        let app_keys = self.app.clone();
+
+        // The track surface is the first child, so its prepaint bounds map
+        // pointer X to a 0..=1 fraction (as in the viewer transport).
+        let track_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
+        let scrub_track = div()
+            .on_children_prepainted({
+                let track_bounds = track_bounds.clone();
+                move |child_bounds: Vec<Bounds<Pixels>>, _window, _cx| {
+                    if let Some(bounds) = child_bounds.first() {
+                        *track_bounds.borrow_mut() = Some(*bounds);
+                    }
+                }
+            })
+            .id("pip-scrub-track")
+            .debug_selector(|| "pip-scrub-track".to_string())
+            .role(Role::Slider)
+            .aria_label(t("pip.seek"))
+            .flex_1()
+            .min_w_0()
+            .h(px(14.0))
+            .relative()
+            .cursor_pointer()
+            .on_mouse_down(MouseButton::Left, {
+                let (app, track_bounds) = (app.downgrade(), track_bounds.clone());
+                move |event: &MouseDownEvent, _w, cx| {
+                    cx.stop_propagation();
+                    if let (Some(app), Some(pct)) =
+                        (app.upgrade(), scrub_fraction(event.position, &track_bounds))
+                    {
+                        app.update(cx, |app, cx| app.begin_video_scrub(pct, cx));
+                    }
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let app = app.downgrade();
+                move |_: &MouseUpEvent, _w, cx| {
+                    if let Some(app) = app.upgrade() {
+                        app.update(cx, |app, cx| app.end_video_scrub(cx));
+                    }
+                }
+            })
+            // A release can land off the track mid-drag.
+            .on_mouse_up_out(MouseButton::Left, {
+                let app = app.downgrade();
+                move |_: &MouseUpEvent, _w, cx| {
+                    if let Some(app) = app.upgrade() {
+                        app.update(cx, |app, cx| app.end_video_scrub(cx));
+                    }
+                }
+            })
+            .child(div().absolute().inset_0())
+            // 4px rail, played portion in accent.
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .top(px(5.0))
+                    .h(px(4.0))
+                    .rounded_full()
+                    .bg(theme::on_media().opacity(0.2))
+                    .child(
+                        div()
+                            .h_full()
+                            .w(relative(progress))
+                            .rounded_full()
+                            .bg(theme::accent()),
+                    ),
+            )
+            // 10px knob centred on the playhead.
+            .child(
+                div()
+                    .absolute()
+                    .top(px(2.0))
+                    .left(relative(progress))
+                    .ml(px(-5.0))
+                    .size(px(10.0))
+                    .rounded_full()
+                    .bg(theme::on_media()),
+            )
+            .child(drag_tracker(is_scrubbing, app.clone(), {
+                let track_bounds = track_bounds.clone();
+                move |this, position, cx| {
+                    if let Some(pct) = scrub_fraction(position, &track_bounds) {
+                        this.update_video_scrub(pct, cx);
+                    }
+                }
+            }));
+
+        let mono = |text: String, alpha: f32| {
+            div()
+                .flex_none()
+                .text_size(px(10.0))
+                .font_family(theme::FONT_MONO)
+                .text_color(theme::on_media().opacity(alpha))
+                .child(text)
+        };
 
         div()
             .id("floating-pip-container")
+            .track_focus(&self.focus_handle)
+            .on_key_down(move |event: &KeyDownEvent, _w, cx| {
+                let Some(app) = app_keys.upgrade() else {
+                    return;
+                };
+                if app.update(cx, |app, cx| handle_pip_key(app, &event.keystroke, cx)) {
+                    cx.stop_propagation();
+                }
+            })
             .size_full()
             .bg(theme::bg_media())
+            // The design card: radius 10 and a line-2 outline. The window's
+            // own shadow and corner clip come from macOS.
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(theme::line_2())
             .relative()
             .overflow_hidden()
-            // Video Frame Surface (Draggable by window)
+            // Video surface; drags the window from anywhere.
             .child(
                 div()
                     .size_full()
@@ -160,156 +325,170 @@ impl Render for FloatingPipPlayerView {
                             .into_any_element()
                     }),
             )
-            // Title bar (always visible): mono filename, Expand, Close.
+            // 72px top fade: badge left, Expand and Close right.
             .child(
                 div()
                     .absolute()
-                    .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
-                        window.start_window_move();
-                    })
                     .top_0()
                     .left_0()
                     .right_0()
-                    .h(px(26.0))
-                    .pl(px(if cfg!(target_os = "macos") { 72.0 } else { 8.0 }))
-                    .pr_2()
-                    .bg(theme::scrim())
+                    .h(px(72.0))
+                    .bg(linear_gradient(
+                        180.0,
+                        linear_color_stop(theme::media_scrim(), 0.0),
+                        linear_color_stop(transparent_black(), 1.0),
+                    ))
+                    .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
+                        window.start_window_move();
+                    })
                     .flex()
                     .flex_row()
-                    .items_center()
-                    .gap_1()
+                    .items_start()
+                    .pt(px(12.0))
+                    // ponytail: the traffic lights own the top-left corner, so
+                    // the badge starts after them, not at the design's 12px.
+                    .pl(px(if cfg!(target_os = "macos") {
+                        72.0
+                    } else {
+                        12.0
+                    }))
+                    .pr(px(12.0))
+                    .gap(px(6.0))
                     .child(
+                        // ponytail: GPUI has no letter-spacing; the design's
+                        // 0.5 tracking is skipped.
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(11.0))
-                            .font_family(theme::FONT_MONO)
-                            .text_color(theme::t2())
-                            .child(title),
+                            .debug_selector(|| "pip-badge".to_string())
+                            .h(px(20.0))
+                            .px(px(6.0))
+                            .rounded(theme::RADIUS_SM)
+                            .bg(theme::media_scrim())
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(render_icon(Icon::Pip, px(10.0), theme::accent()))
+                            .child(
+                                div()
+                                    .text_size(px(8.5))
+                                    .font_family(theme::FONT_MONO)
+                                    .text_color(theme::accent())
+                                    .child(t("pip.badge")),
+                            ),
                     )
+                    .child(div().flex_1())
                     .child(
-                        pip_icon_button(
-                            "pip-return-to-viewer-btn",
-                            Icon::Maximize,
-                            "Expand to viewer",
-                        )
-                        .debug_selector(|| "pip-expand".to_string())
-                        .on_click(cx.listener(
-                            move |_this, _e: &ClickEvent, window, cx| {
-                                if let Some(app_entity) = app_return_viewer.upgrade() {
+                        pip_chrome_button("pip-expand", Icon::Maximize, t("pip.expand")).on_click(
+                            cx.listener(move |_this, _e: &ClickEvent, window, cx| {
+                                if let Some(app_entity) = app_expand.upgrade() {
                                     app_entity.update(cx, |app, cx| {
                                         app.expand_pip_to_viewer(cx);
                                     });
                                 }
                                 window.remove_window();
-                            },
-                        )),
+                            }),
+                        ),
                     )
                     .child(
-                        pip_icon_button("pip-close-btn", Icon::X, "Close")
-                            .debug_selector(|| "pip-close".to_string())
-                            .on_click(cx.listener(move |_this, _e: &ClickEvent, window, cx| {
+                        pip_chrome_button("pip-close", Icon::X, t("pip.close")).on_click(
+                            cx.listener(move |_this, _e: &ClickEvent, window, cx| {
                                 if let Some(app_entity) = app_close.upgrade() {
                                     app_entity.update(cx, |app, cx| {
                                         app.close_pip(cx);
                                     });
                                 }
                                 window.remove_window();
-                            })),
+                            }),
+                        ),
                     ),
             )
-            // Control pill (always visible), inset 8px: play, track, time.
+            // 116px bottom fade: title over the controls row.
             .child(
                 div()
                     .absolute()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .h(px(116.0))
+                    .bg(linear_gradient(
+                        0.0,
+                        linear_color_stop(theme::media_scrim(), 0.0),
+                        linear_color_stop(transparent_black(), 1.0),
+                    ))
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
-                    .bottom(px(8.0))
-                    .left(px(8.0))
-                    .right(px(8.0))
-                    .h(px(28.0))
-                    .px_1()
-                    .rounded_full()
-                    .bg(theme::scrim())
                     .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
+                    .flex_col()
+                    .justify_end()
+                    .gap(px(8.0))
+                    .px(px(14.0))
+                    .pb(px(12.0))
                     .child(
-                        pip_icon_button(
-                            "pip-play-pause-btn",
-                            if is_playing { Icon::Pause } else { Icon::Play },
-                            if is_playing {
-                                "Pause (Space)"
-                            } else {
-                                "Play (Space)"
-                            },
-                        )
-                        .debug_selector(|| "pip-play-pause".to_string())
-                        .on_click(cx.listener(
-                            move |_this, _e: &ClickEvent, _w, cx| {
-                                if let Some(app_entity) = app_toggle_play.upgrade() {
-                                    app_entity.update(cx, |app, cx| {
-                                        app.toggle_video_play(cx);
-                                    });
-                                }
-                            },
-                        )),
+                        div()
+                            .debug_selector(|| "pip-title".to_string())
+                            .truncate()
+                            .text_size(px(13.0))
+                            .font_family(theme::FONT_SANS)
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::on_media())
+                            .child(title),
                     )
-                    // 3px track with a click-to-seek hit row over it.
-                    .child({
-                        let mut hit_row = div().absolute().inset_0().flex().flex_row();
-                        for i in 0..PIP_SCRUB_SEGMENTS {
-                            let pct = scrub_segment_percent(i, PIP_SCRUB_SEGMENTS);
-                            let app_seek = self.app.clone();
-                            hit_row = hit_row.child(
-                                div()
-                                    .id(ElementId::NamedInteger("pip-scrub-seg".into(), i as u64))
-                                    .flex_1()
-                                    .h_full()
-                                    .on_click(cx.listener(
-                                        move |_this, _e: &ClickEvent, _w, cx| {
-                                            if let Some(app_entity) = app_seek.upgrade() {
-                                                app_entity.update(cx, |app, cx| {
-                                                    app.seek_video_percent(pct, cx);
-                                                });
-                                            }
-                                        },
-                                    )),
-                            );
-                        }
-                        div()
-                            .id("pip-scrub-track")
-                            .debug_selector(|| "pip-scrub-track".to_string())
-                            .flex_1()
-                            .h(px(14.0))
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .h(px(3.0))
-                                    .rounded_full()
-                                    .bg(theme::bg_3())
-                                    .child(
-                                        div()
-                                            .h_full()
-                                            .w(relative(time_progress))
-                                            .rounded_full()
-                                            .bg(theme::accent()),
-                                    ),
-                            )
-                            .child(hit_row)
-                    })
                     .child(
                         div()
-                            .pr_2()
-                            .text_size(px(11.0))
-                            .font_family(theme::FONT_MONO)
-                            .text_color(theme::t2())
-                            .child(time_display),
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(10.0))
+                            .child(
+                                pip_button(
+                                    "pip-skip-back",
+                                    Icon::StepBack,
+                                    13.0,
+                                    t(if has_chapters {
+                                        "pip.previous_chapter"
+                                    } else {
+                                        "pip.back"
+                                    }),
+                                )
+                                .on_click(on_app(|app, cx| app.jump_chapter(false, cx))),
+                            )
+                            .child(
+                                pip_button(
+                                    "pip-play-pause",
+                                    if is_playing { Icon::Pause } else { Icon::Play },
+                                    16.0,
+                                    t(if is_playing { "pip.pause" } else { "pip.play" }),
+                                )
+                                .on_click(on_app(LuminaApp::toggle_video_play)),
+                            )
+                            .child(
+                                pip_button(
+                                    "pip-skip-forward",
+                                    Icon::StepForward,
+                                    13.0,
+                                    t(if has_chapters {
+                                        "pip.next_chapter"
+                                    } else {
+                                        "pip.forward"
+                                    }),
+                                )
+                                .on_click(on_app(|app, cx| app.jump_chapter(true, cx))),
+                            )
+                            .child(mono(clock(current_time), 1.0))
+                            .child(scrub_track)
+                            .child(mono(clock(duration), 0.7))
+                            .child(
+                                pip_button(
+                                    "pip-mute",
+                                    if is_muted {
+                                        Icon::VolumeX
+                                    } else {
+                                        Icon::Volume
+                                    },
+                                    13.0,
+                                    t(if is_muted { "pip.unmute" } else { "pip.mute" }),
+                                )
+                                .on_click(on_app(LuminaApp::toggle_video_mute)),
+                            ),
                     ),
             )
             .into_any_element()
@@ -320,7 +499,7 @@ impl Render for FloatingPipPlayerView {
 mod tests {
     // Explicit imports only: a glob import of gpui would bring gpui's `test`
     // proc-macro attribute into scope and shadow the builtin test harness.
-    use super::{scrub_progress_fraction, scrub_segment_percent, PIP_SCRUB_SEGMENTS};
+    use super::{clock, scrub_progress_fraction};
 
     #[test]
     fn scrub_progress_fraction_clamps_and_handles_zero_duration() {
@@ -331,13 +510,9 @@ mod tests {
     }
 
     #[test]
-    fn scrub_segment_percent_returns_segment_centres() {
-        assert!((scrub_segment_percent(0, 16) - 0.03125).abs() < 1e-9);
-        assert!((scrub_segment_percent(7, 16) - 0.46875).abs() < 1e-9);
-        assert!((scrub_segment_percent(15, 16) - 0.96875).abs() < 1e-9);
-        for i in 0..PIP_SCRUB_SEGMENTS {
-            let p = scrub_segment_percent(i, PIP_SCRUB_SEGMENTS);
-            assert!(p > 0.0 && p < 1.0);
-        }
+    fn clock_reads_minutes_and_seconds() {
+        assert_eq!(clock(0.0), "0:00");
+        assert_eq!(clock(78.9), "1:18");
+        assert_eq!(clock(-3.0), "0:00");
     }
 }
