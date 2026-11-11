@@ -9,7 +9,7 @@ mod flags;
 pub use edits::{CropRect, Edits};
 pub use flags::RejectedItems;
 mod view_scope;
-pub use view_scope::{DateSpan, ViewScope};
+pub use view_scope::{DateSpan, DayPlace, LayoutCell, ViewScope};
 pub(crate) mod files;
 mod keyword_ops;
 pub mod keywords;

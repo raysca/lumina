@@ -772,13 +772,15 @@ fn benchmark_scale_and_gates() {
                 timestamp_epoch_ms: 1789430400000 + i as i64 * 1000,
                 year: 2026,
                 month: 9,
-                day: 1,
+                // Days and cities spread so the day-places pass groups
+                // real work; geo_points reads only id and coordinates.
+                day: (i % 30) as u32 + 1,
                 latitude: Some(lat),
                 longitude: Some(lon),
                 altitude: None,
-                country_code: None,
+                country_code: Some("PT".to_string()),
                 admin1_region: None,
-                city: None,
+                city: Some(format!("City {}", i % 7)),
                 make: None,
                 model: None,
                 lens: None,
@@ -835,6 +837,50 @@ fn benchmark_scale_and_gates() {
             points.len()
         );
     }
+
+    // Mosaic: the layout cells and per-day places of the whole library
+    // (~125k active rows here: the 25k main rows plus the 100k geo rows).
+    // Background passes once per revision, not frame queries; release gates
+    // are about 2x the measured release numbers (28.5 and 53 ms on an M-series
+    // Mac, 2026-11-11). The places pass sorts every placed row for its GROUP
+    // BY; add a (year, month, day, city) index only if it misses this gate.
+    let library = lumina_core::ViewScope::Library;
+    let layout_start = Instant::now();
+    let cells = catalog
+        .view_layout(&library, lumina_core::SortSpec::default())
+        .expect("view layout must load");
+    let layout_ms = layout_start.elapsed().as_secs_f64() * 1000.0;
+    let places_start = Instant::now();
+    let places = catalog.day_places(&library).expect("day places must load");
+    let places_ms = places_start.elapsed().as_secs_f64() * 1000.0;
+    assert!(
+        cells.len() >= 120_000 && places.len() >= 30,
+        "the Mosaic bench must cover the whole library and its placed days, got {} cells, {} days",
+        cells.len(),
+        places.len()
+    );
+    let (layout_budget, places_budget) = if cfg!(debug_assertions) {
+        (400.0, 600.0)
+    } else {
+        (60.0, 110.0)
+    };
+    println!(
+        "Mosaic - view_layout: {} cells in {layout_ms:.1} ms (< {layout_budget:.0} ms)",
+        cells.len()
+    );
+    println!(
+        "Mosaic - day_places: {} days in {places_ms:.1} ms (< {places_budget:.0} ms)",
+        places.len()
+    );
+    assert!(
+        layout_ms < layout_budget,
+        "view_layout over {} rows must load in < {layout_budget} ms (got {layout_ms:.1} ms)",
+        cells.len()
+    );
+    assert!(
+        places_ms < places_budget,
+        "day_places over the library must load in < {places_budget} ms (got {places_ms:.1} ms)"
+    );
 
     // Stacks: 100k more rows in groups of ten, 10 s apart. Each group is
     // nine JPEGs 100 ms apart plus a RAW twin of the first, so one burst of

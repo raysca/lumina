@@ -34,9 +34,9 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Album, Catalog, CropRect, DateSpan, DeletionTarget, DownloadRow, DownloadState, Edits,
-    GeoPoint, PlaceCount, PriorDownload, RejectedItems, Rights, TagChange, TagReplay,
-    TemplateChange, ViewScope, SCHEMA_VERSION,
+    Album, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget, DownloadRow, DownloadState,
+    Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload, RejectedItems, Rights, TagChange,
+    TagReplay, TemplateChange, ViewScope, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -782,6 +782,20 @@ impl LuminaEngine {
     /// count.
     pub fn view_date_span(&self, scope: &ViewScope) -> Option<DateSpan> {
         self.read("view date span", self.catalog.view_date_span(scope))
+    }
+
+    /// Every item of the view as a Mosaic layout cell, in the view's sort
+    /// order. Reads every row: call it off the UI thread, once per revision.
+    /// A read error is logged and reads as an empty layout.
+    pub fn view_layout(&self, scope: &ViewScope, sort: SortSpec) -> Vec<LayoutCell> {
+        self.read("view layout", self.catalog.view_layout(scope, sort))
+    }
+
+    /// The most common place of each dated day in the view, by `yyyymmdd`.
+    /// One grouped pass: call it off the UI thread, once per revision. A
+    /// read error is logged and reads as no places.
+    pub fn day_places(&self, scope: &ViewScope) -> std::collections::HashMap<u32, DayPlace> {
+        self.read("day places", self.catalog.day_places(scope))
     }
 
     /// Every picked or rejected item; unflagged items are left out.

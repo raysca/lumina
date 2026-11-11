@@ -6661,3 +6661,119 @@ fn migration_adds_rotation_index_idempotently() {
         );
     }
 }
+
+#[test]
+fn view_layout_follows_the_view_order_and_aspect() {
+    use lumina_core::ViewScope;
+    let catalog = Catalog::open_in_memory().unwrap();
+    let sized = |path: &str, ts: i64, width: u32, height: u32| {
+        let mut item = sample_media_item(path, MediaType::Image, ts, None, None);
+        (item.width, item.height) = (width, height);
+        (item.year, item.month, item.day) = (2026, 3, 7);
+        item
+    };
+    let mut undated = sized("/layout/undated.jpg", 0, 1000, 1000);
+    (undated.year, undated.month, undated.day) = (0, 0, 0);
+    let stored = catalog
+        .insert_or_update_batch(&[
+            sized("/layout/landscape.jpg", 5_000, 4000, 3000),
+            sized("/layout/turned.jpg", 4_000, 4000, 3000),
+            sized("/layout/unprobed.mov", 3_000, 0, 0),
+            sized("/layout/panorama.jpg", 2_000, 10_000, 1000),
+            undated,
+        ])
+        .unwrap();
+    catalog
+        .set_rotations(&[(stored[1].id, 1)])
+        .expect("rotate a quarter turn");
+
+    let cells = catalog
+        .view_layout(&ViewScope::Library, SortSpec::default())
+        .unwrap();
+    let slice: Vec<MediaId> = catalog
+        .get_item_slice(0, 5)
+        .unwrap()
+        .iter()
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(
+        cells.iter().map(|c| c.id).collect::<Vec<_>>(),
+        slice,
+        "layout cells come in the grid's own order"
+    );
+    let cell = |i: usize| {
+        *cells
+            .iter()
+            .find(|c| c.id == stored[i].id)
+            .expect("every active item has a cell")
+    };
+    assert!(
+        (cell(0).aspect - 4.0 / 3.0).abs() < 1e-3,
+        "4000x3000 is 1.333"
+    );
+    assert!(
+        (cell(1).aspect - 0.75).abs() < 1e-3,
+        "a quarter turn swaps the aspect"
+    );
+    assert_eq!(cell(2).aspect, 1.0, "a 0x0 item lays out square");
+    assert_eq!(cell(3).aspect, 3.0, "a 10:1 panorama is clamped to 3.0");
+    assert_eq!(cell(0).day, 20260307, "day is yyyymmdd");
+    assert_eq!(cell(4).day, 0, "an undated item has day 0");
+}
+
+#[test]
+fn day_places_picks_the_most_common_city_per_day() {
+    use lumina_core::ViewScope;
+    let catalog = Catalog::open_in_memory().unwrap();
+    let at = |path: &str, day: u32, place: Option<(&str, &str)>| {
+        let mut item = sample_media_item(path, MediaType::Image, day as i64, None, None);
+        (item.year, item.month, item.day) = (2026, 5, day);
+        item.city = place.map(|p| p.0.to_string());
+        item.country_code = place.map(|p| p.1.to_string());
+        item
+    };
+    let lisbon = Some(("Lisbon", "PT"));
+    let stored = catalog
+        .insert_or_update_batch(&[
+            at("/p/1.jpg", 1, lisbon),
+            at("/p/2.jpg", 1, lisbon),
+            at("/p/3.jpg", 1, lisbon),
+            at("/p/4.jpg", 1, Some(("Porto", "PT"))),
+            at("/p/5.jpg", 2, Some(("Porto", "PT"))),
+            at("/p/6.jpg", 2, Some(("Faro", "PT"))),
+            at("/p/7.jpg", 3, None),
+        ])
+        .unwrap();
+    let places = catalog.day_places(&ViewScope::Library).unwrap();
+    assert_eq!(
+        places.get(&20260501),
+        Some(&("Lisbon".to_string(), Some("PT".to_string()))),
+        "the most common city wins the day"
+    );
+    assert_eq!(
+        places.get(&20260502).map(|p| p.0.as_str()),
+        Some("Faro"),
+        "a tie goes to the alphabetically first city"
+    );
+    assert!(
+        !places.contains_key(&20260503),
+        "a day with no city has no place"
+    );
+
+    let album = catalog
+        .create_album_with("Trip", &[stored[0].id, stored[3].id])
+        .unwrap();
+    catalog
+        .remove_from_album(album.id, &[stored[0].id])
+        .unwrap();
+    let album_places = catalog.day_places(&ViewScope::Album(album.id)).unwrap();
+    assert_eq!(
+        album_places.get(&20260501).map(|p| p.0.as_str()),
+        Some("Porto"),
+        "an album counts only its members, not the library's Lisbon majority"
+    );
+    assert!(
+        !album_places.contains_key(&20260502),
+        "days without members are absent"
+    );
+}

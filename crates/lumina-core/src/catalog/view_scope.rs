@@ -1,10 +1,12 @@
 //! A grid view as SQL: the WHERE over `media_items m` that its count uses,
-//! shared by Delete Rejected… and the header's date span.
+//! shared by Delete Rejected…, the header's date span and the Mosaic
+//! layout and day places.
 
 use super::Catalog;
-use crate::{SmartAlbum, StructuredQuery, SystemAlbum};
+use crate::{MediaId, SmartAlbum, SortSpec, StructuredQuery, SystemAlbum};
 use anyhow::{Context, Result};
 use rusqlite::types::Value;
+use std::collections::HashMap;
 
 /// One grid view whose rows are a WHERE over `media_items m`. A search, a
 /// year and a tag are all search text (`year:2024`, `tag:beach`), as the
@@ -72,7 +74,125 @@ fn date_span_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
     Ok((format!("SELECT {}, {};", end("ASC"), end("DESC")), both))
 }
 
+/// One item of a view as the Mosaic lays it out.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayoutCell {
+    pub id: MediaId,
+    /// Width over height as shown: a 0x0 (unprobed) item is 1.0, an odd
+    /// `rotation_quarters` swaps it, and it is clamped to 0.4-3.0 so a
+    /// panorama or a sliver cannot take over a row.
+    pub aspect: f32,
+    /// Capture day as `yyyymmdd`, or 0 when undated.
+    pub day: u32,
+}
+
+/// The most common place of one day in a view: (city, country code).
+pub type DayPlace = (String, Option<String>);
+
+/// `yyyymmdd`, or 0 for an undated row (year 0).
+const DAY_KEY: &str = "CASE WHEN m.year > 0 THEN m.year * 10000 + m.month * 100 + m.day ELSE 0 END";
+
+/// Every row of the view in its sort order: same WHERE as the count, same
+/// ORDER BY as the slice, so a cell index is a grid index. Date sort walks
+/// `idx_media_timestamp` with no sort for the library (timestamp DESC, id
+/// DESC matches the index); an album is driven by `album_items`.
+fn layout_sql(scope: &ViewScope, sort: SortSpec) -> Result<(String, Vec<Value>)> {
+    let (view, params) = view_where(scope)?;
+    Ok((
+        format!(
+            "SELECT m.id, m.width, m.height, m.rotation_quarters, {DAY_KEY} \
+             FROM media_items m WHERE ({view}) ORDER BY {}",
+            sort.order_by("m.")
+        ),
+        params,
+    ))
+}
+
+/// Per dated day and place, how many of the view's items were taken there.
+/// Library plan: `SCAN m USING INDEX idx_media_file_size` (any active-row
+/// partial index; an album seeks `album_items`) then `USE TEMP B-TREE FOR
+/// GROUP BY`. Accepted: it is one background pass per
+/// catalog revision, not a frame query, so no `(year, month, day, city)`
+/// index is added while the bench meets its gate.
+fn day_places_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+    let (view, params) = view_where(scope)?;
+    Ok((
+        format!(
+            "SELECT {DAY_KEY}, m.city, m.country_code, COUNT(*) FROM media_items m \
+             WHERE ({view}) AND m.city IS NOT NULL AND m.city <> '' \
+             GROUP BY 1, 2, 3"
+        ),
+        params,
+    ))
+}
+
+/// Width over height as the Mosaic shows it; see [`LayoutCell::aspect`].
+fn shown_aspect(width: i64, height: i64, rotation_quarters: i64) -> f32 {
+    if width <= 0 || height <= 0 {
+        return 1.0;
+    }
+    let (w, h) = if rotation_quarters % 2 != 0 {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    (w as f32 / h as f32).clamp(0.4, 3.0)
+}
+
 impl Catalog {
+    /// Every item of the view as a layout cell, in the view's sort order.
+    pub fn view_layout(&self, scope: &ViewScope, sort: SortSpec) -> Result<Vec<LayoutCell>> {
+        let (sql, params) = layout_sql(scope, sort)?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            Ok(LayoutCell {
+                id: MediaId(row.get::<_, i64>(0)? as u64),
+                aspect: shown_aspect(row.get(1)?, row.get(2)?, row.get(3)?),
+                day: row.get::<_, i64>(4)?.max(0) as u32,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<_>>()
+            .context("reading the view layout")
+    }
+
+    /// The most common place of each dated day in the view, keyed by
+    /// `yyyymmdd`. A tie goes to the alphabetically first city. Days with
+    /// no city, and undated items, are absent.
+    pub fn day_places(&self, scope: &ViewScope) -> Result<HashMap<u32, DayPlace>> {
+        let (sql, params) = day_places_sql(scope)?;
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            Ok((
+                row.get::<_, i64>(0)? as u32,
+                row.get::<_, i64>(3)?,
+                (row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?),
+            ))
+        })?;
+        let mut best: HashMap<u32, (i64, DayPlace)> = HashMap::new();
+        for row in rows {
+            let (day, count, place) = row.context("reading the day places")?;
+            // Undated rows (day 0) are dropped here, not in the WHERE: a
+            // `year > 0` there makes the planner seek idx_media_year_month
+            // and look up nearly every row.
+            if day == 0 {
+                continue;
+            }
+            // More items wins; on a tie the smaller (city, country) wins.
+            let wins = best
+                .get(&day)
+                .is_none_or(|(n, p)| count > *n || (count == *n && place < *p));
+            if wins {
+                best.insert(day, (count, place));
+            }
+        }
+        Ok(best
+            .into_iter()
+            .map(|(day, (_, place))| (day, place))
+            .collect())
+    }
+
     /// The capture months the view spans, for the page header. `None` when
     /// it has no dated items (empty, or every capture time is 0).
     pub fn view_date_span(&self, scope: &ViewScope) -> Result<Option<DateSpan>> {
@@ -97,7 +217,10 @@ mod tests {
     use super::*;
 
     fn plan(catalog: &Catalog, scope: &ViewScope) -> String {
-        let (sql, params) = date_span_sql(scope).unwrap();
+        explain(catalog, date_span_sql(scope).unwrap())
+    }
+
+    fn explain(catalog: &Catalog, (sql, params): (String, Vec<Value>)) -> String {
         let conn = catalog.conn.lock();
         let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt
@@ -133,6 +256,42 @@ mod tests {
         assert!(
             album.contains("album_items USING PRIMARY KEY"),
             "an album's span is driven by its members, not a library walk: {album}"
+        );
+    }
+
+    #[test]
+    fn layout_and_place_queries_use_the_view_indexes() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let library = explain(
+            &catalog,
+            layout_sql(&ViewScope::Library, SortSpec::default()).unwrap(),
+        );
+        assert!(
+            library.contains("idx_media_timestamp") && !library.contains("TEMP B-TREE"),
+            "the library layout walks the timestamp index in date order, never sorting: {library}"
+        );
+        let album = explain(
+            &catalog,
+            layout_sql(&ViewScope::Album(1), SortSpec::default()).unwrap(),
+        );
+        assert!(
+            album.contains("album_items USING PRIMARY KEY"),
+            "an album layout is driven by its members, not a library walk: {album}"
+        );
+        let places = explain(&catalog, day_places_sql(&ViewScope::Library).unwrap());
+        assert!(
+            places.starts_with("SCAN m") && places.matches("TEMP B-TREE").count() == 1,
+            "the library place pass is one scan plus the accepted GROUP BY b-tree, \
+             never a per-row index seek: {places}"
+        );
+        let album_places = explain(&catalog, day_places_sql(&ViewScope::Album(1)).unwrap());
+        assert!(
+            album_places.contains("album_items USING PRIMARY KEY"),
+            "an album's places are driven by its members: {album_places}"
+        );
+        println!(
+            "layout library: {library}\nlayout album: {album}\n\
+             day places library: {places}\nday places album: {album_places}"
         );
     }
 }
