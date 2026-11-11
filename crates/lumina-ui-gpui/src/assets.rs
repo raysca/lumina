@@ -13,6 +13,7 @@ macro_rules! lucide {
 }
 
 static LUCIDE: &[(&str, &str)] = lucide!(
+    "aperture",
     "arrow-down-to-line",
     "camera",
     "check",

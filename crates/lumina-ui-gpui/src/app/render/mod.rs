@@ -20,6 +20,7 @@ mod status_bar;
 mod toolbar;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
+pub(crate) use toolbar::HEADER_HEIGHT;
 
 impl LuminaApp {
     /// Banner for recoverable failures: alert icon, title and description,
@@ -664,11 +665,7 @@ impl Render for LuminaApp {
             .flex()
             .flex_col()
             .relative()
-            // 0. Recoverable error banner (if any)
-            .child(self.render_error_banner(cx))
-            // 1. Top 52px Toolbar
-            .child(self.render_toolbar(&view_label, window, cx))
-            // 2. Workspace Horizontal Split: Sidebar + Resizer + Canvas + Year Rail + Resizer + Inspector
+            // Sidebar (full height) + resizer + main column (banner, header, canvas, inspector)
             .child(
                 div()
                     .flex_1()
@@ -697,11 +694,8 @@ impl Render for LuminaApp {
                     } else {
                         Empty.into_any_element()
                     })
-                    // Center Canvas: the browser grid is the only non-modal
-                    // content. The media viewer is painted as a fullscreen
-                    // overlay above it (see render_viewer_modal).
-                    // The filter and status bars belong to this column, so
-                    // the sidebar and inspector run full height.
+                    // Main column: the banner and header sit beside the
+                    // full-height sidebar, above the canvas and inspector.
                     .child(
                         div()
                             .flex_1()
@@ -709,60 +703,94 @@ impl Render for LuminaApp {
                             .h_full()
                             .flex()
                             .flex_col()
-                            .children(self.render_trash_note())
+                            .child(self.render_error_banner(cx))
+                            .child(self.render_toolbar(&view_label, window, cx))
                             .child(
                                 div()
-                                    .relative()
                                     .flex_1()
                                     .min_h_0()
                                     .flex()
                                     .flex_row()
-                                    .child(if self.selection == AlbumSelection::Duplicates {
-                                        crate::views::stacks::render_duplicates(
-                                            self,
-                                            total_count,
-                                            cx,
-                                        )
-                                    } else if self.map_shown() {
-                                        crate::views::map::render(self, cx)
+                                    .overflow_hidden()
+                                    // Center Canvas: the browser grid is the only non-modal
+                                    // content. The media viewer is painted as a fullscreen
+                                    // overlay above it (see render_viewer_modal).
+                                    // The filter and status bars belong to this column; the
+                                    // inspector sits beside it, under the header.
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .flex()
+                                            .flex_col()
+                                            .children(self.render_trash_note())
+                                            .child(
+                                                div()
+                                                    .relative()
+                                                    .flex_1()
+                                                    .min_h_0()
+                                                    .flex()
+                                                    .flex_row()
+                                                    .child(
+                                                        if self.selection
+                                                            == AlbumSelection::Duplicates
+                                                        {
+                                                            crate::views::stacks::render_duplicates(
+                                                                self,
+                                                                total_count,
+                                                                cx,
+                                                            )
+                                                        } else if self.map_shown() {
+                                                            crate::views::map::render(self, cx)
+                                                        } else {
+                                                            self.render_browser_grid(
+                                                                total_count,
+                                                                cx,
+                                                            )
+                                                            .into_any_element()
+                                                        },
+                                                    )
+                                                    // Pinned Vertical Year Rail
+                                                    .child(self.render_year_rail(cx))
+                                                    // Selection dock and toast, over the grid column only
+                                                    .child(self.render_action_dock(
+                                                        is_fullscreen_viewer,
+                                                        cx,
+                                                    ))
+                                                    .child(self.render_toast_overlay(cx)),
+                                            )
+                                            .child(self.render_status_bar(total_count, cx)),
+                                    )
+                                    // Inspector Resizer Drag Handle (260–380px)
+                                    .child(if inspector_open && !is_fullscreen_viewer {
+                                        div()
+                                            .id("inspector-resizer")
+                                            .w(px(4.0))
+                                            .h_full()
+                                            .cursor_col_resize()
+                                            .hover(|s| s.bg(theme::line_2()))
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                                                    this.is_dragging_inspector_resizer = true;
+                                                    cx.notify();
+                                                }),
+                                            )
+                                            .into_any_element()
                                     } else {
-                                        self.render_browser_grid(total_count, cx).into_any_element()
+                                        Empty.into_any_element()
                                     })
-                                    // Pinned Vertical Year Rail
-                                    .child(self.render_year_rail(cx))
-                                    // Selection dock and toast, over the grid column only
-                                    .child(self.render_action_dock(is_fullscreen_viewer, cx))
-                                    .child(self.render_toast_overlay(cx)),
-                            )
-                            .child(self.render_status_bar(total_count, cx)),
-                    )
-                    // Inspector Resizer Drag Handle (260–380px)
-                    .child(if inspector_open && !is_fullscreen_viewer {
-                        div()
-                            .id("inspector-resizer")
-                            .w(px(4.0))
-                            .h_full()
-                            .cursor_col_resize()
-                            .hover(|s| s.bg(theme::line_2()))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                                    this.is_dragging_inspector_resizer = true;
-                                    cx.notify();
-                                }),
-                            )
-                            .into_any_element()
-                    } else {
-                        Empty.into_any_element()
-                    })
-                    // Right Slide-out Metadata & Location Inspector
-                    .child(if inspector_open && !is_fullscreen_viewer {
-                        div()
-                            .child(InspectorView::render(self, cx))
-                            .into_any_element()
-                    } else {
-                        Empty.into_any_element()
-                    }),
+                                    // Right Slide-out Metadata & Location Inspector
+                                    .child(if inspector_open && !is_fullscreen_viewer {
+                                        div()
+                                            .child(InspectorView::render(self, cx))
+                                            .into_any_element()
+                                    } else {
+                                        Empty.into_any_element()
+                                    }),
+                            ),
+                    ),
             )
             // 5b. Compare / survey, under the viewer it can open
             .child(crate::views::compare::render(self, cx))

@@ -6,6 +6,9 @@ use crate::theme;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
+/// Height of the main column's header. Sheets hang from its bottom edge.
+pub(crate) const HEADER_HEIGHT: f32 = 52.0;
+
 /// 28×28 borderless icon button; a fill shows on hover, or bg-3 while `on`. The tooltip names the action.
 fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
     if on {
@@ -107,11 +110,12 @@ impl LuminaApp {
         };
         div()
             .w_full()
-            .h(px(52.0))
+            .h(px(HEADER_HEIGHT))
             .flex_shrink_0()
-            // macOS draws the traffic lights over this inset.
-            .pl(px(if cfg!(target_os = "macos") {
-                84.0
+            // The traffic lights sit over the sidebar's brand row; with the
+            // sidebar collapsed to its rail they reach past it into the header.
+            .pl(px(if cfg!(target_os = "macos") && self.sidebar_collapsed {
+                84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH
             } else {
                 12.0
             }))

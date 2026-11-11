@@ -26,7 +26,7 @@ pub(super) fn render_albums_section(
         .debug_selector(|| "sidebar-albums-section".to_string())
         .flex()
         .flex_col()
-        .gap_0p5()
+        .gap(px(3.0))
         .child(
             div()
                 .debug_selector(|| "sidebar-albums-header".to_string())
@@ -34,9 +34,9 @@ pub(super) fn render_albums_section(
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .px_2()
-                .pt(px(16.0))
-                .pb_1()
+                .px(px(10.0))
+                // 5px under the label: this plus the rows gap of 3.
+                .pb(px(2.0))
                 .child(theme::section_label(t("sidebar.albums"))),
         )
         .children(
@@ -79,13 +79,13 @@ pub(super) fn render_pinned_section(
         .debug_selector(|| "sidebar-pinned-section".to_string())
         .flex()
         .flex_col()
-        .gap_0p5()
+        .gap(px(3.0))
         .child(
             div()
                 .debug_selector(|| "sidebar-pinned-header".to_string())
-                .px_2()
-                .pt(px(16.0))
-                .pb_1()
+                .px(px(10.0))
+                // 5px under the label: this plus the rows gap of 3.
+                .pb(px(2.0))
                 .child(theme::section_label(t("sidebar.pinned"))),
         )
         .children(

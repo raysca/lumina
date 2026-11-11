@@ -16,16 +16,16 @@ pub(super) fn render_library_section(
     div()
         .flex()
         .flex_col()
-        .gap_0p5()
+        .gap(px(3.0))
         .child(
             div()
                 .flex()
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .px_2()
-                .pt(px(16.0))
-                .pb_1()
+                .px(px(10.0))
+                // 5px under the label: this plus the rows gap of 3.
+                .pb(px(2.0))
                 .child(theme::section_label("LIBRARY"))
                 .child(
                     div()
@@ -152,16 +152,16 @@ pub(super) fn render_smart_albums_section(
     div()
         .flex()
         .flex_col()
-        .gap_0p5()
+        .gap(px(3.0))
         .child(
             div()
                 .flex()
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .px_2()
-                .pt(px(16.0))
-                .pb_1()
+                .px(px(10.0))
+                // 5px under the label: this plus the rows gap of 3.
+                .pb(px(2.0))
                 .child(theme::section_label("SMART ALBUMS"))
                 .child(
                     div()
@@ -242,7 +242,7 @@ pub(super) fn render_tags_section(
     div()
         .flex()
         .flex_col()
-        .gap_0p5()
+        .gap(px(3.0))
         .child(
             div()
                 .debug_selector(|| "sidebar-tags-header".to_string())
@@ -250,9 +250,9 @@ pub(super) fn render_tags_section(
                 .flex_row()
                 .justify_between()
                 .items_center()
-                .px_2()
-                .pt(px(16.0))
-                .pb_1()
+                .px(px(10.0))
+                // 5px under the label: this plus the rows gap of 3.
+                .pb(px(2.0))
                 .child(
                     theme::section_label("TAGS"),
                 ),

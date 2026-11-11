@@ -581,3 +581,58 @@ fn recently_added_row_opens_its_album() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn sidebar_is_full_height_252() {
+    let (dir, engine) = seed_library("sb_full_height", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let window = vcx.update(|window, _| window.viewport_size());
+    let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
+    assert_eq!(
+        f32::from(sidebar.top()),
+        0.0,
+        "the sidebar starts at the window's top edge, not under a toolbar"
+    );
+    assert_eq!(
+        sidebar.size.height, window.height,
+        "the sidebar runs the full window height"
+    );
+    assert_eq!(
+        f32::from(sidebar.size.width),
+        252.0,
+        "the design's sidebar width on a fresh config"
+    );
+    let area = vcx
+        .debug_bounds("toolbar-drag-area")
+        .expect("toolbar-drag-area");
+    assert!(
+        area.left() >= sidebar.right(),
+        "the header sits in the main column, beside the sidebar"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn sidebar_brand_row_present() {
+    let (dir, engine) = seed_library("sb_brand", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let brand = vcx.debug_bounds("sidebar-brand").expect("brand row");
+    let slot = vcx
+        .debug_bounds("sidebar-search-slot")
+        .expect("search slot");
+    let all = vcx.debug_bounds("sidebar-nav-all").expect("All Media row");
+    assert!(
+        brand.bottom() <= slot.top() && slot.bottom() <= all.top(),
+        "brand row, then the search slot, then the Library rows"
+    );
+    assert_eq!(
+        f32::from(slot.size.height),
+        34.0,
+        "the search slot keeps the field's height"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -65,17 +65,26 @@ impl SidebarView {
             .border_color(theme::line())
             .flex()
             .flex_col()
-            .justify_between()
-            .py(px(4.0))
-            .px(px(8.0))
+            .gap(px(18.0))
+            .py(px(16.0))
+            .px(px(12.0))
             .text_color(theme::t1())
+            .child(render_brand())
+            // Plan 03 puts the search field here.
+            .child(
+                div()
+                    .debug_selector(|| "sidebar-search-slot".to_string())
+                    .flex_none()
+                    .h(px(34.0)),
+            )
             .child(
                 div()
                     .id("sidebar-scroll")
                     .flex()
                     .flex_1()
+                    .min_h_0()
                     .flex_col()
-                    .gap_0()
+                    .gap(px(18.0))
                     .overflow_y_scroll()
                     .child(sections::render_library_section(this, cx))
                     .child(albums::render_pinned_section(this, cx))
@@ -85,4 +94,38 @@ impl SidebarView {
             )
             .into_any_element()
     }
+}
+
+/// Brand row: the aperture mark and "Lumina". On macOS it starts after the
+/// traffic lights, which the window draws over the sidebar's top-left.
+fn render_brand() -> impl IntoElement {
+    // 84px from the window edge, less the sidebar's 12px padding.
+    let inset = if cfg!(target_os = "macos") { 72.0 } else { 2.0 };
+    div()
+        .debug_selector(|| "sidebar-brand".to_string())
+        .flex_none()
+        // At the 180px minimum the wordmark clips rather than spilling out.
+        .min_w_0()
+        .overflow_hidden()
+        .pl(px(inset))
+        .pr(px(2.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(9.0))
+        .child(div().flex_none().child(crate::icons::render_icon(
+            crate::icons::Icon::Aperture,
+            px(19.0),
+            theme::accent(),
+        )))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .font_family(theme::FONT_DISPLAY)
+                .text_size(px(18.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::t1())
+                .child("Lumina"),
+        )
 }

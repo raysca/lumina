@@ -71,7 +71,7 @@ fn main() {
                     titlebar: Some(TitlebarOptions {
                         title: Some("Lumina".into()),
                         appears_transparent: true,
-                        // Centred in the 52px toolbar.
+                        // Left of the sidebar brand row, which starts at x=84 after them.
                         traffic_light_position: Some(point(px(18.0), px(19.0))),
                     }),
                     ..Default::default()

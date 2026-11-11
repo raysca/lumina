@@ -5,15 +5,15 @@ use crate::tests::ui_automation::{
     app_with_library, bounds_center, click, keystrokes, leak, render_ui, right_click, seed_library,
 };
 
-const TOOLBAR_HEIGHT: f32 = 52.0;
+use crate::app::render::HEADER_HEIGHT;
 
 fn assert_hangs_from_toolbar(vcx: &mut gpui::VisualTestContext, selector: &'static str) {
     render_ui(vcx);
     let card = vcx.debug_bounds(selector).expect(selector);
     assert_eq!(
         f32::from(card.top()),
-        TOOLBAR_HEIGHT,
-        "{selector} must hang from the bottom of the toolbar, not be centred"
+        HEADER_HEIGHT,
+        "{selector} must hang from the bottom of the header, not be centred"
     );
 }
 

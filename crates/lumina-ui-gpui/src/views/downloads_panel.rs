@@ -285,7 +285,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .debug_selector(|| "downloads-panel".to_string())
                 .occlude()
                 .absolute()
-                .top(px(58.0))
+                .top(px(crate::app::render::HEADER_HEIGHT + 6.0))
                 .right(px(16.0))
                 .w(px(320.0))
                 .max_h(relative(0.6))

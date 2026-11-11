@@ -464,7 +464,7 @@ pub fn validate_external_editor(raw: Option<&str>) -> Option<&str> {
 }
 
 fn default_sidebar_width() -> f32 {
-    220.0
+    252.0
 }
 
 fn default_inspector_width() -> f32 {

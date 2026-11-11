@@ -129,6 +129,8 @@ pub fn section_label(text: impl Into<SharedString>) -> Div {
 
 /// Body and UI text.
 pub const FONT_SANS: &str = "Inter";
+/// The wordmark and page titles (600 only).
+pub const FONT_DISPLAY: &str = "Inter Tight";
 /// Counts, sizes, durations and shortcut hints.
 pub const FONT_MONO: &str = "JetBrains Mono";
 

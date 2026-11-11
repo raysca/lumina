@@ -31,7 +31,7 @@ impl TagManagerModal {
             .flex()
             .justify_center()
             .items_start()
-            .pt(px(52.0))
+            .pt(px(crate::app::render::HEADER_HEIGHT))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {

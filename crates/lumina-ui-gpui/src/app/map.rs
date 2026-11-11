@@ -168,7 +168,9 @@ pub(crate) fn clamp_center(center: (f32, f32), size: Size<Pixels>, zoom: u8) -> 
     let scale = scale_for(size, zoom);
     let axis = |value: f32, half_world: f32, extent: Pixels| {
         let room = half_world - f32::from(extent) / (2.0 * scale);
-        if room <= 0.0 {
+        // Under half a pixel of room is none: along the axis that fits the
+        // world exactly, rounding leaves a tiny positive room otherwise.
+        if room * scale < 0.5 {
             0.0
         } else {
             value.clamp(-room, room)
@@ -639,6 +641,25 @@ mod tests {
         );
         assert_eq!(z3.basemap_offset(), z3.to_screen(-180.0, 90.0));
         assert_eq!(z3.to_degrees(bounds.center()), (135.0, 35.0));
+    }
+
+    #[core::prelude::v1::test]
+    fn zoom_one_centres_exactly_at_any_width() {
+        for width in 400..1600 {
+            let map = size(px(width as f32), px(width as f32));
+            assert_eq!(
+                clamp_center((5.0, 3.0), map, 1),
+                (0.0, 0.0),
+                "at zoom 1 the world fits, centred, at width {width}"
+            );
+            // A wide map: the height axis is the one that fits exactly.
+            let wide = size(px(width as f32 * 3.0), px(width as f32));
+            assert_eq!(
+                clamp_center((5.0, 3.0), wide, 1).1,
+                0.0,
+                "at zoom 1 the latitude is centred on a wide map, height {width}"
+            );
+        }
     }
 
     #[core::prelude::v1::test]

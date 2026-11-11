@@ -24,7 +24,13 @@ pub(super) fn render_rail(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl
         .flex()
         .flex_col()
         .items_center()
-        .py_4()
+        // macOS draws the traffic lights over the top of the rail.
+        .pt(px(if cfg!(target_os = "macos") {
+            52.0
+        } else {
+            16.0
+        }))
+        .pb_4()
         .gap_1()
         // Scrolls rather than clips if a window is ever shorter than the list.
         .overflow_y_scroll()

@@ -94,8 +94,8 @@ fn sidebar_runs_full_height_beside_the_status_bar() {
     let status = vcx.debug_bounds("status-bar").expect("status bar");
     assert_eq!(
         f32::from(sidebar.top()),
-        52.0,
-        "the sidebar starts under the toolbar"
+        0.0,
+        "the sidebar starts at the window top, beside the header"
     );
     assert!(
         sidebar.bottom() >= status.bottom(),

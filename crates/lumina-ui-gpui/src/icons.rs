@@ -51,6 +51,7 @@ pub enum Icon {
     PanelLeftOpen,
     Video,
     Clock,
+    Aperture,
 }
 
 impl Icon {
@@ -106,6 +107,7 @@ impl Icon {
         Icon::PanelLeftOpen,
         Icon::Video,
         Icon::Clock,
+        Icon::Aperture,
     ];
 
     pub fn path(self) -> &'static str {
@@ -158,6 +160,7 @@ impl Icon {
             Self::PanelLeftOpen => "icons/panel-left-open.svg",
             Self::Video => "icons/video.svg",
             Self::Clock => "icons/clock.svg",
+            Self::Aperture => "icons/aperture.svg",
         }
     }
 }

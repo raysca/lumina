@@ -29,7 +29,7 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .child(
             div()
                 .absolute()
-                .top(px(58.0))
+                .top(px(crate::app::render::HEADER_HEIGHT + 6.0))
                 .right(px(16.0))
                 .w(px(210.0))
                 .p_2()
