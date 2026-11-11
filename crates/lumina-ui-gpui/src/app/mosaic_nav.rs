@@ -54,6 +54,33 @@ pub(crate) fn offset_for_y(layout: &MosaicLayout, target: f32) -> ListOffset {
     }
 }
 
+/// A relaunch's scroll: `item`'s row on top, unless that leaves the
+/// `selected` row off-screen; then the least scroll from there that shows
+/// it, as the Grid restore does. A list not yet measured (`viewport` 0)
+/// keeps the anchor.
+pub(crate) fn restore_offset(
+    layout: &MosaicLayout,
+    item: usize,
+    selected: Option<usize>,
+    viewport: f32,
+) -> ListOffset {
+    let top = row_for_item(layout, item);
+    let y = layout.rows[top].y;
+    let target = match selected.map(|s| layout.rows[layout.row_of(s)]) {
+        Some(sel) if viewport > 0.0 && sel.y < y => sel.y,
+        Some(sel) if viewport > 0.0 && sel.y + sel.height > y + viewport => {
+            sel.y + sel.height - viewport
+        }
+        _ => {
+            return ListOffset {
+                item_ix: top,
+                offset_in_item: px(0.0),
+            }
+        }
+    };
+    offset_for_y(layout, target)
+}
+
 /// Content y of the list's top edge.
 fn scroll_y(layout: &MosaicLayout, list: &ListState) -> f32 {
     let top = list.logical_scroll_top();

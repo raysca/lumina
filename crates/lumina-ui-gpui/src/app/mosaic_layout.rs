@@ -15,7 +15,7 @@ use gpui::{px, Context, ListOffset};
 use lumina_core::{DayPlace, LayoutCell, SortField};
 
 use crate::app::active_view::ViewKey;
-use crate::app::mosaic_nav::{offset_for_y, row_for_item};
+use crate::app::mosaic_nav::{offset_for_y, restore_offset, row_for_item};
 use crate::app::LuminaApp;
 use crate::config::BrowseLayout;
 use crate::views::grid::{center_pane_width, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT};
@@ -307,18 +307,18 @@ impl LuminaApp {
             Some(a) if a.key == built.key && restore.is_some() => Some(a),
             _ => None,
         };
+        // Like the zoom anchor, a relaunch scroll for another view is dropped.
         let pending = self
             .mosaic
             .pending_scroll
-            .take_if(|(key, _)| *key == built.key)
+            .take()
+            .filter(|(key, _)| *key == built.key)
             .map(|(_, item)| item);
         if layout.rows.is_empty() {
             // Nothing to scroll.
         } else if let Some(item) = pending {
-            list.scroll_to(ListOffset {
-                item_ix: row_for_item(layout, item.min(layout.tiles.len().saturating_sub(1))),
-                offset_in_item: px(0.0),
-            });
+            let viewport = f32::from(list.viewport_bounds().size.height);
+            list.scroll_to(restore_offset(layout, item, self.selected_index, viewport));
         } else if let Some(anchor) = zoom {
             // A zoom: the anchor item's point stays at the same screen y.
             let row = layout.rows[layout.row_of(anchor.item)];

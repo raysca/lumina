@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use crate::app::history::NavigationSnapshot;
 use crate::app::import::ImportDialog;
+use crate::app::mosaic_nav::restore_offset;
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::bridge::{frame_to_gpui_image, video_frame_to_gpui_image};
@@ -986,15 +987,18 @@ impl LuminaApp {
     /// the anchor is gone or the selected row falls outside the anchored
     /// viewport. In Mosaic the hidden Grid list is left alone: the anchor
     /// (else the selection) goes on top now when the view's layout is
-    /// there, else once it lands.
+    /// there, else once it lands, with the same selection reveal.
     fn restore_grid_scroll(&mut self, anchor: Option<MediaId>, cx: &mut Context<Self>) {
         if self.mosaic_shown() {
             let item = anchor
                 .and_then(|id| self.find_active_index(id))
                 .or(self.selected_index);
-            match item {
-                Some(item) if self.mosaic_layout().is_some() => {
-                    self.scroll_mosaic_to_item(item, cx)
+            match (item, self.mosaic_layout(), self.grid_state.as_ref()) {
+                (Some(item), Some(layout), Some(state)) if !layout.rows.is_empty() => {
+                    let viewport = f32::from(state.mosaic.viewport_bounds().size.height);
+                    let offset = restore_offset(&layout, item, self.selected_index, viewport);
+                    state.mosaic.scroll_to(offset);
+                    cx.notify();
                 }
                 _ => self.mosaic.pending_scroll = item.map(|item| (self.view_key(), item)),
             }

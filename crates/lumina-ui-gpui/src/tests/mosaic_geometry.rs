@@ -517,15 +517,22 @@ fn a_zoom_anchor_never_outlives_its_view() {
 #[core::prelude::v1::test]
 fn relaunch_in_mosaic_restores_the_scroll_anchor() {
     for before_layout in [true, false] {
-        relaunch_in_mosaic(before_layout);
+        relaunch_in_mosaic(before_layout, 95);
     }
 }
 
-fn relaunch_in_mosaic(before_layout: bool) {
+/// A saved selection off-screen from the anchor is revealed, as in Grid.
+#[core::prelude::v1::test]
+fn relaunch_in_mosaic_reveals_an_off_screen_selection() {
+    for before_layout in [true, false] {
+        relaunch_in_mosaic(before_layout, 190);
+    }
+}
+
+fn relaunch_in_mosaic(before_layout: bool, selected: usize) {
     use crate::app::types::UiMessage;
     use crate::config::{LastView, RestoredSession};
     let (dir, engine) = seed_library_undecodable("mosaic_relaunch", 200);
-    let ids: Vec<MediaId> = engine.get_item_slice(0..200).iter().map(|i| i.id).collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let anchor = view.update(vcx, |app, cx| {
@@ -537,11 +544,13 @@ fn relaunch_in_mosaic(before_layout: bool) {
             };
         }
         assert_eq!(app.mosaic_layout().is_none(), before_layout);
+        // Ids at those positions in the view's order.
+        let ids: Vec<MediaId> = app.get_active_slice(0..200).iter().map(|i| i.id).collect();
         app.pending_restore = Some(RestoredSession {
             view: LastView::All,
             search_query: String::new(),
             active_year: None,
-            selected_media_id: Some(ids[95].0),
+            selected_media_id: Some(ids[selected].0),
             scroll_anchor_id: Some(ids[90].0),
         });
         let total = app.grid_state.as_ref().map_or(0, |s| s.total_count);
@@ -549,17 +558,34 @@ fn relaunch_in_mosaic(before_layout: bool) {
             UiMessage::Engine(lumina_core::EngineEvent::ScanComplete { total_items: total }),
             cx,
         );
-        app.find_active_index(ids[90]).expect("anchor in view")
+        assert_eq!(app.find_active_index(ids[90]), Some(90));
+        (90, selected)
     });
+    let (anchor, sel) = anchor;
     render_ui(vcx);
     render_ui(vcx);
     let layout = layout(&view, vcx);
     let top = top_ix(&view, vcx);
-    assert_eq!(
-        top,
-        crate::app::mosaic_nav::row_for_item(&layout, anchor),
-        "Mosaic opens with the saved anchor's row on top (before layout: {before_layout})"
+    let visible = view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(sel), "the selection is restored");
+        app.mosaic_visible_items()
+    });
+    assert!(
+        visible.contains(&sel),
+        "the restored selection {sel} is on screen ({visible:?}, before layout: {before_layout})"
     );
+    if visible.contains(&anchor) {
+        assert_eq!(
+            top,
+            crate::app::mosaic_nav::row_for_item(&layout, anchor),
+            "Mosaic opens with the saved anchor's row on top (before layout: {before_layout})"
+        );
+    } else {
+        assert!(
+            selected == 190,
+            "the anchor yields only to an off-screen selection"
+        );
+    }
     assert!(top > 0, "the anchor is below the first screen");
     click(vcx, "view-mode-grid");
     render_ui(vcx);
@@ -587,5 +613,43 @@ fn offset_past_the_end_stays_inside_the_last_row() {
         f32::from(offset.offset_in_item) <= layout.rows[last].height,
         "the offset is clamped to the row height"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_relaunch_scroll_for_another_view_is_dropped() {
+    let (dir, engine) = seed_library_undecodable("mosaic_stale_relaunch", 200);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    let flip = |app: &mut LuminaApp| {
+        app.sort.direction = match app.sort.direction {
+            lumina_core::SortDirection::Ascending => lumina_core::SortDirection::Descending,
+            lumina_core::SortDirection::Descending => lumina_core::SortDirection::Ascending,
+        };
+    };
+    view.update(vcx, |app, _| {
+        flip(app);
+        let other = app.view_key();
+        flip(app);
+        app.mosaic.pending_scroll = Some((other, 150));
+    });
+    // A layout for the current view lands (a resize relayouts it).
+    vcx.simulate_resize(size(px(1400.0), px(1000.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.mosaic.pending_scroll.is_none(),
+            "a layout for another view drops the relaunch scroll"
+        )
+    });
+    // Switching to that view later starts at the top: no stale jump.
+    view.update(vcx, |app, cx| {
+        flip(app);
+        cx.notify();
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(top_ix(&view, vcx), 0, "the new view starts at the top");
     let _ = std::fs::remove_dir_all(&dir);
 }
