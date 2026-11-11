@@ -337,7 +337,11 @@ impl LuminaApp {
 
     /// Index of the top visible grid row, from the scroll offset (0 with no
     /// library open).
+    /// In Mosaic, the list's top layout row (headers included).
     pub(crate) fn grid_top_row(&self) -> usize {
+        if self.mosaic_shown() {
+            return self.mosaic_top_row();
+        }
         let Some(state) = self.grid_state.as_ref() else {
             return 0;
         };
@@ -352,7 +356,12 @@ impl LuminaApp {
     /// are stale or no library is open.
     pub(crate) fn grid_top_item_id(&self) -> Option<MediaId> {
         self.grid_state.as_ref()?;
-        let first = self.grid_top_row() * self.grid_columns.clamp(2, 8);
+        let first = if self.mosaic_shown() {
+            let layout = self.mosaic_layout()?;
+            layout.rows.get(self.mosaic_top_row())?.first
+        } else {
+            self.grid_top_row() * self.grid_columns.clamp(2, 8)
+        };
         self.displayed_rows(first..first + 1)
             .first()
             .map(|item| item.id)
@@ -363,6 +372,12 @@ impl LuminaApp {
         let (Some(state), Some(index)) = (self.grid_state.as_ref(), self.selected_index) else {
             return;
         };
+        // Never the uniform list's handle in Mosaic: a queued scroll there
+        // would jump the Grid when it comes back.
+        if self.mosaic_shown() {
+            self.reveal_mosaic_item(index);
+            return;
+        }
         let cols = self.grid_columns.clamp(2, 8);
         state
             .scroll_handle

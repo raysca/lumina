@@ -210,6 +210,10 @@ impl LuminaApp {
     /// [`Self::grid_top_row`] reads it, never from what a frame drew. Before
     /// the list's first layout (no viewport height) it is the top row.
     pub(crate) fn grid_visible_items(&self) -> Range<usize> {
+        if self.mosaic_shown() {
+            let items = self.mosaic_visible_items();
+            return items.start.min(self.rail.total)..items.end.min(self.rail.total);
+        }
         let Some(state) = self.grid_state.as_ref() else {
             return 0..0;
         };
@@ -245,6 +249,11 @@ impl LuminaApp {
     /// scroll) so this frame's rail lens already reads it. Clamped to the
     /// last layout's range; the list's prepaint clamps it again.
     fn scroll_grid_to_offset(&mut self, offset: usize, cx: &mut Context<Self>) {
+        if self.mosaic_shown() {
+            // The item's day header (its first row) at the top.
+            self.scroll_mosaic_to_item(offset, cx);
+            return;
+        }
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };

@@ -196,8 +196,6 @@ impl MosaicLayout {
     /// The item in the next tile row down (`down`) or up
     /// whose x-centre is nearest item `index`'s; headers are skipped. None
     /// at either end or for an index outside the layout.
-    // Unused until the Mosaic arrow keys land (plan 01b Task 6).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn vertical_neighbour(&self, index: usize, down: bool) -> Option<usize> {
         let tile = self.tiles.get(index)?;
         let centre = tile.x + tile.w / 2.0;
@@ -219,18 +217,16 @@ impl MosaicLayout {
         let end = self.rows.partition_point(|r| r.y < y.end);
         start..end.max(start)
     }
-
-    /// Height of the whole layout.
-    // Unused until the Mosaic rail and zoom anchor land (plan 01b Task 6).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn total_height(&self) -> f32 {
-        self.rows.last().map_or(0.0, |r| r.y + r.height)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Height of the whole layout.
+    fn total_height(layout: &MosaicLayout) -> f32 {
+        layout.rows.last().map_or(0.0, |r| r.y + r.height)
+    }
     use lumina_core::MediaId;
 
     fn cells(aspects: &[f32], day: u32) -> Vec<LayoutCell> {
@@ -346,7 +342,7 @@ mod tests {
             header + 190.0 + SECTION_GAP,
             "the second header sits a section gap below the first day's rows"
         );
-        assert_eq!(layout.total_height(), 2.0 * header + SECTION_GAP + 380.0);
+        assert_eq!(total_height(&layout), 2.0 * header + SECTION_GAP + 380.0);
 
         let flat = MosaicLayout::justify(&cs, 1000.0, 190.0, false);
         assert!(
@@ -438,7 +434,7 @@ mod tests {
             );
         }
         assert_eq!(layout.rows_in(-10.0..0.0), 0..0, "nothing above the top");
-        let all = layout.rows_in(0.0..layout.total_height());
+        let all = layout.rows_in(0.0..total_height(&layout));
         assert_eq!(
             all,
             0..layout.rows.len(),
@@ -492,7 +488,7 @@ mod tests {
 
         let empty = MosaicLayout::justify(&[], 800.0, 190.0, true);
         assert!(empty.rows.is_empty() && empty.tiles.is_empty());
-        assert_eq!(empty.total_height(), 0.0);
+        assert_eq!(total_height(&empty), 0.0);
         assert_eq!(empty.vertical_neighbour(0, true), None);
         assert_eq!(empty.rows_in(0.0..100.0), 0..0);
     }

@@ -479,6 +479,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "mosaic.day_date" => "%a, %b %-d, %Y",
         "mosaic.undated" => "Undated",
         "mosaic.select" => "Select",
+        "mosaic.select_updating" => "Updating…",
         "mosaic.select_day_label" => "Select {} items from {}",
         "mosaic.select_day_label_one" => "Select 1 item from {}",
         "header.view_grid" => "Grid",

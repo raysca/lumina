@@ -72,11 +72,21 @@ impl LuminaApp {
                     true
                 }
                 "up" => {
-                    self.extend_selection(-(self.grid_columns as isize), cx);
+                    let step = if self.mosaic_shown() {
+                        self.mosaic_vertical_step(false, false)
+                    } else {
+                        -(self.grid_columns as isize)
+                    };
+                    self.extend_selection(step, cx);
                     true
                 }
                 "down" => {
-                    self.extend_selection(self.grid_columns as isize, cx);
+                    let step = if self.mosaic_shown() {
+                        self.mosaic_vertical_step(true, false)
+                    } else {
+                        self.grid_columns as isize
+                    };
+                    self.extend_selection(step, cx);
                     true
                 }
                 "home" => {
@@ -120,14 +130,18 @@ impl LuminaApp {
             return;
         }
 
-        if key == "pageup" {
-            let step = (self.grid_columns.clamp(2, 8) * 4) as isize;
-            self.navigate_selection(-step, cx);
-            return;
-        }
-
-        if key == "pagedown" {
-            let step = (self.grid_columns.clamp(2, 8) * 4) as isize;
+        if key == "pageup" || key == "pagedown" {
+            let down = key == "pagedown";
+            let step = if self.mosaic_shown() {
+                self.mosaic_vertical_step(down, true)
+            } else {
+                let rows = (self.grid_columns.clamp(2, 8) * 4) as isize;
+                if down {
+                    rows
+                } else {
+                    -rows
+                }
+            };
             self.navigate_selection(step, cx);
             return;
         }
@@ -173,13 +187,16 @@ impl LuminaApp {
             return;
         }
 
-        if key == "up" {
-            self.navigate_selection(-(self.grid_columns as isize), cx);
-            return;
-        }
-
-        if key == "down" {
-            self.navigate_selection(self.grid_columns as isize, cx);
+        if key == "up" || key == "down" {
+            let down = key == "down";
+            let step = if self.mosaic_shown() {
+                self.mosaic_vertical_step(down, false)
+            } else if down {
+                self.grid_columns as isize
+            } else {
+                -(self.grid_columns as isize)
+            };
+            self.navigate_selection(step, cx);
         }
     }
 }

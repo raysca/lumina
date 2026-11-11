@@ -5,6 +5,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
@@ -112,7 +113,15 @@ impl LuminaApp {
             .relative()
             .pt(px(row.pad))
             .pl(px(GRID_ROW_PADDING_LEFT))
-            .pr(px(GRID_ROW_PADDING_RIGHT));
+            .pr(px(GRID_ROW_PADDING_RIGHT))
+            // ⌘-wheel zooms. Rows paint after the list registers its own
+            // scroll handler, so this bubbles first and its stop keeps the
+            // list from also scrolling.
+            .on_scroll(cx.listener(|this, event: &ScrollEvent, window, cx| {
+                if this.zoom_grid_with_wheel(event, window, cx) {
+                    cx.stop_propagation();
+                }
+            }));
         match row.kind {
             RowKind::Header { day, count } => {
                 self.render_day_header(base, day, row.first..row.first + count, cx)
@@ -170,6 +179,9 @@ pub(crate) struct DayHeader {
     pub count: String,
     pub aria_label: String,
     pub select_label: String,
+    /// Select's accessible description while it waits for a current
+    /// layout (it is dimmed then); `None` when it is live.
+    pub select_updating: Option<String>,
 }
 
 impl LuminaApp {
@@ -198,6 +210,8 @@ impl LuminaApp {
             count: count_text,
             aria_label,
             select_label,
+            select_updating: (!self.mosaic_layout_current())
+                .then(|| crate::i18n::t("mosaic.select_updating")),
         }
     }
 
@@ -267,6 +281,11 @@ impl LuminaApp {
                             .debug_selector(move || format!("mosaic-day-select-{day}"))
                             .role(Role::Button)
                             .aria_label(SharedString::from(header.select_label))
+                            // Dimmed while the layout catches up: Select
+                            // does nothing until then.
+                            .when_some(header.select_updating, |button, why| {
+                                button.opacity(0.5).aria_description(why)
+                            })
                             .cursor_pointer()
                             .flex()
                             .flex_row()

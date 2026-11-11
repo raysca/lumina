@@ -15,6 +15,7 @@ use gpui::{px, Context, ListOffset};
 use lumina_core::{DayPlace, LayoutCell, SortField};
 
 use crate::app::active_view::ViewKey;
+use crate::app::mosaic_nav::{offset_for_y, row_for_item};
 use crate::app::LuminaApp;
 use crate::config::BrowseLayout;
 use crate::views::grid::{center_pane_width, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT};
@@ -57,6 +58,8 @@ pub(crate) struct MosaicCache {
     in_flight: bool,
     /// Set when a layout lands, cleared [`SCAN_REFETCH_COOLDOWN`] later.
     cooling: bool,
+    /// Where a zoom's anchor item goes once its level's layout lands.
+    pub(crate) zoom_anchor: Option<crate::app::mosaic_nav::ZoomAnchor>,
 }
 
 impl LuminaApp {
@@ -290,18 +293,25 @@ impl LuminaApp {
                 Some((row.first, header, top.offset_in_item))
             });
         list.reset(built.layout.rows.len());
-        if let Some((item, header, offset)) = restore.filter(|_| !built.layout.rows.is_empty()) {
-            let rows = &built.layout.rows;
+        let layout = &built.layout;
+        let zoom = self
+            .mosaic
+            .zoom_anchor
+            .filter(|a| a.level == built.level && restore.is_some());
+        if let Some(anchor) = zoom.filter(|_| !layout.rows.is_empty()) {
+            // A zoom: the anchor item's point stays at the same screen y.
+            self.mosaic.zoom_anchor = None;
+            let row = layout.rows[layout.row_of(anchor.item)];
+            let y = row.y + row.pad + anchor.frac * (row.height - row.pad) - anchor.screen_y;
+            list.scroll_to(offset_for_y(layout, y));
+        } else if let Some((item, header, offset)) = restore.filter(|_| !layout.rows.is_empty()) {
             // `row_of` is the tile row; a header on top stays on top.
-            let mut item_ix = built.layout.row_of(item);
-            if header
-                && item_ix > 0
-                && matches!(rows[item_ix - 1].kind, RowKind::Header { .. })
-                && rows[item_ix - 1].first == item
-            {
-                item_ix -= 1;
-            }
-            let height = px(built.layout.rows[item_ix].height);
+            let item_ix = if header {
+                row_for_item(layout, item)
+            } else {
+                layout.row_of(item)
+            };
+            let height = px(layout.rows[item_ix].height);
             list.scroll_to(ListOffset {
                 item_ix,
                 offset_in_item: offset.min(height),

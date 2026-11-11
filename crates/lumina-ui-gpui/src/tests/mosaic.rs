@@ -21,7 +21,7 @@ fn layout(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) ->
     view.update(vcx, |app, _| app.config.browse_layout)
 }
 
-fn card(vcx: &mut VisualTestContext, id: MediaId) -> Bounds<Pixels> {
+pub(crate) fn card(vcx: &mut VisualTestContext, id: MediaId) -> Bounds<Pixels> {
     let selector = leak(format!("media-card-{}", id.0));
     vcx.debug_bounds(selector)
         .unwrap_or_else(|| panic!("{selector} must be drawn"))
@@ -223,7 +223,7 @@ fn mosaic_tiles_keep_aspect_and_fill_rows() {
 }
 
 /// A Mosaic app on `count` texture-less items (aspect 1.0), layout landed.
-fn mosaic_app(
+pub(crate) fn mosaic_app(
     cx: &mut gpui::TestAppContext,
     engine: Arc<LuminaEngine>,
 ) -> (gpui::Entity<crate::LuminaApp>, &mut VisualTestContext) {
@@ -515,28 +515,10 @@ fn own_write_refetches_the_layout_without_the_cool_down() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-#[core::prelude::v1::test]
-fn marquee_in_mosaic_selects_the_reading_order_range() {
-    let (dir, engine) = seed_library_undecodable("mosaic_marquee", 12);
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = mosaic_app(&mut cx, engine);
-    view.update(vcx, |app, cx| {
-        app.begin_grid_drag(gpui::point(px(100.0), px(100.0)), Some(2), false);
-        app.drag_over_card(7, gpui::point(px(400.0), px(400.0)), cx);
-        let selected: Vec<usize> = app.selected_indices.iter().copied().collect();
-        assert_eq!(
-            selected,
-            (2..=7).collect::<Vec<_>>(),
-            "a sweep selects the contiguous range, not a grid rectangle"
-        );
-    });
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// Seven items: three on 2025-06-14 (two in Lisbon, PT, one in Porto,
 /// PT), two on 2025-06-13 with no city, two undated. In view order (date,
 /// newest first): 0-2 the 14th, 3-4 the 13th, 5-6 undated.
-fn day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+pub(crate) fn day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
     let (dir, engine) = seed_library_undecodable(prefix, 7);
     let ids: Vec<MediaId> = engine.get_item_slice(0..7).iter().map(|i| i.id).collect();
     let noon = |d: &str| {
@@ -568,7 +550,7 @@ fn day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
     (dir, engine)
 }
 
-fn day_app(
+pub(crate) fn day_app(
     cx: &mut gpui::TestAppContext,
     engine: Arc<LuminaEngine>,
 ) -> (gpui::Entity<crate::LuminaApp>, &mut VisualTestContext) {

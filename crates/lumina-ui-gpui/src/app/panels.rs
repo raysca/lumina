@@ -223,6 +223,11 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) -> bool {
         use crate::views::search_bar::{size_level, SIZE_COLUMNS};
+        // Mosaic anchors on its own layout and never touches the uniform
+        // list's handle (a queued offset there would jump the Grid later).
+        if self.mosaic_shown() {
+            return self.zoom_mosaic_at(step, anchor_pos, cx);
+        }
         let columns = self.grid_columns.clamp(2, 8);
         let level = (size_level(columns) as isize + step).clamp(0, SIZE_COLUMNS.len() as isize - 1);
         // No step yet (a trackpad burst below the threshold): keep the

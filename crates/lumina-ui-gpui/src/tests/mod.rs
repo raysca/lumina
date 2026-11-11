@@ -37,6 +37,7 @@ mod library_header;
 mod map;
 mod missing;
 mod mosaic;
+mod mosaic_geometry;
 mod motion;
 mod multi_select;
 mod network_import;
