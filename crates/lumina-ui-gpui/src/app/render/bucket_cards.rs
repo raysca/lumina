@@ -149,7 +149,7 @@ impl LuminaApp {
     }
 
     /// Opens Days with the card's first day header on top.
-    fn open_bucket_card(&mut self, offset: usize, cx: &mut Context<Self>) {
+    pub(crate) fn open_bucket_card(&mut self, offset: usize, cx: &mut Context<Self>) {
         self.set_group_level(GroupLevel::Days, cx);
         if self.config.group_level == GroupLevel::Days {
             self.scroll_grid_to_offset(offset, cx);

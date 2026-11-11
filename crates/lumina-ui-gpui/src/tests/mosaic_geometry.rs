@@ -631,7 +631,11 @@ fn a_relaunch_scroll_for_another_view_is_dropped() {
         flip(app);
         let other = app.view_key();
         flip(app);
-        app.mosaic.pending_scroll = Some((other, 150));
+        app.mosaic.pending_scroll = Some(crate::app::mosaic_layout::PendingScroll {
+            key: other,
+            item: 150,
+            reveal: None,
+        });
     });
     // A layout for the current view lands (a resize relayouts it).
     vcx.simulate_resize(size(px(1400.0), px(1000.0)));

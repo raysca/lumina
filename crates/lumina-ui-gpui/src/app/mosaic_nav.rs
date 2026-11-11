@@ -156,17 +156,24 @@ impl LuminaApp {
     }
 
     /// Scrolls the Mosaic so `item`'s day header (or row) is at the top.
-    pub(crate) fn scroll_mosaic_to_item(&self, item: usize, cx: &mut Context<Self>) {
-        let (Some(layout), Some(list)) = (self.mosaic_layout(), self.mosaic_list()) else {
+    pub(crate) fn scroll_mosaic_to_item(&mut self, item: usize, cx: &mut Context<Self>) {
+        let Some(list) = self.mosaic_list() else {
             return;
         };
-        if layout.rows.is_empty() {
-            return;
+        match self.mosaic_layout() {
+            Some(layout) if !layout.rows.is_empty() => list.scroll_to(ListOffset {
+                item_ix: row_for_item(&layout, item),
+                offset_in_item: px(0.0),
+            }),
+            // No layout for this view yet: put it on top when one lands.
+            _ => {
+                self.mosaic.pending_scroll = Some(crate::app::mosaic_layout::PendingScroll {
+                    key: self.view_key(),
+                    item,
+                    reveal: None,
+                })
+            }
         }
-        list.scroll_to(ListOffset {
-            item_ix: row_for_item(&layout, item),
-            offset_in_item: px(0.0),
-        });
         cx.notify();
     }
 

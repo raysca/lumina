@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use crate::app::history::NavigationSnapshot;
 use crate::app::import::ImportDialog;
+use crate::app::mosaic_layout::PendingScroll;
 use crate::app::mosaic_nav::restore_offset;
 use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
@@ -1000,7 +1001,13 @@ impl LuminaApp {
                     state.mosaic.scroll_to(offset);
                     cx.notify();
                 }
-                _ => self.mosaic.pending_scroll = item.map(|item| (self.view_key(), item)),
+                _ => {
+                    self.mosaic.pending_scroll = item.map(|item| PendingScroll {
+                        key: self.view_key(),
+                        item,
+                        reveal: self.selected_index,
+                    })
+                }
             }
             return;
         }

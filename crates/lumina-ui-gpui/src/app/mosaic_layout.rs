@@ -60,9 +60,18 @@ pub(crate) struct MosaicCache {
     cooling: bool,
     /// Where a zoom's anchor item goes once its level's layout lands.
     pub(crate) zoom_anchor: Option<crate::app::mosaic_nav::ZoomAnchor>,
-    /// A relaunch's saved scroll item, put on top once its view's first
-    /// layout lands (the session restore runs before any layout exists).
-    pub(crate) pending_scroll: Option<(ViewKey, usize)>,
+    /// A scroll asked for before its view's first layout landed (the
+    /// session restore, a rail click or a Years/Months card).
+    pub(crate) pending_scroll: Option<PendingScroll>,
+}
+
+/// An item to put on top once `key`'s first layout lands.
+pub(crate) struct PendingScroll {
+    pub key: ViewKey,
+    pub item: usize,
+    /// The relaunch's selection, revealed if the anchor leaves it off
+    /// screen; `None` for a rail or card jump.
+    pub reveal: Option<usize>,
 }
 
 impl LuminaApp {
@@ -312,13 +321,12 @@ impl LuminaApp {
             .mosaic
             .pending_scroll
             .take()
-            .filter(|(key, _)| *key == built.key)
-            .map(|(_, item)| item);
+            .filter(|p| p.key == built.key);
         if layout.rows.is_empty() {
             // Nothing to scroll.
-        } else if let Some(item) = pending {
+        } else if let Some(p) = pending {
             let viewport = f32::from(list.viewport_bounds().size.height);
-            list.scroll_to(restore_offset(layout, item, self.selected_index, viewport));
+            list.scroll_to(restore_offset(layout, p.item, p.reveal, viewport));
         } else if let Some(anchor) = zoom {
             // A zoom: the anchor item's point stays at the same screen y.
             let row = layout.rows[layout.row_of(anchor.item)];

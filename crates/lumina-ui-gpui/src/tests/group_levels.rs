@@ -187,3 +187,66 @@ fn a_failed_save_keeps_the_level() {
     assert!(shown(vcx, "mosaic-list"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn a_card_opened_before_the_first_day_layout_lands_on_its_period() {
+    let (dir, engine) = rail_library("levels_card_early");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    click(vcx, "zoom-level-years");
+    render_ui(vcx);
+    let offset = view.update(vcx, |app, cx| {
+        // A new view (oldest first): no day layout for it yet.
+        app.sort.direction = lumina_core::SortDirection::Ascending;
+        assert!(app.mosaic_layout().is_none());
+        let card = app
+            .bucket_cards()
+            .into_iter()
+            .find(|c| c.selector == "year-card-2025")
+            .expect("a 2025 card");
+        app.open_bucket_card(card.offset, cx);
+        assert!(app.mosaic.pending_scroll.is_some(), "the scroll is queued");
+        card.offset
+    });
+    assert_eq!(offset, 32, "2025 follows the 32 items of 2024 oldest first");
+    render_ui(vcx);
+    render_ui(vcx);
+    assert_eq!(level(&view, vcx), GroupLevel::Days);
+    assert_header_on_top(&view, vcx, offset);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn grid_keys_change_nothing_under_years() {
+    let (dir, engine) = rail_library("levels_keys");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    view.update(vcx, |app, cx| app.select_index(5, cx));
+    render_ui(vcx);
+    click(vcx, "zoom-level-years");
+    render_ui(vcx);
+    let (id, count) = view.update(vcx, |app, _| {
+        (
+            app.selected_item.as_ref().unwrap().id,
+            app.get_active_count(),
+        )
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "backspace f 3");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.config.group_level, GroupLevel::Years);
+        assert_eq!(app.selected_index, Some(5), "the selection stays");
+        assert_eq!(app.selected_indices.len(), 1);
+        assert!(
+            app.delete_confirm_state.is_none(),
+            "⌫ opens no Delete dialog"
+        );
+        assert_eq!(app.get_active_count(), count, "nothing went to the trash");
+        let item = app.displayed_rows(5..6)[0].clone();
+        assert_eq!(item.id, id);
+        assert!(!item.is_favorite, "F does not favourite");
+        assert_eq!(app.get_item_rating(&item), 0, "3 does not rate");
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
