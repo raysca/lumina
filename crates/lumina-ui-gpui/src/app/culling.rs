@@ -90,6 +90,39 @@ impl LuminaApp {
         true
     }
 
+    /// Opens or closes the viewer's star popover (the top bar's star button
+    /// and the palette's Rate…). Only the viewer outside a slideshow and
+    /// edit mode has it.
+    pub fn toggle_rate_popover(&mut self, cx: &mut Context<Self>) {
+        self.rate_popover_open = !self.rate_popover_shown() && self.rate_popover_allowed();
+        cx.notify();
+    }
+
+    /// Where the star button shows: the viewer outside a slideshow and
+    /// edit mode.
+    pub(crate) fn rate_popover_allowed(&self) -> bool {
+        self.is_fullscreen_viewer && self.slideshow.is_none() && self.edits.session.is_none()
+    }
+
+    /// The popover is up. Rendering, its backdrop and its key absorption
+    /// all ask this, so a popover left open when edit mode or a slideshow
+    /// starts can never eat clicks or keys unseen.
+    pub(crate) fn rate_popover_shown(&self) -> bool {
+        self.rate_popover_open && self.rate_popover_allowed()
+    }
+
+    pub fn close_rate_popover(&mut self, cx: &mut Context<Self>) {
+        self.rate_popover_open = false;
+        cx.notify();
+    }
+
+    /// A star or key in the popover: rate the viewer's item and close.
+    pub fn rate_from_popover(&mut self, rating: u8, cx: &mut Context<Self>) {
+        self.rate_popover_open = false;
+        self.set_rating_selected(rating, cx);
+        cx.notify();
+    }
+
     /// Rates the selection (0 clears); `false` when nothing is selected or
     /// the write failed.
     pub fn set_rating_selected(&mut self, rating: u8, cx: &mut Context<Self>) -> bool {

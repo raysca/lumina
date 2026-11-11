@@ -726,7 +726,7 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
     // renders with the observed width.
     render_viewer_ui(vcx);
 
-    for selector in ["viewer-top-bar", "viewer-filename", "viewer-back"] {
+    for selector in ["viewer-top-bar", "viewer-position", "viewer-back"] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
             "{selector} must be painted in the viewer at 1024x768"
@@ -741,15 +741,17 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
     });
     render_viewer_ui(vcx);
 
-    let filename = vcx.debug_bounds("viewer-filename").unwrap();
+    let position = vcx.debug_bounds("viewer-position").unwrap();
     let hud = vcx
         .debug_bounds("viewer-zoom-fit")
         .expect("zoomed, the Fit to window button must show");
     let top_bar = vcx.debug_bounds("viewer-top-bar").unwrap();
+    // Design 02: the centre shows only "N / M" (the date moved to the
+    // panel's When line); it must stay readable at 1024x768.
     assert!(
-        filename.size.width > gpui::px(40.0),
-        "filename must retain readable width at 1024x768, got {:?}",
-        filename.size.width
+        position.size.width > gpui::px(20.0),
+        "the position must retain readable width at 1024x768, got {:?}",
+        position.size.width
     );
     assert_eq!(
         f32::from(hud.size.width),
@@ -773,11 +775,10 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
     vcx.simulate_resize(gpui::size(gpui::px(1400.0), gpui::px(768.0)));
     render_viewer_ui(vcx);
     render_viewer_ui(vcx);
-    let title_wide = vcx.debug_bounds("viewer-filename").unwrap();
-    assert!(
-        title_wide.size.width >= gpui::px(40.0),
-        "title must keep its width at 1400px, got {:?}",
-        title_wide.size.width
+    let position_wide = vcx.debug_bounds("viewer-position").unwrap();
+    assert_eq!(
+        position_wide.size.width, position.size.width,
+        "the position keeps its width at 1400px"
     );
 
     click(vcx, "viewer-zoom-fit");

@@ -114,6 +114,7 @@ impl LuminaApp {
             || self.sort_menu_open
             || self.filter_menu.is_some()
             || self.downloads.open
+            || self.rate_popover_shown()
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

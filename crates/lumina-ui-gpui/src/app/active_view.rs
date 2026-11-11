@@ -15,6 +15,7 @@ use lumina_core::{
 };
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::views::sidebar::AlbumSelection;
 
 #[cfg(test)]
@@ -243,6 +244,27 @@ impl ActiveView {
 }
 
 impl LuminaApp {
+    /// The active view's name: the page title and the viewer's Back label.
+    pub(crate) fn view_label(&self) -> String {
+        match &self.selection {
+            AlbumSelection::AllLibrary => t("view.all_media"),
+            AlbumSelection::System(album) => album.title().into(),
+            AlbumSelection::User(id) => self
+                .user_smart_albums
+                .iter()
+                .find(|a| a.id == *id)
+                .map(|a| a.title.clone())
+                .unwrap_or_else(|| t("album.fallback_title")),
+            AlbumSelection::Album(id) => self
+                .album_title(*id)
+                .map_or_else(|| t("album.fallback_title"), str::to_string),
+            AlbumSelection::Tag(tag) => format!("#{tag}"),
+            AlbumSelection::Untagged => t("view.untagged"),
+            AlbumSelection::Duplicates => t("duplicates.title"),
+            AlbumSelection::Trash => t("view.recently_deleted"),
+        }
+    }
+
     pub(crate) fn view_key(&self) -> ViewKey {
         ViewKey {
             library: self.library_generation,

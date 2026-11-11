@@ -35,6 +35,18 @@ pub(super) fn info_panel_shown(this: &LuminaApp) -> bool {
         && this.slideshow.is_none()
 }
 
+/// The stage column's width: the window minus the docked info panel.
+/// `None` before the window bounds are known.
+pub(super) fn stage_width(this: &LuminaApp) -> Option<f32> {
+    let (_, _, width, _) = this.window_bounds?;
+    let docked = info_panel_shown(this) && !this.is_immersive_fullscreen;
+    Some(if docked {
+        width - INFO_PANEL_WIDTH
+    } else {
+        width
+    })
+}
+
 pub struct MediaViewer;
 
 impl MediaViewer {
@@ -199,6 +211,24 @@ impl MediaViewer {
                     .into_any_element()
             } else {
                 Empty.into_any_element()
+            })
+            // The star popover's dismiss backdrop; the card hangs from the
+            // star button and paints above it (deferred).
+            .when(this.rate_popover_shown(), |viewer| {
+                viewer.child(
+                    div()
+                        .id("viewer-rate-backdrop")
+                        .debug_selector(|| "viewer-rate-backdrop".to_string())
+                        .absolute()
+                        .inset_0()
+                        .occlude()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                                this.close_rate_popover(cx);
+                            }),
+                        ),
+                )
             })
             .into_any_element()
     }

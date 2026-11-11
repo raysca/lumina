@@ -166,17 +166,21 @@ fn l_toggles_loop_and_speed_menu_opens_above_its_button() {
 }
 
 #[core::prelude::v1::test]
-fn top_bar_has_only_favorite_and_info_and_actions_live_in_the_right_click_menu() {
+fn video_top_bar_has_no_edit_and_actions_live_in_the_right_click_menu() {
     let mut cx = crate::tests::TestApp::single();
     let (_dir, view, vcx) = open_video(&mut cx);
 
-    for selector in ["viewer-fav-btn", "viewer-info-btn"] {
+    for selector in ["viewer-fav-btn", "viewer-rate-btn", "viewer-info-btn"] {
         assert_eq!(
             size(bounds(vcx, selector)),
-            (28.0, 28.0),
-            "{selector} is icon-only"
+            (30.0, 30.0),
+            "{selector} is a 30px icon button"
         );
     }
+    assert!(
+        vcx.debug_bounds("viewer-edit-btn").is_none(),
+        "videos cannot be edited, so the top bar has no Edit"
+    );
     for removed in ["quick-edit-rotate-left", "quick-edit-rotate-right"] {
         assert!(
             vcx.debug_bounds(removed).is_none(),
@@ -380,7 +384,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
         let media = bounds(vcx, "viewer-media");
         let transport = bounds(vcx, "video-transport");
         assert!(
-            (f32::from(media.top()) - (52.0 + 12.0)).abs() < 0.5
+            (f32::from(media.top()) - (60.0 + 12.0)).abs() < 0.5
                 && (f32::from(transport.top() - media.bottom()) - 12.0).abs() < 0.5
                 && f32::from(transport.bottom()) <= window.1,
             "{frame:?} in {window:?}: the frame keeps a 12px gap under the top bar and \

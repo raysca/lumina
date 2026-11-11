@@ -4,7 +4,6 @@ use gpui::*;
 use crate::actions::*;
 
 use crate::app::LuminaApp;
-use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::motion;
 use crate::theme;
@@ -480,23 +479,7 @@ impl Render for LuminaApp {
         }
         let total_count = self.displayed_count();
 
-        let view_label: String = match &self.selection {
-            AlbumSelection::AllLibrary => "All Media".into(),
-            AlbumSelection::System(album) => album.title().into(),
-            AlbumSelection::User(id) => self
-                .user_smart_albums
-                .iter()
-                .find(|a| a.id == *id)
-                .map(|a| a.title.clone())
-                .unwrap_or_else(|| "Album".into()),
-            AlbumSelection::Album(id) => self
-                .album_title(*id)
-                .map_or_else(|| t("album.fallback_title"), str::to_string),
-            AlbumSelection::Tag(tag) => format!("#{tag}"),
-            AlbumSelection::Untagged => "Untagged".into(),
-            AlbumSelection::Duplicates => "Duplicates".into(),
-            AlbumSelection::Trash => "Recently Deleted".into(),
-        };
+        let view_label = self.view_label();
 
         // The inspector stays while Info is on; with no selection it shows an
         // empty state rather than vanishing under a lit toggle.

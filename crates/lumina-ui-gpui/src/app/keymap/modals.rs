@@ -181,6 +181,20 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d3b. Viewer star popover: 1–5 rate, 0 clears, Escape closes it
+        // before the viewer; other keys stay here, so F or ] never act on
+        // the photo behind it.
+        if self.rate_popover_shown() {
+            match key {
+                "escape" => self.close_rate_popover(cx),
+                "0" | "1" | "2" | "3" | "4" | "5" if !cmd_or_ctrl => {
+                    self.rate_from_popover(key.parse().unwrap_or(0), cx)
+                }
+                _ => {}
+            }
+            return true;
+        }
+
         // 1d4. Add filter menu: ↑/↓ move, ↵ chooses, Escape closes; other
         // keys stay here, so ⌫ never trashes the selection behind it.
         if self.filter_menu.is_some() {

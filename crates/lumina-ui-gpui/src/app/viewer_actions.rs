@@ -330,6 +330,7 @@ impl LuminaApp {
         self.immersive_hud_visible = true;
         self.hud_idle = Default::default();
         self.viewer_shortcuts_open = false;
+        self.rate_popover_open = false;
         self.context_menu_state = None;
         // Closing the viewer (the Back button) discards an open draft.
         self.discard_edit_draft();
@@ -436,6 +437,7 @@ impl LuminaApp {
             || self.video.is_scrubbing
             || self.viewer_state.is_dragging
             || self.viewer_shortcuts_open
+            || self.rate_popover_shown()
             || self.text_target().is_some()
     }
 

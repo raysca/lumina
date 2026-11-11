@@ -61,6 +61,9 @@ pub enum Icon {
     FileImage,
     ZoomIn,
     ZoomOut,
+    WandSparkles,
+    Share,
+    PanelRight,
 }
 
 impl Icon {
@@ -126,6 +129,9 @@ impl Icon {
         Icon::FileImage,
         Icon::ZoomIn,
         Icon::ZoomOut,
+        Icon::WandSparkles,
+        Icon::Share,
+        Icon::PanelRight,
     ];
 
     pub fn path(self) -> &'static str {
@@ -188,6 +194,9 @@ impl Icon {
             Self::FileImage => "icons/file-image.svg",
             Self::ZoomIn => "icons/zoom-in.svg",
             Self::ZoomOut => "icons/zoom-out.svg",
+            Self::WandSparkles => "icons/wand-sparkles.svg",
+            Self::Share => "icons/share-2.svg",
+            Self::PanelRight => "icons/panel-right.svg",
         }
     }
 }

@@ -1,44 +1,108 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::MediaItem;
+use lumina_core::{MediaItem, MediaType};
 
 #[cfg(test)]
 use crate::app::types::format_bytes;
-use crate::app::types::month_name;
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::popover_under;
 
 /// Viewer top bar height; the floating immersive info panel starts below it.
-pub(super) const TOP_BAR_HEIGHT: f32 = 52.0;
+pub(super) const TOP_BAR_HEIGHT: f32 = 60.0;
+/// Below this stage width the Back button drops its label.
+const COMPACT_STAGE_WIDTH: f32 = 760.0;
+const BUTTON: f32 = 30.0;
 
 pub struct ViewerTopBar;
 
-/// Transparent 28px icon button with a tooltip.
-fn bar_icon_button(
-    id: &'static str,
-    icon: Icon,
-    tooltip: &'static str,
-    color: Rgba,
-    on: bool,
-) -> Stateful<Div> {
-    bar_button(id, tooltip, on).child(render_icon(icon, px(16.0), color))
+/// "23 / 84": the item's place in the current view.
+pub(crate) fn position_label(index: usize, count: usize) -> String {
+    format!("{} / {}", index + 1, count)
 }
 
-/// `bar_icon_button` without its icon, for an icon that animates.
-fn bar_button(id: &'static str, tooltip: &'static str, on: bool) -> Stateful<Div> {
+/// A 30x30 icon button with a tooltip and an accessible label; `on` shows
+/// the active fill.
+fn bar_button(id: &'static str, label: String, on: bool) -> Stateful<Div> {
     div()
         .id(id)
         .debug_selector(move || id.to_string())
-        .tooltip(theme::tooltip_label(tooltip))
-        .size(px(28.0))
-        .rounded(theme::RADIUS_MD)
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(label))
+        .flex_none()
+        .size(px(BUTTON))
+        .rounded(theme::RADIUS_LG)
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .when(on, |b| b.bg(theme::bg_3()))
+        .when(on, |b| b.bg(theme::bg_2()))
         .hover(|s| s.bg(theme::bg_3()))
+}
+
+fn bar_icon(icon: Icon, on: bool) -> Svg {
+    render_icon(icon, px(16.0), if on { theme::t1() } else { theme::t2() })
+}
+
+/// The star popover's card: five stars (filled up to the rating) and the
+/// key hint. It occludes, so clicks on it never reach the dismiss backdrop.
+fn rate_card(rating: u8, cx: &mut Context<LuminaApp>) -> Div {
+    div()
+        .debug_selector(|| "viewer-rate-popover".to_string())
+        .occlude()
+        .p_2()
+        .bg(theme::bg_1())
+        .border_1()
+        .border_color(theme::line())
+        .rounded(theme::RADIUS_LG)
+        .shadow_2xl()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_1()
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .gap_0p5()
+                .children((1..=5u8).map(|n| {
+                    let id = format!("viewer-rate-star-{n}");
+                    let filled = n <= rating;
+                    div()
+                        .id(SharedString::from(id.clone()))
+                        .debug_selector(move || id.clone())
+                        .role(Role::Button)
+                        .aria_label(t(&format!("command.rate_{n}")))
+                        .size(px(28.0))
+                        .rounded(theme::RADIUS_MD)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .hover(|s| s.bg(theme::bg_3()))
+                        .child(render_icon(
+                            if filled { Icon::StarFilled } else { Icon::Star },
+                            px(16.0),
+                            if filled {
+                                theme::rating()
+                            } else {
+                                theme::rating_unset()
+                            },
+                        ))
+                        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                            this.rate_from_popover(n, cx);
+                        }))
+                })),
+        )
+        .child(
+            div()
+                .text_size(px(11.0))
+                .text_color(theme::t3())
+                .child(t("viewer.rate_hint")),
+        )
 }
 
 impl ViewerTopBar {
@@ -48,74 +112,93 @@ impl ViewerTopBar {
         cx: &mut Context<LuminaApp>,
     ) -> impl IntoElement {
         let is_inspector_open = this.inspector_open;
-        let compact = this
-            .window_bounds
-            .map(|(_, _, width, _)| width < 1400.0)
-            .unwrap_or(false);
-
-        let month_str = month_name(item.month);
-        let date_title = if item.year > 0 {
-            if item.day > 0 {
-                format!("{} {}, {}", month_str, item.day, item.year)
-            } else {
-                format!("{} {}", month_str, item.year)
-            }
-        } else {
-            "Undated".to_string()
-        };
+        let compact = super::stage_width(this).is_some_and(|w| w < COMPACT_STAGE_WIDTH);
         let is_fav = item.is_favorite;
+        let view_label = this.view_label();
+        let rate_open = this.rate_popover_shown();
 
-        let mut center_section = div()
+        // "23 / 84" in the current view; it truncates first in a narrow
+        // stage. Hidden when the viewer has no grid index.
+        let center_section = div()
             .flex()
             .flex_row()
             .items_center()
             .justify_center()
-            .gap_1p5()
             .flex_1()
             .min_w(px(0.0))
-            .overflow_hidden();
-
-        center_section = center_section.child(
-            div()
-                .id("viewer-filename")
-                .debug_selector(|| "viewer-filename".to_string())
-                .min_w(px(40.0))
-                .truncate()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::t1())
-                .child(date_title),
-        );
-
-        // "(3 of 5)" in the current view; hidden when the viewer has no grid index.
-        if let Some(index) = this.selected_index {
-            center_section = center_section.child(
+            .overflow_hidden()
+            .px_2()
+            .children(this.selected_index.map(|index| {
                 div()
                     .id("viewer-position")
                     .debug_selector(|| "viewer-position".to_string())
-                    .ml_1()
-                    .flex_shrink_0()
-                    .text_color(theme::t2())
-                    .child(format!("({} of {})", index + 1, this.displayed_count())),
-            );
-        }
+                    .min_w_0()
+                    .truncate()
+                    .font_family(theme::FONT_MONO)
+                    .text_size(px(11.0))
+                    .text_color(theme::t3())
+                    .child(position_label(index, this.displayed_count()))
+            }));
+
+        let back_tooltip = t("viewer.back_tooltip").replace("{view}", &view_label);
+        let back = div()
+            .id("viewer-back")
+            .debug_selector(|| "viewer-back".to_string())
+            .role(Role::Button)
+            .aria_label(back_tooltip.clone())
+            .tooltip(theme::tooltip_label(back_tooltip))
+            .h(px(BUTTON))
+            .pl(px(6.0))
+            .pr(px(10.0))
+            .bg(theme::bg_2())
+            .hover(|s| s.bg(theme::bg_3()))
+            .rounded(theme::RADIUS_LG)
+            .cursor_pointer()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .child(render_icon(Icon::ChevronLeft, px(15.0), theme::t2()))
+            .when(!compact, |back| {
+                back.child(
+                    div()
+                        .debug_selector(|| "viewer-back-label".to_string())
+                        .max_w(px(220.0))
+                        .truncate()
+                        .text_size(px(12.0))
+                        .text_color(theme::t2())
+                        .child(view_label),
+                )
+            })
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                // During a slideshow Back is Esc: it also puts the
+                // selection back.
+                if this.slideshow.is_some() {
+                    this.end_slideshow(cx);
+                } else {
+                    this.close_viewer(cx);
+                }
+            }));
+
+        // Edit opens edit mode; videos cannot be edited.
+        let can_edit = item.media_type != MediaType::Video;
 
         div()
             .id("viewer-top-bar")
             .debug_selector(|| "viewer-top-bar".to_string())
             .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
             .w_full()
+            .flex_none()
             .h(px(TOP_BAR_HEIGHT))
-            .px_4()
-            .bg(theme::bg_0())
-            .border_b_1()
-            .border_color(theme::line())
+            .px(px(20.0))
             .flex()
             .flex_row()
             .justify_between()
             .items_center()
             .text_xs()
             .text_color(theme::t1())
-            // Left Section: Traffic Light Offset + the single Back control.
+            // Left: the macOS traffic lights sit here while windowed, then
+            // the single Back control (Escape stays equivalent).
             .child(
                 div()
                     .flex()
@@ -123,70 +206,33 @@ impl ViewerTopBar {
                     .items_center()
                     .gap_3()
                     .flex_shrink_0()
-                    // Traffic lights spacer when windowed
-                    .child(div().w(px(64.0)))
-                    // One visible way back to the grid; Escape stays equivalent.
-                    .child(
-                        div()
-                            .id("viewer-back")
-                            .debug_selector(|| "viewer-back".to_string())
-                            .tooltip(theme::tooltip_label("Back to Library (Esc)"))
-                            .px_2p5()
-                            .py_1()
-                            .bg(theme::bg_2())
-                            .border_1()
-                            .border_color(theme::line())
-                            .hover(|s| s.bg(theme::bg_3()))
-                            .rounded(theme::RADIUS_MD)
-                            .cursor_pointer()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .text_color(theme::t1())
-                            .child(render_icon(Icon::ChevronLeft, px(13.0), theme::t1()))
-                            .child(if compact {
-                                Empty.into_any_element()
-                            } else {
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child("Library")
-                                    .into_any_element()
-                            })
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                // During a slideshow Back is Esc: it also
-                                // puts the selection back.
-                                if this.slideshow.is_some() {
-                                    this.end_slideshow(cx);
-                                } else {
-                                    this.close_viewer(cx);
-                                }
-                            })),
-                    ),
+                    .when(!this.is_immersive_fullscreen, |left| {
+                        left.child(div().w(px(64.0)))
+                    })
+                    .child(back),
             )
-            // Center Section: Breadcrumb, Filename, Specs Line
             .child(center_section)
-            // Right Section: Favorite and Info only (v3). Open, Reveal, Edit
-            // and Rotate live in the viewer's right-click menu. A slideshow
-            // has neither: they would act on, or cover, a moving slide.
+            // Right: Favourite, Rate, Edit, Share, Info. A slideshow has
+            // none: they would act on, or cover, a moving slide. Open,
+            // Reveal and Rotate live in the right-click menu.
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(4.0))
+                    .gap(px(6.0))
                     .flex_shrink_0()
                     .when(this.slideshow.is_none(), |right| {
                         right
                             .child(
                                 bar_button(
                                     "viewer-fav-btn",
-                                    if is_fav {
-                                        "Unfavorite (F)"
+                                    t(if is_fav {
+                                        "viewer.unfavorite_tooltip"
                                     } else {
-                                        "Favorite (F)"
-                                    },
-                                    false,
+                                        "viewer.favorite_tooltip"
+                                    }),
+                                    is_fav,
                                 )
                                 .child(crate::motion::pop(
                                     render_icon(
@@ -207,17 +253,38 @@ impl ViewerTopBar {
                                 )),
                             )
                             .child(
-                                bar_icon_button(
+                                bar_button("viewer-rate-btn", t("viewer.rate_tooltip"), rate_open)
+                                    .relative()
+                                    .child(bar_icon(Icon::Star, rate_open))
+                                    .when(rate_open, |button| {
+                                        let rating =
+                                            this.item_ratings.get(&item.id).copied().unwrap_or(0);
+                                        button.child(popover_under(
+                                            Anchor::TopRight,
+                                            rate_card(rating, cx),
+                                        ))
+                                    })
+                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                        this.toggle_rate_popover(cx);
+                                    })),
+                            )
+                            .when(can_edit, |right| {
+                                right.child(
+                                    bar_button("viewer-edit-btn", t("viewer.edit_tooltip"), false)
+                                        .child(bar_icon(Icon::WandSparkles, false))
+                                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                            this.enter_edit_mode(cx);
+                                        })),
+                                )
+                            })
+                            .children(share_button(cx))
+                            .child(
+                                bar_button(
                                     "viewer-info-btn",
-                                    Icon::Info,
-                                    "Info (I)",
-                                    if is_inspector_open {
-                                        theme::t1()
-                                    } else {
-                                        theme::t2()
-                                    },
+                                    t("viewer.info_tooltip"),
                                     is_inspector_open,
                                 )
+                                .child(bar_icon(Icon::PanelRight, is_inspector_open))
                                 .on_click(cx.listener(
                                     |this, _e: &ClickEvent, _w, cx| {
                                         this.toggle_inspector(cx);
@@ -227,6 +294,23 @@ impl ViewerTopBar {
                     }),
             )
     }
+}
+
+/// Share… (macOS only, like the batch dock), anchored where it was clicked.
+#[cfg(target_os = "macos")]
+fn share_button(cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
+    Some(
+        bar_button("viewer-share-btn", t("viewer.share_tooltip"), false)
+            .child(bar_icon(Icon::Share, false))
+            .on_click(cx.listener(|this, e: &ClickEvent, _w, cx| {
+                this.share_selection(Some(e.position()), cx);
+            })),
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+fn share_button(_cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
+    None
 }
 
 /// "4032 × 3024 · HEIC · 3.1 MB" from what the catalog actually knows: no

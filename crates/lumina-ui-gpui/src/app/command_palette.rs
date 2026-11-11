@@ -60,6 +60,8 @@ pub enum CommandId {
     AddFilter,
     /// Sets the selection's rating; 0 clears it.
     Rate(u8),
+    /// Opens the viewer's star popover (Rate…).
+    RateMenu,
     /// Picks, rejects or unflags the selection (P / X / U).
     Flag(lumina_core::Flag),
     /// The current view's rejects, to the Delete dialog.
@@ -173,7 +175,7 @@ impl Command {
             QuickFilter(_) => Icon::Search,
             ClearFilters => Icon::X,
             AddFilter => Icon::SlidersHorizontal,
-            Rate(0) => Icon::Star,
+            Rate(0) | RateMenu => Icon::Star,
             Rate(_) => Icon::StarFilled,
             Flag(lumina_core::Flag::Pick) => Icon::Check,
             Flag(lumina_core::Flag::Reject) => Icon::X,
@@ -509,6 +511,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.zoom_400",
             shortcut: "⌘4",
             keywords: "zoom viewer 400% 4x magnify",
+        },
+        Command {
+            id: CommandId::RateMenu,
+            key: "command.rate_menu",
+            shortcut: "",
+            keywords: "rating stars popover viewer",
         },
         Command {
             id: CommandId::Rate(1),
@@ -1081,6 +1089,11 @@ impl LuminaApp {
                 self.selected_item.is_some()
                     && (self.is_fullscreen_viewer || self.selected_indices.len() <= 1)
             }
+            CommandId::RateMenu => {
+                self.is_fullscreen_viewer
+                    && self.slideshow.is_none()
+                    && self.edits.session.is_none()
+            }
             CommandId::EditPhoto => self
                 .selected_item
                 .as_ref()
@@ -1419,6 +1432,7 @@ impl LuminaApp {
             CommandId::Rate(rating) => {
                 self.set_rating_selected(rating, cx);
             }
+            CommandId::RateMenu => self.toggle_rate_popover(cx),
             CommandId::Flag(flag) => {
                 self.set_flag_selected(flag, cx);
             }

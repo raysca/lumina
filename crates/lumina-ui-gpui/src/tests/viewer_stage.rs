@@ -1,8 +1,8 @@
 //! v3 photo viewer: menu rating, stage prev/next, Fit button while zoomed.
 
 use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, right_click, seed_library,
-    seed_library_undecodable,
+    app_with_library, click, click_point, focus_app, keystrokes, render_ui, right_click,
+    seed_library, seed_library_undecodable,
 };
 
 #[core::prelude::v1::test]
@@ -28,15 +28,13 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
         "the viewer menu's third star must persist a 3-star rating"
     );
 
-    let name = vcx
-        .debug_bounds("viewer-filename")
-        .expect("filename renders");
+    let back = vcx.debug_bounds("viewer-back").expect("Back renders");
     let position = vcx
         .debug_bounds("viewer-position")
-        .expect("the top bar shows the \"N of M\" position counter");
+        .expect("the top bar shows the \"N / M\" position counter");
     assert!(
-        position.left() > name.right(),
-        "the counter follows the meta text"
+        position.left() > back.right(),
+        "the counter sits right of Back"
     );
     click(vcx, "viewer-next");
     let second = view.update(vcx, |app, _| {
@@ -586,6 +584,299 @@ fn viewer_i_key_closes_and_reopens_the_docked_panel() {
     );
     view.update(vcx, |app, _| {
         assert!(app.is_fullscreen_viewer, "I must not close the viewer")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---- Top bar (Design 02 Task 2) -------------------------------------------
+
+/// The catalog rating of the viewer's item.
+fn viewer_rating(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> u8 {
+    view.update(vcx, |app, _| {
+        let id = app.selected_item.as_ref().expect("viewer item").id;
+        let engine = &app.grid_state.as_ref().expect("library").engine;
+        engine.catalog().get_rating(id).expect("rating reads")
+    })
+}
+
+#[core::prelude::v1::test]
+fn viewer_top_bar_matches_detail_design() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar");
+
+    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar");
+    assert_eq!(bar.size.height, gpui::px(60.0), "the top bar is 60 tall");
+    assert!(
+        vcx.debug_bounds("viewer-filename").is_none(),
+        "the date moved to the panel's When line; the bar shows only the position"
+    );
+    assert_eq!(
+        crate::views::viewer::top_bar::position_label(22, 84),
+        "23 / 84",
+        "the position reads \"N / M\""
+    );
+    assert!(
+        vcx.debug_bounds("viewer-back-label").is_some(),
+        "a wide stage shows the Back label"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.view_label(),
+            "All Media",
+            "Back names the view it returns to"
+        )
+    });
+
+    let mut order = vec![
+        "viewer-back",
+        "viewer-position",
+        "viewer-fav-btn",
+        "viewer-rate-btn",
+    ];
+    order.push("viewer-edit-btn");
+    if cfg!(target_os = "macos") {
+        order.push("viewer-share-btn");
+    }
+    order.push("viewer-info-btn");
+    let rects: Vec<_> = order
+        .iter()
+        .map(|s| {
+            vcx.debug_bounds(s)
+                .unwrap_or_else(|| panic!("{s} paints in the top bar"))
+        })
+        .collect();
+    for (pair, names) in rects.windows(2).zip(order.windows(2)) {
+        assert!(
+            pair[0].right() <= pair[1].left(),
+            "{} must sit left of {}: {:?} {:?}",
+            names[0],
+            names[1],
+            pair[0],
+            pair[1]
+        );
+    }
+    let buttons = &rects[2..];
+    for (rect, name) in buttons.iter().zip(&order[2..]) {
+        assert_eq!(
+            (rect.size.width, rect.size.height),
+            (gpui::px(30.0), gpui::px(30.0)),
+            "{name} is a 30x30 button"
+        );
+    }
+    for pair in buttons.windows(2) {
+        assert_eq!(
+            pair[1].left() - pair[0].right(),
+            gpui::px(6.0),
+            "top-bar buttons are 6 apart"
+        );
+    }
+
+    click(vcx, "viewer-edit-btn");
+    view.update(vcx, |app, _| {
+        assert!(app.edits.session.is_some(), "Edit opens edit mode")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_rate_popover_rates_by_key_and_closes_before_the_viewer() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover");
+    focus_app(vcx, &view);
+
+    click(vcx, "viewer-rate-btn");
+    assert!(
+        vcx.debug_bounds("viewer-rate-popover").is_some(),
+        "the star button opens the rating popover"
+    );
+    for n in 1..=5 {
+        assert!(
+            vcx.debug_bounds(super::ui_automation::leak(format!("viewer-rate-star-{n}")))
+                .is_some(),
+            "the popover shows star {n}"
+        );
+    }
+    let card = vcx.debug_bounds("viewer-rate-popover").unwrap();
+    let button = vcx.debug_bounds("viewer-rate-btn").unwrap();
+    assert!(
+        card.top() >= button.bottom() && (card.right() - button.right()).abs() <= gpui::px(2.0),
+        "the popover hangs under the star button, right edges aligned: card={card:?} button={button:?}"
+    );
+    // Keys the viewer would act on stay in the popover.
+    keystrokes(vcx, "f");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_item.as_ref().unwrap().is_favorite,
+            "F must not reach the viewer while the popover is open"
+        )
+    });
+    keystrokes(vcx, "backspace secondary-backspace enter");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let id = app.selected_item.as_ref().unwrap().id;
+        let engine = &app.grid_state.as_ref().unwrap().engine;
+        assert!(
+            !engine.get_item_by_id(id).unwrap().is_trashed,
+            "⌫ and ⌘⌫ must not trash the photo behind the popover"
+        );
+        assert!(
+            app.delete_confirm_state.is_none(),
+            "⌫ must not open the Delete dialog behind the popover"
+        );
+        assert!(app.rate_popover_open, "unhandled keys leave it open");
+    });
+    keystrokes(vcx, "3");
+    render_ui(vcx);
+    assert_eq!(viewer_rating(&view, vcx), 3, "3 rates three stars");
+    assert!(
+        vcx.debug_bounds("viewer-rate-popover").is_none(),
+        "a rating key closes the popover"
+    );
+
+    click(vcx, "viewer-rate-btn");
+    keystrokes(vcx, "0");
+    render_ui(vcx);
+    assert_eq!(viewer_rating(&view, vcx), 0, "0 clears the rating");
+
+    click(vcx, "viewer-rate-btn");
+    click(vcx, "viewer-rate-star-4");
+    assert_eq!(viewer_rating(&view, vcx), 4, "a star click rates");
+    assert!(vcx.debug_bounds("viewer-rate-popover").is_none());
+
+    // The palette's "Rate…" opens it too; Escape closes only the popover.
+    view.update(vcx, |app, cx| {
+        app.execute_command(crate::app::command_palette::CommandId::RateMenu, cx)
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-rate-popover").is_some(),
+        "Rate… opens the popover"
+    );
+    keystrokes(vcx, "escape");
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("viewer-rate-popover").is_none());
+    view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer, "Escape closes the popover first")
+    });
+    assert_eq!(viewer_rating(&view, vcx), 4, "Escape leaves the rating");
+
+    // The backdrop dismisses it.
+    click(vcx, "viewer-rate-btn");
+    click_point(vcx, 400.0, 500.0);
+    assert!(
+        vcx.debug_bounds("viewer-rate-popover").is_none(),
+        "a click outside closes the popover"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer, "…and leaves the viewer open")
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_top_bar_compacts_by_stage_width() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar_compact");
+    // 1300 wide: 960 of stage beside the panel, room for the label.
+    view.update(vcx, |app, cx| {
+        app.window_bounds = Some((0.0, 0.0, 1300.0, 800.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1300.0), gpui::px(800.0)));
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("viewer-back-label").is_some());
+
+    // 960 wide, the minimum: 620 of stage, so the label goes.
+    view.update(vcx, |app, cx| {
+        app.window_bounds = Some((0.0, 0.0, 960.0, 700.0));
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(700.0)));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-back-label").is_none(),
+        "a narrow stage hides the Back label"
+    );
+    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar");
+    let back = vcx.debug_bounds("viewer-back").expect("back");
+    let position = vcx.debug_bounds("viewer-position").expect("position");
+    let fav = vcx.debug_bounds("viewer-fav-btn").expect("fav");
+    let info = vcx.debug_bounds("viewer-info-btn").expect("info");
+    assert!(
+        back.right() <= position.left() && position.right() <= fav.left(),
+        "nothing overlaps: back={back:?} position={position:?} fav={fav:?}"
+    );
+    assert!(info.right() <= bar.right(), "the buttons stay in the bar");
+
+    // Same window, panel closed: 960 of stage, so the label returns.
+    view.update(vcx, |app, cx| {
+        app.inspector_open = false;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-back-label").is_some(),
+        "compact follows the stage width, not the window width"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover_modes");
+    focus_app(vcx, &view);
+
+    // Like the header menus, the open popover holds off edit mode (from the
+    // menu bar; E stays in the popover).
+    click(vcx, "viewer-rate-btn");
+    view.update(vcx, |app, cx| app.enter_edit_mode(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.edits.session.is_none(),
+            "edit mode waits for the popover"
+        );
+    });
+    assert!(vcx.debug_bounds("viewer-rate-popover").is_some());
+    view.update(vcx, |app, cx| {
+        app.close_rate_popover(cx);
+        app.enter_edit_mode(cx);
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.edits.session.is_some(), "test premise: edit mode is on")
+    });
+    // Even a stale flag stays inert while its button is hidden.
+    view.update(vcx, |app, cx| {
+        app.rate_popover_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("viewer-rate-backdrop").is_none()
+            && vcx.debug_bounds("viewer-rate-popover").is_none(),
+        "no popover or invisible backdrop in edit mode"
+    );
+    keystrokes(vcx, "3");
+    assert_eq!(
+        viewer_rating(&view, vcx),
+        0,
+        "1–5 must not rate through a popover edit mode hides"
+    );
+    view.update(vcx, |app, cx| {
+        app.rate_popover_open = false;
+        app.cancel_edit(cx);
+    });
+    render_ui(vcx);
+
+    click(vcx, "viewer-rate-btn");
+    view.update(vcx, |app, _| assert!(app.rate_popover_open));
+    view.update(vcx, |app, cx| app.start_slideshow_deferred(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.slideshow.is_none(), "a slideshow waits for the popover");
+        assert!(app.rate_popover_open);
     });
     let _ = std::fs::remove_dir_all(&dir);
 }

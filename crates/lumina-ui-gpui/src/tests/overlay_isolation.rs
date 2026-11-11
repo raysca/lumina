@@ -61,6 +61,15 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
             "a click over the hidden toolbar must not reach Sort"
         );
     });
+    // At this window width the spot is the viewer's Rate button: it opens
+    // its popover. Close it so the next click reaches viewer Info.
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.rate_popover_open,
+            "the click over the hidden Sort lands on viewer Rate"
+        );
+        app.close_rate_popover(cx)
+    });
     click(vcx, "viewer-info-btn");
     view.update(vcx, |app, _| {
         assert!(

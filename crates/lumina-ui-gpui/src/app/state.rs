@@ -453,6 +453,8 @@ pub struct LuminaApp {
     /// Current grid ordering (persisted in config).
     pub sort: SortSpec,
     pub sort_menu_open: bool,
+    /// The viewer's star popover (1–5 rate, 0 clears), while open.
+    pub rate_popover_open: bool,
     /// The Add filter menu, while open.
     pub filter_menu: Option<crate::views::filter_bar::FilterMenu>,
     pub preferences_open: bool,
@@ -665,6 +667,7 @@ impl LuminaApp {
             grid_columns: crate::views::search_bar::ladder_columns(config.grid_columns),
             sort: config.restored_sort(),
             sort_menu_open: false,
+            rate_popover_open: false,
             filter_menu: None,
             preferences_open: false,
             preferences_tab: crate::app::preferences::PreferencesTab::General,
