@@ -6970,19 +6970,32 @@ fn day_places_picks_the_most_common_city_per_day() {
 fn album_cards_pick_newest_active_member() {
     use lumina_core::AlbumCard;
     let catalog = Catalog::open_in_memory().expect("open catalog");
-    // Two items share the newest timestamp so the tie-breaker is exercised.
-    let stamps = [1_000, 3_000, 2_000, 5_000, 4_000, 4_000];
+    const T: i64 = 1_700_000_000_000;
+    // Items 4 and 5 share a timestamp so the tie-breaker is exercised; 6 is
+    // the newest of all but hidden; 7 is undated (capture time 0).
+    let stamps = [
+        T + 1_000,
+        T + 3_000,
+        T + 2_000,
+        T + 5_000,
+        T + 4_000,
+        T + 4_000,
+        T + 6_000,
+        0,
+    ];
     let items: Vec<MediaItem> = stamps
         .iter()
         .enumerate()
-        .map(|(i, ts)| {
-            sample_media_item(
+        .map(|(i, &ts)| {
+            let mut item = sample_media_item(
                 &format!("/lib/card_{i}.jpg"),
                 MediaType::Image,
-                1_700_000_000_000 + ts,
+                ts,
                 None,
                 None,
-            )
+            );
+            item.is_hidden = i == 6;
+            item
         })
         .collect();
     let ids: Vec<MediaId> = catalog
@@ -6997,10 +7010,13 @@ fn album_cards_pick_newest_active_member() {
         .create_album_with("Trashed newest", &ids[..4])
         .expect("create album");
     let normal = catalog
-        .create_album_with("Normal", &[ids[0], ids[4], ids[5]])
+        .create_album_with("Normal, hidden newest", &[ids[0], ids[4], ids[5], ids[6]])
         .expect("create album");
     let only_trashed = catalog
         .create_album_with("Only trashed", &[ids[3]])
+        .expect("create album");
+    let undated = catalog
+        .create_album_with("Undated", &[ids[7]])
         .expect("create album");
     catalog.set_trashed(ids[3], true).expect("trash newest");
 
@@ -7016,41 +7032,26 @@ fn album_cards_pick_newest_active_member() {
             AlbumCard {
                 album_id: trashed.id,
                 cover: Some(ids[1]),
-                newest_epoch_ms: Some(1_700_000_003_000),
+                newest_epoch_ms: Some(T + 3_000),
             },
             AlbumCard {
                 album_id: normal.id,
                 cover: Some(MediaId(ids[4].0.max(ids[5].0))),
-                newest_epoch_ms: Some(1_700_000_004_000),
+                newest_epoch_ms: Some(T + 4_000),
             },
             AlbumCard {
                 album_id: only_trashed.id,
                 cover: None,
                 newest_epoch_ms: None,
             },
+            AlbumCard {
+                album_id: undated.id,
+                cover: Some(ids[7]),
+                newest_epoch_ms: None,
+            },
         ],
         "every album gets one card in album order; the cover is the newest active member \
-         (larger id on a tie), trashed members are skipped, and an album with no active \
-         member has no cover or date"
-    );
-
-    let plan = catalog
-        .explain_query_plan(Catalog::ALBUM_CARDS_SQL)
-        .expect("explain album cards");
-    println!("EXPLAIN album_cards: {}", plan.join(" | "));
-    // album_items is WITHOUT ROWID, so `SCAN ai` walks its primary key in
-    // album_id order, and the window sort only orders within each album.
-    assert!(
-        plan.iter().any(|row| row == "SCAN ai")
-            && plan
-                .iter()
-                .any(|row| row.contains("TEMP B-TREE FOR RIGHT PART OF ORDER BY")),
-        "album cards must walk album_items in primary-key order, got: {plan:?}"
-    );
-    assert!(
-        plan.iter()
-            .any(|row| row == "SEARCH m USING INTEGER PRIMARY KEY (rowid=?)")
-            && !plan.iter().any(|row| row.starts_with("SCAN m")),
-        "album cards must look up media rows by id, not scan media_items, got: {plan:?}"
+         (larger id on a tie), trashed and hidden members are skipped, an album with no \
+         active member has no cover or date, and an undated cover has no date"
     );
 }

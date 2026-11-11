@@ -479,3 +479,36 @@ fn create_album_with_adds_members_in_one_transaction() {
         "a failed member insert leaves no half-made album"
     );
 }
+
+#[test]
+fn album_cards_plan_seeks_members_per_album() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let a = taken(&catalog, "/lib/a.mp4", 10);
+    let b = taken(&catalog, "/lib/b.mp4", 20);
+    catalog.create_album_with("Picks", &[a, b]).unwrap();
+    let plan = catalog.explain_query_plan(ALBUM_CARDS_SQL).unwrap();
+    let text = plan.join(" | ");
+    assert!(
+        plan.iter()
+            .any(|row| row.starts_with("SEARCH ai USING PRIMARY KEY")
+                && row.contains("album_id=?")),
+        "album cards must seek each album's members by the album_items key, got: {text}"
+    );
+    assert!(
+        plan.iter()
+            .any(|row| row.starts_with("SEARCH m USING INTEGER PRIMARY KEY")),
+        "album cards must look media rows up by id, got: {text}"
+    );
+    assert!(
+        !plan
+            .iter()
+            .any(|row| row.starts_with("SCAN ai") || row.starts_with("SCAN m")),
+        "album cards must scan neither album_items nor media_items, got: {text}"
+    );
+    assert!(
+        !plan
+            .iter()
+            .any(|row| row.starts_with("MATERIALIZE") || row.contains("AUTOMATIC")),
+        "album cards must not materialise or index all memberships, got: {text}"
+    );
+}
