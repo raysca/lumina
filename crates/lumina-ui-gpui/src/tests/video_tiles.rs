@@ -255,6 +255,8 @@ fn portrait_clips_cover_fit_and_the_fit_toggle_contains_them() {
         render_ui(vcx);
         let photo = bounds(vcx, format!("media-card-photo-{}", clip.0));
         let thumb = bounds(vcx, format!("media-card-thumb-{}", clip.0));
+        // The box fills the well in both modes; only the CARD_CONTAIN hook
+        // below tells cover from contain.
         assert!(
             (thumb.size.width - photo.size.width).abs() < gpui::px(1.0)
                 && (thumb.size.height - photo.size.height).abs() < gpui::px(1.0),

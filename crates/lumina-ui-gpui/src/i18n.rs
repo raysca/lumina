@@ -195,7 +195,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         // date.month_short_* keys when another ships.
         "grid.caption_date" => "%-d %b %Y",
         "grid.badge_video" => "Video, {}",
-        "grid.badge_playing" => "Playing in Picture in Picture, {}",
+        "grid.badge_playing" => "In Picture in Picture, {}",
         "grid.zoom_in" => "Larger thumbnails (⌘+)",
         "grid.zoom_out" => "Smaller thumbnails (⌘-)",
         "grid.zoom_limit" => "Not available at this size",
