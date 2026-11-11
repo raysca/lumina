@@ -160,6 +160,7 @@ impl LuminaApp {
                             })),
                     )
             }))
+            .children(self.render_view_mode(cx))
             .children(self.render_downloads_button(window, cx))
             .child(
                 header_icon_button(
@@ -278,6 +279,79 @@ fn progress_ring(fraction: f32) -> impl IntoElement {
 }
 
 impl LuminaApp {
+    /// Grid / Map segments (frame `t0zQL`; Mosaic waits on design 01
+    /// decision 1). Map runs Show Map, which moves to Places, the view the
+    /// map plots; Grid is on whenever the map is not. Not on Recently
+    /// Deleted or Duplicates: neither is a view the map could show, and
+    /// their own actions fill the header.
+    fn render_view_mode(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        if matches!(
+            self.selection,
+            AlbumSelection::Trash | AlbumSelection::Duplicates
+        ) {
+            return None;
+        }
+        let on_map = self.map_shown();
+        let segment = |selector: &'static str, icon, label: &str, tooltip: &str, on: bool| {
+            theme::segmented_item(selector, on)
+                .group(selector)
+                .debug_selector(move || selector.to_string())
+                .role(Role::Button)
+                .aria_label(SharedString::from(label.to_string()))
+                .aria_toggled(if on { Toggled::True } else { Toggled::False })
+                .tooltip(theme::tooltip_label(tooltip.to_string()))
+                .h(px(26.0))
+                .px(px(10.0))
+                .gap(px(6.0))
+                .text_size(px(12.0))
+                .when(!on, |s| s.text_color(theme::t3()))
+                .child(
+                    crate::icons::render_icon(
+                        icon,
+                        px(13.0),
+                        if on { theme::t1() } else { theme::t3() },
+                    )
+                    // The icon lifts with the label on hover.
+                    .group_hover(selector, |s| s.text_color(theme::t1())),
+                )
+                .child(label.to_string())
+        };
+        Some(
+            theme::segmented("view-mode")
+                .debug_selector(|| "view-mode".to_string())
+                // 32 high like the header buttons: the frame's 3px inset
+                // counts its stroke, so 1px border + 2px padding + 26.
+                .h(px(32.0))
+                .p(px(2.0))
+                .rounded(px(9.0))
+                .flex_shrink_0()
+                .child(
+                    segment(
+                        "view-mode-grid",
+                        Icon::Grid3x3,
+                        &crate::i18n::t("header.view_grid"),
+                        &crate::i18n::t("command.show_grid"),
+                        !on_map,
+                    )
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.show_grid(cx);
+                    })),
+                )
+                .child(
+                    segment(
+                        "view-mode-map",
+                        Icon::Map,
+                        &crate::i18n::t("header.view_map"),
+                        &crate::i18n::t("command.show_map"),
+                        on_map,
+                    )
+                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.show_map(cx);
+                    })),
+                ),
+        )
+    }
+
     /// Downloads (⌥⌘L): shown once the list has rows, with the count of
     /// unfinished ones, a red dot for an unseen failure and a progress ring.
     fn render_downloads_button(

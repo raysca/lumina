@@ -182,7 +182,8 @@ pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
         .border_color(line())
 }
 
-/// Segmented control item.
+/// Segmented control item. Hover lifts only the text: bg-3 marks the
+/// selected segment, so an idle one never takes it.
 pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
     let base = div()
         .id(id)
@@ -200,8 +201,7 @@ pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
     if active {
         base.bg(bg_3()).text_color(t1())
     } else {
-        base.text_color(t2())
-            .hover(|s| s.text_color(t1()).bg(bg_3()))
+        base.text_color(t2()).hover(|s| s.text_color(t1()))
     }
 }
 

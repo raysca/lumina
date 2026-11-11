@@ -1,8 +1,8 @@
-//! Offline map (plan 5 C4): Places shows a Grid/Map toggle. The map draws
-//! the bundled land outline and clusters of geotagged items; Tab and the
-//! arrows focus clusters west to east, ↵ searches `within:` the focused
-//! cluster, Esc returns to the grid, and ⌘= / ⌘- zoom the map, never the
-//! hidden grid.
+//! Offline map (plan 5 C4): the header's Grid/Map view mode shows Places
+//! on the map. The map draws the bundled land outline and clusters of
+//! geotagged items; Tab and the arrows focus clusters west to east, ↵
+//! searches `within:` the focused cluster, Esc returns to the grid, and
+//! ⌘= / ⌘- zoom the map, never the hidden grid.
 
 use std::time::Instant;
 
@@ -384,8 +384,8 @@ fn cmd_plus_zooms_map_not_grid() {
 }
 
 #[core::prelude::v1::test]
-fn map_toggle_reachable_from_palette() {
-    let (dir, engine) = seed_library("map_toggle", 4);
+fn view_mode_reachable_from_palette_menu_and_header() {
+    let (dir, engine) = seed_library("view_mode_paths", 4);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -407,12 +407,12 @@ fn map_toggle_reachable_from_palette() {
     render_ui(vcx);
     assert!(shown(&view, vcx), "View > Show Map");
 
-    // The sidebar toggle, by mouse.
-    click(vcx, "map-toggle");
-    assert!(!shown(&view, vcx), "the toggle shows the grid");
-    click(vcx, "map-toggle");
+    // The header's view mode segments, by mouse.
+    click(vcx, "view-mode-grid");
+    assert!(!shown(&view, vcx), "the Grid segment shows the grid");
+    click(vcx, "view-mode-map");
     render_ui(vcx);
-    assert!(shown(&view, vcx), "and the map again");
+    assert!(shown(&view, vcx), "and the Map segment the map again");
     view.update(vcx, |app, _| assert_eq!(app.selection, PLACES));
 
     // Leaving Places and coming back keeps the choice.
@@ -422,8 +422,8 @@ fn map_toggle_reachable_from_palette() {
         "other views show the grid"
     );
     assert!(
-        vcx.debug_bounds("map-toggle").is_none(),
-        "the toggle lives on Places"
+        vcx.debug_bounds("view-mode-grid").is_some(),
+        "the view mode stays in the header off Places"
     );
     click(vcx, "sidebar-nav-places");
     render_ui(vcx);
@@ -676,19 +676,19 @@ fn map_read_failure_offers_retry_and_reads_again() {
 
     // Showing the map again also reads again after a failure.
     MAP_LOAD_FAILS.with(|f| f.set(true));
-    click(vcx, "map-toggle");
-    click(vcx, "map-toggle");
+    click(vcx, "view-mode-grid");
+    click(vcx, "view-mode-map");
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(app.map.failed && app.error_retry.is_some())
     });
     MAP_LOAD_FAILS.with(|f| f.set(false));
     keystrokes(vcx, "escape"); // the banner
-    click(vcx, "map-toggle");
-    click(vcx, "map-toggle");
+    click(vcx, "view-mode-grid");
+    click(vcx, "view-mode-map");
     render_ui(vcx);
     view.update(vcx, |app, _| {
-        assert!(!app.map.failed, "toggling reads again")
+        assert!(!app.map.failed, "showing the map again reads again")
     });
     assert_eq!(counts(&view, vcx), vec![2, 3]);
     let _ = std::fs::remove_dir_all(&dir);
@@ -891,6 +891,78 @@ fn zoom_during_first_read_clusters_at_the_new_zoom() {
         counts(&view, vcx),
         vec![1, 1],
         "the clusters are zoom 2's, not the zoom 1 cell the read started at"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn view_mode_segments_switch_grid_and_map() {
+    let (dir, engine) = seed_library("view_mode", 4);
+    seed_gps(&engine);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    // GPUI's test window builds no accessibility tree (its `a11y_init` is
+    // a no-op), so `aria_toggled` is read through the state it mirrors.
+    view.update(vcx, |app, _| {
+        assert!(!app.map_shown(), "Grid is the default view mode")
+    });
+    let header = vcx.debug_bounds("page-actions").expect("page-actions");
+    let control = vcx.debug_bounds("view-mode").expect("view-mode");
+    let import = vcx.debug_bounds("header-import").expect("header-import");
+    assert_eq!(
+        (control.size.height, control.center().y),
+        (import.size.height, import.center().y),
+        "the view mode is as tall as the header buttons and centred with them"
+    );
+    for selector in ["view-mode-grid", "view-mode-map"] {
+        let b = vcx.debug_bounds(selector).expect(selector);
+        assert!(
+            header.contains(&b.center()),
+            "{selector} sits in the header actions"
+        );
+        assert!(
+            f32::from(b.size.width) > 40.0,
+            "{selector} shows its label beside the icon in a wide window: {b:?}"
+        );
+    }
+
+    click(vcx, "view-mode-map");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.map_shown(), "the Map segment shows the map");
+        assert_eq!(app.selection, PLACES, "on Places, the view the map plots");
+    });
+    assert!(vcx.debug_bounds("map-view").is_some(), "the map renders");
+    let loaded = view.update(vcx, |app, _| app.map.loaded);
+    assert!(loaded.is_some(), "the map has read its points");
+    // A read now would fail, so a re-read would show.
+    crate::app::map::MAP_LOAD_FAILS.with(|f| f.set(true));
+    click(vcx, "view-mode-map");
+    render_ui(vcx);
+    crate::app::map::MAP_LOAD_FAILS.with(|f| f.set(false));
+    view.update(vcx, |app, _| {
+        assert!(app.map_shown());
+        assert!(
+            !app.map.failed && app.map.loaded == loaded,
+            "clicking the active Map segment does not read the points again"
+        );
+    });
+
+    click(vcx, "view-mode-grid");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.map_shown(), "the Grid segment returns to the grid");
+        assert_eq!(app.selection, PLACES, "still Places");
+    });
+    assert!(vcx.debug_bounds("map-view").is_none());
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Duplicates, cx)
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("view-mode-grid").is_none(),
+        "Duplicates is a review screen, neither grid nor map"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

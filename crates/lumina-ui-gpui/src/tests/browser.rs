@@ -111,6 +111,51 @@ fn the_widest_header_fits_a_1024px_window_with_the_inspector_open() {
         title.right() <= restore.left(),
         "the title truncates instead of running under the actions: {title:?} vs {restore:?}"
     );
+    assert!(
+        vcx.debug_bounds("view-mode-grid").is_none(),
+        "Recently Deleted has no view mode: the map never shows it"
+    );
+
+    // Off Trash the view mode takes the bulk actions' place.
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::AllLibrary, cx)
+    });
+    render_ui(vcx);
+    let map = vcx.debug_bounds("view-mode-map").expect("view-mode-map");
+    assert!(
+        map.right() <= root.right(),
+        "the view mode stays on screen at 1024px: {map:?} vs {root:?}"
+    );
+    let title = vcx.debug_bounds("page-title").expect("page-title");
+    let grid = vcx.debug_bounds("view-mode-grid").expect("view-mode-grid");
+    let slack = vcx
+        .debug_bounds("toolbar-drag-area")
+        .expect("toolbar-drag-area");
+    assert!(
+        title.right() <= grid.left() && f32::from(slack.size.width) > 0.0,
+        "the title is not squeezed by the view mode (empty header space remains): \
+         {title:?} vs {grid:?}, slack {slack:?}"
+    );
+
+    // The minimum window (960 px), sidebar at its default width.
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(600.0)));
+    render_ui(vcx);
+    let root = vcx.debug_bounds("app-root").expect("app-root");
+    assert_eq!(f32::from(root.size.width), 960.0, "the window is 960 wide");
+    view.update(vcx, |app, _| {
+        assert!(app.inspector_open && !app.sidebar_collapsed && !app.downloads.entries.is_empty())
+    });
+    let import = vcx.debug_bounds("header-import").expect("header-import");
+    assert!(
+        import.right() <= root.right(),
+        "Import stays on screen at 960px: {import:?} vs {root:?}"
+    );
+    let title = vcx.debug_bounds("page-title").expect("page-title");
+    let grid = vcx.debug_bounds("view-mode-grid").expect("view-mode-grid");
+    assert!(
+        title.right() <= grid.left(),
+        "the title does not run under the view mode at 960px: {title:?} vs {grid:?}"
+    );
 }
 
 #[core::prelude::v1::test]

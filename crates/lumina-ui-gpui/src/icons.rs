@@ -55,6 +55,8 @@ pub enum Icon {
     SlidersHorizontal,
     ArrowUpNarrowWide,
     Import,
+    Grid3x3,
+    Map,
 }
 
 impl Icon {
@@ -114,6 +116,8 @@ impl Icon {
         Icon::SlidersHorizontal,
         Icon::ArrowUpNarrowWide,
         Icon::Import,
+        Icon::Grid3x3,
+        Icon::Map,
     ];
 
     pub fn path(self) -> &'static str {
@@ -170,6 +174,8 @@ impl Icon {
             Self::SlidersHorizontal => "icons/sliders-horizontal.svg",
             Self::ArrowUpNarrowWide => "icons/arrow-up-narrow-wide.svg",
             Self::Import => "icons/import.svg",
+            Self::Grid3x3 => "icons/grid-3x3.svg",
+            Self::Map => "icons/map.svg",
         }
     }
 }

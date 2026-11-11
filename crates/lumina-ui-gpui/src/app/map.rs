@@ -224,8 +224,9 @@ fn cluster_sorted(points: &[GeoPoint], zoom: u8) -> Arc<[Cluster]> {
 
 /// The map's zoom, centre, clusters and focus, and its points.
 pub struct MapState {
-    /// The choice of the Places toggle. It outlives leaving Places, so Back
-    /// and the sidebar return to the map; a new library starts on the grid.
+    /// The Grid/Map view mode chosen for Places. It outlives leaving Places,
+    /// so Back and the sidebar return to the map; a new library starts on
+    /// the grid.
     pub shown: bool,
     pub zoom: u8,
     /// (lon, lat) at the middle of the map, clamped to the world at `zoom`
@@ -242,7 +243,7 @@ pub struct MapState {
     /// is shown again; the map says so instead of drawing nothing.
     pub(crate) failed: bool,
     /// (library generation, data revision) of the last successful read.
-    loaded: Option<(u64, u64)>,
+    pub(crate) loaded: Option<(u64, u64)>,
     in_flight: bool,
     /// Bumped per read, so only the latest read lands.
     request: u64,
@@ -318,7 +319,7 @@ impl MapState {
 }
 
 impl LuminaApp {
-    /// The map is what the window shows: Places with the toggle on Map.
+    /// The map is what the window shows: Places with the view mode on Map.
     pub(crate) fn map_shown(&self) -> bool {
         self.map.shown && self.selection == PLACES && self.grid_state.is_some()
     }
@@ -332,12 +333,17 @@ impl LuminaApp {
             || self.edits.session.is_some()
     }
 
-    /// ⌘K Show Map, View > Show Map, the toggle: Places on the map. The
-    /// map holds no selection, so nothing acts on hidden grid items.
-    /// Showing it reads the points again (after a failed read, too).
+    /// ⌘K Show Map, View > Show Map, the header's Map segment: Places on
+    /// the map. The map holds no selection, so nothing acts on hidden grid
+    /// items. Showing it from the grid reads the points again (after a
+    /// failed read, too); asking again while it shows does nothing.
     pub(crate) fn show_map(&mut self, cx: &mut Context<Self>) {
         // Not part of `map_blocked`: the palette asks that while it is open.
         if self.map_blocked() || self.import_blocked_by_modal() {
+            return;
+        }
+        // Already on the map (the active Map segment): nothing to reload.
+        if self.map_shown() && !self.is_fullscreen_viewer {
             return;
         }
         if self.is_fullscreen_viewer {
@@ -353,19 +359,11 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// ⌘K Show Grid, Esc on the map, the toggle.
+    /// ⌘K Show Grid, Esc on the map, the header's Grid segment.
     pub(crate) fn show_grid(&mut self, cx: &mut Context<Self>) {
         self.map.shown = false;
         self.map.drag = None;
         cx.notify();
-    }
-
-    pub(crate) fn toggle_map(&mut self, cx: &mut Context<Self>) {
-        if self.map_shown() {
-            self.show_grid(cx);
-        } else {
-            self.show_map(cx);
-        }
     }
 
     /// Retry on the error banner: read the points again.
