@@ -161,7 +161,21 @@ impl LuminaApp {
                 cfg!(target_os = "macos") && self.sidebar_collapsed,
                 |header| header.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
             )
-            .child(self.render_query_bar(cx))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.0))
+                    // The frame has no sidebar button; with the sidebar
+                    // collapsed, mouse users still need a way back to it.
+                    .when(self.sidebar_collapsed, |row| {
+                        row.child(self.render_sidebar_toggle(cx))
+                    })
+                    .child(div().flex_1().min_w_0().child(self.render_query_bar(cx))),
+            )
+            .child(self.render_narrow_row(cx))
     }
 
     /// The bar, in a `relative` wrapper the suggestions hang from.
@@ -253,6 +267,7 @@ impl LuminaApp {
                     .text_color(theme::t3())
                     .child(label)
             }))
+            .child(self.render_save_button(cx))
             .when(!self.search_query.is_empty(), |bar| {
                 bar.child(
                     div()

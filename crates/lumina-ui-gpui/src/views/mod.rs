@@ -22,6 +22,7 @@ pub mod onboarding;
 pub mod page_header;
 pub mod preferences;
 pub mod search_bar;
+pub mod search_controls;
 pub mod search_header;
 pub mod sidebar;
 pub mod smart_album_delete;

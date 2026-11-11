@@ -333,3 +333,250 @@ fn emptying_the_typed_text_keeps_the_chips() {
     assert_eq!(query(&view, vcx), "", "the next ⌫ removes the chip whole");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// Task 3: Save as Smart Album and the Narrow by chips.
+
+#[core::prelude::v1::test]
+fn save_button_opens_the_prefilled_builder() {
+    use lumina_core::{RuleField, RuleOperator, RuleValue, SmartAlbumRule};
+    let (dir, engine) = seed_library("search_header_save", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // No item matches: an empty smart album is still a valid one to save.
+    let query = "tram is:favorite";
+    set_query(&view, vcx, query);
+    let save = bounds(vcx, "search-save-smart-album");
+    let bar = bounds(vcx, "search-query-bar");
+    let count = bounds(vcx, "search-result-count");
+    assert!(
+        bar.contains(&save.center()) && save.left() >= count.right(),
+        "Save sits right of the count, inside the bar: {save:?}"
+    );
+    assert_eq!(f32::from(save.size.height), 28.0, "Save is 28 high");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_result_label().as_deref(), Some("0 results"));
+        assert!(app.search_save_enabled(), "Save stays enabled at 0 results");
+    });
+
+    click(vcx, "search-save-smart-album");
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.modal_open, "Save opens the builder");
+        assert_eq!(app.album_draft.editing_album_id, None, "a new album");
+        assert_eq!(app.album_draft.album_title, query, "the query is the title");
+        assert_eq!(
+            app.draft_rules(),
+            Some(vec![SmartAlbumRule {
+                field: RuleField::Query,
+                operator: RuleOperator::Equals,
+                value: RuleValue::Text(query.into()),
+            }]),
+            "one Query rule holding the raw search text"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn save_search_listed(app: &crate::LuminaApp) -> bool {
+    use crate::app::command_palette::{CommandId, PaletteTarget};
+    app.palette_rows()
+        .iter()
+        .any(|row| row.target == PaletteTarget::Command(CommandId::SaveSearch))
+}
+
+#[core::prelude::v1::test]
+fn save_is_disabled_while_compare_holds_the_view() {
+    let (dir, engine) = seed_library("search_header_save_compare", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    set_query(&view, vcx, "photo");
+    view.update(vcx, |app, cx| {
+        assert!(app.search_save_enabled());
+        app.command_query = "save search".into();
+        assert!(save_search_listed(app), "the palette offers Save Search");
+        app.select_all(cx);
+        app.open_compare(cx);
+        assert!(app.compare.is_some(), "compare opened on the results");
+        assert!(
+            !app.search_save_enabled(),
+            "Save is off while compare holds the view"
+        );
+        assert!(
+            !save_search_listed(app),
+            "the palette's Save Search is unavailable under compare"
+        );
+        app.command_query.clear();
+    });
+    render_ui(vcx);
+    click(vcx, "search-save-smart-album");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.album_draft.modal_open,
+            "a click on the disabled Save opens nothing"
+        );
+        app.compare = None;
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn save_is_disabled_in_edit_mode() {
+    use crate::tests::quick_edit::{edit_library, editing, open_viewer_on};
+    let (dir, engine, photos, _) = edit_library("search_header_save_edit");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    set_query(&view, vcx, "tram");
+    open_viewer_on(&view, vcx, &engine, photos[0]);
+    keystrokes(vcx, "e");
+    assert!(editing(&view, vcx), "E opens edit mode");
+    view.update(vcx, |app, _| {
+        assert!(!app.search_save_enabled(), "Save is off in edit mode");
+        app.command_query = "save search".into();
+        assert!(
+            !save_search_listed(app),
+            "the palette's Save Search is unavailable in edit mode"
+        );
+        app.command_query.clear();
+    });
+    // The viewer covers the header; a click there must not save either.
+    click(vcx, "search-save-smart-album");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.album_draft.modal_open,
+            "a click on the disabled Save opens nothing"
+        )
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn save_leaves_the_search_field() {
+    let (dir, engine) = seed_library("search_header_save_blur", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    set_query(&view, vcx, "tram");
+    focus_app(vcx, &view);
+    click(vcx, "search-typed-text");
+    assert!(vcx.debug_bounds("search-suggestions").is_some());
+    click(vcx, "search-save-smart-album");
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.modal_open, "Save opens the builder");
+        assert!(
+            !app.search_focused,
+            "the builder takes the keys, not search"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("search-suggestions").is_none(),
+        "no dropdown paints over the builder"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn narrow_chips_toggle_query_tokens() {
+    let (dir, engine) = seed_library("search_header_narrow", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    set_query(&view, vcx, "tram");
+
+    let header = bounds(vcx, "search-header");
+    let bar = bounds(vcx, "search-query-bar");
+    let row = bounds(vcx, "search-narrow");
+    assert!(
+        row.top() >= bar.bottom() && row.bottom() <= header.bottom(),
+        "the Narrow by row sits under the bar, inside the header: {row:?}"
+    );
+    assert!(
+        (f32::from(row.top() - bar.bottom()) - 13.0).abs() <= 0.5,
+        "13 between the bar and the row"
+    );
+
+    for (selector, token) in [
+        ("search-narrow-video", "is:video"),
+        ("search-narrow-fnumber", "f:<2"),
+        ("search-narrow-rating", "rating:>=4"),
+        ("search-narrow-raw", "is:raw"),
+    ] {
+        assert_eq!(f32::from(bounds(vcx, selector).size.height), 28.0);
+        click(vcx, selector);
+        assert_eq!(
+            query(&view, vcx),
+            format!("tram {token}"),
+            "{selector} appends {token}"
+        );
+        assert!(
+            vcx.debug_bounds(crate::tests::ui_automation::leak(format!("{selector}-on")))
+                .is_some(),
+            "{selector} shows on"
+        );
+        click(vcx, selector);
+        assert_eq!(query(&view, vcx), "tram", "{selector} again removes it");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
+    use crate::app::command_palette::CommandId;
+    let (dir, engine) = seed_library("search_header_narrow_keys", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    set_query(&view, vcx, "tram");
+    for token in ["f:<2", "is:video", "rating:>=4", "is:raw"] {
+        view.update(vcx, |app, cx| {
+            app.execute_command(CommandId::QuickFilter(token), cx)
+        });
+        assert_eq!(
+            query(&view, vcx),
+            format!("tram {token}"),
+            "a palette quick filter is the keyboard path for {token}"
+        );
+        view.update(vcx, |app, cx| {
+            app.execute_command(CommandId::QuickFilter(token), cx)
+        });
+    }
+    let listed = |token: &'static str| {
+        crate::app::command_palette::commands()
+            .iter()
+            .any(|command| command.id == CommandId::QuickFilter(token))
+    };
+    for token in ["f:<2", "is:video", "rating:>=4", "is:raw"] {
+        assert!(listed(token), "the palette lists the {token} quick filter");
+    }
+    view.update(vcx, |app, cx| {
+        app.execute_command(CommandId::SaveSearch, cx)
+    });
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.modal_open, "⌘K Save Search is Save's path")
+    });
+    view.update(vcx, |app, _| app.album_draft.modal_open = false);
+
+    // A collapsed sidebar keeps its toggle on the Search screen.
+    view.update(vcx, |app, cx| app.toggle_sidebar(cx));
+    render_ui(vcx);
+    let header = bounds(vcx, "search-header");
+    assert!(
+        header.contains(&bounds(vcx, "sidebar-toggle").center()),
+        "the sidebar toggle shows in the search header while collapsed"
+    );
+    click(vcx, "sidebar-toggle");
+    view.update(vcx, |app, _| assert!(!app.sidebar_collapsed));
+
+    // A narrow window: the chips run past the row, which scrolls them
+    // rather than squeezing or wrapping them.
+    vcx.simulate_resize(gpui::size(px(600.0), px(700.0)));
+    render_ui(vcx);
+    let header = bounds(vcx, "search-header");
+    let row = bounds(vcx, "search-narrow");
+    let last = bounds(vcx, "search-narrow-raw");
+    assert!(
+        row.right() <= header.right() && last.right() > row.right(),
+        "the row overflows inside the header and scrolls: {last:?} past {row:?}"
+    );
+    assert_eq!(
+        f32::from(last.size.height),
+        28.0,
+        "the chips keep their size, in one line"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

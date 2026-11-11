@@ -94,6 +94,27 @@ impl LuminaApp {
             .then(|| crate::i18n::items_in_span(self.displayed_count(), self.displayed_span()))
     }
 
+    /// The header's Hide/Show Sidebar button; `SIDEBAR_SHORTCUT` is its keyboard path.
+    pub(crate) fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let label = format!(
+            "{} ({})",
+            crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed),
+            crate::app::panels::SIDEBAR_SHORTCUT
+        );
+        icon_button("sidebar-toggle-btn", false)
+            .debug_selector(|| "sidebar-toggle".to_string())
+            .role(Role::Button)
+            .aria_label(label.clone())
+            .tooltip(theme::tooltip_label(label))
+            .child(toolbar_icon(
+                crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed),
+                false,
+            ))
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.toggle_sidebar(cx);
+            }))
+    }
+
     pub(crate) fn render_toolbar(
         &self,
         view_label: &str,
@@ -101,11 +122,6 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let own_controls = draws_own_window_controls(window);
-        let sidebar_toggle_label = format!(
-            "{} ({})",
-            crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed),
-            crate::app::panels::SIDEBAR_SHORTCUT
-        );
         // Only Recently Deleted with items shows its bulk actions.
         let trash_has_items = self.selection == AlbumSelection::Trash
             && self
@@ -116,18 +132,7 @@ impl LuminaApp {
             Some(year) => year.to_string(),
             None => view_label.to_string(),
         };
-        let toggle = icon_button("sidebar-toggle-btn", false)
-            .debug_selector(|| "sidebar-toggle".to_string())
-            .role(Role::Button)
-            .aria_label(sidebar_toggle_label.clone())
-            .tooltip(theme::tooltip_label(sidebar_toggle_label))
-            .child(toolbar_icon(
-                crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed),
-                false,
-            ))
-            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.toggle_sidebar(cx);
-            }));
+        let toggle = self.render_sidebar_toggle(cx);
         // Back/Forward are ⌘[ / ⌘], the Go menu and ⌘K; the design has no
         // header buttons for them.
         let actions = div()

@@ -673,6 +673,19 @@ pub fn commands() -> &'static [Command] {
             shortcut: "",
             keywords: "filter movies clips",
         },
+        // These four quick filters mirror the search header's Narrow by chips.
+        Command {
+            id: CommandId::QuickFilter("is:raw"),
+            key: "command.filter_raw",
+            shortcut: "",
+            keywords: "filter raw camera files negatives",
+        },
+        Command {
+            id: CommandId::QuickFilter("f:<2"),
+            key: "command.filter_wide_aperture",
+            shortcut: "",
+            keywords: "filter aperture fnumber wide fast lens bokeh",
+        },
         Command {
             id: CommandId::QuickFilter("rating:>=1"),
             key: "command.filter_rating_1",
@@ -1006,7 +1019,7 @@ impl LuminaApp {
             CommandId::Forward => self.can_navigate_forward() && !self.compare_holds_view(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),
             CommandId::ClearRecentSearches => !self.config.recent_searches.is_empty(),
-            CommandId::SaveSearch => !self.search_query.trim().is_empty(),
+            CommandId::SaveSearch => self.search_save_enabled(),
             CommandId::NewAlbumWithSelection => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
             }
