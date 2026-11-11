@@ -21,6 +21,16 @@ pub struct Album {
     pub pinned: bool,
 }
 
+/// What an album card needs beyond the album row: the cover (newest active
+/// member by capture time, larger id on a tie) and that member's capture
+/// time. Both are `None` when the album has no active member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlbumCard {
+    pub album_id: i64,
+    pub cover: Option<MediaId>,
+    pub newest_epoch_ms: Option<i64>,
+}
+
 /// Adds one member only while its media row exists. `OR IGNORE` skips a
 /// member already there but not a foreign-key failure, so without the
 /// `SELECT` an id purged meanwhile would abort a restore or an undo.
@@ -171,6 +181,52 @@ impl Catalog {
         )?;
         let rows = stmt.query_map([], |row| {
             Ok((map_album(row)?, row.get::<_, i64>(4)? as usize))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// The SQL [`Self::album_cards`] runs. Public so the query plan can be
+    /// checked.
+    ///
+    /// Every album needs its newest member, so every membership row is read
+    /// once: `album_items` is `WITHOUT ROWID`, and the plan (`SCAN ai`,
+    /// `SEARCH m USING INTEGER PRIMARY KEY`, `USE TEMP B-TREE FOR RIGHT PART
+    /// OF ORDER BY`) walks its primary key in `album_id` order, looks each
+    /// media row up by id, and sorts only within an album. `ROW_NUMBER`
+    /// rather than `MAX()` with bare columns, because SQLite picks an
+    /// arbitrary row among equal timestamps; `m.id DESC` makes the cover
+    /// deterministic. "Active" is not trashed and not hidden, the same rule
+    /// as the counts, so a card never shows a cover its count leaves out.
+    /// ponytail: O(all memberships) per call; it runs once per album
+    /// refresh on a background thread. Cache per album if that stops being
+    /// cheap.
+    pub const ALBUM_CARDS_SQL: &'static str = r#"
+            SELECT a.id, c.media_id, c.ts
+            FROM albums a
+            LEFT JOIN (
+                SELECT ai.album_id, m.id AS media_id, m.timestamp_epoch_ms AS ts,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY ai.album_id
+                        ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
+                    ) AS rank
+                FROM album_items ai
+                JOIN media_items m ON m.id = ai.media_id
+                WHERE m.is_trashed = 0 AND m.is_hidden = 0
+            ) c ON c.album_id = a.id AND c.rank = 1
+            ORDER BY a.created_at_epoch_ms ASC, a.id ASC;
+            "#;
+
+    /// One [`AlbumCard`] per album, in [`Self::list_albums_with_counts`]
+    /// order.
+    pub fn album_cards(&self) -> Result<Vec<AlbumCard>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(Self::ALBUM_CARDS_SQL)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(AlbumCard {
+                album_id: row.get(0)?,
+                cover: row.get::<_, Option<i64>>(1)?.map(|id| MediaId(id as u64)),
+                newest_epoch_ms: row.get(2)?,
+            })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

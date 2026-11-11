@@ -6965,3 +6965,92 @@ fn day_places_picks_the_most_common_city_per_day() {
         "days without members are absent"
     );
 }
+
+#[test]
+fn album_cards_pick_newest_active_member() {
+    use lumina_core::AlbumCard;
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    // Two items share the newest timestamp so the tie-breaker is exercised.
+    let stamps = [1_000, 3_000, 2_000, 5_000, 4_000, 4_000];
+    let items: Vec<MediaItem> = stamps
+        .iter()
+        .enumerate()
+        .map(|(i, ts)| {
+            sample_media_item(
+                &format!("/lib/card_{i}.jpg"),
+                MediaType::Image,
+                1_700_000_000_000 + ts,
+                None,
+                None,
+            )
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+
+    let empty = catalog.create_album("Empty").expect("create album");
+    let trashed = catalog
+        .create_album_with("Trashed newest", &ids[..4])
+        .expect("create album");
+    let normal = catalog
+        .create_album_with("Normal", &[ids[0], ids[4], ids[5]])
+        .expect("create album");
+    let only_trashed = catalog
+        .create_album_with("Only trashed", &[ids[3]])
+        .expect("create album");
+    catalog.set_trashed(ids[3], true).expect("trash newest");
+
+    let cards = catalog.album_cards().expect("album cards");
+    assert_eq!(
+        cards,
+        vec![
+            AlbumCard {
+                album_id: empty.id,
+                cover: None,
+                newest_epoch_ms: None,
+            },
+            AlbumCard {
+                album_id: trashed.id,
+                cover: Some(ids[1]),
+                newest_epoch_ms: Some(1_700_000_003_000),
+            },
+            AlbumCard {
+                album_id: normal.id,
+                cover: Some(MediaId(ids[4].0.max(ids[5].0))),
+                newest_epoch_ms: Some(1_700_000_004_000),
+            },
+            AlbumCard {
+                album_id: only_trashed.id,
+                cover: None,
+                newest_epoch_ms: None,
+            },
+        ],
+        "every album gets one card in album order; the cover is the newest active member \
+         (larger id on a tie), trashed members are skipped, and an album with no active \
+         member has no cover or date"
+    );
+
+    let plan = catalog
+        .explain_query_plan(Catalog::ALBUM_CARDS_SQL)
+        .expect("explain album cards");
+    println!("EXPLAIN album_cards: {}", plan.join(" | "));
+    // album_items is WITHOUT ROWID, so `SCAN ai` walks its primary key in
+    // album_id order, and the window sort only orders within each album.
+    assert!(
+        plan.iter().any(|row| row == "SCAN ai")
+            && plan
+                .iter()
+                .any(|row| row.contains("TEMP B-TREE FOR RIGHT PART OF ORDER BY")),
+        "album cards must walk album_items in primary-key order, got: {plan:?}"
+    );
+    assert!(
+        plan.iter()
+            .any(|row| row == "SEARCH m USING INTEGER PRIMARY KEY (rowid=?)")
+            && !plan.iter().any(|row| row.starts_with("SCAN m")),
+        "album cards must look up media rows by id, not scan media_items, got: {plan:?}"
+    );
+}

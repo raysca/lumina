@@ -1,7 +1,7 @@
 mod albums;
 mod curated;
 mod dims;
-pub use curated::Album;
+pub use curated::{Album, AlbumCard};
 mod downloads;
 mod duplicates;
 mod edits;

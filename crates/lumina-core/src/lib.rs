@@ -34,9 +34,9 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Album, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget, DownloadRow, DownloadState,
-    Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload, RejectedItems, Rights, TagChange,
-    TagReplay, TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
+    Album, AlbumCard, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget, DownloadRow,
+    DownloadState, Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload, RejectedItems, Rights,
+    TagChange, TagReplay, TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -657,6 +657,11 @@ impl LuminaEngine {
             "list albums with counts",
             self.catalog.list_albums_with_counts(),
         )
+    }
+
+    /// One cover card per album, in sidebar order. Run it off the UI thread.
+    pub fn album_cards(&self) -> Vec<AlbumCard> {
+        self.read("album cards", self.catalog.album_cards())
     }
 
     /// Adds media to an album; returns how many were new members.
