@@ -98,7 +98,11 @@ fn tags_field_adds_and_removes_plain_chips() {
         field.contains(&chip.origin),
         "chips sit inside the one field"
     );
-    assert_eq!(f32::from(chip.size.height), 20.0);
+    assert_eq!(
+        f32::from(chip.size.height),
+        28.0,
+        "chips are the 28px design Chip"
+    );
 
     click(vcx, "tag-remove-beach");
     assert!(
@@ -237,5 +241,138 @@ fn rating_beside_another_apps_sidecar_leaves_it_and_says_so() {
         );
     });
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn info_panel_sections_follow_detail_design() {
+    use crate::views::inspector::capture::capture_rows;
+    use crate::views::inspector::format_bytes;
+    use crate::views::inspector::summary::{format_badge, when_line};
+
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, engine, item, view, vcx) = docked("inspector_design", &mut cx);
+
+    for selector in [
+        "inspector-filename",
+        "inspector-format-badge",
+        "inspector-when",
+        "tag-add",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "the panel must show {selector}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("inspector-capture").is_none(),
+        "a photo with no EXIF has no Capture section (no \"—\" rows)"
+    );
+
+    click(vcx, "tag-add");
+    super::ui_automation::keystrokes(vcx, "b e a c h enter");
+    assert_eq!(engine.get_tags_for_item(item.id), vec!["beach".to_string()]);
+    render_ui(vcx);
+    let chip = vcx
+        .debug_bounds("tag-chip-beach")
+        .expect("a tag renders as a chip");
+    assert_eq!(
+        f32::from(chip.size.height),
+        28.0,
+        "tags use the 28px design Chip"
+    );
+
+    // Give the item camera EXIF and a long name, as a real photo would have.
+    view.update(vcx, |app, cx| {
+        let it = app.selected_item.as_mut().expect("an item is selected");
+        it.make = Some("FUJIFILM".into());
+        it.model = Some("X100V".into());
+        it.lens = Some("23mm F2".into());
+        it.f_number = Some(2.0);
+        it.exposure_time = Some("1/640".into());
+        it.iso = Some(400);
+        it.focal_length = Some(23.0);
+        it.file_name = format!("{}.jpg", "very_long_file_name_".repeat(8));
+        cx.notify();
+    });
+    render_ui(vcx);
+    let capture = vcx
+        .debug_bounds("inspector-capture")
+        .expect("a photo with EXIF shows the Capture section");
+    for selector in [
+        "inspector-capture-camera",
+        "inspector-capture-lens",
+        "inspector-capture-exposure",
+        "inspector-capture-focal",
+    ] {
+        let row = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("Capture must show {selector}"));
+        assert_eq!(f32::from(row.size.height), 19.0, "{selector} is a 19px row");
+    }
+    let star = vcx.debug_bounds("inspector-star-1").unwrap();
+    assert!(
+        star.top() >= capture.bottom(),
+        "Rating & Label sits below Capture: star {star:?} capture {capture:?}"
+    );
+    let summary = vcx.debug_bounds("inspector-summary").unwrap();
+    let badge = vcx.debug_bounds("inspector-format-badge").unwrap();
+    let name = vcx.debug_bounds("inspector-filename").unwrap();
+    assert!(
+        badge.right() <= summary.right() && name.right() <= badge.left(),
+        "a long filename keeps the badge visible: name {name:?} badge {badge:?}"
+    );
+
+    // The strings behind the rows.
+    let mut photo = item.clone();
+    photo.file_name = "DSCF4821.RAF".into();
+    photo.media_type = lumina_core::MediaType::Raw;
+    assert_eq!(format_badge(&photo), "RAW", "RAW files badge as RAW");
+    photo.media_type = lumina_core::MediaType::Image;
+    photo.file_name = "IMG_1.heic".into();
+    assert_eq!(
+        format_badge(&photo),
+        "HEIC",
+        "else the uppercased extension"
+    );
+
+    photo.timestamp_epoch_ms = chrono::NaiveDate::from_ymd_opt(2025, 6, 14)
+        .unwrap()
+        .and_hms_opt(18, 42, 9)
+        .unwrap()
+        .and_utc()
+        .timestamp_millis();
+    photo.file_size = 48_200_000;
+    assert_eq!(
+        when_line(&photo),
+        format!("Sat 14 Jun 2025 · 18:42:09 · {}", format_bytes(48_200_000)),
+        "the When line has seconds and the size"
+    );
+
+    assert!(capture_rows(&photo, None).is_empty(), "no EXIF, no rows");
+    photo.make = Some("Canon".into());
+    photo.model = Some("Canon EOS R5".into());
+    photo.f_number = Some(2.0);
+    photo.exposure_time = Some("1/640".into());
+    photo.iso = Some(400);
+    photo.focal_length = Some(23.0);
+    let rows: Vec<(&str, String)> = capture_rows(&photo, Some(35))
+        .into_iter()
+        .map(|row| (row.selector, row.value))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            ("inspector-capture-camera", "Canon EOS R5".to_string()),
+            (
+                "inspector-capture-exposure",
+                "ƒ/2.0 · 1/640 · ISO 400".to_string()
+            ),
+            ("inspector-capture-focal", "23 mm · 35 eq.".to_string()),
+        ],
+        "rows are omitted one by one; the make is not repeated in the model"
+    );
+
+    view.update(vcx, |app, _| assert!(app.error_message.is_none()));
     let _ = std::fs::remove_dir_all(&dir);
 }

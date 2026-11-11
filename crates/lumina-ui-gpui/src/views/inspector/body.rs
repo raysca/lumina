@@ -44,24 +44,31 @@ impl InspectorTab {
     }
 }
 
-pub fn render_meta_row(label: &str, value: &str) -> impl IntoElement {
+/// Capture row (Detail design): 19px, key Inter 11.5 `t3`, value mono 11
+/// `t1` right-aligned; a long value (lens names) truncates.
+pub fn render_meta_row(label: &str, value: &str) -> Div {
     div()
+        .h(px(19.0))
         .flex()
         .flex_row()
         .justify_between()
-        .items_start()
+        .items_center()
         .gap_2()
         .child(
             div()
-                .text_xs()
-                .text_color(theme::t2())
+                .flex_none()
+                .text_size(px(11.5))
+                .text_color(theme::t3())
                 .child(label.to_string()),
         )
         .child(
             div()
-                .text_xs()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .text_size(px(11.0))
                 .font_family(theme::FONT_MONO)
-                .font_weight(FontWeight::MEDIUM)
                 .text_color(theme::t1())
                 .text_right()
                 .child(value.to_string()),

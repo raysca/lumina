@@ -1,20 +1,23 @@
-//! Docked inspector body for a single item (v3): one column with the facts
-//! people check while browsing. Full editing (caption, title, date, location)
-//! stays in the tabbed Get Info window opened from the footer.
+//! Docked inspector body for a single item (Detail design): file header,
+//! Capture, Rating & Label, Location and Tags. Full editing (caption, title,
+//! date, location) stays in the tabbed Get Info window opened from the footer.
 
 use crate::app::text_input::FieldEditor;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{MediaItem, MediaType};
 
-use crate::app::types::format_duration_badge;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
-use crate::theme;
-use crate::views::inspector::body::{display_title, format_bytes, render_meta_row};
+use crate::theme::{self, ChipKind};
+use crate::views::inspector::body::{format_bytes, render_meta_row};
+use crate::views::inspector::capture::capture_rows;
 use crate::views::inspector::tabs::tags::{render_suggestions, Suggestion};
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
 
+/// `focal_35mm` comes from `InfoDetails`, read off the UI thread; `None`
+/// until it lands or when the file does not record it.
 #[allow(clippy::too_many_arguments)]
 pub fn render_summary_body(
     weak_app: WeakEntity<LuminaApp>,
@@ -27,13 +30,10 @@ pub fn render_summary_body(
     rating: u8,
     star_pop: Option<(u8, ElementId)>,
     color_label: Option<u8>,
+    focal_35mm: Option<u32>,
 ) -> AnyElement {
-    let dims = if item.width > 0 && item.height > 0 {
-        format!("{} × {}", item.width, item.height)
-    } else {
-        "—".to_string()
-    };
     let place = place_line(item);
+    let capture = capture_rows(item, focal_35mm);
     let app_info = weak_app.clone();
     let app_reveal = weak_app.clone();
     let path = item.path.clone();
@@ -43,44 +43,30 @@ pub fn render_summary_body(
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
-        .p_4()
+        .p(px(20.0))
         .flex()
         .flex_col()
-        .gap_4()
-        // Title, filename, capture date.
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(3.0))
-                .child(
+        .gap(px(22.0))
+        .child(render_file_header(item))
+        // Rows are omitted one by one and the section with them: no "—" rows.
+        .when(!capture.is_empty(), |body| {
+            body.child(
+                section(
+                    "inspector.capture",
                     div()
-                        .text_base()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(display_title(item)),
+                        .flex()
+                        .flex_col()
+                        .children(capture.into_iter().map(|row| {
+                            let selector = row.selector;
+                            render_meta_row(&row.key, &row.value)
+                                .debug_selector(move || selector.to_string())
+                        })),
                 )
-                .child(
-                    div()
-                        .id("inspector-filename")
-                        .debug_selector(|| "inspector-filename".to_string())
-                        .w_full()
-                        // Lets a long name wrap instead of widening the panel.
-                        .min_w(px(0.0))
-                        .text_xs()
-                        .font_family(theme::FONT_MONO)
-                        .text_color(theme::t2())
-                        .child(item.file_name.clone()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::t2())
-                        .child(item.formatted_timestamp()),
-                ),
-        )
-        .child(render_stat_strip(item))
+                .debug_selector(|| "inspector-capture".to_string()),
+            )
+        })
         .child(section(
-            "RATING & LABEL",
+            "inspector.rating",
             div()
                 .flex()
                 .flex_row()
@@ -89,8 +75,14 @@ pub fn render_summary_body(
                 .child(div().flex_1())
                 .child(render_label_dots(weak_app.clone(), color_label)),
         ))
+        .children(place.map(|place| {
+            section(
+                "inspector.location",
+                div().text_xs().text_color(theme::t2()).child(place),
+            )
+        }))
         .child(section(
-            "TAGS",
+            "inspector.tags",
             div()
                 .flex()
                 .flex_col()
@@ -110,12 +102,6 @@ pub fn render_summary_body(
                         .flatten(),
                 ),
         ))
-        .children(place.map(|place| {
-            section(
-                "LOCATION",
-                div().text_xs().text_color(theme::t2()).child(place),
-            )
-        }))
         .children(is_trash.then(|| render_trash_lifecycle(weak_app.clone())));
 
     div()
@@ -127,116 +113,141 @@ pub fn render_summary_body(
         .flex()
         .flex_col()
         .child(body)
-        // Footer pinned to the bottom: file facts and the way into Get Info.
+        // Slim footer pinned to the bottom: Get Info is the only mouse path
+        // to editing caption, date and location.
         .child(
             div()
                 .id("inspector-footer")
                 .debug_selector(|| "inspector-footer".to_string())
                 .flex_none()
-                .p_4()
-                .pt_2p5()
+                .px(px(20.0))
+                .py(px(12.0))
                 .border_t_1()
                 .border_color(theme::line())
                 .flex()
-                .flex_col()
+                .flex_row()
                 .gap_1p5()
-                .child(render_meta_row("Size", &format_bytes(item.file_size)))
-                .child(render_meta_row("Dimensions", &dims))
                 .child(
-                    div()
-                        .pt_1p5()
-                        .flex()
-                        .flex_row()
-                        .gap_1p5()
-                        .child(
-                            theme::control("inspector-get-info-btn")
-                                .debug_selector(|| "inspector-get-info".to_string())
-                                .flex_1()
-                                .justify_center()
-                                .tooltip(theme::tooltip_label("Open the full inspector window"))
-                                .child("Get Info…")
-                                .on_click(move |_e, _w, cx| {
-                                    if let Some(app) = app_info.upgrade() {
-                                        app.update(cx, |this, cx| this.undock_inspector(cx));
-                                    }
-                                }),
-                        )
-                        .child(
-                            theme::control("inspector-reveal-btn")
-                                .debug_selector(|| "inspector-reveal".to_string())
-                                .flex_1()
-                                .justify_center()
-                                .child("Reveal")
-                                .on_click(move |_e, _w, cx| {
-                                    if let Some(app) = app_reveal.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            this.reveal_item_in_finder(&path, cx)
-                                        });
-                                    }
-                                }),
-                        ),
+                    theme::control("inspector-get-info-btn")
+                        .debug_selector(|| "inspector-get-info".to_string())
+                        .flex_1()
+                        .justify_center()
+                        .tooltip(theme::tooltip_label(t("inspector.get_info_tooltip")))
+                        .child(t("inspector.get_info"))
+                        .on_click(move |_e, _w, cx| {
+                            if let Some(app) = app_info.upgrade() {
+                                app.update(cx, |this, cx| this.undock_inspector(cx));
+                            }
+                        }),
+                )
+                .child(
+                    theme::control("inspector-reveal-btn")
+                        .debug_selector(|| "inspector-reveal".to_string())
+                        .flex_1()
+                        .justify_center()
+                        .child(t("inspector.reveal"))
+                        .on_click(move |_e, _w, cx| {
+                            if let Some(app) = app_reveal.upgrade() {
+                                app.update(cx, |this, cx| this.reveal_item_in_finder(&path, cx));
+                            }
+                        }),
                 ),
         )
         .into_any_element()
 }
 
-fn section(title: &'static str, content: impl IntoElement) -> Div {
+/// Filename with its format badge, then the When line. A long name wraps
+/// beside the badge, so the badge stays visible.
+fn render_file_header(item: &MediaItem) -> Div {
+    let dims =
+        (item.width > 0 && item.height > 0).then(|| format!("{} × {}", item.width, item.height));
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(5.0))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .id("inspector-filename")
+                        .debug_selector(|| "inspector-filename".to_string())
+                        .flex_1()
+                        // Lets a long name wrap instead of widening the panel.
+                        .min_w(px(0.0))
+                        .text_size(px(13.0))
+                        .font_family(theme::FONT_MONO)
+                        .text_color(theme::t1())
+                        .child(item.file_name.clone()),
+                )
+                .child(
+                    div()
+                        .id("inspector-format-badge")
+                        .debug_selector(|| "inspector-format-badge".to_string())
+                        .flex_none()
+                        .h(px(18.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .bg(theme::accent_soft())
+                        .flex()
+                        .items_center()
+                        .text_size(px(9.5))
+                        .font_family(theme::FONT_MONO)
+                        .text_color(theme::accent())
+                        .child(format_badge(item))
+                        // Dimensions moved here from the old footer.
+                        .when_some(dims, |badge, dims| {
+                            badge.tooltip(theme::tooltip_label(dims))
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .debug_selector(|| "inspector-when".to_string())
+                .text_size(px(10.5))
+                .font_family(theme::FONT_MONO)
+                .text_color(theme::t3())
+                .child(when_line(item)),
+        )
+}
+
+/// "RAW" for camera raw files, else the uppercased extension ("JPG", "MOV").
+pub(crate) fn format_badge(item: &MediaItem) -> String {
+    if item.media_type == MediaType::Raw {
+        return "RAW".to_string();
+    }
+    std::path::Path::new(&item.file_name)
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_uppercase())
+        .unwrap_or_default()
+}
+
+/// "Sat 14 Jun 2025 · 18:42:09 · 48.2 MB" (UTC, like the rest of the app).
+pub(crate) fn when_line(item: &MediaItem) -> String {
+    let when = chrono::DateTime::from_timestamp_millis(item.timestamp_epoch_ms)
+        .map(|dt| dt.format("%a %-d %b %Y · %H:%M:%S").to_string())
+        .unwrap_or_else(|| format!("{:04}-{:02}-{:02}", item.year, item.month, item.day));
+    format!("{when} · {}", format_bytes(item.file_size))
+}
+
+/// Section with the design title: 9.5/600 `t3`, uppercase in the catalog.
+// ponytail: no letter spacing (design: 1); GPUI text has no tracking.
+fn section(title_key: &str, content: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()
         .gap_2()
-        .child(theme::section_label(title))
-        .child(content)
-}
-
-/// Mono cells with the numbers photographers scan for: exposure for photos,
-/// duration for videos. Unknown values are left out, and the strip
-/// is omitted entirely when nothing is known.
-fn render_stat_strip(item: &MediaItem) -> AnyElement {
-    let cells: Vec<String> = if item.media_type == MediaType::Video {
-        // ponytail: no fps cell; frame rate is not in the catalog yet.
-        [
-            Some(format_duration_badge(item.duration_secs())).filter(|d| !d.is_empty()),
-            (item.width > 0 && item.height > 0).then(|| resolution_label(item.width, item.height)),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
-    } else {
-        [
-            item.f_number.map(|f| format!("ƒ/{f:.1}")),
-            item.exposure_time.clone(),
-            item.iso.map(|iso| format!("ISO {iso}")),
-            item.focal_length.map(|fl| format!("{fl:.0} mm")),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
-    };
-    if cells.is_empty() {
-        return Empty.into_any_element();
-    }
-    let last = cells.len() - 1;
-    div()
-        .debug_selector(|| "inspector-stats".to_string())
-        .flex()
-        .flex_row()
-        .rounded(theme::RADIUS_MD)
-        .border_1()
-        .border_color(theme::line())
-        .overflow_hidden()
-        .font_family(theme::FONT_MONO)
-        .text_xs()
-        .children(cells.into_iter().enumerate().map(|(i, text)| {
+        .child(
             div()
-                .flex_1()
-                .py(px(7.0))
-                .flex()
-                .justify_center()
-                .when(i < last, |d| d.border_r_1().border_color(theme::line()))
-                .child(text)
-        }))
-        .into_any_element()
+                .text_size(px(9.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::t3())
+                .child(t(title_key)),
+        )
+        .child(content)
 }
 
 /// `pop` is the star just set and its pop id (`motion::MarkPop`).
@@ -333,7 +344,10 @@ pub(crate) fn place_line(item: &MediaItem) -> Option<String> {
     Some(parts.join(", "))
 }
 
-/// One compact field: plain chips (no "#") with ×, then an inline "add…".
+/// Design chips ("#" glyph, label, ×) that wrap onto new rows, then an "Add"
+/// outline chip that turns into the input. Clicking anywhere in the field
+/// starts typing; Enter adds (or takes the highlighted suggestion), Esc stops,
+/// ⌫ in the empty field removes the last tag (app/keymap/modals.rs).
 fn render_tags(
     weak_app: WeakEntity<LuminaApp>,
     tags: &[String],
@@ -345,102 +359,45 @@ fn render_tags(
         .id("inspector-tags")
         .debug_selector(|| "inspector-tags".to_string())
         .w_full()
-        .min_h(px(30.0))
-        .p(px(4.0))
-        .rounded(theme::RADIUS_MD)
-        .bg(theme::bg_0())
-        .border_1()
-        .border_color(if input_active {
-            theme::focus_ring()
-        } else {
-            theme::line()
-        })
         .flex()
         .flex_row()
         .flex_wrap()
         .items_center()
-        .gap(px(4.0))
+        .gap(px(6.0))
         .cursor_text()
         .children(tags.iter().map(|tag| {
-            let app = weak_app.clone();
-            let remove = tag.clone();
             let selector = format!("tag-chip-{tag}");
-            div()
+            theme::chip(ElementId::Name(selector.clone().into()), ChipKind::Normal)
                 .debug_selector(move || selector.clone())
-                .h(px(20.0))
-                .pl(px(7.0))
-                .pr(px(3.0))
-                .rounded(theme::RADIUS_SM)
-                .bg(theme::bg_3())
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(3.0))
-                .text_xs()
-                .child({
-                    let app = weak_app.clone();
-                    let query = if tag.contains(' ') {
-                        format!("tag:\"{tag}\"")
-                    } else {
-                        format!("tag:{tag}")
-                    };
-                    let selector = format!("tag-filter-{tag}");
-                    div()
-                        .id(ElementId::Name(selector.clone().into()))
-                        .debug_selector(move || selector.clone())
-                        .tooltip(theme::tooltip_label("Show items with this tag"))
-                        .cursor_pointer()
-                        .child(tag.clone())
-                        .on_click(move |_e, _w, cx| {
-                            cx.stop_propagation();
-                            if let Some(app) = app.upgrade() {
-                                app.update(cx, |this, cx| this.set_search_query(&query, cx));
-                            }
-                        })
-                })
+                // A long tag truncates inside one panel-wide chip.
+                .max_w_full()
                 .child(
                     div()
-                        .id(ElementId::Name(format!("tag-remove-{tag}").into()))
-                        .debug_selector({
-                            let id = format!("tag-remove-{tag}");
-                            move || id.clone()
-                        })
-                        .tooltip(theme::tooltip_label("Remove tag"))
-                        .size(px(14.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .child(render_icon(Icon::X, px(9.0), theme::t2()))
-                        .on_click(move |_e, _w, cx| {
-                            cx.stop_propagation();
-                            if let Some(app) = app.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.batch_remove_tag(remove.clone(), cx)
-                                });
-                            }
-                        }),
+                        .flex_none()
+                        .font_family(theme::FONT_MONO)
+                        .text_color(theme::accent())
+                        .child("#"),
                 )
+                .child(render_tag_filter(weak_app.clone(), tag))
+                .child(render_tag_remove(weak_app.clone(), tag.clone()))
         }))
-        .child(
-            div()
-                .id("tag-add")
+        .child({
+            let add = theme::chip("tag-add", ChipKind::Ghost)
                 .debug_selector(|| "tag-add".to_string())
-                .flex_1()
-                .min_w(px(40.0))
-                .px(px(4.0))
-                .text_xs()
-                .text_color(if input_active {
-                    theme::t1()
-                } else {
-                    theme::t2()
-                })
-                .child(match field_input.filter(|_| input_active) {
-                    Some(input) => input.into_any_element(),
-                    None => "add…".into_any_element(),
-                }),
-        )
-        // Clicking anywhere in the field starts typing (Enter adds, Esc stops).
+                .border_color(theme::line_2())
+                .text_color(theme::t3());
+            match field_input.filter(|_| input_active) {
+                Some(input) => add
+                    .flex_1()
+                    .min_w(px(120.0))
+                    .border_color(theme::focus_ring())
+                    .text_color(theme::t1())
+                    .child(div().flex_1().min_w_0().child(input)),
+                None => add
+                    .child(render_icon(Icon::Plus, px(11.0), theme::t3()))
+                    .child(t("inspector.tag_add")),
+            }
+        })
         .on_click(move |_e, _w, cx| {
             if let Some(app) = app_add.upgrade() {
                 app.update(cx, |this, cx| {
@@ -448,6 +405,55 @@ fn render_tags(
                         this.start_tag_input(cx);
                     }
                 });
+            }
+        })
+}
+
+/// The chip's label: clicking it searches for the tag.
+fn render_tag_filter(weak_app: WeakEntity<LuminaApp>, tag: &str) -> Stateful<Div> {
+    let query = if tag.contains(' ') {
+        format!("tag:\"{tag}\"")
+    } else {
+        format!("tag:{tag}")
+    };
+    let selector = format!("tag-filter-{tag}");
+    div()
+        .id(ElementId::Name(selector.clone().into()))
+        .debug_selector(move || selector.clone())
+        .min_w_0()
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .tooltip(theme::tooltip_label(t("inspector.filter_tag")))
+        .cursor_pointer()
+        .child(tag.to_string())
+        .on_click(move |_e, _w, cx| {
+            cx.stop_propagation();
+            if let Some(app) = weak_app.upgrade() {
+                app.update(cx, |this, cx| this.set_search_query(&query, cx));
+            }
+        })
+}
+
+fn render_tag_remove(weak_app: WeakEntity<LuminaApp>, tag: String) -> Stateful<Div> {
+    let selector = format!("tag-remove-{tag}");
+    div()
+        .id(ElementId::Name(selector.clone().into()))
+        .debug_selector(move || selector.clone())
+        .tooltip(theme::tooltip_label(t("inspector.remove_tag")))
+        .flex_none()
+        .size(px(14.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::line_2()))
+        .child(render_icon(Icon::X, px(9.0), theme::t2()))
+        .on_click(move |_e, _w, cx| {
+            cx.stop_propagation();
+            if let Some(app) = weak_app.upgrade() {
+                app.update(cx, |this, cx| this.batch_remove_tag(tag.clone(), cx));
             }
         })
 }

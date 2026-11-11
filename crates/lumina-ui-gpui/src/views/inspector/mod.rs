@@ -1,6 +1,7 @@
 pub mod batch;
 pub mod batch_template;
 pub mod body;
+pub mod capture;
 pub mod summary;
 pub mod tabs;
 
@@ -40,6 +41,14 @@ impl InspectorView {
                 .child("Nothing selected.")
                 .into_any_element();
         };
+        // Capture's 35 mm equivalent lives in InfoDetails, read off the UI
+        // thread; ask for it after this frame when it is not for this item.
+        let details = this.info_details.as_ref().filter(|d| d.is_for(item));
+        if details.is_none() {
+            let app = cx.entity();
+            cx.defer(move |cx| app.update(cx, |this, cx| this.ensure_info_details(cx)));
+        }
+        let focal_35mm = details.and_then(|d| d.file.focal_length_35mm);
         let suggestions = this.tag_input_suggestions();
         panel
             .child(summary::render_summary_body(
@@ -53,6 +62,7 @@ impl InspectorView {
                 this.get_item_rating(item),
                 this.mark_pop.star(Some(item.id)),
                 this.item_color_labels.get(&item.id).copied(),
+                focal_35mm,
             ))
             .into_any_element()
     }
