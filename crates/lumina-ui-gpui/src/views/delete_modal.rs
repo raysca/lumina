@@ -96,7 +96,7 @@ impl DeleteConfirmModal {
                             .size(px(THUMB))
                             .overflow_hidden()
                             .border_2()
-                            .border_color(theme::bg_dialog())
+                            .border_color(theme::bg_1())
                             .bg(theme::bg_media())
                             .child(img(image).size_full().object_fit(ObjectFit::Cover))
                     }))
@@ -112,7 +112,7 @@ impl DeleteConfirmModal {
                             .debug_selector(|| "delete-title".to_string())
                             .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .child(title),
                     )
                     .child(
@@ -120,7 +120,7 @@ impl DeleteConfirmModal {
                             .id("delete-summary")
                             .debug_selector(|| "delete-summary".to_string())
                             .text_xs()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(summary_line(state.photos, state.videos, state.total_bytes)),
                     ),
             );
@@ -145,21 +145,16 @@ impl DeleteConfirmModal {
                         .rounded(theme::RADIUS_SM)
                         .border_1()
                         .border_color(theme::danger())
-                        .bg(if on { theme::danger() } else { theme::bg_app() })
+                        .bg(if on { theme::danger() } else { theme::bg_0() })
                         .flex()
                         .items_center()
                         .justify_center()
-                        .children(on.then(|| render_icon(Icon::Check, px(10.0), theme::text()))),
+                        .children(on.then(|| render_icon(Icon::Check, px(10.0), theme::bg_0()))),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::danger_text())
-                        .child(format!(
-                        "I understand {} will be deleted from disk and can't be recovered. (Space)",
-                        items
-                    )),
-                )
+                .child(div().text_xs().text_color(theme::danger()).child(format!(
+                    "I understand {} will be deleted from disk and can't be recovered. (Space)",
+                    items
+                )))
         });
 
         let footer = div()
@@ -175,15 +170,15 @@ impl DeleteConfirmModal {
                     .h(px(30.0))
                     .px_3()
                     .rounded(theme::RADIUS_MD)
-                    .bg(theme::bg_control())
-                    .hover(|s| s.bg(theme::bg_control_hover()))
+                    .bg(theme::bg_2())
+                    .hover(|s| s.bg(theme::bg_3()))
                     .cursor_pointer()
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap_2()
                     .text_xs()
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .child("Cancel")
                     .child(theme::kbd("Esc"))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -207,9 +202,9 @@ impl DeleteConfirmModal {
                         theme::accent()
                     })
                     .text_color(if destructive {
-                        theme::text()
+                        theme::bg_0()
                     } else {
-                        theme::accent_fg()
+                        theme::on_accent()
                     })
                     // Disabled = the same red button at 40%.
                     .opacity(if can_confirm { 1.0 } else { 0.4 })
@@ -252,9 +247,9 @@ impl DeleteConfirmModal {
                     })
                     .w(px(480.0))
                     .p_5()
-                    .bg(theme::bg_dialog())
+                    .bg(theme::bg_1())
                     .border_1()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .rounded(theme::RADIUS_LG)
                     .shadow_2xl()
                     .flex()
@@ -308,7 +303,7 @@ impl DeleteConfirmModal {
                     .id("delete-hint")
                     .debug_selector(|| "delete-hint".to_string())
                     .text_xs()
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child(
                         "Trashed items stay in Library › Recently Deleted. ↑↓ choose · ↵ confirm",
                     )
@@ -338,18 +333,18 @@ fn render_option_card(
         .p_3()
         .bg(if is_selected {
             if is_destructive {
-                theme::danger_bg()
+                theme::danger_soft()
             } else {
-                theme::selection_bg()
+                theme::bg_3()
             }
         } else {
-            theme::bg_raised()
+            theme::bg_2()
         })
         .border_1()
         .border_color(if is_selected {
             active_color
         } else {
-            theme::border()
+            theme::line()
         })
         .rounded(theme::RADIUS_LG)
         .hover(move |s| s.border_color(active_color))
@@ -368,7 +363,7 @@ fn render_option_card(
                 .border_color(if is_selected {
                     active_color
                 } else {
-                    theme::text_disabled()
+                    theme::t3()
                 })
                 .flex()
                 .justify_center()
@@ -395,7 +390,7 @@ fn render_option_card(
                                 .text_color(if is_destructive {
                                     theme::label_red()
                                 } else {
-                                    theme::text()
+                                    theme::t1()
                                 })
                                 .child(title),
                         )
@@ -403,19 +398,14 @@ fn render_option_card(
                             div()
                                 .px_1p5()
                                 .rounded(theme::RADIUS_SM)
-                                .bg(theme::selection_bg())
+                                .bg(theme::bg_3())
                                 .text_size(px(11.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::accent())
                                 .child("Recommended")
                         })),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_subtle())
-                        .child(description),
-                ),
+                .child(div().text_xs().text_color(theme::t2()).child(description)),
         )
 }
 

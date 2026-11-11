@@ -47,10 +47,10 @@ impl TagManagerModal {
                     })
                     .w(px((window_w - 48.0).clamp(640.0, 1000.0)))
                     .h(px((window_h - 76.0).clamp(420.0, 720.0)))
-                    .bg(theme::bg_raised())
+                    .bg(theme::bg_2())
                     .border_1()
                     .border_t_0()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .rounded_b(px(10.0))
                     .shadow_lg()
                     .overflow_hidden()
@@ -82,13 +82,13 @@ fn render_header(total: usize, cx: &mut Context<LuminaApp>) -> impl IntoElement 
         .items_center()
         .gap_3()
         .border_b_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .child(render_icon(Icon::Tag, px(16.0), theme::accent()))
         .child(
             div()
                 .text_base()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child("Tag Manager"),
         )
         // ponytail: no "· M unused" or "+ New Tag": a tag exists only while an
@@ -98,14 +98,14 @@ fn render_header(total: usize, cx: &mut Context<LuminaApp>) -> impl IntoElement 
                 .id("tag-manager-total")
                 .debug_selector(|| "tag-manager-total".to_string())
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(format!("{total} tags")),
         )
         .child(div().flex_1())
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child("↑↓ browse · Space check · ↵ rename · Esc close"),
         )
         .child(

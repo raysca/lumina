@@ -48,17 +48,17 @@ impl AlbumBuilderModal {
                     .debug_selector(|| "album-builder-card".to_string())
                     .w(px(760.0))
                     .max_h(px(620.0))
-                    .bg(theme::bg_dialog())
+                    .bg(theme::bg_1())
                     .border_1()
                     .border_t_0()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .rounded_b(px(10.0))
                     .shadow_lg()
                     .p_5()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .on_mouse_down(MouseButton::Left, |_e, _w, cx| {
                         cx.stop_propagation();
                     })
@@ -98,7 +98,7 @@ impl AlbumBuilderModal {
                             .items_center()
                             .gap_2()
                             .text_sm()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child("Match")
                             .child(
                                 rows::picker(
@@ -123,8 +123,8 @@ impl AlbumBuilderModal {
                             .overflow_y_scroll()
                             .rounded(theme::RADIUS_LG)
                             .border_1()
-                            .border_color(theme::border())
-                            .bg(theme::bg_app())
+                            .border_color(theme::line())
+                            .bg(theme::bg_0())
                             .flex()
                             .flex_col()
                             .when(draft.rows.is_empty(), |el| {
@@ -156,7 +156,7 @@ fn render_empty_conditions(focus: DraftFocus, cx: &mut Context<LuminaApp>) -> im
         .items_center()
         .justify_between()
         .text_sm()
-        .text_color(theme::text_muted())
+        .text_color(theme::t2())
         .child("No conditions — every item matches.")
         .child(rows::square_button(
             "album-rule-add-empty".to_string(),
@@ -186,7 +186,7 @@ fn render_preview(app: &LuminaApp) -> impl IntoElement {
                 .debug_selector(move || format!("album-builder-preview-{}", id.0))
                 .size(px(PREVIEW_TILE))
                 .overflow_hidden()
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .children(texture.map(|t| img(t).size_full().object_fit(ObjectFit::Cover)))
         }));
     div()
@@ -204,7 +204,7 @@ fn render_preview(app: &LuminaApp) -> impl IntoElement {
                     div()
                         .debug_selector(|| "album-builder-preview-help".to_string())
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child("The first matches, updated as you edit."),
                 ),
         )
@@ -222,28 +222,28 @@ fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                 "These conditions can't run: {}",
                 draft.problem.as_deref().unwrap_or_default()
             ),
-            theme::danger_text(),
+            theme::danger(),
         ),
         None => (
             "Fix the highlighted conditions".to_string(),
-            theme::danger_text(),
+            theme::danger(),
         ),
-        Some(0) => ("No items match".to_string(), theme::text_muted()),
-        Some(1) => ("1 item matches".to_string(), theme::text_muted()),
-        Some(n) => (format!("{n} items match"), theme::text_muted()),
+        Some(0) => ("No items match".to_string(), theme::t2()),
+        Some(1) => ("1 item matches".to_string(), theme::t2()),
+        Some(n) => (format!("{n} items match"), theme::t2()),
     };
     let ring = |focused: bool| {
         if focused {
-            theme::text()
+            theme::t1()
         } else {
-            theme::border()
+            theme::line()
         }
     };
     let ok = if valid {
         theme::control_primary("album-builder-save")
     } else {
         theme::control("album-builder-save")
-            .text_color(theme::text_disabled())
+            .text_color(theme::t3())
             .cursor_default()
     };
 
@@ -280,7 +280,7 @@ fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
                 .child(
                     ok.debug_selector(|| "album-builder-save".to_string())
                         .when(draft.focus == DraftFocus::Save, |b| {
-                            b.border_color(theme::text())
+                            b.border_color(theme::t1())
                         })
                         .child("OK")
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {

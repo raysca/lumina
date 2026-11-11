@@ -54,7 +54,7 @@ pub fn render_meta_row(label: &str, value: &str) -> impl IntoElement {
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(label.to_string()),
         )
         .child(
@@ -62,7 +62,7 @@ pub fn render_meta_row(label: &str, value: &str) -> impl IntoElement {
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .text_right()
                 .child(value.to_string()),
         )
@@ -117,7 +117,7 @@ pub fn render_inspector_body(
                 .justify_center()
                 .items_center()
                 .text_sm()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child("No media selected")
                 .into_any_element();
         }
@@ -209,8 +209,8 @@ fn render_single_body(
         .size_full()
         .flex()
         .flex_col()
-        .bg(theme::bg_pane())
-        .text_color(theme::text())
+        .bg(theme::bg_1())
+        .text_color(theme::t1())
         .overflow_hidden()
         // 1. Header: aspect-shaped thumbnail, titles, quick actions (v3).
         .child(
@@ -218,7 +218,7 @@ fn render_single_body(
                 .w_full()
                 .p_4()
                 .border_b_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .flex()
                 .flex_row()
                 .gap_4()
@@ -239,8 +239,8 @@ fn render_single_body(
                                 .h(px(thumb_h))
                                 .overflow_hidden()
                                 .border_1()
-                                .border_color(theme::border_subtle())
-                                .bg(theme::bg_app())
+                                .border_color(theme::line())
+                                .bg(theme::bg_0())
                                 .children(preview_image.clone().map(|img_render| {
                                     img(img_render).size_full().object_fit(ObjectFit::Cover)
                                 })),
@@ -261,7 +261,7 @@ fn render_single_body(
                                 .w_full()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(display_title.clone()),
                         )
                         .child(
@@ -271,13 +271,13 @@ fn render_single_body(
                                 .w_full()
                                 .text_xs()
                                 .font_family(theme::FONT_MONO)
-                                .text_color(theme::text_subtle())
+                                .text_color(theme::t2())
                                 .child(file_name.clone()),
                         )
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(theme::text_muted())
+                                .text_color(theme::t2())
                                 .child(meta_summary_line),
                         )
                         .child(
@@ -381,7 +381,7 @@ fn render_single_body(
                 .px_4()
                 .py_2p5()
                 .border_b_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .child(render_tab_bar(weak_app.clone(), tab)),
         )
         // 3. Tab Content (Scrollable with smooth overflow)
@@ -439,11 +439,7 @@ fn header_button(
     on: bool,
     pop: Option<ElementId>,
 ) -> Stateful<Div> {
-    let fg = if on {
-        theme::accent_fg()
-    } else {
-        theme::text()
-    };
+    let fg = if on { theme::on_accent() } else { theme::t1() };
     div()
         .id(id)
         .debug_selector(move || id.to_string())
@@ -451,19 +447,9 @@ fn header_button(
         .px_2p5()
         .rounded(theme::RADIUS_MD)
         .border_1()
-        .border_color(if on { theme::accent() } else { theme::border() })
-        .bg(if on {
-            theme::accent()
-        } else {
-            theme::bg_raised()
-        })
-        .hover(move |s| {
-            if on {
-                s
-            } else {
-                s.bg(theme::bg_control_hover())
-            }
-        })
+        .border_color(if on { theme::accent() } else { theme::line() })
+        .bg(if on { theme::accent() } else { theme::bg_2() })
+        .hover(move |s| if on { s } else { s.bg(theme::bg_3()) })
         .cursor_pointer()
         .text_xs()
         .text_color(fg)
@@ -486,9 +472,9 @@ fn render_tab_bar(weak_app: WeakEntity<LuminaApp>, active_tab: InspectorTab) -> 
     div()
         .w_full()
         .h(px(28.0))
-        .bg(theme::bg_viewer())
+        .bg(theme::bg_stage())
         .border_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .rounded(theme::RADIUS_MD)
         .p_0p5()
         .flex()
@@ -516,20 +502,16 @@ fn render_tab_bar(weak_app: WeakEntity<LuminaApp>, active_tab: InspectorTab) -> 
                     FontWeight::NORMAL
                 })
                 .bg(if is_active {
-                    theme::bg_control()
+                    theme::bg_2()
                 } else {
                     rgba(0x00000000)
                 })
-                .text_color(if is_active {
-                    theme::text()
-                } else {
-                    theme::text_subtle()
-                })
+                .text_color(if is_active { theme::t1() } else { theme::t2() })
                 .hover(|s| {
                     if is_active {
                         s
                     } else {
-                        s.text_color(theme::text())
+                        s.text_color(theme::t1())
                     }
                 })
                 .child(display_label)

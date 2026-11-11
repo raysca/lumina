@@ -38,10 +38,10 @@ fn notice(id: &'static str, title: String, body: String) -> impl IntoElement {
             div()
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(title),
         )
-        .child(div().text_xs().text_color(theme::text_subtle()).child(body))
+        .child(div().text_xs().text_color(theme::t2()).child(body))
 }
 
 fn cluster_label(c: &Cluster) -> String {
@@ -73,7 +73,7 @@ fn pin(index: usize, c: &Cluster, focused: bool, app: Entity<LuminaApp>) -> AnyE
         .border_color(if focused {
             theme::focus_ring()
         } else {
-            theme::accent_fg()
+            theme::on_accent()
         })
         .flex()
         .items_center()
@@ -85,7 +85,7 @@ fn pin(index: usize, c: &Cluster, focused: bool, app: Entity<LuminaApp>) -> AnyE
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::accent_fg())
+                .text_color(theme::on_accent())
                 .child(count.to_string()),
         )
         .when(focused, |pin| {
@@ -118,9 +118,9 @@ fn zoom_button(
         .role(Role::Button)
         .aria_label(label.clone())
         .tooltip(theme::tooltip_label(label))
-        .bg(theme::bg_control())
-        .border_color(theme::border())
-        .child(render_icon(icon, px(14.0), theme::text()))
+        .bg(theme::bg_2())
+        .border_color(theme::line())
+        .child(render_icon(icon, px(14.0), theme::t1()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.zoom_map(step, cx);
         }))
@@ -173,15 +173,15 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             (projection, pins)
         },
         move |bounds, (projection, mut pins), window, cx| {
-            window.paint_quad(fill(bounds, theme::bg_viewer()));
+            window.paint_quad(fill(bounds, theme::bg_stage()));
             if let Some(basemap) = BASEMAP.as_ref() {
                 let offset = projection.basemap_offset();
                 window.paint_path(
                     place(&basemap.land, projection.scale, offset),
-                    theme::bg_control_hover(),
+                    theme::bg_3(),
                 );
                 if let Some(holes) = &basemap.holes {
-                    window.paint_path(place(holes, projection.scale, offset), theme::bg_viewer());
+                    window.paint_path(place(holes, projection.scale, offset), theme::bg_stage());
                 }
             }
             for pin in &mut pins {
@@ -218,7 +218,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .min_w_0()
         .h_full()
         .overflow_hidden()
-        .bg(theme::bg_viewer())
+        .bg(theme::bg_stage())
         .child(layer)
         .on_mouse_down(
             MouseButton::Left,
@@ -267,7 +267,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .bottom_2()
                 .left_3()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(t("map.hint")),
         )
         .into_any_element()

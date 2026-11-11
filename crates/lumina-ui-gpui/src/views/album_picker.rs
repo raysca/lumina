@@ -76,9 +76,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
                 .w(px(420.0))
                 .max_h(px(420.0))
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .overflow_hidden()
                 .shadow_2xl()
@@ -96,13 +96,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .flex_shrink_0()
                         .px(px(14.0))
                         .border_b_1()
-                        .border_color(theme::border_subtle())
-                        .child(render_icon(Icon::Search, px(14.0), theme::text_muted()))
+                        .border_color(theme::line())
+                        .child(render_icon(Icon::Search, px(14.0), theme::t2()))
                         .child(
                             div()
                                 .flex_1()
                                 .text_size(theme::TEXT_BODY)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .children(app.field_input_for(TextTarget::AlbumPicker)),
                         )
                         .child(theme::kbd("esc")),
@@ -129,10 +129,10 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .items_center()
                         .gap_2()
                         .border_t_1()
-                        .border_color(theme::border_subtle())
-                        .bg(theme::bg_pane())
+                        .border_color(theme::line())
+                        .bg(theme::bg_1())
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(theme::kbd("↑"))
                         .child(theme::kbd("↓"))
                         .child(theme::kbd("↵").ml_2())
@@ -151,9 +151,9 @@ fn row(
     highlighted: bool,
 ) -> Stateful<Div> {
     let fg = if highlighted {
-        theme::accent_fg()
+        theme::on_accent()
     } else {
-        theme::text()
+        theme::t1()
     };
     div()
         .id(id)
@@ -172,7 +172,7 @@ fn row(
             if highlighted {
                 r.bg(theme::accent())
             } else {
-                r.hover(|s| s.bg(theme::bg_control_hover()))
+                r.hover(|s| s.bg(theme::bg_3()))
             }
         })
         .child(render_icon(icon, px(14.0), fg))

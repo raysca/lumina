@@ -66,12 +66,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .flex()
             .flex_col()
             .gap_1()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme::text_muted())
-                    .child(label.clone()),
-            )
+            .child(div().text_xs().text_color(theme::t2()).child(label.clone()))
             .child(
                 theme::field(SharedString::from(format!(
                     "template-field-{}",
@@ -83,14 +78,14 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .border_color(if focused {
                     theme::focus_ring()
                 } else {
-                    theme::border()
+                    theme::line()
                 })
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .child(match app.field_input_for(TextTarget::Template(field)) {
                     Some(input) => input.into_any_element(),
                     None => div()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(value)
                         .into_any_element(),
                 })
@@ -133,9 +128,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 })
                 .w(px(640.0))
                 .p_5()
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .flex()
@@ -150,13 +145,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(t("template.title")),
                         )
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(theme::text_muted())
+                                .text_color(theme::t2())
                                 .child(t("template.intro")),
                         ),
                 )
@@ -183,7 +178,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     div()
                         .debug_selector(|| "template-error".to_string())
                         .text_xs()
-                        .text_color(theme::danger_text())
+                        .text_color(theme::danger())
                         .child(error)
                 }))
                 .child(
@@ -195,9 +190,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .when(editing_existing, |row| {
                             row.child(
                                 button("template-delete", t("template.delete"))
-                                    .bg(theme::bg_control())
-                                    .hover(|s| s.bg(theme::bg_control_hover()))
-                                    .text_color(theme::danger_text())
+                                    .bg(theme::bg_2())
+                                    .hover(|s| s.bg(theme::bg_3()))
+                                    .text_color(theme::danger())
                                     .tooltip(theme::tooltip_label(t("template.delete_tooltip")))
                                     .child(theme::kbd("⇧⌘⌫"))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -209,14 +204,14 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .flex_1()
                                 .text_xs()
-                                .text_color(theme::text_subtle())
+                                .text_color(theme::t2())
                                 .child(t("template.keys_hint")),
                         )
                         .child(
                             button("template-cancel", t("template.cancel"))
-                                .bg(theme::bg_control())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
-                                .text_color(theme::text())
+                                .bg(theme::bg_2())
+                                .hover(|s| s.bg(theme::bg_3()))
+                                .text_color(theme::t1())
                                 .child(theme::kbd("Esc"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.close_template_editor(cx);
@@ -227,7 +222,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::accent_fg())
+                                .text_color(theme::on_accent())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.save_template_editor(cx);
@@ -262,10 +257,9 @@ fn list_row(
         .truncate()
         .map(|row| {
             if selected {
-                row.bg(theme::accent()).text_color(theme::accent_fg())
+                row.bg(theme::accent()).text_color(theme::on_accent())
             } else {
-                row.text_color(theme::text())
-                    .hover(|s| s.bg(theme::bg_control_hover()))
+                row.text_color(theme::t1()).hover(|s| s.bg(theme::bg_3()))
             }
         })
         .child(title)

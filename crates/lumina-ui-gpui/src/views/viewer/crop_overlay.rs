@@ -53,7 +53,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElemen
             ))
             .absolute()
             .size(px(HANDLE))
-            .bg(theme::text())
+            .bg(theme::t1())
             .rounded(px(2.0))
             .cursor(CursorStyle::Crosshair)
             .on_mouse_down(
@@ -96,7 +96,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<AnyElemen
                 .w(relative(r.w))
                 .h(relative(r.h))
                 .border_1()
-                .border_color(theme::text()),
+                .border_color(theme::t1()),
         )
         .children(handles);
 

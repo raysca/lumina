@@ -34,16 +34,16 @@ pub fn render_zoom_controls(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Op
                 .occlude()
                 .size(px(40.0))
                 .rounded_full()
-                .bg(theme::bg_hud())
+                .bg(theme::bg_float())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .shadow_lg()
-                .hover(|s| s.bg(theme::bg_control_hover()))
+                .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Minimize, px(16.0), theme::text()))
+                .child(render_icon(Icon::Minimize, px(16.0), theme::t1()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.reset_viewer_zoom(cx);
                 })),
@@ -105,8 +105,8 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
         .h(px(height))
         .overflow_hidden()
         .border_1()
-        .border_color(theme::border_strong())
-        .bg(theme::bg_hud())
+        .border_color(theme::line_2())
+        .bg(theme::bg_float())
         .shadow_lg()
         .child(img(image).size_full().object_fit(ObjectFit::Fill))
         .child(
@@ -132,7 +132,7 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
                 .bg(theme::scrim())
                 .font_family(theme::FONT_MONO)
                 .text_size(px(11.0))
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(this.viewer_state.zoom_label()),
         );
     Some(
@@ -182,15 +182,15 @@ fn nav_button(
         .mt(px(-20.0))
         .size(px(40.0))
         .rounded_full()
-        .bg(theme::bg_app())
+        .bg(theme::bg_0())
         .border_1()
-        .border_color(theme::border())
-        .hover(|s| s.bg(theme::bg_control()))
+        .border_color(theme::line())
+        .hover(|s| s.bg(theme::bg_2()))
         .cursor_pointer()
         .flex()
         .items_center()
         .justify_center()
-        .child(render_icon(icon, px(16.0), theme::text_muted()))
+        .child(render_icon(icon, px(16.0), theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.navigate_selection(delta, cx);
         }))
@@ -231,13 +231,8 @@ pub fn render_pip_handoff(
                 .flex_row()
                 .items_center()
                 .gap_3()
-                .child(render_icon(Icon::Pip, px(14.0), theme::text_muted()))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_muted())
-                        .child(action),
-                )
+                .child(render_icon(Icon::Pip, px(14.0), theme::t2()))
+                .child(div().text_xs().text_color(theme::t2()).child(action))
                 .child(
                     theme::control_primary("viewer-pip-handoff-btn")
                         .debug_selector(|| "viewer-pip-handoff-btn".to_string())

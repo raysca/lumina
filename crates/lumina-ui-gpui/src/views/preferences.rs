@@ -20,9 +20,9 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .gap_1()
         .pt(px(6.0))
         .pb(px(10.0))
-        .bg(theme::bg_raised())
+        .bg(theme::bg_2())
         .border_b_1()
-        .border_color(theme::border_subtle());
+        .border_color(theme::line());
     for (candidate, label, icon, selector) in [
         (
             PreferencesTab::General,
@@ -44,11 +44,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         ),
     ] {
         let selected = tab == candidate;
-        let fg = if selected {
-            theme::selection_fg()
-        } else {
-            theme::text_muted()
-        };
+        let fg = if selected { theme::t1() } else { theme::t2() };
         tabs = tabs.child(
             div()
                 .id(selector)
@@ -65,11 +61,11 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .text_xs()
                 .text_color(fg)
                 .bg(if selected {
-                    theme::selection_bg()
+                    theme::bg_3()
                 } else {
-                    theme::bg_raised()
+                    theme::bg_2()
                 })
-                .hover(|s| s.bg(theme::bg_control_hover()))
+                .hover(|s| s.bg(theme::bg_3()))
                 .child(render_icon(icon, px(20.0), fg))
                 .child(label)
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -107,9 +103,9 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .occlude()
                 .w(px(680.0))
                 .h(px((window_h - 48.0).clamp(360.0, 600.0)))
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .overflow_hidden()
@@ -126,7 +122,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                         .flex()
                         .flex_row()
                         .items_center()
-                        .bg(theme::bg_raised())
+                        .bg(theme::bg_2())
                         .child(div().size(px(20.0)))
                         .child(
                             div()
@@ -135,7 +131,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                                 .justify_center()
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(match tab {
                                     PreferencesTab::General => "General",
                                     PreferencesTab::Storage => "Storage",
@@ -152,9 +148,9 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                                 .items_center()
                                 .justify_center()
                                 .cursor_pointer()
-                                .hover(|s| s.bg(theme::bg_control_hover()))
+                                .hover(|s| s.bg(theme::bg_3()))
                                 .tooltip(theme::tooltip_label("Close (Esc)"))
-                                .child(render_icon(Icon::X, px(12.0), theme::text_muted()))
+                                .child(render_icon(Icon::X, px(12.0), theme::t2()))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.close_preferences(cx);
                                 })),
@@ -210,11 +206,7 @@ fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .child(group([row(
             "Editor",
             value(&app.external_editor_label(), false)
-                .text_color(if editor_set {
-                    theme::text()
-                } else {
-                    theme::text_subtle()
-                })
+                .text_color(if editor_set { theme::t1() } else { theme::t2() })
                 .debug_selector(|| "preferences-external-editor".to_string()),
         )
         .child(button(
@@ -261,8 +253,8 @@ fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     .items_center()
                     .gap_1()
                     .text_xs()
-                    .text_color(theme::success_text())
-                    .child(render_icon(Icon::Check, px(12.0), theme::success_text()))
+                    .text_color(theme::positive())
+                    .child(render_icon(Icon::Check, px(12.0), theme::positive()))
                     .child("Cleared")
             }))
             .child(button(
@@ -315,13 +307,13 @@ fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(Icon::Sparkles, px(38.0), theme::accent_fg())),
+                .child(render_icon(Icon::Sparkles, px(38.0), theme::on_accent())),
         )
         .child(
             div()
                 .text_xl()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child("Lumina"),
         )
         .child(
@@ -329,7 +321,7 @@ fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                 .debug_selector(|| "preferences-version".to_string())
                 .font_family(theme::FONT_MONO)
                 .text_xs()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(format!("Version {}", env!("CARGO_PKG_VERSION"))),
         )
         .child(
@@ -337,7 +329,7 @@ fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                 .max_w(px(380.0))
                 .text_sm()
                 .text_center()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(
                     "A local-first photo and video manager. No account, no network, \
                      no telemetry. Your files stay where they are.",
@@ -386,13 +378,13 @@ fn group(rows: impl IntoIterator<Item = Div>) -> Div {
         .flex_col()
         .rounded(theme::RADIUS_LG)
         .border_1()
-        .border_color(theme::border_subtle())
-        .bg(theme::bg_app())
+        .border_color(theme::line())
+        .bg(theme::bg_0())
         .children(rows.into_iter().enumerate().map(|(i, row)| {
             if i == 0 {
                 row
             } else {
-                row.border_t_1().border_color(theme::border_subtle())
+                row.border_t_1().border_color(theme::line())
             }
         }))
 }
@@ -411,7 +403,7 @@ fn row(label: &'static str, value: Div) -> Div {
             div()
                 .w(px(130.0))
                 .flex_shrink_0()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(label),
         )
         .child(value)
@@ -422,7 +414,7 @@ fn value(text: &str, mono: bool) -> Div {
         .flex_1()
         .min_w(px(0.0))
         .truncate()
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .child(text.to_string());
     if mono {
         v.font_family(theme::FONT_MONO).text_xs()
@@ -436,7 +428,7 @@ fn note(text: &'static str) -> Div {
         .mt(px(10.0))
         .mx(px(2.0))
         .text_xs()
-        .text_color(theme::text_subtle())
+        .text_color(theme::t2())
         .child(text)
 }
 

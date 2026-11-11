@@ -33,9 +33,9 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .right(px(16.0))
                 .w(px(210.0))
                 .p_2()
-                .bg(theme::bg_pane())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border())
+                .border_color(theme::line())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .occlude()
@@ -60,16 +60,16 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                         .text_color(if selected {
                             theme::accent()
                         } else {
-                            theme::text()
+                            theme::t1()
                         })
-                        .hover(|s| s.bg(theme::bg_control_hover()))
+                        .hover(|s| s.bg(theme::bg_3()))
                         .child(label.to_string())
                         .child(if selected { "✓" } else { "" })
                         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.set_sort_field(field, cx);
                         }))
                 }))
-                .child(div().h(px(1.0)).bg(theme::border_subtle()).my_1())
+                .child(div().h(px(1.0)).bg(theme::line()).my_1())
                 .child(
                     div()
                         .flex()
@@ -90,12 +90,12 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                                 .text_color(if current.direction == SortDirection::Ascending {
                                     theme::accent()
                                 } else {
-                                    theme::text_muted()
+                                    theme::t2()
                                 })
                                 .bg(if current.direction == SortDirection::Ascending {
-                                    theme::selection_bg()
+                                    theme::bg_3()
                                 } else {
-                                    theme::bg_control()
+                                    theme::bg_2()
                                 })
                                 .child("Ascending ↑")
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -116,12 +116,12 @@ pub fn render_sort_menu_overlay(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                                 .text_color(if current.direction == SortDirection::Descending {
                                     theme::accent()
                                 } else {
-                                    theme::text_muted()
+                                    theme::t2()
                                 })
                                 .bg(if current.direction == SortDirection::Descending {
-                                    theme::selection_bg()
+                                    theme::bg_3()
                                 } else {
-                                    theme::bg_control()
+                                    theme::bg_2()
                                 })
                                 .child("Descending ↓")
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {

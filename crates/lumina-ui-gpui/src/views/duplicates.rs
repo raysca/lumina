@@ -47,7 +47,7 @@ impl DuplicatesView {
             .flex_1()
             .h_full()
             .overflow_y_scroll()
-            .bg(theme::bg_app())
+            .bg(theme::bg_0())
             .p_4()
             .flex()
             .flex_col()
@@ -62,9 +62,9 @@ impl DuplicatesView {
                     .items_center()
                     .p_3()
                     .rounded(theme::RADIUS_LG)
-                    .bg(theme::bg_raised())
+                    .bg(theme::bg_2())
                     .border_1()
-                    .border_color(theme::border_subtle())
+                    .border_color(theme::line())
                     .child(
                         div()
                             .flex()
@@ -81,7 +81,7 @@ impl DuplicatesView {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme::text())
+                                            .text_color(theme::t1())
                                             .child(format!(
                                                 "{total_groups} Duplicate Set{} ({total_items} Items)",
                                                 if total_groups == 1 { "" } else { "s" }
@@ -90,7 +90,7 @@ impl DuplicatesView {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(theme::text_subtle())
+                                            .text_color(theme::t2())
                                             .child(format!(
                                                 "Merging will reclaim {} by moving redundant copies to Recently Deleted.",
                                                 format_bytes(total_savings)
@@ -110,7 +110,7 @@ impl DuplicatesView {
                             .cursor_pointer()
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::accent_fg())
+                            .text_color(theme::on_accent())
                             .child("Merge All Duplicates")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.merge_all_duplicates(cx);
@@ -141,9 +141,9 @@ impl DuplicatesView {
             .id(ElementId::Name(format!("dup-group-{}", group_idx).into()))
             .debug_selector(move || format!("duplicate-group-{}", group_idx))
             .rounded(theme::RADIUS_LG)
-            .bg(theme::bg_pane())
+            .bg(theme::bg_1())
             .border_1()
-            .border_color(theme::border_subtle())
+            .border_color(theme::line())
             .p_3()
             .flex()
             .flex_col()
@@ -165,16 +165,14 @@ impl DuplicatesView {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(format!("Exact Match · {item_count} copies")),
                             )
-                            .child(div().text_xs().text_color(theme::text_subtle()).child(
-                                format!(
-                                    "{} each · {} reclaimable",
-                                    format_bytes(group_size),
-                                    format_bytes(savings)
-                                ),
-                            )),
+                            .child(div().text_xs().text_color(theme::t2()).child(format!(
+                                "{} each · {} reclaimable",
+                                format_bytes(group_size),
+                                format_bytes(savings)
+                            ))),
                     )
                     .child(
                         div()
@@ -185,14 +183,14 @@ impl DuplicatesView {
                             .px_2p5()
                             .py_1()
                             .rounded(theme::RADIUS_SM)
-                            .bg(theme::bg_raised())
-                            .hover(|s| s.bg(theme::accent()).text_color(theme::accent_fg()))
+                            .bg(theme::bg_2())
+                            .hover(|s| s.bg(theme::accent()).text_color(theme::on_accent()))
                             .border_1()
-                            .border_color(theme::border())
+                            .border_color(theme::line())
                             .cursor_pointer()
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .child("Merge")
                             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.merge_duplicate_group(keeper_id, &trash_ids, cx);
@@ -242,15 +240,15 @@ impl DuplicatesView {
             .w(px(200.0))
             .rounded(theme::RADIUS_MD)
             .bg(if is_selected {
-                theme::selection_bg()
+                theme::bg_3()
             } else {
-                theme::bg_raised()
+                theme::bg_2()
             })
             .border_1()
             .border_color(if is_selected {
                 theme::focus_ring()
             } else {
-                theme::border()
+                theme::line()
             })
             .overflow_hidden()
             .flex()
@@ -272,7 +270,7 @@ impl DuplicatesView {
                 div()
                     .w_full()
                     .h(px(130.0))
-                    .bg(theme::bg_app())
+                    .bg(theme::bg_0())
                     .relative()
                     .flex()
                     .items_center()
@@ -283,11 +281,11 @@ impl DuplicatesView {
                     } else {
                         div()
                             .size_full()
-                            .bg(theme::bg_raised())
+                            .bg(theme::bg_2())
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(render_icon(Icon::Image, px(24.0), theme::text_subtle()))
+                            .child(render_icon(Icon::Image, px(24.0), theme::t2()))
                             .into_any_element()
                     })
                     // Keeper / Copy badge
@@ -302,14 +300,14 @@ impl DuplicatesView {
                             .bg(if is_keeper {
                                 theme::accent()
                             } else {
-                                theme::bg_raised()
+                                theme::bg_2()
                             })
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if is_keeper {
-                                theme::accent_fg()
+                                theme::on_accent()
                             } else {
-                                theme::text_muted()
+                                theme::t2()
                             })
                             .child(if is_keeper { "Primary" } else { "Copy" }),
                     ),
@@ -325,21 +323,21 @@ impl DuplicatesView {
                         div()
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .truncate()
                             .child(item.file_name.clone()),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .truncate()
                             .child(format!("{dimensions} · {}", format_bytes(item.file_size))),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .truncate()
                             .child(formatted_date),
                     )
@@ -347,7 +345,7 @@ impl DuplicatesView {
                         div()
                             .text_xs()
                             .font_family(theme::FONT_MONO)
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .truncate()
                             .child(item.parent_dir.clone()),
                     ),

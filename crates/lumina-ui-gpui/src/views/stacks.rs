@@ -89,7 +89,7 @@ pub fn render_duplicates(
         .h_full()
         .flex()
         .flex_col()
-        .bg(theme::bg_app())
+        .bg(theme::bg_0())
         .child(
             div()
                 .id("duplicates-tabs")
@@ -163,10 +163,10 @@ fn notice(selector: &'static str, title: String, body: Option<String>) -> Statef
             div()
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(title),
         )
-        .children(body.map(|b| div().text_xs().text_color(theme::text_subtle()).child(b)))
+        .children(body.map(|b| div().text_xs().text_color(theme::t2()).child(b)))
 }
 
 fn render_similar(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
@@ -218,7 +218,7 @@ fn render_similar(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .px_4()
                 .pt_2()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(t("stacks.hint")),
         )
         .child(
@@ -313,12 +313,12 @@ fn render_stack(
         .aria_selected(focused)
         .relative()
         .rounded(theme::RADIUS_LG)
-        .bg(theme::bg_pane())
+        .bg(theme::bg_1())
         .border_1()
         .border_color(if focused {
             theme::focus_ring()
         } else {
-            theme::border_subtle()
+            theme::line()
         })
         .h(px(CARD_HEIGHT))
         .overflow_hidden()
@@ -352,7 +352,7 @@ fn render_stack(
                         .debug_selector(move || format!("stack-{index}-kind"))
                         .text_xs()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child(title),
                 )
                 .child(
@@ -402,7 +402,7 @@ fn render_stack(
                             .flex()
                             .items_center()
                             .text_xs()
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .child(t_with("stacks.more", &[&more])),
                     )
                 }),
@@ -438,22 +438,20 @@ fn render_member(this: &LuminaApp, index: usize, item: &lumina_core::MediaItem) 
                 .h(px(THUMB_HEIGHT))
                 .rounded(theme::RADIUS_MD)
                 .overflow_hidden()
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .flex()
                 .items_center()
                 .justify_center()
                 .child(match texture {
                     Some(tex) => img(tex).size_full().into_any_element(),
-                    None => {
-                        render_icon(Icon::Image, px(24.0), theme::text_subtle()).into_any_element()
-                    }
+                    None => render_icon(Icon::Image, px(24.0), theme::t2()).into_any_element(),
                 })
                 .child(flag_badge(id as usize, flag, false)),
         )
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .truncate()
                 .child(item.file_name.clone()),
         )

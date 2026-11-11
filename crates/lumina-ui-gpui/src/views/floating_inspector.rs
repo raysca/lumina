@@ -51,12 +51,12 @@ impl Render for FloatingInspectorView {
             None => {
                 return div()
                     .size_full()
-                    .bg(theme::bg_pane())
+                    .bg(theme::bg_1())
                     .flex()
                     .justify_center()
                     .items_center()
                     .text_sm()
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child("Main library window closed")
                     .into_any_element();
             }
@@ -131,8 +131,8 @@ impl Render for FloatingInspectorView {
                 }
             }))
             .size_full()
-            .bg(theme::bg_pane())
-            .text_color(theme::text())
+            .bg(theme::bg_1())
+            .text_color(theme::t1())
             .flex()
             .flex_col()
             .overflow_hidden()
@@ -145,9 +145,9 @@ impl Render for FloatingInspectorView {
                     .w_full()
                     .h(px(38.0))
                     .px_4()
-                    .bg(theme::bg_pane())
+                    .bg(theme::bg_1())
                     .border_b_1()
-                    .border_color(theme::border_subtle())
+                    .border_color(theme::line())
                     .flex()
                     .flex_row()
                     .justify_end()
@@ -172,7 +172,7 @@ impl Render for FloatingInspectorView {
                                     .tooltip(theme::tooltip_label(window_title.clone()))
                                     .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(window_title),
                             ),
                     )
@@ -184,16 +184,12 @@ impl Render for FloatingInspectorView {
                             .tooltip(theme::tooltip_label("Dock into inspector"))
                             .size(px(24.0))
                             .rounded(theme::RADIUS_MD)
-                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .hover(|s| s.bg(theme::bg_3()))
                             .cursor_pointer()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(render_icon(
-                                Icon::ArrowDownToLine,
-                                px(14.0),
-                                theme::text_muted(),
-                            ))
+                            .child(render_icon(Icon::ArrowDownToLine, px(14.0), theme::t2()))
                             .on_click(cx.listener(move |_this, _e: &ClickEvent, window, cx| {
                                 if let Some(app_entity) = app_redock.upgrade() {
                                     app_entity.update(cx, |app, cx| {

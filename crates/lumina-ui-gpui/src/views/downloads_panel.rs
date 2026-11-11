@@ -76,8 +76,8 @@ fn row_button(id: String, label: &'static str, tooltip: &'static str) -> Statefu
         .rounded(theme::RADIUS_SM)
         .cursor_pointer()
         .text_xs()
-        .text_color(theme::text_muted())
-        .hover(|s| s.bg(theme::bg_control_hover()).text_color(theme::text()))
+        .text_color(theme::t2())
+        .hover(|s| s.bg(theme::bg_3()).text_color(theme::t1()))
         .tooltip(theme::tooltip_label(tooltip))
         .child(label)
 }
@@ -111,9 +111,10 @@ fn render_row(
         .flex_row()
         .items_center()
         .gap_2()
-        .when(focused || highlighted, |el| el.bg(theme::selection_bg()))
+        .when(focused || highlighted, |el| el.bg(theme::bg_3()))
         .when(!(focused || highlighted), |el| {
-            el.hover(|s| s.bg(theme::bg_control_hover()))
+            // A lighter step than the focused row (bg_3), so keyboard focus stays visible.
+            el.hover(|s| s.bg(theme::bg_2()))
         })
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.downloads.focused = Some(id);
@@ -130,16 +131,16 @@ fn render_row(
                     div()
                         .truncate()
                         .text_xs()
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child(title),
                 )
                 .child(
                     div()
                         .text_xs()
                         .text_color(if row.state == DownloadState::Failed {
-                            theme::danger_text()
+                            theme::danger()
                         } else {
-                            theme::text_subtle()
+                            theme::t2()
                         })
                         // A failure reason ends with what to do; let it wrap.
                         .map(|el| {
@@ -156,7 +157,7 @@ fn render_row(
                         .h(px(3.0))
                         .w_full()
                         .rounded_full()
-                        .bg(theme::bg_control())
+                        .bg(theme::bg_2())
                         .child(
                             div()
                                 .h_full()
@@ -288,9 +289,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .right(px(16.0))
                 .w(px(320.0))
                 .max_h(relative(0.6))
-                .bg(theme::bg_pane())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border())
+                .border_color(theme::line())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .flex()
@@ -307,7 +308,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .px_3()
                         .py_2()
                         .border_t_1()
-                        .border_color(theme::border_subtle())
+                        .border_color(theme::line())
                         .text_xs()
                         .child(
                             div()

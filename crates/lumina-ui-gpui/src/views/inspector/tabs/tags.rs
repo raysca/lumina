@@ -147,13 +147,13 @@ pub(crate) fn render_suggestions(
                     .border_color(if focused {
                         theme::focus_ring()
                     } else {
-                        theme::border_strong()
+                        theme::line_2()
                     })
-                    .when(focused, |chip| chip.bg(theme::bg_control_hover()))
-                    .hover(|s| s.bg(theme::bg_control_hover()))
+                    .when(focused, |chip| chip.bg(theme::bg_3()))
+                    .hover(|s| s.bg(theme::bg_3()))
                     .cursor_pointer()
                     .text_xs()
-                    .text_color(theme::text_muted())
+                    .text_color(theme::t2())
                     .child(label)
                     .on_click(move |_e, _window, cx| {
                         if let Some(app) = app.upgrade() {
@@ -192,14 +192,14 @@ pub fn render_tags_section(
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(format!("{} tags", tags.len())),
                 ),
         )
         .child(if tags.is_empty() {
             div()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child("No tags yet.")
                 .into_any_element()
         } else {
@@ -223,9 +223,9 @@ pub fn render_tags_section(
                         .px_2()
                         .py_0p5()
                         .rounded(theme::RADIUS_MD)
-                        .bg(theme::selection_bg())
+                        .bg(theme::bg_3())
                         .border_1()
-                        .border_color(theme::selection_border())
+                        .border_color(theme::line_2())
                         .flex()
                         .flex_row()
                         .items_center()
@@ -241,7 +241,7 @@ pub fn render_tags_section(
                                 .cursor_pointer()
                                 .text_xs()
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme::selection_fg())
+                                .text_color(theme::t1())
                                 .child(tag_name.clone())
                                 .on_click(move |_e, _window, cx| {
                                     if let Some(app) = app_filter.upgrade() {
@@ -256,7 +256,7 @@ pub fn render_tags_section(
                                 .id(ElementId::Name(format!("remove-tag-{}", tag_name).into()))
                                 .tooltip(theme::tooltip_label("Remove tag"))
                                 .cursor_pointer()
-                                .child(render_icon(Icon::X, px(10.0), theme::selection_fg()))
+                                .child(render_icon(Icon::X, px(10.0), theme::t1()))
                                 .on_click(move |_e, _window, cx| {
                                     if let Some(app) = app_remove.upgrade() {
                                         app.update(cx, |this, cx| {
@@ -280,18 +280,18 @@ pub fn render_tags_section(
                 .flex()
                 .items_center()
                 .rounded(theme::RADIUS_MD)
-                .bg(theme::bg_app())
+                .bg(theme::bg_0())
                 .border_1()
                 .border_color(if tag_input_active {
                     theme::focus_ring()
                 } else {
-                    theme::border()
+                    theme::line()
                 })
                 .cursor_text()
                 .text_size(theme::TEXT_BODY)
                 .child(match field_input.filter(|_| tag_input_active) {
-                    Some(input) => div().flex_1().text_color(theme::text()).child(input),
-                    None => div().text_color(theme::text_subtle()).child("Add a tag…"),
+                    Some(input) => div().flex_1().text_color(theme::t1()).child(input),
+                    None => div().text_color(theme::t2()).child("Add a tag…"),
                 })
                 .on_click(move |_e, _window, cx| {
                     if !tag_input_active {
@@ -312,8 +312,8 @@ pub fn render_tags_section(
                 .debug_selector(|| "open-tag-manager-link".to_string())
                 .cursor_pointer()
                 .text_xs()
-                .text_color(theme::text_muted())
-                .hover(|s| s.text_color(theme::text()))
+                .text_color(theme::t2())
+                .hover(|s| s.text_color(theme::t1()))
                 .child("Open Tag Manager…")
                 .on_click(move |_e, _window, cx| {
                     if let Some(app) = app_manager.upgrade() {

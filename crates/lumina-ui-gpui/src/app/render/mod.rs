@@ -42,14 +42,10 @@ impl LuminaApp {
             .flex_row()
             .items_center()
             .gap_3()
-            .bg(theme::danger_bg())
+            .bg(theme::danger_soft())
             .border_b_1()
             .border_color(theme::danger_border())
-            .child(render_icon(
-                Icon::TriangleAlert,
-                px(16.0),
-                theme::danger_text(),
-            ))
+            .child(render_icon(Icon::TriangleAlert, px(16.0), theme::danger()))
             .child(
                 div()
                     .flex_1()
@@ -61,14 +57,14 @@ impl LuminaApp {
                             .debug_selector(|| "error-banner-title".to_string())
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .child(title),
                     )
                     .children(detail.map(|detail| {
                         div()
                             .debug_selector(|| "error-banner-detail".to_string())
                             .text_xs()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(detail)
                     })),
             )
@@ -96,7 +92,7 @@ impl LuminaApp {
                     .justify_center()
                     .cursor_pointer()
                     .tooltip(theme::tooltip_label("Dismiss"))
-                    .child(render_icon(Icon::X, px(12.0), theme::text()))
+                    .child(render_icon(Icon::X, px(12.0), theme::t1()))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.dismiss_error(cx);
                     })),
@@ -301,9 +297,9 @@ impl LuminaApp {
                     .max_h(px(560.0))
                     .overflow_y_scroll()
                     .track_scroll(&self.shortcuts_scroll)
-                    .bg(theme::bg_pane())
+                    .bg(theme::bg_1())
                     .border_1()
-                    .border_color(theme::border())
+                    .border_color(theme::line())
                     .rounded(theme::RADIUS_LG)
                     .shadow_2xl()
                     .p_5()
@@ -323,7 +319,7 @@ impl LuminaApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child("Keyboard Shortcuts"),
                             )
                             .child(
@@ -331,7 +327,7 @@ impl LuminaApp {
                                     .id("shortcuts-close")
                                     .debug_selector(|| "shortcuts-close".to_string())
                                     .cursor_pointer()
-                                    .child(render_icon(Icon::X, px(12.0), theme::text()))
+                                    .child(render_icon(Icon::X, px(12.0), theme::t1()))
                                     .tooltip(theme::tooltip_label("Close"))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.close_shortcuts_overlay(cx);
@@ -352,16 +348,13 @@ impl LuminaApp {
                                     .items_center()
                                     .py_1()
                                     .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme::text())
-                                            .child(description),
+                                        div().text_xs().text_color(theme::t1()).child(description),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .font_family(theme::FONT_MONO)
-                                            .text_color(theme::text_muted())
+                                            .text_color(theme::t2())
                                             .child(keys),
                                     )
                             }))
@@ -667,7 +660,7 @@ impl Render for LuminaApp {
                 }),
             )
             .size_full()
-            .bg(theme::bg_viewer())
+            .bg(theme::bg_0())
             .flex()
             .flex_col()
             .relative()
@@ -692,7 +685,7 @@ impl Render for LuminaApp {
                             .w(px(4.0))
                             .h_full()
                             .cursor_col_resize()
-                            .hover(|s| s.bg(theme::border_strong()))
+                            .hover(|s| s.bg(theme::line_2()))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
@@ -750,7 +743,7 @@ impl Render for LuminaApp {
                             .w(px(4.0))
                             .h_full()
                             .cursor_col_resize()
-                            .hover(|s| s.bg(theme::border_strong()))
+                            .hover(|s| s.bg(theme::line_2()))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {

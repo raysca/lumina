@@ -48,9 +48,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
 
     let cancel = |label: &'static str| {
         button("net-import-cancel", label)
-            .bg(theme::bg_control())
-            .hover(|s| s.bg(theme::bg_control_hover()))
-            .text_color(theme::text())
+            .bg(theme::bg_2())
+            .hover(|s| s.bg(theme::bg_3()))
+            .text_color(theme::t1())
             .child(theme::kbd("Esc"))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.close_network_import_dialog(cx);
@@ -68,13 +68,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     div()
                         .text_base()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child("Import Video from URL"),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child("Paste a link to a video: a YouTube video, a page on another video site, or a video file."),
                 )
                 .child(
@@ -84,10 +84,10 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .w_full()
                         .h(px(34.0))
                         .px_3()
-                        .bg(theme::bg_control())
+                        .bg(theme::bg_2())
                         .border_1()
                         .border_color(if error.is_some() {
-                            theme::danger_border()
+                            theme::danger()
                         } else {
                             theme::focus_ring()
                         })
@@ -103,9 +103,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .whitespace_nowrap()
                                 .text_xs()
                                 .text_color(if url.is_empty() {
-                                    theme::text_muted()
+                                    theme::t2()
                                 } else {
-                                    theme::text()
+                                    theme::t1()
                                 })
                                 .children(app.field_input_for(TextTarget::NetworkImportUrl)),
                         )
@@ -118,8 +118,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .py_0p5()
                                 .rounded(theme::RADIUS_SM)
                                 .text_xs()
-                                .text_color(theme::text_muted())
-                                .hover(|s| s.text_color(theme::text()))
+                                .text_color(theme::t2())
+                                .hover(|s| s.text_color(theme::t1()))
                                 .child("✕")
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_network_import_url(String::new(), cx);
@@ -129,7 +129,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .children(error.as_ref().map(|err| {
                     div()
                         .text_xs()
-                        .text_color(theme::danger_text())
+                        .text_color(theme::danger())
                         .child(err.clone())
                 }))
                 .child(
@@ -145,7 +145,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::accent_fg())
+                                .text_color(theme::on_accent())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                     this.submit_network_url(inspect_url.clone(), cx);
@@ -161,13 +161,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 div()
                     .text_base()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .child("Checking Link…"),
             )
             .child(
                 div()
                     .text_xs()
-                    .text_color(theme::text_muted())
+                    .text_color(theme::t2())
                     .child(format!("Checking {}…", host_of(url))),
             )
             .child(
@@ -189,14 +189,14 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     div()
                         .text_base()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child("Already Downloaded"),
                 )
                 .child(
                     div()
                         .debug_selector(|| "net-import-already-downloaded".to_string())
                         .text_xs()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(format!(
                             "You downloaded this on {}.",
                             format_day(prior.imported_epoch_ms)
@@ -212,9 +212,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .child(cancel("Cancel"))
                         .child(
                             button("net-import-download-again", "Download Again")
-                                .bg(theme::bg_control())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
-                                .text_color(theme::text())
+                                .bg(theme::bg_2())
+                                .hover(|s| s.bg(theme::bg_3()))
+                                .text_color(theme::t1())
                                 .child(theme::kbd("⌘↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.download_again_from_dialog(cx);
@@ -225,7 +225,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .bg(theme::accent())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::accent_fg())
+                                .text_color(theme::on_accent())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                     this.show_download_in_library(media_id, cx);
@@ -254,9 +254,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .occlude()
                 .w(px(520.0))
                 .p_5()
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .on_click(cx.listener(|_this, _e: &ClickEvent, _w, _cx| {

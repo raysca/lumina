@@ -404,7 +404,7 @@ impl LuminaApp {
             .debug_selector(|| "slideshow-view".to_string())
             .absolute()
             .inset_0()
-            .bg(theme::bg_viewer())
+            .bg(theme::bg_stage())
             .child(slide)
             .when(state.paused, |stage| {
                 stage.child(
@@ -421,7 +421,7 @@ impl LuminaApp {
                                 .px_3()
                                 .py_1()
                                 .text_sm()
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(t("slideshow.paused")),
                         ),
                 )

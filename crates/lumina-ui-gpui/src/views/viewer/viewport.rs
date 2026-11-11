@@ -311,20 +311,16 @@ impl ViewerViewport {
                             .justify_center()
                             .items_center()
                             .gap_2()
-                            .child(render_icon(
-                                Icon::TriangleAlert,
-                                px(28.0),
-                                theme::text_subtle(),
-                            ))
+                            .child(render_icon(Icon::TriangleAlert, px(28.0), theme::t2()))
                             .child(
                                 div()
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(crate::i18n::t("viewer.preview_failed")),
                             )
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(theme::text_subtle())
+                                    .text_color(theme::t2())
                                     .child(crate::i18n::t("viewer.open_default_hint")),
                             )
                             .into_any_element()
@@ -392,14 +388,14 @@ impl ViewerViewport {
                                 .rounded_full()
                                 .bg(theme::scrim())
                                 .border_1()
-                                .border_color(theme::border_strong())
-                                .hover(|s| s.bg(theme::bg_hud()).border_color(theme::text_muted()))
+                                .border_color(theme::line_2())
+                                .hover(|s| s.bg(theme::bg_float()).border_color(theme::t2()))
                                 .flex()
                                 .justify_center()
                                 .items_center()
                                 .cursor_pointer()
                                 .shadow_xl()
-                                .child(render_icon(Icon::Play, px(28.0), theme::text()))
+                                .child(render_icon(Icon::Play, px(28.0), theme::t1()))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.toggle_video_play(cx);
                                 }))
@@ -419,19 +415,15 @@ impl ViewerViewport {
                         .px_3()
                         .py_2()
                         .rounded(theme::RADIUS_MD)
-                        .bg(theme::bg_hud())
+                        .bg(theme::bg_float())
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(render_icon(
-                            Icon::TriangleAlert,
-                            px(14.0),
-                            theme::danger_text(),
-                        ))
+                        .child(render_icon(Icon::TriangleAlert, px(14.0), theme::danger()))
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child("The original file is missing."),
                         ),
                 )

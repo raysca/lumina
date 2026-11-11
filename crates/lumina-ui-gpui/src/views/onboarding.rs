@@ -8,8 +8,8 @@ use gpui::*;
 pub(crate) fn welcome_column() -> Div {
     div()
         .size_full()
-        .bg(theme::bg_app())
-        .text_color(theme::text())
+        .bg(theme::bg_0())
+        .text_color(theme::t1())
         .flex()
         .flex_col()
         .items_center()
@@ -28,7 +28,7 @@ pub(crate) fn logo() -> Div {
         .justify_center()
         .items_center()
         .shadow_lg()
-        .child(render_icon(Icon::Sparkles, px(26.0), theme::accent_fg()))
+        .child(render_icon(Icon::Sparkles, px(26.0), theme::on_accent()))
 }
 
 /// A click handler for a welcome control.
@@ -104,7 +104,7 @@ impl OnboardingView {
                         .child(
                             div()
                                 .text_base()
-                                .text_color(theme::text_muted())
+                                .text_color(theme::t2())
                                 .child(t("welcome.intro")),
                         ),
                 )
@@ -187,7 +187,7 @@ impl OnboardingView {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(t("welcome.footer")),
                 ),
         )
@@ -242,15 +242,11 @@ fn missing_library_notice(message: String) -> impl IntoElement {
         .gap_3()
         .p_3()
         .rounded(theme::RADIUS_LG)
-        .bg(theme::danger_bg())
+        .bg(theme::danger_soft())
         .border_1()
         .border_color(theme::danger_border())
-        .child(render_icon(
-            Icon::TriangleAlert,
-            px(15.0),
-            theme::danger_text(),
-        ))
-        .child(div().text_sm().text_color(theme::text()).child(message))
+        .child(render_icon(Icon::TriangleAlert, px(15.0), theme::danger()))
+        .child(div().text_sm().text_color(theme::t1()).child(message))
 }
 
 /// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets.
@@ -295,11 +291,9 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
         .cursor_pointer()
         .map(|r| {
             if row.focused {
-                r.bg(theme::selection_bg())
-                    .border_color(theme::focus_ring())
+                r.bg(theme::bg_3()).border_color(theme::focus_ring())
             } else {
-                r.border_color(theme::border_subtle())
-                    .hover(|s| s.bg(theme::bg_control_hover()))
+                r.border_color(theme::line()).hover(|s| s.bg(theme::bg_3()))
             }
         })
         .on_click(row.on_open)
@@ -307,9 +301,9 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
             Icon::Folder,
             px(15.0),
             if row.unavailable {
-                theme::text_disabled()
+                theme::t3()
             } else {
-                theme::text_muted()
+                theme::t2()
             },
         ))
         .child(
@@ -323,9 +317,9 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                         .text_sm()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(if row.unavailable {
-                            theme::text_disabled()
+                            theme::t3()
                         } else {
-                            theme::text()
+                            theme::t1()
                         })
                         .truncate()
                         .child(row.name),
@@ -333,7 +327,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .truncate()
                         .child(row.path),
                 ),
@@ -345,7 +339,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     .debug_selector(move || unavailable_selector.clone())
                     .flex_none()
                     .text_xs()
-                    .text_color(theme::text_muted())
+                    .text_color(theme::t2())
                     .child(t("welcome.not_available")),
             )
         })
@@ -362,7 +356,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(|s| s.bg(theme::bg_control_hover()))
+                .hover(|s| s.bg(theme::bg_3()))
                 .tooltip(theme::tooltip_label(format!(
                     "{} (⌫)",
                     t("welcome.remove_recent")
@@ -372,7 +366,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     cx.stop_propagation();
                     on_remove(event, window, cx);
                 })
-                .child(render_icon(Icon::X, px(13.0), theme::text_muted())),
+                .child(render_icon(Icon::X, px(13.0), theme::t2())),
         )
 }
 
@@ -387,11 +381,11 @@ fn feature(icon: Icon, title: String, body: String) -> impl IntoElement {
                 .size(px(32.0))
                 .flex_none()
                 .rounded(theme::RADIUS_LG)
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(render_icon(icon, px(15.0), theme::text_muted())),
+                .child(render_icon(icon, px(15.0), theme::t2())),
         )
         .child(
             div()
@@ -404,7 +398,7 @@ fn feature(icon: Icon, title: String, body: String) -> impl IntoElement {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(title),
                 )
-                .child(div().text_xs().text_color(theme::text_muted()).child(body)),
+                .child(div().text_xs().text_color(theme::t2()).child(body)),
         )
 }
 
@@ -437,14 +431,14 @@ pub(crate) fn button(
                 b.bg(theme::accent())
                     .border_1()
                     .border_color(theme::accent())
-                    .text_color(theme::accent_fg())
+                    .text_color(theme::on_accent())
                     .hover(|s| s.bg(theme::accent_hover()))
             } else {
-                b.bg(theme::bg_control())
+                b.bg(theme::bg_2())
                     .border_1()
-                    .border_color(theme::border())
-                    .text_color(theme::text())
-                    .hover(|s| s.bg(theme::bg_control_hover()))
+                    .border_color(theme::line())
+                    .text_color(theme::t1())
+                    .hover(|s| s.bg(theme::bg_3()))
             }
         })
         .child(label)

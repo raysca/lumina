@@ -168,7 +168,7 @@ fn load_field<M: InputModeKind>(
     let mut selection: Hsla = crate::theme::accent().into();
     selection.a = 0.4;
     state.set_editor_style(InputEditorStyle {
-        caret: crate::theme::text().into(),
+        caret: crate::theme::t1().into(),
         selection,
         ..Default::default()
     });

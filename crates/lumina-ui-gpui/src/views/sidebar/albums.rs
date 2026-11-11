@@ -48,13 +48,13 @@ pub(super) fn render_albums_section(
                         .w(px(20.0))
                         .h(px(20.0))
                         .rounded(theme::RADIUS_SM)
-                        .hover(|s| s.bg(theme::bg_control()))
+                        .hover(|s| s.bg(theme::bg_2()))
                         .flex()
                         .justify_center()
                         .items_center()
                         .cursor_pointer()
                         .tooltip(theme::tooltip_label(t("album.new_tooltip")))
-                        .child(render_icon(Icon::Plus, px(12.0), theme::text_subtle()))
+                        .child(render_icon(Icon::Plus, px(12.0), theme::t2()))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.new_album(cx);
                         })),
@@ -136,7 +136,7 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
             .rounded(theme::RADIUS_SM)
             .cursor_pointer()
             .tooltip(theme::tooltip_label(t(tooltip)))
-            .child(render_icon(icon, px(11.0), theme::text_subtle()))
+            .child(render_icon(icon, px(11.0), theme::t2()))
     };
 
     div()
@@ -155,15 +155,15 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
         .rounded(theme::RADIUS_MD)
         .cursor_pointer()
         .bg(if is_active {
-            theme::selection_bg()
+            theme::bg_3()
         } else {
-            theme::bg_app()
+            gpui::rgba(0x00000000)
         })
         .hover(move |s| {
             if is_active {
-                s.bg(theme::selection_bg_hover())
+                s.bg(theme::bg_3())
             } else {
-                s.bg(theme::bg_raised())
+                s.bg(theme::bg_2())
             }
         })
         .child(render_icon(Icon::Image, px(16.0), text_color(is_active)).flex_none())
@@ -180,11 +180,7 @@ fn render_album_row(this: &LuminaApp, album: &Album, cx: &mut Context<LuminaApp>
             div()
                 .text_xs()
                 .font_family(theme::FONT_MONO)
-                .text_color(if is_active {
-                    theme::selection_count()
-                } else {
-                    theme::text_subtle()
-                })
+                .text_color(theme::t2())
                 .child(count.to_string()),
         )
         .child(
@@ -233,7 +229,7 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
         .px_2()
         .py_1()
         .rounded(theme::RADIUS_MD)
-        .bg(theme::bg_pane())
+        .bg(theme::bg_1())
         .border_1()
         .border_color(theme::focus_ring())
         .flex()
@@ -246,7 +242,7 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                 .min_w_0()
                 .text_size(theme::TEXT_BODY)
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .children(this.field_input_for(TextTarget::AlbumRename)),
         )
         .child(
@@ -254,7 +250,7 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                 "album-rename-save",
                 Icon::Check,
                 theme::accent(),
-                theme::accent_fg(),
+                theme::on_accent(),
             )
             .aria_label(t("album.rename_tooltip"))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -262,16 +258,11 @@ fn render_rename_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
             })),
         )
         .child(
-            button(
-                "album-rename-cancel",
-                Icon::X,
-                theme::bg_control(),
-                theme::text_muted(),
-            )
-            .aria_label(t("album.rename_cancel"))
-            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.cancel_album_rename(cx);
-            })),
+            button("album-rename-cancel", Icon::X, theme::bg_2(), theme::t2())
+                .aria_label(t("album.rename_cancel"))
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.cancel_album_rename(cx);
+                })),
         )
         .into_any_element()
 }

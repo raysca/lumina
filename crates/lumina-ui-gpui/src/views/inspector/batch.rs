@@ -24,8 +24,8 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
         .id("inspector-batch")
         .debug_selector(|| "inspector-batch".to_string())
         .size_full()
-        .bg(theme::bg_pane())
-        .text_color(theme::text())
+        .bg(theme::bg_1())
+        .text_color(theme::t1())
         .flex()
         .flex_col()
         .child(
@@ -104,9 +104,9 @@ pub fn render_batch(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> AnyElem
                 .px(px(16.0))
                 .py(px(10.0))
                 .border_t_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(format!(
                     "{count} selected · ⌘-click to add or remove · ⇧-click for a range · ⌘A selects all"
                 )),
@@ -176,8 +176,8 @@ fn render_header(app: &LuminaApp) -> Div {
                         .size(px(STACK_TILE))
                         .overflow_hidden()
                         .border_2()
-                        .border_color(theme::bg_pane())
-                        .bg(theme::bg_raised())
+                        .border_color(theme::bg_1())
+                        .bg(theme::bg_2())
                         .children(
                             thumb.map(|image| img(image).size_full().object_fit(ObjectFit::Cover)),
                         )
@@ -201,7 +201,7 @@ fn render_header(app: &LuminaApp) -> Div {
                         .id("batch-mix")
                         .debug_selector(|| "batch-mix".to_string())
                         .text_xs()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(mix),
                 )
                 .child(
@@ -209,7 +209,7 @@ fn render_header(app: &LuminaApp) -> Div {
                         .id("batch-size-range")
                         .debug_selector(|| "batch-size-range".to_string())
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(if summary.pending {
                             "…".to_string()
                         } else {
@@ -260,13 +260,13 @@ fn render_rating(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                 .id("batch-rating-note")
                 .debug_selector(|| "batch-rating-note".to_string())
                 .text_xs()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(note),
         )
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text_disabled())
+                .text_color(theme::t3())
                 .child("· click sets all"),
         )
 }
@@ -298,12 +298,12 @@ fn render_tags(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>) -> Div {
                 .border_color(if input_active {
                     theme::focus_ring()
                 } else {
-                    theme::border()
+                    theme::line()
                 })
                 .text_color(if input_active {
-                    theme::text()
+                    theme::t1()
                 } else {
-                    theme::text_subtle()
+                    theme::t2()
                 })
                 .child(match input {
                     Some(input) => input.into_any_element(),
@@ -353,16 +353,16 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
         .gap(px(6.0))
         .text_xs();
     let chip = if on_all {
-        chip.bg(theme::bg_control())
-            .border_color(theme::border())
-            .text_color(theme::text())
+        chip.bg(theme::bg_2())
+            .border_color(theme::line())
+            .text_color(theme::t1())
             .child(tag.clone())
     } else {
         chip.border_dashed()
-            .border_color(theme::text_disabled())
-            .text_color(theme::text_muted())
+            .border_color(theme::t3())
+            .text_color(theme::t2())
             .cursor_pointer()
-            .hover(|s| s.bg(theme::bg_control_hover()))
+            .hover(|s| s.bg(theme::bg_3()))
             .tooltip(theme::tooltip_label(format!(
                 "On {n} of {total} · add to all"
             )))
@@ -371,7 +371,7 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
                 div()
                     .font_family(theme::FONT_MONO)
                     .text_size(px(11.0))
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child(format!("{n}/{total}")),
             )
             .on_click(move |_e, _w, cx| {
@@ -387,8 +387,8 @@ fn tag_chip(weak_app: WeakEntity<LuminaApp>, tag: String, n: usize, total: usize
             .tooltip(theme::tooltip_label("Remove from all"))
             .cursor_pointer()
             .rounded_full()
-            .hover(|s| s.bg(theme::border_strong()))
-            .child(render_icon(Icon::X, px(10.0), theme::text_subtle()))
+            .hover(|s| s.bg(theme::line_2()))
+            .child(render_icon(Icon::X, px(10.0), theme::t2()))
             .on_click(move |_e, _w, cx| {
                 // A dashed chip would otherwise add the tag.
                 cx.stop_propagation();
@@ -460,16 +460,12 @@ fn render_batch_metadata_row(
         .w_full()
         .p_2()
         .rounded(theme::RADIUS_MD)
-        .bg(if editing {
-            theme::bg_control()
-        } else {
-            theme::bg_raised()
-        })
+        .bg(theme::bg_2())
         .border_1()
         .border_color(if editing {
             theme::focus_ring()
         } else {
-            theme::border_subtle()
+            theme::line()
         })
         .cursor_pointer()
         .flex()
@@ -485,7 +481,7 @@ fn render_batch_metadata_row(
                     div()
                         .text_xs()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(label),
                 )
                 .child(if mixed {
@@ -495,11 +491,11 @@ fn render_batch_metadata_row(
                         .py_0p5()
                         .rounded_full()
                         .border_1()
-                        .border_color(theme::border_strong())
-                        .bg(theme::bg_control())
+                        .border_color(theme::line_2())
+                        .bg(theme::bg_2())
                         .text_xs()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child("Mixed")
                         .into_any_element()
                 } else {
@@ -513,19 +509,14 @@ fn render_batch_metadata_row(
                     .debug_selector(move || format!("{selector}-value"))
                     .text_xs()
                     .font_family(theme::FONT_MONO)
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .child(match input {
                         Some(input) => input.into_any_element(),
                         None => display.into_any_element(),
                     }),
             )
         })
-        .child(
-            div()
-                .text_xs()
-                .text_color(theme::text_disabled())
-                .child(hint),
-        )
+        .child(div().text_xs().text_color(theme::t3()).child(hint))
         .on_click(move |_e, _window, cx| {
             if let Some(app) = app.upgrade() {
                 app.update(cx, |this, cx| match row {

@@ -65,7 +65,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child("Building your library"),
                         )
-                        .child(div().text_sm().text_color(theme::text_muted()).child(root)),
+                        .child(div().text_sm().text_color(theme::t2()).child(root)),
                 )
                 // Progress bar, the current file, "X of Y · about N s left".
                 .child(
@@ -81,12 +81,12 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                 .w_full()
                                 .h(px(6.0))
                                 .rounded_full()
-                                .bg(theme::bg_control())
+                                .bg(theme::bg_2())
                                 .child(
                                     div()
                                         .h_full()
                                         .rounded_full()
-                                        .bg(theme::text_muted())
+                                        .bg(theme::t2())
                                         .w(relative(fraction)),
                                 ),
                         )
@@ -104,7 +104,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                         .flex_1()
                                         .min_w_0()
                                         .truncate()
-                                        .text_color(theme::text_subtle())
+                                        .text_color(theme::t2())
                                         .child(current),
                                 )
                                 .child(
@@ -112,7 +112,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                         .id("first-scan-progress")
                                         .debug_selector(|| "first-scan-progress".to_string())
                                         .flex_none()
-                                        .text_color(theme::text_muted())
+                                        .text_color(theme::t2())
                                         .child(scan.progress_line(Instant::now())),
                                 ),
                         ),
@@ -146,7 +146,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
                                         div()
                                             .size(px(JUST_ADDED_TILE))
                                             .overflow_hidden()
-                                            .bg(theme::bg_raised())
+                                            .bg(theme::bg_2())
                                             .children(thumb.map(|image| {
                                                 img(image).size_full().object_fit(ObjectFit::Cover)
                                             }))
@@ -195,9 +195,9 @@ fn stat(id: &'static str, label: &'static str, value: usize) -> impl IntoElement
         .flex_1()
         .p(px(10.0))
         .rounded(theme::RADIUS_LG)
-        .bg(theme::bg_pane())
+        .bg(theme::bg_1())
         .border_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .flex()
         .flex_col()
         .gap_0p5()
@@ -207,20 +207,15 @@ fn stat(id: &'static str, label: &'static str, value: usize) -> impl IntoElement
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(value.to_string()),
         )
-        .child(
-            div()
-                .text_xs()
-                .text_color(theme::text_subtle())
-                .child(label),
-        )
+        .child(div().text_xs().text_color(theme::t2()).child(label))
 }
 
 /// ✓ done, ● in progress, ○ waiting.
 fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
     let color = if done || active {
-        theme::text()
+        theme::t1()
     } else {
-        theme::text_subtle()
+        theme::t2()
     };
     div()
         .flex()
@@ -230,7 +225,7 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
         .text_sm()
         .text_color(color)
         .child(if done {
-            render_icon(Icon::Check, px(13.0), theme::text_muted()).into_any_element()
+            render_icon(Icon::Check, px(13.0), theme::t2()).into_any_element()
         } else {
             div()
                 .size(px(8.0))
@@ -238,9 +233,9 @@ fn phase(label: &'static str, done: bool, active: bool) -> impl IntoElement {
                 .rounded_full()
                 .map(|d| {
                     if active {
-                        d.bg(theme::text())
+                        d.bg(theme::t1())
                     } else {
-                        d.border_1().border_color(theme::border_strong())
+                        d.border_1().border_color(theme::line_2())
                     }
                 })
                 .into_any_element()

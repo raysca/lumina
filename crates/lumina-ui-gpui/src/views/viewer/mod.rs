@@ -54,7 +54,7 @@ impl MediaViewer {
             .bg(if is_immersive {
                 theme::bg_media()
             } else {
-                theme::bg_viewer()
+                theme::bg_stage()
             })
             .flex()
             .flex_col()
@@ -171,9 +171,9 @@ impl MediaViewer {
                     .right(px(DRAWER_INSET))
                     .bottom(px(DRAWER_INSET))
                     .w(px(DRAWER_WIDTH))
-                    .bg(theme::bg_hud())
+                    .bg(theme::bg_float())
                     .border_1()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .rounded(theme::RADIUS_LG)
                     .shadow_2xl()
                     .overflow_hidden()

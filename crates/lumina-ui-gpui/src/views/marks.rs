@@ -28,7 +28,7 @@ fn mark_row(caption: impl Into<SharedString>, controls: impl IntoElement) -> Div
         .child(
             div()
                 .text_xs()
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(caption.into()),
         )
         .child(controls)
@@ -153,7 +153,7 @@ pub fn flag_row(app: &LuminaApp, item: &MediaItem, cx: &mut Context<LuminaApp>) 
 pub fn flag_badge(item_id_num: usize, flag: Flag, beside_missing: bool) -> AnyElement {
     let (icon, color, label) = match flag {
         Flag::Pick => (Icon::Check, theme::accent(), "Picked"),
-        Flag::Reject => (Icon::X, theme::danger_text(), "Rejected"),
+        Flag::Reject => (Icon::X, theme::danger(), "Rejected"),
         Flag::Unflagged => return Empty.into_any_element(),
     };
     div()
@@ -167,7 +167,7 @@ pub fn flag_badge(item_id_num: usize, flag: Flag, beside_missing: bool) -> AnyEl
         .when(!beside_missing, |d| d.right_1())
         .size(px(20.0))
         .rounded(theme::RADIUS_SM)
-        .bg(rgba(0x00000099))
+        .bg(theme::media_scrim())
         .flex()
         .items_center()
         .justify_center()

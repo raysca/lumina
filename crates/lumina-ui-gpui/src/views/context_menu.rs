@@ -116,9 +116,9 @@ impl MediaContextMenu {
                     .w(px(menu_w))
                     .max_h(px((win_h - 16.0).max(120.0)))
                     .overflow_y_scroll()
-                    .bg(theme::bg_hud())
+                    .bg(theme::bg_float())
                     .border_1()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .rounded(theme::RADIUS_LG)
                     .shadow_2xl()
                     .p_1()
@@ -455,7 +455,7 @@ impl MediaContextMenu {
     }
 
     fn render_divider() -> impl IntoElement {
-        div().h(px(1.0)).bg(theme::border()).my_1().mx_1()
+        div().h(px(1.0)).bg(theme::line()).my_1().mx_1()
     }
 
     fn render_menu_item(
@@ -473,7 +473,7 @@ impl MediaContextMenu {
                 .text_color(if hover.hovered == Some(id_str) && !is_destructive {
                     theme::accent_hint()
                 } else {
-                    theme::text_subtle()
+                    theme::t2()
                 })
                 .child(sc)
                 .into_any_element()
@@ -511,15 +511,15 @@ impl MediaContextMenu {
             .rounded(theme::RADIUS_SM)
             .cursor_pointer()
             .text_color(if is_destructive {
-                theme::danger_text()
+                theme::danger()
             } else if is_hovered {
-                theme::accent_fg()
+                theme::on_accent()
             } else {
-                theme::text()
+                theme::t1()
             })
             .hover(move |s| {
                 if is_destructive {
-                    s.bg(theme::danger_bg())
+                    s.bg(theme::danger_soft())
                 } else {
                     s.bg(theme::accent())
                 }

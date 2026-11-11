@@ -17,7 +17,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
         .debug_selector(|| "tag-manager-detail".to_string())
         .flex_1()
         .min_w(px(0.0))
-        .bg(theme::bg_pane())
+        .bg(theme::bg_1())
         .p(px(24.0))
         .flex()
         .flex_col()
@@ -28,7 +28,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
             .items_center()
             .justify_center()
             .text_sm()
-            .text_color(theme::text_subtle())
+            .text_color(theme::t2())
             .child("Select a tag to see its details.")
             .into_any_element();
     };
@@ -57,7 +57,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
             div()
                 .pt(px(14.0))
                 .border_t_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .flex()
                 .flex_row()
                 .items_center()
@@ -76,7 +76,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                 .child(
                     theme::control(ElementId::Name(format!("modal-del-btn-{tag}").into()))
                         .debug_selector(move || delete_selector.clone())
-                        .text_color(theme::danger_text())
+                        .text_color(theme::danger())
                         .child("Delete Tag")
                         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                             this.delete_tag_globally(delete_tag.clone(), cx);
@@ -87,7 +87,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                         .id("tag-manager-delete-note")
                         .debug_selector(|| "tag-manager-delete-note".to_string())
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(t("tags.delete_note").replace("{items}", &items_label)),
                 )
         })
@@ -109,7 +109,7 @@ fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> i
                 .size(px(10.0))
                 .flex_none()
                 .rounded_full()
-                .bg(theme::text_muted()),
+                .bg(theme::t2()),
         )
         .child(
             div()
@@ -124,13 +124,13 @@ fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> i
                         .truncate()
                         .text_size(px(24.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child(tag.to_string()),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(items_label.to_string()),
                 ),
         )
@@ -168,9 +168,9 @@ fn render_name_field(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) ->
         .border_color(if editing {
             theme::focus_ring()
         } else {
-            theme::border()
+            theme::line()
         })
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .child(match app.field_input_for(TextTarget::TagManagerRename) {
             Some(input) if editing => input.into_any_element(),
             _ => tag.to_string().into_any_element(),
@@ -192,7 +192,7 @@ fn render_move_field(app: &LuminaApp) -> AnyElement {
         ))
         .cursor_text()
         .border_color(theme::focus_ring())
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .children(app.field_input_for(TextTarget::TagManagerRename))
         .into_any_element()
 }
@@ -204,7 +204,7 @@ fn render_touches(items_label: &str) -> impl IntoElement {
         .id("tag-detail-touches")
         .debug_selector(|| "tag-detail-touches".to_string())
         .text_xs()
-        .text_color(theme::text_muted())
+        .text_color(theme::t2())
         .child(format!(
             "Changes {items_label}, including keywords below it. ↵ saves, Esc cancels."
         ))
@@ -231,13 +231,13 @@ fn render_aliases(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> An
                     .px(px(9.0))
                     .rounded_full()
                     .border_1()
-                    .border_color(theme::border_strong())
+                    .border_color(theme::line_2())
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap(px(6.0))
                     .text_xs()
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .child(alias)
                     .child(
                         div()
@@ -247,7 +247,7 @@ fn render_aliases(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> An
                             .aria_label(label.clone())
                             .tooltip(theme::tooltip_label(label))
                             .cursor_pointer()
-                            .child(render_icon(Icon::X, px(10.0), theme::text_muted()))
+                            .child(render_icon(Icon::X, px(10.0), theme::t2()))
                             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                 this.remove_keyword_alias(remove.clone(), cx);
                             })),
@@ -264,13 +264,9 @@ fn render_aliases(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> An
                 .border_color(if editing {
                     theme::focus_ring()
                 } else {
-                    theme::border()
+                    theme::line()
                 })
-                .text_color(if editing {
-                    theme::text()
-                } else {
-                    theme::text_subtle()
-                })
+                .text_color(if editing { theme::t1() } else { theme::t2() })
                 .child(match app.field_input_for(TextTarget::TagManagerAlias) {
                     Some(input) if editing => input.into_any_element(),
                     _ => "Add an alias…".into_any_element(),
@@ -292,7 +288,7 @@ fn render_items(app: &LuminaApp) -> AnyElement {
             .id("tag-manager-items-empty")
             .debug_selector(|| "tag-manager-items-empty".to_string())
             .text_xs()
-            .text_color(theme::text_subtle())
+            .text_color(theme::t2())
             .child("No items carry this tag.")
             .into_any_element();
     }
@@ -315,7 +311,7 @@ fn render_items(app: &LuminaApp) -> AnyElement {
             div()
                 .h(px(64.0))
                 .overflow_hidden()
-                .bg(theme::bg_control())
+                .bg(theme::bg_2())
                 .children(thumb.map(|image| img(image).size_full().object_fit(ObjectFit::Cover)))
         }))
         .into_any_element()

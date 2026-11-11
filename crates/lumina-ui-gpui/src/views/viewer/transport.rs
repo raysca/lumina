@@ -71,12 +71,12 @@ fn transport_button(
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .when(on, |b| b.bg(theme::selection_bg()))
-        .hover(|s| s.bg(theme::bg_control_hover()))
+        .when(on, |b| b.bg(theme::bg_3()))
+        .hover(|s| s.bg(theme::bg_3()))
         .child(render_icon(
             icon,
             px(16.0),
-            if on { theme::accent() } else { theme::text() },
+            if on { theme::accent() } else { theme::t1() },
         ))
 }
 
@@ -158,7 +158,7 @@ impl ViewerTransport {
                 .flex_shrink_0()
                 .font_family(theme::FONT_MONO)
                 .text_size(px(11.0))
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(format_time_fractional(t))
         };
 
@@ -176,9 +176,9 @@ impl ViewerTransport {
             .mt(px(12.0))
             .mb_4()
             .p_3()
-            .bg(theme::bg_app())
+            .bg(theme::bg_0())
             .border_1()
-            .border_color(theme::border())
+            .border_color(theme::line())
             .rounded(theme::RADIUS_LG)
             .relative()
             .flex()
@@ -219,9 +219,9 @@ impl ViewerTransport {
                             .rounded(theme::RADIUS_MD)
                             .border_1()
                             .border_color(if is_scrubbing {
-                                theme::text_muted()
+                                theme::t2()
                             } else {
-                                theme::border()
+                                theme::line()
                             })
                             .relative()
                             .cursor_pointer()
@@ -274,7 +274,7 @@ impl ViewerTransport {
                                 div()
                                     .size_full()
                                     .rounded(theme::RADIUS_MD)
-                                    .bg(theme::bg_control()),
+                                    .bg(theme::bg_2()),
                             )
                             // Loop range, under the played tint.
                             .children(loop_band.map(|(start, width)| {
@@ -287,7 +287,7 @@ impl ViewerTransport {
                                     .w(relative(width))
                                     .border_x_1()
                                     .border_color(theme::accent())
-                                    .bg(theme::selection_bg())
+                                    .bg(theme::bg_3())
                             }))
                             .children(chapter_ticks.into_iter().enumerate().map(|(i, pct)| {
                                 div()
@@ -297,7 +297,7 @@ impl ViewerTransport {
                                     .debug_selector(move || format!("video-chapter-tick-{}", i + 1))
                                     .left(relative(pct))
                                     .w(px(1.5))
-                                    .bg(theme::text_muted())
+                                    .bg(theme::t2())
                             }))
                             // Played portion: a 22% amber tint up to the playhead.
                             .child(
@@ -309,7 +309,7 @@ impl ViewerTransport {
                                     .debug_selector(|| "video-played".to_string())
                                     .w(relative(progress_pct as f32))
                                     .rounded_l_md()
-                                    .bg(rgba(0xF0B54B38)),
+                                    .bg(theme::accent_soft()),
                             )
                             // Hover needle indicator, hidden while a scrub owns the playhead.
                             .child(if let Some(hover_pct) = hover_pct {
@@ -319,7 +319,7 @@ impl ViewerTransport {
                                     .bottom_0()
                                     .left(relative(hover_pct))
                                     .w(px(1.5))
-                                    .bg(theme::text())
+                                    .bg(theme::t1())
                                     .into_any_element()
                             } else {
                                 Empty.into_any_element()
@@ -414,14 +414,12 @@ impl ViewerTransport {
                                     .rounded(theme::RADIUS_MD)
                                     .flex()
                                     .items_center()
-                                    .when(this.video.speed_menu_open, |b| {
-                                        b.bg(theme::selection_bg())
-                                    })
-                                    .hover(|s| s.bg(theme::bg_control_hover()))
+                                    .when(this.video.speed_menu_open, |b| b.bg(theme::bg_3()))
+                                    .hover(|s| s.bg(theme::bg_3()))
                                     .cursor_pointer()
                                     .text_xs()
                                     .font_family(theme::FONT_MONO)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(format_playback_speed(this.video.playback_speed))
                                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                         this.toggle_video_speed_menu(cx);
@@ -483,8 +481,8 @@ impl ViewerTransport {
                                     .mx_1()
                                     .size(px(40.0))
                                     .rounded_full()
-                                    .bg(theme::text())
-                                    .hover(|s| s.bg(theme::text_muted()))
+                                    .bg(theme::t1())
+                                    .hover(|s| s.bg(theme::t2()))
                                     .flex()
                                     .justify_center()
                                     .items_center()
@@ -597,9 +595,9 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
         .bottom(px(40.0))
         .left(px(32.0))
         .w(px(102.0))
-        .bg(theme::bg_hud())
+        .bg(theme::bg_float())
         .border_1()
-        .border_color(theme::border_strong())
+        .border_color(theme::line_2())
         .rounded(theme::RADIUS_LG)
         .shadow_2xl()
         .py_1()
@@ -614,7 +612,7 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 ))
                 .px_3()
                 .py_1()
-                .hover(|s| s.bg(theme::bg_control_hover()))
+                .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
                 .flex()
                 .flex_row()
@@ -622,11 +620,7 @@ fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .gap_1p5()
                 .text_xs()
                 .font_family(theme::FONT_MONO)
-                .text_color(if is_cur {
-                    theme::accent()
-                } else {
-                    theme::text()
-                })
+                .text_color(if is_cur { theme::accent() } else { theme::t1() })
                 .child(if is_cur {
                     div().flex().items_center().child(render_icon(
                         Icon::Check,
@@ -661,13 +655,11 @@ fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl In
         .rounded(theme::RADIUS_MD)
         .flex()
         .items_center()
-        .when(this.video.tracks.audio_menu_open, |b| {
-            b.bg(theme::selection_bg())
-        })
-        .hover(|s| s.bg(theme::bg_control_hover()))
+        .when(this.video.tracks.audio_menu_open, |b| b.bg(theme::bg_3()))
+        .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
         .text_xs()
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .child(label)
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.toggle_audio_menu(cx);
@@ -690,9 +682,9 @@ fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
         .left(px(32.0))
         .min_w(px(160.0))
         .max_w(px(280.0))
-        .bg(theme::bg_hud())
+        .bg(theme::bg_float())
         .border_1()
-        .border_color(theme::border_strong())
+        .border_color(theme::line_2())
         .rounded(theme::RADIUS_LG)
         .shadow_2xl()
         .py_1()
@@ -713,18 +705,14 @@ fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl Into
                 .aria_label(name.clone())
                 .px_3()
                 .py_1()
-                .hover(|s| s.bg(theme::bg_control_hover()))
+                .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_1p5()
                 .text_xs()
-                .text_color(if is_cur {
-                    theme::accent()
-                } else {
-                    theme::text()
-                })
+                .text_color(if is_cur { theme::accent() } else { theme::t1() })
                 .child(if is_cur {
                     div()
                         .debug_selector(|| "video-audio-check".to_string())

@@ -59,9 +59,9 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                 .occlude()
                 .w(px(640.0))
                 .max_h(px(480.0))
-                .bg(theme::bg_raised())
+                .bg(theme::bg_2())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .overflow_hidden()
                 .shadow_2xl()
@@ -82,16 +82,16 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .flex_shrink_0()
                         .px(px(18.0))
                         .border_b_1()
-                        .border_color(theme::border_subtle())
-                        .child(render_icon(Icon::Search, px(16.0), theme::text_muted()))
+                        .border_color(theme::line())
+                        .child(render_icon(Icon::Search, px(16.0), theme::t2()))
                         .child(
                             div()
                                 .flex_1()
                                 .text_base()
                                 .text_color(if query.is_empty() {
-                                    theme::text_subtle()
+                                    theme::t2()
                                 } else {
-                                    theme::text()
+                                    theme::t1()
                                 })
                                 .children(app.field_input_for(TextTarget::Palette)),
                         )
@@ -113,7 +113,7 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                                 .px_3()
                                 .py_4()
                                 .text_xs()
-                                .text_color(theme::text_subtle())
+                                .text_color(theme::t2())
                                 .child("No matches")
                         }))
                         .children(list),
@@ -130,10 +130,10 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                         .items_center()
                         .gap_2()
                         .border_t_1()
-                        .border_color(theme::border_subtle())
-                        .bg(theme::bg_pane())
+                        .border_color(theme::line())
+                        .bg(theme::bg_1())
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(theme::kbd("↑"))
                         .child(theme::kbd("↓"))
                         .child("move")
@@ -163,9 +163,9 @@ fn render_row(
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
     let fg = if is_selected {
-        theme::accent_fg()
+        theme::on_accent()
     } else {
-        theme::text()
+        theme::t1()
     };
     let selector = row.selector;
     let target = row.target;
@@ -185,16 +185,16 @@ fn render_row(
             if is_selected {
                 r.bg(theme::accent())
             } else {
-                r.hover(|s| s.bg(theme::bg_control_hover()))
+                r.hover(|s| s.bg(theme::bg_3()))
             }
         })
         .child(render_icon(
             row.icon,
             px(16.0),
             if is_selected {
-                theme::accent_fg()
+                theme::on_accent()
             } else {
-                theme::text_muted()
+                theme::t2()
             },
         ))
         .child(div().flex_1().text_sm().text_color(fg).child(row.title))
@@ -203,9 +203,9 @@ fn render_row(
                 .text_xs()
                 .font_family(theme::FONT_MONO)
                 .text_color(if is_selected {
-                    theme::accent_fg()
+                    theme::on_accent()
                 } else {
-                    theme::text_subtle()
+                    theme::t2()
                 })
                 .child(row.shortcut),
         )

@@ -16,7 +16,7 @@ fn ring(focused: bool) -> Rgba {
     if focused {
         theme::focus_ring()
     } else {
-        theme::border()
+        theme::line()
     }
 }
 
@@ -42,7 +42,7 @@ pub(super) fn picker(
         .justify_between()
         .border_color(ring(focused))
         .child(fill_and_truncate(div()).child(label.into()))
-        .child(div().text_color(theme::text_subtle()).child("⌄"))
+        .child(div().text_color(theme::t2()).child("⌄"))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.toggle_draft_popup(target, cx);
         }))
@@ -63,9 +63,7 @@ pub(super) fn text_field(
     let text_sel = format!("{selector}-text");
     let content = match (input, text.is_empty()) {
         (Some(input), _) => div().child(input),
-        (None, true) => div()
-            .text_color(theme::text_subtle())
-            .child(placeholder.to_string()),
+        (None, true) => div().text_color(theme::t2()).child(placeholder.to_string()),
         (None, false) => div().child(text.to_string()),
     };
     theme::field(ElementId::Name(selector.into()))
@@ -105,7 +103,7 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
                     .px_2()
                     .py_1()
                     .text_xs()
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child("No tags in this library yet"),
             )
         })
@@ -127,7 +125,7 @@ pub(super) fn square_button(
         .justify_center()
         .border_color(ring(focused))
         .tooltip(theme::tooltip_label(tooltip))
-        .child(render_icon(icon, px(12.0), theme::text_muted()))
+        .child(render_icon(icon, px(12.0), theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
 }
 
@@ -187,9 +185,7 @@ pub(super) fn render_row(
         .gap_1()
         .px(px(8.0))
         .py(px(6.0))
-        .when(i > 0, |el| {
-            el.border_t_1().border_color(theme::border_subtle())
-        })
+        .when(i > 0, |el| el.border_t_1().border_color(theme::line()))
         .child(
             div()
                 .debug_selector(move || format!("album-rule-row-{i}"))
@@ -204,7 +200,7 @@ pub(super) fn render_row(
                 .rounded(theme::RADIUS_LG)
                 .border_1()
                 .border_color(if invalid {
-                    theme::danger_border()
+                    theme::danger()
                 } else {
                     rgba(0x00000000)
                 })

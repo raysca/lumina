@@ -68,13 +68,13 @@ pub fn render_summary_body(
                         .min_w(px(0.0))
                         .text_xs()
                         .font_family(theme::FONT_MONO)
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(item.file_name.clone()),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme::text_subtle())
+                        .text_color(theme::t2())
                         .child(item.formatted_timestamp()),
                 ),
         )
@@ -113,7 +113,7 @@ pub fn render_summary_body(
         .children(place.map(|place| {
             section(
                 "LOCATION",
-                div().text_xs().text_color(theme::text_muted()).child(place),
+                div().text_xs().text_color(theme::t2()).child(place),
             )
         }))
         .children(is_trash.then(|| render_trash_lifecycle(weak_app.clone())));
@@ -122,8 +122,8 @@ pub fn render_summary_body(
         .id("inspector-summary")
         .debug_selector(|| "inspector-summary".to_string())
         .size_full()
-        .bg(theme::bg_pane())
-        .text_color(theme::text())
+        .bg(theme::bg_1())
+        .text_color(theme::t1())
         .flex()
         .flex_col()
         .child(body)
@@ -136,7 +136,7 @@ pub fn render_summary_body(
                 .p_4()
                 .pt_2p5()
                 .border_t_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .flex()
                 .flex_col()
                 .gap_1p5()
@@ -223,7 +223,7 @@ fn render_stat_strip(item: &MediaItem) -> AnyElement {
         .flex_row()
         .rounded(theme::RADIUS_MD)
         .border_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .overflow_hidden()
         .font_family(theme::FONT_MONO)
         .text_xs()
@@ -233,9 +233,7 @@ fn render_stat_strip(item: &MediaItem) -> AnyElement {
                 .py(px(7.0))
                 .flex()
                 .justify_center()
-                .when(i < last, |d| {
-                    d.border_r_1().border_color(theme::border_subtle())
-                })
+                .when(i < last, |d| d.border_r_1().border_color(theme::line()))
                 .child(text)
         }))
         .into_any_element()
@@ -350,12 +348,12 @@ fn render_tags(
         .min_h(px(30.0))
         .p(px(4.0))
         .rounded(theme::RADIUS_MD)
-        .bg(theme::bg_app())
+        .bg(theme::bg_0())
         .border_1()
         .border_color(if input_active {
             theme::focus_ring()
         } else {
-            theme::border()
+            theme::line()
         })
         .flex()
         .flex_row()
@@ -373,7 +371,7 @@ fn render_tags(
                 .pl(px(7.0))
                 .pr(px(3.0))
                 .rounded(theme::RADIUS_SM)
-                .bg(theme::bg_control_hover())
+                .bg(theme::bg_3())
                 .flex()
                 .flex_row()
                 .items_center()
@@ -413,7 +411,7 @@ fn render_tags(
                         .items_center()
                         .justify_center()
                         .cursor_pointer()
-                        .child(render_icon(Icon::X, px(9.0), theme::text_muted()))
+                        .child(render_icon(Icon::X, px(9.0), theme::t2()))
                         .on_click(move |_e, _w, cx| {
                             cx.stop_propagation();
                             if let Some(app) = app.upgrade() {
@@ -433,9 +431,9 @@ fn render_tags(
                 .px(px(4.0))
                 .text_xs()
                 .text_color(if input_active {
-                    theme::text()
+                    theme::t1()
                 } else {
-                    theme::text_subtle()
+                    theme::t2()
                 })
                 .child(match field_input.filter(|_| input_active) {
                     Some(input) => input.into_any_element(),

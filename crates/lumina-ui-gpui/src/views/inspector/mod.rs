@@ -20,7 +20,7 @@ impl InspectorView {
             .w(px(this.inspector_width))
             .h_full()
             .border_l_1()
-            .border_color(theme::border_subtle());
+            .border_color(theme::line());
 
         // v3: a single item gets the one-column summary with no header strip;
         // Info / I closes it; ⌘I or Get Info… opens the full tabbed window.
@@ -33,10 +33,10 @@ impl InspectorView {
             return panel
                 .debug_selector(|| "inspector-empty".to_string())
                 .flex_shrink_0()
-                .bg(theme::bg_pane())
+                .bg(theme::bg_1())
                 .p_4()
                 .text_sm()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child("Nothing selected.")
                 .into_any_element();
         };

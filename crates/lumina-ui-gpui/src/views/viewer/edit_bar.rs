@@ -45,7 +45,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     };
     let draft = session.draft;
     let crop_aspect = session.crop.map(|crop| crop.aspect);
-    let icon = |icon: Icon| render_icon(icon, px(16.0), theme::text());
+    let icon = |icon: Icon| render_icon(icon, px(16.0), theme::t1());
     let exposure = exposure_label(draft.exposure_ev);
 
     let tools = div()
@@ -97,7 +97,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex()
                 .justify_center()
                 .font_family(theme::FONT_MONO)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(exposure),
         )
         .child(
@@ -130,7 +130,7 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 cx,
             )
             .gap_1()
-            .child(render_icon(Icon::Sparkles, px(14.0), theme::text()))
+            .child(render_icon(Icon::Sparkles, px(14.0), theme::t1()))
             .child("Auto"),
         )
         .child(
@@ -172,15 +172,15 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .w_full()
         .h(px(52.0))
         .px_4()
-        .bg(theme::bg_app())
+        .bg(theme::bg_0())
         .border_b_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .flex()
         .flex_row()
         .justify_between()
         .items_center()
         .text_xs()
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .child(
             div()
                 .flex()
@@ -230,12 +230,12 @@ fn aspect_buttons(current: CropAspect, cx: &mut Context<LuminaApp>) -> Div {
     div()
         .w_full()
         .h(px(40.0))
-        .bg(theme::bg_app())
+        .bg(theme::bg_0())
         .border_b_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .justify_center()
         .text_xs()
-        .text_color(theme::text())
+        .text_color(theme::t1())
         .flex()
         .flex_row()
         .items_center()

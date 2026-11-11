@@ -87,9 +87,9 @@ pub(crate) fn confirm_dialog(
                 })
                 .w(px(400.0))
                 .p_5()
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .flex()
@@ -104,11 +104,11 @@ pub(crate) fn confirm_dialog(
                             div()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .truncate()
                                 .child(heading),
                         )
-                        .child(div().text_xs().text_color(theme::text_muted()).child(body)),
+                        .child(div().text_xs().text_color(theme::t2()).child(body)),
                 )
                 .child(
                     div()
@@ -118,9 +118,9 @@ pub(crate) fn confirm_dialog(
                         .gap_2()
                         .child(
                             button("cancel", buttons.0)
-                                .bg(theme::bg_control())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
-                                .text_color(theme::text())
+                                .bg(theme::bg_2())
+                                .hover(|s| s.bg(theme::bg_3()))
+                                .text_color(theme::t1())
                                 .child(theme::kbd("Esc"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                     cancel(this, cx)
@@ -131,7 +131,7 @@ pub(crate) fn confirm_dialog(
                                 .bg(theme::danger())
                                 .hover(|s| s.opacity(0.9))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::bg_0())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                                     confirm(this, cx)

@@ -54,15 +54,15 @@ impl LuminaApp {
             .debug_selector(|| "status-bar".to_string())
             .h(px(28.0))
             .w_full()
-            .bg(theme::bg_app())
+            .bg(theme::bg_0())
             .border_t_1()
-            .border_color(theme::border())
+            .border_color(theme::line())
             .px_4()
             .flex()
             .flex_row()
             .justify_between()
             .items_center()
-            .child(div().text_xs().text_color(theme::text_subtle()).child({
+            .child(div().text_xs().text_color(theme::t2()).child({
                 let sel_count = if !self.selected_indices.is_empty() {
                     self.selected_indices.len()
                 } else if self.selected_item.is_some() {
@@ -87,9 +87,9 @@ impl LuminaApp {
                         div()
                             .text_xs()
                             .text_color(if is_scanning || importing.is_some() {
-                                theme::text()
+                                theme::t1()
                             } else {
-                                theme::text_subtle()
+                                theme::t2()
                             })
                             .child(self.status_right_text()),
                     )
@@ -109,8 +109,8 @@ impl LuminaApp {
                                 .rounded(theme::RADIUS_SM)
                                 .cursor_pointer()
                                 .text_xs()
-                                .text_color(theme::text())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
+                                .text_color(theme::t1())
+                                .hover(|s| s.bg(theme::bg_3()))
                                 .tooltip(theme::tooltip_label("Stop after the current file"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.cancel_running_import(cx);

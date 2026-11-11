@@ -75,24 +75,24 @@ pub fn render_info_tab(
                         .w_full()
                         .px_3()
                         .py_1p5()
-                        .bg(theme::bg_app())
+                        .bg(theme::bg_0())
                         .border_1()
                         .border_color(if title_input_active {
                             theme::focus_ring()
                         } else {
-                            theme::border_subtle()
+                            theme::line()
                         })
                         .hover(|s| {
                             if title_input_active {
                                 s
                             } else {
-                                s.border_color(theme::border_strong())
+                                s.border_color(theme::line_2())
                             }
                         })
                         .rounded(theme::RADIUS_MD)
                         .cursor_text()
                         .text_size(theme::TEXT_BODY)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child(
                             input()
                                 .filter(|_| title_input_active)
@@ -117,27 +117,27 @@ pub fn render_info_tab(
                         .min_h(px(54.0))
                         .px_3()
                         .py_2()
-                        .bg(theme::bg_app())
+                        .bg(theme::bg_0())
                         .border_1()
                         .border_color(if caption_input_active {
                             theme::focus_ring()
                         } else {
-                            theme::border_subtle()
+                            theme::line()
                         })
                         .hover(|s| {
                             if caption_input_active {
                                 s
                             } else {
-                                s.border_color(theme::border_strong())
+                                s.border_color(theme::line_2())
                             }
                         })
                         .rounded(theme::RADIUS_MD)
                         .cursor_text()
                         .text_size(theme::TEXT_BODY)
                         .text_color(if caption_input_active || caption.is_some() {
-                            theme::text()
+                            theme::t1()
                         } else {
-                            theme::text_subtle()
+                            theme::t2()
                         })
                         .child(input().filter(|_| caption_input_active).unwrap_or_else(|| {
                             caption
@@ -165,12 +165,12 @@ pub fn render_info_tab(
                             .w_full()
                             .px_3()
                             .py_1p5()
-                            .bg(theme::bg_app())
+                            .bg(theme::bg_0())
                             .border_1()
                             .border_color(theme::focus_ring())
                             .rounded(theme::RADIUS_MD)
                             .text_size(theme::TEXT_BODY)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .children(input())
                             .into_any_element()
                     } else {
@@ -182,7 +182,7 @@ pub fn render_info_tab(
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(date_taken_str),
                             )
                             .child(
@@ -196,12 +196,12 @@ pub fn render_info_tab(
                                     .items_center()
                                     .rounded(theme::RADIUS_MD)
                                     .border_1()
-                                    .border_color(theme::border())
-                                    .bg(theme::bg_raised())
-                                    .hover(|s| s.bg(theme::bg_control_hover()))
+                                    .border_color(theme::line())
+                                    .bg(theme::bg_2())
+                                    .hover(|s| s.bg(theme::bg_3()))
                                     .cursor_pointer()
                                     .text_xs()
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child("Adjust…")
                                     .on_click(move |_e, _w, cx| {
                                         if let Some(app) = app_date_start.upgrade() {
@@ -273,7 +273,7 @@ pub fn render_info_tab(
                         .w_full()
                         .min_h(px(ROW_MIN_HEIGHT))
                         .border_b_1()
-                        .border_color(theme::border_subtle())
+                        .border_color(theme::line())
                         .py_2()
                         .flex()
                         .flex_row()
@@ -283,7 +283,7 @@ pub fn render_info_tab(
                                 .w(px(LABEL_WIDTH))
                                 .flex_shrink_0()
                                 .text_xs()
-                                .text_color(theme::text_muted())
+                                .text_color(theme::t2())
                                 .child("Path"),
                         )
                         .child(
@@ -295,7 +295,7 @@ pub fn render_info_tab(
                                 .min_w(px(0.0))
                                 .text_xs()
                                 .font_family(theme::FONT_MONO)
-                                .text_color(theme::text_muted())
+                                .text_color(theme::t2())
                                 .child(path_str),
                         ),
                 ),
@@ -345,7 +345,7 @@ fn render_info_field_row(label: &str, content: impl IntoElement) -> impl IntoEle
         .w_full()
         .min_h(px(ROW_MIN_HEIGHT))
         .border_b_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .py_1p5()
         .flex()
         .flex_row()
@@ -355,7 +355,7 @@ fn render_info_field_row(label: &str, content: impl IntoElement) -> impl IntoEle
                 .w(px(LABEL_WIDTH))
                 .flex_shrink_0()
                 .text_xs()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(label.to_string()),
         )
         .child(div().flex_1().min_w(px(0.0)).child(content))
@@ -374,7 +374,7 @@ fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElem
         .w_full()
         .min_h(px(ROW_MIN_HEIGHT))
         .border_b_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         .flex()
         .flex_row()
         .items_center()
@@ -383,7 +383,7 @@ fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElem
                 .w(px(LABEL_WIDTH))
                 .flex_shrink_0()
                 .text_xs()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(label.to_string()),
         )
         .child(
@@ -391,7 +391,7 @@ fn render_value_row(selector: String, label: &str, value: &str) -> impl IntoElem
                 .flex_1()
                 .min_w(px(0.0))
                 .text_xs()
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(value.to_string()),
         )
 }

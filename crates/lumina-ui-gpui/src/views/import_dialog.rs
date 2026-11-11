@@ -35,9 +35,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     };
     let cancel = |label: &'static str| {
         button("import-cancel", label)
-            .bg(theme::bg_control())
-            .hover(|s| s.bg(theme::bg_control_hover()))
-            .text_color(theme::text())
+            .bg(theme::bg_2())
+            .hover(|s| s.bg(theme::bg_3()))
+            .text_color(theme::t1())
             .child(theme::kbd("Esc"))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.cancel_import_dialog(cx);
@@ -48,13 +48,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             .bg(theme::accent())
             .hover(|s| s.opacity(0.9))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme::accent_fg())
+            .text_color(theme::on_accent())
             .child(theme::kbd("↵"))
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.confirm_import(cx);
             }))
     };
-    let line = |text: String| div().text_xs().text_color(theme::text_muted()).child(text);
+    let line = |text: String| div().text_xs().text_color(theme::t2()).child(text);
 
     let mut bar = None;
     let (title, lines, buttons): (String, Vec<String>, Vec<AnyElement>) = match dialog {
@@ -147,9 +147,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 })
                 .w(px(420.0))
                 .p_5()
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .flex()
@@ -164,7 +164,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(title),
                         )
                         .children(lines.into_iter().map(line)),
@@ -191,7 +191,7 @@ pub fn progress_bar(id: &'static str, fraction: f32, width: f32) -> Div {
         .w(px(width))
         .h(px(4.0))
         .rounded(px(2.0))
-        .bg(theme::bg_control())
+        .bg(theme::bg_2())
         .child(
             div()
                 .h_full()
@@ -228,10 +228,10 @@ pub fn render_drop_target(cx: &mut Context<LuminaApp>) -> impl IntoElement {
                 .px_4()
                 .py_2()
                 .rounded(theme::RADIUS_LG)
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .text_base()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child("Drop to import"),
         )
 }

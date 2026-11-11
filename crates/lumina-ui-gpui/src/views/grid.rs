@@ -133,12 +133,12 @@ impl Render for MediaCardTooltip {
             .debug_selector(|| "media-card-name-tooltip".to_string())
             .px_2()
             .py_1()
-            .bg(theme::bg_hud())
+            .bg(theme::bg_float())
             .border_1()
-            .border_color(theme::border())
+            .border_color(theme::line())
             .rounded(theme::RADIUS_MD)
             .text_xs()
-            .text_color(theme::text())
+            .text_color(theme::t1())
             .child(self.name.clone())
     }
 }

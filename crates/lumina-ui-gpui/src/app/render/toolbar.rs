@@ -6,8 +6,7 @@ use crate::theme;
 use crate::views::search_bar::SearchBarView;
 use crate::views::sidebar::AlbumSelection;
 
-/// 28×28 borderless icon button; a fill shows on hover, or the selection
-/// fill while `on`. The tooltip names the action.
+/// 28×28 borderless icon button; a fill shows on hover, or bg-3 while `on`. The tooltip names the action.
 fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
     if on {
         theme::control_on(id).border_color(rgba(0x00000000))
@@ -20,13 +19,9 @@ fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
     .justify_center()
 }
 
-/// Toolbar icons: 16px, row text colour, the selection colour while on.
+/// Toolbar icons: 16px, t2, or t1 while on.
 fn toolbar_icon(icon: crate::icons::Icon, on: bool) -> AnyElement {
-    let color = if on {
-        theme::selection_fg()
-    } else {
-        theme::text_row()
-    };
+    let color = if on { theme::t1() } else { theme::t2() };
     crate::icons::render_icon(icon, px(16.0), color).into_any_element()
 }
 
@@ -121,15 +116,15 @@ impl LuminaApp {
                 12.0
             }))
             .pr_3()
-            .bg(theme::bg_app())
+            .bg(theme::bg_0())
             .border_b_1()
-            .border_color(theme::border_subtle())
+            .border_color(theme::line())
             .flex()
             .flex_row()
             .items_center()
             .gap_2()
             .text_xs()
-            .text_color(theme::text())
+            .text_color(theme::t1())
             // Sidebar toggle button
             .child(
                 icon_button("sidebar-toggle-btn", false)
@@ -166,7 +161,7 @@ impl LuminaApp {
                             .truncate()
                             .text_size(px(15.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .child(if let Some(year) = self.active_year {
                                 year.to_string()
                             } else {
@@ -179,7 +174,7 @@ impl LuminaApp {
                                 .debug_selector(|| "trash-item-count".to_string())
                                 .flex_shrink_0()
                                 .text_xs()
-                                .text_color(theme::text_subtle())
+                                .text_color(theme::t2())
                                 .child(if trash_count == 1 {
                                     "1 item".to_string()
                                 } else {
@@ -223,9 +218,9 @@ impl LuminaApp {
                     .child(
                         theme::control("header-empty-trash-btn")
                             .debug_selector(|| "header-empty-trash-btn".to_string())
-                            .bg(theme::danger_bg())
+                            .bg(theme::danger_soft())
                             .border_color(theme::danger_border())
-                            .text_color(theme::danger_text())
+                            .text_color(theme::danger())
                             .child("Empty Trash…")
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 this.prompt_empty_trash(cx);
@@ -330,7 +325,7 @@ impl LuminaApp {
                             .px(px(3.0))
                             .rounded_full()
                             .bg(theme::accent())
-                            .text_color(theme::accent_fg())
+                            .text_color(theme::on_accent())
                             .text_size(px(9.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .flex()
@@ -371,9 +366,9 @@ impl LuminaApp {
                 .px_4()
                 .py(px(6.0))
                 .border_b_1()
-                .border_color(theme::border_subtle())
+                .border_color(theme::line())
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(
                     "Items stay here until you empty the trash. \
                      Restore puts them back in the library.",

@@ -59,8 +59,8 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
                 .flex_row()
                 .rounded(theme::RADIUS_MD)
                 .border_1()
-                .border_color(theme::border_subtle())
-                .bg(theme::bg_app())
+                .border_color(theme::line())
+                .bg(theme::bg_0())
                 .children(
                     [
                         (aperture, "Aperture"),
@@ -78,20 +78,18 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
                             .flex_col()
                             .items_center()
                             .gap_0p5()
-                            .when(i > 0, |cell| {
-                                cell.border_l_1().border_color(theme::border_subtle())
-                            })
+                            .when(i > 0, |cell| cell.border_l_1().border_color(theme::line()))
                             .child(
                                 div()
                                     .text_size(px(15.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .child(value.unwrap_or_else(|| "—".to_string())),
                             )
                             .child(
                                 div()
                                     .text_size(px(11.0))
-                                    .text_color(theme::text_label())
+                                    .text_color(theme::t3())
                                     .child(label),
                             )
                     }),
@@ -109,7 +107,7 @@ pub fn render_camera_tab(item: &MediaItem, details: Option<&InfoDetails>) -> Any
         } else {
             div()
                 .text_xs()
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child("This file has no camera information.")
                 .into_any_element()
         })

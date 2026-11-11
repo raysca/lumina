@@ -33,7 +33,7 @@ pub fn render_list(
         .flex()
         .flex_col()
         .border_r_1()
-        .border_color(theme::border_subtle())
+        .border_color(theme::line())
         // Filter field and sort.
         .child(
             div()
@@ -72,11 +72,11 @@ pub fn render_list(
                 .gap(px(10.0))
                 .border_t_1()
                 .border_b_1()
-                .border_color(theme::border_subtle())
-                .bg(theme::bg_pane())
+                .border_color(theme::line())
+                .bg(theme::bg_1())
                 .text_xs()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text_subtle())
+                .text_color(theme::t2())
                 .child(
                     checkbox("tag-manager-select-all", all_state)
                         .debug_selector(|| "tag-manager-select-all".to_string())
@@ -100,17 +100,13 @@ pub fn render_list(
                 .overflow_y_scroll()
                 .track_scroll(&app.tag_manager.list_scroll)
                 .when(rows.is_empty(), |list| {
-                    list.child(
-                        div()
-                            .p_4()
-                            .text_xs()
-                            .text_color(theme::text_subtle())
-                            .child(if app.library_tag_counts.is_empty() {
-                                "No tags yet. Add tags from the inspector."
-                            } else {
-                                "No tags match the filter."
-                            }),
-                    )
+                    list.child(div().p_4().text_xs().text_color(theme::t2()).child(
+                        if app.library_tag_counts.is_empty() {
+                            "No tags yet. Add tags from the inspector."
+                        } else {
+                            "No tags match the filter."
+                        },
+                    ))
                 })
                 .children(rows.iter().map(|row| render_row(app, row, max_count, cx))),
         )
@@ -135,15 +131,15 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
             this.tag_manager.search_focused = true;
             cx.notify();
         }))
-        .child(render_icon(Icon::Search, px(12.0), theme::text_subtle()))
+        .child(render_icon(Icon::Search, px(12.0), theme::t2()))
         .child(
             div()
                 .flex_1()
                 .min_w_0()
                 .text_color(if search.is_empty() {
-                    theme::text_subtle()
+                    theme::t2()
                 } else {
-                    theme::text()
+                    theme::t1()
                 })
                 .child(match app.field_input_for(TextTarget::TagManagerSearch) {
                     Some(input) => input.into_any_element(),
@@ -207,7 +203,7 @@ fn render_row(
     .gap(px(10.0))
     .rounded(px(0.0))
     .border_b_1()
-    .border_color(theme::border_subtle())
+    .border_color(theme::line())
     .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
         this.focus_tag_manager_tag(row_tag.clone(), cx);
     }))
@@ -236,9 +232,7 @@ fn render_row(
             .min_w(px(0.0))
             .truncate()
             .text_sm()
-            .when(row.count.is_none(), |name| {
-                name.text_color(theme::text_muted())
-            })
+            .when(row.count.is_none(), |name| name.text_color(theme::t2()))
             .child(row.label().to_string()),
     )
     .child(
@@ -255,7 +249,7 @@ fn render_row(
                     .w(px(USAGE_BAR))
                     .h(px(4.0))
                     .rounded_full()
-                    .bg(theme::bg_control())
+                    .bg(theme::bg_2())
                     .child(
                         div()
                             .id(ElementId::Name(format!("tag-usage-fill-{tag}").into()))
@@ -263,18 +257,14 @@ fn render_row(
                             .w(px(fill))
                             .h_full()
                             .rounded_full()
-                            .bg(theme::text_muted()),
+                            .bg(theme::t2()),
                     ),
             )
             .child(
                 div()
                     .font_family(theme::FONT_MONO)
                     .text_xs()
-                    .text_color(if focused {
-                        theme::selection_fg()
-                    } else {
-                        theme::text_subtle()
-                    })
+                    .text_color(if focused { theme::t1() } else { theme::t2() })
                     .child(row.count.map_or(String::new(), |n| n.to_string())),
             ),
     )
@@ -308,12 +298,12 @@ fn checkbox(id: impl Into<ElementId>, state: Check) -> Stateful<Div> {
             Check::On => b
                 .bg(theme::accent())
                 .border_color(theme::accent())
-                .child(render_icon(Icon::Check, px(11.0), theme::accent_fg())),
+                .child(render_icon(Icon::Check, px(11.0), theme::on_accent())),
             Check::Mixed => b
                 .bg(theme::accent())
                 .border_color(theme::accent())
-                .child(div().w(px(8.0)).h(px(2.0)).bg(theme::accent_fg())),
-            Check::Off => b.border_color(theme::border_strong()),
+                .child(div().w(px(8.0)).h(px(2.0)).bg(theme::on_accent())),
+            Check::Off => b.border_color(theme::line_2()),
         })
 }
 
@@ -332,14 +322,14 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
         .items_center()
         .gap_2()
         .border_t_1()
-        .border_color(theme::border_strong())
-        .bg(theme::bg_hud())
+        .border_color(theme::line_2())
+        .bg(theme::bg_float())
         .child(
             div()
                 .flex_1()
                 .text_xs()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(format!("{n} selected")),
         )
         .child(
@@ -364,8 +354,8 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(|s| s.bg(theme::danger_bg()))
-                .child(render_icon(Icon::Trash, px(14.0), theme::danger_text()))
+                .hover(|s| s.bg(theme::danger_soft()))
+                .child(render_icon(Icon::Trash, px(14.0), theme::danger()))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.bulk_delete_tags(selected.clone(), cx);
                 })),
@@ -381,8 +371,8 @@ fn render_bulk_bar(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEle
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(|s| s.bg(theme::bg_control_hover()))
-                .child(render_icon(Icon::X, px(14.0), theme::text_muted()))
+                .hover(|s| s.bg(theme::bg_3()))
+                .child(render_icon(Icon::X, px(14.0), theme::t2()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.clear_tag_manager_selection(cx);
                 })),

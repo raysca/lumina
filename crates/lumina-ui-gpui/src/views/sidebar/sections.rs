@@ -34,7 +34,7 @@ pub(super) fn render_library_section(
                         .w(px(20.0))
                         .h(px(20.0))
                         .rounded(theme::RADIUS_SM)
-                        .hover(|s| s.bg(theme::bg_control()))
+                        .hover(|s| s.bg(theme::bg_2()))
                         .flex()
                         .justify_center()
                         .items_center()
@@ -43,7 +43,7 @@ pub(super) fn render_library_section(
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::Folder,
                             px(12.0),
-                            theme::text_subtle(),
+                            theme::t2(),
                         ))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.pick_folder_dialog(cx);
@@ -82,15 +82,15 @@ pub(super) fn render_user_smart_album_row(
         .rounded(theme::RADIUS_MD)
         .cursor_pointer()
         .bg(if is_active {
-            theme::selection_bg()
+            theme::bg_3()
         } else {
-            theme::bg_app()
+            gpui::rgba(0x00000000)
         })
         .hover(move |s| {
             if is_active {
-                s.bg(theme::selection_bg_hover())
+                s.bg(theme::bg_3())
             } else {
-                s.bg(theme::bg_raised())
+                s.bg(theme::bg_2())
             }
         })
         .child(
@@ -111,11 +111,7 @@ pub(super) fn render_user_smart_album_row(
             div()
                 .text_xs()
                 .font_family(theme::FONT_MONO)
-                .text_color(if is_active {
-                    theme::selection_count()
-                } else {
-                    theme::text_subtle()
-                })
+                .text_color(theme::t2())
                 .child(count.to_string()),
         )
         .child(
@@ -132,7 +128,7 @@ pub(super) fn render_user_smart_album_row(
                 .child(crate::icons::render_icon(
                     crate::icons::Icon::Pencil,
                     px(11.0),
-                    theme::text_subtle(),
+                    theme::t2(),
                 ))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
@@ -153,7 +149,7 @@ pub(super) fn render_user_smart_album_row(
                 .child(crate::icons::render_icon(
                     crate::icons::Icon::X,
                     px(11.0),
-                    theme::text_subtle(),
+                    theme::t2(),
                 ))
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     cx.stop_propagation();
@@ -192,7 +188,7 @@ pub(super) fn render_smart_albums_section(
                         .w(px(20.0))
                         .h(px(20.0))
                         .rounded(theme::RADIUS_SM)
-                        .hover(|s| s.bg(theme::bg_control()).text_color(theme::text()))
+                        .hover(|s| s.bg(theme::bg_2()).text_color(theme::t1()))
                         .flex()
                         .justify_center()
                         .items_center()
@@ -201,7 +197,7 @@ pub(super) fn render_smart_albums_section(
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::Plus,
                             px(12.0),
-                            theme::text_subtle(),
+                            theme::t2(),
                         ))
                         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.open_album_builder(cx);
@@ -298,7 +294,7 @@ pub(super) fn render_tags_section(
                             .px_2()
                             .py_1()
                             .rounded(theme::RADIUS_MD)
-                            .bg(theme::bg_pane())
+                            .bg(theme::bg_1())
                             .border_1()
                             .border_color(theme::focus_ring())
                             .flex()
@@ -313,7 +309,7 @@ pub(super) fn render_tags_section(
                                     .min_w_0()
                                     .text_size(theme::TEXT_BODY)
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::text())
+                                    .text_color(theme::t1())
                                     .children(this.field_input_for(TextTarget::TagRename)),
                             )
                             .child(
@@ -334,16 +330,16 @@ pub(super) fn render_tags_section(
                                             .bg(theme::accent())
                                             .hover(|s| {
                                                 s.bg(theme::accent_hover())
-                                                    .text_color(theme::accent_fg())
+                                                    .text_color(theme::on_accent())
                                             })
                                             .cursor_pointer()
                                             .text_xs()
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme::accent_fg())
+                                            .text_color(theme::on_accent())
                                             .child(render_icon(
                                                 Icon::Check,
                                                 px(10.0),
-                                                theme::accent_fg(),
+                                                theme::on_accent(),
                                             ))
                                             .on_click(cx.listener(
                                                 |this, _e: &ClickEvent, _w, cx| {
@@ -359,12 +355,12 @@ pub(super) fn render_tags_section(
                                             .px_1p5()
                                             .py_0p5()
                                             .rounded(theme::RADIUS_SM)
-                                            .bg(theme::bg_control())
-                                            .hover(|s| s.bg(theme::bg_control_hover()))
+                                            .bg(theme::bg_2())
+                                            .hover(|s| s.bg(theme::bg_3()))
                                             .cursor_pointer()
                                             .text_xs()
-                                            .text_color(theme::text_muted())
-                                            .child(render_icon(Icon::X, px(10.0), theme::text_muted()))
+                                            .text_color(theme::t2())
+                                            .child(render_icon(Icon::X, px(10.0), theme::t2()))
                                             .on_click(cx.listener(
                                                 |this, _e: &ClickEvent, _w, cx| {
                                                     this.cancel_tag_rename(cx);
@@ -388,15 +384,15 @@ pub(super) fn render_tags_section(
                             .h(px(26.0))
                             .rounded(theme::RADIUS_MD)
                             .bg(if is_active {
-                                theme::selection_bg()
+                                theme::bg_3()
                             } else {
-                                theme::bg_app()
+                                gpui::rgba(0x00000000)
                             })
                             .hover(move |s| {
                                 if is_active {
-                                    s.bg(theme::selection_bg_hover())
+                                    s.bg(theme::bg_3())
                                 } else {
-                                    s.bg(theme::bg_raised())
+                                    s.bg(theme::bg_2())
                                 }
                             })
                             .flex()
@@ -440,9 +436,9 @@ pub(super) fn render_tags_section(
                                                 FontWeight::NORMAL
                                             })
                                             .text_color(if is_active {
-                                                theme::selection_fg()
+                                                theme::t1()
                                             } else {
-                                                theme::text_row()
+                                                theme::t2()
                                             })
                                             .child(label),
                                     )
@@ -463,11 +459,7 @@ pub(super) fn render_tags_section(
                                 div()
                                     .text_xs()
                                     .font_family(theme::FONT_MONO)
-                                    .text_color(if is_active {
-                                        theme::selection_count()
-                                    } else {
-                                        theme::text_subtle()
-                                    })
+                                    .text_color(theme::t2())
                                     .child(tag_count.map_or(String::new(), |n| n.to_string())),
                             )
                             .into_any_element()
@@ -520,13 +512,12 @@ fn map_toggle(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .px_1p5()
         .rounded(theme::RADIUS_SM)
         .border_1()
-        .border_color(theme::selection_border())
+        .border_color(theme::line_2())
         .when(on_map, |t| {
-            t.bg(theme::accent()).text_color(theme::accent_fg())
+            t.bg(theme::accent()).text_color(theme::on_accent())
         })
         .when(!on_map, |t| {
-            t.text_color(theme::selection_fg())
-                .hover(|s| s.bg(theme::selection_bg_hover()))
+            t.text_color(theme::t1()).hover(|s| s.bg(theme::bg_3()))
         })
         .text_xs()
         .child(label)
@@ -539,9 +530,9 @@ fn map_toggle(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement
 /// Label and icon colour of a sidebar row.
 pub(super) fn text_color(is_active: bool) -> Rgba {
     if is_active {
-        theme::selection_fg()
+        theme::t1()
     } else {
-        theme::text_row()
+        theme::t2()
     }
 }
 
@@ -557,15 +548,11 @@ fn render_nav_item(
     let icon_selector = format!("sidebar-nav-{label_text}-icon");
     let aria_label = nav::aria_label(&label_text, count);
     let bg_color = if is_active {
-        theme::selection_bg()
+        theme::bg_3()
     } else {
-        theme::bg_app()
+        gpui::rgba(0x00000000)
     };
-    let count_color = if is_active {
-        theme::selection_count()
-    } else {
-        theme::text_subtle()
-    };
+    let count_color = theme::t2();
 
     div()
         .id(ElementId::Name(label_text.clone().into()))
@@ -578,9 +565,9 @@ fn render_nav_item(
         .bg(bg_color)
         .hover(move |s| {
             if is_active {
-                s.bg(theme::selection_bg_hover())
+                s.bg(theme::bg_3())
             } else {
-                s.bg(theme::bg_raised())
+                s.bg(theme::bg_2())
             }
         })
         .cursor_pointer()

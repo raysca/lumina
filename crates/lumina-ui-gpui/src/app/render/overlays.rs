@@ -25,7 +25,7 @@ impl LuminaApp {
             return Empty.into_any_element();
         }
         let in_trash = self.selection == AlbumSelection::Trash;
-        let separator = || div().w(px(1.0)).h(px(20.0)).bg(theme::border_strong());
+        let separator = || div().w(px(1.0)).h(px(20.0)).bg(theme::line_2());
 
         let mut dock = div()
             .id("multi-select-action-dock")
@@ -34,9 +34,9 @@ impl LuminaApp {
             // which would clear the selection the dock acts on.
             .occlude()
             .p(px(5.0))
-            .bg(theme::bg_hud())
+            .bg(theme::bg_float())
             .border_1()
-            .border_color(theme::border_strong())
+            .border_color(theme::line_2())
             .rounded(theme::RADIUS_LG)
             .shadow_lg()
             .flex()
@@ -49,7 +49,7 @@ impl LuminaApp {
                     .debug_selector(|| "batch-dock-count".to_string())
                     .px(px(10.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme::text())
+                    .text_color(theme::t1())
                     .child(format!("{} selected", self.batch_summary.count)),
             )
             .child(separator());
@@ -57,7 +57,7 @@ impl LuminaApp {
         if in_trash {
             dock = dock
                 .child(
-                    dock_button("batch-restore-dock-btn", "Restore", None, theme::text()).on_click(
+                    dock_button("batch-restore-dock-btn", "Restore", None, theme::t1()).on_click(
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.restore_selected_trash(cx);
                         }),
@@ -69,7 +69,7 @@ impl LuminaApp {
                         "batch-delete-immediately-dock-btn",
                         "Delete Immediately",
                         None,
-                        theme::danger_text(),
+                        theme::danger(),
                     )
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.prompt_delete_selected(cx);
@@ -78,7 +78,7 @@ impl LuminaApp {
         } else {
             dock = dock
                 .child(
-                    dock_button("batch-fav-dock-btn", "Favorite", None, theme::text()).on_click(
+                    dock_button("batch-fav-dock-btn", "Favorite", None, theme::t1()).on_click(
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             if this.selected_indices.len() > 1 {
                                 this.batch_toggle_favorite(cx);
@@ -89,7 +89,7 @@ impl LuminaApp {
                     ),
                 )
                 .child(
-                    dock_button("batch-tags-dock-btn", "Tag", None, theme::text())
+                    dock_button("batch-tags-dock-btn", "Tag", None, theme::t1())
                         .gap(px(6.0))
                         .child(theme::kbd("T").debug_selector(|| "batch-tags-dock-key".to_string()))
                         .tooltip(theme::tooltip_label("Tag selection (T)"))
@@ -98,7 +98,7 @@ impl LuminaApp {
                         })),
                 )
                 .child(
-                    dock_button("batch-export-dock-btn", "Export…", None, theme::text()).on_click(
+                    dock_button("batch-export-dock-btn", "Export…", None, theme::t1()).on_click(
                         cx.listener(|this, _e: &ClickEvent, _w, cx| {
                             this.export_pick_folder(lumina_core::ExportPreset::Originals, cx);
                         }),
@@ -111,7 +111,7 @@ impl LuminaApp {
                         "batch-trash-dock-btn",
                         "",
                         Some(Icon::Trash),
-                        theme::danger_text(),
+                        theme::danger(),
                     )
                     .tooltip(theme::tooltip_label("Delete… (⌫)"))
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -133,16 +133,11 @@ impl LuminaApp {
             .justify_center()
             .child(
                 dock.child(
-                    dock_button(
-                        "batch-clear-dock-btn",
-                        "",
-                        Some(Icon::X),
-                        theme::text_muted(),
-                    )
-                    .tooltip(theme::tooltip_label("Clear selection (Esc)"))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.clear_selection(cx);
-                    })),
+                    dock_button("batch-clear-dock-btn", "", Some(Icon::X), theme::t2())
+                        .tooltip(theme::tooltip_label("Clear selection (Esc)"))
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.clear_selection(cx);
+                        })),
                 ),
             )
             .into_any_element()
@@ -229,7 +224,7 @@ fn share_dock_button(cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
     let label = crate::i18n::t("share.dock_tooltip");
     // Labelled here, not by dock_button: the title comes from the catalog.
     Some(
-        dock_button("batch-share-dock-btn", "", None, theme::text())
+        dock_button("batch-share-dock-btn", "", None, theme::t1())
             .px(px(10.0))
             .child(crate::i18n::t("command.share"))
             .role(Role::Button)
@@ -264,7 +259,7 @@ fn dock_button(
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(theme::bg_control_hover()))
+        .hover(|s| s.bg(theme::bg_3()))
         .text_color(color)
         .children(icon.map(|icon| render_icon(icon, px(14.0), color)))
         .when(!label.is_empty(), |d| d.child(label))

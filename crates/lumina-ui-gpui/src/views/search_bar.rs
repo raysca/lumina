@@ -31,11 +31,11 @@ impl SearchBarView {
             .border_color(if focused {
                 theme::focus_ring()
             } else if active {
-                theme::border_strong()
+                theme::line_2()
             } else {
-                theme::border()
+                theme::line()
             })
-            .bg(theme::bg_viewer())
+            .bg(theme::bg_stage())
             .cursor_text()
             .text_size(theme::TEXT_BODY)
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
@@ -46,7 +46,7 @@ impl SearchBarView {
             .child(crate::icons::render_icon(
                 crate::icons::Icon::Search,
                 px(13.0),
-                theme::text_subtle(),
+                theme::t2(),
             ))
             .child(
                 div()
@@ -54,9 +54,9 @@ impl SearchBarView {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_color(if focused || active {
-                        theme::text()
+                        theme::t1()
                     } else {
-                        theme::text_subtle()
+                        theme::t2()
                     })
                     .child(match input {
                         Some(input) => input.into_any_element(),
@@ -71,7 +71,7 @@ impl SearchBarView {
                     .gap_1p5()
                     .child(
                         div()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(format!("{}", this.displayed_count())),
                     )
                     .child(
@@ -82,17 +82,17 @@ impl SearchBarView {
                             .w(px(16.0))
                             .h(px(16.0))
                             .rounded_full()
-                            .bg(theme::bg_control())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .bg(theme::bg_2())
+                            .hover(|s| s.bg(theme::bg_3()))
                             .flex()
                             .justify_center()
                             .items_center()
                             .cursor_pointer()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(crate::icons::render_icon(
                                 crate::icons::Icon::X,
                                 px(10.0),
-                                theme::text_muted(),
+                                theme::t2(),
                             ))
                             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                 cx.stop_propagation();
@@ -140,9 +140,9 @@ impl SearchBarView {
             .right(px(0.0))
             .w(px(320.0))
             .p(px(4.0))
-            .bg(theme::bg_pane())
+            .bg(theme::bg_1())
             .border_1()
-            .border_color(theme::border())
+            .border_color(theme::line())
             .rounded(theme::RADIUS_LG)
             .shadow_2xl()
             .occlude()
@@ -170,12 +170,11 @@ impl SearchBarView {
                     .text_xs()
                     .cursor_pointer();
                 let row = if active {
-                    row.bg(theme::selection_bg())
-                        .text_color(theme::selection_fg())
-                        .hover(|style| style.bg(theme::selection_bg_hover()))
+                    row.bg(theme::bg_3()).text_color(theme::t1())
                 } else {
-                    row.text_color(theme::text())
-                        .hover(|style| style.bg(theme::bg_control_hover()))
+                    // A lighter step than the keyboard row, so Enter's target stays clear.
+                    row.text_color(theme::t1())
+                        .hover(|style| style.bg(theme::bg_2()))
                 };
                 let row = row.gap_1p5().children(recent[index].then(|| {
                     // ponytail: no clock icon in the set; rotate-ccw reads as history.
@@ -184,7 +183,7 @@ impl SearchBarView {
                         .child(crate::icons::render_icon(
                             crate::icons::Icon::RotateCcw,
                             px(11.0),
-                            theme::text_subtle(),
+                            theme::t2(),
                         ))
                 }));
                 row.child(suggestion).on_click(cx.listener(
@@ -203,7 +202,7 @@ impl SearchBarView {
                     .px_2()
                     .py_1()
                     .text_xs()
-                    .text_color(theme::text_muted())
+                    .text_color(theme::t2())
                     .child(text)
             }));
 

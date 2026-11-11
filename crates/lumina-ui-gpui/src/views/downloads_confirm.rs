@@ -65,9 +65,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 })
                 .w(px(400.0))
                 .p_5()
-                .bg(theme::bg_dialog())
+                .bg(theme::bg_1())
                 .border_1()
-                .border_color(theme::border_strong())
+                .border_color(theme::line_2())
                 .rounded(theme::RADIUS_LG)
                 .shadow_2xl()
                 .flex()
@@ -82,10 +82,10 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::text())
+                                .text_color(theme::t1())
                                 .child(format!("{running} {question}")),
                         )
-                        .child(div().text_xs().text_color(theme::text_muted()).child(
+                        .child(div().text_xs().text_color(theme::t2()).child(
                             "They stop now and wait in your downloads, paused, for you to resume.",
                         )),
                 )
@@ -97,9 +97,9 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .gap_2()
                         .child(
                             button("downloads-confirm-cancel", "Cancel")
-                                .bg(theme::bg_control())
-                                .hover(|s| s.bg(theme::bg_control_hover()))
-                                .text_color(theme::text())
+                                .bg(theme::bg_2())
+                                .hover(|s| s.bg(theme::bg_3()))
+                                .text_color(theme::t1())
                                 .child(theme::kbd("Esc"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.dismiss_downloads_prompt(cx);
@@ -110,7 +110,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .bg(theme::accent())
                                 .hover(|s| s.bg(theme::accent_hover()))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::accent_fg())
+                                .text_color(theme::on_accent())
                                 .child(theme::kbd("↵"))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.confirm_downloads_prompt(cx);

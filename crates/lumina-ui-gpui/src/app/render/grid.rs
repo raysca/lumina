@@ -248,8 +248,8 @@ impl LuminaApp {
                                 } else {
                                     linear_gradient(
                                         135.0,
-                                        linear_color_stop(theme::bg_raised(), 0.0),
-                                        linear_color_stop(theme::bg_app(), 1.0),
+                                        linear_color_stop(theme::bg_2(), 0.0),
+                                        linear_color_stop(theme::bg_0(), 1.0),
                                     )
                                 };
 
@@ -442,16 +442,16 @@ impl LuminaApp {
                                                             div()
                                                                 .size(px(34.0))
                                                                 .rounded_full()
-                                                                .bg(theme::bg_control())
+                                                                .bg(theme::bg_2())
                                                                 .border_1()
-                                                                .border_color(theme::border_subtle())
+                                                                .border_color(theme::line())
                                                                 .flex()
                                                                 .items_center()
                                                                 .justify_center()
                                                                 .child(render_icon(
                                                                     Icon::TriangleAlert,
                                                                     px(17.0),
-                                                                    theme::text_subtle(),
+                                                                    theme::t2(),
                                                                 )),
                                                         )
                                                         .child(
@@ -463,7 +463,7 @@ impl LuminaApp {
                                                                     )
                                                                 })
                                                                 .text_xs()
-                                                                .text_color(theme::text_subtle())
+                                                                .text_color(theme::t2())
                                                                 .child(crate::i18n::t("grid.no_preview")),
                                                         )
                                                         .into_any_element()
@@ -487,9 +487,9 @@ impl LuminaApp {
                                                             div()
                                                                 .size(px(34.0))
                                                                 .rounded_full()
-                                                                .bg(theme::bg_control())
+                                                                .bg(theme::bg_2())
                                                                 .border_1()
-                                                                .border_color(theme::border_subtle())
+                                                                .border_color(theme::line())
                                                                 .flex()
                                                                 .items_center()
                                                                 .justify_center()
@@ -500,7 +500,7 @@ impl LuminaApp {
                                                                         Icon::Image
                                                                     },
                                                                     px(17.0),
-                                                                    theme::text_subtle(),
+                                                                    theme::t2(),
                                                                 )),
                                                         )
                                                         .into_any_element()
@@ -519,7 +519,7 @@ impl LuminaApp {
                                                         .h(px(18.0))
                                                         .px(px(5.0))
                                                         .rounded(theme::RADIUS_SM)
-                                                        .bg(rgba(0x00000099))
+                                                        .bg(theme::media_scrim())
                                                         .flex()
                                                         .flex_row()
                                                         .items_center()
@@ -528,7 +528,7 @@ impl LuminaApp {
                                                             d.child(render_icon(
                                                                 Icon::HeartFilled,
                                                                 px(10.0),
-                                                                rgb(0xffffff),
+                                                                theme::on_media(),
                                                             ))
                                                         })
                                                         .when(item_rating > 0, |d| {
@@ -537,7 +537,7 @@ impl LuminaApp {
                                                                     render_icon(
                                                                         Icon::StarFilled,
                                                                         px(9.0),
-                                                                        rgb(0xffffff),
+                                                                        theme::on_media(),
                                                                     )
                                                                 }),
                                                             ))
@@ -562,7 +562,7 @@ impl LuminaApp {
                                                             .right_1()
                                                             .size(px(20.0))
                                                             .rounded(theme::RADIUS_SM)
-                                                            .bg(rgba(0x00000099))
+                                                            .bg(theme::media_scrim())
                                                             .flex()
                                                             .items_center()
                                                             .justify_center()
@@ -570,7 +570,7 @@ impl LuminaApp {
                                                             .child(render_icon(
                                                                 Icon::TriangleAlert,
                                                                 px(12.0),
-                                                                theme::danger_text(),
+                                                                theme::danger(),
                                                             )),
                                                     )
                                                 })
@@ -589,18 +589,18 @@ impl LuminaApp {
                                                         .h(px(18.0))
                                                         .px(px(5.0))
                                                         .rounded(theme::RADIUS_SM)
-                                                        .bg(rgba(0x00000099))
+                                                        .bg(theme::media_scrim())
                                                         .text_size(px(11.0))
                                                         .font_family(theme::FONT_MONO)
                                                         .flex()
                                                         .flex_row()
                                                         .items_center()
                                                         .gap(px(3.0))
-                                                        .text_color(rgb(0xffffff))
+                                                        .text_color(theme::on_media())
                                                         .child(render_icon(
                                                             Icon::Play,
                                                             px(9.0),
-                                                            rgb(0xffffff),
+                                                            theme::on_media(),
                                                         ))
                                                         .child(dur_text)
                                                         .into_any_element()
@@ -692,18 +692,15 @@ impl LuminaApp {
                     div()
                         .text_size(px(15.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme::text())
+                        .text_color(theme::t1())
                         .child(month_title(year, month)),
                 )
                 .children(count.map(|n| {
-                    div()
-                        .text_xs()
-                        .text_color(theme::text_subtle())
-                        .child(if n == 1 {
-                            "1 item".to_string()
-                        } else {
-                            format!("{n} items")
-                        })
+                    div().text_xs().text_color(theme::t2()).child(if n == 1 {
+                        "1 item".to_string()
+                    } else {
+                        format!("{n} items")
+                    })
                 }))
                 .into_any_element(),
         )
@@ -748,7 +745,7 @@ impl LuminaApp {
                         window.paint_quad(
                             fill(
                                 Bounds::from_corners(top_left, bottom_right),
-                                theme::selection_wash(),
+                                theme::accent_soft(),
                             )
                             .border_widths(px(1.0))
                             .border_color(theme::accent()),
@@ -946,19 +943,19 @@ impl LuminaApp {
                         div()
                             .size(px(44.0))
                             .rounded(theme::RADIUS_LG)
-                            .bg(theme::bg_pane())
+                            .bg(theme::bg_1())
                             .border_1()
-                            .border_color(theme::border_subtle())
+                            .border_color(theme::line())
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(render_icon(icon, px(20.0), theme::text_subtle())),
+                            .child(render_icon(icon, px(20.0), theme::t2())),
                     )
                     .child(
                         div()
                             .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::text())
+                            .text_color(theme::t1())
                             .text_center()
                             .child(title),
                     )
@@ -966,7 +963,7 @@ impl LuminaApp {
                         div()
                             .max_w(px(360.0))
                             .text_xs()
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .text_center()
                             .child(body),
                     )
@@ -977,7 +974,7 @@ impl LuminaApp {
                             .truncate()
                             .font_family(theme::FONT_MONO)
                             .text_xs()
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .child(path)
                     }))
                     // Each search term is a chip; removing one widens the search.
@@ -996,11 +993,11 @@ impl LuminaApp {
                                         .px(px(10.0))
                                         .rounded_full()
                                         .border_1()
-                                        .border_color(theme::selection_border())
-                                        .bg(theme::selection_bg())
-                                        .hover(|s| s.bg(theme::selection_bg_hover()))
+                                        .border_color(theme::line_2())
+                                        .bg(theme::bg_3())
+                                        .hover(|s| s.bg(theme::bg_3()))
                                         .text_xs()
-                                        .text_color(theme::selection_fg())
+                                        .text_color(theme::t1())
                                         .cursor_pointer()
                                         .flex()
                                         .flex_row()
@@ -1010,11 +1007,7 @@ impl LuminaApp {
                                         .font_family(theme::FONT_MONO)
                                         .gap_1p5()
                                         .child(term.clone())
-                                        .child(render_icon(
-                                            Icon::X,
-                                            px(10.0),
-                                            theme::selection_fg(),
-                                        ))
+                                        .child(render_icon(Icon::X, px(10.0), theme::t1()))
                                         .on_click(cx.listener(
                                             move |this, _e: &ClickEvent, _w, cx| {
                                                 this.perform_empty_action(
@@ -1103,12 +1096,12 @@ fn edited_badge(item_id_num: usize) -> impl IntoElement {
         .left_1()
         .size(px(20.0))
         .rounded(theme::RADIUS_SM)
-        .bg(rgba(0x00000099))
+        .bg(theme::media_scrim())
         .flex()
         .items_center()
         .justify_center()
         .tooltip(theme::tooltip_label("Edited"))
-        .child(render_icon(Icon::Sliders, px(12.0), rgb(0xffffff)))
+        .child(render_icon(Icon::Sliders, px(12.0), theme::on_media()))
 }
 
 #[cfg(test)]

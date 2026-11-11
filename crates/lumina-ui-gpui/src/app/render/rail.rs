@@ -20,7 +20,7 @@ impl LuminaApp {
             .h_full()
             .flex_shrink_0()
             .border_l_1()
-            .border_color(rgb(0x222326))
+            .border_color(theme::line())
             .flex()
             .flex_col()
             .items_center()
@@ -52,13 +52,13 @@ impl LuminaApp {
                         FontWeight::NORMAL
                     })
                     .text_color(if is_active {
-                        theme::accent_fg()
+                        theme::on_accent()
                     } else {
-                        theme::text_subtle()
+                        theme::t2()
                     })
                     .hover(move |s| {
                         if !is_active {
-                            s.text_color(theme::text())
+                            s.text_color(theme::t1())
                         } else {
                             s
                         }

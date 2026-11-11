@@ -44,7 +44,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .inset_0()
         // The grid and toolbar beneath must not take clicks.
         .occlude()
-        .bg(theme::bg_viewer())
+        .bg(theme::bg_stage())
         .flex()
         .flex_col()
         .on_mouse_up(
@@ -95,19 +95,19 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
         .items_center()
         .gap_3()
         .border_b_1()
-        .border_color(theme::border())
+        .border_color(theme::line())
         .child(
             div()
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(format!("{} ({})", t("compare.title"), state.items.len())),
         )
         .child(
             div()
                 .flex_1()
                 .text_xs()
-                .text_color(theme::text_muted())
+                .text_color(theme::t2())
                 .child(t("compare.hint")),
         )
         .child(
@@ -119,7 +119,7 @@ fn header(state: &CompareState, cx: &mut Context<LuminaApp>) -> impl IntoElement
                     "{} (Esc)",
                     t("compare.close")
                 )))
-                .child(render_icon(Icon::X, px(12.0), theme::text()))
+                .child(render_icon(Icon::X, px(12.0), theme::t1()))
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                     this.close_compare(cx);
                 })),
@@ -177,7 +177,7 @@ fn pane(
         }
         None if state.failed.contains(&item.id) => div()
             .text_sm()
-            .text_color(theme::text_subtle())
+            .text_color(theme::t2())
             .child(t("viewer.preview_failed"))
             .into_any_element(),
         None => Empty.into_any_element(),
@@ -243,7 +243,7 @@ fn pane(
                         .flex_1()
                         .min_w_0()
                         .overflow_hidden()
-                        .text_color(theme::text_muted())
+                        .text_color(theme::t2())
                         .child(item.file_name.clone()),
                 )
                 .child(div().text_color(theme::accent()).child(marks)),

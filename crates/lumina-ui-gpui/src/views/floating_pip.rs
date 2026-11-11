@@ -44,8 +44,8 @@ fn pip_icon_button(id: &'static str, icon: Icon, tooltip: &'static str) -> State
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(theme::bg_control_hover()))
-        .child(render_icon(icon, px(12.0), theme::text()))
+        .hover(|s| s.bg(theme::bg_3()))
+        .child(render_icon(icon, px(12.0), theme::t1()))
 }
 
 impl FloatingPipPlayerView {
@@ -89,7 +89,7 @@ impl Render for FloatingPipPlayerView {
                     .justify_center()
                     .items_center()
                     .text_sm()
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child("Main library window closed")
                     .into_any_element();
             }
@@ -151,7 +151,7 @@ impl Render for FloatingPipPlayerView {
                             .justify_center()
                             .items_center()
                             .text_xs()
-                            .text_color(theme::text_subtle())
+                            .text_color(theme::t2())
                             .child(if has_player {
                                 "Loading video…"
                             } else {
@@ -185,7 +185,7 @@ impl Render for FloatingPipPlayerView {
                             .truncate()
                             .text_size(px(11.0))
                             .font_family(theme::FONT_MONO)
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(title),
                     )
                     .child(
@@ -292,7 +292,7 @@ impl Render for FloatingPipPlayerView {
                                     .w_full()
                                     .h(px(3.0))
                                     .rounded_full()
-                                    .bg(theme::bg_control_hover())
+                                    .bg(theme::bg_3())
                                     .child(
                                         div()
                                             .h_full()
@@ -308,7 +308,7 @@ impl Render for FloatingPipPlayerView {
                             .pr_2()
                             .text_size(px(11.0))
                             .font_family(theme::FONT_MONO)
-                            .text_color(theme::text_muted())
+                            .text_color(theme::t2())
                             .child(time_display),
                     ),
             )

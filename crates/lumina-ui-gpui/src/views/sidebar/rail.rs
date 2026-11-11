@@ -18,9 +18,9 @@ pub(super) fn render_rail(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl
         .w(px(SIDEBAR_COLLAPSED_WIDTH))
         .flex_none()
         .h_full()
-        .bg(theme::bg_app())
+        .bg(theme::bg_1())
         .border_r_1()
-        .border_color(theme::border())
+        .border_color(theme::line())
         .flex()
         .flex_col()
         .items_center()
@@ -47,11 +47,7 @@ fn render_rail_button(
     let tooltip = t("sidebar.rail_tooltip")
         .replace("{label}", entry.label)
         .replace("{n}", &entry.count.to_string());
-    let icon_color = if is_active {
-        theme::selection_fg()
-    } else {
-        theme::text_row()
-    };
+    let icon_color = if is_active { theme::t1() } else { theme::t2() };
     let pill = div()
         .size_full()
         .rounded(theme::RADIUS_MD)
@@ -68,7 +64,7 @@ fn render_rail_button(
     let selection = entry.selection;
     // The active fill sits on the button itself so its hover can replace it.
     let button = if is_active {
-        div().bg(theme::selection_bg())
+        div().bg(theme::bg_3())
     } else {
         div()
     };
@@ -84,9 +80,9 @@ fn render_rail_button(
         .cursor_pointer()
         .hover(move |s| {
             if is_active {
-                s.bg(theme::selection_bg_hover())
+                s.bg(theme::bg_3())
             } else {
-                s.bg(theme::bg_raised())
+                s.bg(theme::bg_2())
             }
         })
         .child(pill)

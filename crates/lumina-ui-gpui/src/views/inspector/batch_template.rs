@@ -19,13 +19,13 @@ pub fn render_template_section(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>)
             .h(px(26.0))
             .px_2()
             .rounded(theme::RADIUS_MD)
-            .bg(theme::bg_control())
-            .hover(|s| s.bg(theme::bg_control_hover()))
+            .bg(theme::bg_2())
+            .hover(|s| s.bg(theme::bg_3()))
             .cursor_pointer()
             .flex()
             .items_center()
             .text_xs()
-            .text_color(theme::text())
+            .text_color(theme::t1())
             .child(label)
     };
     let manage = weak_app.clone();
@@ -42,7 +42,7 @@ pub fn render_template_section(app: &LuminaApp, weak_app: WeakEntity<LuminaApp>)
             .child(
                 div()
                     .text_xs()
-                    .text_color(theme::text_muted())
+                    .text_color(theme::t2())
                     .child(t("template.none_yet")),
             )
             .child(manage_button);

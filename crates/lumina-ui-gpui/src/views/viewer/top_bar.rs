@@ -34,8 +34,8 @@ fn bar_button(id: &'static str, tooltip: &'static str, on: bool) -> Stateful<Div
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .when(on, |b| b.bg(theme::selection_bg()))
-        .hover(|s| s.bg(theme::bg_control_hover()))
+        .when(on, |b| b.bg(theme::bg_3()))
+        .hover(|s| s.bg(theme::bg_3()))
 }
 
 impl ViewerTopBar {
@@ -79,7 +79,7 @@ impl ViewerTopBar {
                 .min_w(px(40.0))
                 .truncate()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::text())
+                .text_color(theme::t1())
                 .child(date_title),
         );
 
@@ -91,7 +91,7 @@ impl ViewerTopBar {
                     .debug_selector(|| "viewer-position".to_string())
                     .ml_1()
                     .flex_shrink_0()
-                    .text_color(theme::text_subtle())
+                    .text_color(theme::t2())
                     .child(format!("({} of {})", index + 1, this.displayed_count())),
             );
         }
@@ -103,15 +103,15 @@ impl ViewerTopBar {
             .w_full()
             .h(px(52.0))
             .px_4()
-            .bg(theme::bg_app())
+            .bg(theme::bg_0())
             .border_b_1()
-            .border_color(theme::border_subtle())
+            .border_color(theme::line())
             .flex()
             .flex_row()
             .justify_between()
             .items_center()
             .text_xs()
-            .text_color(theme::text())
+            .text_color(theme::t1())
             // Left Section: Traffic Light Offset + the single Back control.
             .child(
                 div()
@@ -130,18 +130,18 @@ impl ViewerTopBar {
                             .tooltip(theme::tooltip_label("Back to Library (Esc)"))
                             .px_2p5()
                             .py_1()
-                            .bg(theme::bg_control())
+                            .bg(theme::bg_2())
                             .border_1()
-                            .border_color(theme::border())
-                            .hover(|s| s.bg(theme::bg_control_hover()))
+                            .border_color(theme::line())
+                            .hover(|s| s.bg(theme::bg_3()))
                             .rounded(theme::RADIUS_MD)
                             .cursor_pointer()
                             .flex()
                             .flex_row()
                             .items_center()
                             .gap_1p5()
-                            .text_color(theme::text())
-                            .child(render_icon(Icon::ChevronLeft, px(13.0), theme::text()))
+                            .text_color(theme::t1())
+                            .child(render_icon(Icon::ChevronLeft, px(13.0), theme::t1()))
                             .child(if compact {
                                 Empty.into_any_element()
                             } else {
@@ -193,11 +193,7 @@ impl ViewerTopBar {
                                             Icon::Heart
                                         },
                                         px(16.0),
-                                        if is_fav {
-                                            theme::rating()
-                                        } else {
-                                            theme::text_muted()
-                                        },
+                                        if is_fav { theme::rating() } else { theme::t2() },
                                     ),
                                     this.mark_pop.heart(Some(item.id)),
                                 ))
@@ -213,9 +209,9 @@ impl ViewerTopBar {
                                     Icon::Info,
                                     "Info (I)",
                                     if is_inspector_open {
-                                        theme::selection_fg()
+                                        theme::t1()
                                     } else {
-                                        theme::text_muted()
+                                        theme::t2()
                                     },
                                     is_inspector_open,
                                 )
