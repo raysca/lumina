@@ -2,26 +2,15 @@ use std::cmp;
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::{MediaType, SmartAlbum, SystemAlbum};
+use lumina_core::{SmartAlbum, SystemAlbum};
 
-use crate::app::types::format_duration_badge;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    media_card_tooltip, BAND_TO_ROW, CARD_PADDING, CARD_ROW_GAP, COMPACT_TILE, GRID_CARD_GAP,
-    GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT, UNSELECTED_CARD_OPACITY,
+    BAND_TO_ROW, CARD_ROW_GAP, GRID_CARD_GAP, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT,
 };
-use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
-
-/// Inset of the badges from the tile's edges.
-const BADGE_INSET: f32 = 8.0;
-/// Height of the pill badges (duration, RAW, meta).
-const BADGE_H: f32 = 18.0;
-/// How far the selection ring reaches outside the tile: a 1px gap plus the
-/// 2px border. Half the 6px tile gap, so adjacent selected rings never meet.
-const RING_OUTSET: f32 = 3.0;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
 /// can render every state without duplicating click wiring.
@@ -117,13 +106,11 @@ impl LuminaApp {
             // plain wheel is left alone so the uniform list keeps scrolling.
             // The handler runs in the bubble phase after the list's own scroll
             // listener, and restores the offset it would have scrolled.
-            .on_scroll(cx.listener(
-                |this, event: &ScrollEvent, window, cx| {
-                    if this.zoom_grid_with_wheel(event, window, cx) {
-                        cx.stop_propagation();
-                    }
-                },
-            ))
+            .on_scroll(cx.listener(|this, event: &ScrollEvent, window, cx| {
+                if this.zoom_grid_with_wheel(event, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
             // Pinch walks the same density ladder at the pinch centre.
             .on_pinch(cx.listener(|this, event: &PinchEvent, _window, cx| {
                 this.zoom_grid_with_pinch(event, cx);
@@ -198,23 +185,24 @@ impl LuminaApp {
                                 &[][..]
                             };
 
-                            let (row_textures, missing_items) = if let Some(ref state) = this.grid_state {
-                                let mut cache = state.texture_cache.lock();
-                                let mut texs = Vec::with_capacity(items.len());
-                                let mut missing = Vec::new();
-                                for item in items {
-                                    if let Some(tex) = cache.get(&item.id).cloned() {
-                                        texs.push(Some(tex));
-                                    } else {
-                                        texs.push(None);
-                                        missing.push(item);
+                            let (row_textures, missing_items) =
+                                if let Some(ref state) = this.grid_state {
+                                    let mut cache = state.texture_cache.lock();
+                                    let mut texs = Vec::with_capacity(items.len());
+                                    let mut missing = Vec::new();
+                                    for item in items {
+                                        if let Some(tex) = cache.get(&item.id).cloned() {
+                                            texs.push(Some(tex));
+                                        } else {
+                                            texs.push(None);
+                                            missing.push(item);
+                                        }
                                     }
-                                }
-                                drop(cache);
-                                (texs, missing)
-                            } else {
-                                (vec![None; items.len()], Vec::new())
-                            };
+                                    drop(cache);
+                                    (texs, missing)
+                                } else {
+                                    (vec![None; items.len()], Vec::new())
+                                };
 
                             for missing_item in missing_items {
                                 this.queue_thumbnail_request_item(missing_item);
@@ -222,473 +210,23 @@ impl LuminaApp {
 
                             let mut row_cards = Vec::with_capacity(cols);
                             for (offset_in_row, item) in items.iter().enumerate() {
-                                let card_index = start + offset_in_row;
-                                let item_id_num = item.id.0 as usize;
-                                let is_selected = this.is_index_selected(card_index)
-                                    || this
-                                        .selected_item
-                                        .as_ref()
-                                        .map(|i| i.id == item.id)
-                                        .unwrap_or(false);
-                                let is_fav = item.is_favorite;
-                                let item_rating = this.get_item_rating(item);
-                                let item_color = this.get_item_color_label(item);
-                                let is_video = item.media_type == MediaType::Video;
-                                let is_missing = this.missing_items.contains(&item.id);
-                                let is_edited = this.edits.edited_ids.contains(&item.id);
-                                let flag = this.item_flag(item.id);
-                                let is_raw = item.media_type == MediaType::Raw;
-                                // Selection mode: two or more selected. A single
-                                // plain selection is browsing and dims nothing.
-                                let selection_mode = this.selected_indices.len() > 1;
-                                let card_opacity = if selection_mode && !is_selected {
-                                    UNSELECTED_CARD_OPACITY
-                                } else {
-                                    1.0
-                                };
-
                                 let texture = row_textures.get(offset_in_row).cloned().flatten();
-
-                                let item_for_click = item.clone();
-                                let item_for_context = item.clone();
-                                let dur_text = format_duration_badge(item.duration_secs());
-                                let has_duration = is_video && !dur_text.is_empty();
-                                let has_type_badge = has_duration || is_raw;
-                                let compact = photo_side < COMPACT_TILE;
-                                let show_fav = is_fav && !compact;
-                                let show_edited = is_edited && !compact;
-                                let fit_mode = this.card_fit_mode;
-                                let in_trash = this.selection == AlbumSelection::Trash;
-                                let has_texture = texture.is_some();
-                                let thumb_failed = !has_texture
-                                    && this
-                                        .grid_state
-                                        .as_ref()
-                                        .is_some_and(|s| s.is_failed(item.id));
-                                let fresh_thumb = has_texture
-                                    && this
-                                        .grid_state
-                                        .as_ref()
-                                        .is_some_and(|s| s.thumb_is_fresh(item.id));
-                                let photo_background: Background = if has_texture {
-                                    theme::card_surface().into()
-                                } else {
-                                    linear_gradient(
-                                        135.0,
-                                        linear_color_stop(theme::bg_2(), 0.0),
-                                        linear_color_stop(theme::bg_0(), 1.0),
-                                    )
-                                };
-
-                                row_cards.push(
-                                    div()
-                                        .id(item_id_num)
-                                        // Stable automation contract for card state:
-                                        // media-card-<id>, media-card-photo-<id>,
-                                        // media-card-skeleton-<id>, media-card-thumb-<id>,
-                                        // media-card-failed-<id>,
-                                        // media-card-selected-<id>.
-                                        .debug_selector(move || {
-                                            format!("media-card-{}", item_id_num)
-                                        })
-                                        .flex_1()
-                                        // An img's min-content width is its height
-                                        // times its aspect; without this a landscape
-                                        // thumbnail widens its column.
-                                        .min_w_0()
-                                        .h(px(row_h - CARD_ROW_GAP))
-                                        .p(px(CARD_PADDING))
-                                        .relative()
-                                        // No card surface and no border: the thumbnail sits
-                                        // directly on the library background (FIXES.md).
-                                        // Badges sit on the photo; selection adds an accent
-                                        // ring and, in selection mode, check circles.
-                                        .bg(theme::card_surface())
-                                        .map(|card| {
-                                            // The hook records what each branch applies.
-                                            #[cfg(test)]
-                                            let record = |o: f32| {
-                                                crate::views::grid::CARD_OPACITY.with(|m| {
-                                                    m.borrow_mut().insert(item_id_num, o);
-                                                })
-                                            };
-                                            if card_opacity < 1.0 {
-                                                #[cfg(test)]
-                                                record(card_opacity);
-                                                card.opacity(card_opacity)
-                                            } else {
-                                                #[cfg(test)]
-                                                record(1.0);
-                                                card
-                                            }
-                                        })
-                                        .cursor_pointer()
-                                        // The full filename lives on the tooltip now
-                                        // that the card no longer prints it below
-                                        // the photo.
-                                        .tooltip(media_card_tooltip(item.file_name.clone()))
-                                        .flex()
-                                        .flex_col()
-                                        .justify_between()
-                                        .on_click(cx.listener(
-                                            move |this, event: &ClickEvent, window, cx| {
-                                                // A sweep that ends over this card must not
-                                                // collapse the selection it just built.
-                                                if this.consume_grid_drag_click() {
-                                                    return;
-                                                }
-                                                let mods = window.modifiers();
-                                                let is_shift = mods.shift;
-                                                let is_cmd = mods.secondary(cx) || mods.control;
-                                                if !is_shift && !is_cmd && event.click_count() >= 2
-                                                {
-                                                    this.open_viewer(item_for_click.clone(), cx);
-                                                } else {
-                                                    this.handle_card_click(
-                                                        item_for_click.clone(),
-                                                        card_index,
-                                                        is_shift,
-                                                        is_cmd,
-                                                        cx,
-                                                    );
-                                                }
-                                            },
-                                        ))
-                                        .on_mouse_down(
-                                            MouseButton::Left,
-                                            cx.listener(
-                                                move |this, event: &MouseDownEvent, window, cx| {
-                                                    let mods = window.modifiers();
-                                                    let additive = mods.shift
-                                                        || mods.secondary(cx)
-                                                        || mods.control
-                                                        || (this.selected_indices.len() > 1
-                                                            && this
-                                                                .selected_indices
-                                                                .contains(&card_index));
-                                                    this.begin_grid_drag(
-                                                        event.position,
-                                                        Some(card_index),
-                                                        additive,
-                                                    );
-                                                    // Keep the press away from the grid
-                                                    // background's own drag start.
-                                                    cx.stop_propagation();
-                                                    cx.notify();
-                                                },
-                                            ),
-                                        )
-                                        .on_mouse_move(cx.listener(
-                                            move |this, event: &MouseMoveEvent, _window, cx| {
-                                                if event.pressed_button
-                                                    == Some(MouseButton::Left)
-                                                {
-                                                    this.drag_over_card(
-                                                        card_index,
-                                                        event.position,
-                                                        cx,
-                                                    );
-                                                }
-                                            },
-                                        ))
-                                        .on_mouse_down(
-                                            MouseButton::Right,
-                                            cx.listener(move |this, e: &MouseDownEvent, _w, cx| {
-                                                this.open_card_context_menu(
-                                                    item_for_context.clone(),
-                                                    card_index,
-                                                    e.position,
-                                                    cx,
-                                                );
-                                            }),
-                                        )
-                                        // Inner Photo Container. The tinted gradient is
-                                        // always present so a decoded thumbnail replaces the
-                                        // skeleton without a black flash or a layout jump.
-                                        .child(
-                                            div()
-                                                .debug_selector(move || {
-                                                    format!("media-card-photo-{}", item_id_num)
-                                                })
-                                                .w_full()
-                                                // Square well (r4): the height is the
-                                                // card's content width, derived by
-                                                // `LuminaApp::grid_metrics`.
-                                                .h(px(photo_side))
-                                                .flex_shrink_0()
-                                                // The loading gradient is only needed while
-                                                // the thumbnail is missing; a decoded image
-                                                // has no background around it.
-                                                .bg(photo_background)
-                                                // Recently Deleted reads as set aside.
-                                                .when(in_trash, |well| well.opacity(0.6))
-                                                .when(flag == lumina_core::Flag::Reject, |well| {
-                                                    well.opacity(REJECTED_OPACITY)
-                                                })
-                                                // Tiles are r4 (design 01 Library).
-                                                .rounded(theme::RADIUS_SM)
-                                                .overflow_hidden()
-                                                .relative()
-                                                .child(if let Some(render_img) = texture {
-                                                    let thumb = div()
-                                                        .debug_selector(move || {
-                                                            format!(
-                                                                "media-card-thumb-{}",
-                                                                item_id_num
-                                                            )
-                                                        })
-                                                        .size_full()
-                                                        .child(
-                                                            img(render_img).size_full().object_fit(
-                                                                if fit_mode {
-                                                                    ObjectFit::Contain
-                                                                } else {
-                                                                    ObjectFit::Cover
-                                                                },
-                                                            ),
-                                                        );
-                                                    // A just-decoded image fades in
-                                                    // over the skeleton.
-                                                    if fresh_thumb {
-                                                        crate::motion::fade_in(
-                                                            thumb,
-                                                            ElementId::NamedInteger(
-                                                                "thumb-in".into(),
-                                                                item_id_num as u64,
-                                                            ),
-                                                            crate::motion::THUMB_IN,
-                                                        )
-                                                        .into_any_element()
-                                                    } else {
-                                                        thumb.into_any_element()
-                                                    }
-                                                } else if thumb_failed {
-                                                    // The decode failed for good: say so
-                                                    // in text (not only in a tooltip) and
-                                                    // look unlike the skeleton.
-                                                    div()
-                                                        .id(("media-card-failed", item_id_num as u64))
-                                                        .debug_selector(move || {
-                                                            format!(
-                                                                "media-card-failed-{}",
-                                                                item_id_num
-                                                            )
-                                                        })
-                                                        .size_full()
-                                                        .flex()
-                                                        .flex_col()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .gap(px(6.0))
-                                                        .tooltip(theme::tooltip_label(
-                                                            crate::i18n::t("grid.preview_failed"),
-                                                        ))
-                                                        .child(
-                                                            div()
-                                                                .size(px(34.0))
-                                                                .rounded_full()
-                                                                .bg(theme::bg_2())
-                                                                .border_1()
-                                                                .border_color(theme::line())
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .child(render_icon(
-                                                                    Icon::TriangleAlert,
-                                                                    px(17.0),
-                                                                    theme::t2(),
-                                                                )),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .debug_selector(move || {
-                                                                    format!(
-                                                                        "media-card-failed-caption-{}",
-                                                                        item_id_num
-                                                                    )
-                                                                })
-                                                                .text_xs()
-                                                                .text_color(theme::t2())
-                                                                .child(crate::i18n::t("grid.no_preview")),
-                                                        )
-                                                        .into_any_element()
-                                                } else {
-                                                    // Static skeleton placeholder. The seed
-                                                    // fixtures decode to no texture, so this is
-                                                    // also the automation signal for "not yet
-                                                    // decoded" (media-card-skeleton-<id>).
-                                                    div()
-                                                        .debug_selector(move || {
-                                                            format!(
-                                                                "media-card-skeleton-{}",
-                                                                item_id_num
-                                                            )
-                                                        })
-                                                        .size_full()
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .child(
-                                                            div()
-                                                                .size(px(34.0))
-                                                                .rounded_full()
-                                                                .bg(theme::bg_2())
-                                                                .border_1()
-                                                                .border_color(theme::line())
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .child(render_icon(
-                                                                    if is_video {
-                                                                        Icon::Film
-                                                                    } else {
-                                                                        Icon::Image
-                                                                    },
-                                                                    px(17.0),
-                                                                    theme::t2(),
-                                                                )),
-                                                        )
-                                                        .into_any_element()
-                                                })
-                                                // Meta pill (bottom-left): stars and colour
-                                                // label. It sits above the duration or RAW
-                                                // badge so the two never collide.
-                                                .child(if !compact && (item_rating > 0 || item_color.is_some()) {
-                                                    div()
-                                                        .debug_selector(move || {
-                                                            format!("media-card-meta-{}", item_id_num)
-                                                        })
-                                                        .absolute()
-                                                        .left(px(BADGE_INSET))
-                                                        .bottom(px(if has_type_badge {
-                                                            BADGE_INSET + BADGE_H + 4.0
-                                                        } else {
-                                                            BADGE_INSET
-                                                        }))
-                                                        .h(px(BADGE_H))
-                                                        .px(px(5.0))
-                                                        .rounded(theme::RADIUS_SM)
-                                                        .bg(theme::media_scrim())
-                                                        .flex()
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap(px(5.0))
-                                                        .when(item_rating > 0, |d| {
-                                                            d.child(div().flex().flex_row().gap(px(1.0)).children(
-                                                                (0..item_rating).map(|_| {
-                                                                    render_icon(
-                                                                        Icon::StarFilled,
-                                                                        px(9.0),
-                                                                        theme::on_media(),
-                                                                    )
-                                                                }),
-                                                            ))
-                                                        })
-                                                        .when_some(item_color, |d, c| {
-                                                            d.child(theme::label_dot(c))
-                                                        })
-                                                        .into_any_element()
-                                                } else {
-                                                    Empty.into_any_element()
-                                                })
-                                                // Top-left row: the check circle in
-                                                // selection mode, then the edited badge.
-                                                .when(selection_mode || show_edited, |well| {
-                                                    well.child(
-                                                        badge_row()
-                                                            .left(px(BADGE_INSET))
-                                                            .when(selection_mode, |row| {
-                                                                let item = item.clone();
-                                                                row.child(
-                                                                    check_circle(item_id_num, is_selected)
-                                                                        // Keep the press from starting
-                                                                        // the card's marquee drag.
-                                                                        .on_mouse_down(
-                                                                            MouseButton::Left,
-                                                                            |_, _, cx| cx.stop_propagation(),
-                                                                        )
-                                                                        .on_click(cx.listener(
-                                                                            move |this, _: &ClickEvent, _w, cx| {
-                                                                                cx.stop_propagation();
-                                                                                // The ⌘-click path: toggle this item.
-                                                                                this.handle_card_click(
-                                                                                    item.clone(),
-                                                                                    card_index,
-                                                                                    false,
-                                                                                    true,
-                                                                                    cx,
-                                                                                );
-                                                                            },
-                                                                        )),
-                                                                )
-                                                            })
-                                                            .when(show_edited, |row| {
-                                                                row.child(edited_badge(item_id_num))
-                                                            }),
-                                                    )
-                                                })
-                                                // Top-right row, left to right: flag,
-                                                // favourite heart, missing file. One flex
-                                                // row, so no mark can cover another.
-                                                .when(
-                                                    show_fav
-                                                        || is_missing
-                                                        || flag != lumina_core::Flag::Unflagged,
-                                                    |well| {
-                                                        well.child(
-                                                            badge_row()
-                                                                .right(px(BADGE_INSET))
-                                                                .child(flag_badge(item_id_num, flag))
-                                                                .when(show_fav, |row| {
-                                                                    row.child(fav_badge(item_id_num))
-                                                                })
-                                                                .when(is_missing, |row| {
-                                                                    row.child(missing_badge(item_id_num))
-                                                                }),
-                                                        )
-                                                    },
-                                                )
-                                                // Video duration (bottom-left).
-                                                .when(has_duration, |well| {
-                                                    well.child(duration_badge(item_id_num, dur_text))
-                                                })
-                                                // RAW (bottom-right).
-                                                .when(is_raw, |well| {
-                                                    well.child(raw_badge(item_id_num))
-                                                })
-                                        )
-                                        // Selection: a 2px amber ring with a 1px gap
-                                        // outside the r4 well; its r7 corners (4 +
-                                        // RING_OUTSET) stay concentric. It sits on the
-                                        // card because the well clips.
-                                        .when(is_selected, |card| {
-                                            card.child(
-                                                div()
-                                                    .debug_selector(move || {
-                                                        format!(
-                                                            "media-card-selected-{}",
-                                                            item_id_num
-                                                        )
-                                                    })
-                                                    .absolute()
-                                                    .top(px(CARD_PADDING - RING_OUTSET))
-                                                    // left/right trace the well's real
-                                                    // width even when photo_side clamps.
-                                                    .left(px(CARD_PADDING - RING_OUTSET))
-                                                    .right(px(CARD_PADDING - RING_OUTSET))
-                                                    .h(px(photo_side + 2.0 * RING_OUTSET))
-                                                    .rounded(theme::RADIUS_SM + px(RING_OUTSET))
-                                                    .border_2()
-                                                    .border_color(theme::accent()),
-                                            )
-                                        })
-                                        .into_any_element(),
-                                );
+                                row_cards.push(this.render_media_card(
+                                    item,
+                                    start + offset_in_row,
+                                    size(photo_side, photo_side),
+                                    texture,
+                                    cx,
+                                ));
                             }
 
                             while row_cards.len() < cols {
-                                row_cards
-                                    .push(div().flex_1().h(px(row_h - CARD_ROW_GAP)).into_any_element());
+                                row_cards.push(
+                                    div()
+                                        .flex_1()
+                                        .h(px(row_h - CARD_ROW_GAP))
+                                        .into_any_element(),
+                                );
                             }
 
                             rows.push(
@@ -697,8 +235,8 @@ impl LuminaApp {
                                     .w_full()
                                     .h(px(row_h))
                                     // The row gap sits above the cards, so the
-                                    // first row's selection ring (RING_OUTSET
-                                    // outside the tile) is never clipped by the
+                                    // first row's selection ring (RING_OUTSET in
+                                    // card.rs, outside the tile) is never clipped by the
                                     // list's top edge.
                                     .pt(px(CARD_ROW_GAP))
                                     .pl(px(GRID_ROW_PADDING_LEFT))
@@ -1155,136 +693,6 @@ fn month_title(year: i32, month: u32) -> String {
     } else {
         "Undated".to_string()
     }
-}
-
-/// An absolute row of badges along a tile's top edge; callers pin it
-/// left or right. A flex row keeps its badges from covering each other.
-fn badge_row() -> Div {
-    div()
-        .absolute()
-        .top(px(BADGE_INSET))
-        .h(px(20.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(4.0))
-}
-
-/// A 20 px square badge on the media scrim with a tooltip and an image role.
-fn square_badge(id: ElementId, label: &'static str, icon: Icon, color: Rgba) -> Stateful<Div> {
-    div()
-        .id(id)
-        .role(Role::Image)
-        .aria_label(label)
-        .size(px(20.0))
-        .rounded(theme::RADIUS_SM)
-        .bg(theme::media_scrim())
-        .flex()
-        .items_center()
-        .justify_center()
-        .tooltip(theme::tooltip_label(label))
-        .child(render_icon(icon, px(12.0), color))
-}
-
-/// Badge for an item with Lumina edits or a rotation; reads the cached
-/// `edited_ids`, never the catalog.
-fn edited_badge(item_id_num: usize) -> impl IntoElement {
-    square_badge(
-        ("grid-edited-badge", item_id_num as u64).into(),
-        "Edited",
-        Icon::Sliders,
-        theme::on_media(),
-    )
-    .debug_selector(move || format!("grid-edited-badge-{item_id_num}"))
-}
-
-/// Badge for an item whose file is missing.
-fn missing_badge(item_id_num: usize) -> impl IntoElement {
-    square_badge(
-        ("grid-missing-badge", item_id_num as u64).into(),
-        "File is missing",
-        Icon::TriangleAlert,
-        theme::danger(),
-    )
-    .debug_selector(move || format!("grid-missing-badge-{item_id_num}"))
-}
-
-/// Favourite: an outline heart on the photo with no backing (design 01).
-fn fav_badge(item_id_num: usize) -> impl IntoElement {
-    div()
-        .id(("media-card-fav", item_id_num as u64))
-        .debug_selector(move || format!("media-card-fav-{item_id_num}"))
-        .role(Role::Image)
-        .aria_label("Favorite")
-        .child(render_icon(Icon::Heart, px(14.0), theme::on_media()))
-}
-
-/// Selection-mode check circle: accent with a check when selected, a
-/// faint circle otherwise. The caller wires the click (a ⌘-click toggle).
-fn check_circle(item_id_num: usize, selected: bool) -> Stateful<Div> {
-    div()
-        .id(("media-card-check", item_id_num as u64))
-        .debug_selector(move || format!("media-card-check-{item_id_num}"))
-        .role(Role::CheckBox)
-        .aria_label("Select")
-        .aria_toggled(if selected {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
-        .size(px(22.0))
-        .rounded_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .when(selected, |d| {
-            d.bg(theme::accent()).child(
-                div()
-                    .debug_selector(move || format!("media-card-check-mark-{item_id_num}"))
-                    .child(render_icon(Icon::Check, px(13.0), theme::on_accent())),
-            )
-        })
-        .when(!selected, |d| d.bg(theme::check_idle()))
-}
-
-/// A mono pill badge pinned to the bottom of the tile (duration, RAW).
-fn pill_badge(id: ElementId) -> Stateful<Div> {
-    div()
-        .id(id)
-        .role(Role::Image)
-        .absolute()
-        .bottom(px(BADGE_INSET))
-        .h(px(BADGE_H))
-        .px(px(6.0))
-        .rounded(theme::RADIUS_SM)
-        .bg(theme::media_scrim())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(9.5))
-        .flex()
-        .flex_row()
-        .items_center()
-}
-
-/// Video duration, bottom-left: play icon and the mono time.
-fn duration_badge(item_id_num: usize, text: String) -> impl IntoElement {
-    pill_badge(("media-card-duration", item_id_num as u64).into())
-        .debug_selector(move || format!("media-card-duration-{item_id_num}"))
-        .aria_label(format!("Video, {text}"))
-        .left(px(BADGE_INSET))
-        .gap(px(4.0))
-        .text_color(theme::on_media())
-        .child(render_icon(Icon::Play, px(9.0), theme::on_media()))
-        .child(text)
-}
-
-/// RAW file, bottom-right: "RAW" in mono accent.
-fn raw_badge(item_id_num: usize) -> impl IntoElement {
-    pill_badge(("media-card-raw", item_id_num as u64).into())
-        .debug_selector(move || format!("media-card-raw-{item_id_num}"))
-        .aria_label("RAW")
-        .right(px(BADGE_INSET))
-        .text_color(theme::accent())
-        .child("RAW")
 }
 
 #[cfg(test)]
