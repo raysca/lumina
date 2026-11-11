@@ -8,27 +8,32 @@ use crate::tests::ui_automation::{
 use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]
-fn top_bar_actions_are_28px_icon_buttons_and_back_is_keyboard_only() {
+fn top_bar_actions_are_32px_icon_buttons_and_back_is_keyboard_only() {
     let (dir, engine) = seed_library("br_topbar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
-    for selector in ["sort-menu-button", "tags-toolbar-btn", "inspector-toggle"] {
+    for selector in [
+        "header-filter",
+        "sort-menu-button",
+        "tags-toolbar-btn",
+        "inspector-toggle",
+    ] {
         let b = vcx.debug_bounds(selector).expect(selector);
         assert_eq!(
             (f32::from(b.size.width), f32::from(b.size.height)),
-            (28.0, 28.0),
-            "{selector} is a 28×28 icon button"
+            (32.0, 32.0),
+            "{selector} is a 32×32 header icon button"
         );
     }
     assert!(
         vcx.debug_bounds("nav-back").is_none(),
         "the design has no Back button"
     );
-    let title = vcx.debug_bounds("toolbar-title").expect("toolbar-title");
+    let title = vcx.debug_bounds("page-title").expect("page-title");
     assert!(
         f32::from(title.size.height) >= 24.0,
-        "the page title is 15px (v3), not 12px breadcrumb text: {title:?}"
+        "the page title is 20px (Library frame), not 12px breadcrumb text: {title:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -51,8 +56,61 @@ fn a_long_title_truncates_and_keeps_the_toolbar_buttons_on_screen() {
         info.right() <= root.right(),
         "a long album or tag name must truncate, not push Info off the bar: {info:?} vs {root:?}"
     );
-    assert_eq!(f32::from(info.size.width), 28.0, "buttons never shrink");
+    assert_eq!(f32::from(info.size.width), 32.0, "buttons never shrink");
+    let import = vcx.debug_bounds("header-import").expect("header-import");
+    assert!(
+        import.right() <= root.right(),
+        "Import, the rightmost action, stays on screen: {import:?} vs {root:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn the_widest_header_fits_a_1024px_window_with_the_inspector_open() {
+    use crate::tests::downloads::{install, queue_app, settle, submit};
+    let (_dir, engine, fake, mut cx) = queue_app("br_widest_header");
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine.set_trashed(item.id, true).unwrap();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, "https://example.com/a.mp4");
+    settle(vcx, &view, "the row is stored", |app| {
+        app.downloads.entries.len() == 1 && app.downloads.entries[0].row.id > 0
+    });
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        app.select_album(AlbumSelection::Trash, cx);
+        app.inspector_open = true;
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(720.0)));
+    render_ui(vcx);
+    let root = vcx.debug_bounds("app-root").expect("app-root");
+    assert_eq!(
+        f32::from(root.size.width),
+        1024.0,
+        "the window is 1024 wide"
+    );
+    for selector in [
+        "header-empty-trash-btn",
+        "downloads-toolbar-btn",
+        "inspector-toggle",
+        "header-import",
+    ] {
+        let b = vcx.debug_bounds(selector).expect(selector);
+        assert!(
+            b.right() <= root.right(),
+            "{selector} stays on screen in the widest header at 1024px: {b:?} vs {root:?}"
+        );
+    }
+    let title = vcx.debug_bounds("page-title").expect("page-title");
+    let restore = vcx
+        .debug_bounds("header-restore-all-btn")
+        .expect("header-restore-all-btn");
+    assert!(
+        title.right() <= restore.left(),
+        "the title truncates instead of running under the actions: {title:?} vs {restore:?}"
+    );
 }
 
 #[core::prelude::v1::test]

@@ -15,6 +15,7 @@ macro_rules! lucide {
 static LUCIDE: &[(&str, &str)] = lucide!(
     "aperture",
     "arrow-down-to-line",
+    "arrow-up-narrow-wide",
     "camera",
     "check",
     "clock",
@@ -27,6 +28,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "folder",
     "heart",
     "image",
+    "import",
     "images",
     "info",
     "map-pin",
@@ -46,6 +48,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "rotate-cw",
     "search",
     "settings",
+    "sliders-horizontal",
     "sliders-vertical",
     "sparkles",
     "star",

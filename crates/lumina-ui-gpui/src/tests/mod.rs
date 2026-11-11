@@ -32,6 +32,7 @@ mod keyword_undo;
 mod keywords;
 mod large_selection;
 mod legacy_catalog;
+mod library_header;
 mod map;
 mod missing;
 mod motion;

@@ -218,10 +218,37 @@ fn render_row(
         .into_any_element()
 }
 
+/// The dismiss backdrop behind the downloads list. The list itself hangs
+/// from the header's Downloads button (`panel_card`), which shows whenever
+/// there are rows; the list only opens, and stays open, while there are.
 pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     if !app.downloads.open {
         return Empty.into_any_element();
     }
+    div()
+        .absolute()
+        .inset_0()
+        .child(
+            div()
+                .id("downloads-backdrop")
+                .debug_selector(|| "downloads-backdrop".to_string())
+                // Covers the toolbar too, so a second click on the icon
+                // closes the list rather than reopening it.
+                .occlude()
+                .absolute()
+                .inset_0()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                        this.close_downloads_panel(cx);
+                    }),
+                ),
+        )
+        .into_any_element()
+}
+
+/// The downloads list card: 320 wide, at most 60% of the window high.
+pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let first_waiting = app
         .downloads
         .entries
@@ -261,97 +288,72 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     }
 
     div()
-        .absolute()
-        .inset_0()
+        .debug_selector(|| "downloads-panel".to_string())
+        .w(px(320.0))
+        .id("downloads-panel")
+        .occlude()
+        .max_h(window.viewport_size().height * 0.6)
+        .bg(theme::bg_1())
+        .border_1()
+        .border_color(theme::line())
+        .rounded(theme::RADIUS_LG)
+        .shadow_2xl()
+        .flex()
+        .flex_col()
+        // Each label and row is a direct child: `scroll_to_item`
+        // counts them.
+        .child(body)
         .child(
             div()
-                .id("downloads-backdrop")
-                .debug_selector(|| "downloads-backdrop".to_string())
-                // Covers the toolbar too, so a second click on the icon
-                // closes the list rather than reopening it.
-                .occlude()
-                .absolute()
-                .inset_0()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                        this.close_downloads_panel(cx);
-                    }),
-                ),
-        )
-        .child(
-            div()
-                .id("downloads-panel")
-                .debug_selector(|| "downloads-panel".to_string())
-                .occlude()
-                .absolute()
-                .top(px(crate::app::render::HEADER_HEIGHT + 6.0))
-                .right(px(16.0))
-                .w(px(320.0))
-                .max_h(relative(0.6))
-                .bg(theme::bg_1())
-                .border_1()
-                .border_color(theme::line())
-                .rounded(theme::RADIUS_LG)
-                .shadow_2xl()
+                .flex_shrink_0()
                 .flex()
-                .flex_col()
-                // Each label and row is a direct child: `scroll_to_item`
-                // counts them.
-                .child(body)
+                .flex_row()
+                .justify_between()
+                .px_3()
+                .py_2()
+                .border_t_1()
+                .border_color(theme::line())
+                .text_xs()
                 .child(
                     div()
-                        .flex_shrink_0()
-                        .flex()
-                        .flex_row()
-                        .justify_between()
-                        .px_3()
-                        .py_2()
-                        .border_t_1()
-                        .border_color(theme::line())
-                        .text_xs()
-                        .child(
-                            div()
-                                .id("downloads-clear-finished")
-                                .debug_selector(|| "downloads-clear-finished".to_string())
-                                .cursor_pointer()
-                                .text_color(theme::accent())
-                                .child("Clear finished")
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.clear_finished_downloads(cx);
-                                })),
-                        )
-                        .when(any_paused, |el| {
-                            el.child(
-                                div()
-                                    .id("downloads-resume-all")
-                                    .debug_selector(|| "downloads-resume-all".to_string())
-                                    .cursor_pointer()
-                                    .text_color(theme::accent())
-                                    .child("Resume all")
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.resume_all_downloads(cx);
-                                    })),
-                            )
-                        })
-                        .child(
-                            div()
-                                .id("downloads-show-album")
-                                .debug_selector(|| "downloads-show-album".to_string())
-                                .cursor_pointer()
-                                .text_color(theme::accent())
-                                .child("Show Downloaded")
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                    this.close_downloads_panel(cx);
-                                    this.select_album(
-                                        crate::views::sidebar::AlbumSelection::System(
-                                            lumina_core::SystemAlbum::Downloaded,
-                                        ),
-                                        cx,
-                                    );
-                                })),
-                        ),
+                        .id("downloads-clear-finished")
+                        .debug_selector(|| "downloads-clear-finished".to_string())
+                        .cursor_pointer()
+                        .text_color(theme::accent())
+                        .child("Clear finished")
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.clear_finished_downloads(cx);
+                        })),
+                )
+                .when(any_paused, |el| {
+                    el.child(
+                        div()
+                            .id("downloads-resume-all")
+                            .debug_selector(|| "downloads-resume-all".to_string())
+                            .cursor_pointer()
+                            .text_color(theme::accent())
+                            .child("Resume all")
+                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                this.resume_all_downloads(cx);
+                            })),
+                    )
+                })
+                .child(
+                    div()
+                        .id("downloads-show-album")
+                        .debug_selector(|| "downloads-show-album".to_string())
+                        .cursor_pointer()
+                        .text_color(theme::accent())
+                        .child("Show Downloaded")
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.close_downloads_panel(cx);
+                            this.select_album(
+                                crate::views::sidebar::AlbumSelection::System(
+                                    lumina_core::SystemAlbum::Downloaded,
+                                ),
+                                cx,
+                            );
+                        })),
                 ),
         )
-        .into_any_element()
 }

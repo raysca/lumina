@@ -52,6 +52,9 @@ pub enum Icon {
     Video,
     Clock,
     Aperture,
+    SlidersHorizontal,
+    ArrowUpNarrowWide,
+    Import,
 }
 
 impl Icon {
@@ -108,6 +111,9 @@ impl Icon {
         Icon::Video,
         Icon::Clock,
         Icon::Aperture,
+        Icon::SlidersHorizontal,
+        Icon::ArrowUpNarrowWide,
+        Icon::Import,
     ];
 
     pub fn path(self) -> &'static str {
@@ -161,6 +167,9 @@ impl Icon {
             Self::Video => "icons/video.svg",
             Self::Clock => "icons/clock.svg",
             Self::Aperture => "icons/aperture.svg",
+            Self::SlidersHorizontal => "icons/sliders-horizontal.svg",
+            Self::ArrowUpNarrowWide => "icons/arrow-up-narrow-wide.svg",
+            Self::Import => "icons/import.svg",
         }
     }
 }

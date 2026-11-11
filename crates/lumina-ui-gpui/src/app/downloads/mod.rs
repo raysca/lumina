@@ -292,6 +292,9 @@ impl LuminaApp {
                     Err(err) => {
                         log::error!("queueing a download: {err:#}");
                         app.downloads.entries.remove(index);
+                        if app.downloads.entries.is_empty() {
+                            app.close_downloads_panel(cx);
+                        }
                         app.set_error("Couldn't add the download. Try again.", cx);
                     }
                 }
@@ -534,6 +537,11 @@ impl LuminaApp {
         entry.cancel.store(true, Ordering::Relaxed);
         if self.downloads.highlight == Some(row_id) {
             self.downloads.highlight = None;
+        }
+        // No rows, no Downloads button to hang the list from: close it, as
+        // Clear finished does.
+        if self.downloads.entries.is_empty() {
+            self.close_downloads_panel(cx);
         }
         // A placeholder is removed once its insert returns.
         if let (true, Some(catalog)) = (row_id > 0, self.download_catalog()) {

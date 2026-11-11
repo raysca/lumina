@@ -2,11 +2,12 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::LuminaApp;
+use crate::icons::Icon;
 use crate::theme;
+use crate::views::page_header::{
+    header_icon_button, header_primary_button, page_header, popover_under,
+};
 use crate::views::sidebar::AlbumSelection;
-
-/// Height of the main column's header. Sheets hang from its bottom edge.
-pub(crate) const HEADER_HEIGHT: f32 = 52.0;
 
 /// 28×28 borderless icon button; a fill shows on hover, or bg-3 while `on`. The tooltip names the action.
 fn icon_button(id: &'static str, on: bool) -> Stateful<Div> {
@@ -85,126 +86,55 @@ fn window_controls(window: &Window) -> Div {
 }
 
 impl LuminaApp {
+    /// The page header's meta line: the current view's item count. None
+    /// until a count is known, so a loading view never reads "0 items".
+    pub(crate) fn page_meta(&self) -> Option<String> {
+        (!self.view_loading() || self.cached_active_count().is_some())
+            .then(|| crate::i18n::items(self.displayed_count()))
+    }
+
     pub(crate) fn render_toolbar(
         &self,
         view_label: &str,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let view_label = view_label.to_string();
         let own_controls = draws_own_window_controls(window);
         let sidebar_toggle_label = format!(
             "{} ({})",
             crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed),
             crate::app::panels::SIDEBAR_SHORTCUT
         );
-        // Only Recently Deleted shows a count and its bulk actions.
-        let trash_count = if self.selection == AlbumSelection::Trash {
-            self.system_album_counts
+        // Only Recently Deleted with items shows its bulk actions.
+        let trash_has_items = self.selection == AlbumSelection::Trash
+            && self
+                .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
-                .copied()
-                .unwrap_or(0)
-        } else {
-            0
+                .is_some_and(|&n| n > 0);
+        let title = match self.active_year {
+            Some(year) => year.to_string(),
+            None => view_label.to_string(),
         };
-        div()
-            .w_full()
-            .h(px(HEADER_HEIGHT))
-            .flex_shrink_0()
-            // The traffic lights sit over the sidebar's brand row; with the
-            // sidebar collapsed to its rail they reach past it into the header.
-            .pl(px(if cfg!(target_os = "macos") && self.sidebar_collapsed {
-                84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH
-            } else {
-                12.0
-            }))
-            .pr_3()
-            .bg(theme::bg_0())
-            .border_b_1()
-            .border_color(theme::line())
+        let toggle = icon_button("sidebar-toggle-btn", false)
+            .debug_selector(|| "sidebar-toggle".to_string())
+            .role(Role::Button)
+            .aria_label(sidebar_toggle_label.clone())
+            .tooltip(theme::tooltip_label(sidebar_toggle_label))
+            .child(toolbar_icon(
+                crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed),
+                false,
+            ))
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.toggle_sidebar(cx);
+            }));
+        // Back/Forward are ⌘[ / ⌘], the Go menu and ⌘K; the design has no
+        // header buttons for them.
+        let actions = div()
             .flex()
             .flex_row()
             .items_center()
-            .gap_2()
-            .text_xs()
-            .text_color(theme::t1())
-            // Sidebar toggle button
-            .child(
-                icon_button("sidebar-toggle-btn", false)
-                    .debug_selector(|| "sidebar-toggle".to_string())
-                    .role(Role::Button)
-                    .aria_label(sidebar_toggle_label.clone())
-                    .tooltip(theme::tooltip_label(sidebar_toggle_label))
-                    .child(toolbar_icon(
-                        crate::app::panels::sidebar_toggle_icon(self.sidebar_collapsed),
-                        false,
-                    ))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.toggle_sidebar(cx);
-                    })),
-            )
-            // Back/Forward are ⌘[ / ⌘], the Go menu and ⌘K; the design has no
-            // toolbar buttons for them.
-            // The page title (v3: 15px semibold), then the Trash item count.
-            // A long album or tag name truncates instead of pushing the
-            // buttons off the bar.
-            .child(
-                div()
-                    .ml_2()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .flex()
-                    .flex_row()
-                    .items_baseline()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .debug_selector(|| "toolbar-title".to_string())
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(15.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::t1())
-                            .child(if let Some(year) = self.active_year {
-                                year.to_string()
-                            } else {
-                                view_label
-                            }),
-                    )
-                    .when(trash_count > 0, |row| {
-                        row.child(
-                            div()
-                                .debug_selector(|| "trash-item-count".to_string())
-                                .flex_shrink_0()
-                                .text_xs()
-                                .text_color(theme::t2())
-                                .child(if trash_count == 1 {
-                                    "1 item".to_string()
-                                } else {
-                                    format!("{trash_count} items")
-                                }),
-                        )
-                    }),
-            )
-            // Empty toolbar space moves a frameless window; double-click maximizes.
-            .child(
-                div()
-                    .id("toolbar-drag-area")
-                    .debug_selector(|| "toolbar-drag-area".to_string())
-                    .flex_1()
-                    .h_full()
-                    .when(own_controls, |area| {
-                        area.on_mouse_down(MouseButton::Left, |event, window, _| {
-                            if event.click_count >= 2 {
-                                window.zoom_window();
-                            } else {
-                                window.start_window_move();
-                            }
-                        })
-                    }),
-            )
-            // Trash bulk actions
-            .children((trash_count > 0).then(|| {
+            .gap(px(10.0))
+            .children(trash_has_items.then(|| {
                 div()
                     .flex()
                     .flex_row()
@@ -229,35 +159,88 @@ impl LuminaApp {
                             })),
                     )
             }))
-            .children(self.render_downloads_button(cx))
+            .children(self.render_downloads_button(window, cx))
             .child(
-                icon_button("sort-toolbar-btn", false)
-                    .debug_selector(|| "sort-menu-button".to_string())
-                    .tooltip(theme::tooltip_label(format!("Sort: {}", self.sort_label())))
-                    .child(toolbar_icon(crate::icons::Icon::Sliders, false))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.toggle_sort_menu(cx);
-                    })),
+                header_icon_button(
+                    "tags-toolbar-btn",
+                    Icon::Tag,
+                    crate::i18n::t("header.tags"),
+                    None,
+                    false,
+                )
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.open_tag_manager(cx);
+                })),
             )
             .child(
-                icon_button("tags-toolbar-btn", false)
-                    .debug_selector(|| "tags-toolbar-btn".to_string())
-                    .tooltip(theme::tooltip_label("Tags"))
-                    .child(toolbar_icon(crate::icons::Icon::Tag, false))
-                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                        this.open_tag_manager(cx);
-                    })),
+                header_icon_button(
+                    "inspector-toggle",
+                    Icon::Info,
+                    crate::i18n::t("header.info"),
+                    Some("I"),
+                    self.inspector_open,
+                )
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.toggle_inspector(cx);
+                })),
+            )
+            // ponytail: until the Add filter menu (Design 01 Task 4), the
+            // filter button opens the search field and its filter suggestions.
+            .child(
+                header_icon_button(
+                    "header-filter",
+                    Icon::SlidersHorizontal,
+                    crate::i18n::t("header.filter"),
+                    None,
+                    false,
+                )
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.focus_search_field(cx);
+                })),
             )
             .child(
-                icon_button("inspector-toggle-btn", self.inspector_open)
-                    .debug_selector(|| "inspector-toggle".to_string())
-                    .tooltip(theme::tooltip_label("Info (I)"))
-                    .child(toolbar_icon(crate::icons::Icon::Info, self.inspector_open))
-                    .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                        this.toggle_inspector(cx);
-                    })),
+                header_icon_button(
+                    "sort-menu-button",
+                    Icon::ArrowUpNarrowWide,
+                    crate::i18n::t_with("header.sort", &[&self.sort_label()]),
+                    None,
+                    self.sort_menu_open,
+                )
+                .relative()
+                .when(self.sort_menu_open, |button| {
+                    button.child(popover_under(crate::views::sort_menu::sort_menu_card(
+                        self, cx,
+                    )))
+                })
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.toggle_sort_menu(cx);
+                })),
             )
-            .when(own_controls, |bar| bar.child(window_controls(window)))
+            .child(
+                header_primary_button(
+                    "header-import",
+                    Icon::Import,
+                    crate::i18n::t("header.import"),
+                    crate::i18n::t("header.import_tooltip"),
+                )
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.pick_import_folders(cx);
+                })),
+            )
+            .when(own_controls, |bar| bar.child(window_controls(window)));
+        page_header(
+            toggle,
+            title,
+            self.page_meta().map(Into::into),
+            actions,
+            own_controls,
+        )
+        // The traffic lights sit over the sidebar's brand row; with the
+        // sidebar collapsed to its rail they reach past it into the header.
+        .when(
+            cfg!(target_os = "macos") && self.sidebar_collapsed,
+            |header| header.pl(px(84.0 - crate::views::grid::SIDEBAR_COLLAPSED_WIDTH)),
+        )
     }
 }
 
@@ -296,61 +279,73 @@ fn progress_ring(fraction: f32) -> impl IntoElement {
 impl LuminaApp {
     /// Downloads (⌥⌘L): shown once the list has rows, with the count of
     /// unfinished ones, a red dot for an unseen failure and a progress ring.
-    fn render_downloads_button(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+    fn render_downloads_button(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Stateful<Div>> {
         if self.downloads.entries.is_empty() {
             return None;
         }
         let open = self.downloads.open;
         let count = self.download_badge_count();
         Some(
-            icon_button("downloads-toolbar-btn", open)
-                .debug_selector(|| "downloads-toolbar-btn".to_string())
-                .relative()
-                .tooltip(theme::tooltip_label("Downloads (⌥⌘L)"))
-                .child(toolbar_icon(crate::icons::Icon::ArrowDownToLine, open))
-                .children(self.download_progress().map(|fraction| {
+            header_icon_button(
+                "downloads-toolbar-btn",
+                Icon::ArrowDownToLine,
+                crate::i18n::t("header.downloads"),
+                Some("⌥⌘L"),
+                open,
+            )
+            .relative()
+            .when(open, |button| {
+                button.child(popover_under(crate::views::downloads_panel::panel_card(
+                    self, window, cx,
+                )))
+            })
+            .children(self.download_progress().map(|fraction| {
+                div()
+                    .debug_selector(|| "downloads-progress-ring".to_string())
+                    .absolute()
+                    .inset_0()
+                    .child(progress_ring(fraction))
+            }))
+            .when(count > 0, |el| {
+                el.child(
                     div()
-                        .debug_selector(|| "downloads-progress-ring".to_string())
+                        .debug_selector(|| "downloads-badge".to_string())
                         .absolute()
-                        .inset_0()
-                        .child(progress_ring(fraction))
-                }))
-                .when(count > 0, |el| {
-                    el.child(
-                        div()
-                            .debug_selector(|| "downloads-badge".to_string())
-                            .absolute()
-                            .top(px(-3.0))
-                            .right(px(-3.0))
-                            .min_w(px(14.0))
-                            .h(px(14.0))
-                            .px(px(3.0))
-                            .rounded_full()
-                            .bg(theme::accent())
-                            .text_color(theme::on_accent())
-                            .text_size(px(9.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(count.to_string()),
-                    )
-                })
-                .when(self.downloads.unseen_failure, |el| {
-                    el.child(
-                        div()
-                            .debug_selector(|| "downloads-failure-dot".to_string())
-                            .absolute()
-                            .bottom(px(1.0))
-                            .right(px(1.0))
-                            .size(px(7.0))
-                            .rounded_full()
-                            .bg(theme::danger()),
-                    )
-                })
-                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.toggle_downloads_panel(cx);
-                })),
+                        .top(px(-3.0))
+                        .right(px(-3.0))
+                        .min_w(px(14.0))
+                        .h(px(14.0))
+                        .px(px(3.0))
+                        .rounded_full()
+                        .bg(theme::accent())
+                        .text_color(theme::on_accent())
+                        .text_size(px(9.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(count.to_string()),
+                )
+            })
+            .when(self.downloads.unseen_failure, |el| {
+                el.child(
+                    div()
+                        .debug_selector(|| "downloads-failure-dot".to_string())
+                        .absolute()
+                        .bottom(px(1.0))
+                        .right(px(1.0))
+                        .size(px(7.0))
+                        .rounded_full()
+                        .bg(theme::danger()),
+                )
+            })
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.toggle_downloads_panel(cx);
+            })),
         )
     }
 

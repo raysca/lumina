@@ -59,10 +59,8 @@ impl ImportState {
 }
 
 impl LuminaApp {
-    /// Another dialog or menu is up. The import dialog would open under the
-    /// ones drawn above it, and ↵ would go to the ones whose keys come first
-    /// (a delete confirmation), so imports wait until it is closed.
-    pub(crate) fn import_blocked_by_modal(&self) -> bool {
+    /// A dialog, sheet or menu that takes the keyboard is up.
+    fn dialog_open(&self) -> bool {
         self.command_palette_open
             || self.shortcuts_overlay_open
             || self.preferences_open
@@ -73,11 +71,45 @@ impl LuminaApp {
             || self.album_draft.modal_open
             || self.tag_manager.open
             || self.context_menu_state.is_some()
-            || self.sort_menu_open
             || self.network_import.stage.is_some()
-            || self.downloads.open
             || self.downloads.confirm.is_some()
             || self.templates.editor.is_some()
+    }
+
+    /// A dialog, sheet, menu or the viewer is up. The header's Sort and
+    /// Downloads cards are deferred, so they would paint above it.
+    fn modal_covers_header(&self) -> bool {
+        self.dialog_open()
+            || self.import.dialog.is_some()
+            || self.is_fullscreen_viewer
+            || self.compare.is_some()
+            || self.slideshow.is_some()
+    }
+
+    /// Closes the Sort and Downloads popovers once anything modal opens over
+    /// them. Run from render, so every opener (menus, palette, actions,
+    /// clicks) is covered without each one knowing about the header.
+    pub(crate) fn close_header_popovers_under_modals(&mut self) {
+        if self.modal_covers_header() {
+            self.close_header_popovers();
+        }
+    }
+
+    /// Plain field resets, no notify: called from render.
+    pub(crate) fn close_header_popovers(&mut self) {
+        self.sort_menu_open = false;
+        if self.downloads.open {
+            self.downloads.open = false;
+            self.downloads.focused = None;
+            self.downloads.highlight = None;
+        }
+    }
+
+    /// Another dialog or menu is up. The import dialog would open under the
+    /// ones drawn above it, and ↵ would go to the ones whose keys come first
+    /// (a delete confirmation), so imports wait until it is closed.
+    pub(crate) fn import_blocked_by_modal(&self) -> bool {
+        self.dialog_open() || self.sort_menu_open || self.downloads.open
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

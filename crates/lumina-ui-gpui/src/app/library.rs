@@ -836,6 +836,23 @@ impl LuminaApp {
         .detach();
     }
 
+    /// Focuses the sidebar search field with its suggestions open, showing
+    /// the sidebar first when it is collapsed to the rail (which has no
+    /// field). Returns false when the sidebar could not be shown.
+    pub fn focus_search_field(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.sidebar_collapsed {
+            self.toggle_sidebar(cx);
+            // A failed save puts the rail back: no field to focus.
+            if self.sidebar_collapsed {
+                return false;
+            }
+        }
+        self.search_focused = true;
+        self.reset_search_suggestions();
+        cx.notify();
+        true
+    }
+
     /// Drops keyboard focus from the sidebar search field.
     pub fn blur_search(&mut self, cx: &mut Context<Self>) {
         if self.search_focused {

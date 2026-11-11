@@ -20,7 +20,6 @@ mod status_bar;
 mod toolbar;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
-pub(crate) use toolbar::HEADER_HEIGHT;
 
 impl LuminaApp {
     /// Banner for recoverable failures: alert icon, title and description,
@@ -415,6 +414,11 @@ impl Render for LuminaApp {
                 }));
         }
 
+        // Welcome and first scan have no header: drop its popovers so their
+        // keys don't shadow these screens' and they don't return later.
+        if self.grid_state.is_none() || self.first_scan.is_some() {
+            self.close_header_popovers();
+        }
         if self.grid_state.is_none() {
             self.check_recent_availability(cx);
             // Preferences and About paint here (Review Focus 7: never
@@ -468,6 +472,7 @@ impl Render for LuminaApp {
 
         self.refresh_active_view(cx);
         self.refresh_map_points(cx);
+        self.close_header_popovers_under_modals();
         let total_count = self.displayed_count();
 
         let view_label: String = match &self.selection {

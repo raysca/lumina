@@ -235,7 +235,7 @@ fn ui_automation_renders_all_core_controls() {
         "search-input",
         "switch-library",
         "inspector-toggle",
-        "toolbar-title",
+        "page-title",
         "tags-toolbar-btn",
         "new-smart-album",
     ];

@@ -150,8 +150,15 @@ fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
         app.select_album(AlbumSelection::Trash, cx)
     });
     render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("1 item"),
+            "the meta line counts the trash"
+        )
+    });
     for selector in [
-        "trash-item-count",
+        "page-meta",
         "trash-note",
         "header-empty-trash-btn",
         "header-restore-all-btn",

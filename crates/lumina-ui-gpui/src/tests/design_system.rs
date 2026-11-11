@@ -5,7 +5,7 @@ use crate::tests::ui_automation::{
     app_with_library, bounds_center, click, keystrokes, leak, render_ui, right_click, seed_library,
 };
 
-use crate::app::render::HEADER_HEIGHT;
+use crate::views::page_header::PAGE_HEADER_HEIGHT as HEADER_HEIGHT;
 
 fn assert_hangs_from_toolbar(vcx: &mut gpui::VisualTestContext, selector: &'static str) {
     render_ui(vcx);

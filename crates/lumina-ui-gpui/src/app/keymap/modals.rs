@@ -172,6 +172,15 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d3. Sort popover: Escape closes it; other keys stay here, so ⌫
+        // never trashes the selection behind it.
+        if self.sort_menu_open {
+            if key == "escape" {
+                self.close_sort_menu(cx);
+            }
+            return true;
+        }
+
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {

@@ -171,8 +171,16 @@ fn remove_button_cancels_running_row() {
     let id = view.update(vcx, |app, _| row_id(app, A));
     click(vcx, leak(format!("download-remove-{id}")));
     view.update(vcx, |app, _| {
-        assert!(app.downloads.entries.is_empty(), "✕ removes the row")
+        assert!(app.downloads.entries.is_empty(), "✕ removes the row");
+        assert!(
+            !app.downloads.open,
+            "removing the last row closes the list, as Clear finished does"
+        );
     });
+    assert!(
+        vcx.debug_bounds("downloads-backdrop").is_none(),
+        "no invisible backdrop is left over the window"
+    );
     settle(vcx, &view, "the removal is stored", |_| {
         persisted(&engine).is_empty()
     });

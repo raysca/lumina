@@ -18,6 +18,7 @@ pub mod map;
 pub mod marks;
 pub mod network_import_dialog;
 pub mod onboarding;
+pub mod page_header;
 pub mod preferences;
 pub mod search_bar;
 pub mod sidebar;

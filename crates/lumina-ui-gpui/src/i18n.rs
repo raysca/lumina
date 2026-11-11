@@ -38,6 +38,15 @@ pub fn count(n: usize) -> String {
     out
 }
 
+/// The page header's meta line: "1 item", "48,291 items".
+pub fn items(n: usize) -> String {
+    if n == 1 {
+        t("header.items_one")
+    } else {
+        t("header.items_other").replace("{n}", &count(n))
+    }
+}
+
 /// Accessible name of a collection button, e.g. "Favorites, 22 items".
 pub fn nav_aria_label(label: &str, count: usize) -> String {
     t(if count == 1 {
@@ -375,6 +384,15 @@ fn en_us(key: &str) -> Option<&'static str> {
         "sidebar.hide" => "Hide Sidebar",
         "sidebar.show" => "Show Sidebar",
         "search.placeholder" => "Search library",
+        "header.items_one" => "1 item",
+        "header.items_other" => "{n} items",
+        "header.import" => "Import",
+        "header.import_tooltip" => "Import… (⇧⌘I)",
+        "header.filter" => "Filter",
+        "header.tags" => "Tags",
+        "header.info" => "Info",
+        "header.downloads" => "Downloads",
+        "header.sort" => "Sort: {}",
         "search.shortcut" => "⌘F",
         "grid.no_preview" => "No preview",
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
@@ -412,5 +430,12 @@ mod tests {
         assert_eq!(count(100_000), "100,000");
         assert_eq!(count(48_291), "48,291");
         assert_eq!(count(1_234_567), "1,234,567");
+    }
+
+    #[test]
+    fn items_is_singular_for_one_and_groups_thousands() {
+        assert_eq!(items(0), "0 items");
+        assert_eq!(items(1), "1 item");
+        assert_eq!(items(1_284_503), "1,284,503 items");
     }
 }

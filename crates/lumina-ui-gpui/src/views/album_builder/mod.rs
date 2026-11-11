@@ -35,7 +35,7 @@ impl AlbumBuilderModal {
             .flex()
             .justify_center()
             .items_start()
-            .pt(px(crate::app::render::HEADER_HEIGHT))
+            .pt(px(crate::views::page_header::PAGE_HEADER_HEIGHT))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
