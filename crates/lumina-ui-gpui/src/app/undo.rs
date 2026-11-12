@@ -453,19 +453,24 @@ impl LuminaApp {
                 if let Some(held) = held {
                     self.reselect_held(held, cx);
                 }
-                // Redoing an album delete must not leave the view on it.
+                // Redoing an album delete must not leave the view on it: an
+                // album falls back to the Albums overview, as its confirm
+                // does; a smart album to the library.
                 let deleted = match (action, before) {
                     (UndoAction::SmartAlbumDeleted { album }, false) => {
-                        Some(AlbumSelection::User(album.id))
+                        Some((AlbumSelection::User(album.id), AlbumSelection::AllLibrary))
                     }
-                    (UndoAction::AlbumDeleted { album, .. }, false) => {
-                        Some(AlbumSelection::Album(album.id))
-                    }
+                    (UndoAction::AlbumDeleted { album, .. }, false) => Some((
+                        AlbumSelection::Album(album.id),
+                        AlbumSelection::AlbumsOverview,
+                    )),
                     _ => None,
                 };
-                if deleted.as_ref() == Some(&self.selection) {
-                    self.selection = AlbumSelection::AllLibrary;
-                    self.clear_selection(cx);
+                if let Some((open, fallback)) = deleted {
+                    if self.selection == open {
+                        self.selection = fallback;
+                        self.clear_selection(cx);
+                    }
                 }
                 // Items joined or left the open album: positions shifted.
                 if let UndoAction::AlbumMembership { album, .. } = action {

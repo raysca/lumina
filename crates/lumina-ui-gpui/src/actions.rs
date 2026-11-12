@@ -14,6 +14,7 @@ actions!(
         QuitApp,
         ToggleSidebar,
         ToggleInspector,
+        ToggleAlbumPanel,
         ImportXmp,
         ManageTemplates,
         ImportMedia,

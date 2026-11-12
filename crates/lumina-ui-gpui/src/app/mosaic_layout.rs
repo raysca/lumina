@@ -180,13 +180,12 @@ impl LuminaApp {
     }
 
     /// Width of the Mosaic's content: the center pane less the row padding.
-    fn mosaic_width(&self) -> f32 {
+    pub(crate) fn mosaic_width(&self) -> f32 {
         let window_width = self.window_bounds.map_or(
             crate::views::grid::DEFAULT_WINDOW_WIDTH,
             |(_, _, width, _)| width,
         );
-        let inspector =
-            (self.inspector_open && !self.is_fullscreen_viewer).then_some(self.inspector_width);
+        let inspector = self.right_column_width();
         let pane = center_pane_width(
             window_width,
             self.sidebar_width,

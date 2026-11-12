@@ -861,8 +861,7 @@ impl LuminaApp {
         let window_width = self
             .window_bounds
             .map_or(DEFAULT_WINDOW_WIDTH, |(_, _, width, _)| width);
-        let inspector_width =
-            (self.inspector_open && !self.is_fullscreen_viewer).then_some(self.inspector_width);
+        let inspector_width = self.right_column_width();
         let shape = if self.captioned_tiles() {
             TileShape::Captioned
         } else {

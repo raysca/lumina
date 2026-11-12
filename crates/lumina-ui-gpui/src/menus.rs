@@ -46,6 +46,10 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
                 ToggleSidebar,
             ),
             MenuItem::action("Toggle Inspector", ToggleInspector),
+            MenuItem::action(
+                crate::i18n::t("command.toggle_album_panel"),
+                ToggleAlbumPanel,
+            ),
             MenuItem::action("Show Downloads", ToggleDownloads),
             MenuItem::action(crate::i18n::t("command.compare"), Compare),
             MenuItem::action(crate::i18n::t("command.slideshow"), Slideshow),

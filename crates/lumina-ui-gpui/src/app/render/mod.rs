@@ -530,6 +530,11 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
                     this.toggle_inspector(cx);
                 }))
+                .when(self.album_panel_fits(), |root| {
+                    root.on_action(cx.listener(|this, _: &ToggleAlbumPanel, _w, cx| {
+                        this.toggle_album_panel(cx);
+                    }))
+                })
             })
             // Edit mode: no handler means a disabled menu item. These open
             // overlays that take the keys, change media, or leave the photo
@@ -837,7 +842,10 @@ impl Render for LuminaApp {
                                             .into_any_element()
                                     } else {
                                         Empty.into_any_element()
-                                    }),
+                                    })
+                                    // With Info off an open album's settings
+                                    // panel takes the right column.
+                                    .child(crate::views::album_page::panel::render(self, cx)),
                             ),
                     ),
             )

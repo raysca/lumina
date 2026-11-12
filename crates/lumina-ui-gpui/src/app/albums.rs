@@ -263,8 +263,10 @@ impl LuminaApp {
         };
         match self.album_write("album.delete_failed", |e| e.delete_album(id), cx) {
             Some(Some((album, members))) => {
+                // Back to the albums, not a navigation step: Back would
+                // only find the deleted album.
                 if self.selection == AlbumSelection::Album(id) {
-                    self.selection = AlbumSelection::AllLibrary;
+                    self.selection = AlbumSelection::AlbumsOverview;
                     self.clear_selection(cx);
                 }
                 self.refresh_album_counts();

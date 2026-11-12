@@ -1,9 +1,11 @@
 //! An open album's page (Design 07, frame `w4zpqh`): the header band over
 //! the album grid. This module holds the page's state (the More menu and
 //! the header's stats, read off the UI thread) and its keys; `header`
-//! draws the band and `selection_bar` the band under it.
+//! draws the band, `selection_bar` the band under it and `panel` the
+//! settings column on the right.
 
 pub(crate) mod header;
+pub(crate) mod panel;
 pub(crate) mod selection_bar;
 
 use gpui::*;

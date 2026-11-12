@@ -49,6 +49,8 @@ pub enum CommandId {
     Shortcuts,
     ToggleSidebar,
     ToggleInspector,
+    /// The open album's settings panel (Hide / Show Album Settings).
+    ToggleAlbumPanel,
     GetInfo,
     ExportSelection,
     ExportJpeg,
@@ -186,6 +188,7 @@ impl Command {
             About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
+            ToggleAlbumPanel => Icon::PanelRight,
             ExportSelection | ExportJpeg | Share => Icon::ExternalLink,
             ImportXmp => Icon::ArrowDownToLine,
             ToggleFit => Icon::Maximize,
@@ -478,6 +481,13 @@ pub fn commands() -> &'static [Command] {
             key: "command.toggle_inspector",
             shortcut: "I",
             keywords: "panel info hide show",
+        },
+        Command {
+            id: CommandId::ToggleAlbumPanel,
+            // Titled by state in `command_title`: Hide or Show Album Settings.
+            key: "command.toggle_album_panel",
+            shortcut: "",
+            keywords: "panel album settings hide show",
         },
         Command {
             id: CommandId::GetInfo,
@@ -1132,6 +1142,8 @@ impl LuminaApp {
     fn command_title(&self, command: &Command) -> String {
         if command.id == CommandId::ToggleSidebar {
             crate::app::panels::sidebar_toggle_title(self.sidebar_collapsed)
+        } else if command.id == CommandId::ToggleAlbumPanel {
+            crate::views::album_page::panel::toggle_title(self.config.album_panel_hidden)
         } else {
             command.title()
         }
@@ -1160,6 +1172,7 @@ impl LuminaApp {
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
             // The panel is hidden on the overview; the toggle does nothing.
             CommandId::ToggleInspector => !self.albums_overview_shown(),
+            CommandId::ToggleAlbumPanel => self.album_panel_fits(),
             CommandId::PinAlbum => self.open_album_pinned() == Some(false),
             CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),
             CommandId::DuplicateSmartAlbum | CommandId::ExportSmartAlbumRules => {
@@ -1557,6 +1570,7 @@ impl LuminaApp {
             CommandId::Shortcuts => self.toggle_shortcuts_overlay(cx),
             CommandId::ToggleSidebar => self.toggle_sidebar(cx),
             CommandId::ToggleInspector => self.toggle_inspector(cx),
+            CommandId::ToggleAlbumPanel => self.toggle_album_panel(cx),
             CommandId::GetInfo => self.get_info(cx),
             CommandId::ExportSelection => {
                 self.export_pick_folder(lumina_core::ExportPreset::Originals, cx)

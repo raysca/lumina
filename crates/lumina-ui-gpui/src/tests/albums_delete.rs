@@ -149,8 +149,8 @@ fn delete_album_confirms_and_undo_restores_members() {
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selection,
-            AlbumSelection::AllLibrary,
-            "the deleted album's view falls back to the library"
+            AlbumSelection::AlbumsOverview,
+            "the deleted album's view falls back to the Albums overview"
         );
     });
 

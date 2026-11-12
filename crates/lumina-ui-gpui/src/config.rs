@@ -449,6 +449,9 @@ pub struct AppConfig {
     /// The Albums overview's card order. An unknown value reads as Name.
     #[serde(default, deserialize_with = "lenient_album_sort")]
     pub album_sort: AlbumSort,
+    /// The user hid the album settings panel (⌘K Hide Album Settings).
+    #[serde(default)]
+    pub album_panel_hidden: bool,
 }
 
 /// The Albums overview's card order (its "Sort ▾" control).
@@ -626,6 +629,7 @@ impl Default for AppConfig {
             browse_layout: BrowseLayout::Grid,
             group_level: GroupLevel::Days,
             album_sort: AlbumSort::Name,
+            album_panel_hidden: false,
         }
     }
 }
