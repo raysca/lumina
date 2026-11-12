@@ -730,6 +730,9 @@ impl Render for LuminaApp {
                                 self.render_toolbar(&view_label, window, cx)
                                     .into_any_element()
                             })
+                            .child(crate::views::album_page::selection_bar::render(
+                                self, window, cx,
+                            ))
                             .child(
                                 div()
                                     .flex_1()

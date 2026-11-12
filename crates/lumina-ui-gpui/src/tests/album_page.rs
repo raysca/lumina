@@ -15,7 +15,7 @@ use lumina_core::{LuminaEngine, MediaId, MediaType};
 use std::sync::Arc;
 
 /// Two photos (14 and 18 Jun 2025) and a clip (16 Jun) as one album.
-fn library_with_album(
+pub(super) fn library_with_album(
     prefix: &str,
 ) -> (
     super::downloads::TempLibrary,
@@ -40,7 +40,7 @@ fn library_with_album(
     (super::downloads::TempLibrary(dir), engine, album.id, ids)
 }
 
-fn open_album(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: i64) {
+pub(super) fn open_album(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: i64) {
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::Album(id), cx)
@@ -50,7 +50,7 @@ fn open_album(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: i64) {
     render_ui(vcx);
 }
 
-fn painted(vcx: &mut VisualTestContext, selector: String) -> bool {
+pub(super) fn painted(vcx: &mut VisualTestContext, selector: String) -> bool {
     vcx.debug_bounds(super::ui_automation::leak(selector))
         .is_some()
 }

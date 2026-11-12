@@ -88,6 +88,10 @@ tokens! {
     accent_hint = 0x5A4214;
     /// Keyboard focus on fields and controls. Neutral: amber means selection.
     focus_ring = 0xAAAAA8;
+    /// The album selection bar's fill (Design 07): a dark amber band.
+    accent_surface = 0x17120B;
+    /// The album selection bar's bottom border (Design 07).
+    warn_border = 0x3A2E1A;
     /// Border of a danger panel or button. Invalid-value outlines use `danger`.
     danger_border = 0x45211E;
     /// Timeline rail month bar.
@@ -215,6 +219,8 @@ mod tests {
             ("scrim", scrim(), 0x07070BD9),
             ("media_scrim", media_scrim(), 0x000000A6),
             ("danger_border", danger_border(), 0x45211EFF),
+            ("accent_surface", accent_surface(), 0x17120BFF),
+            ("warn_border", warn_border(), 0x3A2E1AFF),
         ] {
             assert_eq!(hex(token), want, "{name} must equal its lumina.pen value");
         }

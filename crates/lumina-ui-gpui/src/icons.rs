@@ -68,6 +68,10 @@ pub enum Icon {
     Share,
     PanelRight,
     Ellipsis,
+    CircleCheckBig,
+    Hash,
+    FolderMinus,
+    Download,
 }
 
 impl Icon {
@@ -140,6 +144,10 @@ impl Icon {
         Icon::Share,
         Icon::PanelRight,
         Icon::Ellipsis,
+        Icon::CircleCheckBig,
+        Icon::Hash,
+        Icon::FolderMinus,
+        Icon::Download,
     ];
 
     pub fn path(self) -> &'static str {
@@ -209,6 +217,10 @@ impl Icon {
             Self::Share => "icons/share-2.svg",
             Self::PanelRight => "icons/panel-right.svg",
             Self::Ellipsis => "icons/ellipsis.svg",
+            Self::CircleCheckBig => "icons/circle-check-big.svg",
+            Self::Hash => "icons/hash.svg",
+            Self::FolderMinus => "icons/folder-minus.svg",
+            Self::Download => "icons/download.svg",
         }
     }
 }
