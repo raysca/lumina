@@ -45,10 +45,42 @@ fn smart_album_cards_show_mosaic_count_and_chips() {
             &[iso_over_1600(), photos()],
         )
         .unwrap();
+    // Three rules, the last with a long label: two chips and "+1".
+    let long_tag = SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Text("a very long tag name that cannot fit on the card".into()),
+    };
+    let busy = engine
+        .create_smart_album(
+            "Busy",
+            "sparkles",
+            MatchMode::Any,
+            &[photos(), long_tag, iso_over_1600()],
+        )
+        .unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_overview_at_1600(vcx);
     render_ui(vcx);
+
+    let busy_card = vcx
+        .debug_bounds(leak(format!("smart-card-{}", busy.id)))
+        .expect("the busy card is painted");
+    let second = vcx
+        .debug_bounds(leak(format!("smart-chip-{}-1", busy.id)))
+        .unwrap();
+    let more = vcx
+        .debug_bounds(leak(format!("smart-chip-{}-2", busy.id)))
+        .expect("a \"+N\" chip for the third rule");
+    assert!(
+        more.top() == second.top() && more.left() >= second.right(),
+        "\"+N\" shares the last chip's line, to its right: {second:?} then {more:?}"
+    );
+    assert!(
+        more.bottom() <= busy_card.bottom() && more.right() <= busy_card.right(),
+        "a long chip truncates inside the card: {more:?} in {busy_card:?}"
+    );
 
     let card = leak(format!("smart-card-{}", night.id));
     let got = height(vcx, card);
@@ -80,6 +112,16 @@ fn smart_album_cards_show_mosaic_count_and_chips() {
     assert!(
         painted(vcx, format!("smart-chip-{}-1", night.id)),
         "the second rule has its own chip"
+    );
+    let first = vcx
+        .debug_bounds(leak(format!("smart-chip-{}-0", night.id)))
+        .unwrap();
+    let second = vcx
+        .debug_bounds(leak(format!("smart-chip-{}-1", night.id)))
+        .unwrap();
+    assert!(
+        second.top() >= first.bottom() && (second.left() - first.left()).abs() <= gpui::px(0.5),
+        "chips stack one per line under the count: {first:?} then {second:?}"
     );
 
     click(vcx, card);

@@ -223,7 +223,7 @@ fn card(this: &LuminaApp, album: &SmartAlbum, cx: &mut Context<LuminaApp>) -> An
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .justify_between()
+                .gap(px(10.0))
                 .child(
                     div()
                         .flex()
@@ -302,6 +302,7 @@ fn chips(album: &SmartAlbum) -> Div {
             .h(px(21.0))
             .px(px(7.0))
             .min_w_0()
+            .max_w_full()
             .flex()
             .flex_row()
             .items_center()
@@ -315,24 +316,35 @@ fn chips(album: &SmartAlbum) -> Div {
             .children(text_marker("smart-chip", &label))
             .child(div().min_w_0().truncate().child(label))
     };
+    let mut chips: Vec<Div> = album
+        .rules
+        .iter()
+        .take(CHIP_LIMIT)
+        .enumerate()
+        .map(|(n, rule)| chip(n, Some(rule_icon(&rule.field)), rule_label(rule).into()))
+        .collect();
+    let more = (extra > 0).then(|| {
+        let more = t("albums.more_rules").replace("{n}", &extra.to_string());
+        chip(CHIP_LIMIT, None, more.into()).flex_none()
+    });
+    let last = chips.pop();
+    // One chip per line, as the design stacks them; "+N" shares the last line.
     div()
         .min_w_0()
         .flex()
-        .flex_row()
-        .gap(px(5.0))
-        .overflow_hidden()
-        .children(
-            album
-                .rules
-                .iter()
-                .take(CHIP_LIMIT)
-                .enumerate()
-                .map(|(n, rule)| chip(n, Some(rule_icon(&rule.field)), rule_label(rule).into())),
-        )
-        .when(extra > 0, |row| {
-            let more = t("albums.more_rules").replace("{n}", &extra.to_string());
-            row.child(chip(CHIP_LIMIT, None, more.into()).flex_none())
-        })
+        .flex_col()
+        .items_start()
+        .gap(px(7.0))
+        .children(chips)
+        .children(last.map(|last| {
+            div()
+                .max_w_full()
+                .flex()
+                .flex_row()
+                .gap(px(5.0))
+                .child(last)
+                .children(more)
+        }))
 }
 
 /// Edit and Delete for the right-clicked smart card, at the pointer.

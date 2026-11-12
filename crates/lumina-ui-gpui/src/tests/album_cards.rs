@@ -166,6 +166,13 @@ fn album_sort_is_saved_and_reverts_on_a_failed_save() {
         f32::from(bounds_center(vcx, leak(format!("album-card-{id}"))).x)
     };
     assert!(x(vcx, small.id) < x(vcx, big.id), "Name sorts Alpha first");
+    let sort = vcx
+        .debug_bounds("albums-sort")
+        .expect("albums-sort is painted");
+    assert!(
+        sort.right() > gpui::px(1500.0),
+        "Sort sits at the right edge of the head row at 1600 wide: {sort:?}"
+    );
 
     click(vcx, "albums-sort");
     click(vcx, "albums-sort-count");

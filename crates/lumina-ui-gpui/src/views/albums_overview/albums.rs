@@ -133,6 +133,7 @@ fn head_row(this: &LuminaApp, empty: bool, cx: &mut Context<LuminaApp>) -> Div {
     let focused = overview.focus == Some(OverviewFocus::Sort);
     let label = t("albums.sort").replace("{field}", &sort_name(this.config.album_sort));
     div()
+        .w_full()
         .h(px(HEAD_HEIGHT))
         .px(px(BODY_PAD_X))
         .pb(px(HEAD_GAP))

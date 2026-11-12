@@ -188,9 +188,18 @@ fn l_toggles_loop_and_speed_menu_opens_above_its_button() {
         menu.left() < speed.right() && menu.right() > speed.left(),
         "the speed menu is anchored over the speed button"
     );
+    let speed = crate::views::viewer::utils::format_playback_speed;
     assert_eq!(
-        crate::views::viewer::utils::format_playback_speed(1.0),
-        "1×"
+        [
+            speed(1.0),
+            speed(0.25),
+            speed(0.5),
+            speed(1.5),
+            speed(2.0),
+            speed(4.0)
+        ],
+        ["1.0×", "0.25×", "0.5×", "1.5×", "2.0×", "4.0×"],
+        "the speed pill shows one decimal, two only when needed"
     );
 }
 
