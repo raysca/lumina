@@ -208,6 +208,13 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d5. Album page More menu: ↑/↓ move, ↵ runs, Escape closes;
+        // other keys stay here, so ⌫ never trashes the selection behind it.
+        if self.albums.page.menu.is_some() {
+            self.handle_album_menu_key(key, cx);
+            return true;
+        }
+
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {

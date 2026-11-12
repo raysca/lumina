@@ -7055,3 +7055,57 @@ fn album_cards_pick_newest_active_member() {
          active member has no cover or date, and an undated cover has no date"
     );
 }
+
+#[test]
+fn album_stats_counts_kinds_and_range() {
+    use lumina_core::AlbumStats;
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    const T: i64 = 1_700_000_000_000;
+    // 0-1 photos, 2 a video, 3 an undated photo, 4 a trashed video (the
+    // oldest), 5 a hidden photo (the newest).
+    let kinds = [
+        (MediaType::Image, T + 2_000),
+        (MediaType::Image, T + 9_000),
+        (MediaType::Video, T + 5_000),
+        (MediaType::Image, 0),
+        (MediaType::Video, T),
+        (MediaType::Image, T + 20_000),
+    ];
+    let items: Vec<MediaItem> = kinds
+        .iter()
+        .enumerate()
+        .map(|(i, &(kind, ts))| {
+            let mut item = sample_media_item(&format!("/lib/stats_{i}"), kind, ts, None, None);
+            item.is_hidden = i == 5;
+            item
+        })
+        .collect();
+    let ids: Vec<MediaId> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    let album = catalog.create_album_with("Trip", &ids).expect("album");
+    catalog.set_trashed(ids[4], true).expect("trash");
+    let empty = catalog.create_album("Empty").expect("empty album");
+
+    assert_eq!(
+        catalog.album_stats(album.id).expect("stats"),
+        AlbumStats {
+            photos: 3,
+            videos: 1,
+            first_epoch_ms: Some(T + 2_000),
+            last_epoch_ms: Some(T + 9_000),
+            cover: Some(ids[1]),
+        },
+        "stats count active members by kind and span their dated capture times; \
+         trashed, hidden and undated members never widen the range; the cover is \
+         the newest active member"
+    );
+    assert_eq!(
+        catalog.album_stats(empty.id).expect("empty stats"),
+        AlbumStats::default(),
+        "an empty album has no items and no range"
+    );
+}

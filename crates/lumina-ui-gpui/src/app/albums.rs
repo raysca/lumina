@@ -31,6 +31,8 @@ pub struct AlbumsState {
     pub picker: Option<AlbumPicker>,
     /// The Albums overview page's tab and keyboard focus.
     pub overview: crate::app::albums_overview::OverviewState,
+    /// The open album's page: its More menu and header stats.
+    pub page: crate::views::album_page::AlbumPageState,
 }
 
 /// The Add to Album picker: the items it adds, the typed filter, and the

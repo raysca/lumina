@@ -478,6 +478,7 @@ impl Render for LuminaApp {
         self.refresh_top_matches(cx);
         self.refresh_map_points(cx);
         self.prepare_albums_overview(window, cx);
+        self.prepare_album_page(cx);
         self.close_header_popovers_under_modals();
         // A mouse-up outside an inactive window never reaches the root.
         if !window.is_window_active() {
@@ -722,6 +723,9 @@ impl Render for LuminaApp {
                             .child(self.render_error_banner(cx))
                             .child(if self.search_screen_shown() {
                                 self.render_search_header(cx).into_any_element()
+                            } else if let Some(id) = self.album_page_album() {
+                                crate::views::album_page::header::render(self, id, window, cx)
+                                    .into_any_element()
                             } else {
                                 self.render_toolbar(&view_label, window, cx)
                                     .into_any_element()
@@ -909,6 +913,12 @@ impl Render for LuminaApp {
                 self.sort_menu_open,
                 crate::views::sort_menu::render_sort_menu_overlay(self, cx),
                 "sort-menu-in",
+            ))
+            // 9b2. Album page More menu backdrop (the card hangs from More)
+            .child(motion::overlay_in(
+                self.albums.page.menu.is_some(),
+                crate::views::album_page::render_menu_backdrop(self, cx),
+                "album-menu-in",
             ))
             // 9c. Add filter menu backdrop (the card hangs from its opener)
             .child(motion::overlay_in(

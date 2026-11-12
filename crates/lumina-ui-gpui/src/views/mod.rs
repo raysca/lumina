@@ -1,5 +1,6 @@
 pub mod album_builder;
 pub mod album_delete;
+pub mod album_page;
 pub mod album_picker;
 pub mod albums_overview;
 pub mod command_palette;

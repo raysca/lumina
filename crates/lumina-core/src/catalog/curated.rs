@@ -36,6 +36,37 @@ pub struct AlbumCard {
     pub newest_epoch_ms: Option<i64>,
 }
 
+/// An album page's header numbers, over its active (not trashed, not
+/// hidden) members, as the album counts read them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AlbumStats {
+    /// Active members that are not videos.
+    pub photos: usize,
+    pub videos: usize,
+    /// The oldest dated member's capture time; `None` when no member is
+    /// dated (a capture time of 0 is undated, as in `view_scope`).
+    pub first_epoch_ms: Option<i64>,
+    /// The newest dated member's capture time.
+    pub last_epoch_ms: Option<i64>,
+    /// The album's cover, by the [`AlbumCard::cover`] rule.
+    pub cover: Option<MediaId>,
+}
+
+/// The cover rule, once for [`Catalog::album_cards`] and
+/// [`Catalog::album_stats`]: the newest active member by capture time, the
+/// larger id on a tie. `$album` is the SQL for the album id.
+macro_rules! album_cover {
+    ($album:literal) => {
+        concat!(
+            "SELECT m.id FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+             WHERE ai.album_id = ",
+            $album,
+            " AND m.is_trashed = 0 AND m.is_hidden = 0 \
+             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC LIMIT 1"
+        )
+    };
+}
+
 /// The SQL [`Catalog::album_cards`] runs.
 ///
 /// Per album, a correlated `ORDER BY … LIMIT 1` seeks that album's members
@@ -55,19 +86,12 @@ pub struct AlbumCard {
 /// member; that is inherent, since every album needs its newest member.
 /// ponytail: O(all memberships) per call, once per album refresh on a
 /// background thread; store a cover per album if that stops being cheap.
-const ALBUM_CARDS_SQL: &str = r#"
-    SELECT a.id, c.id, c.timestamp_epoch_ms
-    FROM albums a
-    LEFT JOIN media_items c ON c.id = (
-        SELECT m.id
-        FROM album_items ai
-        JOIN media_items m ON m.id = ai.media_id
-        WHERE ai.album_id = a.id AND m.is_trashed = 0 AND m.is_hidden = 0
-        ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
-        LIMIT 1
-    )
-    ORDER BY a.created_at_epoch_ms ASC, a.id ASC;
-    "#;
+const ALBUM_CARDS_SQL: &str = concat!(
+    "SELECT a.id, c.id, c.timestamp_epoch_ms FROM albums a \
+     LEFT JOIN media_items c ON c.id = (",
+    album_cover!("a.id"),
+    ") ORDER BY a.created_at_epoch_ms ASC, a.id ASC;"
+);
 
 /// Adds one member only while its media row exists. `OR IGNORE` skips a
 /// member already there but not a foreign-key failure, so without the
@@ -237,6 +261,37 @@ impl Catalog {
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Photo and video counts, the capture range and the cover of an
+    /// album's active members: one pass over its `album_items` rows
+    /// (primary key seek) with a media lookup per member, plus the cover's
+    /// seek. An unknown album reads as empty.
+    pub fn album_stats(&self, id: i64) -> Result<AlbumStats> {
+        const SQL: &str = concat!(
+            "SELECT COUNT(m.id), COALESCE(SUM(m.media_type = 'video'), 0), \
+                    MIN(NULLIF(m.timestamp_epoch_ms, 0)), \
+                    MAX(NULLIF(m.timestamp_epoch_ms, 0)), (",
+            album_cover!("?1"),
+            ") FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+             WHERE ai.album_id = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0;"
+        );
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(SQL)?;
+        let stats = stmt
+            .query_row([id], |row| {
+                let total = row.get::<_, i64>(0)? as usize;
+                let videos = row.get::<_, i64>(1)? as usize;
+                Ok(AlbumStats {
+                    photos: total - videos,
+                    videos,
+                    first_epoch_ms: row.get(2)?,
+                    last_epoch_ms: row.get(3)?,
+                    cover: row.get::<_, Option<i64>>(4)?.map(|id| MediaId(id as u64)),
+                })
+            })
+            .context("reading album stats")?;
+        Ok(stats)
     }
 
     /// Adds media to an album and returns how many were not members yet.

@@ -155,6 +155,69 @@ pub fn items_in_span(n: usize, span: Option<lumina_core::DateSpan>) -> String {
         .replace("{range}", &range)
 }
 
+/// An album header's meta line: "284 items · 212 photos, 72 videos · 14 —
+/// 18 Jun 2025". The count `n` alone until `stats` land, "0 items" for an
+/// empty album; no range when no member is dated.
+/// Once stats land the count is theirs, so the line never mixes a newer
+/// count with older kinds.
+pub fn album_meta(n: usize, stats: Option<lumina_core::AlbumStats>) -> String {
+    let Some(stats) = stats else {
+        return items(n);
+    };
+    let n = stats.photos + stats.videos;
+    if n == 0 {
+        return items(0);
+    }
+    let plural = |n: usize, key: &str| {
+        let form = if n == 1 { "one" } else { "other" };
+        t(&format!("album_page.{key}_{form}")).replace("{n}", &count(n))
+    };
+    let mut parts = vec![
+        items(n),
+        t("album_page.kinds")
+            .replace("{photos}", &plural(stats.photos, "photos"))
+            .replace("{videos}", &plural(stats.videos, "videos")),
+    ];
+    if let (Some(first), Some(last)) = (stats.first_epoch_ms, stats.last_epoch_ms) {
+        parts.extend(day_range(first, last));
+    }
+    parts.join(" · ")
+}
+
+/// Capture times as days, naming each side only as far as it differs:
+/// "14 Jun 2025", "14 — 18 Jun 2025", "28 May — 3 Jun 2025", "28 Dec 2024
+/// — 3 Jan 2025". Capture times are wall-clock time stored as UTC.
+pub fn day_range(first_ms: i64, last_ms: i64) -> Option<String> {
+    use chrono::Datelike;
+    let first = chrono::DateTime::from_timestamp_millis(first_ms)?.date_naive();
+    let last = chrono::DateTime::from_timestamp_millis(last_ms)?.date_naive();
+    let day_month = |d: chrono::NaiveDate| {
+        t("date.day_month")
+            .replace("{day}", &d.day().to_string())
+            .replace("{month}", &t(&format!("date.month_short_{}", d.month())))
+    };
+    let full = |d: chrono::NaiveDate| {
+        t("date.day_month_year")
+            .replace("{day_month}", &day_month(d))
+            .replace("{year}", &d.year().to_string())
+    };
+    if first == last {
+        return Some(full(last));
+    }
+    let from = if first.year() != last.year() {
+        full(first)
+    } else if first.month() != last.month() {
+        day_month(first)
+    } else {
+        first.day().to_string()
+    };
+    Some(
+        t("header.date_range")
+            .replace("{from}", &from)
+            .replace("{to}", &full(last)),
+    )
+}
+
 /// Accessible name of a collection button, e.g. "Favorites, 22 items".
 pub fn nav_aria_label(label: &str, count: usize) -> String {
     t(if count == 1 {
@@ -581,6 +644,17 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.minutes" => "{m} m",
         "header.date_range" => "{from} — {to}",
         "date.month_year" => "{month} {year}",
+        "date.day_month" => "{day} {month}",
+        "date.day_month_year" => "{day_month} {year}",
+        "album_page.photos_one" => "1 photo",
+        "album_page.photos_other" => "{n} photos",
+        "album_page.videos_one" => "1 video",
+        "album_page.videos_other" => "{n} videos",
+        "album_page.kinds" => "{photos}, {videos}",
+        "album_page.crumb_tooltip" => "Show Albums",
+        "album_page.slideshow_tooltip" => "Slideshow (⌥⌘S)",
+        "album_page.more" => "More album actions",
+        "album_page.share_tooltip" => "Select items to share",
         "timeline.label" => "TIMELINE",
         "timeline.scroll_to" => "Scroll to {year}",
         "timeline.scroll_to_older" => "Scroll to {year} and older",
@@ -792,6 +866,53 @@ mod tests {
             clips_meta(1, 0, "12 B"),
             "1 clip · 12 B",
             "unprobed clips drop the duration, not the size"
+        );
+    }
+
+    #[test]
+    fn album_meta_names_kinds_and_a_day_range() {
+        let ms = |y, m, d| {
+            chrono::NaiveDate::from_ymd_opt(y, m, d)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap()
+                .and_utc()
+                .timestamp_millis()
+        };
+        let stats = |photos, videos, first, last| {
+            Some(lumina_core::AlbumStats {
+                photos,
+                videos,
+                first_epoch_ms: Some(first),
+                last_epoch_ms: Some(last),
+                cover: None,
+            })
+        };
+        assert_eq!(
+            album_meta(284, stats(212, 72, ms(2025, 6, 14), ms(2025, 6, 18))),
+            "284 items · 212 photos, 72 videos · 14 — 18 Jun 2025"
+        );
+        assert_eq!(
+            album_meta(2, stats(1, 1, ms(2025, 5, 28), ms(2025, 6, 3))),
+            "2 items · 1 photo, 1 video · 28 May — 3 Jun 2025"
+        );
+        assert_eq!(
+            album_meta(2, stats(2, 0, ms(2024, 12, 28), ms(2025, 1, 3))),
+            "2 items · 2 photos, 0 videos · 28 Dec 2024 — 3 Jan 2025"
+        );
+        assert_eq!(
+            album_meta(1, stats(1, 0, ms(2025, 6, 14), ms(2025, 6, 14))),
+            "1 item · 1 photo, 0 videos · 14 Jun 2025"
+        );
+        assert_eq!(
+            album_meta(3, None),
+            "3 items",
+            "the count alone before stats"
+        );
+        assert_eq!(
+            album_meta(5, Some(lumina_core::AlbumStats::default())),
+            "0 items",
+            "an empty album has no kinds or range, and the count is the stats'"
         );
     }
 

@@ -423,69 +423,82 @@ impl LuminaApp {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<Stateful<Div>> {
+        let button = header_icon_button(
+            "downloads-toolbar-btn",
+            Icon::ArrowDownToLine,
+            crate::i18n::t("header.downloads"),
+            Some("⌥⌘L"),
+            self.downloads.open,
+        );
+        self.downloads_button(button, window, cx)
+    }
+
+    /// `button` as the Downloads button: the panel hangs from it, with the
+    /// progress ring, the unfinished count and the failure dot. None until
+    /// the list has rows. The page header and the album header share it.
+    pub(crate) fn downloads_button(
+        &self,
+        button: Stateful<Div>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Stateful<Div>> {
         if self.downloads.entries.is_empty() {
             return None;
         }
         let open = self.downloads.open;
         let count = self.download_badge_count();
         Some(
-            header_icon_button(
-                "downloads-toolbar-btn",
-                Icon::ArrowDownToLine,
-                crate::i18n::t("header.downloads"),
-                Some("⌥⌘L"),
-                open,
-            )
-            .relative()
-            .when(open, |button| {
-                button.child(popover_under(
-                    Anchor::TopRight,
-                    crate::views::downloads_panel::panel_card(self, window, cx),
-                ))
-            })
-            .children(self.download_progress().map(|fraction| {
-                div()
-                    .debug_selector(|| "downloads-progress-ring".to_string())
-                    .absolute()
-                    .inset_0()
-                    .child(progress_ring(fraction))
-            }))
-            .when(count > 0, |el| {
-                el.child(
+            button
+                .relative()
+                .when(open, |button| {
+                    button.child(popover_under(
+                        Anchor::TopRight,
+                        crate::views::downloads_panel::panel_card(self, window, cx),
+                    ))
+                })
+                .children(self.download_progress().map(|fraction| {
                     div()
-                        .debug_selector(|| "downloads-badge".to_string())
+                        .debug_selector(|| "downloads-progress-ring".to_string())
                         .absolute()
-                        .top(px(-3.0))
-                        .right(px(-3.0))
-                        .min_w(px(14.0))
-                        .h(px(14.0))
-                        .px(px(3.0))
-                        .rounded_full()
-                        .bg(theme::accent())
-                        .text_color(theme::on_accent())
-                        .text_size(px(9.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(count.to_string()),
-                )
-            })
-            .when(self.downloads.unseen_failure, |el| {
-                el.child(
-                    div()
-                        .debug_selector(|| "downloads-failure-dot".to_string())
-                        .absolute()
-                        .bottom(px(1.0))
-                        .right(px(1.0))
-                        .size(px(7.0))
-                        .rounded_full()
-                        .bg(theme::danger()),
-                )
-            })
-            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                this.toggle_downloads_panel(cx);
-            })),
+                        .inset_0()
+                        .child(progress_ring(fraction))
+                }))
+                .when(count > 0, |el| {
+                    el.child(
+                        div()
+                            .debug_selector(|| "downloads-badge".to_string())
+                            .absolute()
+                            .top(px(-3.0))
+                            .right(px(-3.0))
+                            .min_w(px(14.0))
+                            .h(px(14.0))
+                            .px(px(3.0))
+                            .rounded_full()
+                            .bg(theme::accent())
+                            .text_color(theme::on_accent())
+                            .text_size(px(9.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(count.to_string()),
+                    )
+                })
+                .when(self.downloads.unseen_failure, |el| {
+                    el.child(
+                        div()
+                            .debug_selector(|| "downloads-failure-dot".to_string())
+                            .absolute()
+                            .bottom(px(1.0))
+                            .right(px(1.0))
+                            .size(px(7.0))
+                            .rounded_full()
+                            .bg(theme::danger()),
+                    )
+                })
+                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.toggle_downloads_panel(cx);
+                })),
         )
     }
 

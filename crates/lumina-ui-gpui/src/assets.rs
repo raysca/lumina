@@ -25,6 +25,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "chevron-left",
     "chevron-right",
     "database",
+    "ellipsis",
     "external-link",
     "file-image",
     "film",

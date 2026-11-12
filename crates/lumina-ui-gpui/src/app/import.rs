@@ -102,6 +102,7 @@ impl LuminaApp {
         self.filter_menu = None;
         self.albums.overview.sort_menu = None;
         self.albums.overview.card_menu = None;
+        self.albums.page.menu = None;
         if self.downloads.open {
             self.downloads.open = false;
             self.downloads.focused = None;
@@ -120,6 +121,7 @@ impl LuminaApp {
             || self.rate_popover_shown()
             || self.albums.overview.sort_menu.is_some()
             || self.albums.overview.card_menu.is_some()
+            || self.albums.page.menu.is_some()
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

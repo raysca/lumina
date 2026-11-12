@@ -1199,6 +1199,11 @@ impl LuminaApp {
         self.refresh_batch_metadata(&items);
     }
 
+    /// Anything is selected. Never reads rows.
+    pub(crate) fn has_selection(&self) -> bool {
+        self.selected_item.is_some() || !self.selected_indices.is_empty()
+    }
+
     pub fn get_selected_items(&self) -> Vec<MediaItem> {
         // One selected index is the selected item: no lookup (and no wait on
         // the catalog for every arrow press).

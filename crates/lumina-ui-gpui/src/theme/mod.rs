@@ -126,11 +126,29 @@ tokens_alpha! {
     strip_tick = 0xFFFFFFD9;
     /// The video volume slider's track (white 15%).
     volume_track = 0xFFFFFF26;
+    /// Secondary text over media: an album header's breadcrumb (white 60%).
+    on_media_muted = 0xFFFFFF99;
+    /// Meta lines over media: an album header's counts (white 70%).
+    on_media_meta = 0xFFFFFFB3;
+    /// Top of [`header_fade`]: enough to keep the breadcrumb legible.
+    header_fade_top = 0x00000066;
+    /// Bottom of [`header_fade`], behind the title and meta line.
+    header_fade_bottom = 0x000000CC;
     /// Unselected check circle on a tile in selection mode (Design 07).
     check_idle = 0x00000059;
     /// Library card surface. Cards are transparent by request: thumbnails sit
     /// directly on the library background; selection shows as an outline.
     card_surface = 0x00000000;
+}
+
+/// The scrim over an album header's cover: darkest at the bottom, where
+/// the white title and meta line sit.
+pub fn header_fade() -> gpui::Background {
+    gpui::linear_gradient(
+        180.0,
+        gpui::linear_color_stop(header_fade_top(), 0.0),
+        gpui::linear_color_stop(header_fade_bottom(), 1.0),
+    )
 }
 
 /// Section label (LIBRARY, TAGS, ...): 10px semibold `t3`. Callers add

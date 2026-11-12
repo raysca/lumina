@@ -67,6 +67,7 @@ pub enum Icon {
     WandSparkles,
     Share,
     PanelRight,
+    Ellipsis,
 }
 
 impl Icon {
@@ -138,6 +139,7 @@ impl Icon {
         Icon::WandSparkles,
         Icon::Share,
         Icon::PanelRight,
+        Icon::Ellipsis,
     ];
 
     pub fn path(self) -> &'static str {
@@ -206,6 +208,7 @@ impl Icon {
             Self::WandSparkles => "icons/wand-sparkles.svg",
             Self::Share => "icons/share-2.svg",
             Self::PanelRight => "icons/panel-right.svg",
+            Self::Ellipsis => "icons/ellipsis.svg",
         }
     }
 }

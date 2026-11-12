@@ -2,6 +2,7 @@ mod album_cards;
 mod album_cards_keys;
 mod album_membership;
 mod album_membership_guards;
+mod album_page;
 mod albums;
 mod albums_delete;
 mod albums_overview;
