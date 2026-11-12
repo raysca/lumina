@@ -196,7 +196,7 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
         "tag-manager-detail-name",
         "tag-manager-items",
         "tag-manager-delete-note",
-        "tag-manager-show-beach",
+        "tag-detail-view-all",
     ] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
@@ -204,9 +204,9 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
         );
     }
     let name = vcx.debug_bounds("tag-manager-detail-name").unwrap();
-    assert!(f32::from(name.size.height) >= 24.0, "the name is 24px");
+    assert!(f32::from(name.size.height) >= 21.0, "the name is 21px");
 
-    click(vcx, "tag-manager-rename-field");
+    click(vcx, "tag-detail-edit");
     keystrokes(
         vcx,
         "backspace backspace backspace backspace backspace s h o r e enter",
@@ -265,7 +265,7 @@ fn moving_focus_cancels_a_rename_in_progress() {
 
     click(vcx, "tag-manager-row-beach");
     render_ui(vcx);
-    click(vcx, "tag-manager-rename-field");
+    click(vcx, "tag-detail-edit");
     keystrokes(vcx, "x");
     click(vcx, "tag-manager-row-sea");
     keystrokes(vcx, "enter");

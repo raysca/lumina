@@ -6,6 +6,7 @@
 
 mod bulk_bar;
 pub mod detail;
+mod detail_sections;
 pub mod list;
 
 use gpui::prelude::FluentBuilder;

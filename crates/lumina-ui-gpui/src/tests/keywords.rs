@@ -229,7 +229,7 @@ fn detail_panel_adds_and_removes_aliases() {
     open_manager(&view, vcx);
 
     click(vcx, "tag-row-places/usa/new york");
-    click(vcx, "tag-detail-alias-input");
+    click(vcx, "tag-detail-alias-add");
     type_text(vcx, "NYC");
     keystrokes(vcx, "enter");
     assert_eq!(
@@ -263,7 +263,7 @@ fn detail_panel_adds_and_removes_aliases() {
     });
 
     // An alias that is already a keyword is refused through the banner.
-    click(vcx, "tag-detail-alias-input");
+    click(vcx, "tag-detail-alias-add");
     type_text(vcx, "places");
     keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {

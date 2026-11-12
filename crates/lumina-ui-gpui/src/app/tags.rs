@@ -541,12 +541,15 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Loads the focused tag's items for the detail grid (6 columns × 4 rows).
+    /// Loads the focused tag's newest items for the detail PREVIEW (2 × 4).
     pub(crate) fn load_tag_manager_items(&mut self) {
         self.load_focused_keyword_count();
         self.tag_manager.tagged_items = match (self.tag_manager.focused.as_ref(), &self.grid_state)
         {
-            (Some(tag), Some(state)) => match state.engine.items_with_tag(tag, 24) {
+            (Some(tag), Some(state)) => match state
+                .engine
+                .items_with_tag(tag, crate::views::tag_manager::detail::PREVIEW_ITEMS)
+            {
                 Ok(items) => items.into_iter().map(|item| item.id).collect(),
                 Err(err) => {
                     log::warn!("could not load items for tag {tag:?}: {err:#}");

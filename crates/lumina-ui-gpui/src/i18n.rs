@@ -533,9 +533,28 @@ fn en_us(key: &str) -> Option<&'static str> {
         "tags.renamed_to" => "Renamed tag to \"{path}\"",
         "tags.moved_to" => "Moved keyword to \"{path}\"",
         "tags.bulk_delete_tooltip" => "Delete {n} keywords and the keywords below them (⌘⌫)",
-        "tags.delete_note" => {
-            "Removes this keyword and the keywords below it from {items}. The photos stay."
+        "tags.delete_note" => "Removes it from {items}. Your files are untouched.",
+        "tags.delete_note_children" => {
+            "Removes it and the keywords below it from {items}. Your files are untouched."
         }
+        "tags.delete" => "Delete tag",
+        "tags.detail_empty" => "Select a tag to see its details.",
+        "tags.rename" => "Rename (↵)",
+        "tags.touches" => "Changes {items}, including keywords below it. ↵ saves, Esc cancels.",
+        "tags.preview" => "PREVIEW",
+        "tags.view_all" => "View all",
+        "tags.view_all_label" => "Show every item with this tag in the library",
+        "tags.no_items" => "No items carry this tag.",
+        "tags.aliases" => "ALIASES",
+        "tags.aliases_hint" => "Typing any of these in a tag field adds {tag}.",
+        "tags.alias_add" => "Add",
+        "tags.alias_add_tooltip" => {
+            "Add an alias (⇧⌘A): ↵ adds, ⌫ in an empty field removes the last"
+        }
+        "tags.alias_remove" => "Remove alias {alias}",
+        "tags.organise" => "ORGANISE",
+        "tags.move_sub" => "Puts it under another keyword (⇧⌘M)",
+        "tags.move_hint" => "Type the parent keyword, or leave it empty for the top level.",
         "command.edit_smart_album" => "Edit Smart Album…",
         "command.delete_smart_album" => "Delete Smart Album…",
         "command.locate_missing" => "Locate Missing File…",

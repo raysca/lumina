@@ -643,7 +643,7 @@ fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
     });
     render_ui(vcx);
     assert!(
-        vcx.debug_bounds("tag-manager-rename-field").is_some(),
+        vcx.debug_bounds("tag-detail-edit").is_some(),
         "the detail panel must offer Rename for the focused tag"
     );
 
@@ -689,7 +689,7 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
     open_tag_manager(&view, vcx);
 
     click(vcx, tag_selector("row", "alpha"));
-    click(vcx, "tag-manager-rename-field");
+    click(vcx, "tag-detail-edit");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.tag_manager.editing.as_deref(),
@@ -713,7 +713,7 @@ fn rendered_show_in_library_filters_and_closes_the_manager() {
     open_tag_manager(&view, vcx);
 
     click(vcx, tag_selector("row", "alpha"));
-    click(vcx, tag_selector("show", "alpha"));
+    click(vcx, "tag-detail-view-all");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.search_query, "tag:alpha",

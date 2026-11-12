@@ -29,7 +29,7 @@ fn rename_keyword_rewrites_sidecars() {
     open(&view, vcx);
     click(vcx, "tag-manager-row-beach");
     render_ui(vcx);
-    click(vcx, "tag-manager-rename-field");
+    click(vcx, "tag-detail-edit");
     keystrokes(
         vcx,
         "backspace backspace backspace backspace backspace s h o r e enter",
