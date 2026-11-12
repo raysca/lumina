@@ -10,7 +10,7 @@ use crate::app::albums_overview::OverviewFocus;
 use crate::views::sidebar::AlbumSelection;
 
 /// Epoch ms of a UTC date, for capture times.
-fn utc_ms(year: i32, month: u32, day: u32) -> i64 {
+pub(super) fn utc_ms(year: i32, month: u32, day: u32) -> i64 {
     chrono::NaiveDate::from_ymd_opt(year, month, day)
         .and_then(|d| d.and_hms_opt(12, 0, 0))
         .expect("a valid test date")
@@ -19,7 +19,7 @@ fn utc_ms(year: i32, month: u32, day: u32) -> i64 {
 }
 
 /// The overview at a 1600 × 1000 window, with the album covers loaded.
-fn open_overview_at_1600(vcx: &mut gpui::VisualTestContext) {
+pub(super) fn open_overview_at_1600(vcx: &mut gpui::VisualTestContext) {
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
     click(vcx, "sidebar-albums-header");
     // The covers land from the background read, then paint.
@@ -276,7 +276,8 @@ fn empty_album_card_shows_a_folder_placeholder() {
 #[core::prelude::v1::test]
 fn album_grid_is_virtualised_and_keeps_the_focus_in_view() {
     let (dir, engine) = seed_library("album_cards_many", 1);
-    let ids: Vec<i64> = (0..100)
+    // 103 = 20 rows of 5 and a short last row of 3.
+    let ids: Vec<i64> = (0..103)
         .map(|i| engine.create_album(&format!("Album {i:03}")).unwrap().id)
         .collect();
     let mut cx = crate::tests::TestApp::single();
@@ -285,27 +286,89 @@ fn album_grid_is_virtualised_and_keeps_the_focus_in_view() {
     let card = |id: i64| leak(format!("album-card-{id}"));
     assert!(vcx.debug_bounds(card(ids[0])).is_some());
     assert!(
-        vcx.debug_bounds(card(ids[99])).is_none(),
+        vcx.debug_bounds(card(ids[102])).is_none(),
         "rows below the fold are not built"
     );
+    let focused = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, _| app.albums.overview.focus)
+    };
     focus_app(vcx, &view);
     for _ in 0..4 {
         keystrokes(vcx, "tab");
     }
+    keystrokes(vcx, "right");
     for _ in 0..25 {
         keystrokes(vcx, "down");
     }
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.albums.overview.focus,
-            Some(OverviewFocus::Card(ids[95])),
-            "↓ stops on the last row, same column"
-        );
-    });
+    assert_eq!(
+        focused(&view, vcx),
+        Some(OverviewFocus::Card(ids[101])),
+        "↓ reaches the short last row in the same column and stops there"
+    );
     assert!(
-        vcx.debug_bounds(card(ids[95])).is_some(),
+        vcx.debug_bounds(card(ids[101])).is_some(),
         "the focused card scrolls into view"
+    );
+    keystrokes(vcx, "right");
+    keystrokes(vcx, "right");
+    assert_eq!(
+        focused(&view, vcx),
+        Some(OverviewFocus::Card(ids[102])),
+        "→ stops at the last card"
+    );
+    keystrokes(vcx, "up");
+    keystrokes(vcx, "right");
+    keystrokes(vcx, "right");
+    keystrokes(vcx, "down");
+    assert_eq!(
+        focused(&view, vcx),
+        Some(OverviewFocus::Card(ids[99])),
+        "↓ from a column the short row lacks stays put"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Two albums (Alpha with an item, Beta empty) on the overview at 1600.
+pub(super) fn two_album_overview<'a>(
+    prefix: &str,
+    cx: &'a mut gpui::TestAppContext,
+) -> (
+    std::path::PathBuf,
+    std::sync::Arc<lumina_core::LuminaEngine>,
+    [i64; 2],
+    gpui::Entity<crate::LuminaApp>,
+    &'a mut gpui::VisualTestContext,
+) {
+    let (dir, engine) = seed_library(prefix, 2);
+    let items = engine.get_item_slice(0..2);
+    let alpha = engine.create_album("Alpha").unwrap();
+    engine.add_to_album(alpha.id, &[items[0].id]).unwrap();
+    let beta = engine.create_album("Beta").unwrap();
+    let (view, vcx) = app_with_library(cx, engine.clone());
+    open_overview_at_1600(vcx);
+    (dir, engine, [alpha.id, beta.id], view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn a_membership_change_updates_the_card() {
+    let mut cx = crate::tests::TestApp::single();
+    let (dir, engine, [_, beta], view, vcx) = two_album_overview("album_cards_live", &mut cx);
+    let placeholder = leak(format!("album-card-placeholder-{beta}"));
+    assert!(vcx.debug_bounds(placeholder).is_some());
+    let item = engine.get_item_slice(1..2)[0].clone();
+    engine.set_timestamp(item.id, utc_ms(2025, 6, 14)).unwrap();
+    engine.add_to_album(beta, &[item.id]).unwrap();
+    view.update(vcx, |app, _| app.refresh_album_counts());
+    render_ui(vcx);
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(placeholder).is_none(),
+        "the album's new member becomes its cover"
+    );
+    assert!(
+        vcx.debug_bounds("album-card-meta-text:1 item · Jun 2025")
+            .is_some(),
+        "the meta follows the new member"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -86,7 +86,8 @@ impl LuminaApp {
             || self.slideshow.is_some()
     }
 
-    /// Closes the Sort, Add filter and Downloads popovers once anything modal opens over
+    /// Closes the Sort, Add filter and Downloads popovers (and the Albums
+    /// overview's menus) once anything modal opens over
     /// them. Run from render, so every opener (menus, palette, actions,
     /// clicks) is covered without each one knowing about the header.
     pub(crate) fn close_header_popovers_under_modals(&mut self) {
@@ -99,6 +100,8 @@ impl LuminaApp {
     pub(crate) fn close_header_popovers(&mut self) {
         self.sort_menu_open = false;
         self.filter_menu = None;
+        self.albums.overview.sort_menu = None;
+        self.albums.overview.card_menu = None;
         if self.downloads.open {
             self.downloads.open = false;
             self.downloads.focused = None;
@@ -115,6 +118,8 @@ impl LuminaApp {
             || self.filter_menu.is_some()
             || self.downloads.open
             || self.rate_popover_shown()
+            || self.albums.overview.sort_menu.is_some()
+            || self.albums.overview.card_menu.is_some()
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

@@ -194,6 +194,7 @@ impl LuminaApp {
                 let message = t("album.renamed").replace("{title}", &after);
                 self.push_undo(UndoAction::AlbumRenamed { id, before, after });
                 self.refresh_album_counts();
+                self.scroll_focused_album_card();
                 self.set_last_action(message.clone());
                 self.show_undo_toast(message, cx);
             }
@@ -214,10 +215,19 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Rename Album… in the palette: the open album.
+    /// Rename Album… in the palette: the open album, or the focused card
+    /// on the Albums overview.
     pub fn rename_selected_album(&mut self, cx: &mut Context<Self>) {
-        if let AlbumSelection::Album(id) = self.selection {
+        if let Some(id) = self.palette_album() {
             self.start_album_rename(id, cx);
+        }
+    }
+
+    /// The album ⌘K Rename / Delete Album… act on.
+    pub(crate) fn palette_album(&self) -> Option<i64> {
+        match self.selection {
+            AlbumSelection::Album(id) => Some(id),
+            _ => self.focused_album_card(),
         }
     }
 
@@ -230,9 +240,10 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Delete Album… in the palette: asks about the open album.
+    /// Delete Album… in the palette: asks about the open album, or the
+    /// focused card on the Albums overview.
     pub fn delete_selected_album(&mut self, cx: &mut Context<Self>) {
-        if let AlbumSelection::Album(id) = self.selection {
+        if let Some(id) = self.palette_album() {
             self.prompt_delete_album(id, cx);
         }
     }
@@ -254,7 +265,16 @@ impl LuminaApp {
                     self.selection = AlbumSelection::AllLibrary;
                     self.clear_selection(cx);
                 }
+                // The overview's focus moves to a neighbouring card.
+                let focus_was_here = self.albums.overview.focus
+                    == Some(crate::app::albums_overview::OverviewFocus::Card(id));
+                let neighbour = self.album_card_neighbour(id);
                 self.refresh_album_counts();
+                if focus_was_here {
+                    self.albums.overview.focus =
+                        neighbour.map(crate::app::albums_overview::OverviewFocus::Card);
+                    self.scroll_focused_album_card();
+                }
                 self.push_undo(UndoAction::AlbumDeleted { album, members });
                 self.set_last_action(t("album.deleted"));
                 self.show_undo_toast(t("album.deleted"), cx);

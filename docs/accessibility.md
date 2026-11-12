@@ -25,7 +25,8 @@ Lumina is designed to be usable without a mouse:
   and opens its name field in the sidebar; ⌘K New Album with Selection
   (also in the right-click menu) makes one holding the selection. `↵` saves
   the name, `Esc` keeps the old one, and the field takes every other key.
-  With an album open, ⌘K Rename Album… and Delete Album… act on it; the
+  With an album open (or a card focused on the Albums overview), ⌘K Rename
+  Album… and Delete Album… act on it; the
   delete confirmation takes `↵`/`Esc` and absorbs every other key. `⌘Z`
   undoes a rename or a delete (members come back). `⇧⌘A` (⌘K Add to
   Album…) opens the album picker: type to filter, `↑`/`↓` move, `↵` adds,
@@ -106,9 +107,12 @@ Lumina is designed to be usable without a mouse:
   Albums Tab). `Enter` runs a focused New Album, opens the sort menu
   (`↑`/`↓` then `Enter` pick an order, `Esc` closes it) or opens the
   focused album. On a card the arrows move between cards (the focused card
-  scrolls into view) and `⌘⌫` asks to delete that album. `Esc` clears the
-  focus. Rename is on a card's right-click menu and the sidebar row. The
-  page holds no media, so the grid's keys do nothing there.
+  scrolls into view) and `⌘⌫` asks to delete that album; ⌘K Rename
+  Album… and Delete Album… act on the focused card. After a delete the
+  focus moves to the next card (else the previous). `Esc` closes a menu,
+  else clears the focus. Switching tabs drops a Sort or card focus and
+  closes the menus. The inspector stays hidden there (`I` does nothing).
+  The page holds no media, so the grid's keys do nothing there.
 - **Mosaic**: ⌘K Show Mosaic / Show Grid or the toolbar's view-mode
   segments switch the browser between justified rows and the square grid
   (the choice is kept; Grid is the default). Duplicates and a smart album

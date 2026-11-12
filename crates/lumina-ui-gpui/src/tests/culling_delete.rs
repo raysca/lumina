@@ -271,6 +271,10 @@ fn delete_rejected_is_refused_in_trash_duplicates_and_albums() {
             "{place:?}: a toast says why"
         );
     }
+    assert!(
+        crate::i18n::t("culling.delete_rejected_unavailable").ends_with("or the Albums page"),
+        "the toast names the Albums page, not albums in general"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

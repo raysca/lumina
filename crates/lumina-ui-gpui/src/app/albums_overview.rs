@@ -114,8 +114,20 @@ impl LuminaApp {
         }
     }
 
+    /// Every tab change (click, ←/→, palette) closes the menus and drops a
+    /// Sort or card focus: they belong to the Albums tab, and keys must not
+    /// act on hidden cards.
     pub(crate) fn set_albums_tab(&mut self, tab: AlbumsTab, cx: &mut Context<Self>) {
-        self.albums.overview.tab = tab;
+        let overview = &mut self.albums.overview;
+        overview.tab = tab;
+        overview.sort_menu = None;
+        overview.card_menu = None;
+        if matches!(
+            overview.focus,
+            Some(OverviewFocus::Sort | OverviewFocus::Card(_))
+        ) {
+            overview.focus = None;
+        }
         cx.notify();
     }
 
@@ -158,9 +170,6 @@ impl LuminaApp {
         {
             return;
         }
-        if overview.cards_loaded.is_some_and(|(g, _)| g != generation) {
-            overview.cards.clear();
-        }
         overview.cards_in_flight = true;
         let task = cx.background_executor().spawn(async move {
             // Read before querying: a write meanwhile leaves this revision
@@ -172,10 +181,11 @@ impl LuminaApp {
         cx.spawn(async move |this, cx| {
             let (revision, cards) = task.await;
             this.update(cx, |app, cx| {
-                let overview = &mut app.albums.overview;
-                overview.cards_in_flight = false;
-                // Another library opened meanwhile: the next frame reads it.
+                // Another library opened meanwhile: opening it reset the
+                // album state, so this read touches nothing there.
                 if app.library_generation == generation {
+                    let overview = &mut app.albums.overview;
+                    overview.cards_in_flight = false;
                     overview.cards = cards.into_iter().map(|c| (c.album_id, c)).collect();
                     overview.cards_loaded = Some((generation, revision));
                 }
@@ -213,6 +223,47 @@ impl LuminaApp {
             }
         }
         albums.into_iter().map(|a| a.id).collect()
+    }
+
+    /// The keyboard-focused album card, while it is on screen. ⌘K Rename
+    /// Album… and Delete Album… act on it.
+    pub(crate) fn focused_album_card(&self) -> Option<i64> {
+        match self.albums.overview.focus {
+            Some(OverviewFocus::Card(id))
+                if self.albums_overview_shown()
+                    && self.album_cards_shown()
+                    && self.album_title(id).is_some() =>
+            {
+                Some(id)
+            }
+            _ => None,
+        }
+    }
+
+    /// The card the focus moves to when the focused album `id` is deleted:
+    /// the next one, else the previous; `None` when it is the only one.
+    pub(crate) fn album_card_neighbour(&self, id: i64) -> Option<i64> {
+        let order = self.album_card_order();
+        let at = order.iter().position(|o| *o == id)?;
+        order
+            .get(at + 1)
+            .or(at.checked_sub(1).and_then(|i| order.get(i)))
+            .copied()
+    }
+
+    /// Scrolls the focused card's row into view (its place can change after
+    /// a rename or a delete).
+    pub(crate) fn scroll_focused_album_card(&mut self) {
+        let Some(OverviewFocus::Card(id)) = self.albums.overview.focus else {
+            return;
+        };
+        if let Some(at) = self.album_card_order().iter().position(|o| *o == id) {
+            let columns = self.albums.overview.columns.max(1);
+            self.albums
+                .overview
+                .scroll
+                .scroll_to_item(at / columns, ScrollStrategy::Nearest);
+        }
     }
 
     /// A card's click or ↵: the album, one Back entry.
@@ -267,16 +318,11 @@ impl LuminaApp {
 
     /// Focuses the card at `index` in card order and scrolls its row in.
     fn focus_album_card(&mut self, order: &[i64], index: usize, cx: &mut Context<Self>) {
-        let Some(&id) = order.get(index) else {
-            return;
-        };
-        let columns = self.albums.overview.columns.max(1);
-        self.albums.overview.focus = Some(OverviewFocus::Card(id));
-        self.albums
-            .overview
-            .scroll
-            .scroll_to_item(index / columns, ScrollStrategy::Nearest);
-        cx.notify();
+        if let Some(&id) = order.get(index) {
+            self.albums.overview.focus = Some(OverviewFocus::Card(id));
+            self.scroll_focused_album_card();
+            cx.notify();
+        }
     }
 
     /// The stops Tab moves through, in order.

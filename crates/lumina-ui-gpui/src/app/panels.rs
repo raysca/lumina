@@ -37,6 +37,11 @@ impl LuminaApp {
     }
 
     pub fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
+        // The Albums overview hides the panel: a toggle there would flip and
+        // save a setting the user cannot see.
+        if self.albums_overview_shown() {
+            return;
+        }
         if self.floating_inspector_window.is_some() {
             // If already floating, focus the floating window
             self.inspector_open = false;

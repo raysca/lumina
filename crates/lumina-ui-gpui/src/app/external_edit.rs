@@ -106,6 +106,11 @@ impl LuminaApp {
         if let Some(state) = self.grid_state.as_mut() {
             state.total_count = state.engine.total_count();
         }
+        // The Albums overview holds no media: show the copy in All Media,
+        // as PiP's expand does, so no hidden selection is left on the page.
+        if self.albums_overview_shown() {
+            self.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
+        }
         // Counts first (the view lookup below reads them), and the ratings,
         // labels and captions maps the new selection shows.
         self.refresh_after_history(cx);

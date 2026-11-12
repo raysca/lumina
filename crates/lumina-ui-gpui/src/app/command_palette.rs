@@ -1125,9 +1125,7 @@ impl LuminaApp {
                 matches!(self.selection, AlbumSelection::Album(_))
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
             }
-            CommandId::RenameAlbum | CommandId::DeleteAlbum => {
-                matches!(self.selection, AlbumSelection::Album(_))
-            }
+            CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
             CommandId::PinAlbum => self.open_album_pinned() == Some(false),
             CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),
             CommandId::DuplicateSmartAlbum | CommandId::ExportSmartAlbumRules => {

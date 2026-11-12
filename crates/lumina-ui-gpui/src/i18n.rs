@@ -276,7 +276,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.show_map" => "Show Map",
         "command.show_albums" => "Show Albums",
         "culling.delete_rejected_unavailable" => {
-            "Delete Rejected works in a photo view, not in Recently Deleted, Duplicates or Albums"
+            "Delete Rejected works in a photo view, not in Recently Deleted, Duplicates or the Albums page"
         }
         "command.show_albums_tab" => "Show Albums Tab",
         "command.show_smart_albums_tab" => "Show Smart Albums Tab",
@@ -490,7 +490,6 @@ fn en_us(key: &str) -> Option<&'static str> {
         "albums.sort_created" => "Date created",
         "albums.sort_newest" => "Newest photo",
         "albums.sort_count" => "Item count",
-        "albums.grid" => "Albums",
         "albums.empty" => "No albums yet.",
         "albums.card_menu" => "Album actions",
         "albums.card_rename" => "Rename",
