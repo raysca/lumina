@@ -22,6 +22,49 @@ impl TagSortOrder {
     }
 }
 
+/// The Tags page row `…` menu's items, in order. Merge into… (Design 08
+/// Task 5) and Save as Smart Album (Task 6) join when they exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagRowAction {
+    Rename,
+    Move,
+    Delete,
+}
+
+impl TagRowAction {
+    pub const ALL: [TagRowAction; 3] = [
+        TagRowAction::Rename,
+        TagRowAction::Move,
+        TagRowAction::Delete,
+    ];
+
+    /// The menu row's selector suffix: `tag-row-menu-<id>`.
+    pub fn id(self) -> &'static str {
+        match self {
+            TagRowAction::Rename => "rename",
+            TagRowAction::Move => "move",
+            TagRowAction::Delete => "delete",
+        }
+    }
+
+    pub fn label(self) -> String {
+        crate::i18n::t(match self {
+            TagRowAction::Rename => "tags.row_rename",
+            TagRowAction::Move => "tags.row_move",
+            TagRowAction::Delete => "tags.row_delete",
+        })
+    }
+
+    /// The same action's key on the page, shown at the row's right.
+    pub fn shortcut(self) -> &'static str {
+        match self {
+            TagRowAction::Rename => "↵",
+            TagRowAction::Move => "⇧⌘M",
+            TagRowAction::Delete => "",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteIntent {
     EmptyTrash,

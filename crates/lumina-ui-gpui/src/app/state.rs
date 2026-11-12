@@ -172,7 +172,7 @@ pub struct TagManagerState {
     /// the checkbox set for bulk actions.
     pub focused: Option<String>,
     /// Tracks the list so ↑/↓ can keep the focused row in view.
-    pub list_scroll: gpui::ScrollHandle,
+    pub list_scroll: gpui::UniformListScrollHandle,
     /// Distinct items under the focused keyword (itself and its children),
     /// loaded on focus: the detail count and what a rename or move changes.
     pub focused_count: usize,
@@ -182,6 +182,28 @@ pub struct TagManagerState {
     /// The alias field in the detail panel takes typing.
     pub alias_editing: bool,
     pub alias_buffer: String,
+    /// The open row `…` menu: its keyword and highlighted row in
+    /// [`crate::app::types::TagRowAction::ALL`].
+    pub row_menu: Option<(String, usize)>,
+}
+
+impl TagManagerState {
+    /// The sort menu or a row menu is open: it takes the page's keys and
+    /// typing, and closes with the page or under a modal.
+    pub fn popover_open(&self) -> bool {
+        self.sort_menu.is_some() || self.row_menu.is_some()
+    }
+
+    pub fn close_popovers(&mut self) {
+        self.sort_menu = None;
+        self.row_menu = None;
+    }
+
+    /// The keyword list's scroll offset (negative once scrolled down).
+    #[cfg(test)]
+    pub fn list_offset_y(&self) -> gpui::Pixels {
+        self.list_scroll.0.borrow().base_handle.offset().y
+    }
 }
 
 impl Default for TagManagerState {
@@ -196,11 +218,12 @@ impl Default for TagManagerState {
             editing_buffer: String::new(),
             tagged_items: Vec::new(),
             focused: None,
-            list_scroll: gpui::ScrollHandle::new(),
+            list_scroll: gpui::UniformListScrollHandle::new(),
             focused_count: 0,
             moving: false,
             alias_editing: false,
             alias_buffer: String::new(),
+            row_menu: None,
         }
     }
 }

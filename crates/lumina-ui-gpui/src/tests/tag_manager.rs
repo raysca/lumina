@@ -174,16 +174,16 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
     open(&view, vcx);
 
     let row = vcx.debug_bounds("tag-manager-row-beach").unwrap();
-    assert_eq!(f32::from(row.size.height), 36.0, "rows are 36px");
+    assert_eq!(f32::from(row.size.height), 44.0, "rows are 44px");
     let full = vcx.debug_bounds("tag-manager-usage-fill-beach").unwrap();
     let third = vcx.debug_bounds("tag-manager-usage-fill-coast").unwrap();
     assert_eq!(
         f32::from(full.size.width),
-        110.0,
+        190.0,
         "the most-used tag fills the bar"
     );
     assert!(
-        (f32::from(third.size.width) - 110.0 / 3.0).abs() < 0.5,
+        (f32::from(third.size.width) - 190.0 / 3.0).abs() < 0.5,
         "bars are proportional: {third:?}"
     );
 

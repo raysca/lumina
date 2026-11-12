@@ -263,6 +263,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
             ("Enter", "Rename the keyword"),
             ("⇧⌘A", "Add an alias for the keyword"),
             ("⇧⌘M", "Move the keyword to another parent"),
+            ("⇧F10", "Actions for the keyword"),
             ("Esc", "Clear the checks"),
         ],
     ),
@@ -767,7 +768,9 @@ impl Render for LuminaApp {
                                             .flex_1()
                                             .min_w_0()
                                             .h_full()
-                                            .child(crate::views::tag_manager::render(self, cx))
+                                            .child(crate::views::tag_manager::render(
+                                                self, window, cx,
+                                            ))
                                             .child(self.render_toast_overlay(cx))
                                             .into_any_element()
                                     } else if self.albums_overview_shown() {

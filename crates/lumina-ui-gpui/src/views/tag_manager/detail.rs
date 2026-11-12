@@ -8,6 +8,9 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
 
+/// The panel's width (frame `L3F8Cs`).
+pub(crate) const WIDTH: f32 = 359.5;
+
 /// TAGGED ITEMS grid columns.
 const GRID_COLUMNS: usize = 6;
 
@@ -15,8 +18,8 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
     let panel = div()
         .id("tag-manager-detail")
         .debug_selector(|| "tag-manager-detail".to_string())
-        .flex_1()
-        .min_w(px(0.0))
+        .w(px(WIDTH))
+        .flex_shrink_0()
         .bg(theme::bg_1())
         .p(px(24.0))
         .flex()

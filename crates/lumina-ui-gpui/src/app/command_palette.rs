@@ -156,6 +156,8 @@ pub enum CommandId {
     /// shown only when there is one.
     AddKeywordAlias,
     MoveKeyword,
+    RenameKeyword,
+    DeleteKeyword,
     /// Browsing history; shown only when it would move.
     Back,
     Forward,
@@ -246,7 +248,8 @@ impl Command {
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
-            MoveKeyword | ManageTemplates => Icon::Pencil,
+            MoveKeyword | RenameKeyword | ManageTemplates => Icon::Pencil,
+            DeleteKeyword => Icon::Trash,
             SortTags => Icon::ArrowUpNarrowWide,
             ClearRecents | ClearRecentSearches => Icon::X,
             Back => Icon::ChevronLeft,
@@ -1094,6 +1097,18 @@ pub fn commands() -> &'static [Command] {
             keywords: "tag keyword move parent hierarchy reparent",
         },
         Command {
+            id: CommandId::RenameKeyword,
+            key: "command.rename_keyword",
+            shortcut: "",
+            keywords: "tag keyword rename name",
+        },
+        Command {
+            id: CommandId::DeleteKeyword,
+            key: "command.delete_keyword",
+            shortcut: "",
+            keywords: "tag keyword delete remove",
+        },
+        Command {
             id: CommandId::Back,
             key: "command.back",
             shortcut: "⌘[",
@@ -1262,7 +1277,10 @@ impl LuminaApp {
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
             }
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
-            CommandId::AddKeywordAlias | CommandId::MoveKeyword => self.command_keyword().is_some(),
+            CommandId::AddKeywordAlias
+            | CommandId::MoveKeyword
+            | CommandId::RenameKeyword
+            | CommandId::DeleteKeyword => self.command_keyword().is_some(),
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
             }
@@ -1706,6 +1724,8 @@ impl LuminaApp {
             }
             CommandId::AddKeywordAlias => self.start_alias_input(cx),
             CommandId::MoveKeyword => self.start_keyword_move(cx),
+            CommandId::RenameKeyword => self.start_keyword_rename(cx),
+            CommandId::DeleteKeyword => self.delete_command_keyword(cx),
             CommandId::Back => self.navigate_back(cx),
             CommandId::Forward => self.navigate_forward(cx),
             CommandId::ClearRecents => self.clear_recents(cx),

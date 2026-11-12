@@ -98,6 +98,8 @@ tokens! {
     rail_bar = 0x32323A;
     /// Timeline rail month bar in the year on screen.
     rail_bar_current = 0x4A4A56;
+    /// Bar fills in charts and usage tracks (the Tags page usage column).
+    chart_grey = 0x4E4E5C;
     /// The back plate of an album card's stack (frame Back2).
     plate = 0x2A2A33;
     /// The middle plate of an album card's stack (frame Back1).
@@ -223,6 +225,7 @@ mod tests {
             ("danger_border", danger_border(), 0x45211EFF),
             ("accent_surface", accent_surface(), 0x17120BFF),
             ("warn_border", warn_border(), 0x3A2E1AFF),
+            ("chart_grey", chart_grey(), 0x4E4E5CFF),
         ] {
             assert_eq!(hex(token), want, "{name} must equal its lumina.pen value");
         }

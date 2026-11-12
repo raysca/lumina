@@ -4,6 +4,7 @@
 //! while `AlbumSelection::Tags` shows. State lives in `app/tags.rs`, keys in
 //! `app/keymap/tags_page.rs`.
 
+mod bulk_bar;
 pub mod detail;
 pub mod list;
 
@@ -38,8 +39,20 @@ pub(crate) fn meta(app: &LuminaApp) -> String {
         .replace("{percent}", &percent.to_string())
 }
 
+/// The keyword list's width: the centre pane (no inspector on this page)
+/// less the detail panel.
+fn list_width(app: &LuminaApp, window: &Window) -> f32 {
+    crate::views::grid::center_pane_width(
+        window.viewport_size().width.into(),
+        app.sidebar_width,
+        app.sidebar_collapsed,
+        false,
+        None,
+    ) - detail::WIDTH
+}
+
 /// The page body under the header: the tab row, then list and detail.
-pub(crate) fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
+pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>) -> AnyElement {
     let rows = app.tag_manager_rows();
     let tabs = [PageTab {
         id: "keywords",
@@ -68,15 +81,15 @@ pub(crate) fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
                 .min_h_0()
                 .flex()
                 .flex_row()
-                .child(list::render_list(app, &rows, cx))
+                .child(list::render_list(app, rows, list_width(app, window), cx))
                 .child(detail::render_detail(app, cx)),
         )
         // The open menu's dismiss backdrop; the menu paints above it.
-        .when(app.tag_manager.sort_menu.is_some(), |page| {
+        .when(app.tag_manager.popover_open(), |page| {
             page.child(div().absolute().inset_0().occlude().on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                    this.tag_manager.sort_menu = None;
+                    this.tag_manager.close_popovers();
                     cx.notify();
                 }),
             ))

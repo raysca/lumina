@@ -114,27 +114,6 @@ pub fn menu_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
     }
 }
 
-/// Standard 26px list/sidebar row.
-pub fn row(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
-    let base = div()
-        .id(id)
-        .h(px(26.0))
-        .px(px(8.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .rounded(RADIUS_MD)
-        .text_size(TEXT_BODY)
-        .cursor_pointer();
-
-    if active {
-        base.bg(bg_3()).text_color(t1())
-    } else {
-        base.text_color(t2()).hover(|s| s.bg(bg_3()))
-    }
-}
-
 /// 8px circular color label dot.
 pub fn label_dot(color: Rgba) -> Div {
     div().size(px(8.0)).rounded_full().bg(color)

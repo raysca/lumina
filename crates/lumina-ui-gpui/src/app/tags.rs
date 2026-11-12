@@ -311,10 +311,10 @@ impl LuminaApp {
             self.tag_manager.search.clear();
             self.tag_manager.search_focused = true;
             self.tag_manager.selected.clear();
-            self.tag_manager.sort_menu = None;
+            self.tag_manager.close_popovers();
             self.tag_manager.focused = None;
             self.tag_manager.tagged_items.clear();
-            self.tag_manager.list_scroll = gpui::ScrollHandle::new();
+            self.tag_manager.list_scroll = gpui::UniformListScrollHandle::new();
         }
         cx.notify();
     }
@@ -400,8 +400,9 @@ impl LuminaApp {
         }
         self.tag_manager.focused = Some(rows[next].path.clone());
         self.load_tag_manager_items();
-        // The list's children are exactly these rows when it is non-empty.
-        self.tag_manager.list_scroll.scroll_to_item(next);
+        self.tag_manager
+            .list_scroll
+            .scroll_to_item(next, gpui::ScrollStrategy::Nearest);
         cx.notify();
     }
 
@@ -413,6 +414,7 @@ impl LuminaApp {
         self.tag_manager.moving = false;
         self.tag_manager.alias_editing = false;
         self.tag_manager.alias_buffer.clear();
+        self.tag_manager.row_menu = None;
     }
 
     pub fn start_modal_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {

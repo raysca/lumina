@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 use gpui::*;
 use lumina_core::catalog::keywords::{leaf, parent_of};
 
-use crate::app::types::TagSortOrder;
+use crate::app::types::{TagRowAction, TagSortOrder};
 use crate::app::LuminaApp;
 use crate::views::inspector::tabs::tags::{tag_suggestions, Suggestion};
 use crate::views::sidebar::AlbumSelection;
@@ -212,6 +212,60 @@ impl LuminaApp {
         self.tag_manager.editing = Some(tag);
         self.tag_manager.moving = true;
         cx.notify();
+    }
+
+    /// Rename Keyword (`RenameKeyword`): the rename field for the command's
+    /// keyword, as ↵ on the Tags page.
+    pub fn start_keyword_rename(&mut self, cx: &mut Context<Self>) {
+        if !self.focus_command_keyword(cx) {
+            return;
+        }
+        if let Some(tag) = self.tag_manager.focused.clone() {
+            self.start_modal_tag_rename(tag, cx);
+        }
+    }
+
+    /// Delete Keyword (`DeleteKeyword`): deletes the command's keyword from
+    /// every item, with undo.
+    pub fn delete_command_keyword(&mut self, cx: &mut Context<Self>) {
+        if let Some(tag) = self.command_keyword() {
+            self.delete_tag_globally(tag, cx);
+        }
+    }
+
+    /// Opens the row `…` menu on `tag` (its button, or ⇧F10 on the focused
+    /// row), focusing the row first so the detail shows what it acts on.
+    pub(crate) fn open_tag_row_menu(&mut self, tag: String, cx: &mut Context<Self>) {
+        self.focus_tag_manager_tag(tag.clone(), cx);
+        // ⇧F10 may come with the focused row scrolled away: the menu is drawn
+        // from its row, so bring the row on screen.
+        if let Some(index) = self
+            .tag_manager_rows()
+            .iter()
+            .position(|row| row.path == tag)
+        {
+            self.tag_manager
+                .list_scroll
+                .scroll_to_item(index, gpui::ScrollStrategy::Nearest);
+        }
+        self.tag_manager.row_menu = Some((tag, 0));
+        cx.notify();
+    }
+
+    /// A row menu pick: closes the menu and runs `action` on `tag`.
+    pub(crate) fn run_tag_row_action(
+        &mut self,
+        tag: String,
+        action: TagRowAction,
+        cx: &mut Context<Self>,
+    ) {
+        self.tag_manager.row_menu = None;
+        self.focus_tag_manager_tag(tag.clone(), cx);
+        match action {
+            TagRowAction::Rename => self.start_modal_tag_rename(tag, cx),
+            TagRowAction::Move => self.start_keyword_move(cx),
+            TagRowAction::Delete => self.delete_tag_globally(tag, cx),
+        }
     }
 
     /// The path a modal rename buffer names: the buffer itself, or for Move

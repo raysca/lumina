@@ -306,7 +306,7 @@ fn test_tag_manager_modular_flow() {
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
-    view.update(cx, |app, cx| {
+    view.update_in(cx, |app, window, cx| {
         // Seed library tags
         app.library_tag_counts = vec![
             ("sunset".to_string(), 15),
@@ -324,7 +324,7 @@ fn test_tag_manager_modular_flow() {
         cx.notify();
 
         // Render the Tags page body without panic
-        let _element = crate::views::tag_manager::render(app, cx);
+        let _element = crate::views::tag_manager::render(app, window, cx);
 
         // Test sorting by Alphabetical vs CountDesc
         app.set_tag_sort_order(TagSortOrder::Alphabetical, cx);
@@ -832,7 +832,7 @@ fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
     view.update(vcx, |app, _| {
         assert_eq!(app.tag_manager.focused.as_deref(), Some("tag39"));
         assert!(
-            app.tag_manager.list_scroll.offset().y < gpui::px(0.0),
+            app.tag_manager.list_offset_y() < gpui::px(0.0),
             "focusing the last tag by keyboard must scroll the list to it"
         );
     });

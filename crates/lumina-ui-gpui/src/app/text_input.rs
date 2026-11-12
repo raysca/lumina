@@ -546,9 +546,9 @@ impl LuminaApp {
             TagManagerAlias
         } else if self.search_focused {
             Search
-        } else if self.tags_page_shown() && self.tag_manager.sort_menu.is_none() {
+        } else if self.tags_page_shown() && !self.tag_manager.popover_open() {
             // Typing on the Tags page filters it (the sidebar search, when
-            // focused, takes it first; the open sort menu takes the keys).
+            // focused, takes it first; an open sort or row menu takes the keys).
             TagManagerSearch
         } else {
             return None;
