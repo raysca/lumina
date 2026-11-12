@@ -671,6 +671,12 @@ impl LuminaEngine {
         self.read("album stats", self.catalog.album_stats(id))
     }
 
+    /// Sets an album's key photo (`None` clears it); the photo must be a
+    /// member of the album.
+    pub fn set_album_cover(&self, id: i64, cover: Option<MediaId>) -> Result<()> {
+        self.catalog.set_album_cover(id, cover)
+    }
+
     /// Adds media to an album; returns how many were new members.
     pub fn add_to_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
         self.catalog.add_to_album(id, media)

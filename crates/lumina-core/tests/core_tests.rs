@@ -7109,3 +7109,177 @@ fn album_stats_counts_kinds_and_range() {
         "an empty album has no items and no range"
     );
 }
+
+#[test]
+fn album_cover_set_cleared_on_purge_and_migrated() {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "lumina_album_cover_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    // Removes the temp dir even when an assertion below panics.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(tmp_dir.clone());
+    let db_path = tmp_dir.join("catalog.db");
+    const T: i64 = 1_700_000_000_000;
+    // 0 oldest, 2 newest; 3 is in the library but not in the album.
+    let (ids, album_id) = {
+        let catalog = Catalog::open(&db_path).unwrap();
+        let items: Vec<MediaItem> = (0..4)
+            .map(|i| {
+                sample_media_item(
+                    &format!("/lib/cover_{i}.jpg"),
+                    MediaType::Image,
+                    T + i * 1_000,
+                    None,
+                    None,
+                )
+            })
+            .collect();
+        let ids: Vec<MediaId> = catalog
+            .insert_or_update_batch(&items)
+            .unwrap()
+            .into_iter()
+            .map(|item| item.id)
+            .collect();
+        let album = catalog.create_album_with("Trip", &ids[..3]).unwrap();
+        (ids, album.id)
+    };
+    {
+        // Back to the v21 layout: albums without cover_media_id. DROP COLUMN
+        // refuses a foreign-key column, so rebuild the table.
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = OFF;
+            DROP INDEX IF EXISTS idx_albums_cover;
+            CREATE TABLE albums_v21 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                created_at_epoch_ms INTEGER NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO albums_v21 SELECT id, title, created_at_epoch_ms, pinned FROM albums;
+            DROP TABLE albums;
+            ALTER TABLE albums_v21 RENAME TO albums;
+            PRAGMA user_version = 21;
+            "#,
+        )
+        .unwrap();
+    }
+    for _ in 0..2 {
+        let catalog = Catalog::open(&db_path).expect("a v21 catalog must open and migrate");
+        assert_eq!(catalog.schema_version().unwrap(), SCHEMA_VERSION);
+        let (album, count) = catalog.list_albums_with_counts().unwrap().remove(0);
+        assert_eq!(
+            (album.id, album.cover_media_id, count),
+            (album_id, None, 3),
+            "a migrated album keeps its members and starts without a key photo"
+        );
+    }
+
+    let library = tmp_dir.join("library");
+    std::fs::create_dir_all(&library).unwrap();
+    let (engine, _rx) =
+        LuminaEngine::open_with_paths(library, db_path.clone(), Some(tmp_dir.join("cache")))
+            .expect("engine");
+    let catalog = Catalog::open(&db_path).unwrap();
+    let card_cover = |catalog: &Catalog| catalog.album_cards().unwrap()[0].cover;
+    let stats_cover = |catalog: &Catalog| catalog.album_stats(album_id).unwrap().cover;
+    assert_eq!(card_cover(&catalog), Some(ids[2]), "no key photo: newest");
+
+    engine.set_album_cover(album_id, Some(ids[0])).unwrap();
+    assert_eq!(
+        catalog.list_albums_with_counts().unwrap()[0]
+            .0
+            .cover_media_id,
+        Some(ids[0]),
+        "the key photo is stored on the album row"
+    );
+    assert_eq!(
+        card_cover(&catalog),
+        Some(ids[0]),
+        "cards use the key photo"
+    );
+    assert_eq!(
+        stats_cover(&catalog),
+        Some(ids[0]),
+        "stats use the key photo"
+    );
+
+    assert!(
+        engine.set_album_cover(album_id, Some(ids[3])).is_err(),
+        "a non-member cannot be the key photo"
+    );
+    for cover in [None, Some(ids[0])] {
+        let err = engine
+            .set_album_cover(album_id + 100, cover)
+            .expect_err("an unknown album is an error");
+        assert!(
+            err.to_string().contains("album no longer exists"),
+            "an unknown album reads as unknown, not as a non-member: {err}"
+        );
+    }
+    assert_eq!(
+        catalog.list_albums_with_counts().unwrap()[0]
+            .0
+            .cover_media_id,
+        Some(ids[0]),
+        "a rejected cover leaves the stored one alone"
+    );
+
+    catalog.set_trashed(ids[0], true).unwrap();
+    assert_eq!(
+        (card_cover(&catalog), stats_cover(&catalog)),
+        (Some(ids[2]), Some(ids[2])),
+        "a trashed key photo falls back to the newest member"
+    );
+    catalog.set_trashed(ids[0], false).unwrap();
+    assert_eq!(
+        card_cover(&catalog),
+        Some(ids[0]),
+        "restoring it brings it back"
+    );
+
+    catalog.remove_from_album(album_id, &[ids[0]]).unwrap();
+    assert_eq!(
+        (card_cover(&catalog), stats_cover(&catalog)),
+        (Some(ids[2]), Some(ids[2])),
+        "a key photo removed from the album falls back to the newest member"
+    );
+    catalog.add_to_album(album_id, &[ids[0]]).unwrap();
+
+    engine.set_album_cover(album_id, Some(ids[1])).unwrap();
+    catalog
+        .permanently_delete_items(&[ids[1]], DeletionTarget::CatalogOnly)
+        .unwrap();
+    assert_eq!(
+        catalog.list_albums_with_counts().unwrap()[0]
+            .0
+            .cover_media_id,
+        None,
+        "purging the key photo clears the column"
+    );
+    assert_eq!(
+        card_cover(&catalog),
+        Some(ids[2]),
+        "a purged key photo falls back to the newest member"
+    );
+
+    engine.set_album_cover(album_id, Some(ids[0])).unwrap();
+    engine.set_album_cover(album_id, None).unwrap();
+    assert_eq!(
+        card_cover(&catalog),
+        Some(ids[2]),
+        "clearing restores newest"
+    );
+    drop((engine, catalog));
+}

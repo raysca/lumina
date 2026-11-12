@@ -512,3 +512,63 @@ fn album_cards_plan_seeks_members_per_album() {
         "album cards must not materialise or index all memberships, got: {text}"
     );
 }
+
+#[test]
+fn restore_album_keeps_its_key_photo_unless_purged() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let a = plain(&catalog, "/lib/a.mp4");
+    let b = plain(&catalog, "/lib/b.mp4");
+    let album = catalog.create_album_with("Picks", &[a, b]).unwrap();
+    catalog.set_album_cover(album.id, Some(a)).unwrap();
+
+    let (deleted, members) = catalog.delete_album(album.id).unwrap().unwrap();
+    assert_eq!(
+        deleted.cover_media_id,
+        Some(a),
+        "delete returns the key photo"
+    );
+    catalog.restore_album(&deleted, &members).unwrap();
+    assert_eq!(
+        catalog.album_cards().unwrap()[0].cover,
+        Some(a),
+        "restoring an album brings its key photo back"
+    );
+
+    let (deleted, members) = catalog.delete_album(album.id).unwrap().unwrap();
+    catalog
+        .permanently_delete_items(&[a], DeletionTarget::CatalogOnly)
+        .unwrap();
+    catalog
+        .restore_album(&deleted, &members)
+        .expect("a purged key photo must not fail the restore");
+    assert_eq!(
+        catalog.list_albums_with_counts().unwrap()[0]
+            .0
+            .cover_media_id,
+        None,
+        "a key photo purged meanwhile is dropped on restore"
+    );
+}
+
+#[test]
+fn album_cover_query_plan_scans_only_albums() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let conn = catalog.conn.lock();
+    let mut stmt = conn
+        .prepare(&format!("EXPLAIN QUERY PLAN {ALBUM_CARDS_SQL}"))
+        .unwrap();
+    let plan: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(3))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    let scans: Vec<&String> = plan
+        .iter()
+        .filter(|line| line.starts_with("SCAN") && *line != "SCAN CONSTANT ROW")
+        .collect();
+    assert_eq!(
+        scans,
+        vec!["SCAN a"],
+        "album cards walk the albums table once and seek everything else: {plan:#?}"
+    );
+}

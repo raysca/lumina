@@ -19,6 +19,11 @@ pub struct Album {
     pub title: String,
     pub created_at_epoch_ms: i64,
     pub pinned: bool,
+    /// The key photo the user picked, as stored. It may no longer be an
+    /// active member (removed, trashed or hidden since); [`AlbumCard::cover`]
+    /// and [`AlbumStats::cover`] give the cover actually shown. Purging the
+    /// media clears it (`ON DELETE SET NULL`).
+    pub cover_media_id: Option<MediaId>,
 }
 
 /// What an album card needs beyond the album row. "Active" is not trashed
@@ -28,8 +33,9 @@ pub struct Album {
 pub struct AlbumCard {
     /// The album this card is for.
     pub album_id: i64,
-    /// The newest active member by capture time, the larger id on a tie;
-    /// `None` when the album has no active member.
+    /// The key photo while it is still an active member, else the newest
+    /// active member by capture time, the larger id on a tie; `None` when
+    /// the album has no active member.
     pub cover: Option<MediaId>,
     /// The cover's capture time; `None` when there is no cover or the cover
     /// is undated (a capture time of 0, as in `view_scope`).
@@ -53,16 +59,25 @@ pub struct AlbumStats {
 }
 
 /// The cover rule, once for [`Catalog::album_cards`] and
-/// [`Catalog::album_stats`]: the newest active member by capture time, the
-/// larger id on a tie. `$album` is the SQL for the album id.
+/// [`Catalog::album_stats`]: the album's key photo while it is an active
+/// member (the `album_items` join drops a removed one, so removal never has
+/// to clear it), else the newest active member by capture time, the larger
+/// id on a tie. `$album` is the SQL for the album id. The key photo costs
+/// three primary-key lookups (album, membership, media).
 macro_rules! album_cover {
     ($album:literal) => {
         concat!(
-            "SELECT m.id FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+            "SELECT COALESCE((SELECT k.id FROM albums ka \
+             JOIN album_items kai ON kai.album_id = ka.id AND kai.media_id = ka.cover_media_id \
+             JOIN media_items k ON k.id = kai.media_id \
+             WHERE ka.id = ",
+            $album,
+            " AND k.is_trashed = 0 AND k.is_hidden = 0), \
+             (SELECT m.id FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
              WHERE ai.album_id = ",
             $album,
             " AND m.is_trashed = 0 AND m.is_hidden = 0 \
-             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC LIMIT 1"
+             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC LIMIT 1))"
         )
     };
 }
@@ -82,10 +97,12 @@ macro_rules! album_cover {
 /// album in full and needed a `MATERIALIZED` CTE to avoid an automatic
 /// index over every ranked row.
 ///
-/// Cost: one pass over every active membership plus one PK lookup per
-/// member; that is inherent, since every album needs its newest member.
-/// ponytail: O(all memberships) per call, once per album refresh on a
-/// background thread; store a cover per album if that stops being cheap.
+/// Cost: an album with a shown key photo takes three PK lookups and skips
+/// the member sort (COALESCE stops at the first non-NULL). Every other album
+/// costs one pass over its active memberships plus one PK lookup per
+/// member, which is inherent, since it needs its newest member.
+/// ponytail: O(memberships of albums without a key photo) per call, once per
+/// album refresh on a background thread.
 const ALBUM_CARDS_SQL: &str = concat!(
     "SELECT a.id, c.id, c.timestamp_epoch_ms FROM albums a \
      LEFT JOIN media_items c ON c.id = (",
@@ -99,7 +116,7 @@ const ALBUM_CARDS_SQL: &str = concat!(
 const INSERT_MEMBER_SQL: &str = "INSERT OR IGNORE INTO album_items (album_id, media_id)
      SELECT ?1, id FROM media_items WHERE id = ?2;";
 
-const ALBUM_COLUMNS: &str = "id, title, created_at_epoch_ms, pinned";
+const ALBUM_COLUMNS: &str = "id, title, created_at_epoch_ms, pinned, cover_media_id";
 
 fn map_album(row: &rusqlite::Row) -> rusqlite::Result<Album> {
     Ok(Album {
@@ -107,6 +124,7 @@ fn map_album(row: &rusqlite::Row) -> rusqlite::Result<Album> {
         title: row.get(1)?,
         created_at_epoch_ms: row.get(2)?,
         pinned: row.get::<_, i64>(3)? != 0,
+        cover_media_id: row.get::<_, Option<i64>>(4)?.map(|id| MediaId(id as u64)),
     })
 }
 
@@ -153,6 +171,7 @@ impl Catalog {
             title,
             created_at_epoch_ms: now_ms,
             pinned: false,
+            cover_media_id: None,
         })
     }
 
@@ -201,17 +220,22 @@ impl Catalog {
     }
 
     /// Re-inserts a deleted album under its old id with its members (undo of
-    /// [`Self::delete_album`]). Members purged since are skipped.
+    /// [`Self::delete_album`]). Members and a key photo purged since are
+    /// skipped.
     pub fn restore_album(&self, album: &Album, members: &[MediaId]) -> Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         tx.execute(
-            &format!("INSERT INTO albums ({ALBUM_COLUMNS}) VALUES (?1, ?2, ?3, ?4);"),
+            &format!(
+                "INSERT INTO albums ({ALBUM_COLUMNS}) \
+                 SELECT ?1, ?2, ?3, ?4, (SELECT id FROM media_items WHERE id = ?5);"
+            ),
             params![
                 album.id,
                 album.title,
                 album.created_at_epoch_ms,
-                album.pinned as i64
+                album.pinned as i64,
+                album.cover_media_id.map(|id| id.0 as i64)
             ],
         )
         .context("restoring an album")?;
@@ -232,7 +256,7 @@ impl Catalog {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare_cached(
             r#"
-            SELECT a.id, a.title, a.created_at_epoch_ms, a.pinned, COUNT(m.id)
+            SELECT a.id, a.title, a.created_at_epoch_ms, a.pinned, a.cover_media_id, COUNT(m.id)
             FROM albums a
             LEFT JOIN album_items ai ON ai.album_id = a.id
             LEFT JOIN media_items m
@@ -242,7 +266,7 @@ impl Catalog {
             "#,
         )?;
         let rows = stmt.query_map([], |row| {
-            Ok((map_album(row)?, row.get::<_, i64>(4)? as usize))
+            Ok((map_album(row)?, row.get::<_, i64>(5)? as usize))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -415,6 +439,41 @@ impl Catalog {
             |row| row.get(0),
         )?;
         Ok(count as usize)
+    }
+
+    /// Sets an album's key photo, or clears it with `None`. The photo must
+    /// be a member of the album; an unknown album is an error. A trashed or
+    /// hidden member is stored but not shown as the cover until it is
+    /// restored or unhidden; until then the newest active member is.
+    pub fn set_album_cover(&self, id: i64, cover: Option<MediaId>) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let exists = tx
+            .prepare_cached("SELECT 1 FROM albums WHERE id = ?1;")?
+            .exists(params![id])?;
+        if !exists {
+            bail!("the album no longer exists");
+        }
+        let changed = match cover {
+            Some(media) => tx
+                .execute(
+                    "UPDATE albums SET cover_media_id = ?2 WHERE id = ?1 AND EXISTS \
+                     (SELECT 1 FROM album_items WHERE album_id = ?1 AND media_id = ?2);",
+                    params![id, media.0 as i64],
+                )
+                .context("setting the album cover")?,
+            None => tx
+                .execute(
+                    "UPDATE albums SET cover_media_id = NULL WHERE id = ?1;",
+                    params![id],
+                )
+                .context("clearing the album cover")?,
+        };
+        if changed == 0 {
+            bail!("the cover must be an item in the album");
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     /// Pins or unpins an album; false when no album has `id`.

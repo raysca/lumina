@@ -463,6 +463,18 @@ impl Catalog {
                 album_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
             }
         }
+
+        // 7. Key photos: an album whose cover was a merged copy now shows the
+        // keeper, which step 6 just made a member. Before `fold_into` too,
+        // whose delete would otherwise set the cover to NULL.
+        {
+            let mut cover_stmt = tx.prepare_cached(
+                "UPDATE albums SET cover_media_id = ?1 WHERE cover_media_id = ?2;",
+            )?;
+            for trash_id in trash_ids {
+                cover_stmt.execute(params![keep_id.0 as i64, trash_id.0 as i64])?;
+            }
+        }
         Ok(())
     }
 
@@ -593,6 +605,31 @@ mod tests {
             catalog.get_flags_map().unwrap().get(&keep),
             None,
             "an unflagged keeper stays unflagged when the copy was rejected"
+        );
+    }
+
+    #[test]
+    fn merge_duplicates_moves_key_photo_to_keeper() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        let other = plain(&catalog, "/lib/other.mp4");
+        let album = catalog.create_album_with("Picks", &[dup, other]).unwrap();
+        catalog.set_album_cover(album.id, Some(dup)).unwrap();
+
+        catalog.merge_duplicate_group(keep, &[dup]).unwrap();
+
+        assert_eq!(
+            catalog.list_albums_with_counts().unwrap()[0]
+                .0
+                .cover_media_id,
+            Some(keep),
+            "a merged copy's key photo moves to the keeper"
+        );
+        assert_eq!(
+            catalog.album_cards().unwrap()[0].cover,
+            Some(keep),
+            "the album shows the keeper, not the newest member"
         );
     }
 

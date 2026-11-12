@@ -119,7 +119,9 @@ impl Catalog {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 created_at_epoch_ms INTEGER NOT NULL,
-                pinned INTEGER NOT NULL DEFAULT 0
+                pinned INTEGER NOT NULL DEFAULT 0,
+                -- v22: the key photo; see the guarded ALTER below.
+                cover_media_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS album_items (
                 album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
@@ -642,6 +644,27 @@ impl Catalog {
             [],
         )
         .context("creating the rotation index")?;
+
+        // v22: an album's key photo. Purging the media sets it to NULL (the
+        // connection enables foreign keys above; SQLite allows a REFERENCES
+        // column in ADD COLUMN when its default is NULL). A cover removed
+        // from the album or trashed stays stored but the cover query skips
+        // it. The index keeps the purge's SET NULL lookup off a table scan.
+        let has_album_cover: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('albums') WHERE name = 'cover_media_id'")?
+            .exists([])?;
+        if !has_album_cover {
+            conn.execute(
+                "ALTER TABLE albums ADD COLUMN cover_media_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL;",
+                [],
+            )
+            .context("adding the key photo to albums")?;
+        }
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_albums_cover ON albums(cover_media_id) WHERE cover_media_id IS NOT NULL;",
+            [],
+        )
+        .context("creating the album key photo index")?;
 
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
