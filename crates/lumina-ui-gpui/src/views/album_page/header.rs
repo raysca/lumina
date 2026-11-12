@@ -15,8 +15,8 @@ use crate::views::page_header::{popover_under, text_marker};
 /// Height of the band; it replaces the page header for an open album.
 pub(crate) const ALBUM_HEADER_HEIGHT: f32 = 180.0;
 
-/// A transparent 32-high button over the cover: radius 8, 13px icon, Inter
-/// 12 `t1`. `selector` doubles as the element id.
+/// A transparent 32-high button over the cover with a 1px `line` outline:
+/// radius 8, 13px icon, Inter 12 `t1`. `selector` doubles as the element id.
 fn ghost_button(selector: &'static str, label: SharedString) -> Stateful<Div> {
     div()
         .id(selector)
@@ -31,6 +31,8 @@ fn ghost_button(selector: &'static str, label: SharedString) -> Stateful<Div> {
         .justify_center()
         .gap(px(7.0))
         .rounded(theme::RADIUS_LG)
+        .border_1()
+        .border_color(theme::line())
         .hover(|s| s.bg(theme::media_scrim()))
         .cursor_pointer()
         .text_size(px(12.0))
@@ -177,7 +179,7 @@ pub(crate) fn render(
                         .flex()
                         .flex_row()
                         .items_center()
-                        .gap(px(10.0))
+                        .gap(px(8.0))
                         // The frame has no sidebar button; with the sidebar
                         // collapsed, mouse users still need a way back.
                         .when(this.sidebar_collapsed, |row| {
