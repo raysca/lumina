@@ -3,10 +3,7 @@ use gpui::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::utils::format_playback_speed;
-use crate::app::types::format_time_fractional;
 use crate::app::LuminaApp;
-use crate::icons::{render_icon, Icon};
 use crate::theme;
 
 /// Convert a window-space pointer position into a 0..=1 fraction of the scrub
@@ -54,34 +51,18 @@ pub(crate) fn drag_tracker(
     .size_0()
 }
 
-/// 32px transport hit area with a 16px icon; the tooltip names the key.
-fn transport_button(
-    id: &'static str,
-    icon: Icon,
-    tooltip: impl Into<SharedString>,
-    on: bool,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .debug_selector(move || id.to_string())
-        .tooltip(theme::tooltip_label(tooltip))
-        .size(px(32.0))
-        .rounded(theme::RADIUS_MD)
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_pointer()
-        .when(on, |b| b.bg(theme::bg_3()))
-        .hover(|s| s.bg(theme::bg_3()))
-        .child(render_icon(
-            icon,
-            px(16.0),
-            if on { theme::accent() } else { theme::t1() },
-        ))
-}
+/// Padding above and below the transport's rows.
+const PAD_Y: f32 = 16.0;
+/// Gap between the transport's rows.
+const ROW_GAP: f32 = 11.0;
+/// Height of the scrub track.
+const TRACK_HEIGHT: f32 = 24.0;
 
-/// Narrowest transport card that still fits its three control zones.
-const TRANSPORT_MIN_WIDTH: f32 = 560.0;
+/// The docked transport's full height (border, padding, rows), so the video
+/// frame can be sized to the stage left above it.
+pub(super) fn transport_height(_this: &LuminaApp) -> f32 {
+    1.0 + 2.0 * PAD_Y + TRACK_HEIGHT + ROW_GAP + super::transport_controls::CONTROLS_HEIGHT
+}
 
 pub struct ViewerTransport;
 
@@ -152,205 +133,170 @@ impl ViewerTransport {
         };
         let menu_open = this.video.speed_menu_open || this.video.tracks.audio_menu_open;
 
-        let time_label = |t: f64| {
-            div()
-                .w(px(56.0))
-                .flex_shrink_0()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(11.0))
-                .text_color(theme::t2())
-                .child(format_time_fractional(t))
-        };
-
         div()
             .id("video-transport")
             .debug_selector(|| "video-transport".to_string())
             .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
+            // Docked across the stage, under the frame (Design 06).
             .w_full()
-            // As wide as the video frame, but never too narrow for the three
-            // control zones (portrait and tiny frames).
-            .max_w(px(super::viewport::video_frame_size(this)
-                .map_or(super::viewport::VIDEO_FRAME_MAX_WIDTH, |(w, _)| {
-                    w.max(TRANSPORT_MIN_WIDTH)
-                })))
-            .mt(px(12.0))
-            .mb_4()
-            .p_3()
-            .bg(theme::bg_0())
-            .border_1()
+            .flex_none()
+            .px(px(28.0))
+            .py(px(PAD_Y))
+            .border_t_1()
             .border_color(theme::line())
-            .rounded(theme::RADIUS_LG)
             .relative()
             .flex()
             .flex_col()
-            .gap_2()
-            // Scrubber row: elapsed · track · total.
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(time_label(current_time))
-                    // Timeline scrubber track: press, drag, and release map
-                    // directly to a timeline position. Pointer moves update the
-                    // visible destination on every event while seeks are
-                    // coalesced in LuminaApp::update_video_scrub.
-                    .child({
-                        // The full-size track surface is the first child, so its
-                        // prepaint bounds are the track rect used to map pointer X to a
-                        // 0..=1 timeline fraction.
-                        let track_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> =
-                            Rc::new(RefCell::new(None));
+            .gap(px(ROW_GAP))
+            .child(div().w_full().flex().flex_row().child({
+                // The full-size track surface is the first child, so its
+                // prepaint bounds are the track rect used to map pointer X to a
+                // 0..=1 timeline fraction.
+                let track_bounds: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
 
-                        div()
-                            .on_children_prepainted({
-                                let track_bounds = track_bounds.clone();
-                                move |child_bounds: Vec<Bounds<Pixels>>, _window, _cx| {
-                                    if let Some(bounds) = child_bounds.first() {
-                                        *track_bounds.borrow_mut() = Some(*bounds);
-                                    }
-                                }
-                            })
-                            .id("video-scrubber-track")
-                            .debug_selector(|| "video-scrubber".to_string())
-                            .flex_1()
-                            .h(px(24.0))
-                            .rounded(theme::RADIUS_MD)
-                            .border_1()
-                            .border_color(if is_scrubbing {
-                                theme::t2()
-                            } else {
-                                theme::line()
-                            })
-                            .relative()
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener({
-                                    let track_bounds = track_bounds.clone();
-                                    move |this, event: &MouseDownEvent, _window, cx| {
-                                        if let Some(pct) =
-                                            scrub_fraction(event.position, &track_bounds)
-                                        {
-                                            this.begin_video_scrub(pct, cx);
-                                        }
-                                    }
-                                }),
-                            )
-                            .on_mouse_move(cx.listener({
-                                let track_bounds = track_bounds.clone();
-                                move |this, event: &MouseMoveEvent, _window, cx| {
-                                    let Some(pct) = scrub_fraction(event.position, &track_bounds)
-                                    else {
-                                        return;
-                                    };
-                                    // An active scrub is driven by the drag tracker.
-                                    if !this.video.is_scrubbing {
-                                        this.set_video_hover_scrub(Some(pct as f32), cx);
-                                    }
-                                }
-                            }))
-                            .on_mouse_up(
-                                MouseButton::Left,
-                                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
-                                    this.end_video_scrub(cx);
-                                }),
-                            )
-                            // A release can land outside the track mid-drag; the
-                            // capture-phase out-handler commits the final destination there.
-                            .on_mouse_up_out(
-                                MouseButton::Left,
-                                cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
-                                    this.end_video_scrub(cx);
-                                }),
-                            )
-                            .on_hover(cx.listener(|this, hovered: &bool, _window, cx| {
-                                if !*hovered && !this.video.is_scrubbing {
-                                    this.set_video_hover_scrub(None, cx);
-                                }
-                            }))
-                            .child(
-                                div()
-                                    .size_full()
-                                    .rounded(theme::RADIUS_MD)
-                                    .bg(theme::bg_2()),
-                            )
-                            // Loop range, under the played tint.
-                            .children(loop_band.map(|(start, width)| {
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .bottom_0()
-                                    .debug_selector(|| "video-loop-range".to_string())
-                                    .left(relative(start))
-                                    .w(relative(width))
-                                    .border_x_1()
-                                    .border_color(theme::accent())
-                                    .bg(theme::bg_3())
-                            }))
-                            .children(chapter_ticks.into_iter().enumerate().map(|(i, pct)| {
-                                div()
-                                    .absolute()
-                                    .top(px(4.0))
-                                    .bottom(px(4.0))
-                                    .debug_selector(move || format!("video-chapter-tick-{}", i + 1))
-                                    .left(relative(pct))
-                                    .w(px(1.5))
-                                    .bg(theme::t2())
-                            }))
-                            // Played portion: a 22% amber tint up to the playhead.
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .bottom_0()
-                                    .left_0()
-                                    .debug_selector(|| "video-played".to_string())
-                                    .w(relative(progress_pct as f32))
-                                    .rounded_l_md()
-                                    .bg(theme::accent_soft()),
-                            )
-                            // Hover needle indicator, hidden while a scrub owns the playhead.
-                            .child(if let Some(hover_pct) = hover_pct {
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .bottom_0()
-                                    .left(relative(hover_pct))
-                                    .w(px(1.5))
-                                    .bg(theme::t1())
-                                    .into_any_element()
-                            } else {
-                                Empty.into_any_element()
-                            })
-                            .child(drag_tracker(is_scrubbing, cx.entity(), {
-                                let track_bounds = track_bounds.clone();
-                                move |this, position, cx| {
-                                    if let Some(pct) = scrub_fraction(position, &track_bounds) {
-                                        this.update_video_scrub(pct, cx);
-                                    }
-                                }
-                            }))
-                            // Current playhead: follows the scrub destination while dragging.
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .bottom_0()
-                                    .left(relative(progress_pct as f32))
-                                    .w(px(if is_scrubbing { 3.5 } else { 2.5 }))
-                                    .bg(theme::accent())
-                                    .shadow_md(),
-                            )
-                            // Time badge, with the nearest strip frame once there
-                            // is one, anchored directly above the track.
-                            .children(time_badge.map(|(badge_pct, badge_time)| {
-                                super::scrub_preview::render(this, badge_pct, badge_time)
-                            }))
+                div()
+                    .on_children_prepainted({
+                        let track_bounds = track_bounds.clone();
+                        move |child_bounds: Vec<Bounds<Pixels>>, _window, _cx| {
+                            if let Some(bounds) = child_bounds.first() {
+                                *track_bounds.borrow_mut() = Some(*bounds);
+                            }
+                        }
                     })
-                    .child(time_label(duration)),
-            )
+                    .id("video-scrubber-track")
+                    .debug_selector(|| "video-scrubber".to_string())
+                    .flex_1()
+                    .h(px(TRACK_HEIGHT))
+                    .rounded(theme::RADIUS_MD)
+                    .border_1()
+                    .border_color(if is_scrubbing {
+                        theme::t2()
+                    } else {
+                        theme::line()
+                    })
+                    .relative()
+                    .cursor_pointer()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener({
+                            let track_bounds = track_bounds.clone();
+                            move |this, event: &MouseDownEvent, _window, cx| {
+                                if let Some(pct) = scrub_fraction(event.position, &track_bounds) {
+                                    this.begin_video_scrub(pct, cx);
+                                }
+                            }
+                        }),
+                    )
+                    .on_mouse_move(cx.listener({
+                        let track_bounds = track_bounds.clone();
+                        move |this, event: &MouseMoveEvent, _window, cx| {
+                            let Some(pct) = scrub_fraction(event.position, &track_bounds) else {
+                                return;
+                            };
+                            // An active scrub is driven by the drag tracker.
+                            if !this.video.is_scrubbing {
+                                this.set_video_hover_scrub(Some(pct as f32), cx);
+                            }
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                            this.end_video_scrub(cx);
+                        }),
+                    )
+                    // A release can land outside the track mid-drag; the
+                    // capture-phase out-handler commits the final destination there.
+                    .on_mouse_up_out(
+                        MouseButton::Left,
+                        cx.listener(|this, _event: &MouseUpEvent, _window, cx| {
+                            this.end_video_scrub(cx);
+                        }),
+                    )
+                    .on_hover(cx.listener(|this, hovered: &bool, _window, cx| {
+                        if !*hovered && !this.video.is_scrubbing {
+                            this.set_video_hover_scrub(None, cx);
+                        }
+                    }))
+                    .child(
+                        div()
+                            .size_full()
+                            .rounded(theme::RADIUS_MD)
+                            .bg(theme::bg_2()),
+                    )
+                    // Loop range, under the played tint.
+                    .children(loop_band.map(|(start, width)| {
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .debug_selector(|| "video-loop-range".to_string())
+                            .left(relative(start))
+                            .w(relative(width))
+                            .border_x_1()
+                            .border_color(theme::accent())
+                            .bg(theme::bg_3())
+                    }))
+                    .children(chapter_ticks.into_iter().enumerate().map(|(i, pct)| {
+                        div()
+                            .absolute()
+                            .top(px(4.0))
+                            .bottom(px(4.0))
+                            .debug_selector(move || format!("video-chapter-tick-{}", i + 1))
+                            .left(relative(pct))
+                            .w(px(1.5))
+                            .bg(theme::t2())
+                    }))
+                    // Played portion: a 22% amber tint up to the playhead.
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left_0()
+                            .debug_selector(|| "video-played".to_string())
+                            .w(relative(progress_pct as f32))
+                            .rounded_l_md()
+                            .bg(theme::accent_soft()),
+                    )
+                    // Hover needle indicator, hidden while a scrub owns the playhead.
+                    .child(if let Some(hover_pct) = hover_pct {
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left(relative(hover_pct))
+                            .w(px(1.5))
+                            .bg(theme::t1())
+                            .into_any_element()
+                    } else {
+                        Empty.into_any_element()
+                    })
+                    .child(drag_tracker(is_scrubbing, cx.entity(), {
+                        let track_bounds = track_bounds.clone();
+                        move |this, position, cx| {
+                            if let Some(pct) = scrub_fraction(position, &track_bounds) {
+                                this.update_video_scrub(pct, cx);
+                            }
+                        }
+                    }))
+                    // Current playhead: follows the scrub destination while dragging.
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left(relative(progress_pct as f32))
+                            .w(px(if is_scrubbing { 3.5 } else { 2.5 }))
+                            .bg(theme::accent())
+                            .shadow_md(),
+                    )
+                    // Time badge, with the nearest strip frame once there
+                    // is one, anchored directly above the track.
+                    .children(time_badge.map(|(badge_pct, badge_time)| {
+                        super::scrub_preview::render(this, badge_pct, badge_time)
+                    }))
+            }))
             // Dismiss layer for the speed and audio menus, under the controls.
             .when(menu_open, |card| {
                 card.child(
@@ -368,363 +314,11 @@ impl ViewerTransport {
                         ),
                 )
             })
-            // 3-zone controls: [mute · speed] | [−5s · ‹ · play · › · +5s] | [loop · PiP · full screen]
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex_1()
-                            .relative()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                transport_button(
-                                    "video-mute",
-                                    if this.video.is_muted {
-                                        Icon::VolumeX
-                                    } else {
-                                        Icon::Volume
-                                    },
-                                    if this.video.is_muted {
-                                        "Unmute (M)"
-                                    } else {
-                                        "Mute (M)"
-                                    },
-                                    this.video.is_muted,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.toggle_video_mute(cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                div()
-                                    .id("video-speed-btn")
-                                    .debug_selector(|| "video-speed".to_string())
-                                    .tooltip(theme::tooltip_label("Playback speed"))
-                                    .h(px(32.0))
-                                    .px_2()
-                                    .rounded(theme::RADIUS_MD)
-                                    .flex()
-                                    .items_center()
-                                    .when(this.video.speed_menu_open, |b| b.bg(theme::bg_3()))
-                                    .hover(|s| s.bg(theme::bg_3()))
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .font_family(theme::FONT_MONO)
-                                    .text_color(theme::t1())
-                                    .child(format_playback_speed(this.video.playback_speed))
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.toggle_video_speed_menu(cx);
-                                    })),
-                            )
-                            .when(this.video.tracks.has_audio_choice(), |zone| {
-                                zone.child(render_audio_button(this, cx))
-                            })
-                            .when(this.video.speed_menu_open, |zone| {
-                                zone.child(render_speed_menu(this, cx))
-                            })
-                            .when(
-                                this.video.tracks.audio_menu_open
-                                    && this.video.tracks.has_audio_choice(),
-                                |zone| zone.child(render_audio_menu(this, cx)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                transport_button(
-                                    "video-seek-back",
-                                    Icon::RotateCcw,
-                                    "Back 5 seconds (←)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.seek_video_relative(-5.0, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                transport_button(
-                                    "video-step-back",
-                                    Icon::StepBack,
-                                    "Previous frame (,)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.step_video_frame(-1, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                div()
-                                    .id("video-play-btn")
-                                    .debug_selector(|| "video-play".to_string())
-                                    .tooltip(theme::tooltip_label(if this.video.is_playing {
-                                        "Pause (Space)"
-                                    } else {
-                                        "Play (Space)"
-                                    }))
-                                    .mx_1()
-                                    .size(px(40.0))
-                                    .rounded_full()
-                                    .bg(theme::t1())
-                                    .hover(|s| s.bg(theme::t2()))
-                                    .flex()
-                                    .justify_center()
-                                    .items_center()
-                                    .cursor_pointer()
-                                    .child(render_icon(
-                                        if this.video.is_playing {
-                                            Icon::Pause
-                                        } else {
-                                            Icon::Play
-                                        },
-                                        px(16.0),
-                                        theme::bg_media(),
-                                    ))
-                                    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                        this.toggle_video_play(cx);
-                                    })),
-                            )
-                            .child(
-                                transport_button(
-                                    "video-step-fwd",
-                                    Icon::StepForward,
-                                    "Next frame (.)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.step_video_frame(1, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                transport_button(
-                                    "video-seek-fwd",
-                                    Icon::RotateCw,
-                                    "Forward 5 seconds (→)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.seek_video_relative(5.0, cx);
-                                    },
-                                )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_end()
-                            .gap_1()
-                            .child(
-                                transport_button(
-                                    "video-loop",
-                                    Icon::Repeat,
-                                    "Loop (L)",
-                                    this.video.is_looping,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        this.toggle_video_loop(cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                transport_button(
-                                    "video-pip",
-                                    Icon::Pip,
-                                    "Picture in Picture (⌥P)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, _w, cx| {
-                                        if let Some(item) = this.selected_item.clone() {
-                                            this.play_in_pip(item, cx);
-                                        }
-                                    },
-                                )),
-                            )
-                            .child(
-                                transport_button(
-                                    "video-fullscreen",
-                                    if this.is_immersive_fullscreen {
-                                        Icon::Minimize
-                                    } else {
-                                        Icon::Maximize
-                                    },
-                                    "Full screen (⌃⌘F)",
-                                    false,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _e: &ClickEvent, window, cx| {
-                                        this.toggle_immersive_fullscreen(Some(window), cx);
-                                    },
-                                )),
-                            ),
-                    ),
-            )
+            .child(super::transport_controls::render(
+                this,
+                current_time,
+                duration,
+                cx,
+            ))
     }
-}
-
-/// Speed menu, anchored above the speed button in the left zone.
-fn render_speed_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    div()
-        .id("video-speed-popover")
-        .debug_selector(|| "video-speed-popover".to_string())
-        .occlude()
-        .absolute()
-        .bottom(px(40.0))
-        .left(px(32.0))
-        .w(px(102.0))
-        .bg(theme::bg_float())
-        .border_1()
-        .border_color(theme::line_2())
-        .rounded(theme::RADIUS_LG)
-        .shadow_2xl()
-        .py_1()
-        .flex()
-        .flex_col()
-        .children(crate::config::VIDEO_SPEEDS.into_iter().map(|rate| {
-            let is_cur = (this.video.playback_speed - rate).abs() < 0.05;
-            div()
-                .id(ElementId::NamedInteger(
-                    "speed-opt".into(),
-                    (rate * 100.0) as u64,
-                ))
-                .px_3()
-                .py_1()
-                .hover(|s| s.bg(theme::bg_3()))
-                .cursor_pointer()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_1p5()
-                .text_xs()
-                .font_family(theme::FONT_MONO)
-                .text_color(if is_cur { theme::accent() } else { theme::t1() })
-                .child(if is_cur {
-                    div().flex().items_center().child(render_icon(
-                        Icon::Check,
-                        px(12.0),
-                        theme::accent(),
-                    ))
-                } else {
-                    div().w(px(12.0))
-                })
-                .child(format_playback_speed(rate))
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    this.set_video_speed(rate, cx);
-                }))
-        }))
-}
-
-/// The Audio menu button; shown only when the file offers a choice. Its
-/// keyboard path is the palette's "Audio Track: {name}" rows.
-fn render_audio_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    let label = crate::i18n::t("video.audio_menu");
-    div()
-        .id("video-audio-btn")
-        .debug_selector(|| "video-audio".to_string())
-        .role(Role::Button)
-        .aria_label(crate::i18n::t("video.audio_menu_tooltip"))
-        .aria_expanded(this.video.tracks.audio_menu_open)
-        .tooltip(theme::tooltip_label(crate::i18n::t(
-            "video.audio_menu_tooltip",
-        )))
-        .h(px(32.0))
-        .px_2()
-        .rounded(theme::RADIUS_MD)
-        .flex()
-        .items_center()
-        .when(this.video.tracks.audio_menu_open, |b| b.bg(theme::bg_3()))
-        .hover(|s| s.bg(theme::bg_3()))
-        .cursor_pointer()
-        .text_xs()
-        .text_color(theme::t1())
-        .child(label)
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.toggle_audio_menu(cx);
-        }))
-}
-
-/// Audio track menu, anchored above the left zone like the speed menu.
-fn render_audio_menu(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    let tracks = &this.video.tracks;
-    // Asked while the menu is open, not cached at load (see current_audio_track).
-    let playing = this.current_audio_track();
-    div()
-        .id("video-audio-popover")
-        .debug_selector(|| "video-audio-popover".to_string())
-        .role(Role::Menu)
-        .aria_label(crate::i18n::t("video.audio_menu_tooltip"))
-        .occlude()
-        .absolute()
-        .bottom(px(40.0))
-        .left(px(32.0))
-        .min_w(px(160.0))
-        .max_w(px(280.0))
-        .bg(theme::bg_float())
-        .border_1()
-        .border_color(theme::line_2())
-        .rounded(theme::RADIUS_LG)
-        .shadow_2xl()
-        .py_1()
-        .flex()
-        .flex_col()
-        .children((0..tracks.audio.len()).map(|index| {
-            let is_cur = playing == Some(index);
-            let name = tracks.audio_name(index);
-            div()
-                .id(ElementId::NamedInteger("audio-opt".into(), index as u64))
-                .debug_selector(move || format!("video-audio-track-{index}"))
-                .role(Role::MenuItemRadio)
-                .aria_toggled(if is_cur {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                })
-                .aria_label(name.clone())
-                .px_3()
-                .py_1()
-                .hover(|s| s.bg(theme::bg_3()))
-                .cursor_pointer()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_1p5()
-                .text_xs()
-                .text_color(if is_cur { theme::accent() } else { theme::t1() })
-                .child(if is_cur {
-                    div()
-                        .debug_selector(|| "video-audio-check".to_string())
-                        .flex()
-                        .items_center()
-                        .child(render_icon(Icon::Check, px(12.0), theme::accent()))
-                } else {
-                    div().w(px(12.0))
-                })
-                .child(div().truncate().child(name))
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    this.select_audio_track(index, cx);
-                }))
-        }))
 }

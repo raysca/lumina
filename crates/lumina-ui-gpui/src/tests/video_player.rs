@@ -1,5 +1,5 @@
-//! v3 video player (FIXES §3): slim top bar, viewer right-click menu, and the
-//! three-zone transport card.
+//! Video player (Design 06): top bar, viewer right-click menu, and the
+//! docked transport.
 
 use crate::app::types::get_sample_items;
 use crate::tests::ui_automation::{
@@ -48,72 +48,102 @@ fn size(b: Bounds<Pixels>) -> (f32, f32) {
     (b.size.width.into(), b.size.height.into())
 }
 
-fn center_x(b: Bounds<Pixels>) -> f32 {
-    f32::from(b.origin.x) + f32::from(b.size.width) / 2.0
-}
-
 fn center_y(b: Bounds<Pixels>) -> f32 {
     f32::from(b.origin.y) + f32::from(b.size.height) / 2.0
 }
 
 #[core::prelude::v1::test]
-fn transport_is_a_three_zone_card_with_32px_controls_and_a_40px_play() {
+fn video_transport_is_docked_full_width() {
     let mut cx = crate::tests::TestApp::single();
-    let (_dir, _view, vcx) = open_video(&mut cx);
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| {
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1600.0, 1000.0));
+        app.video.playback_time = 34.0;
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    render_ui(vcx);
+    render_ui(vcx);
 
-    let card = bounds(vcx, "video-transport");
-    assert!(
-        f32::from(card.size.width) <= 1040.0,
-        "the transport card is capped at the 1040px video width"
+    let transport = bounds(vcx, "video-transport");
+    assert_eq!(
+        (
+            f32::from(transport.left()),
+            f32::from(transport.size.width),
+            f32::from(transport.bottom())
+        ),
+        (0.0, 1260.0, 1000.0),
+        "the transport docks across the whole stage at its bottom: {transport:?}"
     );
 
-    let order = [
-        "video-mute",
+    let play = bounds(vcx, "video-play");
+    assert_eq!(size(play), (38.0, 38.0), "play is a 38px round button");
+    for (selector, b) in [
+        ("video-seek-back", bounds(vcx, "video-seek-back")),
+        ("video-seek-fwd", bounds(vcx, "video-seek-fwd")),
+    ] {
+        assert_eq!(size(b), (30.0, 30.0), "{selector} is a 30px round button");
+        assert!(
+            play.right() <= b.left(),
+            "{selector} follows play in the left group"
+        );
+        assert!(
+            (center_y(b) - center_y(play)).abs() < 1.0,
+            "{selector} shares the controls row"
+        );
+    }
+    let time = bounds(vcx, "video-time");
+    assert!(
+        time.left() >= bounds(vcx, "video-seek-fwd").right(),
+        "the time readout follows the buttons"
+    );
+    assert_eq!(
+        crate::views::viewer::transport_controls::time_readout(34.0, 78.0),
+        ("0:34".to_string(), "1:18".to_string()),
+        "the readout is m:ss / m:ss"
+    );
+    assert_eq!(
+        crate::app::types::format_clock(7322.0),
+        "2:02:02",
+        "a long clip switches to h:mm:ss"
+    );
+    let right_group = [
         "video-speed",
-        "video-seek-back",
-        "video-step-back",
-        "video-play",
-        "video-step-fwd",
-        "video-seek-fwd",
+        "video-mute",
         "video-loop",
-        "video-pip",
         "video-fullscreen",
     ];
-    let row: Vec<_> = order.iter().map(|s| bounds(vcx, s)).collect();
-    for (selector, b) in order.iter().zip(&row) {
+    for pair in right_group.windows(2) {
         assert!(
-            card.contains(&b.center()),
-            "{selector} sits inside the card"
-        );
-        assert!(
-            (center_y(*b) - center_y(row[0])).abs() < 1.0,
-            "{selector} shares the single control row"
-        );
-        match *selector {
-            "video-play" => assert_eq!(size(*b), (40.0, 40.0), "play is a 40px round button"),
-            "video-speed" => {}
-            _ => assert_eq!(size(*b), (32.0, 32.0), "{selector} is a 32px hit area"),
-        }
-    }
-    for pair in row.windows(2) {
-        assert!(
-            center_x(pair[0]) < center_x(pair[1]),
-            "controls follow [mute·speed] | [−5s·frame·play·frame·+5s] | [loop·PiP·full]"
+            bounds(vcx, pair[0]).right() <= bounds(vcx, pair[1]).left(),
+            "the right group runs speed, mute, loop, full screen"
         );
     }
     assert!(
-        (center_x(row[4]) - center_x(card)).abs() < 2.0,
-        "play is centred in the card"
-    );
-
-    let scrubber = bounds(vcx, "video-scrubber");
-    assert!(
-        center_y(scrubber) < center_y(row[0]),
-        "the scrubber row sits above the controls"
+        bounds(vcx, "video-speed").left() > time.right(),
+        "the right group sits after the time"
     );
     assert!(
-        vcx.debug_bounds("video-volume-slider").is_none(),
-        "mute is a toggle only; there is no volume slider"
+        center_y(bounds(vcx, "video-scrubber")) < center_y(play),
+        "the scrubber sits above the controls"
+    );
+    for gone in ["video-step-back", "video-step-fwd", "video-pip"] {
+        assert!(
+            vcx.debug_bounds(gone).is_none(),
+            "{gone} left the transport (keys and the palette remain; PiP is in the top bar)"
+        );
+    }
+    let media = bounds(vcx, "viewer-media");
+    assert!(
+        f32::from(media.size.width) >= 1099.5 && media.bottom() <= transport.top(),
+        "the frame is at least 1100 wide and clears the docked transport: {media:?}"
     );
 }
 
@@ -313,7 +343,7 @@ fn open_info_drawer_never_covers_the_transport() {
 }
 
 #[core::prelude::v1::test]
-fn video_frame_is_1040_wide_with_the_transport_right_below() {
+fn video_frame_is_1120_wide_above_the_docked_transport() {
     let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
@@ -330,18 +360,17 @@ fn video_frame_is_1040_wide_with_the_transport_right_below() {
     render_ui(vcx);
     render_ui(vcx);
 
-    // V3Video: a 1040x585 frame, then the transport card 12px below it.
+    // Design 06: a 1120x630 frame centred above the docked transport.
     let media = bounds(vcx, "viewer-media");
     let transport = bounds(vcx, "video-transport");
     let (w, h) = size(media);
     assert!(
-        (w - 1040.0).abs() < 1.0 && (h - 585.0).abs() < 1.5,
-        "a 16:9 video fills a 1040x585 frame: {media:?}"
+        (w - 1120.0).abs() < 1.0 && (h - 630.0).abs() < 1.5,
+        "a 16:9 video fills a 1120x630 frame: {media:?}"
     );
-    let gap = f32::from(transport.top() - media.bottom());
     assert!(
-        (8.0..=16.0).contains(&gap),
-        "the transport sits right below the video, got a {gap}px gap"
+        transport.top() >= media.bottom(),
+        "the transport sits below the video: {media:?} {transport:?}"
     );
     // The arrows centre on the video, beside it and above the transport.
     for arrow in ["viewer-prev", "viewer-next"] {
@@ -356,9 +385,8 @@ fn video_frame_is_1040_wide_with_the_transport_right_below() {
         );
     }
     assert!(
-        (f32::from(transport.left() - media.left())).abs() < 1.0
-            && (size(transport).0 - w).abs() < 1.0,
-        "the transport is exactly as wide as the video: {transport:?} {media:?}"
+        f32::from(transport.left()) == 0.0 && size(transport).0 == 1440.0,
+        "the transport spans the stage: {transport:?}"
     );
 }
 
@@ -411,7 +439,7 @@ fn height_limited_videos_clear_the_top_bar_and_keep_the_transport_on_screen() {
 }
 
 #[core::prelude::v1::test]
-fn transport_matches_a_frame_narrowed_by_the_info_drawer() {
+fn info_panel_narrows_the_frame_and_the_transport_spans_the_stage() {
     let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     view.update(vcx, |app, cx| {
@@ -431,8 +459,9 @@ fn transport_matches_a_frame_narrowed_by_the_info_drawer() {
     let media = bounds(vcx, "viewer-media");
     let transport = bounds(vcx, "video-transport");
     assert!(
-        size(media).0 < 1040.0 && (size(transport).0 - size(media).0).abs() < 1.0,
-        "with Info open the transport narrows with the frame: {media:?} {transport:?}"
+        size(media).0 < 1120.0 && size(transport).0 == 1440.0 - 340.0,
+        "with Info open the frame narrows and the transport spans the stage: \
+         {media:?} {transport:?}"
     );
 }
 

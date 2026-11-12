@@ -165,6 +165,21 @@ pub fn format_duration_badge(secs: f64) -> String {
     format!("{}:{:02}", m, s)
 }
 
+/// "1:18", or "2:02:02" from an hour up: the transport's clock readout.
+pub fn format_clock(secs: f64) -> String {
+    let total = if secs.is_finite() && secs > 0.0 {
+        secs as u64
+    } else {
+        0
+    };
+    let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
 pub fn format_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{} B", bytes)

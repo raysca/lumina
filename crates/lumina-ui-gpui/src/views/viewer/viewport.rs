@@ -30,19 +30,15 @@ fn pinch_zoom_delta(pinch_delta: f32, scale: f32) -> f32 {
     scale * pinch_delta.clamp(-0.5, 0.5)
 }
 
-/// V3Video frame width; the transport card shares it.
-pub(super) const VIDEO_FRAME_MAX_WIDTH: f32 = 1040.0;
+/// Widest video frame (Design 06: 1120x630).
+const VIDEO_FRAME_MAX_WIDTH: f32 = 1120.0;
 
-/// V3Video: the video frame contain-fitted to at most 1040 wide and to the
-/// stage left after the top bar, the docked info panel and the transport, so the
-/// transport sits right below the picture and always stays on screen.
+/// The video frame contain-fitted to at most 1120 wide and to the stage left
+/// after the top bar, the docked info panel and the docked transport, so the
+/// transport always stays on screen.
 /// `None` for photos and immersive fullscreen, which fill the stage.
 pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
-    // ponytail: measured transport card (98) + its 12px top and 16px bottom
-    // margins; update if the card grows.
-    const TRANSPORT_BLOCK: f32 = 126.0;
-    // The stage centres frame + transport, so a height-limited frame gets
-    // 12px above it (the same as frame to transport) and 12px of slack below.
+    // A height-limited frame keeps 12px above and below it.
     const TOP_GAP: f32 = 24.0;
     // Room for the 40px prev/next buttons 26px from each edge, plus a 14px
     // gap to the frame.
@@ -74,8 +70,8 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     } else {
         0.0
     };
-    let max_h =
-        (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - TRANSPORT_BLOCK - strip).max(1.0);
+    let transport = super::transport::transport_height(this);
+    let max_h = (win_h - super::top_bar::TOP_BAR_HEIGHT - TOP_GAP - transport - strip).max(1.0);
     let w = max_w.min(max_h * aspect);
     Some((w, w / aspect))
 }

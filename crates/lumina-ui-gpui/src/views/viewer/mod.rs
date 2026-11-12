@@ -14,6 +14,7 @@ pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;
 pub mod transport;
+pub mod transport_controls;
 pub mod utils;
 pub mod viewport;
 
@@ -119,13 +120,12 @@ impl MediaViewer {
                     .items_center()
                     .justify_center()
                     // The media frame and its prev/next buttons share a box,
-                    // so the buttons centre on the picture, not on the
-                    // picture plus the video transport below it.
+                    // so the buttons centre on the picture.
                     .child(
                         div()
                             .relative()
-                            // A framed video takes its own height so the
-                            // transport follows it; photos fill the stage.
+                            // A framed video takes its own size, centred
+                            // above the transport; photos fill the stage.
                             .map(|frame| match viewport::video_frame_size(this) {
                                 Some(_) => frame.flex_none(),
                                 None => frame.flex_1(),
@@ -144,31 +144,29 @@ impl MediaViewer {
                     .when(show_chrome && !is_video && !presenting, |stage| {
                         stage.children(stage_controls::render_zoom_controls(this, cx))
                     })
-                    // Video Transport Bar (Scrubber + Dock). While PiP owns the
-                    // player the viewer shows the poster and a hand-off pill.
-                    .child(if presenting {
-                        Empty.into_any_element()
-                    } else if is_video && show_chrome && this.video.in_pip {
-                        stage_controls::render_pip_handoff(this, item, cx).into_any_element()
-                    } else if is_video && show_chrome && is_immersive {
-                        crate::motion::fade_in(
-                            div()
-                                .w_full()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .child(ViewerTransport::render(this, cx)),
-                            "viewer-hud-transport-in",
-                            crate::motion::HUD_IN,
-                        )
-                        .into_any_element()
-                    } else if is_video && show_chrome {
-                        ViewerTransport::render(this, cx).into_any_element()
-                    } else {
-                        Empty.into_any_element()
-                    }),
+                    // While PiP owns the player the viewer shows the poster
+                    // and a hand-off pill instead of the transport.
+                    .when(
+                        is_video && show_chrome && !presenting && this.video.in_pip,
+                        |stage| stage.child(stage_controls::render_pip_handoff(this, item, cx)),
+                    ),
             )
-            // 3. The filmstrip under the media.
+            // 3. The transport, docked across the stage under the frame.
+            .child(
+                if presenting || !is_video || !show_chrome || this.video.in_pip {
+                    Empty.into_any_element()
+                } else if is_immersive {
+                    crate::motion::fade_in(
+                        div().w_full().child(ViewerTransport::render(this, cx)),
+                        "viewer-hud-transport-in",
+                        crate::motion::HUD_IN,
+                    )
+                    .into_any_element()
+                } else {
+                    ViewerTransport::render(this, cx).into_any_element()
+                },
+            )
+            // 4. The filmstrip under the media.
             .children(filmstrip::render(this, cx));
 
         backdrop
@@ -184,7 +182,7 @@ impl MediaViewer {
                 }),
             )
             .child(stage)
-            // 4. Info panel: a full-height column beside the stage.
+            // 5. Info panel: a full-height column beside the stage.
             .child(if show_panel {
                 div()
                     .id("viewer-info-drawer")
