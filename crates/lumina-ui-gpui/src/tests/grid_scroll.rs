@@ -429,3 +429,53 @@ fn rail_collapses_older_years_and_stays_inside_its_bounds() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The lens and every drawn year label (and the "{year} ↓" row) do not
+/// overlap: the lens never covers a date.
+fn assert_lens_clears_labels(vcx: &mut gpui::VisualTestContext, when: &str) {
+    let lens = bounds(vcx, "timeline-lens");
+    let slack = gpui::px(0.5);
+    let labels = (1990..=2026)
+        .map(|y| leak(format!("timeline-year-{y}")))
+        .chain(["timeline-older"]);
+    for label in labels {
+        let Some(b) = vcx.debug_bounds(label) else {
+            continue;
+        };
+        let apart = lens.origin.x + slack >= b.origin.x + b.size.width
+            || b.origin.x + slack >= lens.origin.x + lens.size.width
+            || lens.origin.y + slack >= b.origin.y + b.size.height
+            || b.origin.y + slack >= lens.origin.y + lens.size.height;
+        assert!(apart, "{when}: the lens {lens:?} covers {label} {b:?}");
+    }
+}
+
+#[core::prelude::v1::test]
+fn rail_lens_never_covers_a_year_label() {
+    // At the top the lens is on June 2025, right under the 2025 label.
+    let (dir, engine) = seed_rail_library("rail_lens_labels");
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = rail_app(&mut cx, engine);
+    assert_lens_clears_labels(vcx, "the first month of a year");
+    let year = bounds(vcx, "timeline-year-2025");
+    let bar = bounds(vcx, "timeline-bar-fill-2025-06");
+    assert!(
+        bar.origin.y >= year.origin.y + year.size.height,
+        "bars sit on their own lines under the year label: {bar:?} vs {year:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // One item per year: the screen spans many years, and so does the lens.
+    let (dir, engine) = seed_many_years("rail_lens_years");
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = rail_app(&mut cx, engine);
+    assert_lens_clears_labels(vcx, "a lens over several years");
+    // On the older row the lens starts right of "{year} ↓".
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(480.0)));
+    render_ui(vcx);
+    render_ui(vcx);
+    click(vcx, "timeline-older");
+    render_ui(vcx);
+    assert_lens_clears_labels(vcx, "the older row");
+    let _ = std::fs::remove_dir_all(&dir);
+}

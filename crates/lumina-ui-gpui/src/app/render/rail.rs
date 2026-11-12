@@ -24,17 +24,26 @@ const LABEL_TOP: f32 = 8.0;
 const FIRST_ROW: f32 = 26.0;
 /// Month bar height and the step between bars.
 const BAR_H: f32 = 4.0;
-const BAR_PITCH: f32 = 9.0;
-/// Year label line height; a year with one month still takes this much.
-const YEAR_H: f32 = 14.0;
-const YEAR_GAP: f32 = 8.0;
+const BAR_PITCH: f32 = 7.0;
+/// Year label line height. The year's bars start `BARS_TOP` below the
+/// label's top, on their own lines, and the next year `YEAR_GAP` below the
+/// last bar.
+const YEAR_H: f32 = 13.0;
+const BARS_TOP: f32 = 15.0;
+const YEAR_GAP: f32 = 20.0;
 /// Bars are right-aligned to this x; the longest is `BAR_MAX` wide.
 const BAR_RIGHT: f32 = 70.0;
 const BAR_MAX: f32 = 36.0;
-const LENS_W: f32 = 52.0;
+/// The lens spans x 26-78 and is at least `LENS_MIN_H` tall.
+const LENS_LEFT: f32 = 26.0;
+const LENS_RIGHT: f32 = 78.0;
 const LENS_MIN_H: f32 = 29.0;
 /// Height of the "{year} ↓" row.
 const OLDER_H: f32 = 16.0;
+/// Right edges of a year label ("2026") and of the "{year} ↓" label. A lens
+/// that reaches a label's line starts right of it, so it never covers a date.
+const YEAR_LABEL_RIGHT: f32 = 34.0;
+const OLDER_LABEL_RIGHT: f32 = 48.0;
 
 /// One month with items.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -163,7 +172,7 @@ fn layout(months: &[RailMonth], height: f32) -> Vec<RailRow> {
     while i < months.len() {
         let year = months[i].year;
         let n = months[i..].iter().take_while(|m| m.year == year).count();
-        let block = (n as f32 * BAR_PITCH).max(YEAR_H);
+        let block = BARS_TOP + n as f32 * BAR_PITCH - (BAR_PITCH - BAR_H);
         let is_last = i + n == months.len();
         // Keep room for the older row unless this is the last year.
         let needed = block + if is_last { 0.0 } else { YEAR_GAP + OLDER_H };
@@ -175,7 +184,7 @@ fn layout(months: &[RailMonth], height: f32) -> Vec<RailRow> {
         for k in 0..n {
             rows.push(RailRow::Bar {
                 index: i + k,
-                y: y + k as f32 * BAR_PITCH + (YEAR_H - BAR_H) / 2.0,
+                y: y + BARS_TOP + k as f32 * BAR_PITCH,
             });
         }
         y += block + YEAR_GAP;
@@ -192,6 +201,31 @@ fn month_y(rows: &[RailRow], index: usize) -> Option<f32> {
         RailRow::Older { first, y, .. } if index >= first => Some(y + OLDER_H / 2.0),
         _ => None,
     })
+}
+
+/// The lens over `ys` (top to bottom, in rail coordinates) as (left, top,
+/// bottom). It clears the label of the year its newest month is in, moving
+/// down; if it still reaches a label (it spans years, or sits on the
+/// "{year} ↓" row) it starts right of that label instead.
+fn lens_rect(rows: &[RailRow], newest_year: i32, ys: Range<f32>) -> (f32, f32, f32) {
+    let (mut top, mut bottom) = (ys.start, ys.end);
+    let own_label = rows.iter().find_map(|row| match *row {
+        RailRow::Year { year, y } if year == newest_year => Some(y + YEAR_H),
+        _ => None,
+    });
+    if let Some(label_bottom) = own_label.filter(|b| top < *b) {
+        bottom += label_bottom - top;
+        top = label_bottom;
+    }
+    let left = rows
+        .iter()
+        .filter_map(|row| match *row {
+            RailRow::Year { y, .. } if y < bottom && top < y + YEAR_H => Some(YEAR_LABEL_RIGHT),
+            RailRow::Older { y, .. } if y < bottom && top < y + OLDER_H => Some(OLDER_LABEL_RIGHT),
+            _ => None,
+        })
+        .fold(LENS_LEFT, f32::max);
+    (left, top, bottom)
 }
 
 impl LuminaApp {
@@ -304,7 +338,11 @@ impl LuminaApp {
             let bottom = month_y(&rows, oldest)?;
             let h = (bottom - top + BAR_H + 8.0).max(LENS_MIN_H);
             let mid = (top + bottom) / 2.0;
-            Some(mid - h / 2.0..mid + h / 2.0)
+            Some(lens_rect(
+                &rows,
+                rail.months[newest].year,
+                mid - h / 2.0..mid + h / 2.0,
+            ))
         });
 
         let mut children: Vec<AnyElement> = Vec::with_capacity(rows.len() + 2);
@@ -320,15 +358,15 @@ impl LuminaApp {
                 .child(t("timeline.label"))
                 .into_any_element(),
         );
-        if let Some(lens) = &lens {
+        if let Some((left, top, bottom)) = lens {
             children.push(
                 div()
                     .debug_selector(|| "timeline-lens".to_string())
                     .absolute()
-                    .left(px(BAR_RIGHT + 4.0 - LENS_W))
-                    .top(px(lens.start))
-                    .w(px(LENS_W))
-                    .h(px(lens.end - lens.start))
+                    .left(px(left))
+                    .top(px(top))
+                    .w(px(LENS_RIGHT - left))
+                    .h(px(bottom - top))
                     .rounded(px(5.0))
                     .bg(theme::accent_soft())
                     .border_1()
@@ -471,10 +509,7 @@ impl LuminaApp {
             .then(|| self.timeline_bubble_label())
             .flatten()
             .map(|label| {
-                let top = lens
-                    .as_ref()
-                    .map_or(FIRST_ROW, |l| l.start)
-                    .min(height - 23.0);
+                let top = lens.map_or(FIRST_ROW, |(_, top, _)| top).min(height - 23.0);
                 div()
                     .debug_selector(|| "timeline-bubble".to_string())
                     .absolute()
@@ -569,6 +604,32 @@ mod tests {
             range_label(&r.months[oldest], &r.months[newest]),
             "DEC 2024"
         );
+    }
+
+    #[core::prelude::v1::test]
+    fn lens_keeps_the_design_x_unless_it_reaches_a_label() {
+        let r = rail(&[
+            ((2025, 7), 1),
+            ((2025, 6), 1),
+            ((2025, 5), 1),
+            ((2024, 1), 1),
+        ]);
+        let rows = layout(&r.months, f32::INFINITY);
+        // June alone: clear of the 2025 label and of 2024's.
+        let y = month_y(&rows, 1).unwrap();
+        let (left, top, _) = lens_rect(&rows, 2025, y - 14.5..y + 14.5);
+        assert_eq!(left, LENS_LEFT, "no label near: the design's x 26");
+        assert!(top >= FIRST_ROW + YEAR_H, "below the 2025 label");
+        // July, the year's first month: moved below its label, same x.
+        let y = month_y(&rows, 0).unwrap();
+        let (left, top, bottom) = lens_rect(&rows, 2025, y - 14.5..y + 14.5);
+        assert_eq!(top, FIRST_ROW + YEAR_H, "it starts under the label");
+        assert!((bottom - top - 29.0).abs() < 0.01, "and keeps its height");
+        assert_eq!(left, LENS_LEFT);
+        // July to January 2024 spans the 2024 label: it starts right of it.
+        let end = month_y(&rows, 3).unwrap();
+        let (left, ..) = lens_rect(&rows, 2025, y - 6.0..end + 6.0);
+        assert_eq!(left, YEAR_LABEL_RIGHT, "a lens over two years clears 2024");
     }
 
     #[core::prelude::v1::test]
