@@ -596,7 +596,7 @@ impl LuminaApp {
         self.albums = Default::default();
         self.delete_confirm_state = None;
         self.context_menu_state = None;
-        self.close_tag_manager(cx);
+        self.cancel_tag_manager_prompts();
         // Undo entries hold ids from the old library; replaying them here
         // would change the wrong rows.
         self.undo = Default::default();
@@ -727,7 +727,7 @@ impl LuminaApp {
             // Cached by refresh_album_counts.
             AlbumSelection::Untagged => Some(self.untagged_count),
             AlbumSelection::Duplicates => Some(self.duplicate_items_count),
-            AlbumSelection::AlbumsOverview => Some(0),
+            AlbumSelection::AlbumsOverview | AlbumSelection::Tags => Some(0),
         }
     }
 
@@ -766,6 +766,7 @@ impl LuminaApp {
         self.stacks.reset();
         // A page's focus and menus never outlive the visit (↵ would fire them).
         self.albums.overview.leave();
+        self.cancel_tag_manager_prompts();
         if self.selection == AlbumSelection::Duplicates {
             self.refresh_duplicates();
         }

@@ -75,6 +75,7 @@ mod stacks_guards;
 mod stacks_members;
 mod states;
 mod tag_manager;
+mod tag_manager_sidecars;
 mod tags_and_albums;
 mod templates;
 mod text_input;

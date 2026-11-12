@@ -1712,11 +1712,13 @@ fn image_menu_rotate_is_refused_behind_sheets() {
         vcx,
         &engine,
         &photos,
-        "Image > Rotate must not turn the selection hidden behind the tag manager",
+        "Image > Rotate on the Tags page has no media selection to turn",
     );
 
     view.update(vcx, |app, cx| {
-        app.close_tag_manager(cx);
+        // The Tags page dropped the selection; select everything again.
+        app.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
+        app.select_all(cx);
         app.import.dialog = Some(crate::app::import::ImportDialog::Planning {
             count: 1,
             checked: None,

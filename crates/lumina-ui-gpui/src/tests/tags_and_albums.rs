@@ -85,11 +85,11 @@ fn test_e2e_tag_workflow() {
 
     // 3. Rename tag: "mountains" -> "alps"
     view.update(cx, |app, cx| {
-        app.start_tag_rename("mountains".to_string(), cx);
-        assert_eq!(app.editing_tag.as_deref(), Some("mountains"));
-        app.editing_tag_buffer = "alps".to_string();
-        app.commit_tag_rename(cx);
-        assert!(app.editing_tag.is_none());
+        app.start_modal_tag_rename("mountains".to_string(), cx);
+        assert_eq!(app.tag_manager.editing.as_deref(), Some("mountains"));
+        app.tag_manager.editing_buffer = "alps".to_string();
+        app.commit_modal_tag_rename(cx);
+        assert!(app.tag_manager.editing.is_none());
         assert_eq!(app.library_tag_counts, vec![("alps".to_string(), 1)]);
         assert_eq!(app.selected_item_tags, vec!["alps".to_string()]);
         // Search query should automatically adjust to new tag name
@@ -164,9 +164,9 @@ fn test_tag_manager_modal_lifecycle() {
 
     // 1. Open Tag Manager
     view.update(cx, |app, cx| {
-        assert!(!app.tag_manager.open);
+        assert!(!app.tags_page_shown());
         app.open_tag_manager(cx);
-        assert!(app.tag_manager.open);
+        assert!(app.tags_page_shown());
         assert_eq!(app.library_tag_counts.len(), 3);
     });
     cx.run_until_parked();
@@ -232,10 +232,10 @@ fn test_tag_manager_modal_lifecycle() {
     });
     cx.run_until_parked();
 
-    // 6. Dismiss modal via Escape key
+    // 6. Escape with nothing checked stays on the page (no sheet to close)
     cx.update(|window, app_cx| {
         view.update(app_cx, |app, cx| {
-            assert!(app.tag_manager.open);
+            assert!(app.tags_page_shown());
             app.handle_key_down(
                 &KeyDownEvent {
                     keystroke: Keystroke::parse("escape").unwrap(),
@@ -245,7 +245,7 @@ fn test_tag_manager_modal_lifecycle() {
                 window,
                 cx,
             );
-            assert!(!app.tag_manager.open);
+            assert!(app.tags_page_shown(), "Esc does not leave the Tags page");
         });
     });
     cx.run_until_parked();
@@ -314,16 +314,17 @@ fn test_tag_manager_modular_flow() {
             ("vacation".to_string(), 8),
         ];
 
-        // Open tag manager modal
-        app.open_tag_manager(cx);
-        assert!(app.tag_manager.open);
+        // No library is open, so `open_tag_manager` would refuse: select
+        // the page directly.
+        app.selection = AlbumSelection::Tags;
+        assert!(app.tags_page_shown());
 
         // Test search filter
         app.tag_manager.search = "sun".to_string();
         cx.notify();
 
-        // Render modular tag manager modal without panic
-        let _element = crate::views::tag_manager::TagManagerModal::render(app, cx);
+        // Render the Tags page body without panic
+        let _element = crate::views::tag_manager::render(app, cx);
 
         // Test sorting by Alphabetical vs CountDesc
         app.set_tag_sort_order(TagSortOrder::Alphabetical, cx);
@@ -339,9 +340,9 @@ fn test_tag_manager_modular_flow() {
         app.clear_tag_manager_selection(cx);
         assert!(app.tag_manager.selected.is_empty());
 
-        // Close modal
-        app.close_tag_manager(cx);
-        assert!(!app.tag_manager.open);
+        // Leave the page
+        app.select_album(AlbumSelection::AllLibrary, cx);
+        assert!(!app.tags_page_shown());
     });
 }
 
@@ -401,14 +402,14 @@ fn renaming_a_tag_stores_the_normalized_path_and_refuses_over_long_ones() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
     view.update(vcx, |app, cx| {
-        app.start_tag_rename("trip".to_string(), cx);
-        app.editing_tag_buffer = " Places / Europe ".to_string();
-        app.commit_tag_rename(cx);
+        app.start_modal_tag_rename("trip".to_string(), cx);
+        app.tag_manager.editing_buffer = " Places / Europe ".to_string();
+        app.commit_modal_tag_rename(cx);
         assert!(app.error_message.is_none(), "a valid path renames");
         assert_eq!(
             engine.get_tags_for_item(item.id),
             vec!["places/europe".to_string()],
-            "the sidebar rename stores the normalized path"
+            "a rename with spaces round the slash stores the normalized path"
         );
 
         app.start_modal_tag_rename("places/europe".to_string(), cx);
@@ -479,9 +480,9 @@ fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
         assert!(app.error_message.is_none(), "the tag writes must succeed");
 
         app.select_album(AlbumSelection::Tag("travel".to_string()), cx);
-        app.start_tag_rename("travel".to_string(), cx);
-        app.editing_tag_buffer = "trip".to_string();
-        app.commit_tag_rename(cx);
+        app.start_modal_tag_rename("travel".to_string(), cx);
+        app.tag_manager.editing_buffer = "trip".to_string();
+        app.commit_modal_tag_rename(cx);
         assert_eq!(
             app.untagged_count, 1,
             "renaming a tag must not change untagged membership"
@@ -719,7 +720,7 @@ fn rendered_show_in_library_filters_and_closes_the_manager() {
             "Show in Library must filter the grid by that tag"
         );
         assert!(
-            !app.tag_manager.open,
+            !app.tags_page_shown(),
             "Show in Library must close the tag manager"
         );
         assert!(
@@ -856,7 +857,7 @@ fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
 }
 
 #[core::prelude::v1::test]
-fn a_long_name_keeps_the_sidebar_rename_buttons_in_the_row() {
+fn a_long_name_keeps_the_rename_field_in_the_detail_panel() {
     let (dir, engine) = seed_library("rename_overflow", 2);
     let id = engine.get_item_slice(0..1)[0].id;
     engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
@@ -864,30 +865,28 @@ fn a_long_name_keeps_the_sidebar_rename_buttons_in_the_row() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
         app.refresh_album_counts();
-        app.start_tag_rename("trip".to_string(), cx);
-        app.editing_tag_buffer = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
+        app.open_tag_manager(cx);
+        app.focus_tag_manager_tag("trip".to_string(), cx);
+        app.start_modal_tag_rename("trip".to_string(), cx);
+        app.tag_manager.editing_buffer = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
         cx.notify();
     });
     render_ui(vcx);
-    let row = vcx
-        .debug_bounds("sidebar-tag-rename")
-        .expect("the rename row renders");
-    let buttons = vcx
-        .debug_bounds("sidebar-tag-rename-buttons")
-        .expect("the rename buttons render");
+    let panel = vcx
+        .debug_bounds("tag-manager-detail")
+        .expect("the detail panel renders");
+    let field = vcx
+        .debug_bounds("tag-manager-rename-field")
+        .expect("the rename field renders");
     assert!(
-        buttons.right() <= row.right() && buttons.left() >= row.left(),
-        "a long name must not push Save/Cancel out of the row: row {row:?}, buttons {buttons:?}"
-    );
-    assert!(
-        buttons.size.width > gpui::px(20.0),
-        "the buttons keep their width: {buttons:?}"
+        field.right() <= panel.right() && field.left() >= panel.left(),
+        "a long name scrolls inside the field instead of widening it: panel {panel:?}, field {field:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
-fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
+fn long_tag_and_smart_album_names_stay_inside_their_columns() {
     let (dir, engine) = seed_library("sidebar_long_names", 2);
     let long = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
     let id = engine.get_item_slice(0..1)[0].id;
@@ -905,19 +904,25 @@ fn long_tag_and_smart_album_names_stay_inside_the_sidebar() {
     });
     render_ui(vcx);
     let sidebar = vcx.debug_bounds("sidebar").expect("the sidebar renders");
-    let tag_row = vcx
-        .debug_bounds(leak(format!("sidebar-tag-filter-{long}")))
-        .expect("the long tag renders");
-    assert!(
-        tag_row.right() <= sidebar.right(),
-        "a long tag name truncates instead of pushing its count out: sidebar {sidebar:?}, tag {tag_row:?}"
-    );
     let delete = vcx
         .debug_bounds(leak(format!("smart-album-delete-{}", album.id)))
         .expect("the album's delete control renders");
     assert!(
         delete.right() <= sidebar.right(),
         "a long album name truncates instead of pushing its controls out: sidebar {sidebar:?}, delete {delete:?}"
+    );
+
+    view.update(vcx, |app, cx| app.open_tag_manager(cx));
+    render_ui(vcx);
+    let detail = vcx
+        .debug_bounds("tag-manager-detail")
+        .expect("the Tags page renders");
+    let tag_row = vcx
+        .debug_bounds(leak(format!("tag-manager-row-{long}")))
+        .expect("the long tag renders");
+    assert!(
+        tag_row.right() <= detail.left(),
+        "a long tag name truncates in the list instead of pushing into the detail: detail {detail:?}, tag {tag_row:?}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

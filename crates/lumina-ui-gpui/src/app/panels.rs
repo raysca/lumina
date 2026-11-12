@@ -37,9 +37,9 @@ impl LuminaApp {
     }
 
     pub fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
-        // The Albums overview hides the panel: a toggle there would flip and
-        // save a setting the user cannot see.
-        if self.albums_overview_shown() {
+        // The Albums overview and the Tags page hide the panel: a toggle
+        // there would flip and save a setting the user cannot see.
+        if self.non_media_page_shown() {
             return;
         }
         if self.floating_inspector_window.is_some() {

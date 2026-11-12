@@ -273,17 +273,17 @@ fn new_album_waits_for_photo_edits_and_sheets() {
     view.update(vcx, |app, cx| {
         app.discard_edit_draft();
         app.close_viewer(cx);
-        app.open_tag_manager(cx);
+        app.open_album_builder(cx);
     });
     render_ui(vcx);
     vcx.dispatch_action(crate::actions::NewAlbum);
     render_ui(vcx);
     assert!(
         catalog_albums(&engine).is_empty(),
-        "no album under the tag manager"
+        "no album under the smart album sheet"
     );
     view.update(vcx, |app, _| {
-        assert!(app.tag_manager.open);
+        assert!(app.album_draft.modal_open);
         assert!(app.albums.renaming.is_none(), "no hidden name field");
     });
     assert!(vcx.debug_bounds("album-rename-field").is_none());
@@ -370,11 +370,11 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
         app.discard_edit_draft();
         app.close_viewer(cx);
         app.select_index(0, cx);
-        app.open_tag_manager(cx);
+        app.open_album_builder(cx);
         app.open_album_picker(cx);
         assert!(
             app.albums.picker.is_none(),
-            "no picker under the tag manager"
+            "no picker under the smart album sheet"
         );
         app.new_album(cx);
         app.new_album_with_selection(cx);
@@ -383,7 +383,7 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
         assert!(app.albums.renaming.is_none(), "no hidden rename field");
         assert!(
             app.albums.confirm_delete.is_none(),
-            "no dialog under the tag manager"
+            "no dialog under the smart album sheet"
         );
     });
     assert_eq!(only_album(&engine).title, "Trip", "the album is untouched");
@@ -442,7 +442,7 @@ fn opening_another_library_closes_dialogs_holding_old_ids() {
             !app.album_draft.modal_open && app.album_draft.editing_album_id.is_none(),
             "the smart-album sheet closes"
         );
-        assert!(!app.tag_manager.open, "the tag manager closes");
+        assert!(!app.tags_page_shown(), "the Tags page is left");
         app.execute_confirmed_deletion(cx);
     });
     let trashed = other_engine.query_system_album_count(lumina_core::SystemAlbum::RecentlyDeleted);

@@ -609,7 +609,7 @@ fn menu_actions_are_disabled_while_the_slideshow_plays() {
             );
             assert!(app.compare.is_none(), "{name}: no compare");
             assert!(app.templates.editor.is_none(), "{name}: no template editor");
-            assert!(!app.tag_manager.open, "{name}: no Tag Manager");
+            assert!(!app.tags_page_shown(), "{name}: no Tag Manager");
             assert!(!app.downloads.open, "{name}: no downloads list");
             assert!(app.import.dialog.is_none(), "{name}: no import sheet");
             assert!(

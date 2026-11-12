@@ -106,9 +106,10 @@ impl LuminaApp {
         if let Some(state) = self.grid_state.as_mut() {
             state.total_count = state.engine.total_count();
         }
-        // The Albums overview holds no media: show the copy in All Media,
-        // as PiP's expand does, so no hidden selection is left on the page.
-        if self.albums_overview_shown() {
+        // The Albums overview and the Tags page hold no media: show the copy
+        // in All Media, as PiP's expand does, so no hidden selection is left
+        // on the page.
+        if self.non_media_page_shown() {
             self.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
         }
         // Counts first (the view lookup below reads them), and the ratings,

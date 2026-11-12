@@ -1,0 +1,90 @@
+//! Keys on the Tags page. Its rename and alias fields are text fields
+//! (`keymap/modals.rs`); typing filters through the field input.
+
+use gpui::*;
+
+use crate::app::LuminaApp;
+
+impl LuminaApp {
+    /// The Tags page's keys: ↑/↓ focus a keyword, ↵ renames it, Space checks
+    /// it, ⌘A / ⌘M / ⌘⌫ act on the checked ones, ⇧⌘A / ⇧⌘M alias and move
+    /// it, ⌘Z / ⇧⌘Z undo and redo, Esc clears the checks (and otherwise does
+    /// nothing, as on the Albums overview). Every other key is absorbed, so
+    /// the grid's shortcuts (⌫, F, ratings, ⌘E…) never reach media behind
+    /// the page; [`passes_through`] lists the global ones that still work.
+    pub(crate) fn handle_tags_page_key(
+        &mut self,
+        keystroke: &Keystroke,
+        cmd_or_ctrl: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.tags_page_shown() || self.is_fullscreen_viewer {
+            return false;
+        }
+        let key = keystroke.key.as_str();
+        let shift = keystroke.modifiers.shift;
+        match key {
+            // Rename, merge and delete happen here, so their undo does too.
+            // The history step reloads the counts and detail panel.
+            "z" if cmd_or_ctrl && shift => self.redo_last(cx),
+            "z" if cmd_or_ctrl => self.undo_last(cx),
+            "a" if cmd_or_ctrl && shift => self.start_alias_input(cx),
+            "m" if cmd_or_ctrl && shift => self.start_keyword_move(cx),
+            "a" if cmd_or_ctrl => self.toggle_all_tag_manager_rows(cx),
+            "m" if cmd_or_ctrl => self.merge_checked_tags(cx),
+            // Only with an empty filter (⌘⌫ edits text) and the bar showing.
+            "backspace"
+                if cmd_or_ctrl
+                    && self.tag_manager.search.is_empty()
+                    && self.tag_manager.selected.len() >= 2 =>
+            {
+                let tags = self.tag_manager.selected.iter().cloned().collect();
+                self.bulk_delete_tags(tags, cx);
+            }
+            "space" if self.tag_manager.search.is_empty() => {
+                // Not a filter character: keep it from the input handler.
+                cx.stop_propagation();
+                if let Some(tag) = self.tag_manager.focused.clone() {
+                    self.toggle_tag_manager_selection(tag, cx);
+                }
+            }
+            "up" | "down" if !cmd_or_ctrl => {
+                self.step_tag_manager_focus(if key == "up" { -1 } else { 1 }, cx);
+            }
+            "enter" | "return" => {
+                if let Some(tag) = self.tag_manager.focused.clone() {
+                    self.start_modal_tag_rename(tag, cx);
+                }
+            }
+            "escape" if !self.tag_manager.selected.is_empty() => {
+                self.clear_tag_manager_selection(cx);
+            }
+            _ => return !passes_through(keystroke, cmd_or_ctrl),
+        }
+        true
+    }
+}
+
+/// Global shortcuts that open a window, sheet or another place and never
+/// act on the media selection: they keep working on the Tags page. ⌘[ / ⌘]
+/// are handled before the page.
+fn passes_through(keystroke: &Keystroke, cmd_or_ctrl: bool) -> bool {
+    let m = &keystroke.modifiers;
+    if !cmd_or_ctrl {
+        return false;
+    }
+    match keystroke.key.to_ascii_lowercase().as_str() {
+        // Shortcut sheet, palette, New Album / Smart Album, Open Library,
+        // Preferences, Find.
+        "/" | "k" | "n" | "o" | "," | "f" => true,
+        // ⌘R rescans; ⇧⌘R reveals the selection.
+        "r" => !m.shift,
+        // ⇧⌘I imports; ⌘I is Get Info on the selection.
+        "i" => m.shift,
+        // ⌥⌘U import from a link, ⌥⌘L downloads.
+        "u" | "l" => m.alt,
+        // ⌃⌘S sidebar; ⌥⌘S is a slideshow of the view.
+        "s" => m.control && m.platform,
+        _ => false,
+    }
+}

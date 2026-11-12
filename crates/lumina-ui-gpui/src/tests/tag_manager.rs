@@ -1,6 +1,7 @@
 //! v3 Tag Manager (FIXES §7): selection bar with Merge, usage bars,
 //! select-all over shown rows, and the detail panel.
 
+use super::tag_manager_sidecars::sidecar_library;
 use crate::tests::ui_automation::{
     app_with_library, click, keystrokes, leak, render_ui, seed_library,
 };
@@ -26,7 +27,7 @@ fn tag_library(
     (dir, engine)
 }
 
-fn open(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
+pub(super) fn open(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
     view.update(vcx, |app, cx| {
         app.refresh_tag_counts();
         app.open_tag_manager(cx);
@@ -34,11 +35,15 @@ fn open(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
     render_ui(vcx);
 }
 
-fn checkbox(tag: &str) -> &'static str {
+pub(super) fn checkbox(tag: &str) -> &'static str {
     leak(format!("tag-manager-checkbox-{tag}"))
 }
 
-fn count(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, tag: &str) -> Option<usize> {
+pub(super) fn count(
+    view: &Entity<LuminaApp>,
+    vcx: &mut VisualTestContext,
+    tag: &str,
+) -> Option<usize> {
     view.update(vcx, |app, _| {
         app.library_tag_counts
             .iter()
@@ -95,7 +100,7 @@ fn bar_shows_at_two_and_merge_folds_into_the_most_used() {
 }
 
 #[core::prelude::v1::test]
-fn select_all_only_touches_shown_rows_and_esc_deselects_then_closes() {
+fn select_all_only_touches_shown_rows_and_esc_deselects() {
     let (dir, engine) = tag_library("tm_select_all");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -121,11 +126,16 @@ fn select_all_only_touches_shown_rows_and_esc_deselects_then_closes() {
 
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
-        assert!(app.tag_manager.open, "Esc first deselects");
+        assert!(app.tags_page_shown(), "Esc first deselects");
         assert!(app.tag_manager.selected.is_empty());
     });
     keystrokes(vcx, "escape");
-    view.update(vcx, |app, _| assert!(!app.tag_manager.open, "then closes"));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.tags_page_shown(),
+            "then does nothing: a page has no close"
+        )
+    });
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -273,120 +283,6 @@ fn moving_focus_cancels_a_rename_in_progress() {
 }
 
 #[core::prelude::v1::test]
-fn rename_keyword_rewrites_sidecars() {
-    let (dir, engine) = seed_library("tm_rename_sidecar", 1);
-    let item = engine.get_item_slice(0..1)[0].clone();
-    engine
-        .add_tags_batch(
-            &[item.id],
-            &["beach".to_string(), "beach/dunes".to_string()],
-        )
-        .unwrap();
-    engine.write_metadata_sidecars(&[item.id]).unwrap();
-    let sidecar_tags = || {
-        let mut tags = lumina_core::read_sidecar(&item.path)
-            .unwrap()
-            .map(|xmp| xmp.tags)
-            .unwrap_or_default();
-        tags.sort();
-        tags
-    };
-    assert_eq!(sidecar_tags(), ["beach", "beach/dunes"], "Lumina sidecar");
-
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    open(&view, vcx);
-    click(vcx, "tag-manager-row-beach");
-    render_ui(vcx);
-    click(vcx, "tag-manager-rename-field");
-    keystrokes(
-        vcx,
-        "backspace backspace backspace backspace backspace s h o r e enter",
-    );
-    // The sidecar pass runs on the background executor.
-    vcx.run_until_parked();
-    assert_eq!(count(&view, vcx, "shore/dunes"), Some(1), "the child moved");
-    assert_eq!(
-        sidecar_tags(),
-        ["shore", "shore/dunes"],
-        "a rename rewrites the sidecar of every item it changed"
-    );
-
-    view.update(vcx, |app, cx| app.delete_tag_globally("shore".into(), cx));
-    vcx.run_until_parked();
-    assert!(
-        sidecar_tags().is_empty(),
-        "a delete rewrites the sidecar too, so Import XMP cannot bring the keyword back"
-    );
-
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-/// One item tagged `tags`, with a Lumina sidecar listing them.
-fn sidecar_library(
-    prefix: &str,
-    tags: &[&str],
-) -> (
-    std::path::PathBuf,
-    std::sync::Arc<lumina_core::LuminaEngine>,
-    lumina_core::MediaItem,
-) {
-    let (dir, engine) = seed_library(prefix, 2);
-    let items = engine.get_item_slice(0..2);
-    let tags: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
-    engine.add_tags_batch(&[items[0].id], &tags).unwrap();
-    // A second item makes `beach` the most used, so merges fold into it.
-    engine
-        .add_tags_batch(&[items[1].id], &["beach".to_string()])
-        .unwrap();
-    engine.write_metadata_sidecars(&[items[0].id]).unwrap();
-    (dir, engine, items[0].clone())
-}
-
-fn sidecar_tags(item: &lumina_core::MediaItem) -> Vec<String> {
-    let mut tags = lumina_core::read_sidecar(&item.path)
-        .unwrap()
-        .map(|xmp| xmp.tags)
-        .unwrap_or_default();
-    tags.sort();
-    tags
-}
-
-#[core::prelude::v1::test]
-fn merge_and_bulk_delete_rewrite_sidecars() {
-    let (dir, engine, item) =
-        sidecar_library("tm_merge_sidecar", &["beach", "coast", "sea", "unique"]);
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    open(&view, vcx);
-
-    click(vcx, checkbox("beach"));
-    click(vcx, checkbox("coast"));
-    render_ui(vcx);
-    click(vcx, "merge-tags-btn");
-    vcx.run_until_parked();
-    assert_eq!(
-        sidecar_tags(&item),
-        ["beach", "sea", "unique"],
-        "a merge rewrites the sidecars of the items it changed"
-    );
-
-    click(vcx, checkbox("sea"));
-    click(vcx, checkbox("unique"));
-    render_ui(vcx);
-    click(vcx, "bulk-delete-tags-btn");
-    vcx.run_until_parked();
-    assert_eq!(count(&view, vcx, "sea"), None);
-    assert_eq!(
-        sidecar_tags(&item),
-        ["beach"],
-        "a bulk delete rewrites the sidecars of the items it changed"
-    );
-
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[core::prelude::v1::test]
 fn rename_and_delete_follow_a_selected_child() {
     let (dir, engine, _item) = sidecar_library("tm_child_refs", &["a/x"]);
     let mut cx = crate::tests::TestApp::single();
@@ -426,5 +322,111 @@ fn rename_and_delete_follow_a_selected_child() {
         assert!(app.tag_manager.selected.is_empty());
     });
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn tags_page_opens_in_main_area() {
+    use crate::views::sidebar::AlbumSelection;
+    let (dir, engine) = tag_library("tm_page");
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, _| app.refresh_tag_counts());
+    render_ui(vcx);
+
+    crate::tests::duplicates::run_palette_command(vcx, &view, "Open Tags");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("tags-page").is_some(),
+        "Open Tags shows the page in the main column"
+    );
+    let title = vcx.debug_bounds("page-title-text:Tags");
+    assert!(title.is_some(), "the page header reads Tags");
+    for gone in [
+        "tag-manager-backdrop",
+        "tag-manager-dialog",
+        "media-grid-surface",
+        "sidebar-tag-rename",
+        "sidebar-tag-filter-beach",
+        "sidebar-tag-name-beach",
+    ] {
+        assert!(
+            vcx.debug_bounds(gone).is_none(),
+            "the Tags page is not a sheet and the sidebar has no keyword tree: {gone}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("sidebar-nav-keywords-active").is_some(),
+        "TAGS › Keywords is the active sidebar row"
+    );
+
+    // ↑/↓ move the tag focus (A–Z: beach, coast, sea, unique).
+    keystrokes(vcx, "down down up");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.tag_manager.focused.as_deref(), Some("beach"));
+    });
+
+    // Grid shortcuts must not reach media behind the page, even with a
+    // selection left over.
+    view.update(vcx, |app, cx| app.select_item_internal(item.clone(), cx));
+    keystrokes(
+        vcx,
+        "backspace delete secondary-backspace f backspace escape",
+    );
+    vcx.run_until_parked();
+    let after = engine
+        .get_item_by_id(item.id)
+        .expect("item still in the catalog");
+    assert!(
+        !after.is_favorite,
+        "F on the page filters; it does not favourite"
+    );
+    assert!(!after.is_trashed, "⌫ on the page does not trash");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::Tags, "Esc keeps the page");
+    });
+
+    keystrokes(vcx, "secondary-[");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "⌘[ returns to the view before the page"
+        );
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("tags-page").is_none());
+    assert!(vcx.debug_bounds("media-grid-surface").is_some());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn inspector_and_open_tags_do_nothing_on_the_tags_page() {
+    use crate::app::command_palette::CommandId;
+    let (dir, engine) = tag_library("tm_page_inspector");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        assert!(app.command_applies(CommandId::OpenTagManager));
+    });
+    open(&view, vcx);
+    let before = view.update(vcx, |app, _| app.inspector_open);
+    view.update(vcx, |app, cx| app.toggle_inspector(cx));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.inspector_open, before,
+            "the toggle does not flip the hidden inspector setting"
+        );
+        assert!(
+            !app.command_applies(CommandId::ToggleInspector),
+            "⌘K does not list Toggle Inspector where it would do nothing"
+        );
+        assert!(
+            !app.command_applies(CommandId::OpenTagManager),
+            "nor Open Tags on the Tags page"
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -86,7 +86,7 @@ fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
     view.update(vcx, |app, _| {
         assert!(app.tag_input_active, "Tags… starts the tag field");
         assert!(
-            !app.tag_manager.open,
+            !app.tags_page_shown(),
             "Tags… no longer opens the Tag Manager"
         );
     });

@@ -451,8 +451,6 @@ fn confirming_an_untouched_legacy_tag_rename_keeps_it() {
     drop(conn);
 
     view.update(vcx, |app, cx| {
-        app.start_tag_rename(legacy.clone(), cx);
-        app.commit_tag_rename(cx);
         app.start_modal_tag_rename(legacy.clone(), cx);
         app.commit_modal_tag_rename(cx);
     });
@@ -537,9 +535,6 @@ fn every_field_edits_at_its_caret() {
     edits_mid_text("mid_location", Location, true, |app, cx| {
         app.inspector_tab = crate::views::inspector::InspectorTab::Location;
         app.start_location_input(cx);
-    });
-    edits_mid_text("mid_tag_rename", TagRename, false, |app, cx| {
-        app.start_tag_rename("beach".to_string(), cx)
     });
     edits_mid_text("mid_tm_search", TagManagerSearch, false, |app, cx| {
         app.open_tag_manager(cx)

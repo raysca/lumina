@@ -392,34 +392,42 @@ fn cmd_e_with_several_selected_does_nothing() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A copy finishing while the Albums overview shows is selected in All
-/// Media, so no hidden selection is left on the page.
+/// A copy finishing while a page with no media shows (the Albums overview,
+/// the Tags page) is selected in All Media, so no hidden selection is left
+/// on the page.
 #[core::prelude::v1::test]
-fn edit_copy_finishing_on_the_albums_overview_shows_all_media() {
-    let (dir, engine, photos, _) = edit_library("ext_copy_overview");
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine.clone());
-    set_editor(&view, vcx);
-    select(&view, vcx, photos[0]);
-    test_launches::take();
-    view.update(vcx, |app, cx| {
-        app.edit_selected_externally(true, cx);
-        app.show_albums_overview(cx);
-        assert!(app.albums_overview_shown());
-    });
-    vcx.run_until_parked();
-    render_ui(vcx);
-    view.update(vcx, |app, _| {
-        assert!(app.error_message.is_none(), "{:?}", app.error_message);
-        assert_eq!(
-            app.selection,
-            crate::views::sidebar::AlbumSelection::AllLibrary,
-            "the copy shows in All Media, not under the overview"
-        );
-        let copy = app.selected_item.clone().expect("the copy is selected");
-        assert_ne!(copy.id, photos[0], "the new item is selected");
-        assert_eq!(app.selected_index, app.find_active_index(copy.id));
-    });
-    assert_eq!(test_launches::take().len(), 1, "the editor opens the copy");
-    let _ = std::fs::remove_dir_all(&dir);
+fn edit_copy_finishing_on_a_page_without_media_shows_all_media() {
+    type ShowPage = fn(&mut crate::LuminaApp, &mut gpui::Context<crate::LuminaApp>);
+    let pages: [(&str, ShowPage); 2] = [
+        ("ext_copy_overview", |app, cx| app.show_albums_overview(cx)),
+        ("ext_copy_tags", |app, cx| app.open_tag_manager(cx)),
+    ];
+    for (prefix, show_page) in pages {
+        let (dir, engine, photos, _) = edit_library(prefix);
+        let mut cx = crate::tests::TestApp::single();
+        let (view, vcx) = app_with_library(&mut cx, engine.clone());
+        set_editor(&view, vcx);
+        select(&view, vcx, photos[0]);
+        test_launches::take();
+        view.update(vcx, |app, cx| {
+            app.edit_selected_externally(true, cx);
+            show_page(app, cx);
+            assert!(app.non_media_page_shown(), "{prefix}");
+        });
+        vcx.run_until_parked();
+        render_ui(vcx);
+        view.update(vcx, |app, _| {
+            assert!(app.error_message.is_none(), "{:?}", app.error_message);
+            assert_eq!(
+                app.selection,
+                crate::views::sidebar::AlbumSelection::AllLibrary,
+                "{prefix}: the copy shows in All Media, not under the page"
+            );
+            let copy = app.selected_item.clone().expect("the copy is selected");
+            assert_ne!(copy.id, photos[0], "the new item is selected");
+            assert_eq!(app.selected_index, app.find_active_index(copy.id));
+        });
+        assert_eq!(test_launches::take().len(), 1, "the editor opens the copy");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

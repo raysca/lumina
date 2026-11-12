@@ -253,10 +253,17 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
         ],
     ),
     (
-        "IN THE TAG MANAGER",
+        "TAGS PAGE",
         &[
+            ("Type", "Filter the keywords"),
+            ("↑ / ↓", "Previous / next keyword"),
+            ("Space", "Check the keyword"),
+            ("⌘A", "Check / clear every shown keyword"),
+            ("⌘M / ⌘⌫", "Merge / delete the checked keywords"),
+            ("Enter", "Rename the keyword"),
             ("⇧⌘A", "Add an alias for the keyword"),
             ("⇧⌘M", "Move the keyword to another parent"),
+            ("Esc", "Clear the checks"),
         ],
     ),
     (
@@ -491,10 +498,11 @@ impl Render for LuminaApp {
         // The inspector stays while Info is on; with no selection it shows an
         // empty state rather than vanishing under a lit toggle.
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
-        // The Albums overview holds no media: the panel would have nothing
-        // to show, so it stays hidden there (Info stays on for other views).
+        // The Albums overview and the Tags page hold no media: the panel
+        // would have nothing to show, so it stays hidden there (Info stays
+        // on for other views).
         let inspector_shown =
-            self.inspector_open && !is_fullscreen_viewer && !self.albums_overview_shown();
+            self.inspector_open && !is_fullscreen_viewer && !self.non_media_page_shown();
 
         let editing = self.edits.session.is_some();
         // Compare shows (not the viewer opened from it), or a slideshow
@@ -750,9 +758,19 @@ impl Render for LuminaApp {
                                     // overlay above it (see render_viewer_modal).
                                     // The filter and status bars belong to this column; the
                                     // inspector sits beside it, under the header.
-                                    // The Albums overview replaces the whole
-                                    // column: no grid, status bar or dock.
-                                    .child(if self.albums_overview_shown() {
+                                    // The Albums overview and the Tags page
+                                    // replace the whole column: no grid,
+                                    // status bar or dock.
+                                    .child(if self.tags_page_shown() {
+                                        div()
+                                            .relative()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .child(crate::views::tag_manager::render(self, cx))
+                                            .child(self.render_toast_overlay(cx))
+                                            .into_any_element()
+                                    } else if self.albums_overview_shown() {
                                         div()
                                             .relative()
                                             .flex_1()
@@ -936,12 +954,6 @@ impl Render for LuminaApp {
                 self.filter_menu.is_some(),
                 crate::views::filter_bar::render_filter_menu_overlay(self, cx),
                 "filter-menu-in",
-            ))
-            // 10. Tag Manager Modal Overlay
-            .child(motion::overlay_in(
-                self.tag_manager.open,
-                self.render_tag_manager_modal(cx),
-                "tag-manager-in",
             ))
             // 11. Keyboard Shortcuts Cheat Sheet
             .child(motion::overlay_in(

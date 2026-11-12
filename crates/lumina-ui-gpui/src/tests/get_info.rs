@@ -342,7 +342,7 @@ fn tags_tab_adds_with_enter_and_suggests_library_tags() {
 
     click(icx, "open-tag-manager-link");
     view.update(icx, |app, _| {
-        assert!(app.tag_manager.open, "the link opens the Tag Manager");
+        assert!(app.tags_page_shown(), "the link opens the Tag Manager");
     });
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -378,7 +378,7 @@ fn get_info_actions_have_a_keyboard_path() {
         app.execute_command(CommandId::RemoveLocation, cx);
 
         app.execute_command(CommandId::OpenTagManager, cx);
-        assert!(app.tag_manager.open);
+        assert!(app.tags_page_shown());
         id
     });
     view.update(icx, |app, _| {

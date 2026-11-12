@@ -314,7 +314,7 @@ pub fn render_tags_section(
                 .text_xs()
                 .text_color(theme::t2())
                 .hover(|s| s.text_color(theme::t1()))
-                .child("Open Tag Manager…")
+                .child(crate::i18n::t("command.open_tag_manager"))
                 .on_click(move |_e, _window, cx| {
                     if let Some(app) = app_manager.upgrade() {
                         app.update(cx, |this, cx| this.open_tag_manager(cx));

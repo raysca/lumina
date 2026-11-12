@@ -69,7 +69,6 @@ impl LuminaApp {
             || self.albums.confirm_delete.is_some()
             || self.albums.picker.is_some()
             || self.album_draft.modal_open
-            || self.tag_manager.open
             || self.context_menu_state.is_some()
             || self.network_import.stage.is_some()
             || self.downloads.confirm.is_some()

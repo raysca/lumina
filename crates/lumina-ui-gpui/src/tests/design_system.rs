@@ -18,12 +18,18 @@ fn assert_hangs_from_toolbar(vcx: &mut gpui::VisualTestContext, selector: &'stat
 }
 
 #[core::prelude::v1::test]
-fn tag_manager_is_a_sheet_under_the_toolbar() {
-    let (dir, engine) = seed_library("ds_tag_sheet", 2);
+fn tags_page_sits_under_the_page_header() {
+    let (dir, engine) = seed_library("ds_tag_page", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_tag_manager(cx));
-    assert_hangs_from_toolbar(vcx, "tag-manager-dialog");
+    assert_hangs_from_toolbar(vcx, "tags-page");
+    let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
+    let page = vcx.debug_bounds("tags-page").expect("tags-page");
+    assert!(
+        page.left() >= sidebar.right(),
+        "the Tags page sits beside the sidebar, not over it: {page:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

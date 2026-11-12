@@ -152,12 +152,11 @@ pub struct VideoPlaybackState {
     pub tracks: crate::app::video_tracks::VideoTracks,
 }
 
-/// Tag manager modal state.
+/// Tags page state (the keyword list and detail panel).
 pub struct TagManagerState {
-    pub open: bool,
     pub search: String,
     /// Whether the filter field is the active keyboard target. Typing already
-    /// filters while the modal is open; this drives the focus ring and the
+    /// filters while the Tags page shows; this drives the focus ring and the
     /// explicit click target.
     pub search_focused: bool,
     pub sort: TagSortOrder,
@@ -186,7 +185,6 @@ pub struct TagManagerState {
 impl Default for TagManagerState {
     fn default() -> Self {
         Self {
-            open: false,
             search: String::new(),
             search_focused: false,
             sort: TagSortOrder::Alphabetical,
@@ -496,8 +494,6 @@ pub struct LuminaApp {
     pub tag_input_buffer: String,
     pub tag_input_active: bool,
     pub keywords: KeywordState,
-    pub editing_tag: Option<String>,
-    pub editing_tag_buffer: String,
     pub context_menu_state: Option<ContextMenuState>,
     pub tag_manager: TagManagerState,
     /// Metadata template editor and pickers.
@@ -706,8 +702,6 @@ impl LuminaApp {
             tag_input_buffer: String::new(),
             tag_input_active: false,
             keywords: KeywordState::default(),
-            editing_tag: None,
-            editing_tag_buffer: String::new(),
             context_menu_state: None,
             tag_manager: TagManagerState::default(),
             templates: Default::default(),

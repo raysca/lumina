@@ -252,52 +252,6 @@ impl LuminaApp {
         self.apply_tag_mutation("Could not rename tag", normalize_path(buffer), cx)
     }
 
-    pub fn start_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
-        self.editing_tag = Some(tag.clone());
-        self.editing_tag_buffer = tag;
-        cx.notify();
-    }
-
-    pub fn commit_tag_rename(&mut self, cx: &mut Context<Self>) {
-        if let Some(old_tag) = self.editing_tag.take() {
-            let new_tag = std::mem::take(&mut self.editing_tag_buffer);
-            // An untouched or emptied buffer never renames, even if cleaning
-            // would change it; an over-long path is refused with an error.
-            let Some(clean_new) = self.renamed_path(&old_tag, &new_tag, cx) else {
-                cx.notify();
-                return;
-            };
-            if clean_new != old_tag {
-                let keeps_positions = self.keyword_is_unused(&clean_new);
-                let result = match self.grid_state.as_ref() {
-                    Some(state) => state.engine.rename_tag(&old_tag, &clean_new),
-                    None => Ok(Default::default()),
-                };
-                let Some(change) = self.apply_tag_mutation("Could not rename tag", result, cx)
-                else {
-                    return;
-                };
-                self.sync_metadata_sidecars(&change.affected_ids(), cx);
-                let view_before = self.tag_view_refs();
-                self.retarget_tag_refs(&old_tag, Some(&clean_new), cx);
-                let recorded =
-                    self.push_tag_rows_undo("tag rename", change, view_before, keeps_positions);
-                self.refresh_selected_tags();
-                self.refresh_album_counts();
-                let message = format!("Renamed tag to \"{}\"", clean_new);
-                self.set_last_action(message.clone());
-                self.tag_rows_toast(recorded, message, cx);
-            }
-        }
-        cx.notify();
-    }
-
-    pub fn cancel_tag_rename(&mut self, cx: &mut Context<Self>) {
-        self.editing_tag = None;
-        self.editing_tag_buffer.clear();
-        cx.notify();
-    }
-
     pub fn delete_tag_globally(&mut self, tag: String, cx: &mut Context<Self>) {
         let clean = tag.trim().to_lowercase();
         if clean.is_empty() {
@@ -315,7 +269,8 @@ impl LuminaApp {
         // The delete succeeded, so nothing may keep pointing at a keyword
         // (or a child of it) that no longer exists in the catalog.
         self.retarget_tag_refs(&clean, None, cx);
-        let recorded = self.push_tag_rows_undo("tag delete", change, view_before, false);
+        let recorded =
+            self.push_tag_rows_undo("tag delete", change, view_before, false, Vec::new());
         self.refresh_selected_tags();
         self.refresh_album_counts();
         // A deleted child changes the focused keyword's count.
@@ -326,26 +281,40 @@ impl LuminaApp {
         cx.notify();
     }
 
-    pub fn open_tag_manager(&mut self, cx: &mut Context<Self>) {
-        self.tag_manager.open = true;
-        self.tag_manager.search.clear();
-        self.tag_manager.search_focused = true;
-        self.tag_manager.selected.clear();
-        self.tag_manager.editing = None;
-        self.tag_manager.focused = None;
-        self.tag_manager.moving = false;
-        self.tag_manager.alias_editing = false;
-        self.tag_manager.tagged_items.clear();
-        self.tag_manager.list_scroll = gpui::ScrollHandle::new();
-        cx.notify();
+    /// The Tags page is what the main column shows: selected, with no
+    /// search or year over it (those show their matches instead).
+    pub(crate) fn tags_page_shown(&self) -> bool {
+        self.selection == AlbumSelection::Tags
+            && self.search_query.is_empty()
+            && self.active_year.is_none()
     }
 
-    pub fn close_tag_manager(&mut self, cx: &mut Context<Self>) {
-        self.tag_manager.open = false;
-        self.tag_manager.search_focused = false;
-        self.tag_manager.editing = None;
-        self.tag_manager.moving = false;
-        self.tag_manager.alias_editing = false;
+    /// A page with no media shows (the Albums overview or the Tags page):
+    /// no grid, no inspector, and no selection for keys or commands to act
+    /// on, so a viewer or a new copy is shown from All Media instead.
+    pub(crate) fn non_media_page_shown(&self) -> bool {
+        self.albums_overview_shown() || self.tags_page_shown()
+    }
+
+    /// The toolbar Tags button, TAGS › Keywords, ⌘K Open Tags and the empty
+    /// state: the Tags page, one Back entry, starting fresh (empty filter,
+    /// nothing checked or focused). Not while compare holds the view.
+    pub fn open_tag_manager(&mut self, cx: &mut Context<Self>) {
+        if self.grid_state.is_none() || self.compare_holds_view() {
+            return;
+        }
+        if self.is_fullscreen_viewer {
+            self.close_viewer(cx);
+        }
+        if !self.tags_page_shown() {
+            self.select_album(AlbumSelection::Tags, cx);
+            self.tag_manager.search.clear();
+            self.tag_manager.search_focused = true;
+            self.tag_manager.selected.clear();
+            self.tag_manager.focused = None;
+            self.tag_manager.tagged_items.clear();
+            self.tag_manager.list_scroll = gpui::ScrollHandle::new();
+        }
         cx.notify();
     }
 
@@ -424,8 +393,9 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Drops a rename, move or alias in progress (focus moved away).
-    fn cancel_tag_manager_prompts(&mut self) {
+    /// Drops a rename, move or alias in progress (focus moved away, or the
+    /// page was left: a prompt never outlives the visit).
+    pub(crate) fn cancel_tag_manager_prompts(&mut self) {
         self.tag_manager.editing = None;
         self.tag_manager.editing_buffer.clear();
         self.tag_manager.moving = false;
@@ -464,7 +434,13 @@ impl LuminaApp {
                 let view_before = self.tag_view_refs();
                 self.retarget_tag_refs(&old_tag, Some(&new_tag), cx);
                 let label = if moved { "keyword move" } else { "tag rename" };
-                let recorded = self.push_tag_rows_undo(label, change, view_before, keeps_positions);
+                let recorded = self.push_tag_rows_undo(
+                    label,
+                    change,
+                    view_before,
+                    keeps_positions,
+                    vec![(old_tag.to_lowercase(), new_tag.clone())],
+                );
                 self.refresh_selected_tags();
                 self.refresh_album_counts();
                 // A move onto an existing keyword merges, so recount.
@@ -539,7 +515,11 @@ impl LuminaApp {
         self.focus_tag_manager_tag(target.clone(), cx);
         // On a failure part way the merges before it are committed: they
         // still undo as one step.
-        let recorded = self.push_tag_rows_undo("tag merge", combined, view_before, false);
+        let moves = sources[..merged]
+            .iter()
+            .map(|source| (source.clone(), target.clone()))
+            .collect();
+        let recorded = self.push_tag_rows_undo("tag merge", combined, view_before, false, moves);
         if merged > 0 {
             let message = format!("Merged {merged} tag(s) into \"{target}\"");
             self.tag_rows_toast(recorded, message, cx);
@@ -586,7 +566,8 @@ impl LuminaApp {
             self.retarget_tag_refs(tag, None, cx);
         }
         // One transaction, so one undo entry for all N tags.
-        let recorded = self.push_tag_rows_undo("tag delete", change, view_before, false);
+        let recorded =
+            self.push_tag_rows_undo("tag delete", change, view_before, false, Vec::new());
         self.refresh_selected_tags();
         self.refresh_album_counts();
         // A deleted child changes the focused keyword's count.

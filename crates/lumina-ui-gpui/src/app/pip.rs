@@ -87,9 +87,9 @@ impl LuminaApp {
         if self.map_shown() {
             self.show_grid(cx);
         }
-        // Nor the Albums overview, whose keys would act on a hidden
-        // selection after the viewer closes: show it from All Media.
-        if self.albums_overview_shown() {
+        // Nor the Albums overview or the Tags page, whose keys would act on
+        // a hidden selection after the viewer closes: show it from All Media.
+        if self.non_media_page_shown() {
             self.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
         }
         // `in_pip` stays set while selecting so the viewer sync leaves the

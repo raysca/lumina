@@ -4,6 +4,7 @@ use crate::app::LuminaApp;
 
 mod grid;
 mod modals;
+mod tags_page;
 mod viewer;
 
 impl LuminaApp {
@@ -132,6 +133,12 @@ impl LuminaApp {
         }
         if cmd_or_ctrl && key == "]" {
             self.navigate_forward(cx);
+            return;
+        }
+
+        // The Tags page owns ⌘A, ⌘M, ⌘Z, arrows, Space, ↵ and Esc, and
+        // absorbs the grid's keys (it shows no grid).
+        if self.handle_tags_page_key(keystroke, cmd_or_ctrl, cx) {
             return;
         }
 

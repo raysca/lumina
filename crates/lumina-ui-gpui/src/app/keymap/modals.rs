@@ -335,19 +335,6 @@ impl LuminaApp {
             return true;
         }
 
-        // 4. Editing / renaming tag in inspector
-        if self.editing_tag.is_some() {
-            if key == "escape" {
-                self.cancel_tag_rename(cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_tag_rename(cx);
-                return true;
-            }
-            return true;
-        }
-
         // 4b. Renaming an album in the sidebar
         if self.albums.renaming.is_some() {
             match key {
@@ -358,105 +345,24 @@ impl LuminaApp {
             return true;
         }
 
-        // 5. Tag manager modal
-        if self.tag_manager.open {
-            if self.tag_manager.editing.is_some() {
-                if key == "escape" {
-                    self.cancel_modal_tag_rename(cx);
-                    return true;
-                }
-                if key == "enter" || key == "return" {
-                    self.commit_modal_tag_rename(cx);
-                    return true;
-                }
-                return true;
+        // 5. The Tags page's rename and alias fields (its other keys are
+        // page keys, `keymap/tags_page.rs`).
+        if self.tag_manager.editing.is_some() {
+            match key {
+                "escape" => self.cancel_modal_tag_rename(cx),
+                "enter" | "return" => self.commit_modal_tag_rename(cx),
+                _ => {}
             }
-            if self.tag_manager.alias_editing {
-                match key {
-                    "escape" => self.cancel_alias_input(cx),
-                    "enter" | "return" => self.commit_alias_input(cx),
-                    // Reaches here only from an empty field (text_input.rs).
-                    "backspace" => self.remove_last_alias(cx),
-                    _ => {}
-                }
-                return true;
+            return true;
+        }
+        if self.tag_manager.alias_editing {
+            match key {
+                "escape" => self.cancel_alias_input(cx),
+                "enter" | "return" => self.commit_alias_input(cx),
+                // Reaches here only from an empty field (text_input.rs).
+                "backspace" => self.remove_last_alias(cx),
+                _ => {}
             }
-
-            // ⌘Z / ⇧⌘Z: rename, merge and delete happen here, so their undo
-            // must too. The history step reloads the counts and detail panel.
-            if cmd_or_ctrl && key.eq_ignore_ascii_case("z") {
-                if keystroke.modifiers.shift {
-                    self.redo_last(cx);
-                } else {
-                    self.undo_last(cx);
-                }
-                return true;
-            }
-
-            // ⇧⌘A alias and ⇧⌘M Move to… for the focused keyword; before
-            // ⌘A / ⌘M, which ignore ⇧.
-            if cmd_or_ctrl && keystroke.modifiers.shift && key == "a" {
-                self.start_alias_input(cx);
-                return true;
-            }
-            if cmd_or_ctrl && keystroke.modifiers.shift && key == "m" {
-                self.start_keyword_move(cx);
-                return true;
-            }
-
-            // Esc deselects first, then closes.
-            if key == "escape" {
-                if self.tag_manager.selected.is_empty() {
-                    self.close_tag_manager(cx);
-                } else {
-                    self.clear_tag_manager_selection(cx);
-                }
-                return true;
-            }
-            // Keyboard path for the selection bar: ⌘A check all shown, ⌘M
-            // merge, ⌘⌫ delete checked; Space checks the focused tag (both
-            // only while the filter is empty).
-            if cmd_or_ctrl && key == "a" {
-                self.toggle_all_tag_manager_rows(cx);
-                return true;
-            }
-            if cmd_or_ctrl && key == "m" {
-                self.merge_checked_tags(cx);
-                return true;
-            }
-            // Only with an empty filter (⌘⌫ edits text) and the bar showing.
-            if cmd_or_ctrl
-                && key == "backspace"
-                && self.tag_manager.search.is_empty()
-                && self.tag_manager.selected.len() >= 2
-            {
-                let tags = self.tag_manager.selected.iter().cloned().collect();
-                self.bulk_delete_tags(tags, cx);
-                return true;
-            }
-            if key == "space" && self.tag_manager.search.is_empty() {
-                // Not a filter character: keep it from the input handler.
-                cx.stop_propagation();
-                if let Some(tag) = self.tag_manager.focused.clone() {
-                    self.toggle_tag_manager_selection(tag, cx);
-                }
-                return true;
-            }
-
-            // ↑/↓ walk the list into the detail panel; Return renames the
-            // tag shown there.
-            if key == "up" || key == "down" {
-                self.step_tag_manager_focus(if key == "up" { -1 } else { 1 }, cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                if let Some(tag) = self.tag_manager.focused.clone() {
-                    self.start_modal_tag_rename(tag, cx);
-                }
-                return true;
-            }
-
-            // Typing filters tags through the field input (app/text_input.rs).
             return true;
         }
 

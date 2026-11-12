@@ -103,13 +103,14 @@ fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> i
         .flex_row()
         .items_center()
         .gap_3()
-        // ponytail: one neutral dot until tags have colours (schema change).
+        // The colour hashed from the name, as the sidebar's keyword rows
+        // had it (tags store no colour).
         .child(
             div()
                 .size(px(10.0))
                 .flex_none()
                 .rounded_full()
-                .bg(theme::t2()),
+                .bg(crate::views::sidebar::tag_color(tag)),
         )
         .child(
             div()
@@ -141,8 +142,8 @@ fn render_header(tag: &str, items_label: &str, cx: &mut Context<LuminaApp>) -> i
             .debug_selector(move || selector.clone())
             .child("Show in Browser")
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                // The search spans the library; ⌘[ comes back here.
                 this.set_search_query(&format!("tag:{show_tag}"), cx);
-                this.close_tag_manager(cx);
             })),
         )
 }

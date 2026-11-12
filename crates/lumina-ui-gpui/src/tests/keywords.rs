@@ -208,7 +208,7 @@ fn move_keyword_by_keyboard_updates_catalog() {
     type_text(vcx, "move keyword");
     keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {
-        assert!(app.tag_manager.open, "the command opens the tag manager");
+        assert!(app.tags_page_shown(), "the command opens the tag manager");
         assert!(!app.command_palette_open);
         assert!(app.tag_manager.moving, "Move Keyword… opens the prompt");
         assert_eq!(app.tag_manager.editing_buffer, "europe");
@@ -312,8 +312,8 @@ fn untagged_view_restores_after_relaunch() {
 }
 
 #[core::prelude::v1::test]
-fn palette_cannot_open_over_the_tag_manager() {
-    let (dir, engine) = seed_library("kw_palette_over_sheet", 1);
+fn palette_on_the_tags_page_cannot_rate_hidden_media() {
+    let (dir, engine) = seed_library("kw_palette_over_page", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["beach"]);
     let mut cx = crate::tests::TestApp::single();
@@ -322,27 +322,22 @@ fn palette_cannot_open_over_the_tag_manager() {
     open_manager(&view, vcx);
 
     keystrokes(vcx, "secondary-k");
+    view.update(vcx, |app, _| {
+        assert!(app.command_palette_open, "⌘K opens the palette on the page");
+    });
     type_text(vcx, "rate 5");
     keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {
+        assert!(app.tags_page_shown());
         assert!(
-            !app.command_palette_open,
-            "⌘K is absorbed by the sheet, so no command runs behind it"
-        );
-        assert!(app.tag_manager.open);
-    });
-    vcx.dispatch_action(crate::actions::ShowCommandPalette);
-    vcx.run_until_parked();
-    view.update(vcx, |app, _| {
-        assert!(
-            !app.command_palette_open,
-            "the menu's Command Palette item must not open it over the sheet either"
+            app.selected_item.is_none(),
+            "going to the page drops the grid selection"
         );
     });
     assert_eq!(
         engine.get_ratings_map().get(&id).copied().unwrap_or(0),
         0,
-        "nothing behind the tag manager may change the selection's rating"
+        "a palette command on the Tags page must not rate the media left behind"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -434,27 +429,31 @@ fn typing_after_a_highlight_adds_the_typed_text() {
 }
 
 #[core::prelude::v1::test]
-fn sidebar_tag_rows_indent_by_depth() {
+fn sidebar_keywords_row_counts_keywords_and_lists_no_tree() {
     let (dir, engine) = seed_library("kw_sidebar_tree", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["a", "a/b/c"]);
     let mut cx = crate::tests::TestApp::single();
-    let (_view, vcx) = app_with_library(&mut cx, engine);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| app.refresh_album_counts());
     render_ui(vcx);
 
-    let x = |vcx: &mut VisualTestContext, path: &str| {
-        let b = vcx
-            .debug_bounds(leak(format!("sidebar-tag-name-{path}")))
-            .unwrap_or_else(|| panic!("sidebar row {path} must render"));
-        f32::from(b.origin.x)
-    };
-    let (a, ab, abc) = (x(vcx, "a"), x(vcx, "a/b"), x(vcx, "a/b/c"));
-    assert_eq!(
-        ab - a,
-        16.0,
-        "a child indents 16 px, its parent row is drawn"
-    );
-    assert_eq!(abc - a, 32.0, "a grandchild indents 32 px");
+    view.update(vcx, |app, _| {
+        let keywords = crate::views::sidebar::nav::nav_entries(app)
+            .into_iter()
+            .find(|entry| entry.key == "keywords")
+            .expect("TAGS has a Keywords row");
+        assert_eq!(keywords.count, 2, "it counts the keywords items carry");
+        assert_eq!(keywords.selection, AlbumSelection::Tags);
+    });
+    assert!(vcx.debug_bounds("sidebar-nav-keywords-count").is_some());
+    for path in ["a", "a/b", "a/b/c"] {
+        assert!(
+            vcx.debug_bounds(leak(format!("sidebar-tag-name-{path}")))
+                .is_none(),
+            "the keyword tree lives on the Tags page, not the sidebar: {path}"
+        );
+    }
 
     let _ = std::fs::remove_dir_all(&dir);
 }

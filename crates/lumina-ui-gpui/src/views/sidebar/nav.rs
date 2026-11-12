@@ -89,6 +89,14 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
             AlbumSelection::System(SystemAlbum::Screenshots),
             live(system(SystemAlbum::Screenshots), 2),
         )),
+        // TAGS › Keywords: the Tags page, counting distinct keywords.
+        Some(entry(
+            "keywords",
+            "Keywords",
+            Icon::Hash,
+            AlbumSelection::Tags,
+            live(app.library_tag_counts.len(), 3),
+        )),
         Some(entry(
             "places",
             "Places",
@@ -139,8 +147,8 @@ pub(crate) fn nav_entries(app: &LuminaApp) -> Vec<NavEntry> {
 }
 
 /// What clicking an entry does: clicking Untagged again goes back to the
-/// whole library. `select_album` itself clears the year and the search, and
-/// records one Back step.
+/// whole library; Keywords opens the Tags page fresh. `select_album` itself
+/// clears the year and the search, and records one Back step.
 pub(crate) fn open_entry(
     this: &mut LuminaApp,
     selection: &AlbumSelection,
@@ -150,6 +158,7 @@ pub(crate) fn open_entry(
         AlbumSelection::Untagged if this.selection == AlbumSelection::Untagged => {
             this.select_album(AlbumSelection::AllLibrary, cx);
         }
+        AlbumSelection::Tags => this.open_tag_manager(cx),
         other => this.select_album(other.clone(), cx),
     }
 }

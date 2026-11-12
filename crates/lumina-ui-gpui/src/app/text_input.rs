@@ -37,7 +37,6 @@ pub(crate) enum TextTarget {
     Date,
     Location,
     Caption,
-    TagRename,
     /// An album's name in the sidebar.
     AlbumRename,
     /// The Add to Album picker's filter.
@@ -78,7 +77,7 @@ impl TextTarget {
                 "Location",
             ),
             Caption => ("Type caption... (Enter to save, Esc to cancel)", "Caption"),
-            TagRename | TagManagerRename => ("", "Tag name"),
+            TagManagerRename => ("", "Tag name"),
             AlbumRename => ("", "Album name"),
             AlbumPicker => ("Filter albums…", "Filter albums"),
             TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
@@ -533,20 +532,18 @@ impl LuminaApp {
             Location
         } else if self.caption.input_active {
             Caption
-        } else if self.editing_tag.is_some() {
-            TagRename
         } else if self.albums.renaming.is_some() {
             AlbumRename
-        } else if self.tag_manager.open {
-            if self.tag_manager.editing.is_some() {
-                TagManagerRename
-            } else if self.tag_manager.alias_editing {
-                TagManagerAlias
-            } else {
-                TagManagerSearch
-            }
+        } else if self.tag_manager.editing.is_some() {
+            TagManagerRename
+        } else if self.tag_manager.alias_editing {
+            TagManagerAlias
         } else if self.search_focused {
             Search
+        } else if self.tags_page_shown() {
+            // Typing on the Tags page filters it (the sidebar search, when
+            // focused, takes it first).
+            TagManagerSearch
         } else {
             return None;
         };
@@ -567,7 +564,6 @@ impl LuminaApp {
             Date => &mut self.caption.date_input_buffer,
             Location => &mut self.caption.location_input_buffer,
             Caption => &mut self.caption.input_buffer,
-            TagRename => &mut self.editing_tag_buffer,
             AlbumRename => &mut self.albums.rename_buffer,
             AlbumPicker => &mut self.albums.picker.as_mut()?.filter,
             TagManagerRename => &mut self.tag_manager.editing_buffer,
@@ -600,9 +596,7 @@ impl LuminaApp {
     fn text_limit(&self, target: TextTarget) -> usize {
         use TextTarget::*;
         match target {
-            Tag | TagRename | AlbumRename | AlbumPicker | TagManagerRename | TagManagerAlias => {
-                MAX_NAME_CHARS
-            }
+            Tag | AlbumRename | AlbumPicker | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
             Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             // The bar edits the text after its chips; the whole query stays

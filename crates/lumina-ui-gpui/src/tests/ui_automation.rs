@@ -459,7 +459,7 @@ fn ui_automation_selection_contract_and_empty_space_click() {
 }
 
 #[core::prelude::v1::test]
-fn ui_automation_tag_double_click_starts_rename() {
+fn ui_automation_keywords_row_opens_the_page_and_enter_renames() {
     let (temp_dir, engine) = seed_library("tag_rename", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
@@ -474,16 +474,20 @@ fn ui_automation_tag_double_click_starts_rename() {
     });
     render_ui(vcx);
 
+    click(vcx, "sidebar-nav-keywords");
+    render_ui(vcx);
     assert!(
-        vcx.debug_bounds("sidebar-tag-filter-travel").is_some(),
-        "the tagged item must create a sidebar tag row"
+        vcx.debug_bounds("tag-manager-row-travel").is_some(),
+        "TAGS › Keywords opens the Tags page with the tagged item's keyword"
     );
-    double_click(vcx, "sidebar-tag-filter-travel");
+    click(vcx, "tag-manager-row-travel");
+    focus_app(vcx, &view);
+    keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {
         assert_eq!(
-            app.editing_tag.as_deref(),
+            app.tag_manager.editing.as_deref(),
             Some("travel"),
-            "double-clicking a tag must begin its inline rename"
+            "↵ on a focused keyword begins its rename"
         );
     });
 
@@ -823,11 +827,13 @@ fn ui_automation_modals_dismiss_on_backdrop() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
+    // The Tags page is a page, not a sheet: no backdrop to dismiss.
     click(vcx, "tags-toolbar-btn");
-    view.update(vcx, |app, _| assert!(app.tag_manager.open));
-    assert!(vcx.debug_bounds("tag-manager-dialog").is_some());
-    click_point(vcx, 4.0, 4.0);
-    view.update(vcx, |app, _| assert!(!app.tag_manager.open));
+    view.update(vcx, |app, _| assert!(app.tags_page_shown()));
+    assert!(vcx.debug_bounds("tags-page").is_some());
+    assert!(vcx.debug_bounds("tag-manager-backdrop").is_none());
+    view.update(vcx, |app, cx| app.navigate_back(cx));
+    view.update(vcx, |app, _| assert!(!app.tags_page_shown()));
 
     click(vcx, "new-smart-album");
     view.update(vcx, |app, _| assert!(app.album_draft.modal_open));

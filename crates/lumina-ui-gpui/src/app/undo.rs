@@ -131,6 +131,9 @@ pub enum UndoAction {
         /// True for a rename or move onto a new path: the tag view holds the
         /// same items on both sides, so grid positions stay valid.
         keeps_positions: bool,
+        /// `(old, new)` keyword paths the op moved, for a keyword view
+        /// opened after it; see `push_tag_rows_undo`.
+        moves: Vec<(String, String)>,
     },
     /// A deleted metadata template (user config, not the catalog); undo
     /// puts it back at `index`.
@@ -536,6 +539,7 @@ impl LuminaApp {
                     view_before,
                     view_after,
                     keeps_positions,
+                    moves,
                     ..
                 } = action
                 {
@@ -544,7 +548,14 @@ impl LuminaApp {
                     } else {
                         (view_before, view_after)
                     };
-                    self.restore_tag_view_refs(from, to, *keeps_positions, cx);
+                    let replay = crate::app::tag_undo::TagReplay {
+                        from,
+                        to,
+                        keeps_positions: *keeps_positions,
+                        moves,
+                        undo: before,
+                    };
+                    self.restore_tag_view_refs(replay, cx);
                     self.load_tag_manager_items();
                 }
                 Some(replay_note(skipped))

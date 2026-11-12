@@ -452,16 +452,16 @@ fn template_editor_never_stacks_with_other_sheets() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
-    view.update(vcx, |app, cx| app.open_tag_manager(cx));
+    view.update(vcx, |app, cx| app.open_album_builder(cx));
     render_ui(vcx);
     vcx.dispatch_action(crate::actions::ManageTemplates);
     vcx.run_until_parked();
     view.update(vcx, |app, cx| {
         assert!(
             app.templates.editor.is_none(),
-            "the menu item must not open the editor under the tag manager"
+            "the menu item must not open the editor under the smart album sheet"
         );
-        app.close_tag_manager(cx);
+        app.close_album_builder(cx);
     });
     render_ui(vcx);
 

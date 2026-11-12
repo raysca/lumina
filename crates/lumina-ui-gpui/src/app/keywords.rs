@@ -174,11 +174,11 @@ impl LuminaApp {
         };
     }
 
-    /// The keyword the alias and move commands act on: the tag manager's
-    /// focused row (⇧⌘A / ⇧⌘M and the detail buttons; the sheet absorbs ⌘K,
-    /// so nothing else runs behind it), else the sidebar's tag view (palette).
+    /// The keyword the alias and move commands act on: the Tags page's
+    /// focused row (⇧⌘A / ⇧⌘M, the detail buttons and ⌘K there), else the
+    /// tag view's keyword (palette).
     pub(crate) fn command_keyword(&self) -> Option<String> {
-        if self.tag_manager.open {
+        if self.tags_page_shown() {
             return self.tag_manager.focused.clone();
         }
         match &self.selection {
@@ -187,14 +187,12 @@ impl LuminaApp {
         }
     }
 
-    /// Shows the command's keyword in the tag manager, opening it if needed.
+    /// Shows the command's keyword on the Tags page, going there if needed.
     fn focus_command_keyword(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(tag) = self.command_keyword() else {
             return false;
         };
-        if !self.tag_manager.open {
-            self.open_tag_manager(cx);
-        }
+        self.open_tag_manager(cx);
         self.tag_manager.search_focused = false;
         self.focus_tag_manager_tag(tag, cx);
         true

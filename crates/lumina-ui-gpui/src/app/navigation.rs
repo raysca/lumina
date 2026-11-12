@@ -114,6 +114,7 @@ impl LuminaApp {
         // to come: the old list may hold items trashed meanwhile.
         self.stacks.reset();
         self.albums.overview.leave();
+        self.cancel_tag_manager_prompts();
         self.selection = self.resolve_navigation_selection(snapshot.selection);
         self.search_query = snapshot.search_query;
         self.search_focused = false;

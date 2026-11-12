@@ -30,7 +30,7 @@ fn album_rule(engine: &LuminaEngine, id: i64) -> lumina_core::RuleValue {
         .clone()
 }
 
-/// Closes the tag manager (Esc) and presses ⌘Z.
+/// Clears the Tags page's checks (Esc) and presses ⌘Z.
 fn close_and_undo(vcx: &mut VisualTestContext) {
     keystrokes(vcx, "escape");
     keystrokes(vcx, "secondary-z");
@@ -110,7 +110,7 @@ fn undo_merge_restores_rows_and_rules() {
     keystrokes(vcx, "secondary-z");
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
-        assert!(app.tag_manager.open, "⌘Z undoes inside the tag manager");
+        assert!(app.tags_page_shown(), "⌘Z undoes inside the tag manager");
         assert!(app.undo.undo_stack.is_empty(), "one ⌘Z undid both merges");
         assert!(
             app.library_tag_counts.iter().any(|(t, _)| t == "kitty"),
@@ -170,11 +170,11 @@ fn undo_rename_restores_alias_targets() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_manager(&view, vcx);
 
-    view.update(vcx, |app, cx| app.set_search_query("tag:places", cx));
+    // A search would replace the page, so only the detail panel follows
+    // (search retargeting: `tag_manager::rename_and_delete_follow_a_selected_child`).
     rename_in_manager(vcx, "tag-manager-row-places", "spots");
     assert_eq!(sorted_tags(&engine, id), ["spots/nyc"]);
     view.update(vcx, |app, _| {
-        assert_eq!(app.search_query, "tag:spots");
         assert_eq!(app.tag_manager.focused.as_deref(), Some("spots"));
     });
     assert_eq!(
@@ -196,7 +196,6 @@ fn undo_rename_restores_alias_targets() {
             [("big apple".to_string(), "places/nyc".to_string())],
             "app state follows"
         );
-        assert_eq!(app.search_query, "tag:places", "the search points back");
         assert_eq!(
             app.tag_manager.focused.as_deref(),
             Some("places"),
@@ -361,27 +360,25 @@ fn undo_after_item_purged_skips_missing_ids() {
 }
 
 #[core::prelude::v1::test]
-fn undo_sidebar_rename_restores_the_tag_view() {
+fn undo_rename_restores_the_tag_view() {
     let (dir, engine) = seed_library("kw_undo_sidebar", 3);
     let items = engine.get_item_slice(0..3);
     tag(&engine, items[0].id, &["cat"]);
     tag(&engine, items[1].id, &["cat"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
-    view.update(vcx, |app, cx| {
-        app.refresh_album_counts();
-        app.select_album(AlbumSelection::Tag("cat".into()), cx);
-        app.start_tag_rename("cat".into(), cx);
-    });
-    render_ui(vcx);
-    keystrokes(vcx, "backspace backspace backspace");
-    type_text(vcx, "kitty");
-    keystrokes(vcx, "enter");
+    // Rename on the Tags page, then open the renamed keyword's view: the
+    // undo and redo move that view with the keyword.
+    open_manager(&view, vcx);
+    rename_in_manager(vcx, "tag-manager-row-cat", "kitty");
     view.update(vcx, |app, _| {
-        assert_eq!(app.selection, AlbumSelection::Tag("kitty".into()));
         assert!(app.toast.current().is_some_and(|t| t.undo_available));
     });
     assert_eq!(sorted_tags(&engine, items[0].id), ["kitty"]);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Tag("kitty".into()), cx)
+    });
+    render_ui(vcx);
 
     keystrokes(vcx, "secondary-z");
     assert_eq!(sorted_tags(&engine, items[0].id), ["cat"]);
@@ -389,7 +386,7 @@ fn undo_sidebar_rename_restores_the_tag_view() {
         assert_eq!(
             app.selection,
             AlbumSelection::Tag("cat".into()),
-            "undo puts the sidebar back on the old keyword"
+            "undo puts the view back on the old keyword"
         );
         assert_eq!(app.get_active_count(), 2, "with its items");
     });
@@ -490,64 +487,106 @@ fn merge_clears_grid_positions_but_rename_keeps_them() {
         view.update(vcx, |app, _| assert!(app.selected_item.is_some()));
     };
 
-    // A rename onto a new path shows the same items: positions stay.
-    select_in(&view, vcx, "cat");
+    // The page drops the grid selection on arrival, so the edits run there
+    // and their undo runs from the keyword's view with a selection.
+    let merge_on_page = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext| {
+        open_manager(view, vcx);
+        click(vcx, "tag-manager-checkbox-cat");
+        click(vcx, "tag-manager-checkbox-cats");
+        keystrokes(vcx, "secondary-m");
+    };
+
+    // A rename onto a new path shows the same items: its undo keeps
+    // positions.
     open_manager(&view, vcx);
     rename_in_manager(vcx, "tag-manager-row-cat", "kitten");
-    view.update(vcx, |app, _| {
-        assert_eq!(app.selection, AlbumSelection::Tag("kitten".into()));
-        assert!(app.selected_item.is_some(), "a rename keeps the selection");
-    });
+    select_in(&view, vcx, "kitten");
     keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Tag("cat".into()));
-        assert!(app.selected_item.is_some(), "and so does its undo");
+        assert!(
+            app.selected_item.is_some(),
+            "a rename's undo keeps the selection"
+        );
     });
-    keystrokes(vcx, "escape");
 
-    // A merge into `cats` shows other items: positions are cleared.
-    select_in(&view, vcx, "cat");
-    open_manager(&view, vcx);
-    click(vcx, "tag-manager-checkbox-cat");
-    click(vcx, "tag-manager-checkbox-cats");
-    keystrokes(vcx, "secondary-m");
+    // A merge into `cats` shows other items: its undo clears positions, and
+    // a view on the target stays there.
+    merge_on_page(&view, vcx);
+    assert_eq!(sorted_tags(&engine, items[0].id), ["cats"], "⌘M merged");
+    select_in(&view, vcx, "cats");
+    keystrokes(vcx, "secondary-z");
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Tag("cats".into()));
         assert!(
             app.selected_indices.is_empty() && app.selected_item.is_none(),
-            "a merge must not keep positions into a different item set"
+            "a merge's undo must not keep positions into a different item set"
         );
     });
-    select_in(&view, vcx, "cats");
-    open_manager(&view, vcx);
-    keystrokes(vcx, "secondary-z");
-    view.update(vcx, |app, _| {
-        assert_eq!(app.selection, AlbumSelection::Tag("cat".into()));
-        assert!(
-            app.selected_indices.is_empty() && app.selected_item.is_none(),
-            "nor does its undo"
-        );
-    });
-    keystrokes(vcx, "escape");
+    assert_eq!(sorted_tags(&engine, items[0].id), ["cat"], "⌘Z unmerged");
 
     // A merge also changes what a view it did not move shows (a parent
-    // tag, a `tag:` search): positions are cleared there too.
+    // tag, a `tag:` search): its redo clears positions there too.
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::AllLibrary, cx);
         app.select_index(0, cx);
     });
     render_ui(vcx);
-    open_manager(&view, vcx);
-    click(vcx, "tag-manager-checkbox-cat");
-    click(vcx, "tag-manager-checkbox-cats");
-    keystrokes(vcx, "secondary-m");
+    keystrokes(vcx, "secondary-shift-z");
+    assert_eq!(
+        sorted_tags(&engine, items[0].id),
+        ["cats"],
+        "⇧⌘Z merged again"
+    );
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
         assert!(
             app.selected_indices.is_empty() && app.selected_item.is_none(),
-            "a merge clears positions even when the view did not move"
+            "a merge (here its redo) clears positions even when the view did not move"
         );
     });
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn redoing_a_merge_moves_a_source_view_and_a_dead_view_falls_back() {
+    let (dir, engine) = seed_library("kw_undo_merge_views", 3);
+    let items = engine.get_item_slice(0..3);
+    tag(&engine, items[0].id, &["cat"]);
+    // The most used is the merge target.
+    tag(&engine, items[1].id, &["cats"]);
+    tag(&engine, items[2].id, &["cats"]);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_manager(&view, vcx);
+    click(vcx, "tag-manager-checkbox-cat");
+    click(vcx, "tag-manager-checkbox-cats");
+    keystrokes(vcx, "secondary-m");
+    keystrokes(vcx, "secondary-z");
+    // On the source's view, redo folds it into the target: follow it.
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Tag("cat".into()), cx)
+    });
+    keystrokes(vcx, "secondary-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selection, AlbumSelection::Tag("cats".into()));
+    });
+
+    // A deleted keyword's view falls back to All Media on redo.
+    open_manager(&view, vcx);
+    view.update(vcx, |app, cx| app.delete_tag_globally("cats".into(), cx));
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Tag("cats".into()), cx)
+    });
+    keystrokes(vcx, "secondary-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            AlbumSelection::AllLibrary,
+            "no empty view on a keyword that is gone"
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }

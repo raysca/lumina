@@ -1070,7 +1070,7 @@ pub fn commands() -> &'static [Command] {
             id: CommandId::OpenTagManager,
             key: "command.open_tag_manager",
             shortcut: "",
-            keywords: "tags keywords manage rename",
+            keywords: "tag manager keywords manage rename",
         },
         Command {
             id: CommandId::AddKeywordAlias,
@@ -1125,12 +1125,11 @@ pub fn commands() -> &'static [Command] {
 
 impl LuminaApp {
     pub fn open_command_palette(&mut self, cx: &mut Context<Self>) {
-        // Commands act on the grid; over the tag manager or the template
-        // editor they would change media behind the sheet (the menu item
-        // reaches here, not the keymap).
-        // Nor over edit mode: they would act on the photo under the draft.
-        if self.tag_manager.open || self.templates.editor.is_some() || self.edits.session.is_some()
-        {
+        // Commands act on the grid; over the template editor they would
+        // change media behind the sheet (the menu item reaches here, not the
+        // keymap). Nor over edit mode: they would act on the photo under the
+        // draft. The Tags page holds no media selection, so ⌘K works there.
+        if self.templates.editor.is_some() || self.edits.session.is_some() {
             return;
         }
         self.command_palette_open = true;
@@ -1183,8 +1182,10 @@ impl LuminaApp {
                 self.album_page_album().is_some() && self.single_selected_id().is_some()
             }
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
-            // The panel is hidden on the overview; the toggle does nothing.
-            CommandId::ToggleInspector => !self.albums_overview_shown(),
+            // The panel is hidden on these pages; the toggle does nothing.
+            CommandId::ToggleInspector => !self.non_media_page_shown(),
+            // Already there.
+            CommandId::OpenTagManager => !self.tags_page_shown(),
             // An open album's tiles always fill.
             CommandId::ToggleFit => !self.album_tiles(),
             CommandId::ToggleAlbumPanel => self.album_panel_fits(),

@@ -1,11 +1,9 @@
-use crate::app::text_input::TextTarget;
-use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::SmartAlbum;
 
 use super::nav::{self, nav_entries, NavEntry};
-use super::{tag_color, AlbumSelection};
-use crate::icons::{render_icon, Icon};
+use super::AlbumSelection;
+use crate::icons::Icon;
 use crate::theme;
 use crate::LuminaApp;
 
@@ -54,7 +52,7 @@ pub(super) fn render_library_section(
             nav_entries(this)
                 .into_iter()
                 // Untagged lists under Smart Albums, Places under Tags.
-                .filter(|entry| !matches!(entry.key, "untagged" | "places"))
+                .filter(|entry| !matches!(entry.key, "untagged" | "places" | "keywords"))
                 .map(|entry| render_entry(this, entry, cx)),
         )
         .children(render_downloads_row(this, cx))
@@ -225,20 +223,12 @@ pub(super) fn render_smart_albums_section(
         )
 }
 
+/// TAGS: Keywords (the Tags page) and Places, as in the design. Keywords
+/// themselves are listed, renamed and deleted on the Tags page.
 pub(super) fn render_tags_section(
     this: &LuminaApp,
     cx: &mut Context<LuminaApp>,
 ) -> impl IntoElement {
-    let tags: Vec<(String, usize)> = if this.grid_state.is_some() {
-        this.library_tag_counts.clone()
-    } else {
-        vec![
-            ("family".to_string(), 2),
-            ("travel".to_string(), 4),
-            ("street".to_string(), 2),
-        ]
-    };
-
     div()
         .flex()
         .flex_col()
@@ -253,209 +243,12 @@ pub(super) fn render_tags_section(
                 .px(px(10.0))
                 // 5px under the label: this plus the rows gap of 3.
                 .pb(px(2.0))
-                .child(
-                    theme::section_label("TAGS"),
-                ),
+                .child(theme::section_label("TAGS")),
         )
-        .children(
-            // Keyword tree: children indent under their parent; an ancestor
-            // no item carries directly shows no count (filtering it still
-            // shows its whole subtree).
-            crate::app::keywords::keyword_tree(&tags).iter()
-                .map(|row| {
-                    let tag_str = row.path.clone();
-                    let depth = row.depth;
-                    let label = row.label().to_string();
-                    let is_editing = this.editing_tag.as_ref() == Some(&tag_str);
-                    let is_active =
-                        this.sidebar_highlights(&AlbumSelection::Tag(tag_str.clone()));
-                    let tag_count = row.count;
-                    let tag_for_select = tag_str.clone();
-
-                    if is_editing {
-                        div()
-                            .debug_selector(|| "sidebar-tag-rename".to_string())
-                            .px_2()
-                            .py_1()
-                            .rounded(theme::RADIUS_MD)
-                            .bg(theme::bg_1())
-                            .border_1()
-                            .border_color(theme::focus_ring())
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            // The input scrolls a long name to its caret, so
-                            // the buttons stay in view.
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_size(theme::TEXT_BODY)
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme::t1())
-                                    .children(this.field_input_for(TextTarget::TagRename)),
-                            )
-                            .child(
-                                div()
-                                    .debug_selector(|| "sidebar-tag-rename-buttons".to_string())
-                                    .flex_none()
-                                    .flex()
-                                    .flex_row()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .id(ElementId::Name(
-                                                format!("save-tag-rename-{}", tag_str).into(),
-                                            ))
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .rounded(theme::RADIUS_SM)
-                                            .bg(theme::accent())
-                                            .hover(|s| {
-                                                s.bg(theme::accent_hover())
-                                                    .text_color(theme::on_accent())
-                                            })
-                                            .cursor_pointer()
-                                            .text_xs()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme::on_accent())
-                                            .child(render_icon(
-                                                Icon::Check,
-                                                px(10.0),
-                                                theme::on_accent(),
-                                            ))
-                                            .on_click(cx.listener(
-                                                |this, _e: &ClickEvent, _w, cx| {
-                                                    this.commit_tag_rename(cx);
-                                                },
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(ElementId::Name(
-                                                format!("cancel-tag-rename-{}", tag_str).into(),
-                                            ))
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .rounded(theme::RADIUS_SM)
-                                            .bg(theme::bg_2())
-                                            .hover(|s| s.bg(theme::bg_3()))
-                                            .cursor_pointer()
-                                            .text_xs()
-                                            .text_color(theme::t2())
-                                            .child(render_icon(Icon::X, px(10.0), theme::t2()))
-                                            .on_click(cx.listener(
-                                                |this, _e: &ClickEvent, _w, cx| {
-                                                    this.cancel_tag_rename(cx);
-                                                },
-                                            )),
-                                    ),
-                            )
-                            .into_any_element()
-                    } else {
-                        let dot_color = tag_color(&tag_str);
-                        let tag_for_debug = tag_str.clone();
-
-                        div()
-                            .id(ElementId::Name(
-                                format!("sidebar-tag-item-{}", tag_str).into(),
-                            ))
-                            .tooltip(theme::tooltip_label(
-                                "Click to filter · double-click to rename",
-                            ))
-                            .px_2()
-                            .h(px(26.0))
-                            .rounded(theme::RADIUS_MD)
-                            .bg(if is_active {
-                                theme::bg_3()
-                            } else {
-                                gpui::rgba(0x00000000)
-                            })
-                            .hover(move |s| {
-                                if is_active {
-                                    s.bg(theme::bg_3())
-                                } else {
-                                    s.bg(theme::bg_2())
-                                }
-                            })
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .id(ElementId::Name(
-                                        format!("sidebar-tag-filter-{}", tag_str).into(),
-                                    ))
-                                    .debug_selector(move || {
-                                        format!("sidebar-tag-filter-{}", tag_for_debug)
-                                    })
-                                    .flex_1()
-                                    .min_w_0()
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_2()
-                                    // 16 px per level: the spacer plus the row's 8 px gap.
-                                    .when(depth > 0, |name| {
-                                        name.child(div().flex_none().w(px(16.0 * depth as f32 - 8.0)))
-                                    })
-                                    .child(
-                                        div().flex_none().size(px(7.0)).rounded_full().bg(dot_color),
-                                    )
-                                    .child(
-                                        div()
-                                            .debug_selector({
-                                                let id = format!("sidebar-tag-name-{tag_str}");
-                                                move || id.clone()
-                                            })
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_size(theme::TEXT_BODY)
-                                            .font_weight(if is_active {
-                                                FontWeight::MEDIUM
-                                            } else {
-                                                FontWeight::NORMAL
-                                            })
-                                            .text_color(if is_active {
-                                                theme::t1()
-                                            } else {
-                                                theme::t2()
-                                            })
-                                            .child(label),
-                                    )
-                                    .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
-                                        if e.click_count() >= 2 {
-                                            this.start_tag_rename(tag_for_select.clone(), cx);
-                                        } else if matches!(&this.selection, AlbumSelection::Tag(t) if t == &tag_for_select) {
-                                            this.select_album(AlbumSelection::AllLibrary, cx);
-                                        } else {
-                                            this.select_album(
-                                                AlbumSelection::Tag(tag_for_select.clone()),
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_family(theme::FONT_MONO)
-                                    .text_color(theme::t2())
-                                    .child(tag_count.map_or(String::new(), crate::i18n::count)),
-                            )
-                            .into_any_element()
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )
-        // Places sits under Tags, as in the design.
         .children(
             nav_entries(this)
                 .into_iter()
-                .filter(|entry| entry.key == "places")
+                .filter(|entry| matches!(entry.key, "keywords" | "places"))
                 .map(|entry| render_entry(this, entry, cx)),
         )
 }

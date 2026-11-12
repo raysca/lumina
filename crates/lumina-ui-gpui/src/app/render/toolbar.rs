@@ -95,6 +95,10 @@ impl LuminaApp {
         if self.albums_overview_shown() {
             return Some(self.albums_overview_meta());
         }
+        // ponytail: no meta on the Tags page until its header task.
+        if self.tags_page_shown() {
+            return None;
+        }
         if self.view_loading() && self.cached_active_count().is_none() {
             return None;
         }
@@ -151,8 +155,9 @@ impl LuminaApp {
             None => view_label.to_string(),
         };
         let toggle = self.render_sidebar_toggle(cx);
-        // The Albums overview has its own actions: no grid to sort or filter.
-        if self.albums_overview_shown() {
+        // The Albums overview and the Tags page have their own actions: no
+        // grid to sort or filter.
+        if self.non_media_page_shown() {
             let actions = div()
                 .flex()
                 .flex_row()
@@ -160,7 +165,9 @@ impl LuminaApp {
                 .gap(px(10.0))
                 // Running downloads keep their ring and panel here too.
                 .children(self.render_downloads_button(window, cx))
-                .child(crate::views::albums_overview::new_album_button(self, cx))
+                .when(self.albums_overview_shown(), |bar| {
+                    bar.child(crate::views::albums_overview::new_album_button(self, cx))
+                })
                 .when(own_controls, |bar| bar.child(window_controls(window)));
             return self.clear_traffic_lights(page_header(
                 toggle,

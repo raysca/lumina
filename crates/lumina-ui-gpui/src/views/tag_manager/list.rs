@@ -122,13 +122,14 @@ fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoEleme
         .debug_selector(|| "tag-manager-search".to_string())
         .flex_1()
         .gap_2()
-        // Typing filters whenever the sheet is open; the focus border shows
-        // that the field is the keyboard target.
-        .when(app.tag_manager.search_focused, |f| {
+        // Typing filters while the page shows (unless the sidebar search
+        // has focus); the focus border shows the field is the keyboard target.
+        .when(app.tag_manager.search_focused && !app.search_focused, |f| {
             f.border_color(theme::focus_ring())
         })
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.tag_manager.search_focused = true;
+            this.search_focused = false;
             cx.notify();
         }))
         .child(render_icon(Icon::Search, px(12.0), theme::t2()))

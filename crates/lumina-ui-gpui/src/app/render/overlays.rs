@@ -9,7 +9,6 @@ use crate::views::context_menu::MediaContextMenu;
 use crate::views::delete_modal::DeleteConfirmModal;
 
 use crate::views::sidebar::AlbumSelection;
-use crate::views::tag_manager::TagManagerModal;
 use crate::views::viewer::MediaViewer;
 
 /// The selection dock's offset above the status bar.
@@ -209,19 +208,6 @@ impl LuminaApp {
     ) -> impl IntoElement {
         if self.context_menu_state.is_some() {
             MediaContextMenu::render(self, window, cx).into_any_element()
-        } else {
-            Empty.into_any_element()
-        }
-    }
-
-    /// Tag Manager modal overlay
-    pub(crate) fn render_tag_manager_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.tag_manager.open {
-            div()
-                .absolute()
-                .inset_0()
-                .child(TagManagerModal::render(self, cx))
-                .into_any_element()
         } else {
             Empty.into_any_element()
         }

@@ -23,6 +23,8 @@ pub enum AlbumSelection {
     Trash,
     /// The Albums overview page: album and smart album cards, no media grid.
     AlbumsOverview,
+    /// The Tags page (TAGS › Keywords): the keyword list and detail, no grid.
+    Tags,
 }
 
 pub fn tag_color(name: &str) -> Rgba {

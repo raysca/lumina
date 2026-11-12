@@ -95,7 +95,7 @@ fn viewer_open_click_does_not_open_tag_manager() {
     click(vcx, "tags-toolbar-btn");
     view.update(vcx, |app, _| {
         assert!(
-            !app.tag_manager.open,
+            !app.tags_page_shown(),
             "a click over the hidden toolbar must not reach Tags"
         );
     });
@@ -104,7 +104,7 @@ fn viewer_open_click_does_not_open_tag_manager() {
     click(vcx, "open-with-menu-btn");
     view.update(vcx, |app, _| {
         assert!(
-            !app.tag_manager.open,
+            !app.tags_page_shown(),
             "the Open click must not also open the Tag Manager"
         );
     });
@@ -199,34 +199,32 @@ fn info_drawer_click_does_not_change_the_selected_media() {
 }
 
 #[core::prelude::v1::test]
-fn tag_manager_scrim_click_does_not_select_a_grid_card() {
+fn tags_page_click_does_not_select_a_grid_card() {
     let (temp_dir, engine) = seed_library("overlay_tags", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
+    let ids = card_ids(&view, vcx);
     view.update(vcx, |app, cx| app.open_tag_manager(cx));
     render_ui(vcx);
 
-    let dialog = vcx
-        .debug_bounds("tag-manager-dialog")
-        .expect("the tag manager must paint its card");
-    let target = card_ids(&view, vcx).into_iter().find_map(|id| {
-        let card = vcx.debug_bounds(leak(format!("media-card-{id}")))?;
-        (!dialog.contains(&card.center())).then(|| card.center())
-    });
-    let target = target.expect("test premise: a grid card must sit outside the dialog");
+    let page = vcx
+        .debug_bounds("tags-page")
+        .expect("the Tags page must paint");
+    assert!(
+        ids.iter()
+            .all(|id| vcx.debug_bounds(leak(format!("media-card-{id}"))).is_none()),
+        "the Tags page replaces the grid: no card is painted under it"
+    );
     let before = selected_id(&view, vcx);
-
-    click_point(vcx, f32::from(target.x), f32::from(target.y));
+    let center = page.center();
+    click_point(vcx, f32::from(center.x), f32::from(center.y));
     view.update(vcx, |app, _| {
-        assert!(
-            !app.tag_manager.open,
-            "the scrim click must dismiss the modal"
-        );
+        assert!(app.tags_page_shown(), "a click on the page keeps it");
     });
     assert_eq!(
         selected_id(&view, vcx),
         before,
-        "the scrim click must not select the grid card underneath"
+        "a click on the page must not select a grid card"
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);

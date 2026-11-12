@@ -242,13 +242,12 @@ fn modals_opened_without_keys_close_the_header_popovers() {
         app.open_tag_manager(cx);
     });
     render_ui(vcx);
+    // The Tags page is a page with the Downloads button in its header, not
+    // a sheet: the card may stay open under its button.
     view.update(vcx, |app, _| {
-        assert!(
-            !app.downloads.open,
-            "the downloads card must not paint over the tag manager"
-        )
+        assert!(app.tags_page_shown() && app.downloads.open)
     });
-    assert!(vcx.debug_bounds("downloads-panel").is_none());
+    assert!(vcx.debug_bounds("downloads-toolbar-btn").is_some());
 }
 
 #[core::prelude::v1::test]

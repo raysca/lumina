@@ -884,17 +884,17 @@ fn video_badge_marks_the_clip_playing_in_pip() {
     );
 }
 
-/// Expanding PiP over the Albums overview shows the video from All Media:
-/// closing the viewer must not leave a hidden selection on the page.
-#[core::prelude::v1::test]
-fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
-    let lib = pip_library("expand_overview");
+/// Expanding PiP over a page with no media (the Albums overview, the Tags
+/// page) shows the video from All Media: closing the viewer must not leave
+/// a hidden selection on the page.
+fn expand_over_a_page_shows_the_video_from_all_media(prefix: &str, page_row: &'static str) {
+    let lib = pip_library(prefix);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
 
     open_pip_for(&view, vcx, &lib.video_a);
-    click(vcx, "sidebar-albums-header");
-    assert!(view.update(vcx, |app, _| app.albums_overview_shown()));
+    click(vcx, page_row);
+    assert!(view.update(vcx, |app, _| app.non_media_page_shown()));
 
     view.update(vcx, |app, cx| app.expand_pip_to_viewer(cx));
     render_ui(vcx);
@@ -902,7 +902,7 @@ fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
         assert_eq!(
             app.selection,
             crate::views::sidebar::AlbumSelection::AllLibrary,
-            "the viewer opens over All Media, not the overview"
+            "the viewer opens over All Media, not {page_row}'s page"
         );
         assert!(app.is_fullscreen_viewer);
         assert_eq!(
@@ -913,9 +913,19 @@ fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
         assert!(
-            !app.albums_overview_shown(),
+            !app.non_media_page_shown(),
             "closing the viewer shows the grid the selection belongs to"
         );
     });
     assert!(vcx.debug_bounds("media-grid-surface").is_some());
+}
+
+#[core::prelude::v1::test]
+fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
+    expand_over_a_page_shows_the_video_from_all_media("expand_overview", "sidebar-albums-header");
+}
+
+#[core::prelude::v1::test]
+fn expand_over_the_tags_page_shows_the_video_from_all_media() {
+    expand_over_a_page_shows_the_video_from_all_media("expand_tags", "sidebar-nav-keywords");
 }
