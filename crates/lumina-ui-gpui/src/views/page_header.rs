@@ -192,7 +192,7 @@ pub(crate) fn page_tabs(
 /// Tests only: a zero-size marker whose `{kind}-text:{text}` selector
 /// carries the rendered text, since GPUI's test window exposes neither
 /// painted text nor an accessibility tree. Absolute, so it takes no space.
-fn text_marker(kind: &'static str, text: &SharedString) -> Option<Div> {
+pub(crate) fn text_marker(kind: &'static str, text: &SharedString) -> Option<Div> {
     cfg!(test).then(|| {
         let text = text.clone();
         div()

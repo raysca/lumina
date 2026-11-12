@@ -56,6 +56,8 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | PiP buffered-range bar | 04 | Dropped: local files have no buffering |
 | Albums overview tabs People, Places, Shared and the meta's "· N shared" | 05 dec. | Only Albums and Smart Albums tabs; meta reads "N albums · M smart albums". Places tab is a separate plan |
 | Albums overview header sliders and sort icons | 05 Task 2 | Dropped: nothing to filter on the page; sort is the "Sort ▾" control (05 Task 4). The header keeps the sidebar toggle, Downloads (while it has rows) and New Album; the inspector is hidden on the page |
+| Album card min width 200 in the column rule | 05 Task 4 | 230: the frame's 5 cards of 245 at a 1600 window do not fit a 200 minimum (that gives 6 of 201) |
+| "Sort: Recently updated" | 05 dec. | Name (default), Date created, Newest photo, Item count; no updated time is stored |
 
 ## Keyboard and accessibility gaps
 - **No Tab traversal** for the top bar buttons, filmstrip thumbs, tag chips, search chips,
@@ -65,9 +67,11 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Top matches:** ↓ from the bar reaches the cards only after Esc closes the suggestions, with
   no on-screen hint. (03 Task 5)
 - **"Rate…"** is in the palette but not the menu bar or shortcut sheet. (02 Task 2)
-- **Albums overview keys** (Tab / ⇧Tab between the tab bar and New Album, ←/→ switch tabs,
-  ↵ runs New Album, Esc clears the focus) are not in the shortcut sheet; ⌘K Show Albums /
-  Show Albums Tab / Show Smart Albums Tab and Go > Albums are the listed paths. (05 Task 2)
+- **Albums overview keys** (Tab / ⇧Tab between the tab bar, New Album, Sort and the cards,
+  ←/→ switch tabs, arrows move between cards, ↵ runs or opens the focused control, ⌘⌫ asks
+  to delete the focused album, Esc clears the focus) are not in the shortcut sheet; ⌘K Show
+  Albums / Show Albums Tab / Show Smart Albums Tab and Go > Albums are the listed paths. A
+  card has no rename key: Rename is on its right-click menu and the sidebar row. (05 Tasks 2, 4)
 - **Toast copy:** edit/rotate while a popover is open says "Close the open dialog…"; "menu"
   would fit the Sort and Rate popovers better. Slideshow is refused silently. (02 Task 2)
 - **Brand row** has no accessibility role; full-screen traffic-light inset and brand-row window

@@ -2,6 +2,9 @@
 //! the page header while `AlbumSelection::AlbumsOverview` shows. State and
 //! keys live in `app/albums_overview.rs`.
 
+pub(crate) mod albums;
+
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::albums_overview::{AlbumsTab, OverviewFocus};
@@ -11,8 +14,8 @@ use crate::theme;
 use crate::views::page_header::{header_primary_button, page_tabs, PageTab};
 use crate::LuminaApp;
 
-/// The page under the header: tabs, then the body. Album and smart album
-/// cards fill the body in later tasks.
+/// The page under the header: tabs, then the body: the album cards on the
+/// Albums tab (smart album cards come in a later task).
 pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let overview = &this.albums.overview;
     let tabs: Vec<PageTab> = AlbumsTab::ALL
@@ -51,7 +54,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
                 .debug_selector(|| "albums-overview".to_string())
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll(),
+                .when(overview.tab == AlbumsTab::Albums, |body| {
+                    body.child(albums::render(this, cx))
+                }),
         )
         .into_any_element()
 }

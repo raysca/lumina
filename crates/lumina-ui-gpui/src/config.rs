@@ -442,6 +442,43 @@ pub struct AppConfig {
     /// or the day rows (the default). An unknown value reads as Days.
     #[serde(default, deserialize_with = "lenient_group_level")]
     pub group_level: GroupLevel,
+    /// The Albums overview's card order. An unknown value reads as Name.
+    #[serde(default, deserialize_with = "lenient_album_sort")]
+    pub album_sort: AlbumSort,
+}
+
+/// The Albums overview's card order (its "Sort ▾" control).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlbumSort {
+    /// A to Z.
+    #[default]
+    Name,
+    /// Newest album first.
+    Created,
+    /// Newest cover photo first; albums without one last.
+    NewestPhoto,
+    /// Most items first.
+    ItemCount,
+}
+
+impl AlbumSort {
+    /// Menu order.
+    pub const ALL: [AlbumSort; 4] = [
+        AlbumSort::Name,
+        AlbumSort::Created,
+        AlbumSort::NewestPhoto,
+        AlbumSort::ItemCount,
+    ];
+}
+
+/// Reads `album_sort` so a hand-edited or future value falls back to Name
+/// instead of failing the whole config.
+fn lenient_album_sort<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<AlbumSort, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 /// The zoom pill's grouping level in Mosaic. Years and Months apply only
@@ -580,6 +617,7 @@ impl Default for AppConfig {
             slideshow_loop: false,
             browse_layout: BrowseLayout::Grid,
             group_level: GroupLevel::Days,
+            album_sort: AlbumSort::Name,
         }
     }
 }
@@ -1359,6 +1397,34 @@ mod tests {
             );
             assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
         }
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn album_sort_defaults_to_name_and_round_trips() {
+        let path = temp_config_path("album_sort");
+        std::fs::write(&path, br#"{"grid_columns":6}"#).unwrap();
+        assert_eq!(
+            AppConfig::load_from(&path).album_sort,
+            AlbumSort::Name,
+            "a config without the key sorts albums by name"
+        );
+        for sort in AlbumSort::ALL {
+            let cfg = AppConfig {
+                album_sort: sort,
+                ..Default::default()
+            };
+            cfg.save_to(&path).unwrap();
+            assert_eq!(AppConfig::load_from(&path).album_sort, sort);
+        }
+        std::fs::write(&path, br#"{"grid_columns":6,"album_sort":"updated"}"#).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.album_sort,
+            AlbumSort::Name,
+            "unknown value reads as Name"
+        );
+        assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

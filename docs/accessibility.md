@@ -100,11 +100,15 @@ Lumina is designed to be usable without a mouse:
   field stay there.
 - **Albums overview**: the sidebar ALBUMS label (button, labelled "Show
   Albums"), ⌘K Show Albums and Go > Albums open it; ⌘[ returns. `Tab` /
-  `⇧Tab` move a focus ring between the tab bar and New Album, `←`/`→`
-  switch between the Albums and Smart Albums tabs (also ⌘K Show Albums Tab
-  / Show Smart Albums Tab), `Enter` runs a focused New Album and `Esc`
-  clears the focus. The page holds no media, so the grid's keys do nothing
-  there.
+  `⇧Tab` move a focus ring between the tab bar, New Album, the Albums
+  tab's "Sort ▾" control and its first album card; `←`/`→` switch between
+  the Albums and Smart Albums tabs (also ⌘K Show Albums Tab / Show Smart
+  Albums Tab). `Enter` runs a focused New Album, opens the sort menu
+  (`↑`/`↓` then `Enter` pick an order, `Esc` closes it) or opens the
+  focused album. On a card the arrows move between cards (the focused card
+  scrolls into view) and `⌘⌫` asks to delete that album. `Esc` clears the
+  focus. Rename is on a card's right-click menu and the sidebar row. The
+  page holds no media, so the grid's keys do nothing there.
 - **Mosaic**: ⌘K Show Mosaic / Show Grid or the toolbar's view-mode
   segments switch the browser between justified rows and the square grid
   (the choice is kept; Grid is the default). Duplicates and a smart album
@@ -296,7 +300,12 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   originals", with the same tooltip).
 - the Albums overview's tab bar (tab list, labelled "Albums"; each tab a
   tab, labelled with its name, selected when shown) and New Album (button,
-  with a tooltip).
+  with a tooltip); on the Albums tab, the "Albums" heading, the Sort
+  control (button, labelled e.g. "Sort: Name") and its menu (menu; each
+  order a radio menu item, selected when current), each album card
+  (button, labelled with its name and meta, e.g. "Lisbon, 2 items · Jun
+  2025"; the name has a tooltip), the card menu (menu with Rename and
+  Delete… items) and the empty state's New Album (button).
 - Mosaic: the view-mode segments (button, toggled), each day header
   (heading, labelled with date, place and count) and its Select button
   (button, inside the heading), the zoom pill's Years / Months / Days

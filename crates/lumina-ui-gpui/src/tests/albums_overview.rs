@@ -76,7 +76,7 @@ fn albums_overview_opens_from_sidebar_and_palette() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
+pub(super) fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
     let bounds = vcx
         .debug_bounds(selector)
         .unwrap_or_else(|| panic!("{selector} is painted"));

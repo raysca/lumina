@@ -1,3 +1,4 @@
+mod album_cards;
 mod album_membership;
 mod album_membership_guards;
 mod albums;

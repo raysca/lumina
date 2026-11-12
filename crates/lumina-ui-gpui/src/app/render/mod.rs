@@ -476,6 +476,7 @@ impl Render for LuminaApp {
         self.refresh_active_view(cx);
         self.refresh_top_matches(cx);
         self.refresh_map_points(cx);
+        self.prepare_albums_overview(window, cx);
         self.close_header_popovers_under_modals();
         // A mouse-up outside an inactive window never reaches the root.
         if !window.is_window_active() {

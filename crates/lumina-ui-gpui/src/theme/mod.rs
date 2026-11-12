@@ -94,6 +94,10 @@ tokens! {
     rail_bar = 0x32323A;
     /// Timeline rail month bar in the year on screen.
     rail_bar_current = 0x4A4A56;
+    /// The back plate of an album card's stack (frame Back2).
+    plate = 0x2A2A33;
+    /// The middle plate of an album card's stack (frame Back1).
+    plate_2 = 0x3A3A46;
 
     // Metadata marks. Grid cards draw them white on a scrim over the photo.
     rating = 0xE9A23B;
