@@ -106,8 +106,8 @@ fn chip(id: impl Into<ElementId>) -> Stateful<Div> {
         .text_size(px(12.0))
 }
 
-/// ORGANISE: Merge into… (its target picker while open) and Move to… (⇧⌘M,
-/// its parent field while moving), as rows.
+/// ORGANISE: Merge into… (its target picker while open), Save as Smart
+/// Album and Move to… (⇧⌘M, its parent field while moving), as rows.
 pub(super) fn render_organise(
     app: &LuminaApp,
     items_label: &str,
@@ -122,6 +122,15 @@ pub(super) fn render_organise(
     )
     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
         this.start_tag_merge(cx);
+    }));
+    let save_smart = organise_row(
+        "tag-detail-save-smart",
+        Icon::FolderPlus,
+        t("tags.row_save_smart"),
+        t("tags.save_smart_sub"),
+    )
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        this.save_command_keyword_as_album(cx);
     }));
     let move_row = organise_row(
         "tag-detail-move",
@@ -144,6 +153,7 @@ pub(super) fn render_organise(
                 .is_some()
                 .then(|| render_merge_picker(app, cx)),
         )
+        .child(save_smart)
         .child(move_row)
         .children(moving.then(|| {
             theme::field("tag-detail-move-field")

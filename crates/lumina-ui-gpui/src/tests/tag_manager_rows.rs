@@ -215,9 +215,9 @@ fn tag_row_menu_by_keyboard_and_palette() {
         app.cancel_tag_manager_prompts();
     });
 
-    // ↓ past the end stays on Delete; ↑ ↑ ↑ back to Rename; ↵ renames.
+    // ↓ past the end stays on Delete; ↑ ×4 back to Rename; ↵ renames.
     keystrokes(vcx, "shift-f10");
-    keystrokes(vcx, "down down down down up up up");
+    keystrokes(vcx, "down down down down down up up up up");
     keystrokes(vcx, "enter");
     assert_eq!(editing(&view, vcx), (Some("sea".into()), false));
     view.update(vcx, |app, _| app.cancel_tag_manager_prompts());

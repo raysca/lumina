@@ -80,6 +80,7 @@ mod tag_manager_header;
 mod tag_manager_merge;
 mod tag_manager_rows;
 mod tag_manager_sidecars;
+mod tag_manager_smart;
 mod tags_and_albums;
 mod templates;
 mod text_input;

@@ -22,21 +22,22 @@ impl TagSortOrder {
     }
 }
 
-/// The Tags page row `…` menu's items, in order. Merge into… (Design 08
-/// Task 5) and Save as Smart Album (Task 6) join when they exist.
+/// The Tags page row `…` menu's items, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagRowAction {
     Rename,
     Merge,
     Move,
+    SaveSmart,
     Delete,
 }
 
 impl TagRowAction {
-    pub const ALL: [TagRowAction; 4] = [
+    pub const ALL: [TagRowAction; 5] = [
         TagRowAction::Rename,
         TagRowAction::Merge,
         TagRowAction::Move,
+        TagRowAction::SaveSmart,
         TagRowAction::Delete,
     ];
 
@@ -46,6 +47,7 @@ impl TagRowAction {
             TagRowAction::Rename => "rename",
             TagRowAction::Merge => "merge",
             TagRowAction::Move => "move",
+            TagRowAction::SaveSmart => "save-smart",
             TagRowAction::Delete => "delete",
         }
     }
@@ -55,6 +57,7 @@ impl TagRowAction {
             TagRowAction::Rename => "tags.row_rename",
             TagRowAction::Merge => "tags.row_merge",
             TagRowAction::Move => "tags.row_move",
+            TagRowAction::SaveSmart => "tags.row_save_smart",
             TagRowAction::Delete => "tags.row_delete",
         })
     }
@@ -65,7 +68,7 @@ impl TagRowAction {
             TagRowAction::Rename => "↵",
             TagRowAction::Merge => "",
             TagRowAction::Move => "⇧⌘M",
-            TagRowAction::Delete => "",
+            TagRowAction::SaveSmart | TagRowAction::Delete => "",
         }
     }
 }

@@ -266,6 +266,7 @@ impl LuminaApp {
             TagRowAction::Rename => self.start_modal_tag_rename(tag, cx),
             TagRowAction::Merge => self.start_tag_merge(cx),
             TagRowAction::Move => self.start_keyword_move(cx),
+            TagRowAction::SaveSmart => self.save_command_keyword_as_album(cx),
             TagRowAction::Delete => self.delete_tag_globally(tag, cx),
         }
     }

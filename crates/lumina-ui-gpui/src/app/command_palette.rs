@@ -157,6 +157,7 @@ pub enum CommandId {
     AddKeywordAlias,
     MoveKeyword,
     MergeKeyword,
+    SaveKeywordSmart,
     RenameKeyword,
     DeleteKeyword,
     /// Browsing history; shown only when it would move.
@@ -251,6 +252,7 @@ impl Command {
             OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
             MoveKeyword | RenameKeyword | ManageTemplates => Icon::Pencil,
             MergeKeyword => Icon::Merge,
+            SaveKeywordSmart => Icon::FolderPlus,
             DeleteKeyword => Icon::Trash,
             SortTags => Icon::ArrowUpNarrowWide,
             ClearRecents | ClearRecentSearches => Icon::X,
@@ -1105,6 +1107,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "tag keyword merge combine into alias",
         },
         Command {
+            id: CommandId::SaveKeywordSmart,
+            key: "command.save_keyword_smart",
+            shortcut: "",
+            keywords: "tag keyword save smart album rule",
+        },
+        Command {
             id: CommandId::RenameKeyword,
             key: "command.rename_keyword",
             shortcut: "",
@@ -1290,6 +1298,9 @@ impl LuminaApp {
             | CommandId::MergeKeyword
             | CommandId::RenameKeyword
             | CommandId::DeleteKeyword => self.command_keyword().is_some(),
+            CommandId::SaveKeywordSmart => {
+                self.tags_page_shown() && self.tag_manager.focused.is_some()
+            }
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
                 self.selected_item.is_some() || !self.selected_indices.is_empty()
             }
@@ -1734,6 +1745,7 @@ impl LuminaApp {
             CommandId::AddKeywordAlias => self.start_alias_input(cx),
             CommandId::MoveKeyword => self.start_keyword_move(cx),
             CommandId::MergeKeyword => self.start_tag_merge(cx),
+            CommandId::SaveKeywordSmart => self.save_command_keyword_as_album(cx),
             CommandId::RenameKeyword => self.start_keyword_rename(cx),
             CommandId::DeleteKeyword => self.delete_command_keyword(cx),
             CommandId::Back => self.navigate_back(cx),

@@ -70,6 +70,26 @@ impl LuminaApp {
         self.open_draft(None, title, MatchMode::All, &[rule], cx);
     }
 
+    /// Save as Smart Album (Tags page ORGANISE row, row `…` menu, ⌘K "Save
+    /// Tag as Smart Album"): the builder prefilled with one Tag-is-`<path>`
+    /// rule (which covers the keywords below it), titled with the last
+    /// segment. The sheet takes the keys, so the page's prompts and menus
+    /// close first.
+    pub fn save_command_keyword_as_album(&mut self, cx: &mut Context<Self>) {
+        let Some(tag) = self.command_keyword() else {
+            return;
+        };
+        self.cancel_tag_manager_prompts();
+        self.tag_manager.close_popovers();
+        let title = tag.rsplit('/').next().unwrap_or(&tag).to_string();
+        let rule = SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::Equals,
+            value: RuleValue::Text(tag),
+        };
+        self.open_draft(None, title, MatchMode::All, &[rule], cx);
+    }
+
     fn open_draft(
         &mut self,
         editing: Option<i64>,
