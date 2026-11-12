@@ -165,7 +165,8 @@ pub(super) fn section_head(title: String) -> Div {
 }
 
 /// PREVIEW: "View all" (the library searched for the tag) and the newest
-/// 8 items, 4 across, 68 high, from the grid's texture cache.
+/// 8 items, 4 across, 68 high, from the grid's texture cache (queued when
+/// missing).
 fn render_preview(app: &LuminaApp, tag: &str, cx: &mut Context<LuminaApp>) -> impl IntoElement {
     let show_tag = tag.to_string();
     let view_all: SharedString = t("tags.view_all").into();
@@ -204,21 +205,17 @@ fn render_items(app: &LuminaApp) -> AnyElement {
             .child(t("tags.no_items"))
             .into_any_element();
     }
-    let thumbs: Vec<Option<std::sync::Arc<RenderImage>>> = match &app.grid_state {
-        Some(grid) => {
-            let cache = grid.texture_cache.lock();
-            ids.iter().map(|id| cache.peek(id).cloned()).collect()
-        }
-        None => vec![None; ids.len()],
-    };
+    // Missing thumbnails are queued for decoding, as album covers are.
+    let thumbs: Vec<_> = ids
+        .iter()
+        .map(|id| crate::views::albums_overview::albums::thumbnail(app, *id))
+        .collect();
     div()
         .id("tag-manager-items")
         .debug_selector(|| "tag-manager-items".to_string())
         .grid()
         .grid_cols(PREVIEW_COLUMNS as u16)
         .gap(px(5.0))
-        // ponytail: items the grid has not decoded show as placeholders;
-        // request thumbnails here if that proves too sparse.
         .children(thumbs.into_iter().enumerate().map(|(i, thumb)| {
             div()
                 .debug_selector(move || format!("tag-manager-item-{i}"))

@@ -217,3 +217,33 @@ fn delete_hint_names_children_again_after_undo() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[core::prelude::v1::test]
+fn preview_asks_for_thumbnails_it_has_not_got() {
+    let (dir, engine) = seed_library("tm_detail_preview_decode", 8);
+    let ids: Vec<_> = engine.get_item_slice(0..8).iter().map(|i| i.id).collect();
+    engine.add_tags_batch(&ids, &["dusk".into()]).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    open(&view, vcx);
+    // As if the grid never decoded these items (they were off-screen).
+    view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().unwrap();
+        state.texture_cache.lock().clear();
+        state.in_flight.lock().clear();
+    });
+    click(vcx, "tag-manager-row-dusk");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().unwrap();
+        let (cache, in_flight) = (state.texture_cache.lock(), state.in_flight.lock());
+        for id in &ids {
+            assert!(
+                in_flight.contains(id) || cache.contains(id),
+                "a preview tile without a thumbnail must ask for one ({id:?})"
+            );
+        }
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
