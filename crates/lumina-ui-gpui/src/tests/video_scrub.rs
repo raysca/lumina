@@ -647,3 +647,52 @@ fn pausing_during_a_scrub_is_not_undone_on_release() {
         app.close_viewer(cx);
     });
 }
+
+#[core::prelude::v1::test]
+fn scrubber_is_a_strip_with_playhead_pill() {
+    let (temp_dir, engine) = seed_library("video_scrub_strip", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let track = open_video_with_player(&view, vcx, video_sample());
+    assert_eq!(
+        f32::from(track.size.height),
+        54.0,
+        "the scrubber is a 54px thumbnail strip"
+    );
+    assert!(
+        vcx.debug_bounds("video-strip-frame-0").is_none(),
+        "before the strip arrives the scrubber is a plain bar"
+    );
+    let pill = vcx
+        .debug_bounds("video-playhead-time")
+        .expect("the playhead carries a time pill");
+    assert!(
+        pill.top() >= track.bottom(),
+        "the time pill hangs under the strip: {pill:?} {track:?}"
+    );
+
+    test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
+    vcx.simulate_mouse_move(track_point(track, 0.5), None, gpui::Modifiers::default());
+    view.update(vcx, |app, cx| {
+        app.video.playback_time = 34.0;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let first = vcx
+        .debug_bounds("video-strip-frame-0")
+        .expect("with a strip the frames tile the track");
+    let last = vcx
+        .debug_bounds("video-strip-frame-3")
+        .expect("every strip frame gets a slot");
+    assert!(
+        (f32::from(first.left()) - f32::from(track.left())).abs() < 1.0
+            && (f32::from(last.right()) - f32::from(track.right())).abs() < 1.0,
+        "the frames span the track: {first:?} {last:?} {track:?}"
+    );
+    assert_eq!(
+        crate::views::viewer::transport::playhead_label(34.0),
+        "0:34",
+        "the pill shows the current time"
+    );
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

@@ -3,6 +3,7 @@ use gpui::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::app::types::format_clock;
 use crate::app::LuminaApp;
 use crate::theme;
 
@@ -55,13 +56,59 @@ pub(crate) fn drag_tracker(
 const PAD_Y: f32 = 16.0;
 /// Gap between the transport's rows.
 const ROW_GAP: f32 = 11.0;
-/// Height of the scrub track.
-const TRACK_HEIGHT: f32 = 24.0;
+/// Height of the thumbnail strip.
+const STRIP_HEIGHT: f32 = 54.0;
+/// The playhead overhangs the strip by 7px above and below.
+const PLAYHEAD_OVERHANG: f32 = 7.0;
+/// The time pill under the playhead.
+const PILL_HEIGHT: f32 = 19.0;
+/// The strip plus the playhead overhang and the pill below it.
+const SCRUB_BLOCK: f32 = STRIP_HEIGHT + PLAYHEAD_OVERHANG + PILL_HEIGHT;
 
 /// The docked transport's full height (border, padding, rows), so the video
-/// frame can be sized to the stage left above it.
-pub(super) fn transport_height(_this: &LuminaApp) -> f32 {
-    1.0 + 2.0 * PAD_Y + TRACK_HEIGHT + ROW_GAP + super::transport_controls::CONTROLS_HEIGHT
+/// frame can be sized to the stage left above it. The chapter label row
+/// only counts when the file has chapters.
+pub(super) fn transport_height(this: &LuminaApp) -> f32 {
+    let labels = if this.video.tracks.chapters.is_empty() {
+        0.0
+    } else {
+        super::chapter_labels::LABELS_HEIGHT + ROW_GAP
+    };
+    1.0 + 2.0 * PAD_Y + labels + SCRUB_BLOCK + ROW_GAP + super::transport_controls::CONTROLS_HEIGHT
+}
+
+/// The time pill's text: the playhead time as "0:34".
+pub(crate) fn playhead_label(time: f64) -> String {
+    format_clock(time)
+}
+
+/// The accent time pill hanging under the playhead at `pct` of the track.
+fn playhead_pill(pct: f32, time: f64) -> Div {
+    let text = playhead_label(time);
+    // ponytail: width from the mono advance (9.5px * 0.6) plus padding.
+    let width = text.chars().count() as f32 * 5.7 + 14.0;
+    div()
+        .absolute()
+        .top(px(STRIP_HEIGHT + PLAYHEAD_OVERHANG))
+        .left(relative(pct))
+        .size_0()
+        .child(
+            div()
+                .debug_selector(|| "video-playhead-time".to_string())
+                .absolute()
+                .left(px(-width / 2.0))
+                .w(px(width))
+                .h(px(PILL_HEIGHT))
+                .rounded(px(4.0))
+                .bg(theme::accent())
+                .flex()
+                .items_center()
+                .justify_center()
+                .font_family(theme::FONT_MONO)
+                .text_size(px(9.5))
+                .text_color(theme::on_accent())
+                .child(text),
+        )
 }
 
 pub struct ViewerTransport;
@@ -132,6 +179,18 @@ impl ViewerTransport {
             Vec::new()
         };
         let menu_open = this.video.speed_menu_open || this.video.tracks.audio_menu_open;
+        // The open video's strip frames, once built.
+        let frames = this
+            .video
+            .preview_strip
+            .as_ref()
+            .filter(|strip| this.video.item.as_ref().map(|i| i.id) == Some(strip.item))
+            .map(|strip| strip.frames.clone())
+            .unwrap_or_default();
+        let has_frames = !frames.is_empty();
+        // The track spans the stage less the 28px side padding; labels are
+        // laid out against it before layout measures it.
+        let track_width = super::stage_width(this).unwrap_or(1280.0) - 56.0;
 
         div()
             .id("video-transport")
@@ -148,7 +207,13 @@ impl ViewerTransport {
             .flex()
             .flex_col()
             .gap(px(ROW_GAP))
-            .child(div().w_full().flex().flex_row().child({
+            .children(super::chapter_labels::render(
+                &this.video.tracks.chapters,
+                duration,
+                current_time,
+                track_width,
+            ))
+            .child(div().w_full().h(px(SCRUB_BLOCK)).child({
                 // The full-size track surface is the first child, so its
                 // prepaint bounds are the track rect used to map pointer X to a
                 // 0..=1 timeline fraction.
@@ -165,15 +230,8 @@ impl ViewerTransport {
                     })
                     .id("video-scrubber-track")
                     .debug_selector(|| "video-scrubber".to_string())
-                    .flex_1()
-                    .h(px(TRACK_HEIGHT))
-                    .rounded(theme::RADIUS_MD)
-                    .border_1()
-                    .border_color(if is_scrubbing {
-                        theme::t2()
-                    } else {
-                        theme::line()
-                    })
+                    .w_full()
+                    .h(px(STRIP_HEIGHT))
                     .relative()
                     .cursor_pointer()
                     .on_mouse_down(
@@ -218,13 +276,40 @@ impl ViewerTransport {
                             this.set_video_hover_scrub(None, cx);
                         }
                     }))
+                    // The strip: one slot per decoded frame, 1px apart, or a
+                    // plain bar until (or unless) the frames arrive.
                     .child(
                         div()
                             .size_full()
-                            .rounded(theme::RADIUS_MD)
-                            .bg(theme::bg_2()),
+                            .rounded(px(3.0))
+                            .overflow_hidden()
+                            .bg(theme::bg_2())
+                            .flex()
+                            .flex_row()
+                            .gap(px(1.0))
+                            .children(frames.iter().enumerate().map(|(i, (_, image))| {
+                                img(image.clone())
+                                    .debug_selector(move || format!("video-strip-frame-{i}"))
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h_full()
+                                    .object_fit(ObjectFit::Cover)
+                            })),
                     )
-                    // Loop range, under the played tint.
+                    // Frames after the playhead are dimmed.
+                    .when(has_frames, |track| {
+                        track.child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .bottom_0()
+                                .right_0()
+                                .left(relative(progress_pct as f32))
+                                .rounded_r(px(3.0))
+                                .bg(theme::strip_dim()),
+                        )
+                    })
+                    // Loop range, over the strip.
                     .children(loop_band.map(|(start, width)| {
                         div()
                             .absolute()
@@ -235,19 +320,20 @@ impl ViewerTransport {
                             .w(relative(width))
                             .border_x_1()
                             .border_color(theme::accent())
-                            .bg(theme::bg_3())
+                            .bg(theme::accent_soft())
                     }))
                     .children(chapter_ticks.into_iter().enumerate().map(|(i, pct)| {
                         div()
                             .absolute()
-                            .top(px(4.0))
-                            .bottom(px(4.0))
+                            .top_0()
+                            .bottom_0()
                             .debug_selector(move || format!("video-chapter-tick-{}", i + 1))
                             .left(relative(pct))
                             .w(px(1.5))
-                            .bg(theme::t2())
+                            .bg(theme::strip_tick())
                     }))
-                    // Played portion: a 22% amber tint up to the playhead.
+                    // Played portion up to the playhead: tinted on the plain
+                    // bar; over frames the dimming after it marks progress.
                     .child(
                         div()
                             .absolute()
@@ -256,8 +342,8 @@ impl ViewerTransport {
                             .left_0()
                             .debug_selector(|| "video-played".to_string())
                             .w(relative(progress_pct as f32))
-                            .rounded_l_md()
-                            .bg(theme::accent_soft()),
+                            .rounded_l(px(3.0))
+                            .when(!has_frames, |played| played.bg(theme::accent_soft())),
                     )
                     // Hover needle indicator, hidden while a scrub owns the playhead.
                     .child(if let Some(hover_pct) = hover_pct {
@@ -280,17 +366,30 @@ impl ViewerTransport {
                             }
                         }
                     }))
-                    // Current playhead: follows the scrub destination while dragging.
+                    // Playhead (2x68, overhanging the strip by 7) with its
+                    // 10px knob and the time pill; follows the scrub
+                    // destination while dragging.
                     .child(
                         div()
                             .absolute()
-                            .top_0()
-                            .bottom_0()
+                            .top(px(-PLAYHEAD_OVERHANG))
+                            .h(px(STRIP_HEIGHT + 2.0 * PLAYHEAD_OVERHANG))
                             .left(relative(progress_pct as f32))
-                            .w(px(if is_scrubbing { 3.5 } else { 2.5 }))
-                            .bg(theme::accent())
-                            .shadow_md(),
+                            .ml(px(-1.0))
+                            .w(px(2.0))
+                            .bg(theme::accent()),
                     )
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(-PLAYHEAD_OVERHANG - 4.0))
+                            .left(relative(progress_pct as f32))
+                            .ml(px(-5.0))
+                            .size(px(10.0))
+                            .rounded_full()
+                            .bg(theme::accent()),
+                    )
+                    .child(playhead_pill(progress_pct as f32, current_time))
                     // Time badge, with the nearest strip frame once there
                     // is one, anchored directly above the track.
                     .children(time_badge.map(|(badge_pct, badge_time)| {

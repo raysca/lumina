@@ -120,6 +120,10 @@ tokens_alpha! {
     modal_dim = 0x00000066;
     /// Badges and buttons drawn over media.
     media_scrim = 0x000000A6;
+    /// Video scrub strip frames after the playhead (42% black).
+    strip_dim = 0x0000006B;
+    /// Chapter ticks over the scrub strip.
+    strip_tick = 0xFFFFFFD9;
     /// Unselected check circle on a tile in selection mode (Design 07).
     check_idle = 0x00000059;
     /// Library card surface. Cards are transparent by request: thumbnails sit

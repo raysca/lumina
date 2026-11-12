@@ -53,11 +53,23 @@ impl VideoTracks {
     }
 
     fn chapter_name(&self, index: usize) -> String {
-        match self.chapters.get(index).map(|(_, name)| name.trim()) {
-            Some(name) if !name.is_empty() => name.to_string(),
-            _ => t("video.chapter_unnamed").replace("{n}", &(index + 1).to_string()),
-        }
+        chapter_name(&self.chapters, index)
     }
+}
+
+/// A chapter's name, or "Chapter n" when the file leaves it blank.
+pub(crate) fn chapter_name(chapters: &[(f64, String)], index: usize) -> String {
+    match chapters.get(index).map(|(_, name)| name.trim()) {
+        Some(name) if !name.is_empty() => name.to_string(),
+        _ => t("video.chapter_unnamed").replace("{n}", &(index + 1).to_string()),
+    }
+}
+
+/// The chapter playing at `time`: the last one starting at or before it.
+pub(crate) fn current_chapter(chapters: &[(f64, String)], time: f64) -> Option<usize> {
+    chapters
+        .partition_point(|(start, _)| *start <= time)
+        .checked_sub(1)
 }
 
 /// Sorted, finite, in-file chapter starts with no two at the same time.

@@ -486,3 +486,68 @@ fn the_menu_marks_the_track_the_player_reports_now() {
         "the palette marks the playing track too"
     );
 }
+
+#[core::prelude::v1::test]
+fn chapter_labels_mark_the_current_chapter() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    assert!(
+        vcx.debug_bounds("video-chapter-labels").is_none(),
+        "no chapters, no label row"
+    );
+    view.update(vcx, |app, _| app.video.playback_time = 20.0);
+    set_chapters(
+        &view,
+        vcx,
+        &[(0.0, "Intro"), (15.0, "Departure"), (45.0, "")],
+    );
+    for n in 1..=3 {
+        let selector = crate::tests::ui_automation::leak(format!("video-chapter-label-{n}"));
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "chapter {n} gets a label"
+        );
+    }
+    let row = vcx
+        .debug_bounds("video-chapter-labels")
+        .expect("the label row shows with chapters");
+    assert!(
+        row.bottom() <= vcx.debug_bounds("video-scrubber").expect("scrubber").top(),
+        "the labels sit above the strip"
+    );
+    assert!(
+        vcx.debug_bounds("video-chapter-label-current").is_some(),
+        "the current chapter's label is flagged"
+    );
+
+    let chapters: Vec<(f64, String)> = [(0.0, "Intro"), (15.0, "Departure"), (45.0, "")]
+        .iter()
+        .map(|(t, n)| (*t, n.to_string()))
+        .collect();
+    let labels =
+        crate::views::viewer::chapter_labels::chapter_labels(&chapters, 60.0, 20.0, 1000.0);
+    let current: Vec<_> = labels.iter().filter(|l| l.current).collect();
+    assert_eq!(current.len(), 1, "exactly one label is current");
+    assert_eq!(current[0].index, 1, "20 s is inside chapter 2");
+    assert_eq!(current[0].text, "Departure 0:15");
+    assert_eq!(
+        labels[2].text, "Chapter 3 0:45",
+        "an unnamed chapter gets a number"
+    );
+
+    // Crowded: on a narrow track only labels that fit survive, and the
+    // current one always does.
+    let crowded: Vec<(f64, String)> = (0..10).map(|i| (i as f64 * 6.0, format!("C{i}"))).collect();
+    let kept = crate::views::viewer::chapter_labels::chapter_labels(&crowded, 60.0, 31.0, 200.0);
+    assert!(kept.len() < 10, "overlapping labels are dropped");
+    assert!(
+        kept.iter().any(|l| l.current && l.index == 5),
+        "the current chapter's label is always kept"
+    );
+    for pair in kept.windows(2) {
+        assert!(
+            pair[0].x + pair[0].width <= pair[1].x,
+            "kept labels never overlap"
+        );
+    }
+}

@@ -7,6 +7,7 @@ use crate::i18n::t;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 
+pub mod chapter_labels;
 pub mod crop_overlay;
 pub mod edit_bar;
 pub mod filmstrip;
