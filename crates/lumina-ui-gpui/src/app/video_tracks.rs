@@ -134,6 +134,12 @@ impl LuminaApp {
     /// before). A jump is an ordinary seek, so a loop range treats it like
     /// any other: past the out point, playback wraps to the in point.
     /// Without chapters the keys seek 5 s, as they did before chapters.
+    /// Seeks to a chapter's start (a click on its InfoPanel row).
+    pub fn seek_to_chapter_start(&mut self, start: f64, cx: &mut Context<Self>) {
+        self.seek_video_to_time(start);
+        cx.notify();
+    }
+
     pub fn jump_chapter(&mut self, forward: bool, cx: &mut Context<Self>) {
         if self.video.tracks.chapters.is_empty() {
             self.seek_video_relative(if forward { 5.0 } else { -5.0 }, cx);

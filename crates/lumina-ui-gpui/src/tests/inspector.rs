@@ -424,10 +424,10 @@ fn capture_rows_skip_blank_exif_and_dedupe_the_brand() {
 }
 
 #[core::prelude::v1::test]
-fn capture_rows_show_duration_and_resolution_for_videos() {
+fn video_facts_move_from_capture_to_playback() {
     let mut video = crate::app::types::get_sample_items()[0].clone();
     video.media_type = lumina_core::MediaType::Video;
-    video.duration_ms = Some(75_000);
+    video.duration_ms = Some(78_420);
     video.width = 3840;
     video.height = 2160;
     video.make = None;
@@ -437,14 +437,89 @@ fn capture_rows_show_duration_and_resolution_for_videos() {
     video.exposure_time = None;
     video.iso = None;
     video.focal_length = None;
-    assert_eq!(
-        rows_of(&video, None),
-        vec![
-            ("inspector-capture-duration", "1:15".to_string()),
-            ("inspector-capture-resolution", "4K".to_string()),
-        ],
-        "a video's Capture rows are its duration and resolution"
+    assert!(
+        rows_of(&video, None).is_empty(),
+        "a video's duration and resolution live under Playback, not Capture"
     );
+    let playback: Vec<_> =
+        crate::views::inspector::summary_video::playback_rows(&video, video.duration_secs())
+            .into_iter()
+            .map(|row| (row.selector, row.value))
+            .collect();
+    assert_eq!(
+        playback,
+        vec![
+            ("inspector-playback-duration", "1:18.420".to_string()),
+            ("inspector-playback-resolution", "3840 × 2160".to_string()),
+        ],
+        "Playback shows the millisecond duration and the pixel size, no frame rate or codec"
+    );
+    assert_eq!(
+        crate::views::inspector::summary_video::format_duration_ms(7322.5),
+        "2:02:02.500",
+        "a long clip's duration has hours"
+    );
+}
+
+#[core::prelude::v1::test]
+fn video_panel_lists_chapters_and_playback() {
+    let (temp_dir, engine) = seed_library("inspector_video_panel", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    let mut video = crate::app::types::get_sample_items()
+        .into_iter()
+        .find(|item| item.media_type == lumina_core::MediaType::Video)
+        .expect("the sample set has a video");
+    video.duration_ms = Some(60_000);
+    view.update(vcx, |app, cx| {
+        app.open_viewer(video.clone(), cx);
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1600.0, 1000.0));
+        app.video.item = Some(video.clone());
+        app.video.duration = 60.0;
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("inspector-chapters").is_none(),
+        "without chapters there is no chapter section"
+    );
+    assert!(
+        vcx.debug_bounds("inspector-playback-duration").is_some(),
+        "a video panel has a Playback section"
+    );
+    for gone in ["inspector-playback-frame-rate", "inspector-playback-codec"] {
+        assert!(vcx.debug_bounds(gone).is_none(), "{gone} is not shown");
+    }
+
+    view.update(vcx, |app, cx| {
+        app.video.tracks.chapters = vec![
+            (0.0, "Intro".into()),
+            (15.0, "Departure".into()),
+            (45.0, "Arrival".into()),
+        ];
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("inspector-chapters").is_some());
+    for n in 1..=3 {
+        let row = vcx
+            .debug_bounds(leak(format!("inspector-chapter-{n}")))
+            .unwrap_or_else(|| panic!("chapter {n} gets a row"));
+        assert_eq!(f32::from(row.size.height), 44.0, "chapter rows are 44px");
+    }
+    assert!(
+        vcx.debug_bounds("inspector-chapter-current").is_some(),
+        "the playing chapter is marked"
+    );
+    click(vcx, "inspector-chapter-2");
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.playback_time),
+        15.0,
+        "clicking a chapter seeks to its start"
+    );
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// A JPEG container whose EXIF says FocalLengthIn35mmFilm = 35 (in the Exif

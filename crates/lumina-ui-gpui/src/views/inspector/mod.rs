@@ -4,6 +4,7 @@ pub mod body;
 pub mod capture;
 pub mod location_card;
 pub mod summary;
+pub mod summary_video;
 pub mod tabs;
 
 pub use body::{format_bytes, render_inspector_body, InspectorTab};
@@ -61,6 +62,7 @@ impl InspectorView {
                 this.mark_pop.star(Some(item.id)),
                 this.item_color_labels.get(&item.id).copied(),
                 focal_35mm,
+                summary_video::video_panel(this, item),
             ))
             .into_any_element()
     }

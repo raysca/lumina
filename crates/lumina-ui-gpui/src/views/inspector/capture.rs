@@ -2,12 +2,10 @@
 //! the Detail design order.
 
 use gpui::*;
-use lumina_core::{MediaItem, MediaType};
+use lumina_core::MediaItem;
 
-use crate::app::types::format_duration_badge;
 use crate::i18n::{t, t_with};
 use crate::theme;
-use crate::views::inspector::summary::resolution_label;
 
 /// One Capture row: its localised key, automation name and value.
 pub(crate) struct CaptureRow {
@@ -62,12 +60,6 @@ pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<Cap
             None => actual,
         }
     });
-    let video = item.media_type == MediaType::Video;
-    let duration = video
-        .then(|| format_duration_badge(item.duration_secs()))
-        .filter(|d| !d.is_empty());
-    let resolution = (video && item.width > 0 && item.height > 0)
-        .then(|| resolution_label(item.width, item.height));
 
     [
         ("inspector.camera", "inspector-capture-camera", camera),
@@ -82,12 +74,6 @@ pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<Cap
             (!exposure.is_empty()).then_some(exposure),
         ),
         ("inspector.focal_length", "inspector-capture-focal", focal),
-        ("inspector.duration", "inspector-capture-duration", duration),
-        (
-            "inspector.resolution",
-            "inspector-capture-resolution",
-            resolution,
-        ),
     ]
     .into_iter()
     .filter_map(|(key, selector, value)| {

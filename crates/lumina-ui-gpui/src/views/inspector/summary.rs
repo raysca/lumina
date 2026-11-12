@@ -13,6 +13,7 @@ use crate::theme::{self, ChipKind};
 use crate::views::inspector::body::format_bytes;
 use crate::views::inspector::capture::{capture_rows, render_capture_row};
 use crate::views::inspector::location_card::render_location_section;
+use crate::views::inspector::summary_video::{render_video_sections, VideoPanel};
 use crate::views::inspector::tabs::tags::{render_suggestions, Suggestion};
 use crate::views::inspector::tabs::trash::render_trash_lifecycle;
 use crate::LuminaApp;
@@ -32,6 +33,7 @@ pub fn render_summary_body(
     star_pop: Option<(u8, ElementId)>,
     color_label: Option<u8>,
     focal_35mm: Option<u32>,
+    video: Option<VideoPanel>,
 ) -> AnyElement {
     let capture = capture_rows(item, focal_35mm);
     let app_info = weak_app.clone();
@@ -48,6 +50,12 @@ pub fn render_summary_body(
         .flex_col()
         .gap(px(22.0))
         .child(render_file_header(item))
+        .children(
+            video
+                .map(|panel| render_video_sections(weak_app.clone(), item, panel))
+                .into_iter()
+                .flatten(),
+        )
         // Rows are omitted one by one and the section with them: no "—" rows.
         .when(!capture.is_empty(), |body| {
             body.child(
@@ -215,10 +223,14 @@ fn render_file_header(item: &MediaItem) -> Div {
         )
 }
 
-/// "RAW" for camera raw files, else the uppercased extension ("JPG", "MOV").
+/// "RAW" for camera raw files, the resolution label ("4K") for a video of
+/// known size, else the uppercased extension ("JPG", "MOV").
 pub(crate) fn format_badge(item: &MediaItem) -> String {
     if item.media_type == MediaType::Raw {
         return "RAW".to_string();
+    }
+    if item.media_type == MediaType::Video && item.width > 0 && item.height > 0 {
+        return resolution_label(item.width, item.height);
     }
     std::path::Path::new(&item.file_name)
         .extension()
@@ -237,7 +249,7 @@ pub(crate) fn when_line(item: &MediaItem) -> String {
 
 /// Section with the design title: 9.5/600 `t3`, uppercase in the catalog.
 // ponytail: no letter spacing (design: 1); GPUI text has no tracking.
-fn section(title_key: &str, content: impl IntoElement) -> Div {
+pub(super) fn section(title_key: &str, content: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()

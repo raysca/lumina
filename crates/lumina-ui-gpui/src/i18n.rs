@@ -707,6 +707,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "inspector.exposure" => "Exposure",
         "inspector.focal_length" => "Focal length",
         "inspector.focal_equivalent" => "{} eq.",
+        "inspector.chapters" => "CHAPTERS",
+        "inspector.playback" => "PLAYBACK",
         "inspector.duration" => "Duration",
         "inspector.resolution" => "Resolution",
         "inspector.tag_add" => "Add",
