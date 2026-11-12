@@ -1,14 +1,17 @@
-//! The Albums tab's card grid (frame `a0sLrG`): a head row with "Sort ▾",
-//! then rows of album cards, a stack of two plates under the cover and a
-//! caption. Rows are virtualised; covers come from the thumbnail texture
-//! cache. State and keys live in `app/albums_overview.rs`.
+//! The Albums tab (frame `a0sLrG`): a page list of the smart section
+//! (`smart.rs`), a head row with "Sort ▾", then rows of album cards, a
+//! stack of two plates under the cover and a caption. Rows are virtualised;
+//! covers come from the thumbnail texture cache. State and keys live in
+//! `app/albums_overview.rs` and `app/smart_cards.rs`.
 
 use std::sync::Arc;
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
+use super::smart;
 use crate::app::albums_overview::OverviewFocus;
+use crate::app::smart_cards::{FIRST_ALBUM_ROW, SMART_ROW_LIMIT};
 use crate::config::AlbumSort;
 use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
@@ -16,9 +19,13 @@ use crate::theme;
 use crate::views::page_header::{popover_under, text_marker};
 use crate::LuminaApp;
 
-/// The body's side padding (frame: pad 22 28 0 28).
+/// The body's padding (frame: pad 22 28 0 28).
 pub(crate) const BODY_PAD_X: f32 = 28.0;
-const BODY_PAD_TOP: f32 = 22.0;
+pub(crate) const BODY_PAD_TOP: f32 = 22.0;
+/// A section head ("Smart Albums", "Albums"): a 20 line and 14 under it.
+pub(crate) const HEAD_HEIGHT: f32 = 34.0;
+/// A one-line empty state.
+pub(crate) const EMPTY_HEIGHT: f32 = 20.0;
 const CARD_GAP: f32 = 16.0;
 const ROW_GAP: f32 = 20.0;
 // ponytail: the plan's 200 minimum gives 6 cards of 201 at a 1600 window;
@@ -58,67 +65,64 @@ fn sort_selector(sort: AlbumSort) -> &'static str {
     }
 }
 
-/// The Albums tab body: head row, then the grid or a one-line empty state,
-/// and the open menu with its dismiss backdrop.
-pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
-    let overview = &this.albums.overview;
+/// The Albums tab body: one variable-height list, so the smart section,
+/// the albums head and the card rows scroll as one page. Rows outside the
+/// viewport (and its overdraw) are not built.
+pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let app = cx.entity().downgrade();
+    list(
+        this.albums.overview.list.state.clone(),
+        move |ix, _window, cx| {
+            app.update(cx, |this, cx| list_item(this, ix, cx))
+                .unwrap_or_else(|_| Empty.into_any_element())
+        },
+    )
+    .size_full()
+    .into_any_element()
+}
+
+/// The list's item `ix`, `list_item_height` tall.
+fn list_item(this: &LuminaApp, ix: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
     let empty = this.albums.list.is_empty();
-    let menu_open = overview.sort_menu.is_some() || overview.card_menu.is_some();
+    match ix {
+        0 => smart::section(this, cx),
+        1 => head_row(this, empty, cx).into_any_element(),
+        _ if empty => empty_state(cx).into_any_element(),
+        _ => album_row(this, ix - FIRST_ALBUM_ROW, cx),
+    }
+}
+
+/// Item heights are fixed, so the page can scroll to a row it has not
+/// measured yet (see `reveal_overview_item`).
+pub(crate) fn list_item_height(this: &LuminaApp, ix: usize) -> f32 {
+    match ix {
+        0 => smart::section_height(
+            this.user_smart_albums.len().min(SMART_ROW_LIMIT),
+            this.albums.overview.smart_columns,
+        ),
+        1 => HEAD_HEIGHT,
+        _ if this.albums.list.is_empty() => EMPTY_HEIGHT,
+        _ => ROW_HEIGHT,
+    }
+}
+
+fn album_row(this: &LuminaApp, row: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
+    let order = this.album_card_order();
+    let columns = this.albums.overview.columns.max(1);
+    let start = (row * columns).min(order.len());
+    let ids = &order[start..(start + columns).min(order.len())];
     div()
-        .size_full()
-        .relative()
+        .w_full()
+        .h(px(ROW_HEIGHT))
+        .px(px(BODY_PAD_X))
+        .pb(px(ROW_GAP))
         .flex()
-        .flex_col()
-        .pt(px(BODY_PAD_TOP))
-        .child(head_row(this, empty, cx))
-        .child(if empty {
-            empty_state(cx).into_any_element()
-        } else {
-            uniform_list(
-                "album-card-rows",
-                this.albums.list.len().div_ceil(overview.columns.max(1)),
-                cx.processor(|this, range: std::ops::Range<usize>, _window, cx| {
-                    let order = this.album_card_order();
-                    let columns = this.albums.overview.columns.max(1);
-                    range
-                        .map(|row| {
-                            let start = (row * columns).min(order.len());
-                            let ids = &order[start..(start + columns).min(order.len())];
-                            div()
-                                .w_full()
-                                .h(px(ROW_HEIGHT))
-                                .px(px(BODY_PAD_X))
-                                .pb(px(ROW_GAP))
-                                .flex()
-                                .flex_row()
-                                .gap(px(CARD_GAP))
-                                .children(ids.iter().map(|&id| album_card(this, id, cx)))
-                                // Empty cells keep a short last row's cards
-                                // as wide as the rest.
-                                .children((ids.len()..columns).map(|_| div().flex_1().min_w_0()))
-                                .into_any_element()
-                        })
-                        .collect()
-                }),
-            )
-            .track_scroll(&overview.scroll)
-            .flex_1()
-            .min_h_0()
-            .into_any_element()
-        })
-        .when(menu_open, |body| {
-            body.child(div().absolute().inset_0().occlude().on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
-                    this.close_overview_menus(cx);
-                }),
-            ))
-        })
-        .children(
-            overview
-                .card_menu
-                .map(|menu| card_menu(menu.album, menu.position, cx)),
-        )
+        .flex_row()
+        .gap(px(CARD_GAP))
+        .children(ids.iter().map(|&id| album_card(this, id, cx)))
+        // Empty cells keep a short last row's cards as wide as the rest.
+        .children((ids.len()..columns).map(|_| div().flex_1().min_w_0()))
+        .into_any_element()
 }
 
 /// "Albums" on the left; "Sort: Name ▾" on the right while there are cards.
@@ -127,8 +131,9 @@ fn head_row(this: &LuminaApp, empty: bool, cx: &mut Context<LuminaApp>) -> Div {
     let focused = overview.focus == Some(OverviewFocus::Sort);
     let label = t("albums.sort").replace("{field}", &sort_name(this.config.album_sort));
     div()
+        .h(px(HEAD_HEIGHT))
         .px(px(BODY_PAD_X))
-        .pb(px(14.0))
+        .pb(px(HEAD_HEIGHT - EMPTY_HEIGHT))
         .flex()
         .flex_row()
         .items_center()
@@ -206,6 +211,7 @@ fn sort_menu(this: &LuminaApp, highlight: usize, cx: &mut Context<LuminaApp>) ->
 fn empty_state(cx: &mut Context<LuminaApp>) -> Div {
     div()
         .debug_selector(|| "albums-empty".to_string())
+        .h(px(EMPTY_HEIGHT))
         .px(px(BODY_PAD_X))
         .flex()
         .flex_row()
@@ -253,16 +259,7 @@ fn album_card(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) -> AnyElem
     )
     .into();
     let focused = this.albums.overview.focus == Some(OverviewFocus::Card(id));
-    let texture: Option<Arc<RenderImage>> = cover.and_then(|cover| {
-        let texture = this
-            .grid_state
-            .as_ref()
-            .and_then(|state| state.texture_cache.lock().get(&cover).cloned());
-        if texture.is_none() {
-            this.queue_thumbnail_request(cover);
-        }
-        texture
-    });
+    let texture = cover.and_then(|cover| thumbnail(this, cover));
     let plate = |inset: f32, top: f32, color: Rgba| {
         div()
             .absolute()
@@ -373,8 +370,24 @@ fn album_card(this: &LuminaApp, id: i64, cx: &mut Context<LuminaApp>) -> AnyElem
         .into_any_element()
 }
 
+/// A thumbnail from the texture cache, queued for decoding while missing.
+pub(crate) fn thumbnail(this: &LuminaApp, id: lumina_core::MediaId) -> Option<Arc<RenderImage>> {
+    let texture = this
+        .grid_state
+        .as_ref()
+        .and_then(|state| state.texture_cache.lock().get(&id).cloned());
+    if texture.is_none() {
+        this.queue_thumbnail_request(id);
+    }
+    texture
+}
+
 /// Rename and Delete for the right-clicked card, at the pointer.
-fn card_menu(album: i64, position: Point<Pixels>, cx: &mut Context<LuminaApp>) -> AnyElement {
+pub(crate) fn card_menu(
+    album: i64,
+    position: Point<Pixels>,
+    cx: &mut Context<LuminaApp>,
+) -> AnyElement {
     let row = |selector: &'static str, label: String| {
         theme::menu_item(selector, false)
             .debug_selector(move || selector.to_string())

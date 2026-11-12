@@ -31,12 +31,12 @@ impl LuminaApp {
         );
     }
 
-    /// Edits the smart album shown in the grid; a no-op elsewhere.
+    /// Edits the smart album shown in the grid, or the focused card on the
+    /// Albums overview; a toast elsewhere.
     pub fn edit_selected_smart_album(&mut self, cx: &mut Context<Self>) {
-        let album = match self.selection {
-            AlbumSelection::User(id) => self.user_smart_albums.iter().find(|a| a.id == id).cloned(),
-            _ => None,
-        };
+        let album = self
+            .palette_smart_album()
+            .and_then(|id| self.smart_album(id).cloned());
         match album {
             Some(album) => self.open_album_builder_for_edit(album, cx),
             None => self.show_toast("Open a smart album to edit it", cx),
@@ -44,11 +44,11 @@ impl LuminaApp {
     }
 
     /// The keyboard path to the sidebar ×: asks before deleting the open
-    /// smart album.
+    /// smart album, or the focused card on the Albums overview.
     pub fn delete_selected_smart_album(&mut self, cx: &mut Context<Self>) {
-        match self.selection {
-            AlbumSelection::User(id) => self.prompt_delete_smart_album(id, cx),
-            _ => self.show_toast("Open a smart album to delete it", cx),
+        match self.palette_smart_album() {
+            Some(id) => self.prompt_delete_smart_album(id, cx),
+            None => self.show_toast("Open a smart album to delete it", cx),
         }
     }
 

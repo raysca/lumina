@@ -58,6 +58,8 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | Albums overview header sliders and sort icons | 05 Task 2 | Dropped: nothing to filter on the page; sort is the "Sort ▾" control (05 Task 4). The header keeps the sidebar toggle, Downloads (while it has rows) and New Album; the inspector is hidden on the page |
 | Album card min width 200 in the column rule | 05 Task 4 | 230: the frame's 5 cards of 245 at a 1600 window do not fit a 200 minimum (that gives 6 of 201) |
 | Album card cover resolution | 05 Task 4 | Covers use the grid's 320 px thumbnail; a 245 card on a 2× display may look soft |
+| Smart album rule chips | 05 Task 5 | One chip per real rule (the frame's time-of-day, shutter, "unedited" and "outdoors" chips have no engine rule), at most two and "+N". Labels reuse the builder's English field and value names (`smart_draft`), not i18n keys. The mosaic is the album's first 4 matches in its default order, from the 320 px thumbnail |
+| Smart Albums tab grid | 05 Task 5 | Not virtualised (the Albums tab's list is); 4 cards per row, 2 below a 900 wide main column |
 | "Sort: Recently updated" | 05 dec. | Name (default), Date created, Newest photo, Item count; no updated time is stored |
 
 ## Keyboard and accessibility gaps
@@ -68,11 +70,14 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Top matches:** ↓ from the bar reaches the cards only after Esc closes the suggestions, with
   no on-screen hint. (03 Task 5)
 - **"Rate…"** is in the palette but not the menu bar or shortcut sheet. (02 Task 2)
-- **Albums overview keys** (Tab / ⇧Tab between the tab bar, New Album, Sort and the cards,
+- **Albums overview keys** (Tab / ⇧Tab between the tab bar, New Album, the smart cards, Sort
+  and the album cards,
   ←/→ switch tabs, arrows move between cards, ↵ runs or opens the focused control, ⌘⌫ asks
   to delete the focused album, Esc clears the focus) are not in the shortcut sheet; ⌘K Show
   Albums / Show Albums Tab / Show Smart Albums Tab and Go > Albums are the listed paths. A
-  focused card is renamed or deleted with ⌘K Rename Album… / Delete Album…. (05 Tasks 2, 4)
+  focused card is renamed or deleted with ⌘K Rename Album… / Delete Album…, a focused smart
+  card edited or deleted with ⌘K Edit / Delete Smart Album…; "Manage rules" has no Tab stop
+  (⌘K Show Smart Albums Tab). (05 Tasks 2, 4, 5)
 - **Toast copy:** edit/rotate while a popover is open says "Close the open dialog…"; "menu"
   would fit the Sort and Rate popovers better. Slideshow is refused silently. (02 Task 2)
 - **Brand row** has no accessibility role; full-screen traffic-light inset and brand-row window

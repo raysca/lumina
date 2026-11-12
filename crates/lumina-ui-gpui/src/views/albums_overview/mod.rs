@@ -3,6 +3,7 @@
 //! keys live in `app/albums_overview.rs`.
 
 pub(crate) mod albums;
+pub(crate) mod smart;
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -14,10 +15,12 @@ use crate::theme;
 use crate::views::page_header::{header_primary_button, page_tabs, PageTab};
 use crate::LuminaApp;
 
-/// The page under the header: tabs, then the body: the album cards on the
-/// Albums tab (smart album cards come in a later task).
+/// The page under the header: tabs, then the body: the smart row and the
+/// album cards on the Albums tab, every smart card on the Smart Albums
+/// tab; and the open card menu with its dismiss backdrop.
 pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let overview = &this.albums.overview;
+    let menu_open = overview.sort_menu.is_some() || overview.card_menu.is_some();
     let tabs: Vec<PageTab> = AlbumsTab::ALL
         .iter()
         .map(|&tab| {
@@ -52,11 +55,25 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
             div()
                 .id("albums-overview")
                 .debug_selector(|| "albums-overview".to_string())
+                .relative()
                 .flex_1()
                 .min_h_0()
-                .when(overview.tab == AlbumsTab::Albums, |body| {
-                    body.child(albums::render(this, cx))
-                }),
+                .child(match overview.tab {
+                    AlbumsTab::Albums => albums::render(this, cx),
+                    AlbumsTab::SmartAlbums => smart::tab(this, cx),
+                })
+                .when(menu_open, |body| {
+                    body.child(div().absolute().inset_0().occlude().on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                            this.close_overview_menus(cx);
+                        }),
+                    ))
+                })
+                .children(overview.card_menu.map(|menu| match menu.smart {
+                    true => smart::card_menu(menu.album, menu.position, cx),
+                    false => albums::card_menu(menu.album, menu.position, cx),
+                })),
         )
         .into_any_element()
 }

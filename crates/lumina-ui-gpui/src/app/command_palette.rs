@@ -1126,6 +1126,8 @@ impl LuminaApp {
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
             }
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
+            // The panel is hidden on the overview; the toggle does nothing.
+            CommandId::ToggleInspector => !self.albums_overview_shown(),
             CommandId::PinAlbum => self.open_album_pinned() == Some(false),
             CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),
             CommandId::DuplicateSmartAlbum | CommandId::ExportSmartAlbumRules => {

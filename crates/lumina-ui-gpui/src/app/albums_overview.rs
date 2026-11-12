@@ -6,8 +6,9 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 
 use gpui::*;
-use lumina_core::AlbumCard;
+use lumina_core::{AlbumCard, MediaId};
 
+use crate::app::smart_cards::OverviewList;
 use crate::app::LuminaApp;
 use crate::config::AlbumSort;
 use crate::views::sidebar::AlbumSelection;
@@ -43,17 +44,21 @@ pub enum OverviewFocus {
     Sort,
     /// An album card: arrows move, ↵ opens, ⌘⌫ asks to delete.
     Card(i64),
+    /// A smart album card: arrows move, ↵ opens, ⌘⌫ asks to delete.
+    SmartCard(i64),
 }
 
 /// The card whose right-click menu is open, and where.
 #[derive(Debug, Clone, Copy)]
 pub struct CardMenu {
     pub album: i64,
+    /// A smart album's card (Edit, Delete) rather than an album's.
+    pub smart: bool,
     pub position: Point<Pixels>,
 }
 
-/// The overview's tab (kept between visits), keyboard focus, open menus
-/// and the album card covers.
+/// The overview's tab (kept between visits), keyboard focus, open menus,
+/// the album card covers and the smart card mosaics.
 #[derive(Default)]
 pub struct OverviewState {
     pub tab: AlbumsTab,
@@ -63,13 +68,20 @@ pub struct OverviewState {
     pub card_menu: Option<CardMenu>,
     /// Cover and newest capture time per album id, read off the UI thread.
     pub cards: HashMap<i64, AlbumCard>,
+    /// The first matches (up to 4) per smart album id, for the mosaics;
+    /// read with `cards`.
+    pub smart_tiles: HashMap<i64, Vec<MediaId>>,
     /// (library generation, catalog revision) `cards` was read at.
     cards_loaded: Option<(u64, u64)>,
     cards_in_flight: bool,
     /// Cards per row at the current window width (set before each frame).
     pub columns: usize,
-    /// The card grid's rows; keeps the focused card in view.
-    pub scroll: UniformListScrollHandle,
+    /// Smart cards per row (4, or 2 in a narrow window).
+    pub smart_columns: usize,
+    /// The Albums tab's page: smart section, albums head, card rows.
+    pub list: OverviewList,
+    /// The Smart Albums tab's rows; keeps the focused card in view.
+    pub smart_scroll: ScrollHandle,
 }
 
 impl OverviewState {
@@ -124,7 +136,7 @@ impl LuminaApp {
         overview.card_menu = None;
         if matches!(
             overview.focus,
-            Some(OverviewFocus::Sort | OverviewFocus::Card(_))
+            Some(OverviewFocus::Sort | OverviewFocus::Card(_) | OverviewFocus::SmartCard(_))
         ) {
             overview.focus = None;
         }
@@ -156,6 +168,9 @@ impl LuminaApp {
             None, // the inspector is hidden on the page
         );
         self.albums.overview.columns = crate::views::albums_overview::albums::card_columns(pane);
+        self.albums.overview.smart_columns =
+            crate::views::albums_overview::smart::smart_columns(pane);
+        self.sync_overview_list();
         self.refresh_album_cards(cx);
     }
 
@@ -174,12 +189,22 @@ impl LuminaApp {
         let task = cx.background_executor().spawn(async move {
             // Read before querying: a write meanwhile leaves this revision
             // behind, and the next frame reads again. A failed read is
-            // logged and bannered by the engine and gives no covers.
+            // logged and bannered by the engine and gives no covers. The
+            // smart albums are listed here too, so their mosaics match
+            // the revision (every rule edit is a catalog write).
             let revision = engine.data_revision();
-            (revision, engine.album_cards())
+            let tiles: HashMap<i64, Vec<MediaId>> = engine
+                .list_smart_albums()
+                .iter()
+                .map(|album| {
+                    let first = engine.query_smart_album(album, 4, 0);
+                    (album.id, first.iter().map(|item| item.id).collect())
+                })
+                .collect();
+            (revision, engine.album_cards(), tiles)
         });
         cx.spawn(async move |this, cx| {
-            let (revision, cards) = task.await;
+            let (revision, cards, tiles) = task.await;
             this.update(cx, |app, cx| {
                 // Another library opened meanwhile: opening it reset the
                 // album state, so this read touches nothing there.
@@ -187,6 +212,7 @@ impl LuminaApp {
                     let overview = &mut app.albums.overview;
                     overview.cards_in_flight = false;
                     overview.cards = cards.into_iter().map(|c| (c.album_id, c)).collect();
+                    overview.smart_tiles = tiles;
                     overview.cards_loaded = Some((generation, revision));
                 }
                 cx.notify();
@@ -259,10 +285,7 @@ impl LuminaApp {
         };
         if let Some(at) = self.album_card_order().iter().position(|o| *o == id) {
             let columns = self.albums.overview.columns.max(1);
-            self.albums
-                .overview
-                .scroll
-                .scroll_to_item(at / columns, ScrollStrategy::Nearest);
+            self.reveal_overview_item(crate::app::smart_cards::FIRST_ALBUM_ROW + at / columns);
         }
     }
 
@@ -280,7 +303,11 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) {
         self.albums.overview.sort_menu = None;
-        self.albums.overview.card_menu = Some(CardMenu { album, position });
+        self.albums.overview.card_menu = Some(CardMenu {
+            album,
+            smart: false,
+            position,
+        });
         cx.notify();
     }
 
@@ -328,6 +355,9 @@ impl LuminaApp {
     /// The stops Tab moves through, in order.
     fn overview_stops(&self) -> Vec<OverviewFocus> {
         let mut stops = vec![OverviewFocus::Tabs, OverviewFocus::NewAlbum];
+        if let Some(&first) = self.smart_card_order().first() {
+            stops.push(OverviewFocus::SmartCard(first));
+        }
         if let (true, Some(&first)) = (self.album_cards_shown(), self.album_card_order().first()) {
             stops.extend([OverviewFocus::Sort, OverviewFocus::Card(first)]);
         }
@@ -335,9 +365,9 @@ impl LuminaApp {
     }
 
     /// Overview keys: Tab / ⇧Tab move the focus between the tab bar, New
-    /// Album, Sort and the cards; ←/→ switch tabs while the bar has it; ↵
-    /// runs New Album, opens the sort menu or the focused album; arrows move
-    /// between cards; ⌘⌫ asks to delete the focused album; Esc closes a menu
+    /// Album, the smart cards, Sort and the album cards; ←/→ switch tabs while the bar has it; ↵
+    /// runs New Album, opens the sort menu or the focused (smart) album;
+    /// arrows move between cards; ⌘⌫ asks to delete the focused one; Esc closes a menu
     /// or clears the focus. Every key that reaches it stops here: there is
     /// no grid under the page to act on.
     pub(crate) fn handle_albums_overview_key(
@@ -384,11 +414,13 @@ impl LuminaApp {
                     Some(i) if m.shift => stops[(i + n - 1) % n],
                     Some(i) => stops[(i + 1) % n],
                 });
-                if let Some(OverviewFocus::Card(_)) = self.albums.overview.focus {
-                    self.albums
-                        .overview
-                        .scroll
-                        .scroll_to_item(0, ScrollStrategy::Nearest);
+                match self.albums.overview.focus {
+                    Some(OverviewFocus::SmartCard(_)) => self.scroll_focused_smart_card(),
+                    Some(OverviewFocus::Sort) => {
+                        self.reveal_overview_item(crate::app::smart_cards::FIRST_ALBUM_ROW - 1);
+                    }
+                    Some(OverviewFocus::Card(_)) => self.scroll_focused_album_card(),
+                    _ => {}
                 }
                 cx.notify();
             }
@@ -405,6 +437,9 @@ impl LuminaApp {
                 self.set_albums_tab(AlbumsTab::ALL[next], cx);
             }
             "left" | "right" | "up" | "down" if plain && !m.shift => {
+                if let Some(OverviewFocus::SmartCard(id)) = focus {
+                    self.move_smart_focus(id, key, cx);
+                }
                 if let Some(OverviewFocus::Card(id)) = focus {
                     let order = self.album_card_order();
                     let at = order.iter().position(|o| *o == id).unwrap_or(0);
@@ -423,15 +458,18 @@ impl LuminaApp {
                 Some(OverviewFocus::NewAlbum) => self.new_album(cx),
                 Some(OverviewFocus::Sort) => self.toggle_album_sort_menu(cx),
                 Some(OverviewFocus::Card(id)) => self.open_album_card(id, cx),
+                Some(OverviewFocus::SmartCard(id)) => self.open_smart_card(id, cx),
                 _ => {}
             },
-            "backspace" if m.platform && !(m.shift || m.control || m.alt) => {
-                if let Some(OverviewFocus::Card(id)) = focus {
-                    if self.album_title(id).is_some() {
-                        self.prompt_delete_album(id, cx);
-                    }
+            "backspace" if m.platform && !(m.shift || m.control || m.alt) => match focus {
+                Some(OverviewFocus::Card(id)) if self.album_title(id).is_some() => {
+                    self.prompt_delete_album(id, cx);
                 }
-            }
+                Some(OverviewFocus::SmartCard(id)) if self.smart_album(id).is_some() => {
+                    self.prompt_delete_smart_album(id, cx);
+                }
+                _ => {}
+            },
             "escape" if focus.is_some() => {
                 self.albums.overview.focus = None;
                 cx.notify();

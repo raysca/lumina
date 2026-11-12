@@ -204,5 +204,11 @@ fn inspector_key_does_nothing_on_the_overview() {
         before,
         "I does not flip the hidden inspector setting"
     );
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_applies(crate::app::command_palette::CommandId::ToggleInspector),
+            "⌘K does not list Toggle Inspector where it would do nothing"
+        );
+    });
     let _ = std::fs::remove_dir_all(&dir);
 }

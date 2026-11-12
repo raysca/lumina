@@ -101,17 +101,22 @@ Lumina is designed to be usable without a mouse:
   field stay there.
 - **Albums overview**: the sidebar ALBUMS label (button, labelled "Show
   Albums"), ⌘K Show Albums and Go > Albums open it; ⌘[ returns. `Tab` /
-  `⇧Tab` move a focus ring between the tab bar, New Album, the Albums
-  tab's "Sort ▾" control and its first album card; `←`/`→` switch between
+  `⇧Tab` move a focus ring between the tab bar, New Album, the first
+  smart album card, the Albums tab's "Sort ▾" control and its first album
+  card; `←`/`→` switch between
   the Albums and Smart Albums tabs (also ⌘K Show Albums Tab / Show Smart
   Albums Tab). `Enter` runs a focused New Album, opens the sort menu
   (`↑`/`↓` then `Enter` pick an order, `Esc` closes it) or opens the
-  focused album. On a card the arrows move between cards (the focused card
-  scrolls into view) and `⌘⌫` asks to delete that album; ⌘K Rename
-  Album… and Delete Album… act on the focused card. After a delete the
+  focused album or smart album. On a card the arrows move between cards
+  of the same section (the focused card scrolls into view) and `⌘⌫` asks
+  to delete that album; ⌘K Rename Album… and Delete Album… act on a
+  focused album card, ⌘K Edit Smart Album… and Delete Smart Album… on a
+  focused smart card. "Manage rules" has no Tab stop: ⌘K Show Smart
+  Albums Tab does the same. After a delete the
   focus moves to the next card (else the previous). `Esc` closes a menu,
   else clears the focus. Switching tabs drops a Sort or card focus and
-  closes the menus. The inspector stays hidden there (`I` does nothing).
+  closes the menus. The inspector stays hidden there (`I` does nothing,
+  and ⌘K does not list Toggle Inspector).
   The page holds no media, so the grid's keys do nothing there.
 - **Mosaic**: ⌘K Show Mosaic / Show Grid or the toolbar's view-mode
   segments switch the browser between justified rows and the square grid
@@ -309,7 +314,12 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   order a radio menu item, selected when current), each album card
   (button, labelled with its name and meta, e.g. "Lisbon, 2 items · Jun
   2025"; the name has a tooltip), the card menu (menu with Rename and
-  Delete… items) and the empty state's New Album (button).
+  Delete… items) and the empty state's New Album (button); on both tabs,
+  the "Smart Albums" heading, Manage rules (button), each smart card
+  (button, labelled with its name and count, e.g. "Night, 5 items ·
+  live"; the name has a tooltip; the rule chips are not announced
+  separately), the smart card menu (menu with Edit… and Delete… items) and
+  the empty state's New Smart Album… (button).
 - Mosaic: the view-mode segments (button, toggled), each day header
   (heading, labelled with date, place and count) and its Select button
   (button, inside the heading), the zoom pill's Years / Months / Days
