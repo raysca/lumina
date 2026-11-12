@@ -107,6 +107,11 @@ pub enum CommandId {
     SetLoopStart,
     SetLoopEnd,
     ClearLoopRange,
+    /// The open video's volume and frame steps; shown with the loop commands.
+    VolumeUp,
+    VolumeDown,
+    PreviousFrame,
+    NextFrame,
     /// New Album (⌘N), always empty; New Album with Selection holds the
     /// selected items (shown only with a selection).
     NewAlbum,
@@ -209,6 +214,9 @@ impl Command {
             TogglePip => Icon::Pip,
             PipPlayPause => Icon::Play,
             SetLoopStart | SetLoopEnd | ClearLoopRange => Icon::Repeat,
+            VolumeUp | VolumeDown => Icon::Volume,
+            PreviousFrame => Icon::StepBack,
+            NextFrame => Icon::StepForward,
             NewAlbum | NewAlbumWithSelection | AddToAlbum => Icon::Plus,
             NewSmartAlbum | SaveSearch | DuplicateSmartAlbum => Icon::Sparkles,
             PinAlbum | UnpinAlbum => Icon::Star,
@@ -901,6 +909,30 @@ pub fn commands() -> &'static [Command] {
             keywords: "video loop range remove reset",
         },
         Command {
+            id: CommandId::VolumeUp,
+            key: "command.volume_up",
+            shortcut: "↑",
+            keywords: "video sound louder audio",
+        },
+        Command {
+            id: CommandId::VolumeDown,
+            key: "command.volume_down",
+            shortcut: "↓",
+            keywords: "video sound quieter softer audio",
+        },
+        Command {
+            id: CommandId::PreviousFrame,
+            key: "command.previous_frame",
+            shortcut: ",",
+            keywords: "video frame step back",
+        },
+        Command {
+            id: CommandId::NextFrame,
+            key: "command.next_frame",
+            shortcut: ".",
+            keywords: "video frame step forward",
+        },
+        Command {
             id: CommandId::NewAlbum,
             key: "command.new_album",
             shortcut: "⌘N",
@@ -1212,9 +1244,13 @@ impl LuminaApp {
                 !self.config.templates.is_empty()
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
             }
-            CommandId::SetLoopStart | CommandId::SetLoopEnd | CommandId::ClearLoopRange => {
-                self.loop_range_applies()
-            }
+            CommandId::SetLoopStart
+            | CommandId::SetLoopEnd
+            | CommandId::ClearLoopRange
+            | CommandId::VolumeUp
+            | CommandId::VolumeDown
+            | CommandId::PreviousFrame
+            | CommandId::NextFrame => self.loop_range_applies(),
             CommandId::ViewerZoom(_) => {
                 self.is_fullscreen_viewer
                     && self
@@ -1582,6 +1618,10 @@ impl LuminaApp {
             CommandId::SetLoopStart => self.set_loop_in(cx),
             CommandId::SetLoopEnd => self.set_loop_out(cx),
             CommandId::ClearLoopRange => self.clear_loop_range(cx),
+            CommandId::VolumeUp => self.nudge_video_volume(true, cx),
+            CommandId::VolumeDown => self.nudge_video_volume(false, cx),
+            CommandId::PreviousFrame => self.step_video_frame(-1, cx),
+            CommandId::NextFrame => self.step_video_frame(1, cx),
             CommandId::NewAlbum => self.new_album(cx),
             CommandId::NewAlbumWithSelection => self.new_album_with_selection(cx),
             CommandId::RenameAlbum => self.rename_selected_album(cx),

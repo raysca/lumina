@@ -109,6 +109,8 @@ pub struct VideoPlaybackState {
     pub is_looping: bool,
     pub is_muted: bool,
     pub volume: f32,
+    /// True while the user drags the volume slider; the drag saves on release.
+    pub volume_drag: bool,
     pub speed_menu_open: bool,
     pub hover_time: Option<f64>,
     pub hover_pct: Option<f32>,
@@ -688,7 +690,7 @@ impl LuminaApp {
                 playback_speed: config.restored_video_speed(),
                 is_muted: config.video_muted,
                 is_looping: true,
-                volume: 0.85,
+                volume: config.restored_video_volume(),
                 frame_pending: Arc::new(AtomicBool::new(false)),
                 ..Default::default()
             },

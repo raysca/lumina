@@ -4,7 +4,10 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
+use super::transport::{drag_tracker, scrub_fraction};
 use super::utils::format_playback_speed;
 use crate::app::types::format_clock;
 use crate::app::LuminaApp;
@@ -187,6 +190,7 @@ pub(super) fn render(
                 this.toggle_video_mute(cx);
             })),
         )
+        .child(volume_slider(this, cx))
         .when(video.tracks.has_audio_choice(), |zone| {
             zone.child(
                 div()
@@ -234,6 +238,77 @@ pub(super) fn render(
         .gap_4()
         .child(left)
         .child(right)
+}
+
+/// The 62x4 volume slider beside mute: press or drag sets the level; the
+/// drag saves on release. Its keyboard path is ↑/↓ and the palette.
+fn volume_slider(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    // The track is the first child; its prepaint bounds map pointer X.
+    let track: Rc<RefCell<Option<Bounds<Pixels>>>> = Rc::new(RefCell::new(None));
+    let label = t("video.volume");
+    div()
+        .on_children_prepainted({
+            let track = track.clone();
+            move |bounds: Vec<Bounds<Pixels>>, _window, _cx| {
+                if let Some(bounds) = bounds.first() {
+                    *track.borrow_mut() = Some(*bounds);
+                }
+            }
+        })
+        .id("video-volume")
+        .debug_selector(|| "video-volume".to_string())
+        .role(Role::Slider)
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(label))
+        .flex_none()
+        .w(px(62.0))
+        // A taller hit area than the 4px track.
+        .h(px(16.0))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .child(
+            div()
+                .w_full()
+                .h(px(4.0))
+                .rounded_full()
+                .bg(theme::volume_track())
+                .child(
+                    div()
+                        .h_full()
+                        .w(relative(this.video.volume.clamp(0.0, 1.0)))
+                        .rounded_full()
+                        .bg(theme::t1()),
+                ),
+        )
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener({
+                let track = track.clone();
+                move |this, event: &MouseDownEvent, _w, cx| {
+                    if let Some(level) = scrub_fraction(event.position, &track) {
+                        this.begin_volume_drag(level as f32, cx);
+                    }
+                }
+            }),
+        )
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|this, _e: &MouseUpEvent, _w, cx| this.end_volume_drag(cx)),
+        )
+        .on_mouse_up_out(
+            MouseButton::Left,
+            cx.listener(|this, _e: &MouseUpEvent, _w, cx| this.end_volume_drag(cx)),
+        )
+        .child(drag_tracker(
+            this.video.volume_drag,
+            cx.entity(),
+            move |this, position, cx| {
+                if let Some(level) = scrub_fraction(position, &track) {
+                    this.apply_video_volume(level as f32, cx);
+                }
+            },
+        ))
 }
 
 /// Speed menu, hanging above the speed pill.

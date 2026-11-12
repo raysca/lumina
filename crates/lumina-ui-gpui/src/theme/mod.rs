@@ -124,6 +124,8 @@ tokens_alpha! {
     strip_dim = 0x0000006B;
     /// Chapter ticks over the scrub strip.
     strip_tick = 0xFFFFFFD9;
+    /// The video volume slider's track (white 15%).
+    volume_track = 0xFFFFFF26;
     /// Unselected check circle on a tile in selection mode (Design 07).
     check_idle = 0x00000059;
     /// Library card surface. Cards are transparent by request: thumbnails sit

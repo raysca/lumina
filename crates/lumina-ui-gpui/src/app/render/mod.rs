@@ -248,6 +248,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
             ("⌥X", "Clear loop range"),
             ("⌥← / ⌥→", "Previous / next chapter"),
             ("M", "Mute"),
+            ("↑ / ↓", "Volume up / down"),
             ("⌥P", "Picture-in-Picture on / off"),
         ],
     ),

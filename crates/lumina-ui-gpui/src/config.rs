@@ -423,6 +423,10 @@ pub struct AppConfig {
     /// Whether video sound was last muted.
     #[serde(default)]
     pub video_muted: bool,
+    /// Last video volume (0..=1). `None` means the 0.85 default; see
+    /// [`AppConfig::restored_video_volume`].
+    #[serde(default)]
+    pub video_volume: Option<f32>,
     /// Metadata templates (rights and keywords), in the order the user made
     /// them. They belong to the person, not a library, so they live here.
     #[serde(default)]
@@ -526,6 +530,9 @@ fn lenient_browse_layout<'de, D: serde::Deserializer<'de>>(
     })
 }
 
+/// Video volume before the user sets one.
+pub const DEFAULT_VIDEO_VOLUME: f32 = 0.85;
+
 /// Playback speeds the video speed menu offers.
 pub const VIDEO_SPEEDS: [f32; 6] = [0.25, 0.5, 1.0, 1.5, 2.0, 4.0];
 
@@ -612,6 +619,7 @@ impl Default for AppConfig {
             external_editor: None,
             video_speed: None,
             video_muted: false,
+            video_volume: None,
             templates: Vec::new(),
             slideshow_interval_secs: default_slideshow_interval_secs(),
             slideshow_loop: false,
@@ -689,6 +697,15 @@ impl AppConfig {
                 .min_by(|a, b| (a - saved).abs().total_cmp(&(b - saved).abs()))
                 .unwrap_or(1.0),
             _ => 1.0,
+        }
+    }
+
+    /// The saved video volume clamped to 0..=1; 0.85 when unset or not a
+    /// number (a hand-edited config).
+    pub fn restored_video_volume(&self) -> f32 {
+        match self.video_volume {
+            Some(saved) if !saved.is_nan() => saved.clamp(0.0, 1.0),
+            _ => DEFAULT_VIDEO_VOLUME,
         }
     }
 
@@ -1285,6 +1302,41 @@ mod tests {
             LastView::All
         );
     }
+    #[test]
+    fn config_video_volume_roundtrip_and_default() {
+        let path = temp_config_path("video_volume");
+        let cfg = AppConfig {
+            video_volume: Some(0.4),
+            ..AppConfig::default()
+        };
+        cfg.save_to(&path).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(loaded.video_volume, Some(0.4), "volume must round-trip");
+        assert_eq!(loaded.restored_video_volume(), 0.4);
+
+        std::fs::write(&path, br#"{"last_view":"all"}"#).unwrap();
+        let old = AppConfig::load_from(&path);
+        assert_eq!(old.video_volume, None, "a missing volume key is unset");
+        assert_eq!(
+            old.restored_video_volume(),
+            0.85,
+            "an unset volume restores the 0.85 default"
+        );
+
+        for (saved, want) in [(f32::NAN, 0.85), (1.7, 1.0), (-0.2, 0.0)] {
+            let cfg = AppConfig {
+                video_volume: Some(saved),
+                ..AppConfig::default()
+            };
+            assert_eq!(
+                cfg.restored_video_volume(),
+                want,
+                "saved volume {saved} restores as {want}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
     #[test]
     fn config_video_speed_and_mute_roundtrip_and_default() {
         let path = temp_config_path("video_speed_mute");

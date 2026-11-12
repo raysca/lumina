@@ -54,6 +54,7 @@ pub mod types;
 pub mod undo;
 pub mod video_actions;
 pub mod video_tracks;
+pub mod video_volume;
 pub mod viewer_actions;
 pub mod windows;
 

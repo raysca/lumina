@@ -1235,3 +1235,88 @@ fn video_top_bar_shows_title_meta_and_pip() {
         "the top bar PiP button hands the video to PiP"
     );
 }
+
+#[core::prelude::v1::test]
+fn volume_slider_sets_player_volume() {
+    use crate::player::VideoPlayerBackend;
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    render_ui(vcx);
+
+    let slider = bounds(vcx, "video-volume");
+    assert_eq!(size(slider).0, 62.0, "the slider is 62px wide");
+    assert!(
+        bounds(vcx, "video-mute").right() <= slider.left()
+            && slider.right() <= bounds(vcx, "video-loop").left(),
+        "the slider follows mute in the right group"
+    );
+    vcx.simulate_click(
+        gpui::point(slider.left() + slider.size.width * 0.25, slider.center().y),
+        gpui::Modifiers::default(),
+    );
+    let (volume, player) = view.update(vcx, |app, _| {
+        (
+            app.video.volume,
+            app.video.player.as_ref().map(|p| p.volume()),
+        )
+    });
+    assert!(
+        (volume - 0.25).abs() < 0.03,
+        "a click at a quarter sets the volume to 0.25, got {volume}"
+    );
+    assert!(
+        player.is_some_and(|p| (p - volume).abs() < 0.01),
+        "the player follows the slider: {player:?}"
+    );
+    assert_eq!(
+        view.update(vcx, |app, _| app.config.video_volume),
+        Some(volume),
+        "the volume is kept for the next video"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k v o l u m e space u p enter");
+    let up = view.update(vcx, |app, _| app.video.volume);
+    assert!(
+        (up - (volume + 0.1)).abs() < 0.001,
+        "palette Volume Up raises the volume by 0.1: {volume} -> {up}"
+    );
+    for _ in 0..12 {
+        keystrokes(vcx, "up");
+    }
+    assert_eq!(
+        view.update(vcx, |app, _| app.video.volume),
+        1.0,
+        "↑ raises the volume, clamped to 1.0"
+    );
+    keystrokes(vcx, "down");
+    assert!(
+        (view.update(vcx, |app, _| app.video.volume) - 0.9).abs() < 0.001,
+        "↓ lowers the volume by 0.1"
+    );
+    view.update(vcx, |app, _| app.command_query = "volume".into());
+    let titles = view.update(vcx, |app, _| {
+        app.palette_rows()
+            .into_iter()
+            .map(|r| r.title)
+            .collect::<Vec<_>>()
+    });
+    assert!(
+        titles.iter().any(|t| t == "Volume Down"),
+        "the palette offers Volume Down: {titles:?}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn a_volume_save_error_shows_in_the_banner() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    crate::app::state::SAVE_FAILS.with(|fails| fails.set(true));
+    view.update(vcx, |app, cx| app.set_video_volume(0.3, cx));
+    crate::app::state::SAVE_FAILS.with(|fails| fails.set(false));
+    assert!(
+        view.update(vcx, |app, _| app.error_message.is_some()),
+        "a failed volume save is surfaced, not swallowed"
+    );
+}
