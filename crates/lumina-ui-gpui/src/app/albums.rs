@@ -265,16 +265,10 @@ impl LuminaApp {
                     self.selection = AlbumSelection::AllLibrary;
                     self.clear_selection(cx);
                 }
-                // The overview's focus moves to a neighbouring card.
-                let focus_was_here = self.albums.overview.focus
-                    == Some(crate::app::albums_overview::OverviewFocus::Card(id));
-                let neighbour = self.album_card_neighbour(id);
                 self.refresh_album_counts();
-                if focus_was_here {
-                    self.albums.overview.focus =
-                        neighbour.map(crate::app::albums_overview::OverviewFocus::Card);
-                    self.scroll_focused_album_card();
-                }
+                // Now, not next frame: the overview's focus moves to a
+                // neighbouring card.
+                self.sync_overview_cards();
                 self.push_undo(UndoAction::AlbumDeleted { album, members });
                 self.set_last_action(t("album.deleted"));
                 self.show_undo_toast(t("album.deleted"), cx);

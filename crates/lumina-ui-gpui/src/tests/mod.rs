@@ -64,6 +64,7 @@ mod sidebar;
 mod slideshow;
 mod smart_album_builder;
 mod smart_cards;
+mod smart_cards_keys;
 mod stacks;
 mod stacks_guards;
 mod stacks_members;

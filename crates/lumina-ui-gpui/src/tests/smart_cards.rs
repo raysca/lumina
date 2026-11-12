@@ -13,7 +13,7 @@ use super::ui_automation::{
 use crate::app::albums_overview::OverviewFocus;
 use crate::views::sidebar::AlbumSelection;
 
-fn iso_over_1600() -> SmartAlbumRule {
+pub(super) fn iso_over_1600() -> SmartAlbumRule {
     SmartAlbumRule {
         field: RuleField::Iso,
         operator: RuleOperator::GreaterThan,
@@ -21,7 +21,7 @@ fn iso_over_1600() -> SmartAlbumRule {
     }
 }
 
-fn photos() -> SmartAlbumRule {
+pub(super) fn photos() -> SmartAlbumRule {
     SmartAlbumRule {
         field: RuleField::MediaType,
         operator: RuleOperator::Equals,

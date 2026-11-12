@@ -22,10 +22,12 @@ use crate::LuminaApp;
 /// The body's padding (frame: pad 22 28 0 28).
 pub(crate) const BODY_PAD_X: f32 = 28.0;
 pub(crate) const BODY_PAD_TOP: f32 = 22.0;
-/// A section head ("Smart Albums", "Albums"): a 20 line and 14 under it.
-pub(crate) const HEAD_HEIGHT: f32 = 34.0;
-/// A one-line empty state.
+/// A one-line empty state, and a section head's line.
 pub(crate) const EMPTY_HEIGHT: f32 = 20.0;
+/// Under a section head ("Smart Albums", "Albums").
+pub(crate) const HEAD_GAP: f32 = 14.0;
+/// A section head: its line and the gap under it.
+pub(crate) const HEAD_HEIGHT: f32 = EMPTY_HEIGHT + HEAD_GAP;
 const CARD_GAP: f32 = 16.0;
 const ROW_GAP: f32 = 20.0;
 // ponytail: the plan's 200 minimum gives 6 cards of 201 at a 1600 window;
@@ -107,7 +109,7 @@ pub(crate) fn list_item_height(this: &LuminaApp, ix: usize) -> f32 {
 }
 
 fn album_row(this: &LuminaApp, row: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let order = this.album_card_order();
+    let order = &this.albums.overview.card_order;
     let columns = this.albums.overview.columns.max(1);
     let start = (row * columns).min(order.len());
     let ids = &order[start..(start + columns).min(order.len())];
@@ -133,7 +135,7 @@ fn head_row(this: &LuminaApp, empty: bool, cx: &mut Context<LuminaApp>) -> Div {
     div()
         .h(px(HEAD_HEIGHT))
         .px(px(BODY_PAD_X))
-        .pb(px(HEAD_HEIGHT - EMPTY_HEIGHT))
+        .pb(px(HEAD_GAP))
         .flex()
         .flex_row()
         .items_center()

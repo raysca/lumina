@@ -74,6 +74,10 @@ pub struct OverviewState {
     /// (library generation, catalog revision) `cards` was read at.
     cards_loaded: Option<(u64, u64)>,
     cards_in_flight: bool,
+    /// Album and smart card ids in card order, cached once per frame (rows
+    /// read these; a deleted focus finds its neighbour in them).
+    pub card_order: Vec<i64>,
+    pub(crate) smart_order: Vec<i64>,
     /// Cards per row at the current window width (set before each frame).
     pub columns: usize,
     /// Smart cards per row (4, or 2 in a narrow window).
@@ -170,6 +174,7 @@ impl LuminaApp {
         self.albums.overview.columns = crate::views::albums_overview::albums::card_columns(pane);
         self.albums.overview.smart_columns =
             crate::views::albums_overview::smart::smart_columns(pane);
+        self.sync_overview_cards();
         self.sync_overview_list();
         self.refresh_album_cards(cx);
     }
@@ -189,7 +194,7 @@ impl LuminaApp {
         let task = cx.background_executor().spawn(async move {
             // Read before querying: a write meanwhile leaves this revision
             // behind, and the next frame reads again. A failed read is
-            // logged and bannered by the engine and gives no covers. The
+            // logged by the engine (log::warn) and gives no covers. The
             // smart albums are listed here too, so their mosaics match
             // the revision (every rule edit is a catalog write).
             let revision = engine.data_revision();
@@ -264,17 +269,6 @@ impl LuminaApp {
             }
             _ => None,
         }
-    }
-
-    /// The card the focus moves to when the focused album `id` is deleted:
-    /// the next one, else the previous; `None` when it is the only one.
-    pub(crate) fn album_card_neighbour(&self, id: i64) -> Option<i64> {
-        let order = self.album_card_order();
-        let at = order.iter().position(|o| *o == id)?;
-        order
-            .get(at + 1)
-            .or(at.checked_sub(1).and_then(|i| order.get(i)))
-            .copied()
     }
 
     /// Scrolls the focused card's row into view (its place can change after

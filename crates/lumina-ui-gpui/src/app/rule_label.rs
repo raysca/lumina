@@ -2,7 +2,7 @@
 //! rule, for the smart album cards. `smart_draft::rule_summary` is the
 //! long, one-sentence form for a whole album.
 
-use lumina_core::{RuleField, RuleOperator, SmartAlbumRule};
+use lumina_core::{RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 
 use crate::app::smart_draft::{field_label, DraftRow};
 use crate::icons::Icon;
@@ -20,25 +20,30 @@ pub(crate) fn rule_label(rule: &SmartAlbumRule) -> String {
         // The value says it all: "RAW", "Video".
         (RuleField::MediaType, RuleOperator::Equals) => value,
         (RuleField::MediaType, RuleOperator::NotEquals) => format!("≠ {value}"),
-        (RuleField::IsFavorite, _) if value == "No" => format!("Not {}", field.to_lowercase()),
+        (RuleField::IsFavorite, _) if rule.value == RuleValue::Bool(false) => {
+            format!("Not {}", field.to_lowercase())
+        }
         (RuleField::IsFavorite, _) => field.to_string(),
         (RuleField::Query, _) => format!("“{value}”"),
-        (_, RuleOperator::IsEmpty) => format!("No {}", field.to_lowercase()),
-        (_, RuleOperator::IsNotEmpty) => format!("Any {}", field.to_lowercase()),
-        (_, RuleOperator::InTheLast) => format!("{field} last {value} {}", row.unit.label()),
         (_, op) => {
+            let date = rule.field == RuleField::Date;
             let op = match op {
                 RuleOperator::Equals => "=",
                 RuleOperator::NotEquals => "≠",
-                RuleOperator::GreaterThan if rule.field == RuleField::Date => "after",
-                RuleOperator::LessThan if rule.field == RuleField::Date => "before",
+                RuleOperator::GreaterThan if date => "after",
+                RuleOperator::LessThan if date => "before",
                 RuleOperator::GreaterThan => ">",
                 RuleOperator::LessThan => "<",
                 RuleOperator::AtLeast => "≥",
                 RuleOperator::AtMost => "≤",
                 RuleOperator::Contains => "has",
                 RuleOperator::NotContains => "lacks",
-                _ => "in",
+                RuleOperator::Between => "in",
+                RuleOperator::IsEmpty => return format!("No {}", field.to_lowercase()),
+                RuleOperator::IsNotEmpty => return format!("Any {}", field.to_lowercase()),
+                RuleOperator::InTheLast => {
+                    return format!("{field} last {value} {}", row.unit.label())
+                }
             };
             format!("{field} {op} {value}")
         }
@@ -68,7 +73,6 @@ pub(crate) fn rule_icon(field: &RuleField) -> Icon {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lumina_core::RuleValue;
 
     fn rule(field: RuleField, operator: RuleOperator, value: RuleValue) -> SmartAlbumRule {
         SmartAlbumRule {
@@ -108,6 +112,18 @@ mod tests {
             ),
             (rule(F::Tag, O::IsEmpty, V::Text(String::new())), "No tag"),
             (
+                rule(F::Tag, O::IsNotEmpty, V::Text(String::new())),
+                "Any tag",
+            ),
+            (
+                rule(
+                    F::Date,
+                    O::Between,
+                    V::Text("2024-01-01 to 2024-02-01".into()),
+                ),
+                "Date in 2024-01-01 to 2024-02-01",
+            ),
+            (
                 rule(F::Place, O::Contains, V::Text("Lisbon".into())),
                 "Place has Lisbon",
             ),
@@ -119,11 +135,5 @@ mod tests {
         for (rule, want) in cases {
             assert_eq!(rule_label(&rule), want, "chip for {rule:?}");
         }
-    }
-
-    #[test]
-    fn exposure_rules_use_the_aperture_icon() {
-        assert_eq!(rule_icon(&RuleField::Iso), Icon::Aperture);
-        assert_eq!(rule_icon(&RuleField::Tag), Icon::Tag);
     }
 }

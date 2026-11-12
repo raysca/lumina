@@ -32,6 +32,15 @@ impl Default for OverviewList {
     }
 }
 
+/// The card after `gone` in `old` that is still in `new`, else the one
+/// before it.
+fn neighbour(old: &[i64], new: &[i64], gone: i64) -> Option<i64> {
+    let at = old.iter().position(|id| *id == gone)?;
+    let after = old[at + 1..].iter();
+    let before = old[..at].iter().rev();
+    after.chain(before).find(|id| new.contains(id)).copied()
+}
+
 impl LuminaApp {
     pub(crate) fn smart_album(&self, id: i64) -> Option<&SmartAlbum> {
         self.user_smart_albums.iter().find(|album| album.id == id)
@@ -130,6 +139,32 @@ impl LuminaApp {
         }
     }
 
+    /// Per frame (and right after a delete): caches the card orders, and
+    /// moves a focus whose album or smart album is gone (deleted from a
+    /// card, ⌘K, the sidebar or elsewhere) to its neighbour in the previous
+    /// order: the next card still there, else the previous; else none.
+    pub(crate) fn sync_overview_cards(&mut self) {
+        let cards = self.album_card_order();
+        let smart = self.smart_card_order();
+        let overview = &mut self.albums.overview;
+        let moved = match overview.focus {
+            Some(OverviewFocus::Card(id)) if !cards.contains(&id) => {
+                Some(neighbour(&overview.card_order, &cards, id).map(OverviewFocus::Card))
+            }
+            Some(OverviewFocus::SmartCard(id)) if !smart.contains(&id) => {
+                Some(neighbour(&overview.smart_order, &smart, id).map(OverviewFocus::SmartCard))
+            }
+            _ => None,
+        };
+        overview.card_order = cards;
+        overview.smart_order = smart;
+        if let Some(focus) = moved {
+            overview.focus = focus;
+            self.scroll_focused_album_card();
+            self.scroll_focused_smart_card();
+        }
+    }
+
     /// Keeps the Albums tab list's item count in step with the albums, and
     /// re-measures its first items when the smart section or the empty
     /// state changes height. Per frame; it only compares numbers.
@@ -172,6 +207,8 @@ impl LuminaApp {
             });
             return;
         }
+        // ponytail: O(items) sums per call, a few hundred additions on a
+        // keypress; keep prefix sums if albums reach the thousands.
         let height = |i: usize| list_item_height(self, i);
         let top_of = |i: usize| (0..i).map(height).sum::<f32>();
         let scroll = list.logical_scroll_top();

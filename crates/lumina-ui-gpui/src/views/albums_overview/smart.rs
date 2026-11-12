@@ -7,7 +7,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::SmartAlbum;
 
-use super::albums::{thumbnail, BODY_PAD_TOP, BODY_PAD_X, EMPTY_HEIGHT, HEAD_HEIGHT};
+use super::albums::{thumbnail, BODY_PAD_TOP, BODY_PAD_X, EMPTY_HEIGHT, HEAD_GAP, HEAD_HEIGHT};
 use crate::app::albums_overview::{AlbumsTab, OverviewFocus};
 use crate::app::rule_label::{rule_icon, rule_label};
 use crate::i18n::t;
@@ -65,7 +65,7 @@ pub(crate) fn section(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyEleme
         .child(
             div()
                 .h(px(HEAD_HEIGHT))
-                .pb(px(HEAD_HEIGHT - EMPTY_HEIGHT))
+                .pb(px(HEAD_GAP))
                 .flex()
                 .flex_row()
                 .items_center()
