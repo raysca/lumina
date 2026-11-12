@@ -22,11 +22,6 @@ const BUTTON: f32 = 30.0;
 /// The accent Play button.
 const PLAY: f32 = 38.0;
 
-/// The readout's elapsed and total parts: ("0:34", "1:18").
-pub(crate) fn time_readout(current: f64, duration: f64) -> (String, String) {
-    (format_clock(current), format_clock(duration))
-}
-
 /// A 30px round transport button with a 16px icon; the tooltip names the key.
 fn round_button(id: &'static str, icon: Icon, label: String, on: bool) -> Stateful<Div> {
     div()
@@ -59,7 +54,8 @@ pub(super) fn render(
     cx: &mut Context<LuminaApp>,
 ) -> Div {
     let video = &this.video;
-    let (elapsed, total) = time_readout(current_time, duration);
+    let (elapsed, total) = (format_clock(current_time), format_clock(duration));
+    let readout: SharedString = format!("{elapsed} / {total}").into();
     let play_label = t(if video.is_playing {
         "video.pause"
     } else {
@@ -128,6 +124,10 @@ pub(super) fn render(
                 .gap(px(4.0))
                 .font_family(theme::FONT_MONO)
                 .text_size(px(12.0))
+                .children(crate::views::page_header::text_marker(
+                    "video-time",
+                    &readout,
+                ))
                 .child(div().text_color(theme::t1()).child(elapsed))
                 .child(div().text_color(theme::t3()).child(format!("/ {total}"))),
         );
@@ -259,6 +259,10 @@ fn volume_slider(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElem
         .debug_selector(|| "video-volume".to_string())
         .role(Role::Slider)
         .aria_label(label.clone())
+        .aria_numeric_value(f64::from(this.video.volume))
+        .aria_min_numeric_value(0.0)
+        .aria_max_numeric_value(1.0)
+        .aria_numeric_value_step(0.1)
         .tooltip(theme::tooltip_label(label))
         .flex_none()
         .w(px(62.0))

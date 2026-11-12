@@ -76,15 +76,15 @@ pub(super) fn video_frame_size(this: &LuminaApp) -> Option<(f32, f32)> {
     Some((w, w / aspect))
 }
 
-/// Corner radius of the photo at Fit (Design 02 "Detail").
+/// Corner radius of the photo or video frame at Fit (Designs 02 and 06).
 const PHOTO_RADIUS: f32 = 3.0;
 
-/// The photo's drop shadow (0 16 48) under the contain-fitted picture. The
+/// The drop shadow (0 16 48) under the contain-fitted photo or video frame. The
 /// media element fills the letterboxed canvas, so a box shadow on it would
 /// outline the canvas; this paints under the fitted rect, measured in the
 /// same frame. Fit only: a zoomed photo overflows the stage, which clips it.
 fn photo_shadow(image_size: Size<DevicePixels>) -> impl IntoElement {
-    canvas(
+    let shadow = canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
             if image_size.width.0 <= 0 || image_size.height.0 <= 0 {
@@ -105,7 +105,12 @@ fn photo_shadow(image_size: Size<DevicePixels>) -> impl IntoElement {
         },
     )
     .absolute()
-    .size_full()
+    .size_full();
+    div()
+        .debug_selector(|| "viewer-media-shadow".to_string())
+        .absolute()
+        .size_full()
+        .child(shadow)
 }
 
 pub struct ViewerViewport;
@@ -284,7 +289,7 @@ impl ViewerViewport {
                             .object_fit(ObjectFit::Contain)
                             // GPUI rounds the fitted picture, not the
                             // letterboxed element.
-                            .when(!is_video, |m| m.rounded(px(PHOTO_RADIUS)))
+                            .rounded(px(PHOTO_RADIUS))
                             .on_click(cx.listener(|this, e: &ClickEvent, _w, cx| {
                                 // The element fills the canvas; only the
                                 // visible media (not its letterbox) toggles.
@@ -322,7 +327,7 @@ impl ViewerViewport {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .when(!is_video, |fit| fit.child(photo_shadow(image_size)))
+                                .child(photo_shadow(image_size))
                                 // Fit fills the canvas (contain), enlarging
                                 // small media like Photos does.
                                 .child(media.size_full())

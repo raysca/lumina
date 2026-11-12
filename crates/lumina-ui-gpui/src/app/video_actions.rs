@@ -209,6 +209,9 @@ impl LuminaApp {
             if let Some(img) = first_frame {
                 self.show_video_frame(img);
             }
+            // The scrubber and the chapter rows show strip frames without a
+            // hover; closing or changing media cancels it.
+            self.request_scrub_strip(cx);
         } else if let Some(state) = self.grid_state.as_ref() {
             // A failed load has no resume point to finish.
             state.video_resume.finish();
@@ -461,7 +464,6 @@ impl LuminaApp {
             self.stop_video_ticker();
             self.video.resume_after_scrub = true;
         }
-        self.request_scrub_strip(cx);
         self.video.is_scrubbing = true;
         self.video.scrub_time = Some(target);
         self.video.last_scrub_seek = Some(Instant::now());
@@ -592,7 +594,6 @@ impl LuminaApp {
             let pct_clamped = pct.clamp(0.0, 1.0);
             self.video.hover_pct = Some(pct_clamped);
             self.video.hover_time = Some(duration * (pct_clamped as f64));
-            self.request_scrub_strip(cx);
         } else {
             self.video.hover_pct = None;
             self.video.hover_time = None;

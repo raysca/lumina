@@ -213,6 +213,11 @@ Lumina is designed to be usable without a mouse:
   {name}", where the playing track has a check. The button (with its
   expanded state), the menu and its rows (radio items, the playing one
   toggled on) carry roles and labels, not yet checked with VoiceOver. The choice lasts until the video closes.
+- **Volume**: with a video open in the viewer, plain `↑` / `↓` raise or
+  lower the volume by 0.1 (also ⌘K Volume Up / Volume Down); `M` mutes.
+  The transport's volume slider is a slider with its value, range 0–1 and
+  step 0.1, not yet checked with VoiceOver. ⌘K Previous Frame / Next Frame
+  step frames like `,` / `.`.
 - **Rotation**: `R` / `⇧R` rotate the viewer photo or the grid selection
   right / left, also ⌘K Rotate Right / Rotate Left and Image > Rotate
   Right / Rotate Left; the keys type into a focused text field instead.

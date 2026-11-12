@@ -104,10 +104,9 @@ fn video_transport_is_docked_full_width() {
         time.left() >= bounds(vcx, "video-seek-fwd").right(),
         "the time readout follows the buttons"
     );
-    assert_eq!(
-        crate::views::viewer::transport_controls::time_readout(34.0, 78.0),
-        ("0:34".to_string(), "1:18".to_string()),
-        "the readout is m:ss / m:ss"
+    assert!(
+        vcx.debug_bounds("video-time-text:0:34 / 1:00").is_some(),
+        "the readout renders m:ss / m:ss"
     );
     assert_eq!(
         crate::app::types::format_clock(7322.0),
@@ -387,6 +386,10 @@ fn video_frame_is_1120_wide_above_the_docked_transport() {
     assert!(
         f32::from(transport.left()) == 0.0 && size(transport).0 == 1440.0,
         "the transport spans the stage: {transport:?}"
+    );
+    assert!(
+        vcx.debug_bounds("viewer-media-shadow").is_some(),
+        "the video frame has the 0 16 48 drop shadow, like a photo"
     );
 }
 
@@ -1318,5 +1321,123 @@ fn a_volume_save_error_shows_in_the_banner() {
     assert!(
         view.update(vcx, |app, _| app.error_message.is_some()),
         "a failed volume save is surfaced, not swallowed"
+    );
+}
+
+fn saves() -> usize {
+    crate::app::state::SAVE_COUNT.with(std::cell::Cell::get)
+}
+
+#[core::prelude::v1::test]
+fn a_volume_drag_saves_once_on_release() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    render_ui(vcx);
+    let slider = bounds(vcx, "video-volume");
+    let at = |pct: f32| gpui::point(slider.left() + slider.size.width * pct, slider.center().y);
+    let before = saves();
+    vcx.simulate_mouse_down(
+        at(0.25),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    vcx.simulate_mouse_move(
+        at(0.75),
+        Some(gpui::MouseButton::Left),
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    let mid = view.update(vcx, |app, _| app.video.volume);
+    assert!((mid - 0.75).abs() < 0.03, "the drag sets the level: {mid}");
+    assert_eq!(saves(), before, "nothing is saved mid-drag");
+    vcx.simulate_mouse_up(
+        at(0.75),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    assert_eq!(saves(), before + 1, "the release saves once");
+    assert_eq!(
+        view.update(vcx, |app, _| app.config.video_volume),
+        Some(mid),
+        "the saved level is where the drag ended"
+    );
+    let far = bounds(vcx, "video-play").center();
+    vcx.simulate_mouse_down(
+        gpui::point(far.x, far.y - gpui::px(200.0)),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    vcx.simulate_mouse_up(
+        gpui::point(far.x, far.y - gpui::px(200.0)),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    render_ui(vcx);
+    assert_eq!(saves(), before + 1, "an unrelated mouse-up saves nothing");
+}
+
+#[core::prelude::v1::test]
+fn volume_keys_are_plain_and_an_unchanged_level_is_not_saved() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    view.update(vcx, |app, cx| app.set_video_volume(1.0, cx));
+    focus_app(vcx, &view);
+    let before = saves();
+    keystrokes(vcx, "up");
+    assert_eq!(saves(), before, "↑ at full volume writes nothing");
+    for chord in ["alt-down", "shift-down"] {
+        keystrokes(vcx, chord);
+        assert_eq!(
+            view.update(vcx, |app, _| app.video.volume),
+            1.0,
+            "{chord} does not change the volume"
+        );
+    }
+    keystrokes(vcx, "down");
+    assert!((view.update(vcx, |app, _| app.video.volume) - 0.9).abs() < 0.001);
+    assert_eq!(saves(), before + 1, "a real change saves once");
+}
+
+#[core::prelude::v1::test]
+fn palette_steps_frames_for_an_open_video() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_video(&mut cx);
+    with_stub_player(&view, vcx);
+    focus_app(vcx, &view);
+    for (query, label) in [
+        ("secondary-k n e x t space f r a m e enter", "Next Frame"),
+        (
+            "secondary-k p r e v i o u s space f r a m e enter",
+            "Previous Frame",
+        ),
+    ] {
+        view.update(vcx, |app, _| {
+            app.video.step_from = None;
+            app.video.is_playing = true;
+        });
+        keystrokes(vcx, query);
+        view.update(vcx, |app, _| {
+            assert!(
+                app.video.step_from.is_some(),
+                "{label} runs a frame step from the palette"
+            );
+            assert!(!app.video.is_playing, "{label} pauses like , and .");
+        });
+    }
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    let titles = view.update(vcx, |app, _| {
+        app.command_query = "frame".into();
+        app.palette_rows()
+            .into_iter()
+            .map(|r| r.title)
+            .collect::<Vec<_>>()
+    });
+    assert!(
+        !titles.iter().any(|t| t.ends_with("Frame")),
+        "frame steps are offered only for an open video: {titles:?}"
     );
 }

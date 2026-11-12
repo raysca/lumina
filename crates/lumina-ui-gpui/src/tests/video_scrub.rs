@@ -240,6 +240,12 @@ fn open_video_with_player(
         .expect("the video transport must paint its scrubber")
 }
 
+/// Starts the strip request the way a real player load does (stub players
+/// never load a file).
+fn request_strip(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext) {
+    view.update(vcx, |app, cx| app.request_scrub_strip(cx));
+}
+
 fn track_point(track: gpui::Bounds<gpui::Pixels>, pct: f32) -> gpui::Point<gpui::Pixels> {
     gpui::point(
         gpui::px(f32::from(track.left()) + f32::from(track.size.width) * pct),
@@ -320,6 +326,7 @@ fn hover_shows_nearest_strip_frame() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
+    request_strip(&view, vcx);
 
     vcx.simulate_mouse_move(track_point(track, 0.6), None, gpui::Modifiers::default());
     render_ui(vcx);
@@ -352,6 +359,7 @@ fn drag_scrub_shows_preview_for_destination() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
+    request_strip(&view, vcx);
 
     let press = track_point(track, 0.1);
     let drag = track_point(track, 0.8);
@@ -452,24 +460,35 @@ fn media_change_cancels_inflight_strip() {
     });
 }
 
+#[cfg(target_os = "macos")]
 #[core::prelude::v1::test]
-fn scrub_strip_requested_once_per_video_on_first_hover() {
+fn scrub_strip_requested_once_per_video_on_load() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
-    let video = video_sample();
-    open_video_in_plain_app(&view, vcx, video.clone(), 60.0);
-
+    let open = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, cx| {
+            app.grid_state = None;
+            let video = fixture_video();
+            app.select_item_at(video.clone(), 1, cx);
+            app.open_viewer(video, cx);
+            assert!(
+                app.video.player.is_some() && app.video.duration > 0.0,
+                "test premise: the real player loads the fixture"
+            );
+        });
+    };
+    open(&view, vcx);
     view.update(vcx, |app, cx| {
-        app.set_video_hover_scrub(Some(0.3), cx);
-        app.set_video_hover_scrub(None, cx);
-        app.set_video_hover_scrub(Some(0.6), cx);
-        app.begin_video_scrub(0.5, cx);
-        app.end_video_scrub(cx);
         assert_eq!(
             test_seam::requests(),
             1,
-            "hover, leave, hover and press must share one strip request"
+            "loading the video requests its strip without a hover"
         );
+        app.set_video_hover_scrub(Some(0.3), cx);
+        app.set_video_hover_scrub(None, cx);
+        app.begin_video_scrub(0.5, cx);
+        app.end_video_scrub(cx);
+        assert_eq!(test_seam::requests(), 1, "hover and press add no request");
         let cancel = app
             .video
             .strip_request
@@ -483,16 +502,20 @@ fn scrub_strip_requested_once_per_video_on_first_hover() {
             "leaving the scrubber must not cancel the strip"
         );
         app.close_viewer(cx);
+        assert_ne!(
+            cancel.load(std::sync::atomic::Ordering::Acquire),
+            0,
+            "closing the viewer cancels the strip"
+        );
     });
-    open_video_in_plain_app(&view, vcx, video, 60.0);
+    open(&view, vcx);
     view.update(vcx, |app, cx| {
-        app.set_video_hover_scrub(Some(0.3), cx);
         assert_eq!(
             test_seam::requests(),
             2,
             "reopening the video gives it one fresh request"
         );
-        app.stop_video_ticker();
+        app.close_viewer(cx);
     });
 }
 
@@ -503,6 +526,7 @@ fn undecodable_video_stays_time_only_and_is_not_retried() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
     test_seam::inject(Err(anyhow::anyhow!("no frames")));
+    request_strip(&view, vcx);
 
     vcx.simulate_mouse_move(track_point(track, 0.4), None, gpui::Modifiers::default());
     render_ui(vcx);
@@ -546,7 +570,7 @@ fn closing_viewer_retires_strip_images() {
 
     view.update(vcx, |app, cx| {
         test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
-        app.set_video_hover_scrub(Some(0.5), cx);
+        app.request_scrub_strip(cx);
         let ids: Vec<_> = app
             .video
             .preview_strip
@@ -672,7 +696,7 @@ fn scrubber_is_a_strip_with_playhead_pill() {
     );
 
     test_seam::inject(Ok(strip_frames(&STRIP_TIMES)));
-    vcx.simulate_mouse_move(track_point(track, 0.5), None, gpui::Modifiers::default());
+    request_strip(&view, vcx);
     view.update(vcx, |app, cx| {
         app.video.playback_time = 34.0;
         cx.notify();
@@ -689,9 +713,8 @@ fn scrubber_is_a_strip_with_playhead_pill() {
             && (f32::from(last.right()) - f32::from(track.right())).abs() < 1.0,
         "the frames span the track: {first:?} {last:?} {track:?}"
     );
-    assert_eq!(
-        crate::views::viewer::transport::playhead_label(34.0),
-        "0:34",
+    assert!(
+        vcx.debug_bounds("video-playhead-time-text:0:34").is_some(),
         "the pill shows the current time"
     );
     let _ = std::fs::remove_dir_all(&temp_dir);

@@ -61,6 +61,10 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | Smart album rule chips | 05 Task 5 | One chip per real rule (the frame's time-of-day, shutter, "unedited" and "outdoors" chips have no engine rule), at most two and "+N". Labels reuse the builder's English field and value names (`smart_draft`), not i18n keys. The mosaic is the album's first 4 matches in its default order, from the 320 px thumbnail |
 | Smart Albums tab grid | 05 Task 5 | Not virtualised (the Albums tab's list is); 4 cards per row, 2 below a 900 wide main column |
 | "Sort: Recently updated" | 05 dec. | Name (default), Date created, Newest photo, Item count; no updated time is stored |
+| Video trim (scissors), CC/captions and caption overlay, audio waveform | 06 dec. 1 | Omitted; separate plans (export path, legible-media API, off-thread audio decode). No dead controls |
+| HDR/fps badge and Playback rows Frame rate, Codec, Bitrate, Audio | 06 dec. 1 | Omitted; needs a `VideoInfo` read from the loaded player (separate plan). Playback shows Duration and Resolution only |
+| "Scenes" with Re-detect | 06 dec. 2 | Titled CHAPTERS, shown only when the file has chapters, no Re-detect (no scene detection) |
+| Frame-step buttons in the transport | 06 dec. 3 | Removed; `,` / `.` and ⌘K Previous / Next Frame remain |
 
 ## Keyboard and accessibility gaps
 - **No Tab traversal** for the top bar buttons, filmstrip thumbs, tag chips, search chips,
@@ -137,6 +141,17 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
   than square rows. The now-playing badge marks a clip in PiP whether playing or paused. Typing
   exactly `is:video is:4k` from any view shows the Videos page. An empty Videos view reads
   "0 clips · 0 B" and still shows its chip row. The "No 4K clips" empty-state copy hard-codes 3840.
+- **Video player (06):**
+  - ↑/↓ change the volume anywhere in the video viewer, not only on the slider (no control
+    other than text fields takes focus); ⌥/⇧ with them do nothing. (Task 4)
+  - Chapter labels over the strip are laid out from an estimated mono glyph width, so CJK or
+    very long names can overlap or be dropped early. (Task 3)
+  - After a failed save the volume keeps its new level (the banner says so), like speed and
+    mute. (Task 4)
+  - No Tab order through the transport (play, ±5 s, speed, mute, volume, loop, full screen);
+    every control has a key or palette path. (Task 2)
+  - The transport readout is m:ss, so a clip under 2 s shows whole seconds ("0:01 / 0:01")
+    where the old card showed hundredths. (Task 2)
 - **Videos header (04 Task 1):** unprobed clips add their size but not their duration, so the
   total running time is understated with no hint. `format_bytes` divides by 1024 but prints
   "MB"/"GB" and always one decimal ("211.0 GB" vs the design's "211 GB"). Undated items

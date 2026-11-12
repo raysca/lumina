@@ -25,8 +25,12 @@ impl LuminaApp {
 
     /// Sets the volume and saves it, like speed and mute. A save error
     /// shows in the error banner; the player keeps the new level.
+    /// Nothing is written when the saved level already matches (↑ at 1.0).
     pub fn set_video_volume(&mut self, volume: f32, cx: &mut Context<Self>) {
         self.apply_video_volume(volume, cx);
+        if self.config.video_volume == Some(self.video.volume) {
+            return;
+        }
         self.config.video_volume = Some(self.video.volume);
         self.save_config();
     }

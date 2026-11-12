@@ -77,14 +77,9 @@ pub(super) fn transport_height(this: &LuminaApp) -> f32 {
     1.0 + 2.0 * PAD_Y + labels + SCRUB_BLOCK + ROW_GAP + super::transport_controls::CONTROLS_HEIGHT
 }
 
-/// The time pill's text: the playhead time as "0:34".
-pub(crate) fn playhead_label(time: f64) -> String {
-    format_clock(time)
-}
-
 /// The accent time pill hanging under the playhead at `pct` of the track.
 fn playhead_pill(pct: f32, time: f64) -> Div {
-    let text = playhead_label(time);
+    let text: SharedString = format_clock(time).into();
     // ponytail: width from the mono advance (9.5px * 0.6) plus padding.
     let width = text.chars().count() as f32 * 5.7 + 14.0;
     div()
@@ -107,6 +102,10 @@ fn playhead_pill(pct: f32, time: f64) -> Div {
                 .font_family(theme::FONT_MONO)
                 .text_size(px(9.5))
                 .text_color(theme::on_accent())
+                .children(crate::views::page_header::text_marker(
+                    "video-playhead-time",
+                    &text,
+                ))
                 .child(text),
         )
 }

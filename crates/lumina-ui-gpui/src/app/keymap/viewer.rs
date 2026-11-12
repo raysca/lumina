@@ -197,8 +197,11 @@ impl LuminaApp {
                 self.toggle_video_mute(cx);
                 return true;
             }
-            // ↑/↓: volume (unbound elsewhere in the viewer).
-            if key == "up" || key == "down" {
+            // Plain ↑/↓: volume (unbound elsewhere in the viewer).
+            if (key == "up" || key == "down")
+                && !keystroke.modifiers.alt
+                && !keystroke.modifiers.shift
+            {
                 self.nudge_video_volume(key == "up", cx);
                 return true;
             }

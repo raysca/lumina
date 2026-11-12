@@ -1,8 +1,8 @@
 //! Scrub previews: a small strip of decoded frames for the open video, shown
 //! above the scrubber while hovering or dragging.
 //!
-//! The strip is built once per open video, on the first scrubber hover or
-//! press, on the GPUI background executor (never the UI thread and never the
+//! The strip is built once per open video, when the player loads it, on
+//! the GPUI background executor (never the UI thread and never the
 //! engine's decode workers, so grid thumbnails are not starved). Closing the
 //! video or changing media cancels an unfinished request and retires the
 //! frames; a result that arrives for a video that is no longer open is

@@ -763,6 +763,7 @@ impl LuminaApp {
     pub(crate) fn try_save_config(&mut self) -> anyhow::Result<()> {
         #[cfg(test)]
         {
+            SAVE_COUNT.with(|count| count.set(count.get() + 1));
             if SAVE_FAILS.with(std::cell::Cell::get) {
                 anyhow::bail!("the disk is full");
             }
@@ -1081,6 +1082,8 @@ thread_local! {
     /// Makes [`LuminaApp::try_save_config`] fail on this test thread, so the
     /// revert-on-failure paths can be tested without a real config file.
     pub(crate) static SAVE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Config saves attempted on this test thread.
+    pub(crate) static SAVE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// A config for the next [`LuminaApp::new`] on this test thread, which
     /// otherwise starts from `AppConfig::default()`. Taken once, never saved.
     pub(crate) static TEST_CONFIG: std::cell::RefCell<Option<AppConfig>> =
