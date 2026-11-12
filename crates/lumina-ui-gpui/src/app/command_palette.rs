@@ -150,6 +150,8 @@ pub enum CommandId {
     EditLocation,
     RemoveLocation,
     OpenTagManager,
+    /// Opens the Tags page sort menu; shown only on the page.
+    SortTags,
     /// Act on the tag manager's focused keyword (or the sidebar's tag view);
     /// shown only when there is one.
     AddKeywordAlias,
@@ -245,6 +247,7 @@ impl Command {
             RetryError => Icon::RotateCw,
             OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
             MoveKeyword | ManageTemplates => Icon::Pencil,
+            SortTags => Icon::ArrowUpNarrowWide,
             ClearRecents | ClearRecentSearches => Icon::X,
             Back => Icon::ChevronLeft,
             Forward => Icon::ChevronRight,
@@ -1073,6 +1076,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "tag manager keywords manage rename",
         },
         Command {
+            id: CommandId::SortTags,
+            key: "command.sort_tags",
+            shortcut: "",
+            keywords: "tags keywords sort order most used count alphabetical a-z",
+        },
+        Command {
             id: CommandId::AddKeywordAlias,
             key: "command.add_keyword_alias",
             shortcut: "",
@@ -1186,6 +1195,7 @@ impl LuminaApp {
             CommandId::ToggleInspector => !self.non_media_page_shown(),
             // Already there.
             CommandId::OpenTagManager => !self.tags_page_shown(),
+            CommandId::SortTags => self.tags_page_shown(),
             // An open album's tiles always fill.
             CommandId::ToggleFit => !self.album_tiles(),
             CommandId::ToggleAlbumPanel => self.album_panel_fits(),
@@ -1689,6 +1699,11 @@ impl LuminaApp {
                 cx,
             ),
             CommandId::OpenTagManager => self.open_tag_manager(cx),
+            CommandId::SortTags => {
+                if self.tag_manager.sort_menu.is_none() {
+                    self.toggle_tag_sort_menu(cx);
+                }
+            }
             CommandId::AddKeywordAlias => self.start_alias_input(cx),
             CommandId::MoveKeyword => self.start_keyword_move(cx),
             CommandId::Back => self.navigate_back(cx),

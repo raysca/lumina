@@ -64,9 +64,9 @@ impl TextTarget {
     }
 
     /// What the empty field shows, and what VoiceOver calls it.
-    fn placeholder_and_label(self) -> (&'static str, &'static str) {
+    fn placeholder_and_label(self) -> (SharedString, &'static str) {
         use TextTarget::*;
-        match self {
+        let (placeholder, label) = match self {
             Palette => ("Type a command, album, tag or year…", "Command"),
             AlbumDraft => ("", "Smart album field"),
             Tag => ("Type a tag, Enter to add", "Tag"),
@@ -81,11 +81,17 @@ impl TextTarget {
             AlbumRename => ("", "Album name"),
             AlbumPicker => ("Filter albums…", "Filter albums"),
             TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
-            TagManagerSearch => ("Filter tags by name…", "Filter tags"),
+            TagManagerSearch => {
+                return (
+                    crate::i18n::t("tags.filter_placeholder").into(),
+                    "Filter tags",
+                )
+            }
             Search => ("", "Search"),
             NetworkImportUrl => ("Paste a video link (⌘V)", "Video link"),
             Template(field) => template_placeholder_and_label(field),
-        }
+        };
+        (placeholder.into(), label)
     }
 }
 
@@ -540,9 +546,9 @@ impl LuminaApp {
             TagManagerAlias
         } else if self.search_focused {
             Search
-        } else if self.tags_page_shown() {
+        } else if self.tags_page_shown() && self.tag_manager.sort_menu.is_none() {
             // Typing on the Tags page filters it (the sidebar search, when
-            // focused, takes it first).
+            // focused, takes it first; the open sort menu takes the keys).
             TagManagerSearch
         } else {
             return None;

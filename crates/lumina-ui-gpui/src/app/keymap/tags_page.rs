@@ -3,13 +3,15 @@
 
 use gpui::*;
 
+use crate::app::types::TagSortOrder;
 use crate::app::LuminaApp;
 
 impl LuminaApp {
     /// The Tags page's keys: ↑/↓ focus a keyword, ↵ renames it, Space checks
     /// it, ⌘A / ⌘M / ⌘⌫ act on the checked ones, ⇧⌘A / ⇧⌘M alias and move
-    /// it, ⌘Z / ⇧⌘Z undo and redo, Esc clears the checks (and otherwise does
-    /// nothing, as on the Albums overview). Every other key is absorbed, so
+    /// it, ⌘Z / ⇧⌘Z undo and redo, Esc clears the checks, then the filter
+    /// (and otherwise does nothing, as on the Albums overview). While the
+    /// sort menu is open it takes ↑/↓, ↵ / Space and Esc. Every other key is absorbed, so
     /// the grid's shortcuts (⌫, F, ratings, ⌘E…) never reach media behind
     /// the page; [`passes_through`] lists the global ones that still work.
     pub(crate) fn handle_tags_page_key(
@@ -23,6 +25,18 @@ impl LuminaApp {
         }
         let key = keystroke.key.as_str();
         let shift = keystroke.modifiers.shift;
+        if let Some(at) = self.tag_manager.sort_menu {
+            let last = TagSortOrder::ALL.len() - 1;
+            match key {
+                "up" => self.tag_manager.sort_menu = Some(at.saturating_sub(1)),
+                "down" => self.tag_manager.sort_menu = Some((at + 1).min(last)),
+                "enter" | "return" | "space" => self.set_tag_sort_order(TagSortOrder::ALL[at], cx),
+                "escape" => self.tag_manager.sort_menu = None,
+                _ => return !passes_through(keystroke, cmd_or_ctrl),
+            }
+            cx.notify();
+            return true;
+        }
         match key {
             // Rename, merge and delete happen here, so their undo does too.
             // The history step reloads the counts and detail panel.
@@ -58,6 +72,10 @@ impl LuminaApp {
             }
             "escape" if !self.tag_manager.selected.is_empty() => {
                 self.clear_tag_manager_selection(cx);
+            }
+            "escape" if !self.tag_manager.search.is_empty() => {
+                self.tag_manager.search.clear();
+                cx.notify();
             }
             _ => return !passes_through(keystroke, cmd_or_ctrl),
         }

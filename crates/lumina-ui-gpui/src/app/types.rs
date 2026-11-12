@@ -9,6 +9,19 @@ pub enum TagSortOrder {
     CountDesc,
 }
 
+impl TagSortOrder {
+    /// The Tags page sort menu's rows, in order.
+    pub const ALL: [TagSortOrder; 2] = [TagSortOrder::CountDesc, TagSortOrder::Alphabetical];
+
+    /// The menu row and trigger label: "Most used", "A–Z".
+    pub fn label(self) -> String {
+        crate::i18n::t(match self {
+            TagSortOrder::Alphabetical => "tags.sort_az",
+            TagSortOrder::CountDesc => "tags.sort_most_used",
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteIntent {
     EmptyTrash,

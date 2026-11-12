@@ -95,9 +95,8 @@ impl LuminaApp {
         if self.albums_overview_shown() {
             return Some(self.albums_overview_meta());
         }
-        // ponytail: no meta on the Tags page until its header task.
         if self.tags_page_shown() {
-            return None;
+            return Some(crate::views::tag_manager::meta(self));
         }
         if self.view_loading() && self.cached_active_count().is_none() {
             return None;

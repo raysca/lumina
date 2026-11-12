@@ -311,6 +311,7 @@ impl LuminaApp {
             self.tag_manager.search.clear();
             self.tag_manager.search_focused = true;
             self.tag_manager.selected.clear();
+            self.tag_manager.sort_menu = None;
             self.tag_manager.focused = None;
             self.tag_manager.tagged_items.clear();
             self.tag_manager.list_scroll = gpui::ScrollHandle::new();
@@ -320,6 +321,17 @@ impl LuminaApp {
 
     pub fn set_tag_sort_order(&mut self, order: TagSortOrder, cx: &mut Context<Self>) {
         self.tag_manager.sort = order;
+        self.tag_manager.sort_menu = None;
+        cx.notify();
+    }
+
+    /// Opens the sort menu on the current order, or closes it.
+    pub(crate) fn toggle_tag_sort_menu(&mut self, cx: &mut Context<Self>) {
+        let sort = self.tag_manager.sort;
+        self.tag_manager.sort_menu = match self.tag_manager.sort_menu {
+            Some(_) => None,
+            None => TagSortOrder::ALL.iter().position(|s| *s == sort),
+        };
         cx.notify();
     }
 

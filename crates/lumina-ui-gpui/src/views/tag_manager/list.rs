@@ -1,14 +1,13 @@
-//! Left column of the tag manager: filter, sort, checkable rows, bulk bar.
+//! Left column of the Tags page: checkable rows and the bulk bar.
 
 use crate::app::keywords::KeywordRow;
-use crate::app::text_input::TextTarget;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::{LuminaApp, TagSortOrder};
+use crate::LuminaApp;
 
 pub fn render_list(
     app: &LuminaApp,
@@ -34,33 +33,6 @@ pub fn render_list(
         .flex_col()
         .border_r_1()
         .border_color(theme::line())
-        // Filter field and sort.
-        .child(
-            div()
-                .p(px(12.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(render_search(app, cx))
-                .child(
-                    theme::segmented("tag-sort")
-                        .child(sort_item(
-                            "tag-sort-az-btn",
-                            "A–Z",
-                            TagSortOrder::Alphabetical,
-                            app,
-                            cx,
-                        ))
-                        .child(sort_item(
-                            "tag-sort-count-btn",
-                            "Count",
-                            TagSortOrder::CountDesc,
-                            app,
-                            cx,
-                        )),
-                ),
-        )
         // Column header with select-all.
         .child(
             div()
@@ -70,7 +42,6 @@ pub fn render_list(
                 .flex_row()
                 .items_center()
                 .gap(px(10.0))
-                .border_t_1()
                 .border_b_1()
                 .border_color(theme::line())
                 .bg(theme::bg_1())
@@ -114,55 +85,6 @@ pub fn render_list(
         .when(selected.len() >= 2, |col| {
             col.child(render_bulk_bar(app, cx))
         })
-}
-
-fn render_search(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    let search = &app.tag_manager.search;
-    theme::field("tag-manager-search")
-        .debug_selector(|| "tag-manager-search".to_string())
-        .flex_1()
-        .gap_2()
-        // Typing filters while the page shows (unless the sidebar search
-        // has focus); the focus border shows the field is the keyboard target.
-        .when(app.tag_manager.search_focused && !app.search_focused, |f| {
-            f.border_color(theme::focus_ring())
-        })
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.tag_manager.search_focused = true;
-            this.search_focused = false;
-            cx.notify();
-        }))
-        .child(render_icon(Icon::Search, px(12.0), theme::t2()))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_color(if search.is_empty() {
-                    theme::t2()
-                } else {
-                    theme::t1()
-                })
-                .child(match app.field_input_for(TextTarget::TagManagerSearch) {
-                    Some(input) => input.into_any_element(),
-                    None if search.is_empty() => "Filter tags by name…".into_any_element(),
-                    None => search.clone().into_any_element(),
-                }),
-        )
-}
-
-fn sort_item(
-    id: &'static str,
-    label: &'static str,
-    order: TagSortOrder,
-    app: &LuminaApp,
-    cx: &mut Context<LuminaApp>,
-) -> Stateful<Div> {
-    theme::segmented_item(id, app.tag_manager.sort == order)
-        .debug_selector(move || id.to_string())
-        .child(label)
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.set_tag_sort_order(order, cx);
-        }))
 }
 
 /// Indent per tree level.

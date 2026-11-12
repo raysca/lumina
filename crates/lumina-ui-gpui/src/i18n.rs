@@ -65,6 +65,15 @@ pub fn smart_albums(n: usize) -> String {
     }
 }
 
+/// The Tags page's count: "1 keyword", "612 keywords".
+pub fn keywords(n: usize) -> String {
+    if n == 1 {
+        t("tags.keywords_one")
+    } else {
+        t("tags.keywords_other").replace("{n}", &count(n))
+    }
+}
+
 /// The Videos view's count: "1 clip", "4,183 clips".
 pub fn clips(n: usize) -> String {
     if n == 1 {
@@ -466,6 +475,15 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.remove_location" => "Remove Location",
         "command.open_tag_manager" => "Open Tags",
         "tags.title" => "Tags",
+        "tags.keywords_one" => "1 keyword",
+        "tags.keywords_other" => "{n} keywords",
+        "tags.meta" => "{keywords} · {percent}% of library tagged",
+        "tags.tab_keywords" => "Keywords",
+        "tags.filter_placeholder" => "Filter tags",
+        "tags.sort_most_used" => "Most used",
+        "tags.sort_az" => "A–Z",
+        "tags.sort_menu" => "Sort tags",
+        "command.sort_tags" => "Sort Tags…",
         "command.add_keyword_alias" => "Add Alias for Keyword…",
         "command.move_keyword" => "Move Keyword…",
         "command.apply_template" => "Apply Metadata Template…",

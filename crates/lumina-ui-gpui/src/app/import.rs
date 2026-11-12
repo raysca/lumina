@@ -93,6 +93,11 @@ impl LuminaApp {
         if self.modal_covers_header() {
             self.close_header_popovers();
         }
+        // The Tags sort menu never outlives the page (Back, a search, a
+        // year) and gives way to the sidebar search (⌘F).
+        if !self.tags_page_shown() || self.search_focused {
+            self.tag_manager.sort_menu = None;
+        }
     }
 
     /// Plain field resets, no notify: called from render.
@@ -102,6 +107,7 @@ impl LuminaApp {
         self.albums.overview.sort_menu = None;
         self.albums.overview.card_menu = None;
         self.albums.page.menu = None;
+        self.tag_manager.sort_menu = None;
         if self.downloads.open {
             self.downloads.open = false;
             self.downloads.focused = None;

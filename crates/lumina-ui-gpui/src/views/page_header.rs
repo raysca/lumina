@@ -174,6 +174,10 @@ pub(crate) fn page_tabs(
                         .text_color(if tab.active { theme::t1() } else { theme::t2() })
                         .child(tab.label.clone()),
                 )
+                .children(text_marker(
+                    "page-tab-count",
+                    &format!("{id} {}", tab.count).into(),
+                ))
                 .child(
                     div()
                         .font_family(theme::FONT_MONO)

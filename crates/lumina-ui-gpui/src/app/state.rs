@@ -160,6 +160,8 @@ pub struct TagManagerState {
     /// explicit click target.
     pub search_focused: bool,
     pub sort: TagSortOrder,
+    /// The open sort menu's highlighted row in [`TagSortOrder::ALL`].
+    pub sort_menu: Option<usize>,
     pub selected: HashSet<String>,
     pub editing: Option<String>,
     pub editing_buffer: String,
@@ -188,6 +190,7 @@ impl Default for TagManagerState {
             search: String::new(),
             search_focused: false,
             sort: TagSortOrder::Alphabetical,
+            sort_menu: None,
             selected: HashSet::new(),
             editing: None,
             editing_buffer: String::new(),
