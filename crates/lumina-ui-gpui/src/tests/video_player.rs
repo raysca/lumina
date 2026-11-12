@@ -1156,3 +1156,53 @@ fn video_and_transport_fit_above_the_filmstrip_at_the_minimum_window() {
         );
     }
 }
+
+#[core::prelude::v1::test]
+fn video_top_bar_shows_title_meta_and_pip() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_dir, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, _| app.selected_index = Some(0));
+    render_ui(vcx);
+
+    let item = view.update(vcx, |app, _| app.selected_item.clone().expect("video open"));
+    let (title, meta) = crate::views::viewer::top_bar::video_title_meta(&item);
+    assert_eq!(
+        title,
+        crate::views::inspector::body::display_title(&item),
+        "the video top bar shows the display title"
+    );
+    assert!(
+        meta.contains(&item.format_timestamp("%-d %b %Y")),
+        "the meta line carries the capture date: {meta}"
+    );
+    if item.width > 0 && item.height > 0 {
+        assert!(
+            meta.contains(&crate::views::inspector::summary::resolution_label(
+                item.width,
+                item.height
+            )),
+            "the meta line carries the resolution label: {meta}"
+        );
+    }
+    let back = bounds(vcx, "viewer-back");
+    let title_b = bounds(vcx, "viewer-title");
+    let meta_b = bounds(vcx, "viewer-meta");
+    assert!(
+        title_b.left() >= back.right() && meta_b.left() >= back.right(),
+        "title and meta sit after Back on the left"
+    );
+    assert!(
+        vcx.debug_bounds("viewer-position").is_none(),
+        "a video top bar has no position counter"
+    );
+    assert!(
+        vcx.debug_bounds("viewer-trim-btn").is_none(),
+        "no trim control until trimming exists"
+    );
+    assert_eq!(size(bounds(vcx, "viewer-pip-btn")), (30.0, 30.0));
+    click(vcx, "viewer-pip-btn");
+    assert!(
+        view.update(vcx, |app, _| app.video.in_pip),
+        "the top bar PiP button hands the video to PiP"
+    );
+}

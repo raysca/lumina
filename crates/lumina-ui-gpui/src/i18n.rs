@@ -672,6 +672,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "viewer.edit_tooltip" => "Edit (E)",
         "viewer.share_tooltip" => "Share",
         "viewer.info_tooltip" => "Info (I)",
+        "viewer.pip_tooltip" => "Picture in Picture (⌥P)",
         "viewer.prev_tooltip" => "Previous ([)",
         "viewer.next_tooltip" => "Next (])",
         "jobs.export_running" => "An export is already running",

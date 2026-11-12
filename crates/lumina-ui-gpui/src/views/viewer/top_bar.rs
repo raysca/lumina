@@ -23,6 +23,50 @@ pub(crate) fn position_label(index: usize, count: usize) -> String {
     format!("{} / {}", index + 1, count)
 }
 
+/// The video top bar's title and meta line: the display title, then
+/// "14 Jun 2025 · 4K" (the resolution label only when the size is known).
+pub(crate) fn video_title_meta(item: &MediaItem) -> (String, String) {
+    let mut meta = item.format_timestamp("%-d %b %Y");
+    if item.width > 0 && item.height > 0 {
+        meta.push_str(" · ");
+        meta.push_str(&crate::views::inspector::summary::resolution_label(
+            item.width,
+            item.height,
+        ));
+    }
+    (crate::views::inspector::body::display_title(item), meta)
+}
+
+/// Title (Inter Tight 15/600) over the mono meta line, after Back.
+fn video_title_block(item: &MediaItem) -> Div {
+    let (title, meta) = video_title_meta(item);
+    div()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .id("viewer-title")
+                .debug_selector(|| "viewer-title".to_string())
+                .truncate()
+                .font_family(theme::FONT_DISPLAY)
+                .text_size(px(15.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::t1())
+                .child(title),
+        )
+        .child(
+            div()
+                .id("viewer-meta")
+                .debug_selector(|| "viewer-meta".to_string())
+                .truncate()
+                .font_family(theme::FONT_MONO)
+                .text_size(px(10.0))
+                .text_color(theme::t3())
+                .child(meta),
+        )
+}
+
 /// A 30x30 icon button with a tooltip and an accessible label; `on` shows
 /// the active fill.
 fn bar_button(id: &'static str, label: String, on: bool) -> Stateful<Div> {
@@ -116,9 +160,11 @@ impl ViewerTopBar {
         let is_fav = item.is_favorite;
         let view_label = this.view_label();
         let rate_open = this.rate_popover_shown();
+        let is_video = item.media_type == MediaType::Video;
 
         // "23 / 84" in the current view; it truncates first in a narrow
-        // stage. Hidden when the viewer has no grid index.
+        // stage. Hidden when the viewer has no grid index, and for a video,
+        // whose title takes the left instead ([ and ] still step).
         let center_section = div()
             .flex()
             .flex_row()
@@ -128,7 +174,7 @@ impl ViewerTopBar {
             .min_w(px(0.0))
             .overflow_hidden()
             .px_2()
-            .children(this.selected_index.map(|index| {
+            .children(this.selected_index.filter(|_| !is_video).map(|index| {
                 div()
                     .id("viewer-position")
                     .debug_selector(|| "viewer-position".to_string())
@@ -205,11 +251,16 @@ impl ViewerTopBar {
                     .flex_row()
                     .items_center()
                     .gap_3()
-                    .flex_shrink_0()
+                    .min_w_0()
+                    .when(!is_video, |left| left.flex_shrink_0())
                     .when(!this.is_immersive_fullscreen, |left| {
-                        left.child(div().w(px(64.0)))
+                        left.child(div().flex_none().w(px(64.0)))
                     })
-                    .child(back),
+                    .child(back.flex_none())
+                    // Design 06: 14px from Back (gap_3 is 12).
+                    .when(is_video, |left| {
+                        left.child(video_title_block(item).ml(px(2.0)))
+                    }),
             )
             .child(center_section)
             // Right: Favourite, Rate, Edit, Share, Info. A slideshow has
@@ -278,6 +329,17 @@ impl ViewerTopBar {
                                 )
                             })
                             .children(share_button(cx))
+                            .when(is_video, |right| {
+                                right.child(
+                                    bar_button("viewer-pip-btn", t("viewer.pip_tooltip"), false)
+                                        .child(bar_icon(Icon::Pip, false))
+                                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                                            if let Some(item) = this.selected_item.clone() {
+                                                this.play_in_pip(item, cx);
+                                            }
+                                        })),
+                                )
+                            })
                             .child(
                                 bar_button(
                                     "viewer-info-btn",
