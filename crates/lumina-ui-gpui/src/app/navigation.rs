@@ -361,7 +361,7 @@ impl LuminaApp {
             let layout = self.mosaic_layout()?;
             layout.rows.get(self.mosaic_top_row())?.first
         } else {
-            self.grid_top_row() * self.grid_columns.clamp(2, 8)
+            self.grid_top_row() * self.grid_cols()
         };
         self.displayed_rows(first..first + 1)
             .first()
@@ -379,7 +379,7 @@ impl LuminaApp {
             self.reveal_mosaic_item(index);
             return;
         }
-        let cols = self.grid_columns.clamp(2, 8);
+        let cols = self.grid_cols();
         state
             .scroll_handle
             .scroll_to_item(index / cols, gpui::ScrollStrategy::Center);
@@ -692,7 +692,7 @@ impl LuminaApp {
             next.extend(cmp::min(anchor, target)..=cmp::max(anchor, target));
         } else {
             // Must match the column count `render_browser_grid` lays out.
-            let cols = self.grid_columns.clamp(2, 8);
+            let cols = self.grid_cols();
             let (rows, columns) = (
                 cmp::min(anchor / cols, target / cols)..=cmp::max(anchor / cols, target / cols),
                 cmp::min(anchor % cols, target % cols)..=cmp::max(anchor % cols, target % cols),

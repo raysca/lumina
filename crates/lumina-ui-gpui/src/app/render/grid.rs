@@ -7,9 +7,7 @@ use lumina_core::{SmartAlbum, SystemAlbum};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::grid::{
-    BAND_TO_ROW, CARD_ROW_GAP, GRID_ROW_PADDING_LEFT, GRID_ROW_PADDING_RIGHT,
-};
+use crate::views::grid::{ALBUM_PADDING_TOP, BAND_TO_ROW, GRID_ROW_PADDING_LEFT};
 use crate::views::sidebar::AlbumSelection;
 
 /// Actions offered by a grid empty state. Kept as data so the same button helper
@@ -52,11 +50,12 @@ impl LuminaApp {
             return self.render_empty_state(cx);
         }
 
-        let cols = self.grid_columns.clamp(2, 8);
+        let cols = self.grid_cols();
         let metrics = self.grid_metrics();
         let row_h = metrics.row_height;
         let photo = size(metrics.photo_side, metrics.photo_height);
         let column_gap = metrics.column_gap;
+        let (row_gap, padding_right) = (metrics.row_gap, metrics.padding_right);
         let total_rows = effective_count.div_ceil(cols);
 
         let scroll_handle = self
@@ -66,6 +65,11 @@ impl LuminaApp {
             .unwrap_or_default();
 
         self.grid_surface(cx)
+            // An open album's first row sits ALBUM_PADDING_TOP below the
+            // grid's top edge: this plus the row's own gap above the tiles.
+            .when(self.album_tiles(), |surface| {
+                surface.pt(px(ALBUM_PADDING_TOP - row_gap))
+            })
             // ponytail: the band shows the month recorded by the previous
             // frame's processor; the notify below settles it one frame later.
             .children(if self.search_screen_shown() {
@@ -177,14 +181,14 @@ impl LuminaApp {
                                     .id(row_ix)
                                     .w_full()
                                     .h(px(row_h))
-                                    // A 6px gap sits above the cards, so the first
+                                    // The row gap sits above the cards, so the first
                                     // row's square-tile selection ring (RING_OUTSET in
                                     // card.rs, outside the tile) is never clipped by the
                                     // list's top edge. Captioned tiles have no outset
                                     // ring (their outline is on the thumb).
-                                    .pt(px(CARD_ROW_GAP))
+                                    .pt(px(row_gap))
                                     .pl(px(GRID_ROW_PADDING_LEFT))
-                                    .pr(px(GRID_ROW_PADDING_RIGHT))
+                                    .pr(px(padding_right))
                                     .flex()
                                     .flex_row()
                                     .gap(px(column_gap))
@@ -274,12 +278,14 @@ impl LuminaApp {
     /// V3Grid section header, as a band pinned above the date-sorted grid
     /// showing the top row's month. ponytail: one sticky band, not a header
     /// per month (that needs a variable-height list).
+    /// An open album's Grid has no band (frame `w4zpqh`).
     pub(crate) fn render_month_header(&self) -> Option<AnyElement> {
-        if self.sort.field != lumina_core::SortField::DateTaken {
+        if self.sort.field != lumina_core::SortField::DateTaken || self.album_tiles() {
             return None;
         }
         let (year, month) = self.month_header.top?;
         let count = self.month_header_count_label();
+        let metrics = self.grid_metrics();
         Some(
             div()
                 .id("grid-month-header")
@@ -287,10 +293,10 @@ impl LuminaApp {
                 .flex_none()
                 .h(px(36.0))
                 .pl(px(GRID_ROW_PADDING_LEFT))
-                .pr(px(GRID_ROW_PADDING_RIGHT))
+                .pr(px(metrics.padding_right))
                 // Text sits on the band's bottom edge; this margin plus the
-                // first row's CARD_ROW_GAP make the frame's 10px to the tiles.
-                .mb(px(BAND_TO_ROW - CARD_ROW_GAP))
+                // first row's gap make the frame's 10px to the tiles.
+                .mb(px(BAND_TO_ROW - metrics.row_gap))
                 .flex()
                 .flex_col()
                 .justify_end()

@@ -71,6 +71,11 @@ pub struct AlbumPageState {
     /// [`LuminaApp::album_page_cover`] for this frame, set once before the
     /// grid paints so cards compare one id.
     pub(crate) shown_cover: Option<lumina_core::MediaId>,
+    /// The album grid's zoom, once ⌘+ / ⌘− changed it on an album page
+    /// (`None`: [`crate::views::grid::ALBUM_COLUMNS`]). Shared by every
+    /// album and kept for the session only; Library's `grid_columns` is
+    /// the persisted zoom.
+    pub(crate) columns: Option<usize>,
 }
 
 impl LuminaApp {

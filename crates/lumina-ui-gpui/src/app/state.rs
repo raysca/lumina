@@ -864,6 +864,8 @@ impl LuminaApp {
         let inspector_width = self.right_column_width();
         let shape = if self.captioned_tiles() {
             TileShape::Captioned
+        } else if self.album_tiles() {
+            TileShape::Album
         } else {
             TileShape::Square
         };
@@ -873,9 +875,31 @@ impl LuminaApp {
             self.sidebar_collapsed,
             self.timeline_rail_shown(),
             inspector_width,
-            self.grid_columns,
+            self.grid_cols(),
             shape,
         )
+    }
+
+    /// True where the Grid draws an open album's filled tiles (Design 07
+    /// `w4zpqh`): the album page in Grid layout (its Mosaic is unchanged).
+    pub(crate) fn album_tiles(&self) -> bool {
+        self.config.browse_layout == crate::config::BrowseLayout::Grid
+            && self.album_page_album().is_some()
+    }
+
+    /// Columns the Grid lays out: an open album's own count while
+    /// [`Self::album_tiles`] holds, else the Library zoom `grid_columns`.
+    /// Everything that maps an index to a row reads this.
+    pub(crate) fn grid_cols(&self) -> usize {
+        if self.album_tiles() {
+            self.albums
+                .page
+                .columns
+                .unwrap_or(crate::views::grid::ALBUM_COLUMNS)
+        } else {
+            self.grid_columns
+        }
+        .clamp(2, 8)
     }
 
     /// True where the Grid draws 16:9 captioned tiles: the Videos view in
@@ -944,7 +968,7 @@ impl LuminaApp {
 
     pub(crate) fn prefetch_rows(&self, range: std::ops::Range<usize>) {
         if range.start < range.end {
-            let cols = self.grid_columns.clamp(2, 8);
+            let cols = self.grid_cols();
             let start = range.start * cols;
             let end = range.end * cols;
             let items = self.displayed_rows(start..end);

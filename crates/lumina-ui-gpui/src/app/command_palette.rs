@@ -1185,6 +1185,8 @@ impl LuminaApp {
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
             // The panel is hidden on the overview; the toggle does nothing.
             CommandId::ToggleInspector => !self.albums_overview_shown(),
+            // An open album's tiles always fill.
+            CommandId::ToggleFit => !self.album_tiles(),
             CommandId::ToggleAlbumPanel => self.album_panel_fits(),
             CommandId::PinAlbum => self.open_album_pinned() == Some(false),
             CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),

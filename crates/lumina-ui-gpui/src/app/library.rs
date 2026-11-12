@@ -1017,7 +1017,7 @@ impl LuminaApp {
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };
-        let cols = self.grid_columns.clamp(2, 8);
+        let cols = self.grid_cols();
         let Some(anchor_row) = anchor
             .and_then(|id| self.find_active_index(id))
             .map(|index| index / cols)
@@ -1377,7 +1377,7 @@ mod restore_tests {
             assert_eq!(app.selection_anchor, Some(target_index));
             assert!(app.selected_indices.contains(&target_index));
             assert_eq!(app.batch_summary.count, 1);
-            let expected_row = target_index / app.grid_columns.clamp(2, 8);
+            let expected_row = target_index / app.grid_cols();
             assert_eq!(
                 app.grid_state
                     .as_ref()

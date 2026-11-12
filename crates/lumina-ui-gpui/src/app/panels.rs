@@ -185,8 +185,8 @@ impl LuminaApp {
     /// Whether one `step` along the ladder (positive: larger) would change
     /// the size; false at the ladder's ends, where the pill's button disables.
     pub(crate) fn grid_zoom_enabled(&self, step: isize) -> bool {
-        use crate::views::search_bar::{size_level, SIZE_COLUMNS};
-        let level = size_level(self.grid_columns) as isize + step;
+        use crate::views::search_bar::SIZE_COLUMNS;
+        let level = ladder_step(self.grid_cols(), step);
         (0..SIZE_COLUMNS.len() as isize).contains(&level)
     }
 
@@ -227,18 +227,18 @@ impl LuminaApp {
         scroll_y_before: Pixels,
         cx: &mut Context<Self>,
     ) -> bool {
-        use crate::views::search_bar::{size_level, SIZE_COLUMNS};
+        use crate::views::search_bar::SIZE_COLUMNS;
         // Mosaic anchors on its own layout and never touches the uniform
         // list's handle (a queued offset there would jump the Grid later).
         if self.mosaic_shown() {
             return self.zoom_mosaic_at(step, anchor_pos, cx);
         }
-        let columns = self.grid_columns.clamp(2, 8);
-        let level = (size_level(columns) as isize + step).clamp(0, SIZE_COLUMNS.len() as isize - 1);
+        let columns = self.grid_cols();
+        let level = ladder_step(columns, step).clamp(0, SIZE_COLUMNS.len() as isize - 1);
         // No step yet (a trackpad burst below the threshold): keep the
         // count, even one that is off the ladder.
         let new_columns = if step == 0 {
-            self.grid_columns
+            columns
         } else {
             SIZE_COLUMNS[level as usize]
         };
@@ -254,7 +254,7 @@ impl LuminaApp {
                 base.set_offset(point(base.offset().x, y));
             }
         };
-        if new_columns == self.grid_columns {
+        if new_columns == columns {
             set_offset(scroll_y_before);
             return false;
         }
@@ -285,7 +285,12 @@ impl LuminaApp {
                 .map(|anchor| (anchor, geometry.top)),
         };
 
-        self.grid_columns = new_columns;
+        // An open album zooms its own grid; Library's zoom stays put.
+        if self.album_tiles() {
+            self.albums.page.columns = Some(new_columns);
+        } else {
+            self.grid_columns = new_columns;
+        }
         match anchor {
             Some((anchor, y)) => {
                 let target =
@@ -992,6 +997,16 @@ pub(crate) fn sidebar_toggle_icon(collapsed: bool) -> crate::icons::Icon {
 
 /// Show/Hide Sidebar, the macOS standard in Finder, Mail and Notes.
 pub(crate) const SIDEBAR_SHORTCUT: &str = "⌃⌘S";
+
+/// The ladder level `step` levels (positive: larger) from `columns`. An
+/// off-ladder count (an album's 5) sits between two levels, so its first
+/// step either way lands on the neighbour: 5 zooms in to 4 and out to 6.
+fn ladder_step(columns: usize, step: isize) -> isize {
+    use crate::views::search_bar::{size_level, SIZE_COLUMNS};
+    let level = size_level(columns);
+    let off_ladder = SIZE_COLUMNS[level] != columns.clamp(2, 8);
+    level as isize + step - isize::from(off_ladder && step > 0)
+}
 
 #[cfg(test)]
 mod tests {

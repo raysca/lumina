@@ -12,7 +12,8 @@ use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::grid::{
-    media_card_tooltip, CAPTION_HEIGHT, CARD_PADDING, COMPACT_TILE, UNSELECTED_CARD_OPACITY,
+    media_card_tooltip, ALBUM_TILE_RADIUS, CAPTION_HEIGHT, CARD_PADDING, COMPACT_TILE,
+    UNSELECTED_CARD_OPACITY,
 };
 use crate::views::marks::{flag_badge, REJECTED_OPACITY};
 use crate::views::sidebar::AlbumSelection;
@@ -84,9 +85,14 @@ impl LuminaApp {
         let show_edited = is_edited && !compact;
         // The open album page's cover, from its cached stats.
         let is_key_photo = !compact && self.albums.page.shown_cover == Some(item.id);
-        let fit_mode = self.card_fit_mode;
+        // An open album's tiles always fill (Design 07 `w4zpqh`); the Fit
+        // toggle is Library's and is not offered there.
+        let album_tiles = self.album_tiles();
+        let fit_mode = self.card_fit_mode && !album_tiles;
         let (well_radius, ring_outset) = if captioned {
             (px(VIDEO_THUMB_RADIUS), 0.0)
+        } else if album_tiles {
+            (px(ALBUM_TILE_RADIUS), RING_OUTSET)
         } else {
             (theme::RADIUS_SM, RING_OUTSET)
         };

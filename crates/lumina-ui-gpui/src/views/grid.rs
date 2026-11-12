@@ -63,6 +63,22 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
+/// Gap between an open album's tiles, both ways (Design 07 `w4zpqh`: 10).
+pub(crate) const ALBUM_TILE_GAP: f32 = 10.0;
+
+/// Right padding of an open album's grid (frame: 24; the left stays 28).
+pub(crate) const ALBUM_PADDING_RIGHT: f32 = 24.0;
+
+/// From the grid's top edge to an open album's first row of tiles (frame: 22).
+pub(crate) const ALBUM_PADDING_TOP: f32 = 22.0;
+
+/// Corner radius of an open album's tiles (frame: 5).
+pub(crate) const ALBUM_TILE_RADIUS: f32 = 5.0;
+
+/// Columns an open album's grid starts at (frame: 5). Off the zoom
+/// ladder; ⌘+ / ⌘− step from it to the ladder's 3 and 6.
+pub(crate) const ALBUM_COLUMNS: usize = 5;
+
 /// Width of the pinned year rail when the timeline has buckets.
 pub(crate) const YEAR_RAIL_WIDTH: f32 = 83.5;
 
@@ -99,6 +115,9 @@ pub(crate) enum TileShape {
     Square,
     /// A 16:9 thumb over a two-line caption (Videos, design 04).
     Captioned,
+    /// A square, cover-filled tile on an open album's page (Design 07
+    /// `w4zpqh`): [`ALBUM_TILE_GAP`] both ways, [`ALBUM_PADDING_RIGHT`].
+    Album,
 }
 
 /// Grid layout derived from the window width and the chrome beside the grid.
@@ -110,6 +129,10 @@ pub(crate) struct GridMetrics {
     pub photo_height: f32,
     /// Gap between the cards of a row.
     pub column_gap: f32,
+    /// Space above the card inside each row: the gap between rows.
+    pub row_gap: f32,
+    /// Right padding of a row (the left is always [`GRID_ROW_PADDING_LEFT`]).
+    pub padding_right: f32,
     /// Full uniform-list row height: [`CARD_ROW_GAP`] above the card, the
     /// well, the caption when captioned, and the rest of the row gap below.
     pub row_height: f32,
@@ -150,7 +173,8 @@ pub(crate) fn center_pane_width(
 ///
 /// A captioned tile uses the Videos column gap, a 16:9 well (floored, like
 /// the width, to whole pixels) and a fixed caption, and its row ends with
-/// the rest of the 22px row gap.
+/// the rest of the 22px row gap. An album tile is square with the album
+/// gap both ways and the album right padding.
 pub(crate) fn grid_metrics(
     window_width: f32,
     sidebar_width: f32,
@@ -160,9 +184,10 @@ pub(crate) fn grid_metrics(
     columns: usize,
     shape: TileShape,
 ) -> GridMetrics {
-    let column_gap = match shape {
-        TileShape::Square => GRID_CARD_GAP,
-        TileShape::Captioned => VIDEO_COLUMN_GAP,
+    let (column_gap, row_gap, padding_right) = match shape {
+        TileShape::Square => (GRID_CARD_GAP, CARD_ROW_GAP, GRID_ROW_PADDING_RIGHT),
+        TileShape::Captioned => (VIDEO_COLUMN_GAP, CARD_ROW_GAP, GRID_ROW_PADDING_RIGHT),
+        TileShape::Album => (ALBUM_TILE_GAP, ALBUM_TILE_GAP, ALBUM_PADDING_RIGHT),
     };
     let columns = columns.clamp(2, 8) as f32;
     let grid_width = center_pane_width(
@@ -172,12 +197,10 @@ pub(crate) fn grid_metrics(
         year_rail_visible,
         inspector_width,
     );
-    let card_width = (grid_width
-        - GRID_ROW_PADDING_LEFT
-        - GRID_ROW_PADDING_RIGHT
-        - column_gap * (columns - 1.0))
-        .max(0.0)
-        / columns;
+    let card_width =
+        (grid_width - GRID_ROW_PADDING_LEFT - padding_right - column_gap * (columns - 1.0))
+            .max(0.0)
+            / columns;
     // Whole pixels: GPUI snaps the list's row height to the pixel grid, and
     // the scroll math (`grid_top_row`, zoom anchor) divides by this value, so
     // a fractional row (e.g. 234.125) drifts a row behind after deep scrolls.
@@ -185,17 +208,19 @@ pub(crate) fn grid_metrics(
         .floor()
         .clamp(PHOTO_SIDE_MIN, PHOTO_SIDE_MAX);
     let (photo_height, below) = match shape {
-        TileShape::Square => (photo_side, 0.0),
+        TileShape::Square | TileShape::Album => (photo_side, 0.0),
         TileShape::Captioned => (
             (photo_side * 9.0 / 16.0).floor(),
             CAPTION_HEIGHT + VIDEO_ROW_GAP - CARD_ROW_GAP,
         ),
     };
     GridMetrics {
-        row_height: CARD_ROW_GAP + photo_height + 2.0 * CARD_PADDING + below,
+        row_height: row_gap + photo_height + 2.0 * CARD_PADDING + below,
         photo_side,
         photo_height,
         column_gap,
+        row_gap,
+        padding_right,
     }
 }
 
@@ -386,6 +411,9 @@ impl GridZoomAnchor {
 }
 
 /// Column under `pointer_x` for a row laid out with the grid's padding and gap.
+/// ponytail: assumes the Library right padding (20); an album row has 24, so
+/// its card width reads under a pixel wide. Pass the padding if zoom anchors
+/// ever need to be pixel-exact there.
 fn column_at_pointer(pointer_x: f32, left: f32, width: f32, columns: usize, gap: f32) -> usize {
     let inner_width = width - GRID_ROW_PADDING_LEFT - GRID_ROW_PADDING_RIGHT;
     let card_space = inner_width - columns.saturating_sub(1) as f32 * gap;

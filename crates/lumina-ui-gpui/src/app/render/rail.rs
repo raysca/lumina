@@ -259,7 +259,7 @@ impl LuminaApp {
             (f32::from(handle.base_handle.offset().y), view_h)
         };
         let row_h = self.row_height().max(1.0);
-        let cols = self.grid_columns.clamp(2, 8);
+        let cols = self.grid_cols();
         let total = self.rail.total;
         let top = self.grid_top_row();
         // Half a pixel of slack, as in `grid_top_row`.
@@ -295,7 +295,7 @@ impl LuminaApp {
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };
-        let cols = self.grid_columns.clamp(2, 8);
+        let cols = self.grid_cols();
         let mut y = (offset / cols) as f32 * self.row_height();
         let handle = state.scroll_handle.0.borrow();
         let base = &handle.base_handle;

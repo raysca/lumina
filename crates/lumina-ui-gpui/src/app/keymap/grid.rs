@@ -75,7 +75,7 @@ impl LuminaApp {
                     let step = if self.mosaic_shown() {
                         self.mosaic_vertical_step(false, false)
                     } else {
-                        -(self.grid_columns as isize)
+                        -(self.grid_cols() as isize)
                     };
                     self.extend_selection(step, cx);
                     true
@@ -84,7 +84,7 @@ impl LuminaApp {
                     let step = if self.mosaic_shown() {
                         self.mosaic_vertical_step(true, false)
                     } else {
-                        self.grid_columns as isize
+                        self.grid_cols() as isize
                     };
                     self.extend_selection(step, cx);
                     true
@@ -135,7 +135,7 @@ impl LuminaApp {
             let step = if self.mosaic_shown() {
                 self.mosaic_vertical_step(down, true)
             } else {
-                let rows = (self.grid_columns.clamp(2, 8) * 4) as isize;
+                let rows = (self.grid_cols() * 4) as isize;
                 if down {
                     rows
                 } else {
@@ -192,9 +192,9 @@ impl LuminaApp {
             let step = if self.mosaic_shown() {
                 self.mosaic_vertical_step(down, false)
             } else if down {
-                self.grid_columns as isize
+                self.grid_cols() as isize
             } else {
-                -(self.grid_columns as isize)
+                -(self.grid_cols() as isize)
             };
             self.navigate_selection(step, cx);
         }
