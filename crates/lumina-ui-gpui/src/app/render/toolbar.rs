@@ -158,6 +158,8 @@ impl LuminaApp {
                 .flex_row()
                 .items_center()
                 .gap(px(10.0))
+                // Running downloads keep their ring and panel here too.
+                .children(self.render_downloads_button(window, cx))
                 .child(crate::views::albums_overview::new_album_button(self, cx))
                 .when(own_controls, |bar| bar.child(window_controls(window)));
             return self.clear_traffic_lights(page_header(

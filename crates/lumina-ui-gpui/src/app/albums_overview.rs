@@ -61,7 +61,6 @@ impl LuminaApp {
             self.close_viewer(cx);
         }
         if !self.albums_overview_shown() {
-            self.albums.overview.focus = None;
             self.select_album(AlbumSelection::AlbumsOverview, cx);
         }
         cx.notify();

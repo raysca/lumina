@@ -87,6 +87,11 @@ impl LuminaApp {
         if self.map_shown() {
             self.show_grid(cx);
         }
+        // Nor the Albums overview, whose keys would act on a hidden
+        // selection after the viewer closes: show it from All Media.
+        if self.albums_overview_shown() {
+            self.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
+        }
         // `in_pip` stays set while selecting so the viewer sync leaves the
         // player running. Position-based selection must follow the item; when
         // the current view no longer contains it, nothing stays selected by

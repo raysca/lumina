@@ -113,7 +113,15 @@ fn albums_header_and_tabs_match_design() {
             "{selector} is {want} high: {got}"
         );
     }
-    assert!(vcx.debug_bounds("page-title").is_some());
+    assert!(
+        vcx.debug_bounds("page-title-text:Albums").is_some(),
+        "the header paints the title Albums"
+    );
+    assert!(
+        vcx.debug_bounds("page-meta-text:2 albums · 1 smart album")
+            .is_some(),
+        "the header paints the catalog counts"
+    );
     assert!(vcx.debug_bounds("new-album-page-btn").is_some());
     view.update(vcx, |app, _| {
         assert_eq!(app.view_label(), "Albums", "the page title is Albums");
@@ -202,4 +210,159 @@ fn albums_header_and_tabs_match_design() {
         );
     });
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The page shows no media: keys that act on a selection must find none,
+/// even when an item was selected before the page opened.
+#[core::prelude::v1::test]
+fn albums_overview_absorbs_media_keys() {
+    let (dir, engine) = seed_library("albums_overview_keys", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    keystrokes(vcx, "right");
+    assert!(view.update(vcx, |app, _| app.selected_item.is_some()));
+    let before = engine.get_item_slice(0..3);
+
+    click(vcx, "sidebar-albums-header");
+    focus_app(vcx, &view);
+    for key in [
+        "cmd-backspace",
+        "backspace",
+        "p",
+        "x",
+        "u",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "left",
+        "right",
+        "up",
+        "down",
+        "cmd-a",
+        "enter",
+        "space",
+    ] {
+        keystrokes(vcx, key);
+        view.update(vcx, |app, _| {
+            assert!(app.albums_overview_shown(), "{key} keeps the page");
+            assert!(
+                app.selected_item.is_none() && app.selected_indices.is_empty(),
+                "{key}: the page holds no selection"
+            );
+            assert!(
+                app.delete_confirm_state.is_none() && !app.is_fullscreen_viewer,
+                "{key} opens no delete dialog or viewer"
+            );
+        });
+        assert_eq!(
+            engine.get_item_slice(0..3),
+            before,
+            "{key} changes no catalog row on the overview"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn albums_overview_new_album_from_the_keyboard() {
+    let (dir, engine) = seed_library("albums_overview_kbd_new", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    click(vcx, "sidebar-albums-header");
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "tab");
+    keystrokes(vcx, "tab");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.albums.overview.focus,
+            Some(OverviewFocus::NewAlbum),
+            "the second Tab reaches New Album"
+        );
+    });
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        engine.list_albums_with_counts().len(),
+        1,
+        "↵ on New Album adds a row"
+    );
+    // ↵ saves the name the album started with.
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| assert_eq!(app.albums.renaming, None));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "escape");
+    keystrokes(vcx, "shift-tab");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.albums.overview.focus,
+            Some(OverviewFocus::NewAlbum),
+            "⇧Tab from no focus reaches New Album"
+        );
+    });
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        engine.list_albums_with_counts().len(),
+        2,
+        "⇧Tab then ↵ adds another"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn forward_returns_to_the_overview_without_its_old_focus() {
+    let (dir, engine) = seed_library("albums_overview_forward", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    click(vcx, "sidebar-albums-header");
+    focus_app(vcx, &view);
+    keystrokes(vcx, "shift-tab");
+    keystrokes(vcx, "cmd-[");
+    assert!(view.update(vcx, |app, _| !app.albums_overview_shown()));
+
+    keystrokes(vcx, "cmd-]");
+    assert_on_overview(vcx, "⌘] Forward");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.albums.overview.focus, None,
+            "the focus does not survive the visit"
+        );
+    });
+    keystrokes(vcx, "enter");
+    assert!(
+        engine.list_albums_with_counts().is_empty(),
+        "↵ after Forward runs no stale New Album"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn overview_hides_the_inspector_and_keeps_downloads() {
+    use super::downloads::{install, queue_app, settle, submit};
+    let (_dir, engine, fake, mut cx) = queue_app("albums_overview_header_actions");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, "https://example.com/a.mp4");
+    settle(vcx, &view, "the row is stored", |app| {
+        app.downloads.entries.len() == 1 && app.downloads.entries[0].row.id > 0
+    });
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        app.close_network_import_dialog(cx);
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("inspector-panel").is_some());
+
+    click(vcx, "sidebar-albums-header");
+    assert!(
+        vcx.debug_bounds("inspector-panel").is_none(),
+        "the overview has nothing for the inspector to show"
+    );
+    assert!(
+        vcx.debug_bounds("downloads-toolbar-btn").is_some(),
+        "running downloads keep their header button on the overview"
+    );
 }

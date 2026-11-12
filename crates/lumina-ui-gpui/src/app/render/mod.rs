@@ -487,8 +487,11 @@ impl Render for LuminaApp {
 
         // The inspector stays while Info is on; with no selection it shows an
         // empty state rather than vanishing under a lit toggle.
-        let inspector_open = self.inspector_open;
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
+        // The Albums overview holds no media: the panel would have nothing
+        // to show, so it stays hidden there (Info stays on for other views).
+        let inspector_shown =
+            self.inspector_open && !is_fullscreen_viewer && !self.albums_overview_shown();
 
         let editing = self.edits.session.is_some();
         // Compare shows (not the viewer opened from it), or a slideshow
@@ -794,7 +797,7 @@ impl Render for LuminaApp {
                                             .into_any_element()
                                     })
                                     // Inspector Resizer Drag Handle (260–380px)
-                                    .child(if inspector_open && !is_fullscreen_viewer {
+                                    .child(if inspector_shown {
                                         div()
                                             .id("inspector-resizer")
                                             .w(px(4.0))
@@ -813,8 +816,9 @@ impl Render for LuminaApp {
                                         Empty.into_any_element()
                                     })
                                     // Right Slide-out Metadata & Location Inspector
-                                    .child(if inspector_open && !is_fullscreen_viewer {
+                                    .child(if inspector_shown {
                                         div()
+                                            .debug_selector(|| "inspector-panel".to_string())
                                             .flex_none()
                                             .w(px(self.inspector_width))
                                             .h_full()

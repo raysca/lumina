@@ -98,6 +98,13 @@ Lumina is designed to be usable without a mouse:
   the middle as far as the world's edge allows, and `Esc` returns to the
   grid. Keys typed in the palette or a
   field stay there.
+- **Albums overview**: the sidebar ALBUMS label (button, labelled "Show
+  Albums"), ⌘K Show Albums and Go > Albums open it; ⌘[ returns. `Tab` /
+  `⇧Tab` move a focus ring between the tab bar and New Album, `←`/`→`
+  switch between the Albums and Smart Albums tabs (also ⌘K Show Albums Tab
+  / Show Smart Albums Tab), `Enter` runs a focused New Album and `Esc`
+  clears the focus. The page holds no media, so the grid's keys do nothing
+  there.
 - **Mosaic**: ⌘K Show Mosaic / Show Grid or the toolbar's view-mode
   segments switch the browser between justified rows and the square grid
   (the choice is kept; Grid is the default). Duplicates and a smart album
@@ -287,6 +294,9 @@ Controls that do set a role and a label (none checked with VoiceOver yet):
   loading, empty and error notices (status).
 - the batch dock's Share… button (button, labelled "Share the selected
   originals", with the same tooltip).
+- the Albums overview's tab bar (tab list, labelled "Albums"; each tab a
+  tab, labelled with its name, selected when shown) and New Album (button,
+  with a tooltip).
 - Mosaic: the view-mode segments (button, toggled), each day header
   (heading, labelled with date, place and count) and its Select button
   (button, inside the heading), the zoom pill's Years / Months / Days

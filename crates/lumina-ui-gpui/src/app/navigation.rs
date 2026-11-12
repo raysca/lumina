@@ -113,6 +113,7 @@ impl LuminaApp {
         // Back/Forward lands on Exact copies with a fresh Similar shots read
         // to come: the old list may hold items trashed meanwhile.
         self.stacks.reset();
+        self.albums.overview.focus = None;
         self.selection = self.resolve_navigation_selection(snapshot.selection);
         self.search_query = snapshot.search_query;
         self.search_focused = false;

@@ -883,3 +883,39 @@ fn video_badge_marks_the_clip_playing_in_pip() {
         "closing PiP drops the mark"
     );
 }
+
+/// Expanding PiP over the Albums overview shows the video from All Media:
+/// closing the viewer must not leave a hidden selection on the page.
+#[core::prelude::v1::test]
+fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
+    let lib = pip_library("expand_overview");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, lib.engine.clone());
+
+    open_pip_for(&view, vcx, &lib.video_a);
+    click(vcx, "sidebar-albums-header");
+    assert!(view.update(vcx, |app, _| app.albums_overview_shown()));
+
+    view.update(vcx, |app, cx| app.expand_pip_to_viewer(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::AllLibrary,
+            "the viewer opens over All Media, not the overview"
+        );
+        assert!(app.is_fullscreen_viewer);
+        assert_eq!(
+            app.selected_item.as_ref().map(|i| i.id),
+            Some(lib.video_a.id)
+        );
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.albums_overview_shown(),
+            "closing the viewer shows the grid the selection belongs to"
+        );
+    });
+    assert!(vcx.debug_bounds("media-grid-surface").is_some());
+}

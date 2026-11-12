@@ -275,6 +275,9 @@ fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
         "command.show_map" => "Show Map",
         "command.show_albums" => "Show Albums",
+        "culling.delete_rejected_unavailable" => {
+            "Delete Rejected works in a photo view, not in Recently Deleted, Duplicates or Albums"
+        }
         "command.show_albums_tab" => "Show Albums Tab",
         "command.show_smart_albums_tab" => "Show Smart Albums Tab",
         "command.show_grid" => "Show Grid",

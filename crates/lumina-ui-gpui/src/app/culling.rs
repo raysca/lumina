@@ -234,10 +234,7 @@ impl LuminaApp {
             return;
         }
         let Some(scope) = self.view_query().reject_scope() else {
-            self.show_toast(
-                "Delete Rejected is not available in the Trash or Duplicates",
-                cx,
-            );
+            self.show_toast(crate::i18n::t("culling.delete_rejected_unavailable"), cx);
             return;
         };
         let key = self.view_key();

@@ -54,6 +54,8 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | "Recently captured" per-section headers in Videos | 04 dec. 4 | Month band with "clips" count instead |
 | PiP as a card inside the main window | 04 dec. 5 | Kept as a floating OS window, restyled to the card |
 | PiP buffered-range bar | 04 | Dropped: local files have no buffering |
+| Albums overview tabs People, Places, Shared and the meta's "· N shared" | 05 dec. | Only Albums and Smart Albums tabs; meta reads "N albums · M smart albums". Places tab is a separate plan |
+| Albums overview header sliders and sort icons | 05 Task 2 | Dropped: nothing to filter on the page; sort is the "Sort ▾" control (05 Task 4). The header keeps the sidebar toggle, Downloads (while it has rows) and New Album; the inspector is hidden on the page |
 
 ## Keyboard and accessibility gaps
 - **No Tab traversal** for the top bar buttons, filmstrip thumbs, tag chips, search chips,
@@ -63,6 +65,9 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 - **Top matches:** ↓ from the bar reaches the cards only after Esc closes the suggestions, with
   no on-screen hint. (03 Task 5)
 - **"Rate…"** is in the palette but not the menu bar or shortcut sheet. (02 Task 2)
+- **Albums overview keys** (Tab / ⇧Tab between the tab bar and New Album, ←/→ switch tabs,
+  ↵ runs New Album, Esc clears the focus) are not in the shortcut sheet; ⌘K Show Albums /
+  Show Albums Tab / Show Smart Albums Tab and Go > Albums are the listed paths. (05 Task 2)
 - **Toast copy:** edit/rotate while a popover is open says "Close the open dialog…"; "menu"
   would fit the Sort and Rate popovers better. Slideshow is refused silently. (02 Task 2)
 - **Brand row** has no accessibility role; full-screen traffic-light inset and brand-row window

@@ -53,9 +53,11 @@ pub(crate) fn page_header(
                         .text_size(px(20.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::t1())
+                        .children(text_marker("page-title", &title))
                         .child(title),
                 )
                 .children(meta.map(|meta| {
+                    let marker = text_marker("page-meta", &meta);
                     div()
                         .debug_selector(|| "page-meta".to_string())
                         .min_w_0()
@@ -63,6 +65,7 @@ pub(crate) fn page_header(
                         .font_family(theme::FONT_MONO)
                         .text_size(px(10.5))
                         .text_color(theme::t3())
+                        .children(marker)
                         .child(meta)
                 })),
         )
@@ -184,6 +187,19 @@ pub(crate) fn page_tabs(
                 )
                 .on_click(move |_, window, cx| on_select(&id, window, cx))
         }))
+}
+
+/// Tests only: a zero-size marker whose `{kind}-text:{text}` selector
+/// carries the rendered text, since GPUI's test window exposes neither
+/// painted text nor an accessibility tree. Absolute, so it takes no space.
+fn text_marker(kind: &'static str, text: &SharedString) -> Option<Div> {
+    cfg!(test).then(|| {
+        let text = text.clone();
+        div()
+            .absolute()
+            .size_0()
+            .debug_selector(move || format!("{kind}-text:{text}"))
+    })
 }
 
 /// 32×32 header button: bg-2, 8px radius, `line` outline, 15px icon; bg-3

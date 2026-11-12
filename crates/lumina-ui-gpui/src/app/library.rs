@@ -764,6 +764,8 @@ impl LuminaApp {
         self.search_focused = false;
         self.active_year = None;
         self.stacks.reset();
+        // A page's keyboard focus never outlives the visit (↵ would fire it).
+        self.albums.overview.focus = None;
         if self.selection == AlbumSelection::Duplicates {
             self.refresh_duplicates();
         }

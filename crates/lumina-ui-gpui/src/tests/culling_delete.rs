@@ -237,12 +237,16 @@ fn delete_rejected_late_result_is_dropped() {
 }
 
 #[core::prelude::v1::test]
-fn delete_rejected_is_refused_in_trash_and_duplicates() {
+fn delete_rejected_is_refused_in_trash_duplicates_and_albums() {
     let (dir, engine) = one_reject("cull_delete_refused");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
-    for place in [AlbumSelection::Trash, AlbumSelection::Duplicates] {
+    for place in [
+        AlbumSelection::Trash,
+        AlbumSelection::Duplicates,
+        AlbumSelection::AlbumsOverview,
+    ] {
         view.update(vcx, |app, cx| {
             app.select_album(place.clone(), cx);
             app.open_command_palette(cx);
@@ -263,7 +267,7 @@ fn delete_rejected_is_refused_in_trash_and_duplicates() {
             "{place:?}: the menu action opens no dialog"
         );
         assert!(
-            toast(&view, vcx).is_some_and(|t| t.contains("not available")),
+            toast(&view, vcx) == Some(crate::i18n::t("culling.delete_rejected_unavailable")),
             "{place:?}: a toast says why"
         );
     }
