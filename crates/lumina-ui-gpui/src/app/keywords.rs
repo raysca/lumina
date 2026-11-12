@@ -188,7 +188,7 @@ impl LuminaApp {
     }
 
     /// Shows the command's keyword on the Tags page, going there if needed.
-    fn focus_command_keyword(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn focus_command_keyword(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(tag) = self.command_keyword() else {
             return false;
         };
@@ -208,6 +208,7 @@ impl LuminaApp {
             return;
         };
         self.tag_manager.alias_editing = false;
+        self.tag_manager.merge = None;
         self.tag_manager.editing_buffer = parent_of(&tag).unwrap_or("").to_string();
         self.tag_manager.editing = Some(tag);
         self.tag_manager.moving = true;
@@ -263,6 +264,7 @@ impl LuminaApp {
         self.focus_tag_manager_tag(tag.clone(), cx);
         match action {
             TagRowAction::Rename => self.start_modal_tag_rename(tag, cx),
+            TagRowAction::Merge => self.start_tag_merge(cx),
             TagRowAction::Move => self.start_keyword_move(cx),
             TagRowAction::Delete => self.delete_tag_globally(tag, cx),
         }
@@ -290,6 +292,7 @@ impl LuminaApp {
         }
         self.tag_manager.editing = None;
         self.tag_manager.moving = false;
+        self.tag_manager.merge = None;
         self.tag_manager.alias_editing = true;
         self.tag_manager.alias_buffer.clear();
         cx.notify();

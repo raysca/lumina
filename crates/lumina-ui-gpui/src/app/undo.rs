@@ -586,6 +586,8 @@ impl LuminaApp {
         // Batch labels and mixed-value summaries read the refreshed maps.
         self.update_batch_summary();
         self.refresh_album_counts();
+        // Undoing a merge removes the alias it added.
+        self.refresh_keyword_aliases();
         cx.notify();
     }
 }

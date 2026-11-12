@@ -7283,3 +7283,60 @@ fn album_cover_set_cleared_on_purge_and_migrated() {
     );
     drop((engine, catalog));
 }
+
+// --- Merge into another keyword keeps the source name as an alias ---
+
+#[test]
+fn merge_keeps_source_as_alias() {
+    let (catalog, ids) = catalog_with_tags(&["golden", "golden hour"]);
+    let change = catalog.merge_tags("golden", "golden hour").unwrap();
+    assert_eq!(catalog.get_tags_for_item(ids[0]).unwrap(), ["golden hour"]);
+    assert_eq!(
+        catalog.resolve_alias("Golden").unwrap(),
+        "golden hour",
+        "typing the merged name must apply the target"
+    );
+    let mut hits = search_ids(&catalog, "hour");
+    hits.sort_by_key(|id| id.0);
+    assert_eq!(
+        hits,
+        vec![ids[0], ids[1]],
+        "the merged item is indexed under the target"
+    );
+
+    catalog.replace_tag_rows(&change, true).unwrap();
+    assert!(
+        catalog.aliases().unwrap().is_empty(),
+        "undo must remove the alias the merge added"
+    );
+    assert_eq!(catalog.resolve_alias("golden").unwrap(), "golden");
+    assert_eq!(catalog.get_tags_for_item(ids[0]).unwrap(), ["golden"]);
+
+    catalog.replace_tag_rows(&change, false).unwrap();
+    assert_eq!(
+        catalog.resolve_alias("golden").unwrap(),
+        "golden hour",
+        "redo must restore the alias"
+    );
+}
+
+#[test]
+fn merge_skips_the_alias_for_a_parent_with_children() {
+    let (catalog, ids) = catalog_with_tags(&["trip", "trip/rome", "places"]);
+    catalog.merge_tags("trip", "places").unwrap();
+    assert_eq!(catalog.get_tags_for_item(ids[1]).unwrap(), ["places/rome"]);
+    assert!(
+        catalog.aliases().unwrap().is_empty(),
+        "an alias on a parent would refuse every keyword typed below it"
+    );
+}
+
+#[test]
+fn merge_refuses_itself_and_a_keyword_below_it() {
+    let (catalog, _) = catalog_with_tags(&["trip", "trip/rome"]);
+    let err = catalog.merge_tags("trip", "Trip").unwrap_err();
+    assert!(err.to_string().contains("into itself"), "{err}");
+    let err = catalog.merge_tags("trip", "trip/rome").unwrap_err();
+    assert!(err.to_string().contains("below it"), "{err}");
+    assert!(catalog.aliases().unwrap().is_empty());
+}

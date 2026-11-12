@@ -27,13 +27,15 @@ impl TagSortOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagRowAction {
     Rename,
+    Merge,
     Move,
     Delete,
 }
 
 impl TagRowAction {
-    pub const ALL: [TagRowAction; 3] = [
+    pub const ALL: [TagRowAction; 4] = [
         TagRowAction::Rename,
+        TagRowAction::Merge,
         TagRowAction::Move,
         TagRowAction::Delete,
     ];
@@ -42,6 +44,7 @@ impl TagRowAction {
     pub fn id(self) -> &'static str {
         match self {
             TagRowAction::Rename => "rename",
+            TagRowAction::Merge => "merge",
             TagRowAction::Move => "move",
             TagRowAction::Delete => "delete",
         }
@@ -50,6 +53,7 @@ impl TagRowAction {
     pub fn label(self) -> String {
         crate::i18n::t(match self {
             TagRowAction::Rename => "tags.row_rename",
+            TagRowAction::Merge => "tags.row_merge",
             TagRowAction::Move => "tags.row_move",
             TagRowAction::Delete => "tags.row_delete",
         })
@@ -59,6 +63,7 @@ impl TagRowAction {
     pub fn shortcut(self) -> &'static str {
         match self {
             TagRowAction::Rename => "↵",
+            TagRowAction::Merge => "",
             TagRowAction::Move => "⇧⌘M",
             TagRowAction::Delete => "",
         }

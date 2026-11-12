@@ -28,6 +28,9 @@ pub struct TagChange {
     pub aliases_before: Vec<(String, String)>,
     /// The same alias rows, as they are now.
     pub aliases_after: Vec<(String, String)>,
+    /// `(alias, tag)` rows it created (a merge keeps the source name as an
+    /// alias of the target); undo deletes them, redo inserts them again.
+    pub aliases_added: Vec<(String, String)>,
     /// `(smart album id, rules_json)` of the albums whose rules it rewrote, as
     /// they were.
     pub albums_before: Vec<(i64, String)>,
@@ -214,6 +217,13 @@ impl Catalog {
     /// matches. Refuses a move inside the keyword's own subtree, a name that
     /// is an alias, and a move that would make a child path too long.
     pub fn rename_tag(&self, old_tag: &str, new_tag: &str) -> Result<TagChange> {
+        self.move_subtree(old_tag, new_tag, false)
+    }
+
+    /// [`Catalog::rename_tag`], and with `keep_alias` the old name becomes an
+    /// alias of the new one in the same transaction, unless the old keyword
+    /// had children (an alias there would refuse every keyword below it).
+    fn move_subtree(&self, old_tag: &str, new_tag: &str, keep_alias: bool) -> Result<TagChange> {
         let old = old_tag.trim().to_lowercase();
         if old.is_empty() || is_blank_path(new_tag) {
             return Ok(TagChange::default());
@@ -274,21 +284,49 @@ impl Catalog {
         Self::insert_fts_for_items(&tx, &ids)?;
         let (albums_before, albums_after) = rewrite_tag_rules(&tx, &old, &new)?;
         let (aliases_before, aliases_after) = retarget_aliases(&tx, &old, &new)?;
+        // `was` holds every subtree row: any not on `old` itself is a child.
+        // The old name is free now (its rows moved, its aliases retargeted).
+        let mut aliases_added = Vec::new();
+        // A stored name that no longer normalizes (an old, unclean tag)
+        // keeps no alias: it could not be typed anyway.
+        let alias = normalize_path(&old).ok().filter(|clean| *clean == old);
+        if let Some(alias) = alias.filter(|_| keep_alias && was.iter().all(|(_, t)| *t == old)) {
+            // A leftover alias row for the name (only possible in data that
+            // predates the alias rules) is kept as it is: nothing to add or undo.
+            if tx.execute(
+                "INSERT OR IGNORE INTO tag_aliases (alias, tag) VALUES (?1, ?2);",
+                params![alias, new],
+            )? == 1
+            {
+                aliases_added.push((alias, new));
+            }
+        }
         tx.commit()?;
         Ok(TagChange {
             removed,
             added,
             aliases_before,
             aliases_after,
+            aliases_added,
             albums_before,
             albums_after,
         })
     }
 
-    /// Merges `source_tag` (and its subtree) into `target_tag`; see
-    /// [`Catalog::rename_tag`].
+    /// Merges `source_tag` (and its subtree) into `target_tag`, keeping the
+    /// source name as an alias of the target when it has no children; see
+    /// [`Catalog::rename_tag`]. Refuses a merge into itself or below itself.
     pub fn merge_tags(&self, source_tag: &str, target_tag: &str) -> Result<TagChange> {
-        self.rename_tag(source_tag, target_tag)
+        let source = source_tag.trim().to_lowercase();
+        if let Ok(target) = normalize_path(target_tag) {
+            if target == source {
+                bail!("A keyword cannot merge into itself");
+            }
+            if subtree_suffix(&target, &source).is_some() {
+                bail!("A keyword cannot merge into a keyword below it");
+            }
+        }
+        self.move_subtree(source_tag, target_tag, true)
     }
 
     /// Deletes `tag` and every keyword below it from all media; see

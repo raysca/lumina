@@ -346,7 +346,17 @@ impl LuminaApp {
         }
 
         // 5. The Tags page's rename and alias fields (its other keys are
-        // page keys, `keymap/tags_page.rs`).
+        // page keys, `keymap/tags_page.rs`). Every other key is absorbed.
+        if self.tag_manager.merge.is_some() {
+            match key {
+                "escape" => self.cancel_tag_merge(cx),
+                "enter" | "return" => self.commit_tag_merge(cx),
+                "up" => self.step_tag_merge(-1, cx),
+                "down" => self.step_tag_merge(1, cx),
+                _ => {}
+            }
+            return true;
+        }
         if self.tag_manager.editing.is_some() {
             match key {
                 "escape" => self.cancel_modal_tag_rename(cx),

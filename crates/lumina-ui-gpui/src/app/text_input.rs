@@ -43,6 +43,8 @@ pub(crate) enum TextTarget {
     AlbumPicker,
     TagManagerRename,
     TagManagerAlias,
+    /// The Merge into… picker's filter.
+    TagMergeFilter,
     TagManagerSearch,
     Search,
     NetworkImportUrl,
@@ -81,6 +83,12 @@ impl TextTarget {
             AlbumRename => ("", "Album name"),
             AlbumPicker => ("Filter albums…", "Filter albums"),
             TagManagerAlias => ("Type an alias, Enter to add", "Alias"),
+            TagMergeFilter => {
+                return (
+                    crate::i18n::t("tags.merge_placeholder").into(),
+                    "Merge into",
+                )
+            }
             TagManagerSearch => {
                 return (
                     crate::i18n::t("tags.filter_placeholder").into(),
@@ -540,6 +548,8 @@ impl LuminaApp {
             Caption
         } else if self.albums.renaming.is_some() {
             AlbumRename
+        } else if self.tag_manager.merge.is_some() {
+            TagMergeFilter
         } else if self.tag_manager.editing.is_some() {
             TagManagerRename
         } else if self.tag_manager.alias_editing {
@@ -574,6 +584,7 @@ impl LuminaApp {
             AlbumPicker => &mut self.albums.picker.as_mut()?.filter,
             TagManagerRename => &mut self.tag_manager.editing_buffer,
             TagManagerAlias => &mut self.tag_manager.alias_buffer,
+            TagMergeFilter => &mut self.tag_manager.merge.as_mut()?.filter,
             TagManagerSearch => &mut self.tag_manager.search,
             // The query bar edits the text after its chips (Design 03);
             // the sidebar field, the whole query.
@@ -602,7 +613,8 @@ impl LuminaApp {
     fn text_limit(&self, target: TextTarget) -> usize {
         use TextTarget::*;
         match target {
-            Tag | AlbumRename | AlbumPicker | TagManagerRename | TagManagerAlias => MAX_NAME_CHARS,
+            Tag | AlbumRename | AlbumPicker | TagManagerRename | TagManagerAlias
+            | TagMergeFilter => MAX_NAME_CHARS,
             Template(TemplateField::Name) => MAX_NAME_CHARS,
             AlbumDraft if self.album_draft.focus == DraftFocus::Title => MAX_NAME_CHARS,
             // The bar edits the text after its chips; the whole query stays
@@ -634,6 +646,11 @@ impl LuminaApp {
                 if let Some(picker) = self.albums.picker.as_mut() {
                     picker.highlight = 0;
                     picker.scroll.scroll_to_item(0);
+                }
+            }
+            TextTarget::TagMergeFilter => {
+                if let Some(picker) = self.tag_manager.merge.as_mut() {
+                    picker.highlight = 0;
                 }
             }
             TextTarget::AlbumDraft if self.album_draft.focus != DraftFocus::Title => {

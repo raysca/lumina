@@ -46,6 +46,7 @@ pub mod smart_draft;
 pub mod sort;
 pub mod stacks;
 pub mod state;
+pub mod tag_merge;
 pub mod tag_undo;
 pub mod tags;
 pub mod templates;

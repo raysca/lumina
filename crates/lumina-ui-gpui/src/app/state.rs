@@ -185,6 +185,16 @@ pub struct TagManagerState {
     /// The open row `…` menu: its keyword and highlighted row in
     /// [`crate::app::types::TagRowAction::ALL`].
     pub row_menu: Option<(String, usize)>,
+    /// Merge into…: the focused keyword's target picker, while open.
+    pub merge: Option<TagMergePicker>,
+}
+
+/// The Merge into… picker: its filter and the highlighted target in
+/// [`crate::LuminaApp::tag_merge_options`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TagMergePicker {
+    pub filter: String,
+    pub highlight: usize,
 }
 
 impl TagManagerState {
@@ -222,6 +232,7 @@ impl Default for TagManagerState {
             focused_count: 0,
             moving: false,
             alias_editing: false,
+            merge: None,
             alias_buffer: String::new(),
             row_menu: None,
         }

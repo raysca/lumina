@@ -156,6 +156,7 @@ pub enum CommandId {
     /// shown only when there is one.
     AddKeywordAlias,
     MoveKeyword,
+    MergeKeyword,
     RenameKeyword,
     DeleteKeyword,
     /// Browsing history; shown only when it would move.
@@ -249,6 +250,7 @@ impl Command {
             RetryError => Icon::RotateCw,
             OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
             MoveKeyword | RenameKeyword | ManageTemplates => Icon::Pencil,
+            MergeKeyword => Icon::Merge,
             DeleteKeyword => Icon::Trash,
             SortTags => Icon::ArrowUpNarrowWide,
             ClearRecents | ClearRecentSearches => Icon::X,
@@ -1097,6 +1099,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "tag keyword move parent hierarchy reparent",
         },
         Command {
+            id: CommandId::MergeKeyword,
+            key: "command.merge_keyword",
+            shortcut: "",
+            keywords: "tag keyword merge combine into alias",
+        },
+        Command {
             id: CommandId::RenameKeyword,
             key: "command.rename_keyword",
             shortcut: "",
@@ -1279,6 +1287,7 @@ impl LuminaApp {
             CommandId::ImportXmp => self.jobs.xmp.is_none(),
             CommandId::AddKeywordAlias
             | CommandId::MoveKeyword
+            | CommandId::MergeKeyword
             | CommandId::RenameKeyword
             | CommandId::DeleteKeyword => self.command_keyword().is_some(),
             CommandId::RotateLeft | CommandId::RotateRight | CommandId::RevertToOriginal => {
@@ -1724,6 +1733,7 @@ impl LuminaApp {
             }
             CommandId::AddKeywordAlias => self.start_alias_input(cx),
             CommandId::MoveKeyword => self.start_keyword_move(cx),
+            CommandId::MergeKeyword => self.start_tag_merge(cx),
             CommandId::RenameKeyword => self.start_keyword_rename(cx),
             CommandId::DeleteKeyword => self.delete_command_keyword(cx),
             CommandId::Back => self.navigate_back(cx),

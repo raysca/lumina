@@ -77,6 +77,7 @@ mod states;
 mod tag_manager;
 mod tag_manager_detail;
 mod tag_manager_header;
+mod tag_manager_merge;
 mod tag_manager_rows;
 mod tag_manager_sidecars;
 mod tags_and_albums;

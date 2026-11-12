@@ -143,6 +143,7 @@ fn tag_row_menu_by_mouse() {
     assert!(menu_open(vcx), "the … button opens the row menu");
     for item in [
         "tag-row-menu//rename",
+        "tag-row-menu//merge",
         "tag-row-menu//move",
         "tag-row-menu//delete",
     ] {
@@ -203,9 +204,9 @@ fn tag_row_menu_by_keyboard_and_palette() {
         assert_eq!(app.tag_manager.focused.as_deref(), Some("sea"));
     });
 
-    // ↓ ↵ picks Move to…; keys go to the menu, not the list.
+    // ↓ ↓ ↵ picks Move to…; keys go to the menu, not the list.
     keystrokes(vcx, "shift-f10");
-    keystrokes(vcx, "down");
+    keystrokes(vcx, "down down");
     keystrokes(vcx, "enter");
     assert!(!menu_open(vcx));
     assert_eq!(editing(&view, vcx), (Some("sea".into()), true));
@@ -214,9 +215,9 @@ fn tag_row_menu_by_keyboard_and_palette() {
         app.cancel_tag_manager_prompts();
     });
 
-    // ↓ past the end stays on Delete; ↑ ↑ back to Rename; ↵ renames.
+    // ↓ past the end stays on Delete; ↑ ↑ ↑ back to Rename; ↵ renames.
     keystrokes(vcx, "shift-f10");
-    keystrokes(vcx, "down down down up up");
+    keystrokes(vcx, "down down down down up up up");
     keystrokes(vcx, "enter");
     assert_eq!(editing(&view, vcx), (Some("sea".into()), false));
     view.update(vcx, |app, _| app.cancel_tag_manager_prompts());

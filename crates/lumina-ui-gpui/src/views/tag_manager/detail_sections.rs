@@ -106,64 +106,45 @@ fn chip(id: impl Into<ElementId>) -> Stateful<Div> {
         .text_size(px(12.0))
 }
 
-/// ORGANISE: Move to… as a row (⇧⌘M), and its parent field while moving.
+/// ORGANISE: Merge into… (its target picker while open) and Move to… (⇧⌘M,
+/// its parent field while moving), as rows.
 pub(super) fn render_organise(
     app: &LuminaApp,
     items_label: &str,
     cx: &mut Context<LuminaApp>,
 ) -> impl IntoElement {
-    let label: SharedString = t("tags.row_move").into();
-    let sub: SharedString = t("tags.move_sub").into();
     let moving = app.tag_manager.moving;
+    let merge = organise_row(
+        "tag-detail-merge",
+        Icon::Merge,
+        t("tags.row_merge"),
+        t("tags.merge_sub"),
+    )
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        this.start_tag_merge(cx);
+    }));
+    let move_row = organise_row(
+        "tag-detail-move",
+        Icon::CornerDownRight,
+        t("tags.row_move"),
+        t("tags.move_sub"),
+    )
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        this.start_keyword_move(cx);
+    }));
     div()
         .flex()
         .flex_col()
         .gap(px(8.0))
         .child(section_head(t("tags.organise")))
-        .child(
-            div()
-                .id("tag-detail-move-btn")
-                .debug_selector(|| "tag-detail-move".to_string())
-                .role(Role::Button)
-                .aria_label(format!("{label} {sub}"))
-                .h(px(46.0))
-                .px(px(11.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(10.0))
-                .rounded(theme::RADIUS_LG)
-                .border_1()
-                .border_color(theme::line())
-                .bg(theme::bg_0())
-                .hover(|s| s.bg(theme::bg_2()))
-                .cursor_pointer()
-                .child(render_icon(Icon::CornerDownRight, px(15.0), theme::t2()))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(theme::t1())
-                                .child(label),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(10.0))
-                                .text_color(theme::t3())
-                                .child(sub),
-                        ),
-                )
-                .child(render_icon(Icon::ChevronRight, px(14.0), theme::t3()))
-                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.start_keyword_move(cx);
-                })),
+        .child(merge)
+        .children(
+            app.tag_manager
+                .merge
+                .is_some()
+                .then(|| render_merge_picker(app, cx)),
         )
+        .child(move_row)
         .children(moving.then(|| {
             theme::field("tag-detail-move-field")
                 .debug_selector(|| "tag-detail-move-field".to_string())
@@ -177,4 +158,112 @@ pub(super) fn render_organise(
                 .child(t("tags.move_hint"))
         }))
         .children(moving.then(|| render_touches(items_label)))
+}
+
+/// An ORGANISE row: bg-0 r8 h46, icon 15, label 12 t1, sub 10 t3, chevron.
+fn organise_row(selector: &'static str, icon: Icon, label: String, sub: String) -> Stateful<Div> {
+    div()
+        .id(selector)
+        .debug_selector(move || selector.to_string())
+        .role(Role::Button)
+        .aria_label(format!("{label} {sub}"))
+        .h(px(46.0))
+        .px(px(11.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(10.0))
+        .rounded(theme::RADIUS_LG)
+        .border_1()
+        .border_color(theme::line())
+        .bg(theme::bg_0())
+        .hover(|s| s.bg(theme::bg_2()))
+        .cursor_pointer()
+        .child(render_icon(icon, px(15.0), theme::t2()))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme::t1())
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(10.0))
+                        .text_color(theme::t3())
+                        .child(sub),
+                ),
+        )
+        .child(render_icon(Icon::ChevronRight, px(14.0), theme::t3()))
+}
+
+/// Most targets the picker lists; typing narrows the rest.
+const MERGE_OPTIONS_SHOWN: usize = 8;
+
+/// The Merge into… picker: the filter field, the matching keywords (the
+/// highlighted one is what ↵ merges into, a click merges too) and the hint.
+fn render_merge_picker(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+    let options = app.tag_merge_options();
+    let highlight = app.tag_merge_highlight();
+    let source = app.tag_manager.focused.clone().unwrap_or_default();
+    let list: AnyElement = if options.is_empty() {
+        div()
+            .text_size(px(10.5))
+            .text_color(theme::t3())
+            .child(t("tags.merge_none"))
+            .into_any_element()
+    } else {
+        div()
+            .id("tag-detail-merge-options")
+            .role(Role::ListBox)
+            .aria_label(t("tags.merge_targets"))
+            .flex()
+            .flex_col()
+            // ponytail: a window of 8 around the highlight, no virtual list;
+            // the filter is the way to a far keyword.
+            .children(
+                options
+                    .into_iter()
+                    .enumerate()
+                    .skip((highlight + 1).saturating_sub(MERGE_OPTIONS_SHOWN))
+                    .take(MERGE_OPTIONS_SHOWN)
+                    .map(|(i, target)| {
+                        let selector = format!("tag-detail-merge-option-{target}");
+                        let source = source.clone();
+                        let pick = target.clone();
+                        theme::menu_item(ElementId::Name(selector.clone().into()), i == highlight)
+                            .debug_selector(move || selector.clone())
+                            .role(Role::ListBoxOption)
+                            .aria_label(target.clone())
+                            .child(div().truncate().child(target))
+                            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                                this.merge_tag_into(source.clone(), pick.clone(), cx);
+                            }))
+                    }),
+            )
+            .into_any_element()
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .child(
+            theme::field("tag-detail-merge-field")
+                .debug_selector(|| "tag-detail-merge-field".to_string())
+                .border_color(theme::focus_ring())
+                .children(app.field_input_for(TextTarget::TagMergeFilter)),
+        )
+        .child(list)
+        .child(
+            div()
+                .text_size(px(10.5))
+                .text_color(theme::t3())
+                .child(t("tags.merge_hint")),
+        )
 }

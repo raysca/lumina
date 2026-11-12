@@ -74,7 +74,7 @@ pub(super) fn sidecar_library(
     (dir, engine, items[0].clone())
 }
 
-fn sidecar_tags(item: &lumina_core::MediaItem) -> Vec<String> {
+pub(super) fn sidecar_tags(item: &lumina_core::MediaItem) -> Vec<String> {
     let mut tags = lumina_core::read_sidecar(&item.path)
         .unwrap()
         .map(|xmp| xmp.tags)

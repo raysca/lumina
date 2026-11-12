@@ -2,11 +2,13 @@
 //! undo and redo.
 
 use anyhow::Result;
-use rusqlite::params;
+use rusqlite::types::Value;
+use rusqlite::{params, params_from_iter};
 
 use std::collections::HashSet;
 
 use super::keyword_ops::refuse_alias_path;
+use super::keywords::{subtree_clause, subtree_params};
 use super::{Catalog, TagChange};
 
 impl TagChange {
@@ -37,6 +39,7 @@ impl TagChange {
             later.albums_before,
             later.albums_after,
         );
+        self.aliases_added.extend(later.aliases_added);
         fold(
             &mut self.aliases_before,
             &mut self.aliases_after,
@@ -111,6 +114,17 @@ impl Catalog {
 
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
+        // Undo drops the aliases a merge added first: the source name it
+        // puts back would otherwise be refused as an alias.
+        if before {
+            let mut delete =
+                tx.prepare_cached("DELETE FROM tag_aliases WHERE alias = ?1 AND tag = ?2;")?;
+            for (alias, tag) in &change.aliases_added {
+                if delete.execute(params![alias, tag])? == 0 {
+                    skipped.aliases += 1;
+                }
+            }
+        }
         let paths: HashSet<&str> = put_rows.iter().map(|(_, tag)| tag.as_str()).collect();
         for path in paths {
             refuse_alias_path(&tx, path)?;
@@ -135,6 +149,22 @@ impl Catalog {
             }
         }
         Self::insert_fts_for_items(&tx, &ids)?;
+        if !before {
+            // Skipped when the name was aliased again since, or it or a
+            // keyword below it was tagged again (the `set_alias` rule).
+            let mut insert = tx.prepare_cached(&format!(
+                "INSERT OR IGNORE INTO tag_aliases (alias, tag) SELECT ?, ? \
+                 WHERE NOT EXISTS (SELECT 1 FROM media_tags WHERE {});",
+                subtree_clause("tag")
+            ))?;
+            for (alias, tag) in &change.aliases_added {
+                let mut values = vec![Value::Text(alias.clone()), Value::Text(tag.clone())];
+                values.extend(subtree_params(alias));
+                if insert.execute(params_from_iter(values))? == 0 {
+                    skipped.aliases += 1;
+                }
+            }
+        }
         {
             let mut alias = tx
                 .prepare_cached("UPDATE tag_aliases SET tag = ?3 WHERE alias = ?1 AND tag = ?2;")?;
@@ -338,5 +368,54 @@ mod tests {
         catalog.set_alias("kitty", "dog").unwrap();
         assert!(catalog.replace_tag_rows(&change, false).is_err());
         assert_eq!(tags(&catalog, a), ["cat", "cat/kid", "pet"]);
+    }
+
+    #[test]
+    fn redo_skips_the_merge_alias_once_the_name_is_tagged_again() {
+        for retag in ["golden", "golden/x"] {
+            let catalog = Catalog::open_in_memory().unwrap();
+            let a = plain(&catalog, "/lib/a.mp4");
+            catalog.add_tags_batch(&[a], &["golden".into()]).unwrap();
+            let change = catalog.merge_tags("golden", "hour").unwrap();
+            catalog.replace_tag_rows(&change, true).unwrap();
+            // Another item: redo deletes only the rows the merge moved.
+            let b = plain(&catalog, "/lib/b.mp4");
+            catalog.add_tags_batch(&[b], &[retag.into()]).unwrap();
+
+            let skipped = catalog.replace_tag_rows(&change, false).unwrap();
+            assert_eq!(skipped.aliases, 1, "redo counts the alias it left out");
+            assert!(
+                catalog.aliases().unwrap().is_empty(),
+                "redo must not alias \"golden\" while {retag} is a keyword in use"
+            );
+        }
+    }
+
+    #[test]
+    fn merge_keeps_a_leftover_alias_row_for_the_source() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let a = plain(&catalog, "/lib/a.mp4");
+        catalog.add_tags_batch(&[a], &["golden".into()]).unwrap();
+        // Data from before the alias rules: the keyword is also an alias.
+        catalog
+            .conn
+            .lock()
+            .execute(
+                "INSERT INTO tag_aliases (alias, tag) VALUES ('golden', 'other');",
+                [],
+            )
+            .unwrap();
+        let change = catalog
+            .merge_tags("golden", "hour")
+            .expect("a leftover alias row must not fail the merge");
+        assert!(
+            change.aliases_added.is_empty(),
+            "nothing added, nothing to undo"
+        );
+        assert_eq!(tags(&catalog, a), ["hour"]);
+        assert_eq!(
+            catalog.aliases().unwrap(),
+            [("golden".to_string(), "other".to_string())]
+        );
     }
 }

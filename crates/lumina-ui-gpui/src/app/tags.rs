@@ -1,7 +1,6 @@
 use gpui::*;
 use lumina_core::catalog::keywords::{normalize_path, subtree_suffix};
 use lumina_core::text::{clean_text, MAX_NAME_CHARS};
-use lumina_core::TagChange;
 
 use crate::app::types::TagSortOrder;
 use crate::app::LuminaApp;
@@ -415,9 +414,11 @@ impl LuminaApp {
         self.tag_manager.alias_editing = false;
         self.tag_manager.alias_buffer.clear();
         self.tag_manager.row_menu = None;
+        self.tag_manager.merge = None;
     }
 
     pub fn start_modal_tag_rename(&mut self, tag: String, cx: &mut Context<Self>) {
+        self.tag_manager.merge = None;
         self.tag_manager.moving = false;
         self.tag_manager.alias_editing = false;
         self.tag_manager.editing = Some(tag.clone());
@@ -474,70 +475,6 @@ impl LuminaApp {
         self.tag_manager.moving = false;
         self.tag_manager.editing = None;
         self.tag_manager.editing_buffer.clear();
-        cx.notify();
-    }
-
-    /// The most-used checked tag (ties: A–Z): Merge folds the others into it.
-    pub(crate) fn tag_merge_target(&self) -> Option<String> {
-        self.library_tag_counts
-            .iter()
-            .filter(|(tag, _)| self.tag_manager.selected.contains(tag))
-            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
-            .map(|(tag, _)| tag.clone())
-    }
-
-    /// Merges every checked tag into [`Self::tag_merge_target`] (v3 Merge).
-    pub fn merge_checked_tags(&mut self, cx: &mut Context<Self>) {
-        if self.tag_manager.selected.len() < 2 {
-            return;
-        }
-        let Some(target) = self.tag_merge_target() else {
-            return;
-        };
-        let mut sources: Vec<String> = self
-            .tag_manager
-            .selected
-            .iter()
-            .filter(|tag| **tag != target)
-            .cloned()
-            .collect();
-        sources.sort();
-        let mut merged = 0;
-        // Every merge folds into one change, so one undo reverses them all.
-        let mut combined = TagChange::default();
-        let view_before = self.tag_view_refs();
-        for source in &sources {
-            let result = match self.grid_state.as_ref() {
-                Some(state) => state.engine.merge_tags(source, &target),
-                None => Ok(Default::default()),
-            };
-            // Stop at the first failure; the merges before it are committed
-            // and the counts and sidecars below reflect them.
-            let Some(change) = self.apply_tag_mutation("Could not merge tags", result, cx) else {
-                break;
-            };
-            combined.then(change);
-            merged += 1;
-            self.retarget_tag_refs(source, Some(&target), cx);
-        }
-        if merged == sources.len() {
-            self.tag_manager.selected.clear();
-        }
-        self.sync_metadata_sidecars(&combined.affected_ids(), cx);
-        self.refresh_selected_tags();
-        self.refresh_album_counts();
-        self.focus_tag_manager_tag(target.clone(), cx);
-        // On a failure part way the merges before it are committed: they
-        // still undo as one step.
-        let moves = sources[..merged]
-            .iter()
-            .map(|source| (source.clone(), target.clone()))
-            .collect();
-        let recorded = self.push_tag_rows_undo("tag merge", combined, view_before, false, moves);
-        if merged > 0 {
-            let message = format!("Merged {merged} tag(s) into \"{target}\"");
-            self.tag_rows_toast(recorded, message, cx);
-        }
         cx.notify();
     }
 
