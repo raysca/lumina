@@ -200,6 +200,36 @@ pub(crate) fn render(this: &LuminaApp, window: &Window, cx: &mut Context<LuminaA
                 cx.listener(|this, _e: &ClickEvent, _w, cx| this.begin_tagging_selection(cx)),
             ),
         )
+        .child({
+            // Exactly one item: a cover is one photo.
+            let one = this.single_selected_id().is_some();
+            bar_button(
+                "album-bar-set-cover",
+                Icon::ImagePlus,
+                "album_bar.set_cover",
+                t(if one {
+                    "album_bar.set_cover_tooltip"
+                } else {
+                    "album_bar.set_cover_disabled"
+                }),
+                Look::Filled,
+                compact,
+            )
+            .map(|button| {
+                if one {
+                    button.on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                        this.set_album_cover_from_selection(cx)
+                    }))
+                } else {
+                    // GPUI has no disabled state: dimmed, no click, and
+                    // the tooltip says why.
+                    button
+                        .aria_description(t("album_bar.set_cover_disabled"))
+                        .opacity(0.4)
+                        .cursor_default()
+                }
+            })
+        })
         .child(
             bar_button(
                 "album-bar-export",

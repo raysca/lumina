@@ -283,6 +283,64 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// The selected item while exactly one is selected.
+    pub(crate) fn single_selected_id(&self) -> Option<MediaId> {
+        if self.selected_indices.len() > 1 {
+            return None;
+        }
+        self.selected_item.as_ref().map(|item| item.id)
+    }
+
+    /// Set as Cover (selection bar, ⌘K Set as Album Cover): the one
+    /// selected item becomes the open album's key photo.
+    pub fn set_album_cover_from_selection(&mut self, cx: &mut Context<Self>) {
+        if let Some(cover) = self.single_selected_id() {
+            self.set_album_cover(cover, cx);
+        }
+    }
+
+    /// Stores `cover` as the open album page's key photo; ⌘Z puts back the
+    /// key photo stored before (not the fallback shown), or none. A failed
+    /// write is in the error banner and changes nothing.
+    pub(crate) fn set_album_cover(&mut self, cover: MediaId, cx: &mut Context<Self>) {
+        let Some(id) = self.album_page_album() else {
+            return;
+        };
+        if self.albums_blocked(cx) {
+            return;
+        }
+        let before = self
+            .albums
+            .list
+            .iter()
+            .find(|album| album.id == id)
+            .and_then(|album| album.cover_media_id);
+        // Already the key photo: nothing to write or undo.
+        if before == Some(cover) {
+            return;
+        }
+        if self
+            .album_write(
+                "album.cover_failed",
+                |e| e.set_album_cover(id, Some(cover)),
+                cx,
+            )
+            .is_none()
+        {
+            return;
+        }
+        self.push_undo(UndoAction::AlbumCover {
+            album: id,
+            before,
+            after: Some(cover),
+        });
+        self.refresh_album_counts();
+        let message = t("album.cover_set");
+        self.set_last_action(message.clone());
+        self.show_undo_toast(message, cx);
+        cx.notify();
+    }
+
     /// Whether the open album or smart album is pinned; `None` in any
     /// other view.
     pub(crate) fn open_album_pinned(&self) -> Option<bool> {

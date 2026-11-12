@@ -65,6 +65,11 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
 | HDR/fps badge and Playback rows Frame rate, Codec, Bitrate, Audio | 06 dec. 1 | Omitted; needs a `VideoInfo` read from the loaded player (separate plan). Playback shows Duration and Resolution only |
 | "Scenes" with Re-detect | 06 dec. 2 | Titled CHAPTERS, shown only when the file has chapters, no Re-detect (no scene detection) |
 | Frame-step buttons in the transport | 06 dec. 3 | Removed; `,` / `.` and ⌘K Previous / Next Frame remain |
+| Album Share button, sharing sections, avatars, "Shared with" | 07 dec. | Dropped (no server); Share… (macOS share sheet) is in the header's More menu |
+| Album SORT ORDER (Custom / Date / Title, drag to reorder) | 07 dec. | Dropped; custom order is a separate plan (L). The global sort menu covers Date/Title |
+| Selection bar "Download" and Favorite | 07 dec. | "Export…" calls the existing export; Favorite left the bar (F and ⌘K keep it). The bar is for albums only; other views keep the dock |
+| Key photo sub line "Used on album covers and shares" | 07 Task 5 | "Used as the album’s cover" (no sharing) |
+| Key photo badge | 07 Task 5 | Marks the cover in use: the stored key photo, else the newest member. It does not tell a chosen key photo from that fallback |
 
 ## Keyboard and accessibility gaps
 - **No Tab traversal** for the top bar buttons, filmstrip thumbs, tag chips, search chips,
@@ -73,6 +78,8 @@ Last updated: 2026-11-11 (after plans 00–03, 02 and 01b landed).
   mouse-only to remove (also in Get Info). (02 Task 4)
 - **Top matches:** ↓ from the bar reaches the cards only after Esc closes the suggestions, with
   no on-screen hint. (03 Task 5)
+- **Album panel "Change"** (key photo) has no focus; ⌘K Set as Album Cover on a selected
+  item is the keyboard path. (07 Task 5)
 - **"Rate…"** is in the palette but not the menu bar or shortcut sheet. (02 Task 2)
 - **Albums overview keys** (Tab / ⇧Tab between the tab bar, New Album, the smart cards, Sort
   and the album cards,

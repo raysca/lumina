@@ -568,6 +568,12 @@ impl LuminaApp {
             return true;
         }
 
+        // 6d. Album cover pick mode: ↵ picks the selection, Esc cancels,
+        // before the toast's Esc (Set as Cover leaves an undo toast up).
+        if !cmd_or_ctrl && self.handle_cover_pick_key(key, cx) {
+            return true;
+        }
+
         // 7. Dismiss a visible toast from the keyboard.
         //
         // This sits after every modal and inline-editor branch above, so those

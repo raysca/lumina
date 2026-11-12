@@ -124,6 +124,8 @@ tokens_alpha! {
     modal_dim = 0x00000066;
     /// Badges and buttons drawn over media.
     media_scrim = 0x000000A6;
+    /// The key photo badge on an album's cover card (Design 07, 70% black).
+    key_photo_scrim = 0x000000B3;
     /// Video scrub strip frames after the playhead (42% black).
     strip_dim = 0x0000006B;
     /// Chapter ticks over the scrub strip.

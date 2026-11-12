@@ -677,6 +677,11 @@ impl LuminaEngine {
         self.catalog.set_album_cover(id, cover)
     }
 
+    /// Whether `media` is a member of album `id`.
+    pub fn album_contains(&self, id: i64, media: MediaId) -> Result<bool> {
+        self.catalog.album_contains(id, media)
+    }
+
     /// Adds media to an album; returns how many were new members.
     pub fn add_to_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
         self.catalog.add_to_album(id, media)

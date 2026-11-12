@@ -572,3 +572,21 @@ fn album_cover_query_plan_scans_only_albums() {
         "album cards walk the albums table once and seek everything else: {plan:#?}"
     );
 }
+
+#[test]
+fn album_contains_reports_membership() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let a = plain(&catalog, "/a.mov");
+    let b = plain(&catalog, "/b.mov");
+    let album = catalog.create_album_with("Trip", &[a]).unwrap();
+    assert!(catalog.album_contains(album.id, a).unwrap(), "a member");
+    assert!(
+        !catalog.album_contains(album.id, b).unwrap(),
+        "not a member"
+    );
+    catalog.remove_from_album(album.id, &[a]).unwrap();
+    assert!(
+        !catalog.album_contains(album.id, a).unwrap(),
+        "a removed item is no longer a member"
+    );
+}

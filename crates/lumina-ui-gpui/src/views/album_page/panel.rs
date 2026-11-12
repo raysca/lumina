@@ -1,6 +1,7 @@
 //! The album settings panel (Design 07 Task 3, frame `w4zpqh`): the right
-//! column of an open album while Info is off. It holds Delete Album; the
-//! design's SORT ORDER and sharing sections are dropped by decision.
+//! column of an open album while Info is off. It holds KEY PHOTO and
+//! Delete Album; the design's SORT ORDER and sharing sections are dropped
+//! by decision.
 
 use gpui::*;
 
@@ -103,9 +104,9 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElemen
         .flex()
         .flex_col()
         .gap(px(20.0))
-        // Sections go above the divider (KEY PHOTO, Tasks 4-5), each with
-        // an Inter 9.5/600 t3 label; GPUI has no letter-spacing for the
-        // design's 1px tracking.
+        // Sections go above the divider, each with an Inter 9.5/600 t3
+        // label; GPUI has no letter-spacing for the design's 1px tracking.
+        .child(super::key_photo::section(this, id, cx))
         .child(div().w_full().h(px(1.0)).flex_shrink_0().bg(theme::line()))
         .child(
             div()

@@ -476,6 +476,18 @@ impl Catalog {
         Ok(())
     }
 
+    /// Whether `media` is a member of album `id` (trashed and hidden
+    /// members count, as for [`Self::set_album_cover`]). One primary-key
+    /// lookup.
+    pub fn album_contains(&self, id: i64, media: MediaId) -> Result<bool> {
+        let conn = self.conn.lock();
+        let found = conn
+            .prepare_cached("SELECT 1 FROM album_items WHERE album_id = ?1 AND media_id = ?2;")?
+            .exists(params![id, media.0 as i64])
+            .context("checking album membership")?;
+        Ok(found)
+    }
+
     /// Pins or unpins an album; false when no album has `id`.
     pub fn set_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
         let conn = self.conn.lock();

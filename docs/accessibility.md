@@ -34,7 +34,10 @@ Lumina is designed to be usable without a mouse:
   takes the selection out of it (the files stay; `⌘⌫` still opens Delete).
   ⌘K Pin Album / Unpin Album act on the open album or smart album, and ⌘K
   Duplicate Smart Album and Export Smart Album Rules… on smart albums;
-  Import Smart Album Rules… is in ⌘K and the File menu. Album rows carry a list item role and a label with the count, not
+  Import Smart Album Rules… is in ⌘K and the File menu. On an album page
+  with one item selected, ⌘K Set as Album Cover makes it the key photo
+  (`⌘Z` undoes). The album panel's Change link is mouse-only (no focus);
+  while it picks, `↵` takes the selected item and `Esc` cancels. Album rows carry a list item role and a label with the count, not
   yet checked with VoiceOver.
 - **Culling**: in the grid and the viewer, `P` picks, `X` rejects, `U`
   removes the flag and `0`–`5` rate the selection (one `⌘Z` undoes the

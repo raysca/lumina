@@ -5,7 +5,7 @@
 //! quick edits (exposure, auto-enhance, Revert to Original),
 //! metadata template applies, global keyword rename/merge/delete (exact rows, aliases
 //! and smart-album rules), smart album deletion, album rename and deletion,
-//! and album membership.
+//! album membership and album key photos.
 //! Permanent deletion is intentionally excluded.
 
 use anyhow::Result;
@@ -109,6 +109,13 @@ pub enum UndoAction {
         ids: Vec<MediaId>,
         added: bool,
     },
+    /// An album's stored key photo changed (`None`: none stored). Applying
+    /// a side whose item has left the album since clears the key photo.
+    AlbumCover {
+        album: i64,
+        before: Option<MediaId>,
+        after: Option<MediaId>,
+    },
     /// One metadata template apply: undo restores every item's rights and
     /// removes only the keywords the apply added.
     Template { change: TemplateChange },
@@ -170,6 +177,7 @@ impl UndoAction {
             | UndoAction::AlbumRenamed { .. }
             | UndoAction::AlbumDeleted { .. }
             | UndoAction::AlbumMembership { .. }
+            | UndoAction::AlbumCover { .. }
             | UndoAction::TemplateDeleted { .. } => Vec::new(),
             UndoAction::Template { change } => change.affected_ids(),
             UndoAction::TagRows { change, .. } => change.affected_ids(),
@@ -201,6 +209,7 @@ impl UndoAction {
             UndoAction::AlbumDeleted { .. } => "album delete",
             UndoAction::AlbumMembership { added: true, .. } => "add to album",
             UndoAction::AlbumMembership { added: false, .. } => "remove from album",
+            UndoAction::AlbumCover { .. } => "album cover",
             UndoAction::Template { .. } => "template",
             UndoAction::TemplateDeleted { .. } => "template delete",
             UndoAction::TagRows { label, .. } => label,
@@ -309,6 +318,14 @@ impl UndoAction {
                     engine.remove_from_album(*album, ids).map(|_| ())
                 }
             }
+            UndoAction::AlbumCover {
+                album,
+                before: b,
+                after: a,
+            } => {
+                let cover = if before { *b } else { *a };
+                set_album_cover_or_clear(engine, *album, cover)
+            }
             UndoAction::Template { change } => engine.replay_template_change(change, before),
             // Config, not the catalog: `apply_history_action` handles it.
             UndoAction::TemplateDeleted { .. } => Ok(()),
@@ -316,6 +333,29 @@ impl UndoAction {
         };
         done.map(|()| TagReplay::default())
     }
+}
+
+/// Puts back an album's key photo. An item that left the album since is
+/// cleared instead (the album falls back to its newest member) rather than
+/// failing the step; any error fails it, so it shows in the banner.
+fn set_album_cover_or_clear(
+    engine: &LuminaEngine,
+    album: i64,
+    cover: Option<MediaId>,
+) -> Result<()> {
+    let cover = match cover {
+        Some(id) if !engine.album_contains(album, id)? => {
+            log::info!("album cover {id:?} left the album; cleared instead");
+            None
+        }
+        other => other,
+    };
+    // The album write test hook fails the write itself, after the check.
+    #[cfg(test)]
+    if crate::app::albums::ALBUM_WRITE_FAILS.with(std::cell::Cell::get) {
+        anyhow::bail!("database is locked");
+    }
+    engine.set_album_cover(album, cover)
 }
 
 /// The toast's note on what a replay left alone, or `""`.

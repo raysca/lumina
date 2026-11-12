@@ -1,10 +1,12 @@
 //! An open album's page (Design 07, frame `w4zpqh`): the header band over
 //! the album grid. This module holds the page's state (the More menu and
 //! the header's stats, read off the UI thread) and its keys; `header`
-//! draws the band, `selection_bar` the band under it and `panel` the
-//! settings column on the right.
+//! draws the band, `selection_bar` the band under it, `panel` the
+//! settings column on the right and `key_photo` its KEY PHOTO section,
+//! pick mode and the cover card's badge.
 
 pub(crate) mod header;
+pub(crate) mod key_photo;
 pub(crate) mod panel;
 pub(crate) mod selection_bar;
 
@@ -56,6 +58,19 @@ pub struct AlbumPageState {
     /// (library generation, album, catalog revision) `stats` was read at.
     stats_loaded: Option<(u64, i64, u64)>,
     stats_in_flight: bool,
+    /// The album's stored key photo when the last read started.
+    stats_stored_cover: Option<lumina_core::MediaId>,
+    /// The file name of `stats`' cover, read with it.
+    cover_name: Option<SharedString>,
+    /// The album whose cover the next clicked or ↵-ed item becomes, while
+    /// Change is picking; it ends on leaving that album.
+    pub(crate) picking_cover: Option<i64>,
+    /// The item whose click picked the cover: the second click of that
+    /// double-click must not open the viewer.
+    pub(crate) picked_by_click: Option<lumina_core::MediaId>,
+    /// [`LuminaApp::album_page_cover`] for this frame, set once before the
+    /// grid paints so cards compare one id.
+    pub(crate) shown_cover: Option<lumina_core::MediaId>,
 }
 
 impl LuminaApp {
@@ -79,28 +94,57 @@ impl LuminaApp {
         }
     }
 
+    /// The cover's file name for album `id`, once its stats are read.
+    pub(crate) fn album_page_cover_name(&self, id: i64) -> Option<SharedString> {
+        self.album_page_stats(id)
+            .and(self.albums.page.cover_name.clone())
+    }
+
     /// Run from render: while the page shows, reads the stats (and cover)
     /// when the album or the catalog changed. One read at a time, so reads
     /// never stack: the next frame after one lands reads the latest
     /// revision. During a scan the stats are reread only when the open
-    /// album's member count moved, not on every batch. Per frame it only
+    /// album's member count or stored key photo moved, not on every batch.
+    /// Per frame it only
     /// compares numbers. Off the page the menu closes.
     pub(crate) fn prepare_album_page(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.album_page_album() else {
             self.albums.page.menu = None;
+            self.albums.page.picking_cover = None;
+            self.albums.page.shown_cover = None;
             return;
         };
+        // Pick mode lives in the panel: it ends with the album or when the
+        // panel hides (Info on, a narrow window, Hide Album Settings).
+        if !self.album_panel_shown()
+            || self
+                .albums
+                .page
+                .picking_cover
+                .is_some_and(|album| album != id)
+        {
+            self.albums.page.picking_cover = None;
+        }
+        self.albums.page.shown_cover = self.album_page_cover();
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };
         let (engine, scanning) = (state.engine.clone(), state.is_scanning);
         let generation = self.library_generation;
         // Current enough to wait for the scan: the stats count what the
-        // grid shows.
+        // grid shows and were read for the key photo stored now (the list
+        // reloads right after Set as Cover and its undo).
         let live = self.displayed_count();
+        let stored = self
+            .albums
+            .list
+            .iter()
+            .find(|album| album.id == id)
+            .and_then(|album| album.cover_media_id);
         let current = self
             .album_page_stats(id)
-            .is_some_and(|s| s.photos + s.videos == live);
+            .is_some_and(|s| s.photos + s.videos == live)
+            && self.albums.page.stats_stored_cover == stored;
         let page = &mut self.albums.page;
         if page.stats_in_flight
             || (scanning && current)
@@ -109,15 +153,21 @@ impl LuminaApp {
             return;
         }
         page.stats_in_flight = true;
+        page.stats_stored_cover = stored;
         let task = cx.background_executor().spawn(async move {
             // Read before querying: a write meanwhile leaves this revision
             // behind, and the next frame reads again. A failed read is
             // logged by the engine and reads as empty.
             let revision = engine.data_revision();
-            (revision, engine.album_stats(id))
+            let stats = engine.album_stats(id);
+            let name = stats
+                .cover
+                .and_then(|cover| engine.get_item_by_id(cover))
+                .map(|item| SharedString::from(item.file_name));
+            (revision, stats, name)
         });
         cx.spawn(async move |this, cx| {
-            let (revision, stats) = task.await;
+            let (revision, stats, name) = task.await;
             this.update(cx, |app, cx| {
                 // Another library opened meanwhile: opening it reset the
                 // page state, so this read touches nothing there.
@@ -125,6 +175,7 @@ impl LuminaApp {
                     let page = &mut app.albums.page;
                     page.stats_in_flight = false;
                     page.stats = Some((id, stats));
+                    page.cover_name = name;
                     page.stats_loaded = Some((generation, id, revision));
                 }
                 cx.notify();

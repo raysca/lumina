@@ -125,6 +125,9 @@ pub enum CommandId {
     AddToAlbum,
     /// Takes the selection out of the open album (⌫ there).
     RemoveFromAlbum,
+    /// The one selected item becomes the open album's key photo; shown
+    /// only on an album page with one item selected.
+    SetAlbumCover,
     /// Pin or unpin the open album or smart album; one shows at a time.
     PinAlbum,
     UnpinAlbum,
@@ -223,6 +226,7 @@ impl Command {
             NewAlbum | NewAlbumWithSelection | AddToAlbum => Icon::Plus,
             NewSmartAlbum | SaveSearch | DuplicateSmartAlbum => Icon::Sparkles,
             PinAlbum | UnpinAlbum => Icon::Star,
+            SetAlbumCover => Icon::ImagePlus,
             ExportSmartAlbumRules => Icon::ExternalLink,
             ImportSmartAlbumRules => Icon::ArrowDownToLine,
             EditSmartAlbum | RenameAlbum | AdjustDate | EditLocation => Icon::Pencil,
@@ -979,6 +983,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "album remove take out collection selected items",
         },
         Command {
+            id: CommandId::SetAlbumCover,
+            key: "command.set_album_cover",
+            shortcut: "",
+            keywords: "album cover key photo thumbnail set selected item",
+        },
+        Command {
             id: CommandId::PinAlbum,
             key: "command.pin_album",
             shortcut: "",
@@ -1168,6 +1178,9 @@ impl LuminaApp {
             CommandId::RemoveFromAlbum => {
                 matches!(self.selection, AlbumSelection::Album(_))
                     && (self.selected_item.is_some() || !self.selected_indices.is_empty())
+            }
+            CommandId::SetAlbumCover => {
+                self.album_page_album().is_some() && self.single_selected_id().is_some()
             }
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
             // The panel is hidden on the overview; the toggle does nothing.
@@ -1642,6 +1655,7 @@ impl LuminaApp {
             CommandId::DeleteAlbum => self.delete_selected_album(cx),
             CommandId::AddToAlbum => self.open_album_picker(cx),
             CommandId::RemoveFromAlbum => self.remove_selection_from_album(cx),
+            CommandId::SetAlbumCover => self.set_album_cover_from_selection(cx),
             CommandId::PinAlbum => self.set_open_album_pinned(true, cx),
             CommandId::UnpinAlbum => self.set_open_album_pinned(false, cx),
             CommandId::DuplicateSmartAlbum => self.duplicate_selected_smart_album(cx),

@@ -1,5 +1,6 @@
 mod album_cards;
 mod album_cards_keys;
+mod album_key_photo;
 mod album_membership;
 mod album_membership_guards;
 mod album_page;

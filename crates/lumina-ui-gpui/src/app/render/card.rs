@@ -82,6 +82,8 @@ impl LuminaApp {
         } < COMPACT_TILE;
         let show_fav = is_fav && !compact;
         let show_edited = is_edited && !compact;
+        // The open album page's cover, from its cached stats.
+        let is_key_photo = !compact && self.albums.page.shown_cover == Some(item.id);
         let fit_mode = self.card_fit_mode;
         let (well_radius, ring_outset) = if captioned {
             (px(VIDEO_THUMB_RADIUS), 0.0)
@@ -157,6 +159,10 @@ impl LuminaApp {
             .flex_col()
             .justify_between()
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                // Album cover pick mode takes the click (and its double-click).
+                if this.cover_pick_click(item_for_click.id, event.click_count(), cx) {
+                    return;
+                }
                 // A sweep that ends over this card must not collapse the selection it just built.
                 if this.consume_grid_drag_click() {
                     return;
@@ -173,6 +179,11 @@ impl LuminaApp {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    // Picking a cover starts no sweep.
+                    if this.cover_picking() {
+                        cx.stop_propagation();
+                        return;
+                    }
                     let mods = window.modifiers();
                     let additive = mods.shift
                         || mods.secondary(cx)
@@ -338,8 +349,9 @@ impl LuminaApp {
                     } else {
                         Empty.into_any_element()
                     })
-                    // Top-left row: the check circle in selection mode, then the edited badge.
-                    .when(selection_mode || show_edited, |well| {
+                    // Top-left row: the check circle in selection mode, the key photo badge, then
+                    // the edited badge.
+                    .when(selection_mode || show_edited || is_key_photo, |well| {
                         well.child(
                             badge_row()
                                 .left(px(BADGE_INSET))
@@ -366,6 +378,11 @@ impl LuminaApp {
                                                 },
                                             )),
                                     )
+                                })
+                                .when(is_key_photo, |row| {
+                                    row.child(crate::views::album_page::key_photo::badge(
+                                        item_id_num as u64,
+                                    ))
                                 })
                                 .when(show_edited, |row| row.child(edited_badge(item_id_num))),
                         )

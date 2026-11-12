@@ -522,6 +522,11 @@ impl LuminaApp {
         is_cmd: bool,
         cx: &mut Context<Self>,
     ) {
+        // Change in the album panel: this click picks the cover.
+        if self.cover_picking() {
+            self.pick_cover(item.id, cx);
+            return;
+        }
         if is_shift {
             let anchor = self
                 .selection_anchor

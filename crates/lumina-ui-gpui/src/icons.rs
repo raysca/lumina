@@ -72,6 +72,7 @@ pub enum Icon {
     Hash,
     FolderMinus,
     Download,
+    ImagePlus,
 }
 
 impl Icon {
@@ -148,6 +149,7 @@ impl Icon {
         Icon::Hash,
         Icon::FolderMinus,
         Icon::Download,
+        Icon::ImagePlus,
     ];
 
     pub fn path(self) -> &'static str {
@@ -221,6 +223,7 @@ impl Icon {
             Self::Hash => "icons/hash.svg",
             Self::FolderMinus => "icons/folder-minus.svg",
             Self::Download => "icons/download.svg",
+            Self::ImagePlus => "icons/image-plus.svg",
         }
     }
 }

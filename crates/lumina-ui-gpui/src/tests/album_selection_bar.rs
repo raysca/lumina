@@ -177,6 +177,7 @@ fn album_selection_bar_collapses_to_icons_when_narrow() {
     for selector in [
         "album-bar-add",
         "album-bar-tag",
+        "album-bar-set-cover",
         "album-bar-export",
         "album-bar-remove",
         "album-bar-delete",

@@ -38,6 +38,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "hash",
     "heart",
     "image",
+    "image-plus",
     "import",
     "images",
     "info",
