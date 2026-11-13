@@ -31,6 +31,8 @@ fn host_of(url: &str) -> &str {
 const SUBTITLE: &str =
     "Paste a link to a video: a YouTube video, a page on another video site, or a video file.";
 
+const CLEAR_LABEL: &str = "Clear URL";
+
 /// What one stage puts in the shared shell: header title, body, footer hint
 /// and footer buttons.
 struct StageParts {
@@ -73,28 +75,33 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .id("net-import-url-input")
                         .debug_selector(|| "net-import-url-input".to_string())
                         .w_full()
-                        .h(px(34.0))
-                        .px_3()
-                        .bg(theme::bg_2())
+                        .h(px(46.0))
+                        .px(px(13.0))
+                        .bg(theme::bg_0())
                         .border_1()
                         .border_color(if error.is_some() {
                             theme::danger()
                         } else {
-                            theme::focus_ring()
+                            theme::accent()
                         })
-                        .rounded(theme::RADIUS_MD)
+                        .rounded(px(10.0))
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap(px(10.0))
                         .overflow_hidden()
+                        .child(render_icon(Icon::Link2, px(15.0), theme::t3()).flex_none())
                         .child(
+                            // min_w_0 lets a long URL clip here instead of
+                            // pushing the clear button out of the field.
                             div()
                                 .flex_1()
+                                .min_w_0()
                                 .overflow_hidden()
                                 .whitespace_nowrap()
-                                .text_xs()
+                                .font_family(theme::FONT_MONO)
+                                .text_size(px(12.5))
                                 .text_color(if url.is_empty() {
-                                    theme::t2()
+                                    theme::t3()
                                 } else {
                                     theme::t1()
                                 })
@@ -104,14 +111,19 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                             div()
                                 .id("net-import-clear-btn")
                                 .debug_selector(|| "net-import-clear-btn".to_string())
+                                .role(Role::Button)
+                                .aria_label(CLEAR_LABEL)
+                                .tooltip(theme::tooltip_label(CLEAR_LABEL))
+                                .flex_none()
+                                .size(px(20.0))
+                                .rounded_full()
+                                .bg(theme::bg_3())
+                                .hover(|s| s.bg(theme::plate()))
+                                .flex()
+                                .items_center()
+                                .justify_center()
                                 .cursor_pointer()
-                                .px_1()
-                                .py_0p5()
-                                .rounded(theme::RADIUS_SM)
-                                .text_xs()
-                                .text_color(theme::t2())
-                                .hover(|s| s.text_color(theme::t1()))
-                                .child("✕")
+                                .child(render_icon(Icon::X, px(11.0), theme::t2()))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.set_network_import_url(String::new(), cx);
                                 }))
@@ -119,7 +131,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 )
                 .children(error.as_ref().map(|err| {
                     div()
-                        .text_xs()
+                        .text_size(px(12.0))
                         .text_color(theme::danger())
                         .child(err.clone())
                 }));

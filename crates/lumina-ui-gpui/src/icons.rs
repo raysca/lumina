@@ -89,6 +89,7 @@ pub enum Icon {
     FolderSync,
     ShieldCheck,
     Link,
+    Link2,
     FolderDown,
 }
 
@@ -183,6 +184,7 @@ impl Icon {
         Icon::FolderSync,
         Icon::ShieldCheck,
         Icon::Link,
+        Icon::Link2,
         Icon::FolderDown,
     ];
 
@@ -274,6 +276,7 @@ impl Icon {
             Self::FolderSync => "icons/folder-sync.svg",
             Self::ShieldCheck => "icons/shield-check.svg",
             Self::Link => "icons/link.svg",
+            Self::Link2 => "icons/link-2.svg",
             Self::FolderDown => "icons/folder-down.svg",
         }
     }

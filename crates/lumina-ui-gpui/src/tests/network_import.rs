@@ -293,6 +293,63 @@ fn net_import_card_absorbs_clicks_and_backdrop_closes() {
 }
 
 #[core::prelude::v1::test]
+fn net_import_url_field_is_46_tall_with_clear_button() {
+    let (_library, engine) = seed_library("net_import_field", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    render_ui(vcx);
+    let field = vcx.debug_bounds("net-import-url-input").expect("URL field");
+    assert_eq!(
+        field.size.height,
+        gpui::px(46.0),
+        "the URL field is 46 tall"
+    );
+
+    let long_url = format!("https://example.com/watch?v={}", "x".repeat(400));
+    view.update(vcx, |app, cx| app.set_network_import_url(long_url, cx));
+    render_ui(vcx);
+    let field = vcx.debug_bounds("net-import-url-input").expect("URL field");
+    assert_eq!(
+        field.size.height,
+        gpui::px(46.0),
+        "a very long URL stays on one line"
+    );
+    let clear = vcx
+        .debug_bounds("net-import-clear-btn")
+        .expect("clear button");
+    assert_eq!(
+        (clear.size.width, clear.size.height),
+        (gpui::px(20.0), gpui::px(20.0)),
+        "the clear button is a 20×20 circle"
+    );
+    assert!(
+        clear.right() <= field.right(),
+        "the clear button stays inside the field, not pushed out by the URL"
+    );
+    vcx.simulate_mouse_move(clear.center(), None, gpui::Modifiers::default());
+    vcx.background_executor
+        .advance_clock(std::time::Duration::from_millis(600));
+    vcx.run_until_parked();
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("tooltip-Clear URL").is_some(),
+        "the icon-only clear button names itself in a tooltip"
+    );
+
+    click(vcx, "net-import-clear-btn");
+    view.update(vcx, |app, _| match &app.network_import.stage {
+        Some(NetworkImportStage::Input { url, .. }) => {
+            assert!(url.is_empty(), "the clear button empties the URL");
+        }
+        _ => panic!("expected Input stage"),
+    });
+}
+
+#[core::prelude::v1::test]
 fn network_import_long_url_and_clear_button() {
     let (_library, engine) = seed_library("net_import_long", 1);
     let mut cx = crate::tests::TestApp::single();
