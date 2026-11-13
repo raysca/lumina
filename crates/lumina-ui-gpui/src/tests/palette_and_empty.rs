@@ -489,3 +489,54 @@ fn empty_search_drop_chips_and_clear_all() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// Design 11 Task 4: an empty library after its scan uses the First Run
+/// (Hero) glyph and buttons; other empty views keep the default size.
+#[core::prelude::v1::test]
+fn empty_library_state_uses_first_run_glyph_and_buttons() {
+    use crate::views::sidebar::AlbumSelection;
+
+    let (temp_dir, engine) = seed_library("empty_hero", 0);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        if let Some(state) = app.grid_state.as_mut() {
+            state.is_scanning = false;
+        }
+    });
+    render_ui(vcx);
+    let glyph = vcx.debug_bounds("empty-state-glyph").expect("a glyph");
+    let side = (f32::from(glyph.size.width), f32::from(glyph.size.height));
+    assert_eq!(
+        side,
+        (150.0, 150.0),
+        "the empty library uses the hero glyph"
+    );
+    assert!(
+        vcx.debug_bounds("empty-state-headline-text:No photos or videos found")
+            .is_some(),
+        "the copy stays the same"
+    );
+    for button in ["empty-primary", "empty-secondary"] {
+        let bounds = vcx.debug_bounds(button).expect("both actions stay");
+        assert_eq!(f32::from(bounds.size.height), 40.0, "{button} is 40 high");
+    }
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    let (temp_dir, engine) = seed_library("empty_tag_standard", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Tag("nothing-here".into()), cx)
+    });
+    render_ui(vcx);
+    let glyph = vcx
+        .debug_bounds("empty-state-glyph")
+        .expect("the empty tag view draws a glyph");
+    assert_eq!(
+        f32::from(glyph.size.width),
+        54.0,
+        "an empty tag view keeps the default glyph"
+    );
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

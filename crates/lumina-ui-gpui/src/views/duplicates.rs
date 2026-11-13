@@ -18,7 +18,7 @@ impl DuplicatesView {
         cx: &mut Context<LuminaApp>,
     ) -> impl IntoElement {
         if this.duplicate_groups.is_empty() && total_count == 0 {
-            return this.render_empty_state(crate::app::render::EmptySize::Standard, cx);
+            return this.render_empty_state(cx);
         }
 
         let total_groups = this.duplicate_groups.len();

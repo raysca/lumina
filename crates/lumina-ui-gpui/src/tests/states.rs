@@ -540,7 +540,8 @@ fn videos_meta_updates_after_a_clip_is_trashed() {
     });
 }
 
-/// Hosts the empty-state shell at the `Hero` size, which no view uses yet.
+/// Hosts the empty-state shell with no library open, which draws at the
+/// `Hero` size.
 struct HeroHost(gpui::Entity<crate::app::LuminaApp>);
 
 impl gpui::Render for HeroHost {
@@ -549,9 +550,7 @@ impl gpui::Render for HeroHost {
         _window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) -> impl gpui::IntoElement {
-        self.0.update(cx, |app, cx| {
-            app.render_empty_state(crate::app::render::EmptySize::Hero, cx)
-        })
+        self.0.update(cx, |app, cx| app.render_empty_state(cx))
     }
 }
 

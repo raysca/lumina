@@ -24,7 +24,6 @@ pub(crate) mod rail;
 mod status_bar;
 mod toolbar;
 mod video_caption;
-pub(crate) use empty_state::EmptySize;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 

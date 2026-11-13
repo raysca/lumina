@@ -21,7 +21,7 @@ impl LuminaApp {
             if self.view_loading() {
                 return div().flex_1().into_any_element();
             }
-            return self.render_empty_state(crate::app::render::EmptySize::Standard, cx);
+            return self.render_empty_state(cx);
         }
 
         let cols = self.grid_cols();
