@@ -8,7 +8,7 @@ use super::ui_automation::{
 use crate::app::import::ImportDialog;
 use std::path::{Path, PathBuf};
 
-/// A folder outside any library with `count` distinct jpegs.
+/// A folder outside any library with `count` (at most 13) distinct jpegs.
 fn source_folder(name: &str, count: u8) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "lumina_uitest_import_src_{name}_{}",
@@ -19,9 +19,11 @@ fn source_folder(name: &str, count: u8) -> PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     for seed in 0..count {
-        image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([x as u8 * 30, y as u8 * 30, seed]))
-            .save(dir.join(format!("new_{seed}.jpg")))
-            .unwrap();
+        image::RgbImage::from_fn(8, 8, |x, y| {
+            image::Rgb([x as u8 * 30, y as u8 * 30, seed * 19])
+        })
+        .save(dir.join(format!("new_{seed}.jpg")))
+        .unwrap();
     }
     dir
 }
@@ -386,4 +388,60 @@ fn status_bar_shows_progress_and_cancels() {
 
     drop(view);
     let _ = std::fs::remove_dir_all(&library);
+}
+
+/// Plans `total` files, removes `failing` of them, then imports: the copy
+/// of each removed file fails.
+fn import_with_failures(name: &str, total: u8, failing: u8) -> Option<String> {
+    let (library, engine) = seed_library(name, 1);
+    let source = source_folder(name, total);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
+    render_ui(vcx);
+    for seed in 0..failing {
+        std::fs::remove_file(source.join(format!("new_{seed}.jpg"))).unwrap();
+    }
+    keystrokes(vcx, "enter");
+    vcx.run_until_parked();
+    let message = view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "the banner carries the result; no toast repeats it: {:?}",
+            app.toast.current().map(|t| &t.message)
+        );
+        app.error_message.clone()
+    });
+    drop(view);
+    let _ = std::fs::remove_dir_all(&source);
+    let _ = std::fs::remove_dir_all(&library);
+    message
+}
+
+#[core::prelude::v1::test]
+fn partial_import_banner_reads_imported_x_of_y() {
+    let message = import_with_failures("partial_one", 3, 1).expect("a failure sets the banner");
+    let (title, detail) = message.split_once(": ").expect("title and detail");
+    assert_eq!(title, "Imported 2 of 3. 1 file failed.");
+    assert!(
+        detail.starts_with("new_0.jpg: "),
+        "the detail names the failed file and its reason: {detail}"
+    );
+
+    let message = import_with_failures("partial_many", 13, 12).expect("failures set the banner");
+    let (title, detail) = message.split_once(": ").expect("title and detail");
+    assert_eq!(
+        title, "Imported 1 of 13. 12 files failed.",
+        "the count is exact"
+    );
+    assert_eq!(
+        detail.matches("; ").count(),
+        2,
+        "three names at most: {detail}"
+    );
+    assert!(
+        detail.ends_with(" and 9 more"),
+        "the rest are counted: {detail}"
+    );
 }

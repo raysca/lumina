@@ -1242,7 +1242,7 @@ impl LuminaApp {
                 cx.notify();
             }
             Err(err) => {
-                self.show_toast(format!("Could not merge duplicates: {err:#}"), cx);
+                self.set_error(format!("Could not merge duplicates: {err:#}"), cx);
             }
         }
     }
@@ -1281,7 +1281,7 @@ impl LuminaApp {
                 cx.notify();
             }
             Err(err) => {
-                self.show_toast(format!("Could not merge all duplicates: {err:#}"), cx);
+                self.set_error(format!("Could not merge duplicates: {err:#}"), cx);
             }
         }
     }

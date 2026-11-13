@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[cfg(not(test))]
 use crate::app::types::UiMessage;
+use crate::i18n;
 use crate::LuminaApp;
 
 /// The import confirmation dialog.
@@ -307,16 +308,24 @@ impl LuminaApp {
     }
 
     fn finish_import(&mut self, report: CopyImportReport, cx: &mut Context<Self>) {
+        let total = self
+            .import
+            .progress
+            .map_or(report.copied + report.failed.len(), |(_, total)| total);
         self.import.running = None;
         self.import.progress = None;
         self.refresh_album_counts();
         let noun = if report.copied == 1 { "item" } else { "items" };
-        let message = if report.cancelled {
-            format!("Import cancelled after {} {noun}", report.copied)
-        } else {
-            format!("Imported {} {noun}", report.copied)
-        };
-        self.show_toast(message, cx);
+        if report.cancelled {
+            self.show_toast(
+                format!("Import cancelled after {} {noun}", report.copied),
+                cx,
+            );
+        } else if report.failed.is_empty() {
+            self.show_toast(format!("Imported {} {noun}", report.copied), cx);
+        }
+        // ponytail: failures only in the banner (it says X of Y); the
+        // failed-file panel is a separate plan.
         if !report.failed.is_empty() {
             let details: Vec<String> = report
                 .failed
@@ -327,16 +336,16 @@ impl LuminaApp {
                     format!("{}: {err}", name.to_string_lossy())
                 })
                 .collect();
-            let more = report.failed.len().saturating_sub(details.len());
+            let more = report.failed.len() - details.len();
             let more = if more > 0 {
-                format!(" and {more} more")
+                i18n::t("import.failed_more").replace("{n}", &i18n::count(more))
             } else {
                 String::new()
             };
             self.set_error(
                 format!(
-                    "{} files could not be imported: {}{more}",
-                    report.failed.len(),
+                    "{}: {}{more}",
+                    i18n::import_failed(report.copied, total, report.failed.len()),
                     details.join("; ")
                 ),
                 cx,

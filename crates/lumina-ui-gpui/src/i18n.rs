@@ -134,6 +134,20 @@ pub fn results(n: usize) -> String {
     }
 }
 
+/// The import result banner title: "Imported 1,284 of 1,310. 26 files
+/// failed."
+pub fn import_failed(copied: usize, total: usize, failed: usize) -> String {
+    let key = if failed == 1 {
+        "import.failed_one"
+    } else {
+        "import.failed_other"
+    };
+    t(key)
+        .replace("{copied}", &count(copied))
+        .replace("{total}", &count(total))
+        .replace("{n}", &count(failed))
+}
+
 /// "Jun 2018" (en-US short month and year); the year alone for a month
 /// outside 1-12.
 pub fn month_year(year: i32, month: u32) -> String {
@@ -811,6 +825,9 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.import" => "Import",
         "header.import_tooltip" => "Import… (⇧⌘I)",
         "header.filter" => "Filter",
+        "import.failed_one" => "Imported {copied} of {total}. 1 file failed.",
+        "import.failed_other" => "Imported {copied} of {total}. {n} files failed.",
+        "import.failed_more" => " and {n} more",
         "filter.matches_one" => "1 match",
         "filter.matches_other" => "{n} matches",
         "filter.clear_all" => "Clear all",
@@ -970,6 +987,15 @@ mod tests {
         assert_eq!(items(0), "0 items");
         assert_eq!(items(1), "1 item");
         assert_eq!(items(1_284_503), "1,284,503 items");
+    }
+
+    #[test]
+    fn import_failed_is_singular_for_one_and_groups_thousands() {
+        assert_eq!(import_failed(2, 3, 1), "Imported 2 of 3. 1 file failed.");
+        assert_eq!(
+            import_failed(1_284, 1_310, 26),
+            "Imported 1,284 of 1,310. 26 files failed."
+        );
     }
 
     #[test]

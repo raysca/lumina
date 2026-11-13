@@ -149,3 +149,45 @@ fn command_palette_merges_all_duplicates() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn failed_merge_uses_the_error_banner() {
+    let (temp_dir, engine) = seed_library("dup_merge_fail", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    rusqlite::Connection::open(temp_dir.join("catalog.db"))
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_merge BEFORE UPDATE ON media_items
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        )
+        .unwrap();
+
+    click(vcx, "merge-group-0");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not merge duplicates")),
+            "a failed merge reaches the banner: {:?}",
+            app.error_message
+        );
+        assert!(
+            app.toast.current().is_none(),
+            "no success-style toast for a failure"
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a failed merge is not undoable"
+        );
+        assert_eq!(app.duplicate_items_count, 2, "the group is still shown");
+    });
+    assert_eq!(engine.get_item_slice(0..10).len(), 2, "nothing was trashed");
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
