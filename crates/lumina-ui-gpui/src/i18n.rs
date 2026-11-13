@@ -681,6 +681,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "smart_album.import_failed" => "Could not import smart album rules",
         "smart_album.imported" => "Imported “{title}”",
         "smart_album.untitled" => "Untitled Smart Album",
+        "smart_album.close" => "Close without saving (Esc)",
         "smart_album.empty_title" => "Nothing matches these rules yet",
         "smart_album.empty_body" => "This album fills itself. As soon as a photo matches, it appears here.",
         "smart_album.empty_edit" => "Edit rules",

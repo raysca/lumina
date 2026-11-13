@@ -34,22 +34,6 @@ fn tags_page_sits_under_the_page_header() {
 }
 
 #[core::prelude::v1::test]
-fn smart_album_builder_is_a_760px_sheet_under_the_toolbar() {
-    let (dir, engine) = seed_library("ds_album_sheet", 2);
-    let mut cx = crate::tests::TestApp::single();
-    let (_view, vcx) = app_with_library(&mut cx, engine);
-    click(vcx, "new-smart-album");
-    assert_hangs_from_toolbar(vcx, "album-builder-card");
-    let card = vcx.debug_bounds("album-builder-card").unwrap();
-    assert_eq!(
-        f32::from(card.size.width),
-        760.0,
-        "the design's sheet width"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[core::prelude::v1::test]
 fn hovered_menu_row_is_tracked_for_dark_on_amber_text() {
     let (dir, engine) = seed_library("ds_menu_hover", 2);
     let mut cx = crate::tests::TestApp::single();

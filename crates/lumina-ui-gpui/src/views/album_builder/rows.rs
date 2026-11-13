@@ -42,7 +42,7 @@ pub(super) fn picker(
         .justify_between()
         .border_color(ring(focused))
         .child(fill_and_truncate(div()).child(label.into()))
-        .child(div().text_color(theme::t2()).child("⌄"))
+        .child(render_icon(Icon::ChevronDown, px(13.0), theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.toggle_draft_popup(target, cx);
         }))

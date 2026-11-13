@@ -369,6 +369,21 @@ pub enum DraftFocus {
     Save,
 }
 
+impl DraftFocus {
+    /// The condition row this control belongs to, if any.
+    pub fn row(self) -> Option<usize> {
+        match self {
+            Self::Field(i)
+            | Self::Operator(i)
+            | Self::Value(i)
+            | Self::Unit(i)
+            | Self::Remove(i)
+            | Self::Add(i) => Some(i),
+            _ => None,
+        }
+    }
+}
+
 /// An open option popup and its highlighted option.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DraftPopup {

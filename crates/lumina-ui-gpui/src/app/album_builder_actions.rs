@@ -113,6 +113,8 @@ impl LuminaApp {
         };
         draft.focus = DraftFocus::Title;
         draft.popup = None;
+        // A reopened builder starts at the first condition.
+        draft.scroll = gpui::ScrollHandle::new();
         self.refresh_draft_preview();
         cx.notify();
     }
@@ -207,7 +209,16 @@ impl LuminaApp {
     pub fn set_draft_focus(&mut self, focus: DraftFocus, cx: &mut Context<Self>) {
         self.album_draft.focus = focus;
         self.album_draft.popup = None;
+        self.reveal_draft_focus();
         cx.notify();
+    }
+
+    /// Scrolls the focused control's row into the conditions list's view.
+    /// Rows are the list's children in order, so the row index is the child index.
+    fn reveal_draft_focus(&self) {
+        if let Some(row) = self.album_draft.focus.row() {
+            self.album_draft.scroll.scroll_to_item(row);
+        }
     }
 
     /// Labels for the popup that `target` opens; empty when it has none.
@@ -395,6 +406,7 @@ impl LuminaApp {
             .insert(at, DraftRow::new(RuleField::IsFavorite));
         self.album_draft.focus = DraftFocus::Field(at);
         self.album_draft.popup = None;
+        self.reveal_draft_focus();
         self.refresh_draft_preview();
         cx.notify();
     }

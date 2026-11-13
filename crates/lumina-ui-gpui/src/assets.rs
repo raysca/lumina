@@ -26,6 +26,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "clock",
     "copy",
     "corner-down-right",
+    "chevron-down",
     "chevron-left",
     "chevron-right",
     "database",

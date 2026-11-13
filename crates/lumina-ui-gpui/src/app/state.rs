@@ -272,6 +272,8 @@ pub struct AlbumDraftState {
     pub problem: Option<String>,
     /// The smart album whose delete confirmation is open.
     pub confirm_delete: Option<i64>,
+    /// The conditions list; keyboard focus scrolls its row into view.
+    pub scroll: gpui::ScrollHandle,
 }
 
 impl Default for AlbumDraftState {
@@ -288,6 +290,7 @@ impl Default for AlbumDraftState {
             preview: Vec::new(),
             problem: None,
             confirm_delete: None,
+            scroll: gpui::ScrollHandle::new(),
         }
     }
 }

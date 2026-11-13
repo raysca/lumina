@@ -338,9 +338,10 @@ fn focused_text_fields_give_the_input_the_whole_field() {
     let text = vcx
         .debug_bounds("album-builder-title-text")
         .expect("title text");
+    // Only the field's 13px padding and 1px border on each side are spare.
     let spare = field.size.width - text.size.width;
     assert!(
-        spare < gpui::px(24.0),
+        spare <= gpui::px(28.0),
         "title text box is {:?} wide in a {:?} field; it must fill the field",
         text.size.width,
         field.size.width
@@ -353,12 +354,31 @@ fn focused_text_fields_give_the_input_the_whole_field() {
 fn v3_sheet_layout_matches_the_design() {
     let (dir, engine, ids) = library("sab_v3_layout");
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
     render_ui(vcx);
 
     let card = vcx.debug_bounds("album-builder-card").unwrap();
-    assert_eq!(f32::from(card.size.width), 760.0);
+    assert_eq!(f32::from(card.size.width), 840.0, "the dialog is 840 wide");
+    let window = vcx.update(|window, _| window.viewport_size());
+    let above = f32::from(card.origin.y);
+    let below = f32::from(window.height - card.origin.y - card.size.height);
+    assert!(
+        (above - below).abs() <= 1.0,
+        "the dialog is centred vertically: {above} above, {below} below"
+    );
+    let mut size = |selector: &'static str| {
+        let b = vcx.debug_bounds(selector).unwrap();
+        (f32::from(b.size.width), f32::from(b.size.height))
+    };
+    assert_eq!(size("album-builder-badge"), (36.0, 36.0), "badge is 36x36");
+    assert_eq!(size("album-builder-title"), (420.0, 42.0), "name is 420x42");
+    assert_eq!(size("album-builder-close"), (28.0, 28.0), "close is 28x28");
+    assert_eq!(
+        size("album-builder-match").0,
+        92.0,
+        "match picker is 92 wide"
+    );
     assert_eq!(
         f32::from(vcx.debug_bounds("album-rule-field-0").unwrap().size.width),
         180.0
@@ -386,6 +406,92 @@ fn v3_sheet_layout_matches_the_design() {
     assert!(
         rows.contains(&field.origin),
         "rows sit inside one container"
+    );
+
+    // × closes like Cancel: nothing is saved.
+    keystrokes(vcx, "b e a c h");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.album_title, "beach",
+            "the name took the typing"
+        )
+    });
+    click(vcx, "album-builder-close");
+    view.update(vcx, |app, _| {
+        assert!(!app.album_draft.modal_open, "× closes the builder");
+        assert!(app.user_smart_albums.is_empty(), "× must not save");
+    });
+    assert!(engine.list_smart_albums().is_empty(), "× must not save");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Opens the builder at 1200x900 with `rows` conditions.
+fn sheet_with_rows(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>, rows: usize) {
+    vcx.simulate_resize(gpui::size(gpui::px(1200.0), gpui::px(900.0)));
+    open_sheet(vcx, view);
+    view.update(vcx, |app, cx| {
+        while app.album_draft.rows.len() < rows {
+            let last = app.album_draft.rows.len() - 1;
+            app.add_draft_row_after(last, cx);
+        }
+        // Back to the top: adding rows scrolled to the last one.
+        app.set_draft_focus(DraftFocus::Field(0), cx);
+    });
+    render_ui(vcx);
+}
+
+#[core::prelude::v1::test]
+fn many_conditions_scroll_inside_a_dialog_that_fits_the_window() {
+    let (dir, engine, _ids) = library("sab_many_rows");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    sheet_with_rows(vcx, &view, 15);
+
+    let card = vcx.debug_bounds("album-builder-card").unwrap();
+    assert!(
+        f32::from(card.size.height) <= 900.0 - 80.0,
+        "the dialog is at most the window height − 80: {:?}",
+        card.size.height
+    );
+    for selector in ["album-builder-close", "album-builder-save"] {
+        let b = vcx.debug_bounds(selector).unwrap();
+        assert!(
+            card.contains(&b.origin) && card.contains(&b.bottom_right()),
+            "{selector} stays visible inside the dialog: {b:?} in {card:?}"
+        );
+    }
+    let overflow = view.update(vcx, |app, _| app.album_draft.scroll.max_offset().y);
+    assert!(
+        overflow > gpui::px(0.0),
+        "15 conditions overflow the conditions box, which scrolls"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn tab_to_a_row_below_the_fold_scrolls_it_into_view() {
+    let (dir, engine, _ids) = library("sab_tab_scroll");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    sheet_with_rows(vcx, &view, 15);
+
+    // Shift-Tab from row 0: Match, Title, wrap to Save, Cancel, row 14's Add.
+    let rows = vcx.debug_bounds("album-builder-conditions").unwrap();
+    let add = vcx.debug_bounds("album-rule-add-14").unwrap();
+    assert!(add.top() > rows.bottom(), "row 14 starts below the fold");
+    keystrokes(vcx, "shift-tab shift-tab shift-tab shift-tab shift-tab");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.focus, DraftFocus::Add(14))
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    let rows = vcx.debug_bounds("album-builder-conditions").unwrap();
+    let add = vcx.debug_bounds("album-rule-add-14").unwrap();
+    assert!(
+        add.top() >= rows.top() && add.bottom() <= rows.bottom(),
+        "the focused control is scrolled into the conditions box: {add:?} in {rows:?}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
