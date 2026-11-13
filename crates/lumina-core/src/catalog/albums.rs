@@ -382,7 +382,31 @@ impl Catalog {
             })?;
         Ok(count as usize)
     }
+
+    /// Every camera in the library as stored `(make, model)`, "" for a
+    /// missing part, for the smart album "Camera is" list. Spellings are
+    /// kept apart ("Canon" / "canon") because the rule matches them exactly.
+    /// Trashed and hidden items count, so the list does not shift as items
+    /// move in and out of Trash.
+    pub fn distinct_cameras(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(DISTINCT_CAMERAS_SQL)?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            ))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .context("list cameras")
+    }
 }
+
+/// Served by `idx_media_camera (make, model)` as a covering index: one pass
+/// over the index, no table rows and no temp b-tree for DISTINCT or ORDER BY.
+/// `trim` drops a camera of only spaces, which would be a blank option.
+const DISTINCT_CAMERAS_SQL: &str = "SELECT DISTINCT make, model FROM media_items \
+     WHERE trim(make) <> '' OR trim(model) <> '' ORDER BY make, model";
 
 /// Decodes a stored album's rules. An unreadable `rules_json` (say, from a
 /// newer build) still yields no rules, as before, but is logged instead of
@@ -392,4 +416,26 @@ fn decode_rules(album_id: i64, rules_json: &str) -> Vec<SmartAlbumRule> {
         log::warn!("smart album {album_id}: rules could not be read, so it has no rules: {err}");
         Vec::new()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn distinct_cameras_reads_only_the_camera_index() {
+        let catalog = Catalog::open_in_memory().expect("open catalog");
+        let plan = catalog
+            .explain_query_plan(DISTINCT_CAMERAS_SQL)
+            .expect("plan")
+            .join(" | ");
+        assert!(
+            plan.contains("USING COVERING INDEX idx_media_camera"),
+            "the camera list reads the (make, model) index, not the table: {plan}"
+        );
+        assert!(
+            !plan.contains("TEMP B-TREE"),
+            "the index already orders and de-duplicates the pairs: {plan}"
+        );
+    }
 }

@@ -7444,3 +7444,138 @@ fn tag_any_of_plan_seeks_the_tag_index() {
         "media_tags is never scanned: {plan}"
     );
 }
+
+fn camera_rule(operator: RuleOperator, value: RuleValue) -> lumina_core::SmartAlbum {
+    lumina_core::SmartAlbum::new(
+        "Camera".into(),
+        "camera".into(),
+        MatchMode::All,
+        vec![SmartAlbumRule {
+            field: RuleField::Camera,
+            operator,
+            value,
+        }],
+    )
+}
+
+fn camera_pair(make: &str, model: &str) -> RuleValue {
+    RuleValue::List(vec![make.into(), model.into()])
+}
+
+#[test]
+fn camera_equals_matches_the_stored_make_and_model_exactly() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let cameras: [(Option<&str>, Option<&str>); 8] = [
+        (Some("FUJIFILM"), Some("X-T5")),
+        (Some("Canon"), Some("Canon EOS R5")),
+        (Some("canon"), Some("Canon EOS R5")),
+        (Some("Canon"), Some("Canon EOS R5 Mark II")),
+        (None, Some("iPhone 15")),
+        (None, None),
+        (Some(""), Some("")),
+        (Some("  "), Some(" ")),
+    ];
+    let items: Vec<_> = cameras
+        .iter()
+        .enumerate()
+        .map(|(i, (make, model))| {
+            let mut item = sample_media_item(
+                &format!("/photos/cam/{i}.jpg"),
+                MediaType::Image,
+                1_000 + i as i64,
+                None,
+                *model,
+            );
+            item.make = make.map(str::to_string);
+            item
+        })
+        .collect();
+    let ids: Vec<u64> = catalog
+        .insert_or_update_batch(&items)
+        .expect("insert items")
+        .iter()
+        .map(|it| it.id.0)
+        .collect();
+    let matching = |album: &lumina_core::SmartAlbum| {
+        let mut got: Vec<u64> = catalog
+            .query_smart_album(album, 50, 0)
+            .expect("query")
+            .iter()
+            .map(|m| m.id.0)
+            .collect();
+        got.sort();
+        got
+    };
+
+    let is_r5 = camera_rule(RuleOperator::Equals, camera_pair("Canon", "Canon EOS R5"));
+    assert_eq!(
+        matching(&is_r5),
+        vec![ids[1]],
+        "is matches the stored make and model exactly: not another spelling, not the Mark II"
+    );
+    assert_eq!(catalog.query_smart_album_count(&is_r5).unwrap(), 1);
+    let (sql, params) = is_r5.synthesize_count_query().unwrap();
+    let plan = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .unwrap()
+        .join(" | ");
+    assert!(
+        plan.contains("SEARCH m USING INDEX idx_media_camera (make=? AND model=?)"),
+        "the count seeks the camera index: {plan}"
+    );
+    let other_case = camera_rule(RuleOperator::Equals, camera_pair("canon", "Canon EOS R5"));
+    assert_eq!(
+        matching(&other_case),
+        vec![ids[2]],
+        "case is part of the stored value"
+    );
+
+    let is_phone = camera_rule(RuleOperator::Equals, camera_pair("", "iPhone 15"));
+    assert_eq!(
+        matching(&is_phone),
+        vec![ids[4]],
+        "an empty make matches a missing make"
+    );
+
+    let not_r5 = camera_rule(
+        RuleOperator::NotEquals,
+        camera_pair("Canon", "Canon EOS R5"),
+    );
+    assert_eq!(
+        matching(&not_r5),
+        vec![ids[0], ids[2], ids[3], ids[4], ids[5], ids[6], ids[7]],
+        "is not keeps every other camera and items with no camera"
+    );
+
+    let contains = camera_rule(RuleOperator::Contains, RuleValue::Text("canon".into()));
+    assert_eq!(
+        matching(&contains),
+        vec![ids[1], ids[2], ids[3]],
+        "old contains rules still match make or model"
+    );
+
+    for value in [
+        RuleValue::Text("Canon".into()),
+        RuleValue::List(vec!["Canon".into()]),
+        camera_pair("", ""),
+    ] {
+        assert!(
+            camera_rule(RuleOperator::Equals, value.clone())
+                .build_sql()
+                .is_err(),
+            "is needs a make and model pair with at least one part: {value:?}"
+        );
+    }
+
+    assert_eq!(
+        catalog.distinct_cameras().expect("cameras"),
+        vec![
+            (String::new(), "iPhone 15".to_string()),
+            ("Canon".to_string(), "Canon EOS R5".to_string()),
+            ("Canon".to_string(), "Canon EOS R5 Mark II".to_string()),
+            ("FUJIFILM".to_string(), "X-T5".to_string()),
+            ("canon".to_string(), "Canon EOS R5".to_string()),
+        ],
+        "each stored camera once, in index order; items with no camera, or only spaces, are skipped"
+    );
+}

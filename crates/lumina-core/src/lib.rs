@@ -763,6 +763,11 @@ impl LuminaEngine {
             })
     }
 
+    /// Every stored `(make, model)` pair, for the smart album "Camera is" list.
+    pub fn distinct_cameras(&self) -> Result<Vec<(String, String)>> {
+        self.catalog.distinct_cameras()
+    }
+
     pub fn toggle_favorite(&self, id: MediaId, is_favorite: bool) -> Result<()> {
         self.catalog.toggle_favorite(id, is_favorite)
     }

@@ -858,6 +858,121 @@ fn keywords_tokens_add_and_remove() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Sets photo `i`'s camera straight in the catalog file, as a scan would.
+fn set_camera(dir: &std::path::Path, id: MediaId, make: Option<&str>, model: Option<&str>) {
+    rusqlite::Connection::open(dir.join("catalog.db"))
+        .unwrap()
+        .execute(
+            "UPDATE media_items SET make = ?1, model = ?2 WHERE id = ?3",
+            rusqlite::params![make, model, id.0 as i64],
+        )
+        .unwrap();
+}
+
+fn camera_is_row(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
+    click(vcx, "album-rule-field-0");
+    pick_option(vcx, view, DraftFocus::Field(0), "Camera");
+    click(vcx, "album-rule-op-0");
+    let ops = view.update(vcx, |app, _| {
+        app.draft_popup_options(DraftFocus::Operator(0))
+    });
+    assert_eq!(
+        ops,
+        ["is", "is not", "contains", "does not contain"],
+        "Camera offers is / is not and keeps contains"
+    );
+    pick_option(vcx, view, DraftFocus::Operator(0), "is");
+    click(vcx, "album-rule-value-0");
+    render_ui(vcx);
+}
+
+#[core::prelude::v1::test]
+fn camera_is_offers_library_cameras() {
+    let (dir, engine, ids) = library("sab_camera");
+    set_camera(&dir, ids[0], Some("Canon"), Some("Canon EOS R5"));
+    set_camera(&dir, ids[1], Some("FUJIFILM"), Some("X-T5"));
+    set_camera(&dir, ids[2], None, None);
+    set_camera(&dir, ids[3], None, None);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    // Loaded once when the builder opens, not per frame: a camera added
+    // now shows the next time the builder opens.
+    set_camera(&dir, ids[2], Some("Sony"), Some("ILCE-7M4"));
+    camera_is_row(vcx, &view);
+    let offered = view.update(vcx, |app, _| app.draft_popup_options(DraftFocus::Value(0)));
+    assert_eq!(
+        offered,
+        ["Canon EOS R5", "FUJIFILM X-T5"],
+        "the library's cameras, named as the inspector names them"
+    );
+
+    pick_option(vcx, &view, DraftFocus::Value(0), "Canon EOS R5");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("album-rule-value-text:Canon EOS R5")
+            .is_some(),
+        "the value picker shows the chosen camera"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(1), "one Canon photo")
+    });
+    keystrokes(vcx, "secondary-enter");
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(
+        saved[0].rules[0],
+        SmartAlbumRule {
+            field: RuleField::Camera,
+            operator: RuleOperator::Equals,
+            value: RuleValue::List(vec!["Canon".into(), "Canon EOS R5".into()]),
+        },
+        "the rule keeps the stored make and model"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn camera_is_with_no_cameras_says_so() {
+    let (dir, engine, ids) = library("sab_no_camera");
+    for id in ids {
+        set_camera(&dir, id, None, None);
+    }
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    camera_is_row(vcx, &view);
+    assert!(
+        vcx.debug_bounds("album-builder-popup-text:No cameras in this library yet")
+            .is_some(),
+        "an empty camera list says so instead of a blank popup"
+    );
+
+    for key in ["enter", "space", "down"] {
+        keystrokes(vcx, "escape");
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds("album-builder-popup").is_none(),
+            "Esc closes the popup"
+        );
+        view.update(vcx, |app, _| {
+            assert_eq!(app.album_draft.focus, DraftFocus::Value(0))
+        });
+        keystrokes(vcx, key);
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds("album-builder-popup-text:No cameras in this library yet")
+                .is_some(),
+            "{key} opens the same empty popup a click does"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[core::prelude::v1::test]
 fn keyword_chips_remove_from_the_keyboard() {
     let (dir, engine, ids) = library("sab_token_keys");

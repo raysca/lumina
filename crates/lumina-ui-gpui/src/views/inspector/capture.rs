@@ -4,6 +4,7 @@
 use gpui::*;
 use lumina_core::MediaItem;
 
+use crate::app::smart_draft::camera_name;
 use crate::i18n::{t, t_with};
 use crate::theme;
 
@@ -27,19 +28,10 @@ fn filled(value: &Option<String>) -> Option<String> {
 /// The capture facts the file has, in design order. Unknown or blank values
 /// are left out, so an item with no EXIF gets no rows.
 pub(crate) fn capture_rows(item: &MediaItem, focal_35mm: Option<u32>) -> Vec<CaptureRow> {
-    let camera = match (filled(&item.make), filled(&item.model)) {
-        (Some(make), Some(model)) => {
-            // Makers repeat their name in the model, often only its first
-            // word ("NIKON CORPORATION" + "NIKON D850").
-            let brand = make.split_whitespace().next().unwrap_or(&make);
-            if model.to_lowercase().starts_with(&brand.to_lowercase()) {
-                Some(model)
-            } else {
-                Some(format!("{make} {model}"))
-            }
-        }
-        (make, model) => make.or(model),
-    };
+    let camera = camera_name(
+        item.make.as_deref().unwrap_or_default(),
+        item.model.as_deref().unwrap_or_default(),
+    );
     let exposure = [
         item.f_number.map(|f| format!("ƒ/{f:.1}")),
         filled(&item.exposure_time),

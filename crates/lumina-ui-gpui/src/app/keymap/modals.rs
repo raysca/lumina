@@ -565,7 +565,7 @@ impl LuminaApp {
             }
         } else if enter || key == "space" {
             self.activate_draft_focus(cx);
-        } else if key == "down" && !self.draft_popup_options(self.album_draft.focus).is_empty() {
+        } else if key == "down" && self.draft_focus_has_popup(self.album_draft.focus) {
             self.toggle_draft_popup(self.album_draft.focus, cx);
         }
     }

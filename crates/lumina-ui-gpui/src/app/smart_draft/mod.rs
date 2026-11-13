@@ -11,7 +11,9 @@ use lumina_core::{
 mod focus;
 mod labels;
 pub use focus::{focus_order, DraftFocus, DraftPopup};
-pub use labels::{field_icon, field_label, match_label, operator_label, rating_value_label};
+pub use labels::{
+    camera_name, field_icon, field_label, match_label, operator_label, rating_value_label,
+};
 
 /// Fields offered in the field popup, in Photos-like order. Older albums may
 /// hold other fields (Year, City…); those still display, convert and save.
@@ -73,6 +75,8 @@ pub enum ValueKind {
     Period,
     /// Several of the library's tags as chips ("include any of").
     TagList,
+    /// One of the library's cameras, kept in `list` as `[make, model]`.
+    Camera,
 }
 
 impl ValueKind {
@@ -91,6 +95,7 @@ impl ValueKind {
             Self::Number | Self::Period => "number",
             Self::Tags => "choose a tag",
             Self::TagList => "add keyword…",
+            Self::Camera => "choose a camera",
             _ => "text",
         }
     }
@@ -148,6 +153,7 @@ pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
         RuleField::Date => &[Equals, LessThan, GreaterThan, Between, InTheLast],
         RuleField::Tag => &[Equals, NotEquals, AnyOf, Contains, IsEmpty, IsNotEmpty],
         RuleField::Rating => &[Equals, AtLeast, AtMost],
+        RuleField::Camera => &[Equals, NotEquals, Contains, NotContains],
         f if is_numeric(f) => &[Equals, GreaterThan, LessThan],
         _ => &[Contains, NotContains],
     }
@@ -166,6 +172,7 @@ pub fn value_kind(field: &RuleField, op: &RuleOperator) -> ValueKind {
         (RuleField::Date, _) => ValueKind::Date,
         (RuleField::Tag, RuleOperator::Equals | RuleOperator::NotEquals) => ValueKind::Tags,
         (RuleField::Tag, RuleOperator::AnyOf) => ValueKind::TagList,
+        (RuleField::Camera, RuleOperator::Equals | RuleOperator::NotEquals) => ValueKind::Camera,
         (f, _) if is_numeric(f) => ValueKind::Number,
         _ => ValueKind::Text,
     }
@@ -179,7 +186,8 @@ pub struct DraftRow {
     /// The value as typed, or the key of the chosen option.
     pub text: String,
     pub unit: PeriodUnit,
-    /// The chosen keywords of an "include any of" row, in the order added.
+    /// The chosen keywords of an "include any of" row, in the order added,
+    /// or a "Camera is" row's `[make, model]`.
     pub list: Vec<String>,
 }
 
@@ -234,6 +242,10 @@ impl DraftRow {
                 .find(|(key, _)| *key == self.text)
                 .map_or_else(|| self.text.clone(), |(_, label)| label.to_string()),
             ValueKind::TagList => self.list.join(", "),
+            ValueKind::Camera => match self.list.as_slice() {
+                [make, model] => camera_name(make, model).unwrap_or_default(),
+                _ => String::new(),
+            },
             _ => self.text.clone(),
         }
     }
@@ -257,6 +269,10 @@ impl DraftRow {
             }
             ValueKind::TagList if self.list.is_empty() => return None,
             ValueKind::TagList => RuleValue::List(self.list.clone()),
+            ValueKind::Camera if self.list.len() != 2 || self.list.concat().is_empty() => {
+                return None
+            }
+            ValueKind::Camera => RuleValue::List(self.list.clone()),
             ValueKind::Tags | ValueKind::Text if text.is_empty() => return None,
             ValueKind::Tags | ValueKind::Text => RuleValue::Text(text.to_string()),
             ValueKind::Number => match text.parse::<i64>() {
@@ -401,6 +417,17 @@ mod tests {
                 .to_rule()
                 .is_none(),
             "an empty keyword list is invalid"
+        );
+        let mut camera = DraftRow::new(RuleField::Camera);
+        assert_eq!(camera.to_rule(), None, "Camera is starts unpicked");
+        camera.list = vec![String::new(), "iPhone 15".into()];
+        let rule = camera.to_rule().expect("a model alone is a camera");
+        assert_eq!(DraftRow::from_rule(&rule).display_value(), "iPhone 15");
+        let old = row(RuleField::Camera, RuleOperator::Contains, "canon");
+        assert_eq!(
+            DraftRow::from_rule(&old.to_rule().unwrap()),
+            old,
+            "a saved Camera contains rule reopens as typed text"
         );
         let back: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
         assert_eq!(back, rows, "editing a saved album restores the same rows");

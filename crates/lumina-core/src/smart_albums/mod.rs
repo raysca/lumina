@@ -504,6 +504,17 @@ mod tests {
             album(vec![list(half), list(half)]).build_sql().is_ok(),
             "exactly the limit compiles"
         );
+        let camera = SmartAlbumRule {
+            field: RuleField::Camera,
+            operator: RuleOperator::Equals,
+            value: RuleValue::List(vec!["Canon".into(), "EOS R5".into()]),
+        };
+        assert!(
+            album(vec![list(half), list(half), camera])
+                .build_sql()
+                .is_ok(),
+            "a camera's make and model are not keywords"
+        );
         let err = album(vec![list(half), list(half + 1)])
             .build_sql()
             .expect_err("one keyword over the limit");

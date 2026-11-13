@@ -66,6 +66,27 @@ pub fn operator_label(field: &RuleField, op: &RuleOperator) -> &'static str {
     }
 }
 
+/// A camera as people say it, from its EXIF make and model ("" or spaces
+/// when missing); `None` when both are blank. Makers repeat their name in
+/// the model, often only its first word ("NIKON CORPORATION" + "NIKON
+/// D850"), so the make is dropped then. Shared by the inspector and the
+/// smart album "Camera is" list so both name a camera the same way.
+pub fn camera_name(make: &str, model: &str) -> Option<String> {
+    match (make.trim(), model.trim()) {
+        ("", "") => None,
+        (make, "") => Some(make.to_string()),
+        ("", model) => Some(model.to_string()),
+        (make, model) => {
+            let brand = make.split_whitespace().next().unwrap_or(make);
+            if model.to_lowercase().starts_with(&brand.to_lowercase()) {
+                Some(model.to_string())
+            } else {
+                Some(format!("{make} {model}"))
+            }
+        }
+    }
+}
+
 pub fn match_label(mode: MatchMode) -> &'static str {
     match mode {
         MatchMode::All => "all",
@@ -87,6 +108,21 @@ pub fn rating_value_label(op: &RuleOperator, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn camera_name_drops_a_make_the_model_repeats() {
+        assert_eq!(
+            camera_name("NIKON CORPORATION", "NIKON D850").as_deref(),
+            Some("NIKON D850")
+        );
+        assert_eq!(
+            camera_name("FUJIFILM", "X-T5").as_deref(),
+            Some("FUJIFILM X-T5")
+        );
+        assert_eq!(camera_name("", "iPhone 15").as_deref(), Some("iPhone 15"));
+        assert_eq!(camera_name("Leica", " ").as_deref(), Some("Leica"));
+        assert_eq!(camera_name(" ", ""), None, "no camera, no name");
+    }
 
     #[test]
     fn rating_label_follows_the_operator_and_counts_stars() {

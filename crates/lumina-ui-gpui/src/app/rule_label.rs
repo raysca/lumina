@@ -135,6 +135,18 @@ mod tests {
                 rule(F::Query, O::Equals, V::Text("sunset".into())),
                 "“sunset”",
             ),
+            (
+                rule(
+                    F::Camera,
+                    O::NotEquals,
+                    V::List(vec!["NIKON CORPORATION".into(), "NIKON D850".into()]),
+                ),
+                "Camera ≠ NIKON D850",
+            ),
+            (
+                rule(F::Camera, O::Contains, V::Text("canon".into())),
+                "Camera has canon",
+            ),
         ];
         for (rule, want) in cases {
             assert_eq!(rule_label(&rule), want, "chip for {rule:?}");

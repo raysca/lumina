@@ -98,7 +98,14 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) {
         let rows: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
+        let cameras = self.grid_state.as_ref().map_or_else(Vec::new, |state| {
+            state.engine.distinct_cameras().unwrap_or_else(|err| {
+                log::warn!("the library's cameras could not be listed: {err:#}");
+                Vec::new()
+            })
+        });
         let draft = &mut self.album_draft;
+        draft.cameras = cameras;
         draft.modal_open = true;
         draft.editing_album_id = editing;
         draft.album_title = title;

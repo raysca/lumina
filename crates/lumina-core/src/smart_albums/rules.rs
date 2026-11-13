@@ -35,7 +35,8 @@ pub enum RuleField {
     ColorLabel,
     /// City, region or country code (contains / does not contain).
     Place,
-    /// Camera make or model (contains / does not contain).
+    /// Camera make or model: contains / does not contain text, or is / is
+    /// not one `[make, model]` pair.
     Camera,
     /// A saved search: the value is the raw search text, compiled through
     /// [`crate::StructuredQuery`] so the album and the search cannot drift.
@@ -133,11 +134,12 @@ impl SmartAlbum {
         }
 
         // Each keyword binds four values; SQLite allows 32,766 per statement.
+        // A camera's two-item list binds at most two and is not counted.
         let keywords: usize = self
             .rules
             .iter()
             .map(|rule| match &rule.value {
-                RuleValue::List(items) => items.len(),
+                RuleValue::List(items) if rule.field == RuleField::Tag => items.len(),
                 _ => 0,
             })
             .sum();
@@ -456,6 +458,15 @@ fn compile_rule(
         };
     }
 
+    if rule.field == RuleField::Camera
+        && matches!(
+            rule.operator,
+            RuleOperator::Equals | RuleOperator::NotEquals
+        )
+    {
+        return compile_camera_is(rule);
+    }
+
     let columns: &[&str] = match rule.field {
         RuleField::Place => &["m.city", "m.admin1_region", "m.country_code"],
         RuleField::Camera => &["m.make", "m.model"],
@@ -614,6 +625,39 @@ fn compile_tag_any_of(value: &RuleValue) -> Result<(String, Vec<rusqlite::types:
         format!("m.id IN (SELECT media_id FROM media_tags WHERE {any})"),
         params,
     ))
+}
+
+/// Camera "is" / "is not": the value is the `[make, model]` pair as stored
+/// (see `Catalog::distinct_cameras`), "" for a missing part. Both parts are
+/// compared exactly, case included: the pair comes from the library's own
+/// list, and a binary `=` lets the count seek `idx_media_camera`.
+fn compile_camera_is(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    let RuleValue::List(pair) = &rule.value else {
+        return Err(anyhow!("Choose a camera"));
+    };
+    let [make, model] = pair.as_slice() else {
+        return Err(anyhow!("Choose a camera"));
+    };
+    if make.is_empty() && model.is_empty() {
+        return Err(anyhow!("Choose a camera"));
+    }
+    let mut params = Vec::new();
+    let mut part = |col: &str, value: &str| {
+        if value.is_empty() {
+            format!("({col} IS NULL OR {col} = '')")
+        } else {
+            params.push(value.to_string().into());
+            format!("{col} = ?")
+        }
+    };
+    let both = format!("{} AND {}", part("m.make", make), part("m.model", model));
+    // A NULL part makes the AND NULL; COALESCE keeps "is not" true for it.
+    let clause = if rule.operator == RuleOperator::NotEquals {
+        format!("NOT COALESCE(({both}), 0)")
+    } else {
+        format!("({both})")
+    };
+    Ok((clause, params))
 }
 
 /// A saved search: the raw text parsed exactly as the search field parses it.

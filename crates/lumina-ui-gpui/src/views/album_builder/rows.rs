@@ -8,9 +8,10 @@ use crate::app::smart_draft::{
     field_icon, field_label, operator_label, rating_value_label, DraftFocus, DraftRow, ValueKind,
 };
 use crate::app::text_input::TextTarget;
-use crate::i18n::stars;
+use crate::i18n::{stars, t};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 use lumina_core::RuleField;
 
@@ -88,6 +89,14 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         return Empty.into_any_element();
     };
     let options = app.draft_popup_options(popup.target);
+    let empty_line: SharedString = match popup.target {
+        DraftFocus::Value(i)
+            if app.album_draft.rows.get(i).map(DraftRow::kind) == Some(ValueKind::Camera) =>
+        {
+            t("smart_album.no_cameras").into()
+        }
+        _ => t("smart_album.no_tags").into(),
+    };
     let empty = options.is_empty();
     theme::menu("album-builder-popup")
         .debug_selector(|| "album-builder-popup".to_string())
@@ -111,7 +120,8 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
                     .py_1()
                     .text_xs()
                     .text_color(theme::t2())
-                    .child("No tags in this library yet"),
+                    .children(text_marker("album-builder-popup", &empty_line))
+                    .child(empty_line),
             )
         })
         .into_any_element()
@@ -305,11 +315,10 @@ pub(super) fn render_row(
             let focused = focus == DraftFocus::Value(i);
             keyword_tokens(i, row, focused, app.album_draft.token, cx).into_any_element()
         }
-        ValueKind::Choice(_) | ValueKind::Tags => {
-            let label = if row.text.is_empty() {
-                kind.placeholder().to_string()
-            } else {
-                row.display_value()
+        ValueKind::Choice(_) | ValueKind::Tags | ValueKind::Camera => {
+            let label = match row.display_value() {
+                value if value.is_empty() => kind.placeholder().to_string(),
+                value => value,
             };
             // Kind shows what it picks: "video" shows Video, anything else (photo, raw) Image.
             let icon = (row.field == RuleField::MediaType).then(|| {
@@ -319,6 +328,7 @@ pub(super) fn render_row(
                     Icon::Image
                 }
             });
+            let marker = text_marker("album-rule-value", &label.clone().into());
             row_control(picker(
                 format!("album-rule-value-{i}"),
                 icon,
@@ -327,6 +337,7 @@ pub(super) fn render_row(
                 DraftFocus::Value(i),
                 cx,
             ))
+            .children(marker)
             .flex_1()
             .into_any_element()
         }

@@ -5,8 +5,8 @@ use gpui::*;
 use lumina_core::{MatchMode, RuleField};
 
 use crate::app::smart_draft::{
-    field_label, focus_order, operator_label, operators, DraftFocus, DraftPopup, DraftRow,
-    ValueKind, FIELDS, UNITS,
+    camera_name, field_label, focus_order, operator_label, operators, DraftFocus, DraftPopup,
+    DraftRow, ValueKind, FIELDS, UNITS,
 };
 use crate::app::LuminaApp;
 
@@ -59,6 +59,13 @@ impl LuminaApp {
                     .map(|(tag, _)| tag.clone())
                     .filter(|tag| !rows[i].list.contains(tag))
                     .collect(),
+                Some(ValueKind::Camera) => self
+                    .album_draft
+                    .cameras
+                    .iter()
+                    // map, not filter_map: option i is camera i when picked.
+                    .map(|(make, model)| camera_name(make, model).unwrap_or_default())
+                    .collect(),
                 _ => Vec::new(),
             },
             DraftFocus::Unit(_) => UNITS.iter().map(|(_, l)| l.to_string()).collect(),
@@ -81,6 +88,11 @@ impl LuminaApp {
             }),
             DraftFocus::Value(i) => rows.get(i).and_then(|row| match row.kind() {
                 ValueKind::Choice(options) => options.iter().position(|(k, _)| *k == row.text),
+                ValueKind::Camera => self
+                    .album_draft
+                    .cameras
+                    .iter()
+                    .position(|(make, model)| row.list == [make.as_str(), model.as_str()]),
                 _ => self
                     .library_tag_counts
                     .iter()
@@ -131,6 +143,7 @@ impl LuminaApp {
             return;
         };
         let picked = self.draft_popup_options(popup.target).get(index).cloned();
+        let camera = self.album_draft.cameras.get(index).cloned();
         let tags = &self.library_tag_counts;
         let draft = &mut self.album_draft;
         match popup.target {
@@ -160,6 +173,12 @@ impl LuminaApp {
                     let key = match row.kind() {
                         ValueKind::TagList => {
                             row.list.extend(picked);
+                            None
+                        }
+                        ValueKind::Camera => {
+                            if let Some((make, model)) = camera {
+                                row.list = vec![make, model];
+                            }
                             None
                         }
                         ValueKind::Choice(options) => options.get(index).map(|o| o.0.to_string()),
@@ -271,10 +290,25 @@ impl LuminaApp {
             DraftFocus::Save => self.save_draft_smart_album(cx),
             DraftFocus::Title => {}
             target => {
-                if !self.draft_popup_options(target).is_empty() {
+                if self.draft_focus_has_popup(target) {
                     self.toggle_draft_popup(target, cx);
                 }
             }
+        }
+    }
+
+    /// Whether `target` opens a popup, as a click on it does, even an empty
+    /// one that says why ("No cameras in this library yet"). Rating's stars
+    /// and typed values have none.
+    pub fn draft_focus_has_popup(&self, target: DraftFocus) -> bool {
+        match target {
+            DraftFocus::Match | DraftFocus::Field(_) | DraftFocus::Operator(_) => true,
+            DraftFocus::Unit(_) => true,
+            DraftFocus::Value(i) => self.album_draft.rows.get(i).is_some_and(|row| {
+                let kind = row.kind();
+                row.field != RuleField::Rating && kind != ValueKind::None && !kind.is_typed()
+            }),
+            _ => false,
         }
     }
 

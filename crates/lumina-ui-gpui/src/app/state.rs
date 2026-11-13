@@ -279,6 +279,9 @@ pub struct AlbumDraftState {
     pub pinned_before: bool,
     /// The keyword chip ←/→ picked in the focused list, for ⌫ to remove.
     pub token: Option<usize>,
+    /// The library's cameras as stored `(make, model)`, read once when the
+    /// builder opens for the "Camera is" popup, never per frame.
+    pub cameras: Vec<(String, String)>,
 }
 
 impl AlbumDraftState {
@@ -308,6 +311,7 @@ impl Default for AlbumDraftState {
             pin: false,
             pinned_before: false,
             token: None,
+            cameras: Vec::new(),
         }
     }
 }

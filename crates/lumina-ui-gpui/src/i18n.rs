@@ -705,6 +705,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "smart_album.save" => "Save Smart Album",
         "smart_album.stays_current" => "· stays up to date automatically",
         "smart_album.more" => "more",
+        "smart_album.no_tags" => "No tags in this library yet",
+        "smart_album.no_cameras" => "No cameras in this library yet",
         "smart_album.preview_empty" => "Nothing matches yet. The album fills in as matching items arrive.",
         "smart_album.close" => "Close without saving (Esc)",
         "smart_album.empty_title" => "Nothing matches these rules yet",
