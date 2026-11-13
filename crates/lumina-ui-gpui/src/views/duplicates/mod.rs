@@ -22,7 +22,10 @@ const GROUP_LIST_WIDTH: f32 = 372.0;
 
 /// The Exact copies body: the empty state, or the list and compare panes.
 pub fn render(this: &LuminaApp, total_count: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
-    if this.duplicate_groups.is_empty() && total_count == 0 {
+    let visible = this.stacks.review.visible(&this.duplicate_groups);
+    // Nothing found, or every group skipped. Groups still loading (none
+    // yet, a count already) draw the empty panes instead.
+    if visible.is_empty() && (total_count == 0 || !this.duplicate_groups.is_empty()) {
         return this.render_empty_state(cx);
     }
     div()
@@ -33,19 +36,20 @@ pub fn render(this: &LuminaApp, total_count: usize, cx: &mut Context<LuminaApp>)
         .h_full()
         .flex()
         .flex_row()
-        .child(list::render(this, cx))
+        .child(list::render(this, &visible, cx))
         .children(
             this.stacks
                 .review
-                .selected(this.duplicate_groups.len())
-                .map(|index| compare::render(this, index, cx)),
+                .selected(&visible)
+                .map(|index| compare::render(this, &visible, index, cx)),
         )
         .into_any_element()
 }
 
 /// The page header's meta line: "128 groups · 412 items · 18.4 GB recoverable".
+/// Skipped groups are left out.
 pub(crate) fn meta(this: &LuminaApp) -> String {
-    let groups = &this.duplicate_groups;
+    let groups = this.stacks.review.visible(&this.duplicate_groups);
     let items: usize = groups.iter().map(|g| g.items.len()).sum();
     let bytes: u64 = groups.iter().map(|g| g.potential_reclaimable_bytes).sum();
     format!(
@@ -58,7 +62,7 @@ pub(crate) fn meta(this: &LuminaApp) -> String {
 
 /// The header's "Merge {n} groups": merges every group into its keeper.
 pub(crate) fn merge_all_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
-    let n = this.duplicate_groups.len();
+    let n = this.stacks.review.visible(&this.duplicate_groups).len();
     let label = if n == 1 {
         t("duplicates.merge_groups_one")
     } else {
@@ -77,13 +81,46 @@ pub(crate) fn merge_all_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) ->
 
 /// The header's "Auto-select best": every group back to the heuristic pick.
 pub(crate) fn auto_best_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
-    let label = t("duplicates.auto_best");
+    header_button(
+        "duplicates-auto-best",
+        Icon::WandSparkles,
+        t("duplicates.auto_best"),
+        t("duplicates.auto_best_hint"),
+    )
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        this.stacks.review.keepers.clear();
+        cx.notify();
+    }))
+}
+
+/// The header's "Skip all": hides every group until Duplicates is opened
+/// again. The catalog is not touched.
+pub(crate) fn skip_all_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    header_button(
+        "duplicates-skip-all",
+        Icon::StepForward,
+        t("duplicates.skip_all"),
+        t("duplicates.skip_all_hint"),
+    )
+    .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        let hashes: Vec<String> = this
+            .duplicate_groups
+            .iter()
+            .map(|g| g.hash.clone())
+            .collect();
+        this.stacks.review.skipped.extend(hashes);
+        cx.notify();
+    }))
+}
+
+/// A header button: 32 high, bg-2 with a `line` outline, icon and 12.5 label.
+fn header_button(selector: &'static str, icon: Icon, label: String, hint: String) -> Stateful<Div> {
     div()
-        .id("duplicates-auto-best")
-        .debug_selector(|| "duplicates-auto-best".to_string())
+        .id(selector)
+        .debug_selector(move || selector.to_string())
         .role(Role::Button)
         .aria_label(label.clone())
-        .tooltip(theme::tooltip_label(t("duplicates.auto_best_hint")))
+        .tooltip(theme::tooltip_label(hint))
         .h(px(32.0))
         .px(px(12.0))
         .flex_shrink_0()
@@ -99,12 +136,8 @@ pub(crate) fn auto_best_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .cursor_pointer()
         .text_size(px(12.5))
         .text_color(theme::t1())
-        .child(render_icon(Icon::WandSparkles, px(14.0), theme::t2()))
+        .child(render_icon(icon, px(14.0), theme::t2()))
         .child(label)
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.stacks.review.keepers.clear();
-            cx.notify();
-        }))
 }
 
 /// A group's name: the heuristic pick's title (the first item, whichever

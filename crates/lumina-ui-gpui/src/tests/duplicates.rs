@@ -493,3 +493,133 @@ fn footer_counts_copies_and_freed_bytes() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn skip_group_moves_on_and_skip_all_empties_the_review() {
+    let (temp_dir, engine) = seed_two_groups("dup_skip");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let before = engine.get_item_slice(0..100).len();
+    let (second_ids, second_meta) = view.update(vcx, |app, _| {
+        let g = &app.duplicate_groups[1];
+        let meta = format!(
+            "page-meta-text:1 group · 2 items · {} recoverable",
+            crate::app::types::format_bytes(g.potential_reclaimable_bytes)
+        );
+        (g.items.iter().map(|i| i.id.0).collect::<Vec<_>>(), meta)
+    });
+    assert!(vcx
+        .debug_bounds("duplicates-position-text:1 of 2")
+        .is_some());
+
+    click(vcx, "duplicates-skip-group");
+    for id in &second_ids {
+        assert!(
+            vcx.debug_bounds(super::ui_automation::leak(format!(
+                "duplicate-candidate-{id}"
+            )))
+            .is_some(),
+            "skipping moves on to the next group"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("duplicates-position-text:1 of 1")
+            .is_some(),
+        "the skipped group leaves the count"
+    );
+    assert!(
+        vcx.debug_bounds(super::ui_automation::leak(second_meta.clone()))
+            .is_some(),
+        "the header counts only the groups left: {second_meta}"
+    );
+    assert!(
+        vcx.debug_bounds("duplicates-group-row-1").is_none(),
+        "the skipped group leaves the list"
+    );
+
+    click(vcx, "duplicates-skip-all");
+    assert!(
+        vcx.debug_bounds("empty-state-headline-text:All groups skipped")
+            .is_some(),
+        "with every group skipped the review shows its empty state"
+    );
+    assert!(vcx.debug_bounds("duplicates-group-list").is_none());
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_applies(crate::app::command_palette::CommandId::MergeAllDuplicates),
+            "with every group skipped, Merge All Duplicates has nothing to do"
+        );
+    });
+    assert_eq!(
+        engine.get_item_slice(0..100).len(),
+        before,
+        "skipping never changes the catalog"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn merge_all_leaves_skipped_groups() {
+    let (temp_dir, engine) = seed_two_groups("dup_skip_merge");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let skipped: Vec<_> = view.update(vcx, |app, _| {
+        app.duplicate_groups[0].items.iter().map(|i| i.id).collect()
+    });
+
+    click(vcx, "duplicates-skip-group");
+    click(vcx, "merge-all-duplicates");
+    let active: Vec<_> = engine.get_item_slice(0..100).iter().map(|i| i.id).collect();
+    assert_eq!(active.len(), 4, "only the shown group lost a copy");
+    assert!(
+        skipped.iter().all(|id| active.contains(id)),
+        "Merge all leaves a skipped group alone"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn merging_a_group_moves_on_to_the_next() {
+    let (temp_dir, engine) = seed_two_groups("dup_merge_next");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let second_ids: Vec<u64> = view.update(vcx, |app, _| {
+        app.duplicate_groups[1]
+            .items
+            .iter()
+            .map(|i| i.id.0)
+            .collect()
+    });
+
+    click(vcx, "duplicates-merge-group");
+    for id in &second_ids {
+        assert!(
+            vcx.debug_bounds(super::ui_automation::leak(format!(
+                "duplicate-candidate-{id}"
+            )))
+            .is_some(),
+            "after a merge the next group is compared"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("duplicates-position-text:1 of 1")
+            .is_some(),
+        "the merged group leaves the count"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

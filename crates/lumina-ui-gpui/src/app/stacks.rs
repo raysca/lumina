@@ -5,7 +5,7 @@
 //! all, by Delete Rejected….
 
 use gpui::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use lumina_core::{DuplicateGroup, Flag, MediaId, MediaItem, StackKind};
 
@@ -61,23 +61,45 @@ pub struct StacksState {
     pub review: DuplicatesReview,
 }
 
-/// Which exact-copy group the review compares.
+/// Which exact-copy group the review compares, which copy each keeps, and
+/// which groups the user skipped. Session only: [`StacksState::reset`]
+/// (leaving or re-entering Duplicates) clears it all.
 #[derive(Default)]
 pub struct DuplicatesReview {
-    /// Index into `duplicate_groups`. Read through [`Self::selected`]: the
-    /// groups shrink after a merge, so the stored value may be past the end.
-    selected: usize,
+    /// The selected group's content hash. Read through [`Self::selected`].
+    selected: Option<String>,
+    /// Where the selected group was in the visible list: when it leaves
+    /// (skipped or merged) the group that slides into its place is next.
+    index: usize,
     pub scroll: UniformListScrollHandle,
     /// The copy each group keeps, by content hash, when the user chose one
-    /// over the heuristic. Session only; read through [`Self::keeper`].
+    /// over the heuristic. Read through [`Self::keeper`].
     pub keepers: HashMap<String, MediaId>,
+    /// Content hashes of the groups skipped this session: hidden from the
+    /// list, the counts and Merge all.
+    pub skipped: HashSet<String>,
 }
 
 impl DuplicatesReview {
-    /// The selected group, clamped to the last of `len` groups; None when
-    /// there are none.
-    pub fn selected(&self, len: usize) -> Option<usize> {
-        len.checked_sub(1).map(|last| self.selected.min(last))
+    /// The groups not skipped, in order.
+    // ponytail: O(groups) per call; cache it if thousands of groups lag.
+    pub fn visible<'a>(&self, groups: &'a [DuplicateGroup]) -> Vec<&'a DuplicateGroup> {
+        groups
+            .iter()
+            .filter(|g| !self.skipped.contains(&g.hash))
+            .collect()
+    }
+
+    /// The selected group's index in `visible`: the selected hash where it
+    /// still is, else the group now at its old place (clamped); None when
+    /// nothing is left.
+    pub fn selected(&self, visible: &[&DuplicateGroup]) -> Option<usize> {
+        let last = visible.len().checked_sub(1)?;
+        let by_hash = self
+            .selected
+            .as_ref()
+            .and_then(|hash| visible.iter().position(|g| &g.hash == hash));
+        Some(by_hash.unwrap_or(self.index.min(last)))
     }
 
     /// The copy `group` keeps: the user's choice while it is still in the
@@ -91,10 +113,17 @@ impl DuplicatesReview {
             .unwrap_or(MediaId(0))
     }
 
-    /// Selects group `index` (clamped on read) and scrolls its row into view.
-    pub fn select(&mut self, index: usize) {
-        self.selected = index;
+    /// Selects the visible group at `index` and scrolls its row into view.
+    pub fn select(&mut self, index: usize, hash: &str) {
+        self.index = index;
+        self.selected = Some(hash.to_string());
         self.scroll.scroll_to_item(index, ScrollStrategy::Nearest);
+    }
+
+    /// Hides the group at visible `index`; the next one takes its place.
+    pub fn skip(&mut self, index: usize, hash: &str) {
+        self.select(index, hash);
+        self.skipped.insert(hash.to_string());
     }
 }
 
@@ -145,6 +174,15 @@ impl LuminaApp {
     /// The Exact copies review is on screen (its own header and actions).
     pub(crate) fn duplicates_review_shown(&self) -> bool {
         self.selection == AlbumSelection::Duplicates && self.stacks.tab == DuplicatesTab::Exact
+    }
+
+    /// Some group is left to review: not all merged or skipped.
+    pub(crate) fn duplicates_to_review(&self) -> bool {
+        !self
+            .stacks
+            .review
+            .visible(&self.duplicate_groups)
+            .is_empty()
     }
 
     /// Palette "Show Exact Copies" / "Show Similar Shots", from anywhere.
@@ -350,14 +388,53 @@ impl LuminaApp {
 #[cfg(test)]
 mod tests {
     use super::DuplicatesReview;
+    use lumina_core::DuplicateGroup;
+
+    fn group(hash: &str) -> DuplicateGroup {
+        DuplicateGroup {
+            hash: hash.into(),
+            file_size: 1,
+            items: Vec::new(),
+            potential_reclaimable_bytes: 1,
+        }
+    }
 
     #[core::prelude::v1::test]
-    fn review_selection_never_reads_past_the_groups() {
+    fn review_selection_follows_the_hash_and_never_reads_past_the_groups() {
+        let groups = [group("a"), group("b"), group("c")];
         let mut review = DuplicatesReview::default();
-        assert_eq!(review.selected(0), None, "no groups, no selection");
-        review.select(5);
-        assert_eq!(review.selected(2), Some(1), "clamped to the last group");
-        assert_eq!(review.selected(0), None, "groups merged away: none");
-        assert_eq!(review.selected(9), Some(5), "in range: as selected");
+        assert_eq!(review.selected(&[]), None, "no groups, no selection");
+        assert_eq!(review.selected(&review.visible(&groups)), Some(0));
+
+        review.select(1, "b");
+        let shifted = [group("b"), group("c")];
+        assert_eq!(
+            review.selected(&review.visible(&shifted)),
+            Some(0),
+            "the selection follows its group when an earlier one leaves"
+        );
+
+        review.skip(1, "b");
+        let visible = review.visible(&groups);
+        assert_eq!(visible.len(), 2, "a skipped group is hidden");
+        assert_eq!(
+            review.selected(&visible).map(|i| visible[i].hash.as_str()),
+            Some("c"),
+            "skipping moves on to the next group"
+        );
+
+        review.skip(1, "c");
+        let visible = review.visible(&groups);
+        assert_eq!(
+            review.selected(&visible),
+            Some(0),
+            "clamped to the last group"
+        );
+        review.skip(0, "a");
+        assert_eq!(
+            review.selected(&review.visible(&groups)),
+            None,
+            "all skipped: none"
+        );
     }
 }

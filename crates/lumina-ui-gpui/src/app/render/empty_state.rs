@@ -122,6 +122,12 @@ impl LuminaApp {
                 AlbumSelection::Trash => {
                     copy(Icon::Trash, t("trash.empty_title"), t("trash.empty_body"))
                 }
+                // Every group skipped: they come back on the next visit.
+                AlbumSelection::Duplicates if !self.duplicate_groups.is_empty() => copy(
+                    Icon::StepForward,
+                    t("duplicates.all_skipped"),
+                    t("duplicates.all_skipped_body"),
+                ),
                 AlbumSelection::Duplicates => copy(
                     Icon::Repeat,
                     "No Duplicates Found".into(),

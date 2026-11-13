@@ -165,8 +165,9 @@ impl LuminaApp {
                 .items_center()
                 .gap(px(10.0))
                 .children(self.render_downloads_button(window, cx))
-                .when(!self.duplicate_groups.is_empty(), |bar| {
+                .when(self.duplicates_to_review(), |bar| {
                     bar.child(crate::views::duplicates::auto_best_button(cx))
+                        .child(crate::views::duplicates::skip_all_button(cx))
                         .child(crate::views::duplicates::merge_all_button(self, cx))
                 })
                 .when(own_controls, |bar| bar.child(window_controls(window)));

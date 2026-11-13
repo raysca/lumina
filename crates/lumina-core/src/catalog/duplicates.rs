@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::params;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -496,9 +496,14 @@ impl Catalog {
     /// Merges all duplicate groups in a single atomic transaction.
     /// `keepers` maps a content hash to the copy that group keeps; a group
     /// with no entry, or whose entry is not one of its items, keeps its
-    /// heuristic pick (the first item).
+    /// heuristic pick (the first item). Groups whose hash is in `skipped`
+    /// are left alone.
     /// Returns the IDs of all newly trashed duplicate items.
-    pub fn merge_all_duplicates(&self, keepers: &HashMap<String, MediaId>) -> Result<Vec<MediaId>> {
+    pub fn merge_all_duplicates(
+        &self,
+        keepers: &HashMap<String, MediaId>,
+        skipped: &HashSet<String>,
+    ) -> Result<Vec<MediaId>> {
         let groups = self.query_duplicate_groups()?;
         if groups.is_empty() {
             return Ok(Vec::new());
@@ -508,7 +513,7 @@ impl Catalog {
         let tx = conn.transaction()?;
         let mut all_trashed = Vec::new();
         for group in groups {
-            if group.items.len() >= 2 {
+            if group.items.len() >= 2 && !skipped.contains(&group.hash) {
                 let keep_id = keepers
                     .get(&group.hash)
                     .copied()
@@ -609,7 +614,9 @@ mod tests {
 
         // Group a keeps its second copy; b's stale choice (not in b) is ignored.
         let keepers = HashMap::from([("a".to_string(), a2), ("b".to_string(), a1)]);
-        let mut trashed = catalog.merge_all_duplicates(&keepers).unwrap();
+        let mut trashed = catalog
+            .merge_all_duplicates(&keepers, &HashSet::new())
+            .unwrap();
         trashed.sort_by_key(|id| id.0);
         assert_eq!(
             trashed,
@@ -635,6 +642,33 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![b1],
             "an id from another group falls back to the heuristic keeper"
+        );
+    }
+
+    #[test]
+    fn merge_all_leaves_skipped_groups() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let a1 = plain(&catalog, "/lib/a1.mp4");
+        let a2 = plain(&catalog, "/lib/a2.mp4");
+        let b1 = plain(&catalog, "/lib/b1.mp4");
+        let b2 = plain(&catalog, "/lib/b2.mp4");
+        catalog
+            .batch_insert_hashes(&[
+                (a1, 1_000, "a".into()),
+                (a2, 1_000, "a".into()),
+                (b1, 1_000, "b".into()),
+                (b2, 1_000, "b".into()),
+            ])
+            .unwrap();
+        let skipped = HashSet::from(["a".to_string()]);
+        let trashed = catalog
+            .merge_all_duplicates(&HashMap::new(), &skipped)
+            .unwrap();
+        assert_eq!(trashed, vec![b2], "only the group not skipped merges");
+        assert_eq!(
+            catalog.find_items_by_hash("a").unwrap().len(),
+            2,
+            "a skipped group keeps every copy"
         );
     }
 

@@ -1266,7 +1266,11 @@ impl LuminaApp {
                 .system_album_counts
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0),
-            CommandId::MergeAllDuplicates => self.duplicate_items_count > 0,
+            // Not when the review shows every group skipped: it would merge nothing.
+            CommandId::MergeAllDuplicates => {
+                self.duplicate_items_count > 0
+                    && (!self.duplicates_review_shown() || self.duplicates_to_review())
+            }
             CommandId::ShowExactCopies | CommandId::ShowSimilarShots => {
                 self.grid_state.is_some() && !self.compare_holds_view()
             }

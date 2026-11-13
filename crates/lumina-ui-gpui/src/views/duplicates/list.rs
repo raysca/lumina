@@ -9,14 +9,24 @@ use super::{group_summary, group_title, texture, GROUP_LIST_WIDTH};
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 
 const ROW_HEIGHT: f32 = 75.5;
 const THUMB: f32 = 40.0;
 
-pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
-    let len = this.duplicate_groups.len();
-    let position = this.stacks.review.selected(len).map_or(0, |i| i + 1);
+pub(super) fn render(
+    this: &LuminaApp,
+    visible: &[&DuplicateGroup],
+    cx: &mut Context<LuminaApp>,
+) -> Div {
+    let len = visible.len();
+    let position = this.stacks.review.selected(visible).map_or(0, |i| i + 1);
+    let position: SharedString = t_with(
+        "duplicates.position",
+        &[&crate::i18n::count(position), &crate::i18n::count(len)],
+    )
+    .into();
     div()
         .debug_selector(|| "duplicates-group-list".to_string())
         .w(px(GROUP_LIST_WIDTH))
@@ -53,10 +63,8 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                         .font_family(theme::FONT_MONO)
                         .text_size(px(10.5))
                         .text_color(theme::t3())
-                        .child(t_with(
-                            "duplicates.position",
-                            &[&crate::i18n::count(position), &crate::i18n::count(len)],
-                        )),
+                        .children(text_marker("duplicates-position", &position))
+                        .child(position),
                 ),
         )
         .child(
@@ -75,10 +83,11 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
                         "duplicates-group-rows",
                         len,
                         cx.processor(|this, range: std::ops::Range<usize>, _window, cx| {
-                            let selected = this.stacks.review.selected(this.duplicate_groups.len());
+                            let visible = this.stacks.review.visible(&this.duplicate_groups);
+                            let selected = this.stacks.review.selected(&visible);
                             range
                                 .filter_map(|index| {
-                                    let group = this.duplicate_groups.get(index)?;
+                                    let group = visible.get(index)?;
                                     Some(row(this, index, group, selected == Some(index), cx))
                                 })
                                 .collect()
@@ -99,6 +108,7 @@ fn row(
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
     let title = group_title(group);
+    let hash = group.hash.clone();
     let thumbs: Vec<_> = group
         .items
         .iter()
@@ -125,7 +135,7 @@ fn row(
         .hover(|s| s.bg(theme::bg_2()))
         .cursor_pointer()
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.stacks.review.select(index);
+            this.stacks.review.select(index, &hash);
             cx.notify();
         }))
         .child(

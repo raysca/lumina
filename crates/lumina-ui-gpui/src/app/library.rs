@@ -1254,7 +1254,7 @@ impl LuminaApp {
         };
         match state
             .engine
-            .merge_all_duplicates(&self.stacks.review.keepers)
+            .merge_all_duplicates(&self.stacks.review.keepers, &self.stacks.review.skipped)
         {
             Ok(trashed_ids) => {
                 let total_merged = trashed_ids.len();
