@@ -190,31 +190,7 @@ impl ViewerViewport {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, e: &MouseDownEvent, _w, cx| {
-                    // The menu acts on the shown item only: drop any grid
-                    // multi-selection so Delete/Rate cannot reach hidden items.
-                    // The viewer can be open without a grid index.
-                    // Edit mode has its own bar; the menu's Delete and
-                    // Rotate must not act under the draft.
-                    // A slideshow has no menu: its Delete and Rotate would
-                    // act on a slide behind the timer.
-                    if this.edits.session.is_some() || this.slideshow.is_some() {
-                        return;
-                    }
-                    if let Some(item) = this.selected_item.clone() {
-                        this.selected_indices.clear();
-                        this.selected_indices.extend(this.selected_index);
-                        this.selection_anchor = this.selected_index;
-                        // One item now: its own summary and tags (a large
-                        // selection's may still be loading).
-                        this.update_batch_summary();
-                        this.refresh_selected_tags();
-                        this.context_menu_state = Some(ContextMenuState {
-                            position: e.position,
-                            item,
-                            hovered: None,
-                        });
-                        cx.notify();
-                    }
+                    open_viewer_menu(this, e.position, cx)
                 }),
             )
             // The double-click zoom handler lives on the media element itself
@@ -423,7 +399,11 @@ impl ViewerViewport {
                     // Large Circular Play Indicator (Centered on Video when paused).
                     // Not while PiP owns the player: this is a poster then.
                     .child(
-                        if is_video && !this.video.in_pip && !this.video.is_playing {
+                        if is_video
+                            && !this.video.in_pip
+                            && !this.video.is_playing
+                            && !this.playback_failed_shown()
+                        {
                             div()
                                 .id("viewer-center-play-indicator")
                                 .debug_selector(|| "viewer-center-play".to_string())
@@ -451,6 +431,39 @@ impl ViewerViewport {
             )
             // The cached thumbnail may still show; say why it goes no further.
             .children(super::missing::render(this, cx))
+            .children(super::playback_failed::render(this, cx))
+    }
+}
+
+/// Opens the viewer's right-click menu at `position`. Also called by the
+/// cards over the stage (which occlude the stage's own handler).
+pub(super) fn open_viewer_menu(
+    this: &mut LuminaApp,
+    position: Point<Pixels>,
+    cx: &mut Context<LuminaApp>,
+) {
+    // The menu acts on the shown item only: drop any grid multi-selection
+    // so Delete/Rate cannot reach hidden items. The viewer can be open
+    // without a grid index. Edit mode has its own bar; the menu's Delete
+    // and Rotate must not act under the draft. A slideshow has no menu:
+    // its Delete and Rotate would act on a slide behind the timer.
+    if this.edits.session.is_some() || this.slideshow.is_some() {
+        return;
+    }
+    if let Some(item) = this.selected_item.clone() {
+        this.selected_indices.clear();
+        this.selected_indices.extend(this.selected_index);
+        this.selection_anchor = this.selected_index;
+        // One item now: its own summary and tags (a large selection's may
+        // still be loading).
+        this.update_batch_summary();
+        this.refresh_selected_tags();
+        this.context_menu_state = Some(ContextMenuState {
+            position,
+            item,
+            hovered: None,
+        });
+        cx.notify();
     }
 }
 

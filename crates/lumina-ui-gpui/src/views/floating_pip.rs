@@ -47,7 +47,8 @@ fn start_drag(window: &Window) {
 
 /// The player keys while the PiP window is key (the viewer's bindings):
 /// Space/K play, J/← back 5 s, → forward 5 s, ⌥←/⌥→ chapter or 5 s,
-/// L loop, M mute; Escape closes the PiP (its window has no window buttons).
+/// L loop, M mute; Escape closes the PiP (its window has no window buttons);
+/// ↵ retries a clip that failed to load.
 /// Returns whether the key was handled.
 fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<LuminaApp>) -> bool {
     let m = keystroke.modifiers;
@@ -64,6 +65,8 @@ fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<L
         "l" => app.toggle_video_loop(cx),
         "m" => app.toggle_video_mute(cx),
         "escape" => app.close_pip(cx),
+        // The failure message's Try Again.
+        "enter" if app.video.load_error.is_some() => app.retry_video_load(cx),
         _ => return false,
     }
     true
@@ -179,6 +182,10 @@ impl Render for FloatingPipPlayerView {
         let video = &app_read.video;
         let preview_image = video.pip_frame.clone();
         let has_player = video.player.is_some();
+        // A failed load says so instead of showing a stale or empty frame.
+        let failed = video.load_error.is_some();
+        // A portrait PiP is too narrow for the line beside the button.
+        let narrow = window.viewport_size().width < px(260.0);
         let title = video.item.as_ref().map(display_title).unwrap_or_default();
         let is_playing = video.is_playing;
         let is_muted = video.is_muted;
@@ -325,7 +332,10 @@ impl Render for FloatingPipPlayerView {
                     .on_mouse_down(MouseButton::Left, |_e, window, _cx| {
                         start_drag(window);
                     })
-                    .child(if let Some(img_render) = preview_image {
+                    .child(if failed {
+                        // The failure message sits over the fades, below.
+                        div().into_any_element()
+                    } else if let Some(img_render) = preview_image {
                         div()
                             .size_full()
                             .child(img(img_render).size_full().object_fit(ObjectFit::Contain))
@@ -514,6 +524,9 @@ impl Render for FloatingPipPlayerView {
                                 .on_click(on_app(LuminaApp::toggle_video_mute)),
                             ),
                     ),
+            )
+            .children(
+                failed.then(|| crate::views::viewer::pip_playback_failed(self.app.clone(), narrow)),
             )
             .into_any_element()
     }

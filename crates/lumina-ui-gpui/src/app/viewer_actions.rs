@@ -336,6 +336,7 @@ impl LuminaApp {
         self.discard_edit_draft();
         self.viewer_state.reset();
         self.missing_card.focus = None;
+        self.video.failed_focus = None;
         if !self.video.in_pip {
             self.stop_video_player();
         }

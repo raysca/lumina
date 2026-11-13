@@ -128,6 +128,9 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
         // regardless of small viewer layout changes.
         app.grid_columns = 2;
         app.open_viewer(video, cx);
+        // The sample path doesn't exist, so the load failed; this test is
+        // about the play badge a loadable paused video shows.
+        app.video.load_error = None;
     });
     render_ui(vcx);
 

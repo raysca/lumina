@@ -918,6 +918,12 @@ fn en_us(key: &str) -> Option<&'static str> {
         "viewer.missing_locate" => "Locate file…",
         "viewer.missing_keep" => "Keep preview",
         "viewer.missing_dismiss" => "Dismiss",
+        "playback.failed_title" => "Can't play this clip",
+        "playback.failed_body" => {
+            "Lumina couldn't open this video. The file may be damaged or use a format macOS can't play."
+        }
+        "playback.retry" => "Try Again",
+        "playback.reveal" => "Reveal in Finder",
         "viewer.info_panel" => "Info",
         "view.all_media" => "All Media",
         "view.untagged" => "Untagged",

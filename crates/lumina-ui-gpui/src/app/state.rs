@@ -150,6 +150,11 @@ pub struct VideoPlaybackState {
     pub loop_range: crate::app::loop_range::LoopRange,
     /// Audio tracks and chapters of the open video, for this session only.
     pub tracks: crate::app::video_tracks::VideoTracks,
+    /// Why the open video failed to load, shown in the viewer card and in
+    /// PiP. Set by a failed load, cleared by the next load or stop.
+    pub load_error: Option<String>,
+    /// Tab focus in the failure card: 0 Try Again, 1 Reveal in Finder.
+    pub failed_focus: Option<usize>,
 }
 
 /// Tags page state (the keyword list and detail panel).

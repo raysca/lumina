@@ -28,6 +28,7 @@ pub mod navigation;
 pub mod network_import;
 pub mod panels;
 pub mod pip;
+pub mod playback_failed;
 pub mod preferences;
 pub mod present;
 pub mod quick_edit;

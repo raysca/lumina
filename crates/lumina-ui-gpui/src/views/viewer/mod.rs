@@ -12,6 +12,8 @@ pub mod crop_overlay;
 pub mod edit_bar;
 pub mod filmstrip;
 mod missing;
+mod playback_failed;
+pub(crate) use playback_failed::pip_message as pip_playback_failed;
 pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;

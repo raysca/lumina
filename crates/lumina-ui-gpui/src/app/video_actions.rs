@@ -174,7 +174,10 @@ impl LuminaApp {
 
         let mut player = player::create_native_player();
         self.video.playback_time = 0.0;
-        if let Ok(meta) = player.load(&item.path) {
+        #[cfg(test)]
+        crate::app::playback_failed::VIDEO_LOADS.with(|n| n.set(n.get() + 1));
+        let loaded = player.load(&item.path);
+        if let Ok(meta) = loaded {
             player.set_looping(self.video.is_looping);
             player.set_volume(self.video.volume);
             player.set_muted(self.video.is_muted);
@@ -212,9 +215,12 @@ impl LuminaApp {
             // The scrubber and the chapter rows show strip frames without a
             // hover; closing or changing media cancels it.
             self.request_scrub_strip(cx);
-        } else if let Some(state) = self.grid_state.as_ref() {
+        } else {
             // A failed load has no resume point to finish.
-            state.video_resume.finish();
+            if let Some(state) = self.grid_state.as_ref() {
+                state.video_resume.finish();
+            }
+            self.video.load_error = loaded.err().map(|err| format!("{err:#}"));
         }
         cx.notify();
     }
@@ -259,6 +265,9 @@ impl LuminaApp {
         self.video.loop_range = Default::default();
         // So are its tracks, chapters and audio choice.
         self.video.tracks = Default::default();
+        // And its load failure.
+        self.video.load_error = None;
+        self.video.failed_focus = None;
         self.clear_scrub_strip();
     }
 

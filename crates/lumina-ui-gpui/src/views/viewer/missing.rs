@@ -155,6 +155,12 @@ fn card(this: &LuminaApp, drive: bool, preview: bool, cx: &mut Context<LuminaApp
                 .aria_label(title.clone())
                 // Clicks on the card must not reach the photo (double-click zoom).
                 .occlude()
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(|this, e: &MouseDownEvent, _, cx| {
+                        super::viewport::open_viewer_menu(this, e.position, cx)
+                    }),
+                )
                 .w(px(420.0))
                 .max_w_full()
                 .p(px(24.0))

@@ -349,6 +349,11 @@ impl LuminaApp {
             return;
         }
 
+        // The viewer's "Can't play this clip" card: Tab and a focused ↵.
+        if self.handle_playback_failed_key(keystroke, cx) {
+            return;
+        }
+
         // Enter/Return: Close viewer if open, or open selected item
         if key == "enter" || key == "return" {
             if self.is_fullscreen_viewer {

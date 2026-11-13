@@ -53,6 +53,7 @@ mod network_import;
 mod overlay_isolation;
 mod palette_and_empty;
 mod pip;
+mod playback_failed;
 mod preferences;
 mod quick_edit;
 mod quick_edit_crop;

@@ -130,6 +130,13 @@ fn viewer_says_the_original_is_missing() {
         "Locate file… runs the Locate path for the item on screen"
     );
 
+    right_click(vcx, "viewer-missing-card");
+    assert!(
+        view.update(vcx, |app, _| app.context_menu_state.take().is_some()),
+        "right-clicking the card still opens the viewer menu"
+    );
+    render_ui(vcx);
+
     click(vcx, "viewer-missing-keep");
     render_ui(vcx);
     assert!(

@@ -131,7 +131,10 @@ impl VideoPlayerBackend for AvFoundationPlayer {
         };
 
         if ok != 1 {
-            return Err(anyhow!("Failed to load video in AVFoundation: {:?}", path));
+            return Err(anyhow!(
+                "The system player could not open {}",
+                path.display()
+            ));
         }
 
         self.cached_width = width.max(0) as u32;
