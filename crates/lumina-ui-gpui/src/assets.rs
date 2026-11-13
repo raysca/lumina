@@ -44,6 +44,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "images",
     "info",
     "layout-dashboard",
+    "library",
     "map",
     "map-pin",
     "maximize-2",

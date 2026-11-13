@@ -8,6 +8,7 @@ use lumina_core::{SmartAlbum, SystemAlbum};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::text_marker;
 use crate::views::sidebar::AlbumSelection;
 
 /// How large the shell draws. `Hero` is for First Run (Design 11); every view
@@ -30,6 +31,8 @@ pub(crate) enum EmptySize {
 #[derive(Clone)]
 enum EmptyAction {
     ShowAll,
+    /// All Media plus a toast pointing at Add to Album; an empty album's way in.
+    AddFromLibrary,
     EditSmartAlbum(SmartAlbum),
     OpenLibrary,
     ManageTags,
@@ -135,9 +138,12 @@ impl LuminaApp {
                     },
                 },
                 AlbumSelection::Album(id) => EmptyCopy {
-                    primary: show_all(),
+                    primary: Some((
+                        crate::i18n::t("command.add_from_library"),
+                        EmptyAction::AddFromLibrary,
+                    )),
                     ..copy(
-                        Icon::Image,
+                        Icon::ImagePlus,
                         match self.album_title(*id) {
                             Some(title) => {
                                 crate::i18n::t("album.empty_title").replace("{title}", title)
@@ -213,8 +219,10 @@ impl LuminaApp {
             }
         };
 
-        let primary_button = primary
-            .map(|(label, action)| self.empty_action_button(true, label, None, action, size, cx));
+        let primary_button = primary.map(|(label, action)| {
+            let icon = matches!(action, EmptyAction::AddFromLibrary).then_some(Icon::Library);
+            self.empty_action_button(true, label, icon, action, size, cx)
+        });
         let secondary_button = secondary
             .map(|(label, action)| self.empty_action_button(false, label, None, action, size, cx));
         let glyph = match size {
@@ -272,6 +280,7 @@ impl LuminaApp {
                             .line_height(px(19.0))
                             .text_color(theme::t2())
                             .text_center()
+                            .children(text_marker("empty-state-body", &body.clone().into()))
                             .child(body),
                     )
                     .children(path.map(|path| {
@@ -379,6 +388,7 @@ impl LuminaApp {
             .rounded(theme::RADIUS_LG)
             .text_size(px(12.5))
             .children(icon.map(|icon| render_icon(icon, px(14.0), ink)))
+            .children(text_marker(id, &label.clone().into()))
             .child(label)
             .on_click(cx.listener(move |this, _event, _window, cx| {
                 this.perform_empty_action(action.clone(), cx);
@@ -389,6 +399,7 @@ impl LuminaApp {
     fn perform_empty_action(&mut self, action: EmptyAction, cx: &mut Context<Self>) {
         match action {
             EmptyAction::ShowAll => self.select_album(AlbumSelection::AllLibrary, cx),
+            EmptyAction::AddFromLibrary => self.add_from_library(cx),
             EmptyAction::EditSmartAlbum(album) => self.open_album_builder_for_edit(album, cx),
             EmptyAction::OpenLibrary => self.pick_folder_dialog(cx),
             EmptyAction::ManageTags => self.open_tag_manager(cx),
@@ -402,5 +413,16 @@ impl LuminaApp {
                 self.set_search_query(&query, cx);
             }
         }
+    }
+
+    /// An album with nothing in it is on screen (⌘K Add from Library).
+    pub(crate) fn empty_album_shown(&self) -> bool {
+        self.album_page_album().is_some() && !self.view_loading() && self.displayed_count() == 0
+    }
+
+    /// No picker yet: go to All Media and say how to add items from there.
+    pub(crate) fn add_from_library(&mut self, cx: &mut Context<Self>) {
+        self.select_album(AlbumSelection::AllLibrary, cx);
+        self.show_toast(crate::i18n::t("album.add_from_library_toast"), cx);
     }
 }

@@ -441,3 +441,116 @@ fn empty_state_shell_matches_design() {
         "the hero primary button is 40 px tall"
     );
 }
+
+#[core::prelude::v1::test]
+fn empty_album_offers_add_from_library() {
+    use crate::app::command_palette::CommandId;
+
+    let (dir, engine) = seed_library("states_empty_album_add", 1);
+    let album = engine.create_album("Iceland 2024").unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let open_album = |vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, cx| {
+            app.select_album(AlbumSelection::Album(album.id), cx)
+        });
+        render_ui(vcx);
+    };
+    let assert_went_to_library = |vcx: &mut gpui::VisualTestContext, path: &str| {
+        view.update(vcx, |app, cx| {
+            assert_eq!(
+                app.selection,
+                AlbumSelection::AllLibrary,
+                "{path} goes to All Media"
+            );
+            let toast = app.toast.current().map(|t| t.message.clone());
+            assert!(
+                toast.as_deref().is_some_and(|m| m.contains("Add to Album")),
+                "{path} points at Add to Album, got {toast:?}"
+            );
+            app.dismiss_toast(cx);
+        });
+    };
+
+    open_album(vcx);
+    assert!(
+        vcx.debug_bounds(
+            "empty-state-body-text:Items stay in your library \u{2014} an album is just a view of them."
+        )
+        .is_some(),
+        "the empty album says items stay in the library"
+    );
+    assert!(
+        vcx.debug_bounds("empty-primary-text:Add from Library")
+            .is_some(),
+        "the empty album's primary action is Add from Library"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.command_applies(CommandId::AddFromLibrary),
+            "⌘K offers Add from Library on an empty album"
+        )
+    });
+
+    click(vcx, "empty-primary");
+    assert_went_to_library(vcx, "the button");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_applies(CommandId::AddFromLibrary),
+            "no Add from Library outside an empty album"
+        )
+    });
+
+    open_album(vcx);
+    focus_app(vcx, &view);
+    keystrokes(
+        vcx,
+        "secondary-k a d d space f r o m space l i b r a r y enter",
+    );
+    render_ui(vcx);
+    assert_went_to_library(vcx, "⌘K Add from Library");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn empty_album_long_title_wraps_and_keeps_the_button_in_view() {
+    let (dir, engine) = seed_library("states_empty_album_long", 1);
+    let title = "A very long album title for the Iceland road trip of summer 2024 and more";
+    assert!(title.chars().count() >= 60);
+    let album = engine.create_album(title).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Album(album.id), cx)
+    });
+    render_ui(vcx);
+
+    let headline = vcx
+        .debug_bounds("empty-state-headline")
+        .expect("the empty album draws a headline");
+    assert!(
+        f32::from(headline.size.width) <= 430.0,
+        "the headline wraps within 430 px, got {:?}",
+        headline.size.width
+    );
+    assert!(
+        f32::from(headline.size.height) > 30.0,
+        "a 60+ character headline wraps onto a second line, got {:?}",
+        headline.size.height
+    );
+    let window = vcx.update(|window, _| window.viewport_size());
+    let primary = vcx
+        .debug_bounds("empty-primary")
+        .expect("the empty album keeps its primary action");
+    assert!(
+        primary.left() >= gpui::px(0.0)
+            && primary.top() >= gpui::px(0.0)
+            && primary.right() <= window.width
+            && primary.bottom() <= window.height,
+        "Add from Library stays inside the {window:?} window, got {primary:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
