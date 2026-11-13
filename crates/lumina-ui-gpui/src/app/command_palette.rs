@@ -25,6 +25,11 @@ pub enum CommandId {
     EmptyTrash,
     RestoreAll,
     MergeAllDuplicates,
+    /// Review Duplicates: the shown group, or every group.
+    SkipDuplicateGroup,
+    MergeDuplicateGroup,
+    AutoSelectBest,
+    SkipAllDuplicateGroups,
     /// The Duplicates destination on its Exact copies / Similar shots tab.
     ShowExactCopies,
     ShowSimilarShots,
@@ -246,6 +251,9 @@ impl Command {
             EmptyTrash => Icon::Trash,
             RestoreAll => Icon::Undo2,
             MergeAllDuplicates | ShowExactCopies | ShowSimilarShots => Icon::Repeat,
+            SkipDuplicateGroup | SkipAllDuplicateGroups => Icon::StepForward,
+            MergeDuplicateGroup => Icon::Combine,
+            AutoSelectBest => Icon::WandSparkles,
             ShowMap | ShowOnMap => Icon::MapPin,
             ShowAlbums | ShowAlbumsTab | ShowSmartAlbumsTab => Icon::Folder,
             ShowGrid => Icon::Images,
@@ -385,6 +393,30 @@ pub fn commands() -> &'static [Command] {
             key: "command.merge_all_duplicates",
             shortcut: "",
             keywords: "duplicate duplicates merge clean dedup",
+        },
+        Command {
+            id: CommandId::SkipDuplicateGroup,
+            key: "command.skip_group",
+            shortcut: "S",
+            keywords: "duplicates skip group later",
+        },
+        Command {
+            id: CommandId::MergeDuplicateGroup,
+            key: "command.merge_group",
+            shortcut: "↵",
+            keywords: "duplicates merge group keep copy",
+        },
+        Command {
+            id: CommandId::AutoSelectBest,
+            key: "command.auto_select_best",
+            shortcut: "",
+            keywords: "duplicates keeper best copy reset",
+        },
+        Command {
+            id: CommandId::SkipAllDuplicateGroups,
+            key: "command.skip_all_groups",
+            shortcut: "",
+            keywords: "duplicates skip all groups later",
         },
         Command {
             id: CommandId::ShowExactCopies,
@@ -1271,6 +1303,14 @@ impl LuminaApp {
                 self.duplicate_items_count > 0
                     && (!self.duplicates_review_shown() || self.duplicates_to_review())
             }
+            CommandId::SkipDuplicateGroup
+            | CommandId::MergeDuplicateGroup
+            | CommandId::AutoSelectBest
+            | CommandId::SkipAllDuplicateGroups => {
+                self.duplicates_review_shown()
+                    && self.duplicates_to_review()
+                    && !self.is_fullscreen_viewer
+            }
             CommandId::ShowExactCopies | CommandId::ShowSimilarShots => {
                 self.grid_state.is_some() && !self.compare_holds_view()
             }
@@ -1632,6 +1672,10 @@ impl LuminaApp {
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),
             CommandId::RestoreAll => self.restore_all_trash(cx),
             CommandId::MergeAllDuplicates => self.merge_all_duplicates(cx),
+            CommandId::SkipDuplicateGroup => self.duplicates_skip_shown(cx),
+            CommandId::MergeDuplicateGroup => self.duplicates_merge_shown(cx),
+            CommandId::AutoSelectBest => self.duplicates_auto_best(cx),
+            CommandId::SkipAllDuplicateGroups => self.duplicates_skip_all(cx),
             CommandId::ShowExactCopies => {
                 self.show_duplicates_tab(crate::app::stacks::DuplicatesTab::Exact, cx)
             }

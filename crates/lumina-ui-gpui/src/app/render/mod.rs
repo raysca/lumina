@@ -112,7 +112,7 @@ impl LuminaApp {
 
 /// The shortcut sheet: titled sections of (keys, what they do). Keep in
 /// step with `app/keymap`.
-const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
+const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
     (
         "GENERAL",
         &[
@@ -169,6 +169,17 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 11] = [
             ("+ / - / Z / ⌘0–⌘4", "Zoom every pane"),
             ("⌘Z / ⇧⌘Z", "Undo / redo a flag or rating"),
             ("Esc", "Close compare"),
+        ],
+    ),
+    (
+        "REVIEW DUPLICATES",
+        &[
+            ("↑ / ↓", "Previous / next group"),
+            ("← / → or 1–9", "Keep another copy"),
+            ("S", "Skip group"),
+            ("Enter", "Merge group"),
+            ("⌘↓", "Open the selected copy or the keeper"),
+            ("⌘K Skip All Groups", "Skip every group"),
         ],
     ),
     (

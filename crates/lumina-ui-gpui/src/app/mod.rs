@@ -11,6 +11,7 @@ pub mod crop_geometry;
 pub mod culling;
 pub mod deletion;
 pub mod downloads;
+pub mod duplicates_review;
 pub mod external_edit;
 pub mod first_scan;
 pub mod history;

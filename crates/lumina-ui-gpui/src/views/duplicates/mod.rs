@@ -90,8 +90,7 @@ pub(crate) fn auto_best_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         t("duplicates.auto_best_hint"),
     )
     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-        this.stacks.review.keepers.clear();
-        cx.notify();
+        this.duplicates_auto_best(cx);
     }))
 }
 
@@ -105,13 +104,7 @@ pub(crate) fn skip_all_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         t("duplicates.skip_all_hint"),
     )
     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-        let hashes: Vec<String> = this
-            .duplicate_groups
-            .iter()
-            .map(|g| g.hash.clone())
-            .collect();
-        this.stacks.review.skipped.extend(hashes);
-        cx.notify();
+        this.duplicates_skip_all(cx);
     }))
 }
 

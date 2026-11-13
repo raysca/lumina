@@ -21,8 +21,6 @@ pub(super) fn render(
     cx: &mut Context<LuminaApp>,
 ) -> Div {
     let group = visible[index];
-    let hash = group.hash.clone();
-    let skip_hash = hash.clone();
     let keeper = this.stacks.review.keeper(group);
     let trash: Vec<MediaId> = group
         .items
@@ -112,7 +110,10 @@ pub(super) fn render(
                         .role(Role::Button)
                         .aria_label(t("duplicates.skip_group"))
                         .aria_keyshortcuts("S")
-                        .tooltip(theme::tooltip_label(t("duplicates.skip_group_hint")))
+                        .tooltip(theme::tooltip_label(t_with(
+                            "duplicates.with_key",
+                            &[&t("duplicates.skip_group_hint"), "S"],
+                        )))
                         .h(px(36.0))
                         .px(px(14.0))
                         .flex()
@@ -130,9 +131,8 @@ pub(super) fn render(
                         .text_color(theme::t1())
                         .child(t("duplicates.skip_group"))
                         .child(theme::kbd("S"))
-                        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            this.stacks.review.skip(index, &skip_hash);
-                            cx.notify();
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.duplicates_skip_shown(cx);
                         })),
                 )
                 .child(
@@ -141,11 +141,17 @@ pub(super) fn render(
                         .debug_selector(|| "duplicates-merge-group".to_string())
                         .role(Role::Button)
                         .aria_label(t("duplicates.merge_group"))
-                        .tooltip(theme::tooltip_label(t("duplicates.merge_group_hint")))
+                        .aria_keyshortcuts("Enter")
+                        .tooltip(theme::tooltip_label(t_with(
+                            "duplicates.with_key",
+                            &[&t("duplicates.merge_group_hint"), "⏎"],
+                        )))
                         .h(px(36.0))
                         .px(px(14.0))
                         .flex()
+                        .flex_row()
                         .items_center()
+                        .gap(px(8.0))
                         .rounded(px(9.0))
                         .bg(theme::accent())
                         .hover(|s| s.bg(theme::accent_hover()))
@@ -154,10 +160,19 @@ pub(super) fn render(
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::on_accent())
                         .child(t("duplicates.merge_group"))
-                        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                            // Pinned here, so the group after it is shown next.
-                            this.stacks.review.select(index, &hash);
-                            this.merge_duplicate_group(keeper, &trash, cx);
+                        // The plan's kbd on accent: on-accent at 20%.
+                        .child(
+                            div()
+                                .px(px(5.0))
+                                .py(px(1.0))
+                                .rounded(theme::RADIUS_SM)
+                                .bg(theme::on_accent_kbd())
+                                .font_family(theme::FONT_MONO)
+                                .text_size(px(11.0))
+                                .child("⏎"),
+                        )
+                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            this.duplicates_merge_shown(cx);
                         })),
                 ),
         )
@@ -166,7 +181,7 @@ pub(super) fn render(
 fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) -> Div {
     let group = visible[index];
     let len = visible.len();
-    let step = |i: usize| visible.get(i).map(|g| (i, g.hash.clone()));
+    let step = |i: usize| (i < len).then_some(i);
     let title = group_title(group);
     div()
         .h(px(55.5))
@@ -224,6 +239,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
             "duplicates-prev",
             Icon::ChevronLeft,
             t("duplicates.prev"),
+            "↑",
             index.checked_sub(1).and_then(step),
             cx,
         ))
@@ -231,6 +247,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
             "duplicates-next",
             Icon::ChevronRight,
             t("duplicates.next"),
+            "↓",
             step(index + 1),
             cx,
         ))
@@ -241,7 +258,8 @@ fn step_button(
     selector: &'static str,
     icon: Icon,
     label: String,
-    target: Option<(usize, String)>,
+    key: &'static str,
+    target: Option<usize>,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     div()
@@ -249,7 +267,11 @@ fn step_button(
         .debug_selector(move || selector.to_string())
         .role(Role::Button)
         .aria_label(label.clone())
-        .tooltip(theme::tooltip_label(label))
+        .aria_keyshortcuts(if key == "↑" { "ArrowUp" } else { "ArrowDown" })
+        .tooltip(theme::tooltip_label(t_with(
+            "duplicates.with_key",
+            &[&label, key],
+        )))
         .flex_shrink_0()
         .size(px(30.0))
         .flex()
@@ -268,13 +290,12 @@ fn step_button(
                 theme::t3()
             },
         ))
-        .when_some(target, |button, (target, hash)| {
+        .when_some(target, |button, target| {
             button
                 .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    this.stacks.review.select(target, &hash);
-                    cx.notify();
+                    this.duplicates_select_group(target, cx);
                 }))
         })
 }

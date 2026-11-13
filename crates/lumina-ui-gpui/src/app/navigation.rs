@@ -1114,7 +1114,13 @@ impl LuminaApp {
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
         let total = self.get_active_count();
-        if total == 0 || self.similar_shots_shown() || self.map_shown() {
+        // The duplicates review shows no grid: its hidden items are not
+        // what ⌫ should be offered.
+        if total == 0
+            || self.similar_shots_shown()
+            || self.map_shown()
+            || self.duplicates_review_shown()
+        {
             return;
         }
         self.selected_indices.clear();

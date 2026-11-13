@@ -321,6 +321,11 @@ impl LuminaApp {
             return;
         }
 
+        // Review Duplicates takes ↑/↓, ←/→, 1–9, S, ↵ and ⌘↓.
+        if self.handle_duplicates_review_key(keystroke, cx) {
+            return;
+        }
+
         // Similar shots takes ↑/↓/↵ and absorbs the grid's keys.
         if self.handle_stacks_key(keystroke, cx) {
             return;

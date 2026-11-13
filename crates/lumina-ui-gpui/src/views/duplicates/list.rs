@@ -108,7 +108,6 @@ fn row(
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
     let title = group_title(group);
-    let hash = group.hash.clone();
     let thumbs: Vec<_> = group
         .items
         .iter()
@@ -135,8 +134,7 @@ fn row(
         .hover(|s| s.bg(theme::bg_2()))
         .cursor_pointer()
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.stacks.review.select(index, &hash);
-            cx.notify();
+            this.duplicates_select_group(index, cx);
         }))
         .child(
             div()
