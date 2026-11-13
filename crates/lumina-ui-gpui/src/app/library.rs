@@ -1252,7 +1252,10 @@ impl LuminaApp {
         let Some(ref state) = self.grid_state else {
             return;
         };
-        match state.engine.merge_all_duplicates() {
+        match state
+            .engine
+            .merge_all_duplicates(&self.stacks.review.keepers)
+        {
             Ok(trashed_ids) => {
                 let total_merged = trashed_ids.len();
                 if !trashed_ids.is_empty() {

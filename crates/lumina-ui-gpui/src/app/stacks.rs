@@ -5,7 +5,9 @@
 //! all, by Delete Rejected….
 
 use gpui::*;
-use lumina_core::{Flag, MediaId, MediaItem, StackKind};
+use std::collections::HashMap;
+
+use lumina_core::{DuplicateGroup, Flag, MediaId, MediaItem, StackKind};
 
 use crate::app::LuminaApp;
 use crate::i18n::t;
@@ -66,6 +68,9 @@ pub struct DuplicatesReview {
     /// groups shrink after a merge, so the stored value may be past the end.
     selected: usize,
     pub scroll: UniformListScrollHandle,
+    /// The copy each group keeps, by content hash, when the user chose one
+    /// over the heuristic. Session only; read through [`Self::keeper`].
+    pub keepers: HashMap<String, MediaId>,
 }
 
 impl DuplicatesReview {
@@ -73,6 +78,17 @@ impl DuplicatesReview {
     /// there are none.
     pub fn selected(&self, len: usize) -> Option<usize> {
         len.checked_sub(1).map(|last| self.selected.min(last))
+    }
+
+    /// The copy `group` keeps: the user's choice while it is still in the
+    /// group, else the heuristic pick (the first item).
+    pub fn keeper(&self, group: &DuplicateGroup) -> MediaId {
+        self.keepers
+            .get(&group.hash)
+            .copied()
+            .filter(|id| group.items.iter().any(|i| i.id == *id))
+            .or_else(|| group.items.first().map(|i| i.id))
+            .unwrap_or(MediaId(0))
     }
 
     /// Selects group `index` (clamped on read) and scrolls its row into view.

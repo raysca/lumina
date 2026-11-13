@@ -355,3 +355,141 @@ fn review_hides_the_inspector_and_ignores_its_toggle() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn choosing_a_keeper_merges_the_others() {
+    let (temp_dir, engine) = seed_library("dup_keeper", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let (first, second) = view.update(vcx, |app, _| {
+        let items = &app.duplicate_groups[0].items;
+        (items[0].id, items[1].id)
+    });
+    let keeper = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, _| {
+            app.stacks.review.keeper(&app.duplicate_groups[0])
+        })
+    };
+    assert_eq!(
+        keeper(&view, vcx),
+        first,
+        "the heuristic pick keeps by default"
+    );
+    assert!(
+        vcx.debug_bounds(super::ui_automation::leak(format!(
+            "duplicate-best-{}",
+            first.0
+        )))
+        .is_some(),
+        "BEST marks the heuristic pick"
+    );
+    assert!(
+        vcx.debug_bounds(
+            "duplicates-summary-text:Keeping 1 of 2 · 1 copy moves to Recently Deleted"
+        )
+        .is_some(),
+        "the footer says what the merge will do"
+    );
+
+    click(
+        vcx,
+        super::ui_automation::leak(format!("duplicate-keep-{}", second.0)),
+    );
+    assert_eq!(keeper(&view, vcx), second, "the radio chooses the keeper");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.selected_item.as_ref().is_none_or(|i| i.id != second),
+            "the radio is its own control: it does not select the card"
+        );
+    });
+
+    click(vcx, "duplicates-merge-group");
+    let active: Vec<_> = engine.get_item_slice(0..10).iter().map(|i| i.id).collect();
+    assert_eq!(
+        active,
+        vec![second],
+        "the chosen copy stays, the other is trashed"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    assert_eq!(
+        engine.get_item_slice(0..10).len(),
+        2,
+        "⌘Z restores the trashed copy"
+    );
+
+    render_ui(vcx);
+    assert_eq!(keeper(&view, vcx), second, "the choice outlives an undo");
+    click(vcx, "duplicates-auto-best");
+    assert_eq!(
+        keeper(&view, vcx),
+        first,
+        "Auto-select best goes back to the heuristic"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn merge_all_keeps_the_chosen_copy() {
+    let (temp_dir, engine) = seed_library("dup_keeper_all", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let second = view.update(vcx, |app, _| app.duplicate_groups[0].items[1].id);
+
+    click(
+        vcx,
+        super::ui_automation::leak(format!("duplicate-keep-{}", second.0)),
+    );
+    click(vcx, "merge-all-duplicates");
+    let active: Vec<_> = engine.get_item_slice(0..10).iter().map(|i| i.id).collect();
+    assert_eq!(
+        active,
+        vec![second],
+        "Merge all keeps the copy the user chose"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn footer_counts_copies_and_freed_bytes() {
+    let (temp_dir, engine) = seed_two_groups("dup_footer");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let (count, freed) = view.update(vcx, |app, _| {
+        let items = &app.duplicate_groups[0].items;
+        let freed: u64 = items[1..].iter().map(|i| i.file_size).sum();
+        (items.len(), crate::app::types::format_bytes(freed))
+    });
+    assert_eq!(count, 3, "the three-copy group is shown first");
+    assert!(
+        vcx.debug_bounds(
+            "duplicates-summary-text:Keeping 1 of 3 · 2 copies move to Recently Deleted"
+        )
+        .is_some(),
+        "two copies read in the plural"
+    );
+    assert!(
+        vcx.debug_bounds(super::ui_automation::leak(format!(
+            "duplicates-frees-text:· frees {freed}"
+        )))
+        .is_some(),
+        "the footer frees the non-keepers' bytes ({freed})"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rusqlite::params;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -493,8 +494,11 @@ impl Catalog {
     }
 
     /// Merges all duplicate groups in a single atomic transaction.
+    /// `keepers` maps a content hash to the copy that group keeps; a group
+    /// with no entry, or whose entry is not one of its items, keeps its
+    /// heuristic pick (the first item).
     /// Returns the IDs of all newly trashed duplicate items.
-    pub fn merge_all_duplicates(&self) -> Result<Vec<MediaId>> {
+    pub fn merge_all_duplicates(&self, keepers: &HashMap<String, MediaId>) -> Result<Vec<MediaId>> {
         let groups = self.query_duplicate_groups()?;
         if groups.is_empty() {
             return Ok(Vec::new());
@@ -505,8 +509,17 @@ impl Catalog {
         let mut all_trashed = Vec::new();
         for group in groups {
             if group.items.len() >= 2 {
-                let keep_id = group.items[0].id;
-                let trash_ids: Vec<MediaId> = group.items[1..].iter().map(|i| i.id).collect();
+                let keep_id = keepers
+                    .get(&group.hash)
+                    .copied()
+                    .filter(|id| group.items.iter().any(|i| i.id == *id))
+                    .unwrap_or(group.items[0].id);
+                let trash_ids: Vec<MediaId> = group
+                    .items
+                    .iter()
+                    .map(|i| i.id)
+                    .filter(|id| *id != keep_id)
+                    .collect();
                 Self::merge_duplicate_group_in_tx(&tx, keep_id, &trash_ids)?;
                 all_trashed.extend(trash_ids);
             }
@@ -564,6 +577,64 @@ mod tests {
         assert!(
             beach(&catalog).is_empty(),
             "the keeper is indexed once, so removing the tag removes the match"
+        );
+    }
+
+    #[test]
+    fn merge_all_keeps_the_chosen_keeper() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let a1 = plain(&catalog, "/lib/a1.mp4");
+        let a2 = plain(&catalog, "/lib/a2.mp4");
+        let b1 = plain(&catalog, "/lib/b1.mp4");
+        let b2 = plain(&catalog, "/lib/b2.mp4");
+        catalog
+            .batch_insert_hashes(&[
+                (a1, 1_000, "a".into()),
+                (a2, 1_000, "a".into()),
+                (b1, 1_000, "b".into()),
+                (b2, 1_000, "b".into()),
+            ])
+            .unwrap();
+        let heuristic: Vec<MediaId> = catalog
+            .query_duplicate_groups()
+            .unwrap()
+            .iter()
+            .map(|g| g.items[0].id)
+            .collect();
+        assert_eq!(
+            heuristic,
+            vec![a1, b1],
+            "the heuristic keeps the first catalogued"
+        );
+
+        // Group a keeps its second copy; b's stale choice (not in b) is ignored.
+        let keepers = HashMap::from([("a".to_string(), a2), ("b".to_string(), a1)]);
+        let mut trashed = catalog.merge_all_duplicates(&keepers).unwrap();
+        trashed.sort_by_key(|id| id.0);
+        assert_eq!(
+            trashed,
+            vec![a1, b2],
+            "the chosen keeper stays; the others go"
+        );
+        assert_eq!(
+            catalog
+                .find_items_by_hash("a")
+                .unwrap()
+                .iter()
+                .map(|i| i.id)
+                .collect::<Vec<_>>(),
+            vec![a2],
+            "group a keeps the copy the user chose"
+        );
+        assert_eq!(
+            catalog
+                .find_items_by_hash("b")
+                .unwrap()
+                .iter()
+                .map(|i| i.id)
+                .collect::<Vec<_>>(),
+            vec![b1],
+            "an id from another group falls back to the heuristic keeper"
         );
     }
 

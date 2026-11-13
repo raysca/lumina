@@ -1459,10 +1459,14 @@ impl LuminaEngine {
         self.catalog.merge_duplicate_group(keep_id, trash_ids)
     }
 
-    /// Merges all duplicate groups in the catalog in a single atomic transaction.
-    /// Returns the IDs of all newly trashed items.
-    pub fn merge_all_duplicates(&self) -> Result<Vec<MediaId>> {
-        self.catalog.merge_all_duplicates()
+    /// Merges all duplicate groups in the catalog in a single atomic transaction,
+    /// each keeping its entry in `keepers` (by content hash) or else its
+    /// heuristic pick. Returns the IDs of all newly trashed items.
+    pub fn merge_all_duplicates(
+        &self,
+        keepers: &std::collections::HashMap<String, MediaId>,
+    ) -> Result<Vec<MediaId>> {
+        self.catalog.merge_all_duplicates(keepers)
     }
 
     /// Points the missing item `id` at `chosen`, a file inside the library

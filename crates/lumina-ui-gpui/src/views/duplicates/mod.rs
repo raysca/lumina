@@ -1,6 +1,7 @@
 //! Review Duplicates (frame `PwE8h`): the exact-copy groups in a list on
 //! the left, the selected group's copies side by side on the right.
 
+mod card;
 mod compare;
 mod list;
 
@@ -11,7 +12,8 @@ use lumina_core::{DuplicateGroup, MediaItem};
 
 use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
-use crate::icons::Icon;
+use crate::icons::{render_icon, Icon};
+use crate::theme;
 use crate::views::page_header::header_primary_button;
 use crate::LuminaApp;
 
@@ -54,7 +56,7 @@ pub(crate) fn meta(this: &LuminaApp) -> String {
     )
 }
 
-/// The header's "Merge {n} groups": merges every group, keeper first.
+/// The header's "Merge {n} groups": merges every group into its keeper.
 pub(crate) fn merge_all_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let n = this.duplicate_groups.len();
     let label = if n == 1 {
@@ -73,7 +75,40 @@ pub(crate) fn merge_all_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) ->
     }))
 }
 
-/// A group's name: its keeper's title, else the keeper's file stem.
+/// The header's "Auto-select best": every group back to the heuristic pick.
+pub(crate) fn auto_best_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    let label = t("duplicates.auto_best");
+    div()
+        .id("duplicates-auto-best")
+        .debug_selector(|| "duplicates-auto-best".to_string())
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .tooltip(theme::tooltip_label(t("duplicates.auto_best_hint")))
+        .h(px(32.0))
+        .px(px(12.0))
+        .flex_shrink_0()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(7.0))
+        .rounded(theme::RADIUS_LG)
+        .bg(theme::bg_2())
+        .border_1()
+        .border_color(theme::line())
+        .hover(|s| s.bg(theme::bg_3()))
+        .cursor_pointer()
+        .text_size(px(12.5))
+        .text_color(theme::t1())
+        .child(render_icon(Icon::WandSparkles, px(14.0), theme::t2()))
+        .child(label)
+        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+            this.stacks.review.keepers.clear();
+            cx.notify();
+        }))
+}
+
+/// A group's name: the heuristic pick's title (the first item, whichever
+/// copy is kept), else that copy's file stem.
 fn group_title(group: &DuplicateGroup) -> String {
     let Some(keeper) = group.items.first() else {
         return String::new();

@@ -166,7 +166,8 @@ impl LuminaApp {
                 .gap(px(10.0))
                 .children(self.render_downloads_button(window, cx))
                 .when(!self.duplicate_groups.is_empty(), |bar| {
-                    bar.child(crate::views::duplicates::merge_all_button(self, cx))
+                    bar.child(crate::views::duplicates::auto_best_button(cx))
+                        .child(crate::views::duplicates::merge_all_button(self, cx))
                 })
                 .when(own_controls, |bar| bar.child(window_controls(window)));
             return self.clear_traffic_lights(page_header(

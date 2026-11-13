@@ -3,9 +3,10 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::{DuplicateGroup, MediaId, MediaItem};
+use lumina_core::{DuplicateGroup, MediaId};
 
-use super::{group_summary, group_title, texture};
+use super::card::card;
+use super::{group_summary, group_title};
 use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
@@ -13,14 +14,32 @@ use crate::theme;
 use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 
-/// Cards share the width but never get narrower than this; past that the
-/// row scrolls sideways.
-const CARD_MIN_WIDTH: f32 = 180.0;
-
 pub(super) fn render(this: &LuminaApp, index: usize, cx: &mut Context<LuminaApp>) -> Div {
     let group = &this.duplicate_groups[index];
-    let keeper = group.items.first().map_or(MediaId(0), |i| i.id);
-    let trash: Vec<MediaId> = group.items.iter().skip(1).map(|i| i.id).collect();
+    let keeper = this.stacks.review.keeper(group);
+    let trash: Vec<MediaId> = group
+        .items
+        .iter()
+        .map(|i| i.id)
+        .filter(|id| *id != keeper)
+        .collect();
+    let freed: u64 = group
+        .items
+        .iter()
+        .filter(|i| i.id != keeper)
+        .map(|i| i.file_size)
+        .sum();
+    let summary: SharedString = format!(
+        "{} · {}",
+        t_with("duplicates.keeping", &[&group.items.len().to_string()]),
+        if trash.len() == 1 {
+            t("duplicates.moves_one")
+        } else {
+            t_with("duplicates.moves_other", &[&trash.len().to_string()])
+        }
+    )
+    .into();
+    let frees: SharedString = t_with("duplicates.frees", &[&format_bytes(freed)]).into();
     div()
         .debug_selector(|| "duplicates-compare".to_string())
         .flex_1()
@@ -44,13 +63,9 @@ pub(super) fn render(this: &LuminaApp, index: usize, cx: &mut Context<LuminaApp>
                         .flex()
                         .flex_row()
                         .gap(px(14.0))
-                        .children(
-                            group
-                                .items
-                                .iter()
-                                .enumerate()
-                                .map(|(i, item)| card(this, i, item, cx)),
-                        ),
+                        .children(group.items.iter().enumerate().map(|(i, item)| {
+                            card(this, &group.hash, i, item, item.id == keeper, cx)
+                        })),
                 ),
         )
         .child(
@@ -64,7 +79,24 @@ pub(super) fn render(this: &LuminaApp, index: usize, cx: &mut Context<LuminaApp>
                 .flex()
                 .flex_row()
                 .items_center()
-                .justify_end()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(theme::t1())
+                        .children(text_marker("duplicates-summary", &summary))
+                        .child(summary),
+                )
+                .child(
+                    div()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(px(11.5))
+                        .text_color(theme::t3())
+                        .children(text_marker("duplicates-frees", &frees))
+                        .child(frees),
+                )
+                .child(div().flex_1())
                 .child(
                     div()
                         .id("duplicates-merge-group")
@@ -208,173 +240,4 @@ fn step_button(
                     cx.notify();
                 }))
         })
-}
-
-/// One copy: the image with its tag and resolution, then its facts. The
-/// keeper (the first copy) has the accent outline; the selected card is
-/// lifted to bg-3 with the focus ring instead.
-fn card(
-    this: &LuminaApp,
-    position: usize,
-    item: &MediaItem,
-    cx: &mut Context<LuminaApp>,
-) -> Stateful<Div> {
-    let id = item.id.0;
-    let keeper = position == 0;
-    let selected = this.selected_item.as_ref().is_some_and(|i| i.id == item.id);
-    let item_clone = item.clone();
-    let tag = if keeper {
-        t("duplicates.original")
-    } else {
-        t_with("duplicates.copy_n", &[&position.to_string()])
-    };
-    let format = std::path::Path::new(&item.file_name)
-        .extension()
-        .map(|e| e.to_string_lossy().to_uppercase())
-        .unwrap_or_default();
-    let source = match (item.make.as_deref(), item.model.as_deref()) {
-        (Some(make), Some(model)) if model.starts_with(make) => model.to_string(),
-        (Some(make), Some(model)) => format!("{make} {model}"),
-        (Some(one), None) | (None, Some(one)) => one.to_string(),
-        (None, None) => item.parent_dir.clone(),
-    };
-    let edits = if this.edits.edited_ids.contains(&item.id) {
-        t("duplicates.edited")
-    } else {
-        t("duplicates.not_edited")
-    };
-    let resolution =
-        (item.width > 0 && item.height > 0).then(|| format!("{} × {}", item.width, item.height));
-    div()
-        .id(("duplicate-candidate", id))
-        .debug_selector(move || format!("duplicate-candidate-{id}"))
-        .role(Role::Group)
-        .aria_label(item.file_name.clone())
-        .flex_1()
-        .min_w(px(CARD_MIN_WIDTH))
-        .rounded(px(12.0))
-        .bg(if selected {
-            theme::bg_3()
-        } else {
-            theme::bg_1()
-        })
-        .map(|card| {
-            if keeper {
-                card.border(px(1.5))
-            } else {
-                card.border_1()
-            }
-        })
-        // The selection (what ⌫ and ⌘E act on) wins over the keeper's accent.
-        .border_color(if selected {
-            theme::focus_ring()
-        } else if keeper {
-            theme::accent()
-        } else {
-            theme::line()
-        })
-        .children(
-            selected
-                .then(|| text_marker("duplicate-selected", &id.to_string().into()))
-                .flatten(),
-        )
-        .overflow_hidden()
-        .flex()
-        .flex_col()
-        .cursor_pointer()
-        .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
-            if e.click_count() >= 2 {
-                this.open_viewer(item_clone.clone(), cx);
-            } else {
-                this.selected_item = Some(item_clone.clone());
-                this.selected_index = None;
-                this.selected_indices.clear();
-                this.refresh_selected_tags();
-                cx.notify();
-            }
-        }))
-        .child(
-            div()
-                .relative()
-                .w_full()
-                .h(px(400.0))
-                .bg(theme::bg_media())
-                .flex()
-                .items_center()
-                .justify_center()
-                .overflow_hidden()
-                .child(match texture(this, item) {
-                    Some(tex) => img(tex)
-                        .size_full()
-                        .object_fit(ObjectFit::Contain)
-                        .into_any_element(),
-                    None => render_icon(Icon::Image, px(24.0), theme::t3()).into_any_element(),
-                })
-                .child(media_tag(tag).top(px(10.0)).left(px(10.0)))
-                .children(resolution.map(|r| media_tag(r).bottom(px(10.0)).left(px(10.0)))),
-        )
-        .child(
-            div()
-                .p(px(14.0))
-                .flex()
-                .flex_col()
-                .gap(px(8.0))
-                .child(fact(
-                    "duplicates.fact_size",
-                    format_bytes(item.file_size),
-                    false,
-                ))
-                .child(fact("duplicates.fact_format", format, false))
-                .child(fact("duplicates.fact_edits", edits, false))
-                .child(fact("duplicates.fact_source", source, false))
-                .child(fact(
-                    "duplicates.fact_captured",
-                    item.formatted_timestamp(),
-                    true,
-                ))
-                .child(fact(
-                    "duplicates.fact_folder",
-                    item.parent_dir.clone(),
-                    false,
-                )),
-        )
-}
-
-/// A mono label over the image, on the media scrim.
-fn media_tag(text: impl Into<SharedString>) -> Div {
-    div()
-        .absolute()
-        .px(px(6.0))
-        .py(px(2.0))
-        .rounded(theme::RADIUS_SM)
-        .bg(theme::media_scrim())
-        .font_family(theme::FONT_MONO)
-        .text_size(px(10.0))
-        .text_color(theme::on_media())
-        .child(text.into())
-}
-
-/// A key/value row; `dim` draws the value in t3 (Captured).
-fn fact(key: &str, value: String, dim: bool) -> Div {
-    div()
-        .flex()
-        .flex_row()
-        .justify_between()
-        .gap(px(12.0))
-        .child(
-            div()
-                .flex_shrink_0()
-                .text_size(px(11.5))
-                .text_color(theme::t3())
-                .child(t(key)),
-        )
-        .child(
-            div()
-                .min_w_0()
-                .truncate()
-                .font_family(theme::FONT_MONO)
-                .text_size(px(11.5))
-                .text_color(if dim { theme::t3() } else { theme::t1() })
-                .child(value),
-        )
 }
