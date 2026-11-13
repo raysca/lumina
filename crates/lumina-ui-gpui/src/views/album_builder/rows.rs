@@ -4,11 +4,14 @@ use crate::app::text_input::FieldEditor;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-use crate::app::smart_draft::{field_label, operator_label, DraftFocus, DraftRow, ValueKind};
+use crate::app::smart_draft::{
+    field_icon, field_label, operator_label, DraftFocus, DraftRow, ValueKind,
+};
 use crate::app::text_input::TextTarget;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
+use lumina_core::RuleField;
 
 /// Border for a control: the neutral focus ring when focused. Invalid values outline their
 /// whole row instead (see `render_row`).
@@ -28,9 +31,10 @@ fn fill_and_truncate(text: Div) -> Div {
     text.flex_1().min_w_0().truncate()
 }
 
-/// A popup button showing its current value.
+/// A popup button showing its current value, after an optional icon.
 pub(super) fn picker(
     selector: String,
+    icon: Option<Icon>,
     label: impl Into<SharedString>,
     focused: bool,
     target: DraftFocus,
@@ -40,7 +44,9 @@ pub(super) fn picker(
     theme::control(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
         .justify_between()
+        .gap_2()
         .border_color(ring(focused))
+        .children(icon.map(|icon| render_icon(icon, px(14.0), theme::t2())))
         .child(fill_and_truncate(div()).child(label.into()))
         .child(render_icon(Icon::ChevronDown, px(13.0), theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -110,6 +116,16 @@ pub(super) fn render_popup(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyE
         .into_any_element()
 }
 
+/// A condition row's control: 38 tall, bg-0, r9, Inter 13.
+fn row_control(control: Stateful<Div>) -> Stateful<Div> {
+    control
+        .h(px(38.0))
+        .px(px(12.0))
+        .rounded(px(9.0))
+        .bg(theme::bg_0())
+        .text_size(px(13.0))
+}
+
 pub(super) fn square_button(
     selector: String,
     icon: Icon,
@@ -121,11 +137,14 @@ pub(super) fn square_button(
     let sel = selector.clone();
     theme::control(ElementId::Name(selector.into()))
         .debug_selector(move || sel.clone())
-        .w(px(28.0))
+        .flex_none()
+        .size(px(34.0))
+        .rounded(px(8.0))
+        .bg(theme::bg_1())
         .justify_center()
         .border_color(ring(focused))
         .tooltip(theme::tooltip_label(tooltip))
-        .child(render_icon(icon, px(12.0), theme::t2()))
+        .child(render_icon(icon, px(14.0), theme::t2()))
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
 }
 
@@ -154,17 +173,27 @@ pub(super) fn render_row(
             } else {
                 row.display_value()
             };
-            picker(
+            // Kind shows what it picks: "video" shows Video, anything else (photo, raw) Image.
+            let icon = (row.field == RuleField::MediaType).then(|| {
+                if row.text == "video" {
+                    Icon::Video
+                } else {
+                    Icon::Image
+                }
+            });
+            row_control(picker(
                 format!("album-rule-value-{i}"),
+                icon,
                 label,
                 focus == DraftFocus::Value(i),
                 DraftFocus::Value(i),
                 cx,
-            )
+            ))
             .flex_1()
             .into_any_element()
         }
-        _ => text_field(
+        // A short centred number; the unit picker beside it fills the row.
+        ValueKind::Period => row_control(text_field(
             format!("album-rule-value-{i}"),
             &row.text,
             kind.placeholder(),
@@ -173,7 +202,23 @@ pub(super) fn render_row(
                 .filter(|_| focus == DraftFocus::Value(i)),
             DraftFocus::Value(i),
             cx,
-        )
+        ))
+        .flex_none()
+        .w(px(66.0))
+        .justify_center()
+        .text_center()
+        .font_family(theme::FONT_MONO)
+        .into_any_element(),
+        _ => row_control(text_field(
+            format!("album-rule-value-{i}"),
+            &row.text,
+            kind.placeholder(),
+            focus == DraftFocus::Value(i),
+            app.field_input_for(TextTarget::AlbumDraft)
+                .filter(|_| focus == DraftFocus::Value(i)),
+            DraftFocus::Value(i),
+            cx,
+        ))
         .flex_1()
         .into_any_element(),
     };
@@ -183,9 +228,6 @@ pub(super) fn render_row(
         .flex()
         .flex_col()
         .gap_1()
-        .px(px(8.0))
-        .py(px(6.0))
-        .when(i > 0, |el| el.border_t_1().border_color(theme::line()))
         .child(
             div()
                 .debug_selector(move || format!("album-rule-row-{i}"))
@@ -193,9 +235,11 @@ pub(super) fn render_row(
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
+                .gap(px(12.0))
                 // The whole row is outlined while its value is invalid; the
-                // transparent border keeps valid rows the same size.
+                // transparent border keeps valid rows the same size, and the
+                // negative margin keeps the outline out of the layout.
+                .m(px(-4.0))
                 .p(px(3.0))
                 .rounded(theme::RADIUS_LG)
                 .border_1()
@@ -205,36 +249,43 @@ pub(super) fn render_row(
                     rgba(0x00000000)
                 })
                 .child(
-                    picker(
+                    row_control(picker(
                         format!("album-rule-field-{i}"),
+                        Some(field_icon(&row.field)),
                         field_label(&row.field),
                         focus == DraftFocus::Field(i),
                         DraftFocus::Field(i),
                         cx,
-                    )
-                    .w(px(180.0)),
+                    ))
+                    .flex_none()
+                    .w(px(210.0))
+                    .font_weight(FontWeight::MEDIUM),
                 )
                 .child(
-                    picker(
+                    row_control(picker(
                         format!("album-rule-op-{i}"),
+                        None,
                         operator_label(&row.field, &row.operator),
                         focus == DraftFocus::Operator(i),
                         DraftFocus::Operator(i),
                         cx,
-                    )
-                    .w(px(150.0)),
+                    ))
+                    .flex_none()
+                    .w(px(140.0))
+                    .text_color(theme::t2()),
                 )
                 .child(value)
                 .when(kind == ValueKind::Period, |el| {
                     el.child(
-                        picker(
+                        row_control(picker(
                             format!("album-rule-unit-{i}"),
+                            None,
                             row.unit.label(),
                             focus == DraftFocus::Unit(i),
                             DraftFocus::Unit(i),
                             cx,
-                        )
-                        .w(px(90.0)),
+                        ))
+                        .flex_1(),
                     )
                 })
                 .child(square_button(

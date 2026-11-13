@@ -289,6 +289,8 @@ impl LuminaApp {
                 highlight: self.draft_popup_current(target),
             })
         };
+        // A popup on the bottom row opens below the fold otherwise.
+        self.reveal_draft_focus();
         cx.notify();
     }
 

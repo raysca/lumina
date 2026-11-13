@@ -86,6 +86,7 @@ impl AlbumBuilderModal {
                                     .child(
                                         rows::picker(
                                             "album-builder-match".to_string(),
+                                            None,
                                             match_label(draft.match_mode),
                                             focus == DraftFocus::Match,
                                             DraftFocus::Match,
@@ -103,7 +104,7 @@ impl AlbumBuilderModal {
                                     .child("of the following conditions:"),
                             )
                             .when(popup_on_match, |el| el.child(rows::render_popup(app, cx)))
-                            // One bordered dark container; rows draw their dividers.
+                            // The condition card: rows 10 apart, no dividers.
                             .child(
                                 div()
                                     .id("album-builder-scroll-content")
@@ -113,10 +114,10 @@ impl AlbumBuilderModal {
                                     .w_full()
                                     .overflow_y_scroll()
                                     .track_scroll(&draft.scroll)
-                                    .rounded(theme::RADIUS_LG)
-                                    .border_1()
-                                    .border_color(theme::line())
-                                    .bg(theme::bg_0())
+                                    .rounded(px(12.0))
+                                    .bg(theme::bg_2())
+                                    .p(px(14.0))
+                                    .gap(px(10.0))
                                     .flex()
                                     .flex_col()
                                     .when(draft.rows.is_empty(), |el| {

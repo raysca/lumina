@@ -5,9 +5,11 @@
 //! OK and outlines that row. No GPUI here, so the rules are unit-tested.
 
 use lumina_core::{
-    parse_rule_date, split_date_range, MatchMode, RuleField, RuleOperator, RuleValue,
-    SmartAlbumRule,
+    parse_rule_date, split_date_range, RuleField, RuleOperator, RuleValue, SmartAlbumRule,
 };
+
+mod labels;
+pub use labels::{field_icon, field_label, match_label, operator_label};
 
 /// Fields offered in the field popup, in Photos-like order. Older albums may
 /// hold other fields (Year, City…); those still display, convert and save.
@@ -119,34 +121,6 @@ impl PeriodUnit {
     }
 }
 
-pub fn field_label(field: &RuleField) -> &'static str {
-    match field {
-        RuleField::MediaType => "Kind",
-        RuleField::IsFavorite => "Favorite",
-        RuleField::Date => "Date",
-        RuleField::Tag => "Tag",
-        RuleField::Rating => "Stars",
-        RuleField::ColorLabel => "Color label",
-        RuleField::Camera => "Camera",
-        RuleField::CameraModel => "Camera model",
-        RuleField::Lens => "Lens",
-        RuleField::FNumber => "Aperture",
-        RuleField::Iso => "ISO",
-        RuleField::FocalLength => "Focal length",
-        RuleField::Filename => "Filename",
-        RuleField::Place => "Place",
-        RuleField::CameraMake => "Camera make",
-        RuleField::Year => "Year",
-        RuleField::Month => "Month",
-        RuleField::City => "City",
-        RuleField::CountryCode => "Country code",
-        RuleField::FileSize => "File size (bytes)",
-        RuleField::DurationMs => "Duration (ms)",
-        RuleField::Query => "Search",
-        RuleField::Flag => "Flag",
-    }
-}
-
 fn is_numeric(field: &RuleField) -> bool {
     matches!(
         field,
@@ -171,28 +145,6 @@ pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
         RuleField::Rating => &[Equals, AtLeast, AtMost],
         f if is_numeric(f) => &[Equals, GreaterThan, LessThan],
         _ => &[Contains, NotContains],
-    }
-}
-
-pub fn operator_label(field: &RuleField, op: &RuleOperator) -> &'static str {
-    let date = *field == RuleField::Date;
-    match op {
-        // Matches the compile error's wording for a saved search.
-        RuleOperator::Equals if *field == RuleField::Query => "matches",
-        RuleOperator::Equals => "is",
-        RuleOperator::NotEquals => "is not",
-        RuleOperator::Contains => "contains",
-        RuleOperator::NotContains => "does not contain",
-        RuleOperator::GreaterThan if date => "is after",
-        RuleOperator::GreaterThan => "is greater than",
-        RuleOperator::LessThan if date => "is before",
-        RuleOperator::LessThan => "is less than",
-        RuleOperator::Between => "is in the range",
-        RuleOperator::InTheLast => "is in the last",
-        RuleOperator::IsEmpty => "is empty",
-        RuleOperator::IsNotEmpty => "is not empty",
-        RuleOperator::AtLeast => "is at least",
-        RuleOperator::AtMost => "is at most",
     }
 }
 
@@ -412,13 +364,6 @@ pub fn focus_order(rows: &[DraftRow]) -> Vec<DraftFocus> {
     }
     order.extend([DraftFocus::Cancel, DraftFocus::Save]);
     order
-}
-
-pub fn match_label(mode: MatchMode) -> &'static str {
-    match mode {
-        MatchMode::All => "all",
-        MatchMode::Any => "any",
-    }
 }
 
 #[cfg(test)]

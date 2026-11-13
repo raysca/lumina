@@ -11,8 +11,12 @@ use crate::icons::Icon;
 pub(crate) fn rule_label(rule: &SmartAlbumRule) -> String {
     let row = DraftRow::from_rule(rule);
     let value = row.display_value();
+    // Chips keep short names; the builder says "Date Captured", "Keywords", "Rating".
     let field = match rule.field {
         RuleField::FNumber => "ƒ",
+        RuleField::Date => "Date",
+        RuleField::Tag => "Tag",
+        RuleField::Rating => "Stars",
         ref field => field_label(field),
     };
     match (&rule.field, &rule.operator) {

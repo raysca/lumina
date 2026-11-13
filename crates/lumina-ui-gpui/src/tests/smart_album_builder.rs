@@ -381,11 +381,11 @@ fn v3_sheet_layout_matches_the_design() {
     );
     assert_eq!(
         f32::from(vcx.debug_bounds("album-rule-field-0").unwrap().size.width),
-        180.0
+        210.0
     );
     assert_eq!(
         f32::from(vcx.debug_bounds("album-rule-op-0").unwrap().size.width),
-        150.0
+        140.0
     );
     let tile = vcx
         .debug_bounds(leak(format!("album-builder-preview-{}", ids[0].0)))
@@ -422,6 +422,82 @@ fn v3_sheet_layout_matches_the_design() {
         assert!(app.user_smart_albums.is_empty(), "× must not save");
     });
     assert!(engine.list_smart_albums().is_empty(), "× must not save");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Clicks the open popup's option labelled `label`.
+fn pick_option(
+    vcx: &mut VisualTestContext,
+    view: &Entity<LuminaApp>,
+    target: DraftFocus,
+    label: &str,
+) {
+    let i = view
+        .update(vcx, |app, _| app.draft_popup_options(target))
+        .iter()
+        .position(|l| l == label)
+        .unwrap_or_else(|| panic!("the popup offers {label}"));
+    click(vcx, leak(format!("album-builder-option-{i}")));
+}
+
+#[core::prelude::v1::test]
+fn condition_rows_match_design() {
+    let (dir, engine, _ids) = library("sab_rows_design");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+
+    let size = |vcx: &mut VisualTestContext, selector: &'static str| {
+        let b = vcx.debug_bounds(selector).expect(selector);
+        (f32::from(b.size.width), f32::from(b.size.height))
+    };
+    assert_eq!(
+        size(vcx, "album-rule-field-0"),
+        (210.0, 38.0),
+        "field 210x38"
+    );
+    assert_eq!(size(vcx, "album-rule-op-0").0, 140.0, "operator 140 wide");
+    assert_eq!(size(vcx, "album-rule-remove-0"), (34.0, 34.0), "− is 34x34");
+    assert_eq!(size(vcx, "album-rule-add-0"), (34.0, 34.0), "+ is 34x34");
+
+    let labels = view.update(vcx, |app, _| app.draft_popup_options(DraftFocus::Field(0)));
+    for label in ["Date Captured", "Keywords", "Rating"] {
+        assert!(
+            labels.iter().any(|l| l == label),
+            "the field popup lists {label}: {labels:?}"
+        );
+    }
+
+    // A second row: Date Captured is in the last N <unit>.
+    click(vcx, "album-rule-add-0");
+    click(vcx, "album-rule-field-1");
+    pick_option(vcx, &view, DraftFocus::Field(1), "Date Captured");
+    click(vcx, "album-rule-op-1");
+    pick_option(vcx, &view, DraftFocus::Operator(1), "is in the last");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows[1].field, RuleField::Date);
+        assert_eq!(app.album_draft.rows[1].operator, RuleOperator::InTheLast);
+    });
+    assert_eq!(
+        size(vcx, "album-rule-value-1"),
+        (66.0, 38.0),
+        "number box 66x38"
+    );
+    assert!(
+        size(vcx, "album-rule-unit-1").0 > 66.0,
+        "the unit picker fills the rest of the row"
+    );
+
+    let first = vcx.debug_bounds("album-rule-field-0").unwrap();
+    let second = vcx.debug_bounds("album-rule-field-1").unwrap();
+    assert_eq!(
+        f32::from(second.top() - first.bottom()),
+        10.0,
+        "rows are 10 apart with no divider between them"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -492,6 +568,29 @@ fn tab_to_a_row_below_the_fold_scrolls_it_into_view() {
     assert!(
         add.top() >= rows.top() && add.bottom() <= rows.bottom(),
         "the focused control is scrolled into the conditions box: {add:?} in {rows:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn a_popup_on_the_bottom_row_scrolls_into_view() {
+    let (dir, engine, _ids) = library("sab_popup_scroll");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    sheet_with_rows(vcx, &view, 15);
+
+    // Open it from state: the row-14 picker is below the fold, so a click cannot reach it.
+    view.update(vcx, |app, cx| {
+        app.toggle_draft_popup(DraftFocus::Field(14), cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    let rows = vcx.debug_bounds("album-builder-conditions").unwrap();
+    let popup = vcx.debug_bounds("album-builder-popup").expect("popup");
+    assert!(
+        popup.top() >= rows.top() && popup.bottom() <= rows.bottom(),
+        "the bottom row's popup is scrolled into the conditions box: {popup:?} in {rows:?}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
