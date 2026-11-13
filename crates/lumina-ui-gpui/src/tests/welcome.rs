@@ -8,8 +8,10 @@ use crate::{LuminaApp, UiMessage};
 use gpui::{Entity, VisualTestContext};
 use lumina_core::EngineEvent;
 
+/// Design 11 Task 2: the first-run empty state is centred in the main
+/// column, with Choose a Folder… beside Import into New Library….
 #[core::prelude::v1::test]
-fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
+fn first_run_empty_state_is_centred_with_folder_and_import_actions() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
@@ -19,23 +21,59 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
     });
     render_ui(vcx);
 
-    let column = vcx.debug_bounds("welcome-column").expect("welcome renders");
-    assert_eq!(f32::from(column.size.width), 520.0);
-    // Design 11 Task 1: the column now sits under the page header. Task 2
-    // rewrites this test for the centred empty state.
     let header = vcx.debug_bounds("page-header").expect("header renders");
-    assert_eq!(
-        column.origin.y,
-        header.origin.y + header.size.height + gpui::px(120.0),
-        "the column starts 120px below the header"
+    let glyph = vcx
+        .debug_bounds("welcome-glyph")
+        .expect("the glyph renders");
+    let side = (f32::from(glyph.size.width), f32::from(glyph.size.height));
+    assert_eq!(side, (150.0, 150.0), "the glyph is a 150 px box");
+    let offset = f32::from(glyph.center().x - header.center().x);
+    assert!(
+        offset.abs() <= 1.0,
+        "the glyph is centred in the main column, off by {offset}"
     );
-    let logo = vcx.debug_bounds("welcome-logo").unwrap();
-    assert_eq!(f32::from(logo.size.width), 60.0);
-    assert_eq!(logo.origin.x, column.origin.x, "content is left-aligned");
+    assert!(
+        vcx.debug_bounds("welcome-title-text:Your library is empty")
+            .is_some(),
+        "the headline says the library is empty"
+    );
     let open = vcx.debug_bounds("welcome-open-btn").unwrap();
     let import = vcx.debug_bounds("welcome-import-new-btn").unwrap();
-    assert_eq!(open.size.width, import.size.width, "two equal buttons");
+    assert_eq!(f32::from(open.size.height), 40.0, "the primary is 40 high");
     assert_eq!(open.origin.y, import.origin.y, "side by side");
+    assert!(
+        open.right() <= import.left(),
+        "Choose a Folder… comes first"
+    );
+    for (button, icon) in [
+        (open, "welcome-open-btn-icon"),
+        (import, "welcome-import-new-btn-icon"),
+    ] {
+        let icon = vcx.debug_bounds(icon).expect("each button has an icon");
+        assert!(
+            f32::from(icon.left() - button.left()) <= 19.0,
+            "the icon leads the label, right after the 18 px padding: {icon:?} in {button:?}"
+        );
+    }
+    let sample = vcx.debug_bounds("welcome-sample-btn").unwrap();
+    assert!(
+        sample.top() >= open.bottom(),
+        "the sample link sits below the buttons"
+    );
+    let hints: Vec<_> = ["welcome-hint-0", "welcome-hint-1", "welcome-hint-2"]
+        .into_iter()
+        .map(|hint| vcx.debug_bounds(hint).expect("three hint cards"))
+        .collect();
+    assert!(
+        hints
+            .iter()
+            .all(|h| f32::from(h.size.width - hints[0].size.width).abs() <= 1.0),
+        "the hint cards have equal widths (±1 for pixel snapping): {hints:?}"
+    );
+    assert!(
+        hints[0].top() >= sample.bottom(),
+        "the hints sit below the links"
+    );
     let pictures = vcx
         .debug_bounds("welcome-pictures-link")
         .expect("Use Pictures Folder stays as a secondary link");
@@ -63,11 +101,7 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
     click(vcx, "welcome-open-btn");
     click(vcx, "welcome-import-new-btn");
     click(vcx, "welcome-pictures-link");
-    assert_eq!(
-        picks(),
-        folders + 1,
-        "Open Existing Library… opens the picker"
-    );
+    assert_eq!(picks(), folders + 1, "Choose a Folder… opens the picker");
     assert_eq!(
         new_library_picks(),
         new_libraries + 1,
@@ -441,10 +475,11 @@ fn small_window_welcome_scrolls_under_the_header() {
         open.origin.y >= header_bottom,
         "the welcome buttons never overlap the header"
     );
-    let below = vcx.debug_bounds("welcome-sample-btn").expect("sample link");
+    // The last recent row is the lowest control (Design 11 Task 2).
+    let below = vcx.debug_bounds("welcome-recent-5").expect("last recent");
     assert!(
         below.origin.y > gpui::px(600.0),
-        "precondition: at 900×600 the sample link starts below the window: {below:?}"
+        "precondition: at 900×600 the last recent starts below the window: {below:?}"
     );
     let body = vcx.debug_bounds("welcome-body").expect("body renders");
     for _ in 0..5 {
@@ -455,12 +490,10 @@ fn small_window_welcome_scrolls_under_the_header() {
             gpui::Modifiers::default(),
         );
     }
-    let sample = vcx
-        .debug_bounds("welcome-sample-btn")
-        .expect("the sample link renders");
+    let last = vcx.debug_bounds("welcome-recent-5").expect("last recent");
     assert!(
-        sample.origin.y >= header_bottom && sample.origin.y + sample.size.height <= gpui::px(600.0),
-        "scrolling brings the lowest control into the window: {sample:?}"
+        last.origin.y >= header_bottom && last.origin.y + last.size.height <= gpui::px(600.0),
+        "scrolling brings the lowest control into the window: {last:?}"
     );
 }
 
@@ -1073,6 +1106,25 @@ fn sample_files(dir: &std::path::Path) -> usize {
                 .count()
         })
         .unwrap_or(0)
+}
+
+/// Review Focus 3: while the sample is being written the link is inert.
+#[core::prelude::v1::test]
+fn sample_link_is_inert_while_preparing() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.welcome.generating_sample = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let before = sample_opens();
+    click(vcx, "welcome-sample-btn");
+    assert_eq!(
+        sample_opens(),
+        before,
+        "a click on Preparing the Sample Library… asks for nothing"
+    );
 }
 
 #[core::prelude::v1::test]

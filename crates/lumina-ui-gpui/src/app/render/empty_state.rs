@@ -260,8 +260,8 @@ impl LuminaApp {
         let primary_button = primary.map(|p| button(true, p));
         let secondary_button = secondary.map(|s| button(false, s));
         let glyph = match size {
-            EmptySize::Standard => px(54.0),
-            EmptySize::Hero => px(150.0),
+            EmptySize::Standard => empty_glyph(px(54.0), icon, theme::t2()),
+            EmptySize::Hero => hero_glyph(icon),
         };
 
         div()
@@ -282,10 +282,7 @@ impl LuminaApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(
-                        empty_glyph(glyph, icon, theme::t2())
-                            .debug_selector(|| "empty-state-glyph".to_string()),
-                    )
+                    .child(glyph.debug_selector(|| "empty-state-glyph".to_string()))
                     .child(empty_headline("empty-state-headline", title.into()))
                     .child(empty_body("empty-state-body", body.into()))
                     .children(path.map(|path| {
@@ -488,6 +485,38 @@ pub(crate) fn empty_glyph(size: Pixels, icon: Icon, ink: Rgba) -> Div {
         .child(render_icon(icon, px(20.0), ink))
 }
 
+/// The First Run glyph (frame `DiFtb`): a 150 px box holding an 84 px
+/// `bg_1` ring with an accent outline, a soft accent glow and a 36 px accent
+/// icon.
+pub(crate) fn hero_glyph(icon: Icon) -> Div {
+    div()
+        .size(px(150.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .size(px(84.0))
+                .rounded_full()
+                .bg(theme::bg_1())
+                .border_1()
+                .border_color(theme::accent_outline())
+                // ponytail: the frame's radial glow as a soft shadow, by eye.
+                .shadow(vec![BoxShadow {
+                    color: theme::accent_soft().into(),
+                    offset: point(px(0.0), px(0.0)),
+                    blur_radius: px(48.0),
+                    spread_radius: px(12.0),
+                    inset: false,
+                }])
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(render_icon(icon, px(36.0), theme::accent())),
+        )
+}
+
 /// The shell's headline: Inter Tight 18/600, centred, 14 px under the glyph.
 pub(crate) fn empty_headline(selector: &'static str, title: SharedString) -> Div {
     div()
@@ -516,7 +545,8 @@ pub(crate) fn empty_body(selector: &'static str, body: SharedString) -> Div {
 }
 
 /// The shell's button: accent primary or `line_2` secondary, 12.5 text, an
-/// optional 14 px leading icon. `id` is also the selector; callers add the click.
+/// optional leading icon (`{id}-icon`; 14 px, or 15 px on a 40 px button).
+/// `id` is also the selector; callers add the click.
 pub(crate) fn empty_button(
     id: &'static str,
     primary: bool,
@@ -542,7 +572,15 @@ pub(crate) fn empty_button(
         .text_size(px(12.5))
         .role(Role::Button)
         .aria_label(label.clone())
-        .children(icon.map(|icon| render_icon(icon, px(14.0), ink)))
+        .children(icon.map(|icon| {
+            // The 40 px Hero buttons (First Run) carry a 15 px icon.
+            let size = if height >= px(40.0) {
+                px(15.0)
+            } else {
+                px(14.0)
+            };
+            render_icon(icon, size, ink).debug_selector(move || format!("{id}-icon"))
+        }))
         .children(text_marker(id, &label))
         .child(label)
 }

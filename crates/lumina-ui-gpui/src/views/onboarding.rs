@@ -1,3 +1,4 @@
+use crate::app::render::empty_state::{empty_body, empty_button, empty_headline, hero_glyph};
 use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -5,7 +6,7 @@ use crate::views::missing_library::{missing_library_state, MissingLibraryProps};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-/// Welcome and first-scan column: left-aligned, 520px, 120px from the top.
+/// Welcome and first-scan column: centred, 120px from the top.
 pub(crate) fn welcome_column() -> Div {
     div()
         // At least the window's height, and taller when the content is, so
@@ -86,87 +87,65 @@ impl OnboardingView {
             recents,
             missing: _,
         } = props;
+        let choose = t("welcome.choose_folder");
+        let import = t("welcome.import_new");
         welcome_column()
             .child(
                 div()
                     .id("welcome-column")
                     .debug_selector(|| "welcome-column".to_string())
-                    .w(px(520.0))
+                    .w_full()
+                    .max_w(px(640.0))
+                    .pb(px(48.0))
                     .flex()
                     .flex_col()
-                    .items_start()
-                    .gap_6()
-                    .child(logo().debug_selector(|| "welcome-logo".to_string()))
+                    .items_center()
                     .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_3xl()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(t("welcome.title")),
-                            )
-                            .child(
-                                div()
-                                    .text_base()
-                                    .text_color(theme::t2())
-                                    .child(t("welcome.intro")),
-                            ),
+                        hero_glyph(Icon::Aperture).debug_selector(|| "welcome-glyph".to_string()),
+                    )
+                    .child(
+                        // ponytail: the design's -0.6 tracking is skipped; GPUI
+                        // 0.3.11 has no letter-spacing style.
+                        empty_headline("welcome-title", t("welcome.empty_title").into())
+                            .mt(px(20.0))
+                            .text_size(px(28.0)),
+                    )
+                    .child(
+                        empty_body("welcome-intro", t("welcome.empty_body").into())
+                            .mt(px(12.0))
+                            .max_w(px(470.0))
+                            .text_size(px(13.5))
+                            .line_height(px(21.0)),
                     )
                     .child(
                         div()
-                            .w_full()
-                            .flex()
-                            .flex_col()
-                            .gap_4()
-                            .child(feature(
-                                Icon::Folder,
-                                t("welcome.in_place_title"),
-                                t("welcome.in_place_body"),
-                            ))
-                            .child(feature(
-                                Icon::Check,
-                                t("welcome.originals_title"),
-                                t("welcome.originals_body"),
-                            ))
-                            .child(feature(
-                                Icon::Database,
-                                t("welcome.catalog_title"),
-                                t("welcome.catalog_body"),
-                            )),
-                    )
-                    .when(!recents.is_empty(), |column| {
-                        column.child(recent_libraries(recents))
-                    })
-                    .child(
-                        div()
-                            .w_full()
+                            .mt(px(26.0))
                             .flex()
                             .flex_row()
-                            .gap_3()
+                            .flex_wrap()
+                            .justify_center()
+                            .gap(px(10.0))
                             .child(
-                                button("welcome-open-btn", t("welcome.open_existing"), true)
+                                welcome_button("welcome-open-btn", true, &choose, Icon::FolderOpen)
                                     .child(shortcut_hint("welcome-open-key", "↵"))
-                                    .tooltip(theme::tooltip_label(format!(
-                                        "{} (↵)",
-                                        t("welcome.open_existing")
-                                    )))
+                                    .tooltip(theme::tooltip_label(format!("{choose} (↵)")))
                                     .on_click(on_open),
                             )
                             .child(
-                                button("welcome-import-new-btn", t("welcome.import_new"), false)
-                                    .child(shortcut_hint("welcome-import-new-key", "⇧⌘I"))
-                                    .tooltip(theme::tooltip_label(format!(
-                                        "{} (⇧⌘I)",
-                                        t("welcome.import_new")
-                                    )))
-                                    .on_click(on_import_new),
+                                welcome_button(
+                                    "welcome-import-new-btn",
+                                    false,
+                                    &import,
+                                    Icon::Folder,
+                                )
+                                .child(shortcut_hint("welcome-import-new-key", "⇧⌘I"))
+                                .tooltip(theme::tooltip_label(format!("{import} (⇧⌘I)")))
+                                .on_click(on_import_new),
                             ),
                     )
                     .child(
                         div()
+                            .mt(px(14.0))
                             .flex()
                             .flex_row()
                             .gap_6()
@@ -179,6 +158,7 @@ impl OnboardingView {
                                     t("welcome.sample")
                                 },
                                 ("welcome-sample-key", "⌥↵"),
+                                sample_busy,
                                 on_sample,
                             ))
                             .children(has_desktop_pics.then(|| {
@@ -187,19 +167,87 @@ impl OnboardingView {
                                     Role::Link,
                                     t("welcome.use_pictures"),
                                     ("welcome-pictures-key", "⇧↵"),
+                                    false,
                                     on_pick_desktop_pics,
                                 )
                             })),
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(theme::t2())
-                            .child(t("welcome.footer")),
-                    ),
+                            .mt(px(46.0))
+                            .w_full()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap(px(12.0))
+                            .child(hint_card(
+                                0,
+                                Icon::FolderSync,
+                                "welcome.hint_watch_title",
+                                "welcome.hint_watch_body",
+                            ))
+                            .child(hint_card(
+                                1,
+                                Icon::FileImage,
+                                "welcome.hint_formats_title",
+                                "welcome.hint_formats_body",
+                            ))
+                            .child(hint_card(
+                                2,
+                                Icon::ShieldCheck,
+                                "welcome.hint_device_title",
+                                "welcome.hint_device_body",
+                            )),
+                    )
+                    // ponytail: Task 3 restyles this list; it sits under the hints.
+                    .when(!recents.is_empty(), |column| {
+                        column.child(div().mt(px(32.0)).w_full().child(recent_libraries(recents)))
+                    }),
             )
             .into_any_element()
     }
+}
+
+/// A First Run button: 40 high, 18 px padding, 9 px radius, 15 px icon, 13 px
+/// label. Callers add the shortcut hint, tooltip and click.
+fn welcome_button(id: &'static str, primary: bool, label: &str, icon: Icon) -> Stateful<Div> {
+    empty_button(id, primary, label.to_string().into(), Some(icon), px(40.0))
+        .px(px(18.0))
+        .gap(px(8.0))
+        .rounded(px(9.0))
+        .text_size(px(13.0))
+}
+
+/// One of the three equal hint cards under the links (`welcome-hint-{i}`).
+/// They wrap onto more rows in a narrow window.
+fn hint_card(i: usize, icon: Icon, title_key: &str, body_key: &str) -> Div {
+    div()
+        .debug_selector(move || format!("welcome-hint-{i}"))
+        .flex_1()
+        .min_w(px(180.0))
+        .p(px(14.0))
+        .flex()
+        .flex_col()
+        .gap(px(7.0))
+        .rounded(px(9.0))
+        .bg(theme::bg_1())
+        .border_1()
+        .border_color(theme::line())
+        .child(render_icon(icon, px(16.0), theme::accent()))
+        .child(
+            div()
+                .text_size(px(12.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme::t1())
+                .child(t(title_key)),
+        )
+        .child(
+            div()
+                .text_size(px(11.0))
+                .line_height(px(16.0))
+                .text_color(theme::t3())
+                .child(t(body_key)),
+        )
 }
 
 /// The shortcut shown next to a welcome control's label.
@@ -216,6 +264,7 @@ fn text_link(
     role: Role,
     label: String,
     (hint_id, keys): (&'static str, &'static str),
+    busy: bool,
     on_click: WelcomeHandler,
 ) -> impl IntoElement {
     div()
@@ -227,11 +276,19 @@ fn text_link(
         .flex_row()
         .items_center()
         .gap_2()
-        .cursor_pointer()
-        .text_sm()
-        .text_color(theme::accent())
-        .hover(|s| s.underline())
-        .on_click(on_click)
+        .text_size(px(12.0))
+        .map(|link| {
+            // Busy (the sample is being written): dimmed, and a click does nothing.
+            if busy {
+                link.text_color(theme::t3())
+                    .aria_description(t("welcome.sample_busy"))
+            } else {
+                link.text_color(theme::accent())
+                    .cursor_pointer()
+                    .hover(|s| s.underline())
+                    .on_click(on_click)
+            }
+        })
         .child(label)
         .child(shortcut_hint(hint_id, keys))
 }
@@ -354,38 +411,6 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     on_remove(event, window, cx);
                 })
                 .child(render_icon(Icon::X, px(13.0), theme::t2())),
-        )
-}
-
-fn feature(icon: Icon, title: String, body: String) -> impl IntoElement {
-    div()
-        .flex()
-        .flex_row()
-        .items_start()
-        .gap_3()
-        .child(
-            div()
-                .size(px(32.0))
-                .flex_none()
-                .rounded(theme::RADIUS_LG)
-                .bg(theme::bg_2())
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(render_icon(icon, px(15.0), theme::t2())),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_0p5()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(title),
-                )
-                .child(div().text_xs().text_color(theme::t2()).child(body)),
         )
 }
 

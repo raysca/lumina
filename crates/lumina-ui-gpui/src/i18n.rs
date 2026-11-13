@@ -596,34 +596,27 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.open_recent" => "Open Recent Library: {name}",
         "command.clear_recents" => "Clear Recent Libraries",
         "command.clear_recent_searches" => "Clear Recent Searches",
-        "welcome.title" => "Welcome to Lumina",
-        "welcome.intro" => {
-            "A fast, private browser for the photos and videos on your Mac: \
-            JPEG, HEIC, RAW and video."
+        "welcome.empty_title" => "Your library is empty",
+        "welcome.empty_body" => {
+            "Point Lumina at a folder or a drive. Nothing is copied or moved: \
+            Lumina reads your files where they already live and leaves them there."
         }
-        "welcome.in_place_title" => "Works where your photos are",
-        "welcome.in_place_body" => {
-            "Open a folder and Lumina shows the photos where they already are. \
-            Or start a new library, and Lumina copies photos into it."
-        }
-        "welcome.originals_title" => "Leaves your originals alone",
-        "welcome.originals_body" => {
-            "Lumina never edits your original files, and nothing is uploaded."
-        }
-        "welcome.catalog_title" => "Keeps its catalog on this Mac",
-        "welcome.catalog_body" => {
-            "Dates, tags and albums are kept in Lumina's catalog in Application Support."
-        }
-        "welcome.open_existing" => "Open Existing Library…",
+        "welcome.choose_folder" => "Choose a Folder…",
+        "welcome.hint_watch_title" => "Watch folders",
+        "welcome.hint_watch_body" => "Stays in sync as you shoot",
+        "welcome.hint_formats_title" => "RAW and video",
+        "welcome.hint_formats_body" => "RAW · HEIC · MOV · MP4",
+        "welcome.hint_device_title" => "On-device",
+        "welcome.hint_device_body" => "Your catalog and places stay on this Mac",
         "welcome.import_new" => "Import into New Library…",
         "welcome.use_pictures" => "Use Pictures Folder",
         "welcome.sample" => "Explore a Sample Library",
         "welcome.sample_preparing" => "Preparing the Sample Library…",
+        "welcome.sample_busy" => "Unavailable until the sample library is ready",
         "welcome.sample_failed" => "Could not prepare the sample library",
         "welcome.sample_no_folder" => {
             "Could not prepare the sample library: this Mac has no Application Support folder"
         }
-        "welcome.footer" => "You can open another library later with File > Open Library… (⌘O).",
         "welcome.recent_heading" => "Recent Libraries",
         "welcome.not_available" => "Not available",
         "welcome.open_recent" => "Open {name}",

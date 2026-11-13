@@ -82,6 +82,9 @@ pub enum Icon {
     Unplug,
     HardDrive,
     RefreshCw,
+    FolderOpen,
+    FolderSync,
+    ShieldCheck,
 }
 
 impl Icon {
@@ -168,6 +171,9 @@ impl Icon {
         Icon::Unplug,
         Icon::HardDrive,
         Icon::RefreshCw,
+        Icon::FolderOpen,
+        Icon::FolderSync,
+        Icon::ShieldCheck,
     ];
 
     pub fn path(self) -> &'static str {
@@ -251,6 +257,9 @@ impl Icon {
             Self::Unplug => "icons/unplug.svg",
             Self::HardDrive => "icons/hard-drive.svg",
             Self::RefreshCw => "icons/refresh-cw.svg",
+            Self::FolderOpen => "icons/folder-open.svg",
+            Self::FolderSync => "icons/folder-sync.svg",
+            Self::ShieldCheck => "icons/shield-check.svg",
         }
     }
 }
