@@ -110,7 +110,7 @@ impl LuminaApp {
         } else {
             rows
         };
-        draft.focus = DraftFocus::Title;
+        draft.focus_on(DraftFocus::Title);
         draft.popup = None;
         draft.pin = false;
         draft.pinned_before = false;

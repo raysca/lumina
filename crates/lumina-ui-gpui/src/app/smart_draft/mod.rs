@@ -8,7 +8,9 @@ use lumina_core::{
     parse_rule_date, split_date_range, RuleField, RuleOperator, RuleValue, SmartAlbumRule,
 };
 
+mod focus;
 mod labels;
+pub use focus::{focus_order, DraftFocus, DraftPopup};
 pub use labels::{field_icon, field_label, match_label, operator_label, rating_value_label};
 
 /// Fields offered in the field popup, in Photos-like order. Older albums may
@@ -69,6 +71,8 @@ pub enum ValueKind {
     DateRange,
     /// A count of days, weeks or months ("in the last").
     Period,
+    /// Several of the library's tags as chips ("include any of").
+    TagList,
 }
 
 impl ValueKind {
@@ -86,6 +90,7 @@ impl ValueKind {
             Self::DateRange => "YYYY-MM-DD to YYYY-MM-DD",
             Self::Number | Self::Period => "number",
             Self::Tags => "choose a tag",
+            Self::TagList => "add keyword…",
             _ => "text",
         }
     }
@@ -141,7 +146,7 @@ pub fn operators(field: &RuleField) -> &'static [RuleOperator] {
         RuleField::MediaType | RuleField::ColorLabel | RuleField::Flag => &[Equals, NotEquals],
         RuleField::IsFavorite | RuleField::Query => &[Equals],
         RuleField::Date => &[Equals, LessThan, GreaterThan, Between, InTheLast],
-        RuleField::Tag => &[Equals, NotEquals, Contains, IsEmpty, IsNotEmpty],
+        RuleField::Tag => &[Equals, NotEquals, AnyOf, Contains, IsEmpty, IsNotEmpty],
         RuleField::Rating => &[Equals, AtLeast, AtMost],
         f if is_numeric(f) => &[Equals, GreaterThan, LessThan],
         _ => &[Contains, NotContains],
@@ -160,6 +165,7 @@ pub fn value_kind(field: &RuleField, op: &RuleOperator) -> ValueKind {
         (RuleField::Date, RuleOperator::InTheLast) => ValueKind::Period,
         (RuleField::Date, _) => ValueKind::Date,
         (RuleField::Tag, RuleOperator::Equals | RuleOperator::NotEquals) => ValueKind::Tags,
+        (RuleField::Tag, RuleOperator::AnyOf) => ValueKind::TagList,
         (f, _) if is_numeric(f) => ValueKind::Number,
         _ => ValueKind::Text,
     }
@@ -173,6 +179,8 @@ pub struct DraftRow {
     /// The value as typed, or the key of the chosen option.
     pub text: String,
     pub unit: PeriodUnit,
+    /// The chosen keywords of an "include any of" row, in the order added.
+    pub list: Vec<String>,
 }
 
 impl DraftRow {
@@ -184,6 +192,7 @@ impl DraftRow {
             operator,
             text: String::new(),
             unit: PeriodUnit::Days,
+            list: Vec::new(),
         };
         row.text = row.default_text();
         row
@@ -212,6 +221,7 @@ impl DraftRow {
                 && matches!(after, ValueKind::Text | ValueKind::Tags));
         if !keeps_text {
             self.text = self.default_text();
+            self.list.clear();
         }
     }
 
@@ -223,6 +233,7 @@ impl DraftRow {
                 .chain(LEGACY_KINDS)
                 .find(|(key, _)| *key == self.text)
                 .map_or_else(|| self.text.clone(), |(_, label)| label.to_string()),
+            ValueKind::TagList => self.list.join(", "),
             _ => self.text.clone(),
         }
     }
@@ -244,6 +255,8 @@ impl DraftRow {
                     _ => RuleValue::Integer(text.parse().ok()?),
                 }
             }
+            ValueKind::TagList if self.list.is_empty() => return None,
+            ValueKind::TagList => RuleValue::List(self.list.clone()),
             ValueKind::Tags | ValueKind::Text if text.is_empty() => return None,
             ValueKind::Tags | ValueKind::Text => RuleValue::Text(text.to_string()),
             ValueKind::Number => match text.parse::<i64>() {
@@ -277,8 +290,13 @@ impl DraftRow {
             operator: rule.operator.clone(),
             text: String::new(),
             unit: PeriodUnit::Days,
+            list: Vec::new(),
         };
         row.text = match &rule.value {
+            RuleValue::List(tags) => {
+                row.list = tags.clone();
+                String::new()
+            }
             RuleValue::Text(s) if row.kind() == ValueKind::Period => {
                 let s = s.trim().to_lowercase();
                 let (count, unit) = if let Some(n) = s.strip_suffix("mo") {
@@ -304,67 +322,6 @@ impl DraftRow {
 /// Converts every row, or `None` when any row is invalid.
 pub fn rules_from_rows(rows: &[DraftRow]) -> Option<Vec<SmartAlbumRule>> {
     rows.iter().map(DraftRow::to_rule).collect()
-}
-
-/// A keyboard-focusable control in the builder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DraftFocus {
-    Title,
-    Match,
-    Field(usize),
-    Operator(usize),
-    Value(usize),
-    Unit(usize),
-    Remove(usize),
-    Add(usize),
-    Pin,
-    Cancel,
-    Save,
-}
-
-impl DraftFocus {
-    /// The condition row this control belongs to, if any.
-    pub fn row(self) -> Option<usize> {
-        match self {
-            Self::Field(i)
-            | Self::Operator(i)
-            | Self::Value(i)
-            | Self::Unit(i)
-            | Self::Remove(i)
-            | Self::Add(i) => Some(i),
-            _ => None,
-        }
-    }
-}
-
-/// An open option popup and its highlighted option.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DraftPopup {
-    pub target: DraftFocus,
-    pub highlight: usize,
-}
-
-/// Tab order for the current rows.
-pub fn focus_order(rows: &[DraftRow]) -> Vec<DraftFocus> {
-    let mut order = vec![DraftFocus::Title, DraftFocus::Match];
-    for (i, row) in rows.iter().enumerate() {
-        order.push(DraftFocus::Field(i));
-        order.push(DraftFocus::Operator(i));
-        if row.kind() != ValueKind::None {
-            order.push(DraftFocus::Value(i));
-        }
-        if row.kind() == ValueKind::Period {
-            order.push(DraftFocus::Unit(i));
-        }
-        order.push(DraftFocus::Remove(i));
-        order.push(DraftFocus::Add(i));
-    }
-    // The empty state's "Add Condition" button.
-    if rows.is_empty() {
-        order.push(DraftFocus::Add(0));
-    }
-    order.extend([DraftFocus::Pin, DraftFocus::Cancel, DraftFocus::Save]);
-    order
 }
 
 #[cfg(test)]
@@ -413,6 +370,8 @@ mod tests {
     fn rows_round_trip_through_rules() {
         let mut period = row(RuleField::Date, RuleOperator::InTheLast, "6");
         period.unit = PeriodUnit::Months;
+        let mut keywords = row(RuleField::Tag, RuleOperator::AnyOf, "");
+        keywords.list = vec!["beach".into(), "places/paris".into()];
         let rows = [
             row(RuleField::MediaType, RuleOperator::NotEquals, "video"),
             row(RuleField::IsFavorite, RuleOperator::Equals, "false"),
@@ -425,6 +384,7 @@ mod tests {
                 "2024-01-01 to 2024-02-01",
             ),
             period,
+            keywords,
         ];
         let rules = rules_from_rows(&rows).expect("all rows valid");
         assert_eq!(rules[1].value, RuleValue::Bool(false));
@@ -432,6 +392,16 @@ mod tests {
         assert_eq!(rules[3].value, RuleValue::Integer(-1));
         assert_eq!(rules[4].value, RuleValue::Number(2.8));
         assert_eq!(rules[6].value, RuleValue::Text("6mo".into()));
+        assert_eq!(
+            rules[7].value,
+            RuleValue::List(vec!["beach".into(), "places/paris".into()])
+        );
+        assert!(
+            row(RuleField::Tag, RuleOperator::AnyOf, "")
+                .to_rule()
+                .is_none(),
+            "an empty keyword list is invalid"
+        );
         let back: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
         assert_eq!(back, rows, "editing a saved album restores the same rows");
     }

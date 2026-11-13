@@ -60,6 +60,9 @@ pub enum RuleOperator {
     IsNotEmpty,
     AtLeast,
     AtMost,
+    /// The item has at least one of the keywords in a [`RuleValue::List`]
+    /// (or a keyword below one). Tag only.
+    AnyOf,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -70,6 +73,10 @@ pub enum RuleValue {
     Integer(i64),
     Bool(bool),
     Range(f64, f64),
+    /// Several keywords ([`RuleOperator::AnyOf`]). Last, so a stored numeric
+    /// `[min, max]` still reads as a `Range`; old rules never hold strings in
+    /// an array, so they cannot read as a list.
+    List(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -123,6 +130,19 @@ impl SmartAlbum {
                 "m.is_trashed = 0 AND m.is_hidden = 0".to_string(),
                 Vec::new(),
             ));
+        }
+
+        // Each keyword binds four values; SQLite allows 32,766 per statement.
+        let keywords: usize = self
+            .rules
+            .iter()
+            .map(|rule| match &rule.value {
+                RuleValue::List(items) => items.len(),
+                _ => 0,
+            })
+            .sum();
+        if keywords > MAX_KEYWORDS {
+            return Err(anyhow!("Too many keywords in this album"));
         }
 
         let mut clauses = Vec::new();
@@ -211,6 +231,11 @@ pub const MAX_PORTABLE_BYTES: usize = 1024 * 1024;
 pub const MAX_PORTABLE_RULES: usize = 100;
 /// The longest text value an imported rule may have, in characters.
 pub const MAX_PORTABLE_TEXT_CHARS: usize = 1_000;
+/// The most keywords an imported "include any of" rule may list.
+const MAX_PORTABLE_LIST: usize = 100;
+/// The most "include any of" keywords one album may list across its rules,
+/// well under SQLite's 32,766 bound values (four per keyword).
+pub const MAX_KEYWORDS: usize = 1_000;
 
 /// A smart album as a rules file holds it: no catalog id, date or pin,
 /// which belong to one library.
@@ -300,7 +325,12 @@ pub fn from_portable_json(json: &str) -> Result<PortableSmartAlbum> {
             "This file has more than {MAX_PORTABLE_RULES} rules, too many to import"
         ));
     }
-    let too_long = |v: &RuleValue| matches!(v, RuleValue::Text(text) if text.chars().count() > MAX_PORTABLE_TEXT_CHARS);
+    let long = |text: &String| text.chars().count() > MAX_PORTABLE_TEXT_CHARS;
+    let too_long = |v: &RuleValue| match v {
+        RuleValue::Text(text) => long(text),
+        RuleValue::List(items) => items.len() > MAX_PORTABLE_LIST || items.iter().any(long),
+        _ => false,
+    };
     if file.rules.iter().any(|r| too_long(&r.value)) {
         return Err(anyhow!("A rule in this file is too long to import"));
     }
@@ -413,6 +443,7 @@ fn compile_rule(
                     vec![format!("%{}%", escaped).into()],
                 ))
             }
+            RuleOperator::AnyOf => compile_tag_any_of(&rule.value),
             RuleOperator::IsEmpty => Ok((
                 "m.id NOT IN (SELECT media_id FROM media_tags)".to_string(),
                 Vec::new(),
@@ -473,6 +504,7 @@ fn compile_rule(
     let col = column_for_field(&rule.field);
 
     match &rule.operator {
+        RuleOperator::AnyOf => Err(anyhow!("Only keywords support \"include any of\"")),
         RuleOperator::Equals => {
             let val = rule_value_to_sqlite(&rule.value)?;
             Ok((format!("{} = ?", col), vec![val]))
@@ -558,6 +590,30 @@ fn compile_rule(
             Vec::new(),
         )),
     }
+}
+
+/// Tag "include any of": one `IN` over media_tags with a subtree test per
+/// keyword, so each OR arm still seeks the tag index (see `subtree_clause`).
+fn compile_tag_any_of(value: &RuleValue) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    let RuleValue::List(tags) = value else {
+        return Err(anyhow!("\"include any of\" needs a list of keywords"));
+    };
+    let mut paths: Vec<String> = tags
+        .iter()
+        .map(|tag| filter_value(tag))
+        .filter(|path| !path.is_empty())
+        .collect();
+    paths.sort();
+    paths.dedup();
+    if paths.is_empty() {
+        return Err(anyhow!("Choose at least one keyword"));
+    }
+    let any = vec![subtree_clause("tag"); paths.len()].join(" OR ");
+    let params = paths.iter().flat_map(|path| subtree_params(path)).collect();
+    Ok((
+        format!("m.id IN (SELECT media_id FROM media_tags WHERE {any})"),
+        params,
+    ))
 }
 
 /// A saved search: the raw text parsed exactly as the search field parses it.
@@ -671,6 +727,7 @@ fn rule_value_to_sqlite(v: &RuleValue) -> Result<rusqlite::types::Value> {
         RuleValue::Integer(i) => Ok((*i).into()),
         RuleValue::Bool(b) => Ok((if *b { 1i64 } else { 0i64 }).into()),
         RuleValue::Range(min, _) => Ok((*min).into()),
+        RuleValue::List(_) => Err(anyhow!("This rule takes one value, not a list")),
     }
 }
 
@@ -681,6 +738,7 @@ fn rule_value_to_string(v: &RuleValue) -> Result<String> {
         RuleValue::Integer(i) => Ok(i.to_string()),
         RuleValue::Bool(b) => Ok(b.to_string()),
         RuleValue::Range(min, max) => Ok(format!("{}..{}", min, max)),
+        RuleValue::List(_) => Err(anyhow!("This rule takes one value, not a list")),
     }
 }
 

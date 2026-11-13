@@ -277,6 +277,17 @@ pub struct AlbumDraftState {
     /// "Pin to sidebar", and whether the album was pinned when opened.
     pub pin: bool,
     pub pinned_before: bool,
+    /// The keyword chip ←/→ picked in the focused list, for ⌫ to remove.
+    pub token: Option<usize>,
+}
+
+impl AlbumDraftState {
+    /// The one way focus moves: the chip highlight (`token`) belongs to the
+    /// focused keyword list, so it never follows focus elsewhere.
+    pub fn focus_on(&mut self, focus: crate::app::smart_draft::DraftFocus) {
+        self.focus = focus;
+        self.token = None;
+    }
 }
 
 impl Default for AlbumDraftState {
@@ -296,6 +307,7 @@ impl Default for AlbumDraftState {
             scroll: gpui::ScrollHandle::new(),
             pin: false,
             pinned_before: false,
+            token: None,
         }
     }
 }

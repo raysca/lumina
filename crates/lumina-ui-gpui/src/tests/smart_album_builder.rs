@@ -777,6 +777,223 @@ fn pin_failure_shows_the_error_and_keeps_the_album() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[core::prelude::v1::test]
+fn keywords_tokens_add_and_remove() {
+    let (dir, engine, ids) = library("sab_tokens");
+    engine
+        .add_tags_batch(&[ids[2]], &["sunset".to_string()])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    click(vcx, "album-rule-field-0");
+    pick_option(vcx, &view, DraftFocus::Field(0), "Keywords");
+    click(vcx, "album-rule-op-0");
+    pick_option(vcx, &view, DraftFocus::Operator(0), "include any of");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.match_count, None,
+            "an empty list is invalid"
+        )
+    });
+
+    let add = |vcx: &mut VisualTestContext, tag: &str| {
+        click(vcx, "album-rule-value-0");
+        pick_option(vcx, &view, DraftFocus::Value(0), tag);
+        render_ui(vcx);
+    };
+    add(vcx, "beach");
+    let offered = view.update(vcx, |app, _| app.draft_popup_options(DraftFocus::Value(0)));
+    assert_eq!(
+        offered,
+        vec!["sunset".to_string()],
+        "a chosen keyword is not offered again"
+    );
+    add(vcx, "sunset");
+    for tag in ["beach", "sunset"] {
+        assert!(
+            vcx.debug_bounds(leak(format!("album-rule-token-0-{tag}")))
+                .is_some(),
+            "{tag} shows as a chip"
+        );
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(2), "beach or sunset")
+    });
+
+    click(vcx, "album-rule-token-remove-0-beach");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("album-rule-token-0-beach").is_none(),
+        "× removes the chip"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows[0].list, vec!["sunset".to_string()]);
+        assert_eq!(app.album_draft.focus, DraftFocus::Value(0));
+    });
+
+    add(vcx, "beach");
+    keystrokes(vcx, "backspace");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.rows[0].list,
+            vec!["sunset".to_string()],
+            "⌫ drops the last chip"
+        )
+    });
+    add(vcx, "beach");
+    keystrokes(vcx, "secondary-enter");
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(
+        saved[0].rules[0],
+        SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::AnyOf,
+            value: RuleValue::List(vec!["sunset".into(), "beach".into()]),
+        }
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn keyword_chips_remove_from_the_keyboard() {
+    let (dir, engine, ids) = library("sab_token_keys");
+    engine
+        .add_tags_batch(&[ids[2]], &["sunset".to_string()])
+        .unwrap();
+    engine
+        .add_tags_batch(&[ids[3]], &["city".to_string()])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    click(vcx, "album-rule-field-0");
+    pick_option(vcx, &view, DraftFocus::Field(0), "Keywords");
+    click(vcx, "album-rule-op-0");
+    pick_option(vcx, &view, DraftFocus::Operator(0), "include any of");
+    for tag in ["beach", "sunset", "city"] {
+        // Enter opens the popup on the focused list; picking adds a chip.
+        view.update(vcx, |app, cx| app.set_draft_focus(DraftFocus::Value(0), cx));
+        keystrokes(vcx, "enter");
+        let i = view
+            .update(vcx, |app, _| app.draft_popup_options(DraftFocus::Value(0)))
+            .iter()
+            .position(|t| t == tag)
+            .unwrap();
+        for _ in 0..i {
+            keystrokes(vcx, "down");
+        }
+        keystrokes(vcx, "enter");
+    }
+    let list = |vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| app.album_draft.rows[0].list.clone())
+    };
+    assert_eq!(list(vcx), vec!["beach", "sunset", "city"]);
+
+    // ← ← highlights the middle chip; ⌫ removes it, not the last.
+    keystrokes(vcx, "left left");
+    view.update(vcx, |app, _| assert_eq!(app.album_draft.token, Some(1)));
+    keystrokes(vcx, "backspace");
+    assert_eq!(
+        list(vcx),
+        vec!["beach", "city"],
+        "⌫ removes the highlighted chip"
+    );
+    // ← once more highlights the last; → past it clears the highlight.
+    keystrokes(vcx, "left right");
+    view.update(vcx, |app, _| assert_eq!(app.album_draft.token, None));
+    keystrokes(vcx, "left left left backspace");
+    assert_eq!(list(vcx), vec!["city"], "← stops at the first chip");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn chip_highlight_does_not_follow_focus_to_another_row() {
+    let (dir, engine, _ids) = library("sab_token_stale");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    view.update(vcx, |app, cx| {
+        let keywords = |list: &[&str]| {
+            let mut row = crate::app::smart_draft::DraftRow::new(RuleField::Tag);
+            row.set_operator(RuleOperator::AnyOf);
+            row.list = list.iter().map(|t| t.to_string()).collect();
+            row
+        };
+        app.album_draft.rows = vec![keywords(&["a", "b"]), keywords(&["c", "d"])];
+        app.refresh_draft_preview();
+        app.set_draft_focus(DraftFocus::Value(0), cx);
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "left left");
+    view.update(vcx, |app, _| assert_eq!(app.album_draft.token, Some(0)));
+
+    // A click on row 1's box moves focus there; row 0's highlight must not.
+    click(vcx, "album-rule-value-1");
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.focus, DraftFocus::Value(1));
+        assert_eq!(
+            app.album_draft.token, None,
+            "the highlight stays with its row"
+        );
+    });
+    keystrokes(vcx, "backspace");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.rows[1].list,
+            vec!["c".to_string()],
+            "⌫ removes row 1's last chip, not one the user never chose"
+        )
+    });
+
+    // Closing and reopening starts without a highlight.
+    view.update(vcx, |app, cx| {
+        app.set_draft_focus(DraftFocus::Value(0), cx);
+    });
+    keystrokes(vcx, "left");
+    view.update(vcx, |app, cx| {
+        app.close_album_builder(cx);
+        app.open_album_builder(cx);
+        assert_eq!(
+            app.album_draft.token, None,
+            "a new session has no highlight"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn too_many_keywords_block_save() {
+    let (dir, engine, _ids) = library("sab_too_many_keywords");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    view.update(vcx, |app, cx| {
+        let mut row = crate::app::smart_draft::DraftRow::new(RuleField::Tag);
+        row.set_operator(RuleOperator::AnyOf);
+        row.list = (0..1_001).map(|i| format!("k{i}")).collect();
+        app.album_draft.rows = vec![row];
+        app.refresh_draft_preview();
+        app.save_draft_smart_album(cx);
+        assert_eq!(
+            app.album_draft.problem.as_deref(),
+            Some("Too many keywords in this album"),
+            "the footer says why"
+        );
+        assert!(app.album_draft.modal_open, "OK refuses to save it");
+    });
+    assert!(engine.list_smart_albums().is_empty());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Opens the builder at 1200x900 with `rows` conditions.
 fn sheet_with_rows(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>, rows: usize) {
     vcx.simulate_resize(gpui::size(gpui::px(1200.0), gpui::px(900.0)));

@@ -12,7 +12,7 @@ use crate::app::LuminaApp;
 
 impl LuminaApp {
     pub fn set_draft_focus(&mut self, focus: DraftFocus, cx: &mut Context<Self>) {
-        self.album_draft.focus = focus;
+        self.album_draft.focus_on(focus);
         self.album_draft.popup = None;
         self.reveal_draft_focus();
         cx.notify();
@@ -52,6 +52,13 @@ impl LuminaApp {
                     .iter()
                     .map(|(tag, _)| tag.clone())
                     .collect(),
+                // The tags not chosen yet; picking one adds a chip.
+                Some(ValueKind::TagList) => self
+                    .library_tag_counts
+                    .iter()
+                    .map(|(tag, _)| tag.clone())
+                    .filter(|tag| !rows[i].list.contains(tag))
+                    .collect(),
                 _ => Vec::new(),
             },
             DraftFocus::Unit(_) => UNITS.iter().map(|(_, l)| l.to_string()).collect(),
@@ -89,7 +96,7 @@ impl LuminaApp {
 
     /// Opens `target`'s popup, or closes it when it is already open.
     pub fn toggle_draft_popup(&mut self, target: DraftFocus, cx: &mut Context<Self>) {
-        self.album_draft.focus = target;
+        self.album_draft.focus_on(target);
         self.album_draft.popup = if self.album_draft.popup.map(|p| p.target) == Some(target) {
             None
         } else {
@@ -123,6 +130,7 @@ impl LuminaApp {
         let Some(popup) = self.album_draft.popup.take() else {
             return;
         };
+        let picked = self.draft_popup_options(popup.target).get(index).cloned();
         let tags = &self.library_tag_counts;
         let draft = &mut self.album_draft;
         match popup.target {
@@ -150,6 +158,10 @@ impl LuminaApp {
             DraftFocus::Value(i) => {
                 if let Some(row) = draft.rows.get_mut(i) {
                     let key = match row.kind() {
+                        ValueKind::TagList => {
+                            row.list.extend(picked);
+                            None
+                        }
                         ValueKind::Choice(options) => options.get(index).map(|o| o.0.to_string()),
                         _ => tags.get(index).map(|(tag, _)| tag.clone()),
                     };
@@ -167,6 +179,62 @@ impl LuminaApp {
         }
         self.refresh_draft_preview();
         cx.notify();
+    }
+
+    /// The chip's ×: drops `tag` from row `i`'s "include any of" list.
+    pub fn remove_draft_token(&mut self, i: usize, tag: &str, cx: &mut Context<Self>) {
+        if let Some(row) = self.album_draft.rows.get_mut(i) {
+            row.list.retain(|t| t != tag);
+        }
+        self.set_draft_focus(DraftFocus::Value(i), cx);
+        self.refresh_draft_preview();
+    }
+
+    /// The focused keyword list's chips, when the focus is on one.
+    fn focused_tokens(&mut self) -> Option<&mut Vec<String>> {
+        let DraftFocus::Value(i) = self.album_draft.focus else {
+            return None;
+        };
+        let row = self.album_draft.rows.get_mut(i)?;
+        (row.kind() == ValueKind::TagList).then_some(&mut row.list)
+    }
+
+    /// ←/→ on a focused keyword list: moves the chip highlight (none, then
+    /// the chips; → past the last clears it). False elsewhere.
+    pub fn step_draft_token(&mut self, delta: i64, cx: &mut Context<Self>) -> bool {
+        let token = self.album_draft.token;
+        let Some(len) = self.focused_tokens().map(|list| list.len()) else {
+            return false;
+        };
+        self.album_draft.token = match (token, delta < 0) {
+            _ if len == 0 => None,
+            (None, true) => Some(len - 1),
+            (None, false) => None,
+            (Some(0), true) => Some(0),
+            (Some(t), true) => Some(t - 1),
+            (Some(t), false) => (t + 1 < len).then_some(t + 1),
+        };
+        cx.notify();
+        true
+    }
+
+    /// ⌫ on a focused keyword list drops the highlighted chip, else the last;
+    /// false elsewhere.
+    pub fn pop_draft_token(&mut self, cx: &mut Context<Self>) -> bool {
+        let token = self.album_draft.token.take();
+        let Some(list) = self.focused_tokens() else {
+            return false;
+        };
+        match token.filter(|t| *t < list.len()) {
+            Some(t) => {
+                list.remove(t);
+            }
+            None if list.pop().is_none() => return false,
+            None => {}
+        }
+        self.refresh_draft_preview();
+        cx.notify();
+        true
     }
 
     /// Tab / Shift-Tab.
@@ -248,7 +316,7 @@ impl LuminaApp {
         self.album_draft
             .rows
             .insert(at, DraftRow::new(RuleField::IsFavorite));
-        self.album_draft.focus = DraftFocus::Field(at);
+        self.album_draft.focus_on(DraftFocus::Field(at));
         self.album_draft.popup = None;
         self.reveal_draft_focus();
         self.refresh_draft_preview();
@@ -260,10 +328,11 @@ impl LuminaApp {
     pub fn remove_draft_row(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.album_draft.rows.len() {
             self.album_draft.rows.remove(index);
-            self.album_draft.focus = match self.album_draft.rows.len() {
+            let focus = match self.album_draft.rows.len() {
                 0 => DraftFocus::Add(0),
                 n => DraftFocus::Field(index.min(n - 1)),
             };
+            self.album_draft.focus_on(focus);
             self.album_draft.popup = None;
             self.refresh_draft_preview();
             cx.notify();

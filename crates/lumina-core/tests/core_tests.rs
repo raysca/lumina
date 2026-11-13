@@ -7340,3 +7340,107 @@ fn merge_refuses_itself_and_a_keyword_below_it() {
     assert!(err.to_string().contains("below it"), "{err}");
     assert!(catalog.aliases().unwrap().is_empty());
 }
+
+fn any_of(tags: &[&str]) -> SmartAlbumRule {
+    SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::AnyOf,
+        value: RuleValue::List(tags.iter().map(|t| t.to_string()).collect()),
+    }
+}
+
+#[test]
+fn tag_any_of_matches_either_keyword_and_subtrees() {
+    let (catalog, ids) = catalog_with_tag_sets(&[
+        &["beach"],
+        &["places/paris"],
+        &["placesx"],
+        &["mountain"],
+        &[],
+    ]);
+    let album = lumina_core::SmartAlbum::new(
+        "Trips".into(),
+        "tag".into(),
+        MatchMode::All,
+        vec![any_of(&["Beach", "places"])],
+    );
+    let mut got: Vec<u64> = catalog
+        .query_smart_album(&album, 50, 0)
+        .unwrap()
+        .iter()
+        .map(|m| m.id.0)
+        .collect();
+    got.sort();
+    assert_eq!(
+        got,
+        vec![ids[0].0, ids[1].0],
+        "either keyword or a keyword below it matches; a sibling prefix does not"
+    );
+    assert_eq!(catalog.query_smart_album_count(&album).unwrap(), 2);
+
+    let empty = lumina_core::SmartAlbum::new(
+        String::new(),
+        String::new(),
+        MatchMode::All,
+        vec![any_of(&[])],
+    );
+    assert!(
+        empty.build_sql().is_err(),
+        "an empty list is refused, not a panic"
+    );
+    let blank = lumina_core::SmartAlbum::new(
+        String::new(),
+        String::new(),
+        MatchMode::All,
+        vec![any_of(&["  "])],
+    );
+    assert!(blank.build_sql().is_err(), "a list of blanks is refused");
+}
+
+#[test]
+fn rename_rewrites_any_of_members() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["a", "a/x"], &["b"], &["ab"]]);
+    let album = catalog
+        .create_smart_album("Any", "tag", MatchMode::All, &[any_of(&["a/x", "b", "ab"])])
+        .unwrap();
+    catalog.rename_tag("a", "c").expect("rename");
+    let rules = catalog.get_smart_album(album.id).unwrap().unwrap().rules;
+    assert_eq!(
+        rules[0].value,
+        RuleValue::List(vec!["c/x".into(), "b".into(), "ab".into()]),
+        "members in the renamed subtree follow it; a sibling prefix stays"
+    );
+    catalog.merge_tags("b", "c/x").expect("merge");
+    let rules = catalog.get_smart_album(album.id).unwrap().unwrap().rules;
+    assert_eq!(
+        rules[0].value,
+        RuleValue::List(vec!["c/x".into(), "ab".into()]),
+        "a merge rewrites members and drops the duplicate it makes"
+    );
+}
+
+#[test]
+fn tag_any_of_plan_seeks_the_tag_index() {
+    let (catalog, _ids) = catalog_with_tag_sets(&[&["beach"], &["places/paris"]]);
+    let album = lumina_core::SmartAlbum::new(
+        String::new(),
+        String::new(),
+        MatchMode::All,
+        vec![any_of(&["beach", "places"])],
+    );
+    let (sql, params) = album.synthesize_count_query().unwrap();
+    let rows = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .expect("explain");
+    let plan = rows.join(" | ");
+    println!("any-of count plan: {plan}");
+    assert!(
+        rows.iter()
+            .any(|r| r.contains("media_tags") && r.contains("INDEX idx_media_tags_tag")),
+        "each keyword seeks idx_media_tags_tag: {plan}"
+    );
+    assert!(
+        !rows.iter().any(|r| r.starts_with("SCAN media_tags")),
+        "media_tags is never scanned: {plan}"
+    );
+}

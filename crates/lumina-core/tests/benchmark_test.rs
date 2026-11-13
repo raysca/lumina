@@ -590,6 +590,51 @@ fn benchmark_scale_and_gates() {
         "Smart album query must resolve in < {album_budget}ms (got {album_per_query_ms:.3}ms)"
     );
 
+    // Gate 3b: Keywords "include any of" (2% beach, 1% under places/), the
+    // first page and the sidebar count, each OR arm a tag-index seek.
+    let beach: Vec<MediaId> = ids.iter().copied().step_by(50).collect();
+    let temples: Vec<MediaId> = ids.iter().copied().skip(7).step_by(100).collect();
+    catalog
+        .add_tags_batch(&beach, &["beach".to_string()])
+        .expect("tag bench beach");
+    catalog
+        .add_tags_batch(&temples, &["places/kyoto/temple".to_string()])
+        .expect("tag bench temples");
+    let any_of = lumina_core::SmartAlbum::new(
+        String::new(),
+        String::new(),
+        lumina_core::MatchMode::All,
+        vec![lumina_core::SmartAlbumRule {
+            field: lumina_core::RuleField::Tag,
+            operator: lumina_core::RuleOperator::AnyOf,
+            value: lumina_core::RuleValue::List(vec!["beach".into(), "places".into()]),
+        }],
+    );
+    assert!(
+        catalog
+            .query_smart_album_count(&any_of)
+            .expect("any-of count")
+            > 0,
+        "the any-of album must match rows so the gate measures real work"
+    );
+    let any_start = Instant::now();
+    for _ in 0..iterations {
+        catalog
+            .query_smart_album(&any_of, 50, 0)
+            .expect("any-of album must run");
+        catalog
+            .query_smart_album_count(&any_of)
+            .expect("any-of count must run");
+    }
+    let any_ms = (any_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+    println!(
+        "Gate 3b - Keywords Any-Of Album + Count Latency: {any_ms:.3} ms (< {album_budget:.1} ms target)"
+    );
+    assert!(
+        any_ms < album_budget,
+        "the any-of album and count must resolve in < {album_budget}ms (got {any_ms:.3}ms)"
+    );
+
     // Gate 3: saved searches (smart album `Query` rules) under the default
     // date sort: a common term with a LIKE and a rating filter, and a rare
     // term (25 rows), which walks the date index. Then the sidebar count for

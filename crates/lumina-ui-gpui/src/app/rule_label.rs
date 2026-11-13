@@ -38,6 +38,7 @@ pub(crate) fn rule_label(rule: &SmartAlbumRule) -> String {
                 RuleOperator::GreaterThan => ">",
                 RuleOperator::LessThan => "<",
                 RuleOperator::AtLeast => "≥",
+                RuleOperator::AnyOf => "any of",
                 RuleOperator::AtMost => "≤",
                 RuleOperator::Contains => "has",
                 RuleOperator::NotContains => "lacks",

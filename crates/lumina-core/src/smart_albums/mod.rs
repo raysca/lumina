@@ -10,7 +10,9 @@ pub use system::SystemAlbum;
 
 #[cfg(test)]
 mod tests {
-    use super::rules::{MAX_PORTABLE_BYTES, MAX_PORTABLE_RULES, MAX_PORTABLE_TEXT_CHARS};
+    use super::rules::{
+        MAX_KEYWORDS, MAX_PORTABLE_BYTES, MAX_PORTABLE_RULES, MAX_PORTABLE_TEXT_CHARS,
+    };
     use super::*;
 
     #[test]
@@ -428,6 +430,90 @@ mod tests {
             compile_err.to_string(),
             "the import reports the builder's own compile error"
         );
+    }
+
+    #[test]
+    fn old_rules_json_still_parses() {
+        // Stored before AnyOf existed: one value per rule, a [min, max] range.
+        let old = r#"[{"field":"tag","operator":"equals","value":"beach"},
+            {"field":"iso","operator":"between","value":[100.0,800.0]},
+            {"field":"is_favorite","operator":"equals","value":true}]"#;
+        let rules: Vec<SmartAlbumRule> = serde_json::from_str(old).expect("old rules parse");
+        assert_eq!(rules[0].value, RuleValue::Text("beach".into()));
+        assert_eq!(
+            rules[1].value,
+            RuleValue::Range(100.0, 800.0),
+            "a numeric pair stays a range"
+        );
+        assert_eq!(rules[2].value, RuleValue::Bool(true));
+
+        let list = SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::AnyOf,
+            value: RuleValue::List(vec!["a".into(), "b".into()]),
+        };
+        let json = serde_json::to_string(&list).unwrap();
+        assert!(
+            json.contains(r#""value":["a","b"]"#),
+            "a list is a JSON array: {json}"
+        );
+        assert_eq!(serde_json::from_str::<SmartAlbumRule>(&json).unwrap(), list);
+
+        // The rules file round-trips it and bounds its size.
+        let portable = from_portable_json(&album_with(vec![list.clone()])).expect("import");
+        assert_eq!(portable.rules, vec![list]);
+        let long = SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::AnyOf,
+            value: RuleValue::List(vec!["x".repeat(MAX_PORTABLE_TEXT_CHARS + 1)]),
+        };
+        assert!(
+            from_portable_json(&album_with(vec![long])).is_err(),
+            "a long member is refused"
+        );
+        let empty = SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::AnyOf,
+            value: RuleValue::List(Vec::new()),
+        };
+        assert!(
+            from_portable_json(&album_with(vec![empty])).is_err(),
+            "an empty list is refused"
+        );
+        let wrong = SmartAlbumRule {
+            field: RuleField::Iso,
+            operator: RuleOperator::Equals,
+            value: RuleValue::List(vec!["1".into()]),
+        };
+        assert!(
+            from_portable_json(&album_with(vec![wrong])).is_err(),
+            "a list elsewhere is refused"
+        );
+    }
+
+    #[test]
+    fn too_many_keywords_in_total_are_refused() {
+        let list = |n: usize| SmartAlbumRule {
+            field: RuleField::Tag,
+            operator: RuleOperator::AnyOf,
+            value: RuleValue::List((0..n).map(|i| format!("k{i}")).collect()),
+        };
+        let album = |rules| SmartAlbum::new(String::new(), String::new(), MatchMode::Any, rules);
+        let half = MAX_KEYWORDS / 2;
+        assert!(
+            album(vec![list(half), list(half)]).build_sql().is_ok(),
+            "exactly the limit compiles"
+        );
+        let err = album(vec![list(half), list(half + 1)])
+            .build_sql()
+            .expect_err("one keyword over the limit");
+        assert_eq!(err.to_string(), "Too many keywords in this album");
+
+        // Import: 11 rules of 100 keywords each pass the per-rule limit but
+        // not the total, so the file is refused before any query runs.
+        let file = album_with(vec![list(100); 11]);
+        let err = from_portable_json(&file).expect_err("too many keywords in the file");
+        assert_eq!(err.to_string(), "Too many keywords in this album");
     }
 
     fn album_with(rules: Vec<SmartAlbumRule>) -> String {

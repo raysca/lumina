@@ -548,12 +548,15 @@ impl LuminaApp {
             "tab" => return self.move_draft_focus(if shift { -1 } else { 1 }, cx),
             _ => {}
         }
-        let step = match key {
+        let step: i64 = match key {
             "left" => -1,
             "right" => 1,
             _ => 0,
         };
-        if step != 0 && self.step_draft_rating(step, cx) {
+        if step != 0 && (self.step_draft_rating(step, cx) || self.step_draft_token(step, cx)) {
+            return;
+        }
+        if key == "backspace" && self.pop_draft_token(cx) {
             return;
         }
         if self.draft_focus_is_typed() {

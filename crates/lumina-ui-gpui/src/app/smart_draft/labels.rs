@@ -62,6 +62,7 @@ pub fn operator_label(field: &RuleField, op: &RuleOperator) -> &'static str {
         RuleOperator::IsNotEmpty => "is not empty",
         RuleOperator::AtLeast => "is at least",
         RuleOperator::AtMost => "is at most",
+        RuleOperator::AnyOf => "include any of",
     }
 }
 

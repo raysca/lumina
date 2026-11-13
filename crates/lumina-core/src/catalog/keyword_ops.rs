@@ -140,9 +140,10 @@ fn distinct_raw_ids(rows: &[(MediaId, String)]) -> Vec<i64> {
 
 type AlbumRows = Vec<(i64, String)>;
 
-/// Rewrites every smart-album `Tag` rule (any operator) whose value is `old`
-/// or below it. Saved-search (`Query`) rules are the user's own text and are
-/// left alone. Returns the touched albums' rules before and after.
+/// Rewrites every smart-album `Tag` rule (any operator) whose value, or a
+/// member of whose "any of" list, is `old` or below it. Saved-search
+/// (`Query`) rules are the user's own text and are left alone. Returns the
+/// touched albums' rules before and after.
 fn rewrite_tag_rules(tx: &Transaction, old: &str, new: &str) -> Result<(AlbumRows, AlbumRows)> {
     let albums: AlbumRows = {
         let mut stmt = tx.prepare("SELECT id, rules_json FROM smart_albums;")?;
@@ -157,13 +158,30 @@ fn rewrite_tag_rules(tx: &Transaction, old: &str, new: &str) -> Result<(AlbumRow
             continue;
         };
         let mut changed = false;
+        let moved = |value: &str| {
+            let value = filter_value(value);
+            subtree_suffix(&value, old).map(|rest| format!("{new}{rest}"))
+        };
         for rule in rules.iter_mut().filter(|r| r.field == RuleField::Tag) {
-            if let RuleValue::Text(value) = &rule.value {
-                let value = filter_value(value);
-                if let Some(rest) = subtree_suffix(&value, old) {
-                    rule.value = RuleValue::Text(format!("{new}{rest}"));
+            match &mut rule.value {
+                RuleValue::Text(value) => {
+                    if let Some(path) = moved(value) {
+                        *value = path;
+                        changed = true;
+                    }
+                }
+                // "include any of": each member follows; a merge can make two
+                // members equal, and the second goes.
+                RuleValue::List(items) if items.iter().any(|item| moved(item).is_some()) => {
+                    let mut seen = HashSet::new();
+                    *items = items
+                        .iter()
+                        .map(|item| moved(item).unwrap_or_else(|| item.clone()))
+                        .filter(|item| seen.insert(item.clone()))
+                        .collect();
                     changed = true;
                 }
+                _ => {}
             }
         }
         if changed {

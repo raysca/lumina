@@ -200,6 +200,85 @@ fn rating_stars(
         }))
 }
 
+/// "include any of": the chosen keywords as chips (× drops one, ⌫ the last),
+/// then "add keyword…"; a click opens the popup of tags not chosen yet.
+/// Chips wrap onto a second line instead of overflowing the row.
+fn keyword_tokens(
+    i: usize,
+    row: &DraftRow,
+    focused: bool,
+    highlight: Option<usize>,
+    cx: &mut Context<LuminaApp>,
+) -> Stateful<Div> {
+    let chips = row.list.iter().enumerate().map(|(n, tag)| {
+        let remove_tag = tag.clone();
+        let chip_sel = format!("album-rule-token-{i}-{tag}");
+        let remove_sel = format!("album-rule-token-remove-{i}-{tag}");
+        div()
+            .debug_selector(move || chip_sel.clone())
+            .h(px(24.0))
+            .px(px(7.0))
+            .rounded(px(6.0))
+            .bg(theme::accent_soft())
+            // The ←/→ highlight ⌫ removes; transparent keeps chips one size.
+            .border_1()
+            .border_color(if focused && highlight == Some(n) {
+                theme::accent()
+            } else {
+                theme::card_surface()
+            })
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(4.0))
+            .text_size(px(11.5))
+            .text_color(theme::accent())
+            .child(tag.clone())
+            .child(
+                div()
+                    .id(ElementId::Name(remove_sel.clone().into()))
+                    .debug_selector(move || remove_sel.clone())
+                    .role(Role::Button)
+                    .aria_label(format!("Remove {tag}"))
+                    .cursor_pointer()
+                    .child(render_icon(Icon::X, px(10.0), theme::accent()))
+                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                        // The box behind it would open the popup.
+                        cx.stop_propagation();
+                        this.remove_draft_token(i, &remove_tag, cx);
+                    })),
+            )
+    });
+    let sel = format!("album-rule-value-{i}");
+    div()
+        .id(ElementId::Name(sel.clone().into()))
+        .debug_selector(move || sel.clone())
+        .flex_1()
+        .min_h(px(38.0))
+        .py(px(6.0))
+        .px(px(8.0))
+        .rounded(px(9.0))
+        .bg(theme::bg_0())
+        .border_1()
+        .border_color(ring(focused))
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(px(6.0))
+        .cursor_pointer()
+        .children(chips)
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(theme::t3())
+                .child(ValueKind::TagList.placeholder()),
+        )
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            this.toggle_draft_popup(DraftFocus::Value(i), cx);
+        }))
+}
+
 pub(super) fn render_row(
     app: &LuminaApp,
     i: usize,
@@ -221,6 +300,10 @@ pub(super) fn render_row(
         ValueKind::None => div().flex_1().into_any_element(),
         ValueKind::Choice(_) if row.field == RuleField::Rating => {
             rating_stars(i, row, focus == DraftFocus::Value(i), cx).into_any_element()
+        }
+        ValueKind::TagList => {
+            let focused = focus == DraftFocus::Value(i);
+            keyword_tokens(i, row, focused, app.album_draft.token, cx).into_any_element()
         }
         ValueKind::Choice(_) | ValueKind::Tags => {
             let label = if row.text.is_empty() {
