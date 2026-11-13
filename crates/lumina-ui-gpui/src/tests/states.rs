@@ -125,10 +125,43 @@ fn error_banner_splits_title_retries_and_esc_dismisses() {
     view.update(vcx, |app, _| {
         assert!(app.error_retry.is_none(), "no Retry by default")
     });
+    render_ui(vcx);
+    let height = f32::from(
+        vcx.debug_bounds("error-banner")
+            .expect("plain banner renders")
+            .size
+            .height,
+    );
+    assert!(
+        (height - 43.5).abs() <= 1.0,
+        "a banner without detail is 43.5 px tall (design), got {height}"
+    );
+    assert!(
+        vcx.debug_bounds("error-banner-dismiss-text:Dismiss")
+            .is_some(),
+        "the dismiss control is a text button reading Dismiss"
+    );
+    let dismiss_h = f32::from(
+        vcx.debug_bounds("error-banner-dismiss")
+            .expect("dismiss renders")
+            .size
+            .height,
+    );
+    assert!(
+        dismiss_h < 26.0,
+        "Dismiss is a text button, not the old 26 px box, got {dismiss_h}"
+    );
     focus_app(vcx, &view);
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
         assert!(app.error_message.is_none(), "Esc dismisses")
+    });
+
+    view.update(vcx, |app, cx| app.set_error("Another failure", cx));
+    render_ui(vcx);
+    click(vcx, "error-banner-dismiss");
+    view.update(vcx, |app, _| {
+        assert!(app.error_message.is_none(), "clicking Dismiss dismisses")
     });
 
     let _ = std::fs::remove_dir_all(&dir);

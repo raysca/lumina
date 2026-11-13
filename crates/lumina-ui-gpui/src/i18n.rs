@@ -257,6 +257,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.restore_all" => "Restore All from Trash",
         "command.merge_all_duplicates" => "Merge All Duplicates",
         "command.retry_error" => "Retry Failed Action",
+        "error_banner.dismiss" => "Dismiss",
+        "error_banner.dismiss_tooltip" => "Dismiss (Esc)",
         "command.show_license" => "Show MIT License",
         "command.show_acknowledgements" => "Show Acknowledgements",
         "command.shortcuts" => "Keyboard Shortcuts",

@@ -96,6 +96,10 @@ tokens! {
     warn_border = 0x3A2E1A;
     /// Border of a danger panel or button. Invalid-value outlines use `danger`.
     danger_border = 0x45211E;
+    /// Fill of the global error banner (Design 10).
+    danger_surface = 0x1E100F;
+    /// Text on a `danger_surface` fill.
+    on_danger = 0xF0C4C0;
     /// Timeline rail month bar.
     rail_bar = 0x32323A;
     /// Timeline rail month bar in the year on screen.
@@ -226,6 +230,8 @@ mod tests {
             ("scrim", scrim(), 0x07070BD9),
             ("media_scrim", media_scrim(), 0x000000A6),
             ("danger_border", danger_border(), 0x45211EFF),
+            ("danger_surface", danger_surface(), 0x1E100FFF),
+            ("on_danger", on_danger(), 0xF0C4C0FF),
             ("accent_surface", accent_surface(), 0x17120BFF),
             ("warn_border", warn_border(), 0x3A2E1AFF),
             ("chart_grey", chart_grey(), 0x4E4E5CFF),

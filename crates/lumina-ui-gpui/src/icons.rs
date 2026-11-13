@@ -77,6 +77,7 @@ pub enum Icon {
     Merge,
     Library,
     SearchX,
+    CircleAlert,
 }
 
 impl Icon {
@@ -158,6 +159,7 @@ impl Icon {
         Icon::Merge,
         Icon::Library,
         Icon::SearchX,
+        Icon::CircleAlert,
     ];
 
     pub fn path(self) -> &'static str {
@@ -236,6 +238,7 @@ impl Icon {
             Self::Merge => "icons/merge.svg",
             Self::Library => "icons/library.svg",
             Self::SearchX => "icons/search-x.svg",
+            Self::CircleAlert => "icons/circle-alert.svg",
         }
     }
 }

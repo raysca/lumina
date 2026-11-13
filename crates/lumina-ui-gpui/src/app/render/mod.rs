@@ -4,11 +4,13 @@ use gpui::*;
 use crate::actions::*;
 
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::motion;
 use crate::theme;
 use crate::views::inspector::InspectorView;
 use crate::views::onboarding::OnboardingView;
+use crate::views::page_header::text_marker;
 use crate::views::sidebar::{AlbumSelection, SidebarView};
 use crate::views::viewer_state::ViewerRotation;
 
@@ -27,8 +29,8 @@ pub(crate) use empty_state::EmptySize;
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 
 impl LuminaApp {
-    /// Banner for recoverable failures: alert icon, title and description,
-    /// optional Retry, and a bordered dismiss button.
+    /// Banner for recoverable failures (Design 10): alert-circle, title and
+    /// optional detail in `on_danger`, optional Retry, and a text Dismiss.
     pub(crate) fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(message) = self.error_message.clone() else {
             return Empty.into_any_element();
@@ -37,39 +39,40 @@ impl LuminaApp {
             Some((title, detail)) => (title.to_string(), Some(detail.to_string())),
             None => (message, None),
         };
+        let dismiss: SharedString = t("error_banner.dismiss").into();
         div()
             .id("app-error-banner")
             .debug_selector(|| "error-banner".to_string())
             .w_full()
+            .min_h(px(43.5))
             .px_4()
-            .py_2()
+            .when(detail.is_some(), |d| d.py_2())
             .flex()
             .flex_row()
             .items_center()
-            .gap_3()
-            .bg(theme::danger_soft())
+            .gap(px(9.0))
+            .bg(theme::danger_surface())
             .border_b_1()
             .border_color(theme::danger_border())
-            .child(render_icon(Icon::TriangleAlert, px(16.0), theme::danger()))
+            .child(render_icon(Icon::CircleAlert, px(16.0), theme::danger()))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .flex()
                     .flex_col()
+                    .text_color(theme::on_danger())
                     .child(
                         div()
                             .debug_selector(|| "error-banner-title".to_string())
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::t1())
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
                             .child(title),
                     )
                     .children(detail.map(|detail| {
                         div()
                             .debug_selector(|| "error-banner-detail".to_string())
                             .text_xs()
-                            .text_color(theme::t2())
                             .child(detail)
                     })),
             )
@@ -86,18 +89,20 @@ impl LuminaApp {
                 div()
                     .id("app-error-banner-dismiss")
                     .debug_selector(|| "error-banner-dismiss".to_string())
-                    .size(px(26.0))
+                    .role(Role::Button)
+                    .aria_label(dismiss.clone())
                     .flex_none()
-                    .rounded(theme::RADIUS_MD)
-                    .border_1()
-                    .border_color(theme::danger_border())
-                    .hover(|s| s.bg(theme::danger_bg_hover()))
-                    .flex()
-                    .items_center()
-                    .justify_center()
                     .cursor_pointer()
-                    .tooltip(theme::tooltip_label("Dismiss"))
-                    .child(render_icon(Icon::X, px(12.0), theme::t1()))
+                    .px(px(6.0))
+                    .py(px(4.0))
+                    .rounded(theme::RADIUS_SM)
+                    .text_size(px(11.5))
+                    .line_height(px(14.0))
+                    .text_color(theme::t2())
+                    .hover(|s| s.text_color(theme::t1()))
+                    .tooltip(theme::tooltip_label(t("error_banner.dismiss_tooltip")))
+                    .children(text_marker("error-banner-dismiss", &dismiss))
+                    .child(dismiss)
                     .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                         this.dismiss_error(cx);
                     })),
