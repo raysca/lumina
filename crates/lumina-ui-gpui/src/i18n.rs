@@ -712,6 +712,9 @@ fn en_us(key: &str) -> Option<&'static str> {
         "album.empty_title" => "“{title}” is empty",
         "album.empty_title_unknown" => "This album is empty",
         "album.empty_body" => "Items stay in your library — an album is just a view of them.",
+        "trash.empty_title" => "Nothing waiting to be removed",
+        // Emptying asks per run (delete_modal.rs): macOS Trash, keep on disk, or delete.
+        "trash.empty_body" => "Deleted items stay here until you restore them or remove them for good. Lumina leaves their original files on disk unless you choose to move them to the macOS Trash or delete them.",
         "album.add_from_library_toast" => "Select items, then use Add to Album (⇧⌘A).",
         "sidebar.nav_label_one" => "{label}, 1 item",
         "sidebar.nav_label_other" => "{label}, {n} items",

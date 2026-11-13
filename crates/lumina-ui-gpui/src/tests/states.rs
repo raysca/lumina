@@ -145,12 +145,30 @@ fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
     view.update(vcx, |app, cx| app.select_album(AlbumSelection::Trash, cx));
     render_ui(vcx);
     assert!(vcx.debug_bounds("empty-state").is_some());
-    for absent in ["empty-primary", "header-empty-trash-btn", "trash-note"] {
+    for absent in [
+        "empty-primary",
+        "empty-secondary",
+        "header-empty-trash-btn",
+        "trash-note",
+    ] {
         assert!(
             vcx.debug_bounds(absent).is_none(),
             "empty trash has no {absent}"
         );
     }
+    assert!(
+        vcx.debug_bounds("empty-state-headline-text:Nothing waiting to be removed")
+            .is_some(),
+        "empty trash uses the design headline"
+    );
+    let body = "Deleted items stay here until you restore them or remove them for good. \
+                Lumina leaves their original files on disk unless you choose to move them to \
+                the macOS Trash or delete them.";
+    assert!(
+        vcx.debug_bounds(leak(format!("empty-state-body-text:{body}")))
+            .is_some(),
+        "empty trash body says how deletion works, without a retention period"
+    );
 
     engine.set_trashed(item.id, true).unwrap();
     view.update(vcx, |app, cx| {

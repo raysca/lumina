@@ -7,6 +7,7 @@ use lumina_core::{SmartAlbum, SystemAlbum};
 
 use crate::app::rule_label::{rule_icon, rule_label};
 use crate::app::LuminaApp;
+use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::text_marker;
@@ -99,7 +100,6 @@ impl LuminaApp {
         } else if !search_terms.is_empty() {
             // Each chip drops one term; Clear all filters drops them all.
             // ponytail: no per-term counts or kind icons (plan 09 decisions).
-            let t = crate::i18n::t;
             let (title, body) = match search_terms.len() {
                 1 => (t("search.empty_title_one"), t("search.empty_body_one")),
                 2 => (t("search.empty_title_two"), t("search.empty_body_many")),
@@ -118,11 +118,9 @@ impl LuminaApp {
             }
         } else {
             match &self.selection {
-                AlbumSelection::Trash => copy(
-                    Icon::Trash,
-                    "Recently Deleted is empty".into(),
-                    "Items you delete stay here until you empty the trash or restore them.".into(),
-                ),
+                AlbumSelection::Trash => {
+                    copy(Icon::Trash, t("trash.empty_title"), t("trash.empty_body"))
+                }
                 AlbumSelection::Duplicates => copy(
                     Icon::Repeat,
                     "No Duplicates Found".into(),
