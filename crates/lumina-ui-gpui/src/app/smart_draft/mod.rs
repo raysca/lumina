@@ -317,6 +317,7 @@ pub enum DraftFocus {
     Unit(usize),
     Remove(usize),
     Add(usize),
+    Pin,
     Cancel,
     Save,
 }
@@ -362,7 +363,7 @@ pub fn focus_order(rows: &[DraftRow]) -> Vec<DraftFocus> {
     if rows.is_empty() {
         order.push(DraftFocus::Add(0));
     }
-    order.extend([DraftFocus::Cancel, DraftFocus::Save]);
+    order.extend([DraftFocus::Pin, DraftFocus::Cancel, DraftFocus::Save]);
     order
 }
 

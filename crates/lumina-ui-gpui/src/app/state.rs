@@ -274,6 +274,9 @@ pub struct AlbumDraftState {
     pub confirm_delete: Option<i64>,
     /// The conditions list; keyboard focus scrolls its row into view.
     pub scroll: gpui::ScrollHandle,
+    /// "Pin to sidebar", and whether the album was pinned when opened.
+    pub pin: bool,
+    pub pinned_before: bool,
 }
 
 impl Default for AlbumDraftState {
@@ -291,6 +294,8 @@ impl Default for AlbumDraftState {
             problem: None,
             confirm_delete: None,
             scroll: gpui::ScrollHandle::new(),
+            pin: false,
+            pinned_before: false,
         }
     }
 }

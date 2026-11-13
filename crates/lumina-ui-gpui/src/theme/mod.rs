@@ -135,6 +135,8 @@ tokens! {
 tokens_alpha! {
     /// Hovered `danger_soft` button.
     danger_bg_hover = 0xE8584F33;
+    /// A key hint on an accent button: on_accent at 20%.
+    on_accent_kbd = 0x1A120633;
     /// Dialog scrim.
     scrim = 0x07070BD9;
     /// Library dim behind modals and sheets: the grid stays readable.

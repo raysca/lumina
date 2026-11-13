@@ -389,7 +389,11 @@ fn v3_sheet_layout_matches_the_design() {
     let tile = vcx
         .debug_bounds(leak(format!("album-builder-preview-{}", ids[0].0)))
         .unwrap();
-    assert_eq!(f32::from(tile.size.width), 72.0, "preview tiles are 72px");
+    assert_eq!(
+        f32::from(tile.size.height),
+        96.0,
+        "preview tiles are 96 tall"
+    );
     for selector in [
         "album-builder-conditions",
         "album-builder-preview-help",
@@ -586,6 +590,193 @@ fn rating_stars_click_and_arrow_keys() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[core::prelude::v1::test]
+fn footer_preview_and_pin_option() {
+    use crate::views::album_builder::footer::{footer_status, more_label};
+    let (dir, engine) = seed_library("sab_footer", 10);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+
+    // Zero matches (no favourites): one empty line, no More tile.
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(0));
+        assert_eq!(footer_status(&app.album_draft).0, "No items match");
+    });
+    assert!(
+        vcx.debug_bounds("album-builder-preview-empty").is_some(),
+        "zero matches show one empty-state line"
+    );
+    assert!(
+        vcx.debug_bounds("album-builder-more").is_none(),
+        "zero matches hide the More tile"
+    );
+
+    // Favorite is No: all 10 match; 8 tiles and "+2 more".
+    click(vcx, "album-rule-value-0");
+    pick_option(vcx, &view, DraftFocus::Value(0), "No");
+    render_ui(vcx);
+    let preview = view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(10));
+        assert_eq!(footer_status(&app.album_draft).0, "10 items match");
+        app.album_draft.preview.clone()
+    });
+    assert_eq!(preview.len(), 8);
+    assert!(
+        vcx.debug_bounds("album-builder-more").is_some(),
+        "10 > 8 shows More"
+    );
+    assert!(
+        vcx.debug_bounds("album-builder-more-text:+2").is_some(),
+        "the More tile reads +2"
+    );
+    assert_eq!(
+        more_label(Some(1248), 8).as_deref(),
+        Some("+1,240"),
+        "grouped digits"
+    );
+    assert_eq!(more_label(Some(3), 3), None, "never \"+0\" or negative");
+    let tile = vcx
+        .debug_bounds(leak(format!("album-builder-preview-{}", preview[0].id.0)))
+        .unwrap();
+    assert_eq!(f32::from(tile.size.height), 96.0, "tiles are 96 tall");
+    let width = f32::from(tile.size.width);
+    assert!(
+        (68.0..=92.0).contains(&width),
+        "tile width {width} is 68-92"
+    );
+
+    // Three favourites, Favorite is Yes: no More tile.
+    let ids: Vec<_> = engine.get_item_slice(0..3).iter().map(|i| i.id).collect();
+    for id in ids {
+        engine.toggle_favorite(id, true).unwrap();
+    }
+    click(vcx, "album-rule-value-0");
+    pick_option(vcx, &view, DraftFocus::Value(0), "Yes");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(3))
+    });
+    assert!(
+        vcx.debug_bounds("album-builder-more").is_none(),
+        "3 ≤ 8: no More"
+    );
+
+    assert!(
+        vcx.debug_bounds("album-builder-save-text:Create Smart Album")
+            .is_some(),
+        "a new album's button reads Create Smart Album"
+    );
+
+    // Pin: Space on the focused checkbox, a click toggles it too.
+    view.update(vcx, |app, cx| app.set_draft_focus(DraftFocus::Pin, cx));
+    keystrokes(vcx, "space");
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.pin, "Space checks Pin")
+    });
+    click(vcx, "album-builder-pin");
+    view.update(vcx, |app, _| {
+        assert!(!app.album_draft.pin, "a click unchecks it")
+    });
+    click(vcx, "album-builder-pin");
+    click(vcx, "album-builder-save");
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1);
+    assert!(saved[0].pinned, "Pin to sidebar creates the album pinned");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn editing_a_pinned_album_keeps_or_clears_the_pin() {
+    let (dir, engine, _ids) = library("sab_edit_pin");
+    let rule = SmartAlbumRule {
+        field: RuleField::IsFavorite,
+        operator: RuleOperator::Equals,
+        value: RuleValue::Bool(true),
+    };
+    let id = engine
+        .create_smart_album("Pinned", "folder", MatchMode::All, &[rule])
+        .unwrap()
+        .id;
+    engine.set_smart_album_pinned(id, true).unwrap();
+    let saved = || engine.list_smart_albums().into_iter().next().unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let db = rusqlite::Connection::open(dir.join("catalog.db")).unwrap();
+    // Any pin write now fails, so an unchanged save must not write one.
+    db.execute_batch(
+        "CREATE TRIGGER fail_pin BEFORE UPDATE OF pinned ON smart_albums
+         BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+    )
+    .unwrap();
+
+    let album = saved();
+    view.update(vcx, |app, cx| app.open_album_builder_for_edit(album, cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.album_draft.pin, "Edit starts checked")
+    });
+    assert!(
+        vcx.debug_bounds("album-builder-pin-text:on").is_some(),
+        "the Pin checkbox renders checked"
+    );
+    assert!(
+        vcx.debug_bounds("album-builder-save-text:Save Smart Album")
+            .is_some(),
+        "editing reads Save Smart Album"
+    );
+    click(vcx, "album-builder-save");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.error_message, None, "an unchanged pin is not written");
+        assert!(!app.album_draft.modal_open);
+    });
+    assert!(saved().pinned, "still pinned");
+
+    db.execute_batch("DROP TRIGGER fail_pin;").unwrap();
+    let album = saved();
+    view.update(vcx, |app, cx| app.open_album_builder_for_edit(album, cx));
+    render_ui(vcx);
+    click(vcx, "album-builder-pin");
+    click(vcx, "album-builder-save");
+    assert!(!saved().pinned, "unchecking Pin unpins the album");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn pin_failure_shows_the_error_and_keeps_the_album() {
+    let (dir, engine, _ids) = library("sab_pin_fail");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    rusqlite::Connection::open(dir.join("catalog.db"))
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_pin BEFORE UPDATE OF pinned ON smart_albums
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        )
+        .unwrap();
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    click(vcx, "album-builder-pin");
+    click(vcx, "album-builder-save");
+
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1, "a failed pin keeps the album");
+    assert!(!saved[0].pinned);
+    view.update(vcx, |app, _| {
+        let error = app.error_message.clone().unwrap_or_default();
+        assert!(
+            error.contains("injected"),
+            "the banner names the cause: {error:?}"
+        );
+        assert!(!app.album_draft.modal_open, "the album was created");
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Opens the builder at 1200x900 with `rows` conditions.
 fn sheet_with_rows(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>, rows: usize) {
     vcx.simulate_resize(gpui::size(gpui::px(1200.0), gpui::px(900.0)));
@@ -637,11 +828,14 @@ fn tab_to_a_row_below_the_fold_scrolls_it_into_view() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     sheet_with_rows(vcx, &view, 15);
 
-    // Shift-Tab from row 0: Match, Title, wrap to Save, Cancel, row 14's Add.
+    // Shift-Tab from row 0: Match, Title, wrap to Save, Cancel, Pin, row 14's Add.
     let rows = vcx.debug_bounds("album-builder-conditions").unwrap();
     let add = vcx.debug_bounds("album-rule-add-14").unwrap();
     assert!(add.top() > rows.bottom(), "row 14 starts below the fold");
-    keystrokes(vcx, "shift-tab shift-tab shift-tab shift-tab shift-tab");
+    keystrokes(
+        vcx,
+        "shift-tab shift-tab shift-tab shift-tab shift-tab shift-tab",
+    );
     view.update(vcx, |app, _| {
         assert_eq!(app.album_draft.focus, DraftFocus::Add(14))
     });
