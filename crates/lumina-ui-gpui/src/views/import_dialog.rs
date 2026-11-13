@@ -18,41 +18,19 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         return Empty.into_any_element();
     };
 
-    let button = |id: &'static str, label: &'static str| {
-        div()
-            .id(id)
-            .debug_selector(move || id.to_string())
-            .h(px(30.0))
-            .px_3()
-            .rounded(theme::RADIUS_MD)
-            .cursor_pointer()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_2()
-            .text_xs()
-            .child(label)
-    };
     let cancel = |label: &'static str| {
-        button("import-cancel", label)
-            .bg(theme::bg_2())
-            .hover(|s| s.bg(theme::bg_3()))
-            .text_color(theme::t1())
-            .child(theme::kbd("Esc"))
-            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        dialog_footer_button("import-cancel", label, "Esc", false).on_click(cx.listener(
+            |this, _e: &ClickEvent, _w, cx| {
                 this.cancel_import_dialog(cx);
-            }))
+            },
+        ))
     };
     let confirm = |label: &'static str| {
-        button("import-confirm", label)
-            .bg(theme::accent())
-            .hover(|s| s.opacity(0.9))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme::on_accent())
-            .child(theme::kbd("↵"))
-            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+        dialog_footer_button("import-confirm", label, "↵", true).on_click(cx.listener(
+            |this, _e: &ClickEvent, _w, cx| {
                 this.confirm_import(cx);
-            }))
+            },
+        ))
     };
     let line = |text: String| div().text_xs().text_color(theme::t2()).child(text);
 
@@ -182,6 +160,69 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 ),
         )
         .into_any_element()
+}
+
+/// A dialog footer button: 36 high, r9, Inter 13, with a 22×20 key hint.
+/// Primary is the accent action; the other is bg-3 with a `line_2` outline.
+/// `id` is also the debug selector; `label` is the accessible name.
+pub fn dialog_footer_button(
+    id: &'static str,
+    label: &'static str,
+    kbd: &'static str,
+    primary: bool,
+) -> Stateful<Div> {
+    let (hint_bg, hint_fg) = if primary {
+        (theme::on_accent_kbd(), theme::on_accent())
+    } else {
+        (theme::bg_0(), theme::t3())
+    };
+    let button = div()
+        .id(id)
+        .debug_selector(move || id.to_string())
+        .role(Role::Button)
+        .aria_label(label)
+        .flex_none()
+        .h(px(36.0))
+        .px(px(12.0))
+        .rounded(px(9.0))
+        .border_1()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(9.0))
+        .text_size(px(13.0))
+        .cursor_pointer();
+    let button = if primary {
+        button
+            .bg(theme::accent())
+            .border_color(theme::accent())
+            .hover(|s| s.bg(theme::accent_hover()))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme::on_accent())
+    } else {
+        button
+            .bg(theme::bg_3())
+            .border_color(theme::line_2())
+            .hover(|s| s.bg(theme::plate()))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(theme::t1())
+    };
+    button.child(label).child(
+        div()
+            .min_w(px(22.0))
+            .h(px(20.0))
+            .px(px(4.0))
+            .rounded(px(5.0))
+            .bg(hint_bg)
+            .flex()
+            .items_center()
+            .justify_center()
+            .font_family(theme::FONT_MONO)
+            .text_size(px(11.0))
+            .font_weight(FontWeight::NORMAL)
+            .text_color(hint_fg)
+            .child(kbd),
+    )
 }
 
 /// A thin determinate bar, `fraction` (0–1) of `width` filled.

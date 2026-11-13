@@ -88,6 +88,8 @@ pub enum Icon {
     FolderOpen,
     FolderSync,
     ShieldCheck,
+    Link,
+    FolderDown,
 }
 
 impl Icon {
@@ -180,6 +182,8 @@ impl Icon {
         Icon::FolderOpen,
         Icon::FolderSync,
         Icon::ShieldCheck,
+        Icon::Link,
+        Icon::FolderDown,
     ];
 
     pub fn path(self) -> &'static str {
@@ -269,6 +273,8 @@ impl Icon {
             Self::FolderOpen => "icons/folder-open.svg",
             Self::FolderSync => "icons/folder-sync.svg",
             Self::ShieldCheck => "icons/shield-check.svg",
+            Self::Link => "icons/link.svg",
+            Self::FolderDown => "icons/folder-down.svg",
         }
     }
 }

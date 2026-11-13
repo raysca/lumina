@@ -1,7 +1,7 @@
 //! UI automation and state tests for Network Video Import (Direct, YouTube, HLS).
 
 use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+    app_with_library, click, click_point, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::app::downloads::{real_job, JobOutcome, JobRequest};
 use crate::app::network_import::NetworkImportStage;
@@ -199,6 +199,95 @@ fn network_import_shortcut_alt_cmd_u() {
         assert!(
             app.network_import.stage.is_some(),
             "⌥⌘U should open the network import dialog"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn net_import_dialog_has_header_close_and_footer() {
+    let (_library, engine) = seed_library("net_import_shell", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    render_ui(vcx);
+
+    let card = vcx.debug_bounds("network-import-card").expect("the card");
+    assert_eq!(
+        card.size.width,
+        gpui::px(644.0),
+        "the card is 644 wide in a wide window"
+    );
+    let field = vcx.debug_bounds("net-import-url-input").expect("URL field");
+    let footer = vcx.debug_bounds("net-import-footer").expect("footer bar");
+    assert!(
+        footer.top() >= field.bottom(),
+        "the footer sits below the URL field"
+    );
+    let cancel = vcx.debug_bounds("net-import-cancel").expect("Cancel");
+    assert!(
+        footer.contains(&cancel.center()),
+        "Cancel sits in the footer bar"
+    );
+    let close = vcx.debug_bounds("net-import-close").expect("close button");
+    assert!(
+        close.bottom() <= field.top(),
+        "the close button sits in the header, above the field"
+    );
+
+    // Below 700 px the card is the window width minus 32.
+    vcx.simulate_resize(gpui::size(gpui::px(600.0), gpui::px(800.0)));
+    render_ui(vcx);
+    let card = vcx.debug_bounds("network-import-card").expect("the card");
+    assert_eq!(
+        card.size.width,
+        gpui::px(568.0),
+        "a narrow window leaves 16 px each side of the card"
+    );
+
+    click(vcx, "net-import-close");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.network_import.stage.is_none(),
+            "the close button closes the dialog"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn net_import_card_absorbs_clicks_and_backdrop_closes() {
+    let (_library, engine) = seed_library("net_import_overlay", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    render_ui(vcx);
+
+    // The footer's left edge holds only the hint, not a control.
+    let footer = vcx.debug_bounds("net-import-footer").expect("footer bar");
+    let y = f32::from(footer.center().y);
+    click_point(vcx, f32::from(footer.left()) + 8.0, y);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.network_import.stage.is_some(),
+            "a click on the card must not reach the backdrop"
+        );
+    });
+
+    let card = vcx.debug_bounds("network-import-card").expect("the card");
+    assert!(
+        card.left() > gpui::px(8.0),
+        "the test clicks left of the card"
+    );
+    click_point(vcx, 4.0, y);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.network_import.stage.is_none(),
+            "a click on the backdrop outside the card closes the dialog"
         );
     });
 }
