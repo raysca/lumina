@@ -1,6 +1,5 @@
 //! Short chip labels for smart album rules ("ISO > 1600", "RAW"), one per
-//! rule, for the smart album cards. `smart_draft::rule_summary` is the
-//! long, one-sentence form for a whole album.
+//! rule, for the smart album cards and the empty smart album.
 
 use lumina_core::{RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 

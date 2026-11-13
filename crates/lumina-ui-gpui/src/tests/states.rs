@@ -218,33 +218,148 @@ fn restore_all_reports_what_it_did() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-#[core::prelude::v1::test]
-fn empty_smart_album_offers_only_edit_rules_and_library_path_is_mono() {
-    let (dir, engine) = seed_library("states_album", 2);
-    let rules = [SmartAlbumRule {
+fn favorite_rule() -> SmartAlbumRule {
+    SmartAlbumRule {
         field: RuleField::IsFavorite,
         operator: RuleOperator::Equals,
         value: RuleValue::Bool(true),
-    }];
+    }
+}
+
+#[core::prelude::v1::test]
+fn empty_smart_album_shows_rule_chips_edit_and_delete() {
+    use crate::app::rule_label::rule_label;
+
+    let (dir, engine) = seed_library("states_album", 2);
+    let rules = [
+        favorite_rule(),
+        SmartAlbumRule {
+            field: RuleField::Rating,
+            operator: RuleOperator::GreaterThan,
+            value: RuleValue::Integer(4),
+        },
+    ];
     let album = engine
         .create_smart_album("Keepers", "folder", MatchMode::All, &rules)
         .unwrap();
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
         app.select_album(AlbumSelection::User(album.id), cx)
     });
     render_ui(vcx);
     assert!(
-        vcx.debug_bounds("empty-secondary").is_none(),
-        "one button only"
+        vcx.debug_bounds("empty-state-headline-text:Nothing matches these rules yet")
+            .is_some(),
+        "the headline speaks of the rules, not the title"
     );
+    assert!(
+        vcx.debug_bounds(
+            "empty-state-body-text:This album fills itself. As soon as a photo matches, it appears here."
+        )
+        .is_some(),
+        "the body says the album fills itself"
+    );
+    for (i, rule) in rules.iter().enumerate() {
+        assert!(
+            vcx.debug_bounds(leak(format!("empty-rule-chip-{i}")))
+                .is_some(),
+            "one chip per rule: chip {i} is missing"
+        );
+        let text = format!("empty-rule-chip-{i}-text:{}", rule_label(rule));
+        assert!(
+            vcx.debug_bounds(leak(text.clone())).is_some(),
+            "chip {i} reads its rule label, missing {text}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds(leak(format!("empty-rule-chip-{}", rules.len())))
+            .is_none(),
+        "no chip beyond the album's rules"
+    );
+    assert!(
+        vcx.debug_bounds("empty-primary-text:Edit rules").is_some(),
+        "the primary action is Edit rules"
+    );
+    assert!(
+        vcx.debug_bounds("empty-secondary-text:Delete album")
+            .is_some(),
+        "the secondary action is Delete album"
+    );
+
+    click(vcx, "empty-secondary");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("smart-album-delete-dialog").is_some(),
+        "Delete album draws the delete confirmation"
+    );
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.album_draft.confirm_delete,
+            Some(album.id),
+            "Delete album asks for confirmation first"
+        );
+        app.cancel_delete_smart_album(cx);
+    });
+    assert!(
+        engine.list_smart_albums().iter().any(|a| a.id == album.id),
+        "Delete album never deletes without the confirmation"
+    );
+    render_ui(vcx);
     click(vcx, "empty-primary");
     view.update(vcx, |app, _| {
-        assert!(app.album_draft.modal_open, "Edit Rules… opens the builder")
+        assert!(app.album_draft.modal_open, "Edit rules opens the builder")
     });
     let _ = std::fs::remove_dir_all(&dir);
+}
 
+#[core::prelude::v1::test]
+fn empty_smart_album_many_rules_wrap_inside_the_window() {
+    let (dir, engine) = seed_library("states_album_many_rules", 1);
+    let rules: Vec<_> = (0..9)
+        .map(|i| SmartAlbumRule {
+            field: RuleField::Camera,
+            operator: RuleOperator::Contains,
+            value: RuleValue::Text(format!("Camera model {i}")),
+        })
+        .collect();
+    let album = engine
+        .create_smart_album("Many rules", "folder", MatchMode::Any, &rules)
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::User(album.id), cx)
+    });
+    render_ui(vcx);
+
+    let window = vcx.update(|window, _| window.viewport_size());
+    let chips: Vec<_> = (0..rules.len())
+        .map(|i| {
+            vcx.debug_bounds(leak(format!("empty-rule-chip-{i}")))
+                .unwrap_or_else(|| panic!("chip {i} is drawn"))
+        })
+        .collect();
+    let first_top = chips[0].top();
+    assert!(
+        chips.iter().any(|chip| chip.top() > first_top),
+        "nine chips wrap onto more than one row"
+    );
+    for (i, chip) in chips.iter().enumerate() {
+        assert!(
+            chip.left() >= gpui::px(0.0)
+                && chip.top() >= gpui::px(0.0)
+                && chip.right() <= window.width
+                && chip.bottom() <= window.height,
+            "chip {i} stays inside the {window:?} window, got {chip:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn empty_library_path_is_mono() {
     let (empty_dir, empty) = seed_library("states_empty_lib", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, empty);

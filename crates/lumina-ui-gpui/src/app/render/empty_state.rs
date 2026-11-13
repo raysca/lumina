@@ -5,6 +5,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
+use crate::app::rule_label::{rule_icon, rule_label};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -34,6 +35,8 @@ enum EmptyAction {
     /// All Media plus a toast pointing at Add to Album; an empty album's way in.
     AddFromLibrary,
     EditSmartAlbum(SmartAlbum),
+    /// Opens the existing delete confirmation; never deletes directly.
+    DeleteSmartAlbum(i64),
     OpenLibrary,
     ManageTags,
     Rescan,
@@ -48,6 +51,8 @@ struct EmptyCopy {
     body: String,
     /// Library folder, shown on its own mono line.
     path: Option<String>,
+    /// A smart album's rules, one mono chip each.
+    rule_chips: Vec<(Icon, String)>,
     primary: Option<(String, EmptyAction)>,
     secondary: Option<(String, EmptyAction)>,
 }
@@ -71,6 +76,7 @@ impl LuminaApp {
             title,
             body,
             path: None,
+            rule_chips: Vec::new(),
             primary: None,
             secondary: None,
         };
@@ -80,6 +86,7 @@ impl LuminaApp {
             title,
             body,
             path,
+            rule_chips,
             primary,
             secondary,
         } = if let Some((title, body)) = self.videos_empty_copy() {
@@ -117,14 +124,23 @@ impl LuminaApp {
                 },
                 AlbumSelection::User(_) => match user_album {
                     Some(album) => EmptyCopy {
+                        rule_chips: album
+                            .rules
+                            .iter()
+                            .map(|rule| (rule_icon(&rule.field), rule_label(rule)))
+                            .collect(),
                         primary: Some((
-                            "Edit Rules…".into(),
+                            crate::i18n::t("smart_album.empty_edit"),
                             EmptyAction::EditSmartAlbum(album.clone()),
                         )),
+                        secondary: Some((
+                            crate::i18n::t("smart_album.empty_delete"),
+                            EmptyAction::DeleteSmartAlbum(album.id),
+                        )),
                         ..copy(
-                            Icon::Sliders,
-                            format!("Nothing matches \u{201c}{}\u{201d} yet", album.title),
-                            crate::app::smart_draft::rule_summary(album.match_mode, &album.rules),
+                            Icon::Sparkles,
+                            crate::i18n::t("smart_album.empty_title"),
+                            crate::i18n::t("smart_album.empty_body"),
                         )
                     },
                     None => EmptyCopy {
@@ -219,12 +235,17 @@ impl LuminaApp {
             }
         };
 
-        let primary_button = primary.map(|(label, action)| {
-            let icon = matches!(action, EmptyAction::AddFromLibrary).then_some(Icon::Library);
-            self.empty_action_button(true, label, icon, action, size, cx)
-        });
-        let secondary_button = secondary
-            .map(|(label, action)| self.empty_action_button(false, label, None, action, size, cx));
+        let mut button = |primary: bool, (label, action): (String, EmptyAction)| {
+            let icon = match action {
+                EmptyAction::AddFromLibrary => Some(Icon::Library),
+                EmptyAction::EditSmartAlbum(_) => Some(Icon::SlidersHorizontal),
+                EmptyAction::DeleteSmartAlbum(_) => Some(Icon::Trash),
+                _ => None,
+            };
+            self.empty_action_button(primary, label, icon, action, size, cx)
+        };
+        let primary_button = primary.map(|p| button(true, p));
+        let secondary_button = secondary.map(|s| button(false, s));
         let glyph = match size {
             EmptySize::Standard => px(54.0),
             EmptySize::Hero => px(150.0),
@@ -270,6 +291,7 @@ impl LuminaApp {
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme::t1())
                             .text_center()
+                            .children(text_marker("empty-state-headline", &title.clone().into()))
                             .child(title),
                     )
                     .child(
@@ -294,6 +316,48 @@ impl LuminaApp {
                             .text_color(theme::t2())
                             .child(path)
                     }))
+                    // One chip per rule, the cards' short label and field icon.
+                    .when(!rule_chips.is_empty(), |col| {
+                        col.child(
+                            div()
+                                .mt(px(16.0))
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_center()
+                                .gap(px(7.0))
+                                .children(rule_chips.into_iter().enumerate().map(
+                                    |(i, (icon, label))| {
+                                        let label = SharedString::from(label);
+                                        div()
+                                            .debug_selector(move || format!("empty-rule-chip-{i}"))
+                                            .h(px(24.0))
+                                            .px(px(9.0))
+                                            .rounded(px(6.0))
+                                            .bg(theme::bg_1())
+                                            .border_1()
+                                            .border_color(theme::line())
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(6.0))
+                                            .font_family(theme::FONT_MONO)
+                                            .text_size(px(10.0))
+                                            .text_color(theme::t2())
+                                            .child(render_icon(icon, px(10.0), theme::accent()))
+                                            .children(cfg!(test).then(|| {
+                                                let text = label.clone();
+                                                div().absolute().size_0().debug_selector(
+                                                    move || {
+                                                        format!("empty-rule-chip-{i}-text:{text}")
+                                                    },
+                                                )
+                                            }))
+                                            .child(label)
+                                    },
+                                )),
+                        )
+                    })
                     // Each search term is a chip; removing one widens the search.
                     .when(!search_terms.is_empty(), |col| {
                         col.child(
@@ -387,6 +451,8 @@ impl LuminaApp {
             .gap(px(7.0))
             .rounded(theme::RADIUS_LG)
             .text_size(px(12.5))
+            .role(Role::Button)
+            .aria_label(label.clone())
             .children(icon.map(|icon| render_icon(icon, px(14.0), ink)))
             .children(text_marker(id, &label.clone().into()))
             .child(label)
@@ -401,6 +467,7 @@ impl LuminaApp {
             EmptyAction::ShowAll => self.select_album(AlbumSelection::AllLibrary, cx),
             EmptyAction::AddFromLibrary => self.add_from_library(cx),
             EmptyAction::EditSmartAlbum(album) => self.open_album_builder_for_edit(album, cx),
+            EmptyAction::DeleteSmartAlbum(id) => self.prompt_delete_smart_album(id, cx),
             EmptyAction::OpenLibrary => self.pick_folder_dialog(cx),
             EmptyAction::ManageTags => self.open_tag_manager(cx),
             EmptyAction::Rescan => self.rescan_library(cx),
