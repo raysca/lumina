@@ -14,6 +14,7 @@ use crate::views::viewer_state::ViewerRotation;
 
 pub(crate) mod bucket_cards;
 mod card;
+mod empty_state;
 mod grid;
 pub(crate) mod mosaic;
 pub(crate) mod overlays;
@@ -21,6 +22,7 @@ pub(crate) mod rail;
 mod status_bar;
 mod toolbar;
 mod video_caption;
+pub(crate) use empty_state::EmptySize;
 #[cfg(test)]
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 

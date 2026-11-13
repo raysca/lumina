@@ -369,3 +369,75 @@ fn videos_meta_updates_after_a_clip_is_trashed() {
         );
     });
 }
+
+/// Hosts the empty-state shell at the `Hero` size, which no view uses yet.
+struct HeroHost(gpui::Entity<crate::app::LuminaApp>);
+
+impl gpui::Render for HeroHost {
+    fn render(
+        &mut self,
+        _window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        self.0.update(cx, |app, cx| {
+            app.render_empty_state(crate::app::render::EmptySize::Hero, cx)
+        })
+    }
+}
+
+#[core::prelude::v1::test]
+fn empty_state_shell_matches_design() {
+    let (dir, engine) = seed_library("states_empty_shell", 1);
+    let album = engine.create_album("Nothing yet").unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::Album(album.id), cx)
+    });
+    render_ui(vcx);
+
+    let glyph = vcx
+        .debug_bounds("empty-state-glyph")
+        .expect("the empty album draws the glyph");
+    let side = (f32::from(glyph.size.width), f32::from(glyph.size.height));
+    assert_eq!(side, (54.0, 54.0), "the glyph is a 54 px circle");
+    let headline = vcx
+        .debug_bounds("empty-state-headline")
+        .expect("the empty album draws a headline");
+    assert!(
+        vcx.debug_bounds("empty-state-body").is_some(),
+        "the empty album draws a body line"
+    );
+    let gap = f32::from(headline.top() - glyph.bottom());
+    assert!(
+        (gap - 14.0).abs() <= 1.0,
+        "14 px from the glyph to the headline, got {gap}"
+    );
+    let primary = vcx.debug_bounds("empty-primary").expect("a primary action");
+    assert_eq!(
+        f32::from(primary.size.height),
+        34.0,
+        "the primary button is 34 px tall"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Hero (First Run): no library, so the shell offers Open Library….
+    use gpui::AppContext as _;
+    let mut cx = crate::tests::TestApp::single();
+    let (_host, vcx) =
+        cx.add_window_view(|_window, cx| HeroHost(cx.new(crate::app::LuminaApp::new)));
+    render_ui(vcx);
+    let glyph = vcx
+        .debug_bounds("empty-state-glyph")
+        .expect("the hero shell draws the glyph");
+    let side = (f32::from(glyph.size.width), f32::from(glyph.size.height));
+    assert_eq!(side, (150.0, 150.0), "the hero glyph is 150 px");
+    let primary = vcx
+        .debug_bounds("empty-primary")
+        .expect("the hero shell has a primary action");
+    assert_eq!(
+        f32::from(primary.size.height),
+        40.0,
+        "the hero primary button is 40 px tall"
+    );
+}
