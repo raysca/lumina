@@ -3,6 +3,8 @@
 
 mod card;
 mod compare;
+mod differences;
+pub(crate) mod kinds;
 mod list;
 
 use std::sync::Arc;

@@ -121,7 +121,7 @@ fn back_and_forward_onto_duplicates_start_on_exact_copies() {
         });
     };
     check(&view, vcx, "Back then Forward");
-    click(vcx, "stacks-tab");
+    click(vcx, "duplicates-kind-similar");
     click(vcx, "sidebar-nav-favorites");
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
@@ -156,7 +156,7 @@ fn stale_list_never_flags_trashed_members_and_rereads() {
     click(vcx, "sidebar-nav-favorites");
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
-    click(vcx, "stacks-tab");
+    click(vcx, "duplicates-kind-similar");
     view.update(vcx, |app, _| {
         assert!(
             matches!(&app.stacks.list, StacksList::Loaded(s) if s.is_empty()),

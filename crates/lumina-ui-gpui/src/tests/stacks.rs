@@ -80,7 +80,7 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
 
 pub(crate) fn open_similar_shots(vcx: &mut VisualTestContext) {
     click(vcx, "sidebar-nav-duplicates");
-    click(vcx, "stacks-tab");
+    click(vcx, "duplicates-kind-similar");
 }
 
 pub(crate) fn loaded_ids(
@@ -115,7 +115,8 @@ fn stacks_tab_lists_raw_jpeg_pair() {
     let (view, vcx) = app_with_library(&mut cx, f.engine.clone());
     click(vcx, "sidebar-nav-duplicates");
     assert!(
-        vcx.debug_bounds("exact-copies-tab").is_some() && vcx.debug_bounds("stacks-tab").is_some(),
+        vcx.debug_bounds("duplicates-kind-exact").is_some()
+            && vcx.debug_bounds("duplicates-kind-similar").is_some(),
         "the Duplicates destination shows both tabs"
     );
 

@@ -70,7 +70,7 @@ fn members_that_fit(this: &LuminaApp, window: &Window) -> Fit {
     }
 }
 
-/// The tab header and the shown tab's body.
+/// The kind chips and the shown kind's body.
 pub fn render_duplicates(
     this: &LuminaApp,
     total_count: usize,
@@ -87,60 +87,9 @@ pub fn render_duplicates(
         .flex()
         .flex_col()
         .bg(theme::bg_0())
-        .child(
-            div()
-                .id("duplicates-tabs")
-                .role(Role::TabList)
-                .aria_label(t("duplicates.title"))
-                .px_4()
-                .pt_3()
-                .flex()
-                .flex_row()
-                .gap_1()
-                .child(tab(
-                    this,
-                    DuplicatesTab::Exact,
-                    "exact-copies-tab",
-                    "duplicates.tab_exact",
-                    "duplicates.tab_exact_hint",
-                    cx,
-                ))
-                .child(tab(
-                    this,
-                    DuplicatesTab::Similar,
-                    "stacks-tab",
-                    "duplicates.tab_similar",
-                    "duplicates.tab_similar_hint",
-                    cx,
-                )),
-        )
+        .child(crate::views::duplicates::kinds::render(this, cx))
         .child(div().flex_1().min_h_0().flex().flex_row().child(body))
         .into_any_element()
-}
-
-fn tab(
-    this: &LuminaApp,
-    which: DuplicatesTab,
-    selector: &'static str,
-    key: &str,
-    hint: &str,
-    cx: &mut Context<LuminaApp>,
-) -> Stateful<Div> {
-    let label = t(key);
-    if this.stacks.tab == which {
-        theme::control_on(selector)
-    } else {
-        theme::control(selector)
-    }
-    .debug_selector(move || selector.to_string())
-    .role(Role::Tab)
-    .aria_label(label.clone())
-    .aria_selected(this.stacks.tab == which)
-    .tooltip(theme::tooltip_label(t(hint)))
-    .child(label)
-    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-        this.set_duplicates_tab(which, cx);
-    }))
 }
 
 /// A centered message: loading, error or empty.

@@ -73,7 +73,8 @@ pub(super) fn render(
                         .children(group.items.iter().enumerate().map(|(i, item)| {
                             card(this, &group.hash, i, item, item.id == keeper, cx)
                         })),
-                ),
+                )
+                .child(super::differences::render(this, group)),
         )
         .child(
             div()

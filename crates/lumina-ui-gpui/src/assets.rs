@@ -41,6 +41,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "folder-open",
     "folder-plus",
     "folder-sync",
+    "git-compare-arrows",
     "grid-3x3",
     "hard-drive",
     "hash",

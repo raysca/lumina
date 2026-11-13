@@ -38,16 +38,8 @@ pub(super) fn card(
     } else {
         t_with("duplicates.copy_n", &[&position.to_string()])
     };
-    let format = std::path::Path::new(&item.file_name)
-        .extension()
-        .map(|e| e.to_string_lossy().to_uppercase())
-        .unwrap_or_default();
-    let source = match (item.make.as_deref(), item.model.as_deref()) {
-        (Some(make), Some(model)) if model.starts_with(make) => model.to_string(),
-        (Some(make), Some(model)) => format!("{make} {model}"),
-        (Some(one), None) | (None, Some(one)) => one.to_string(),
-        (None, None) => item.parent_dir.clone(),
-    };
+    let format = format_of(item);
+    let source = camera(item).unwrap_or_else(|| item.parent_dir.clone());
     let edits = if this.edits.edited_ids.contains(&item.id) {
         t("duplicates.edited")
     } else {
@@ -131,6 +123,13 @@ pub(super) fn card(
                 .flex_col()
                 .gap(px(8.0))
                 .child(keep_radio(hash, item.id, keeper, cx))
+                .child(
+                    div()
+                        .id(("duplicate-name", id))
+                        .debug_selector(move || format!("duplicate-name-{id}"))
+                        .tooltip(theme::tooltip_label(item.file_name.clone()))
+                        .child(fact("duplicates.fact_name", item.file_name.clone(), false)),
+                )
                 .child(fact(
                     "duplicates.fact_size",
                     format_bytes(item.file_size),
@@ -150,6 +149,25 @@ pub(super) fn card(
                     false,
                 )),
         )
+}
+
+/// The file's extension in capitals ("JPG"), the Format fact.
+pub(super) fn format_of(item: &MediaItem) -> String {
+    std::path::Path::new(&item.file_name)
+        .extension()
+        .map(|e| e.to_string_lossy().to_uppercase())
+        .unwrap_or_default()
+}
+
+/// The camera ("Sony ILCE-7M4"), when the file names one. The Source fact
+/// falls back to the folder.
+pub(super) fn camera(item: &MediaItem) -> Option<String> {
+    match (item.make.as_deref(), item.model.as_deref()) {
+        (Some(make), Some(model)) if model.starts_with(make) => Some(model.to_string()),
+        (Some(make), Some(model)) => Some(format!("{make} {model}")),
+        (Some(one), None) | (None, Some(one)) => Some(one.to_string()),
+        (None, None) => None,
+    }
 }
 
 /// The accent BEST badge, top right: the heuristic's pick.
