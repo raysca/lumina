@@ -19,6 +19,7 @@ pub mod import_dialog;
 pub mod inspector;
 pub mod map;
 pub mod marks;
+pub mod missing_library;
 pub mod mosaic;
 pub mod network_import_dialog;
 pub mod onboarding;

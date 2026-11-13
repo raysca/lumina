@@ -276,7 +276,7 @@ fn a_replaced_librarys_late_scan_complete_is_ignored() {
 use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::app::downloads::DownloadsConfirm;
 use crate::app::library::FOLDER_PICKS;
-use crate::app::recents::{missing_library_message, startup_library};
+use crate::app::recents::startup_library;
 use crate::tests::downloads::{install, queue_app, settle, submit, TempLibrary};
 use std::path::PathBuf;
 
@@ -451,19 +451,18 @@ fn missing_last_library_shows_notice() {
         vcx.debug_bounds("welcome-missing-library").is_some(),
         "a missing last library is explained, not skipped silently"
     );
-    let name = gone.file_name().unwrap().to_string_lossy().into_owned();
     assert!(
-        missing_library_message(&gone).contains(&name),
-        "the notice names the folder"
+        painted_text(vcx, format!("missing-library-path-text:{}", gone.display())),
+        "the state names the folder"
     );
     view.update(vcx, |app, _| {
         assert_eq!(app.welcome.missing.as_deref(), Some(gone.as_path()));
         assert!(app.grid_state.is_none());
     });
     let before = picks();
-    click(vcx, "welcome-open-btn");
-    keystrokes(vcx, "enter");
-    assert_eq!(picks(), before + 2, "the Open button and ↵ stay usable");
+    click(vcx, "missing-library-choose");
+    keystrokes(vcx, "cmd-o");
+    assert_eq!(picks(), before + 2, "Choose and ⌘O stay usable");
 }
 
 #[core::prelude::v1::test]
@@ -496,6 +495,22 @@ fn enter_on_unavailable_recent_shows_notice_not_open() {
         assert_eq!(app.config.recent_libraries.len(), 2, "it stays in the list");
     });
     assert!(vcx.debug_bounds("welcome-missing-library").is_some());
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(app.welcome.missing.is_none(), "Esc goes Back")
+    });
+    assert!(
+        vcx.debug_bounds("welcome-recent-1").is_some(),
+        "Back shows the recents again"
+    );
+    keystrokes(vcx, "down enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(here.as_path()),
+            "the available recent is reachable after Back"
+        )
+    });
 }
 
 fn library_rows(app: &LuminaApp) -> Vec<PathBuf> {
@@ -1059,5 +1074,361 @@ fn sample_ready_after_another_library_opened_keeps_that_library() {
             "a sample that finishes later must not replace the library the user opened"
         );
         assert!(!app.welcome.generating_sample, "the busy state is cleared");
+    });
+}
+
+// ---- Library unreachable state (Design 10 Task 3) ----
+
+/// Clicks `selector` without letting background work run, so a test can see
+/// what the UI shows while that work is still pending.
+fn click_unparked(vcx: &mut VisualTestContext, selector: &'static str) {
+    let position = crate::tests::ui_automation::bounds_center(vcx, selector);
+    vcx.update(|window, cx| {
+        let (modifiers, button) = (gpui::Modifiers::default(), gpui::MouseButton::Left);
+        window.dispatch_event(
+            gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                position,
+                modifiers,
+                button,
+                click_count: 1,
+                first_mouse: false,
+            }),
+            cx,
+        );
+        window.dispatch_event(
+            gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                position,
+                modifiers,
+                button,
+                click_count: 1,
+            }),
+            cx,
+        );
+        window.refresh();
+        window.draw(cx).clear(cx);
+    });
+}
+
+/// The welcome screen after startup found `last_library_path` missing.
+fn missing_at_startup<'a>(
+    cx: &'a mut gpui::TestAppContext,
+    gone: &std::path::Path,
+) -> (Entity<LuminaApp>, &'a mut VisualTestContext) {
+    let (view, vcx) = welcome_with_recents(cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.config.last_library_path = Some(gone.to_path_buf());
+        let startup = startup_library(&app.config);
+        app.apply_startup_library(startup, cx);
+    });
+    render_ui(vcx);
+    (view, vcx)
+}
+
+fn painted_text(vcx: &mut VisualTestContext, selector: String) -> bool {
+    vcx.debug_bounds(crate::tests::ui_automation::leak(selector))
+        .is_some()
+}
+
+#[core::prelude::v1::test]
+fn missing_library_state_retries_and_chooses() {
+    // Removed now, made again before Retry; the guard deletes it at the end.
+    let library = temp_folder("unreachable");
+    std::fs::remove_dir(library.as_path()).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = missing_at_startup(&mut cx, &library);
+
+    for selector in [
+        "welcome-missing-library",
+        "missing-library-headline",
+        "missing-library-path",
+        "missing-library-retry",
+        "missing-library-choose",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "{selector}: the unreachable state shows its parts"
+        );
+    }
+    assert!(
+        painted_text(
+            vcx,
+            "missing-library-headline-text:Can't reach your library".into()
+        ),
+        "the headline says what is wrong"
+    );
+    assert!(
+        painted_text(
+            vcx,
+            format!("missing-library-path-text:{}", library.display())
+        ),
+        "the pill shows the library's path"
+    );
+    // GPUI's test window builds no accessibility tree; a test-only marker
+    // sits beside the `.role(Role::Alert)` call instead.
+    assert!(
+        painted_text(vcx, "welcome-missing-library-role:alert".into()),
+        "the state is announced as an alert (Role::Alert)"
+    );
+
+    let before = picks();
+    click(vcx, "missing-library-choose");
+    assert_eq!(
+        picks(),
+        before + 1,
+        "Choose another library… picks a folder"
+    );
+
+    std::fs::create_dir_all(library.as_path()).unwrap();
+    click_unparked(vcx, "missing-library-retry");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.is_none(),
+            "Retry must not open the library on the UI thread"
+        );
+        assert!(app.welcome.retrying, "Retry is checking in the background");
+    });
+    assert!(
+        painted_text(vcx, "missing-library-retry-text:Checking…".into()),
+        "the Retry button says it is checking"
+    );
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(library.as_path()),
+            "Retry opens the library once it is back"
+        );
+        assert!(app.welcome.missing.is_none(), "the state is gone");
+        assert!(!app.welcome.retrying, "the checking state is cleared");
+    });
+}
+
+#[core::prelude::v1::test]
+fn missing_library_retry_that_fails_keeps_the_state() {
+    let gone = temp_folder("still_gone").to_path_buf(); // deleted at once
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = missing_at_startup(&mut cx, &gone);
+
+    click(vcx, "missing-library-retry");
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "a missing folder is not opened");
+        assert_eq!(
+            app.welcome.missing.as_deref(),
+            Some(gone.as_path()),
+            "the state stays for the same library"
+        );
+        assert!(!app.welcome.retrying, "the checking state is cleared");
+        assert!(
+            app.welcome.missing_error.is_none(),
+            "a folder that is not there has no error string to show"
+        );
+    });
+    assert!(
+        painted_text(vcx, "missing-library-retry-text:Retry".into()),
+        "Retry is offered again"
+    );
+    assert!(
+        vcx.debug_bounds("missing-library-error").is_none(),
+        "no details line without a real error"
+    );
+    assert!(!gone.exists(), "Retry creates nothing");
+}
+
+#[core::prelude::v1::test]
+fn missing_library_retry_open_error_shows_details() {
+    // A file where the folder should be: `is_dir` fails the same way, so
+    // make it a folder whose catalog cannot be opened instead.
+    let library = temp_folder("bad_catalog");
+    std::fs::create_dir_all(library.join("catalog.db")).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.welcome.missing = Some(library.to_path_buf());
+        cx.notify();
+    });
+    render_ui(vcx);
+    click(vcx, "missing-library-retry");
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "a failed open opens nothing");
+        assert!(
+            app.welcome.missing_error.is_some(),
+            "the open error is kept to show"
+        );
+        assert!(
+            app.error_message.is_none(),
+            "the state shows the failure; no second banner"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("missing-library-error").is_some(),
+        "the real error string is shown under the state"
+    );
+}
+
+#[core::prelude::v1::test]
+fn missing_library_keys_retry_and_choose() {
+    let gone = temp_folder("keys_gone").to_path_buf();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = missing_at_startup(&mut cx, &gone);
+    let before = picks();
+    keystrokes(vcx, "tab tab enter");
+    assert_eq!(picks(), before + 1, "Tab reaches Choose and ↵ presses it");
+    keystrokes(vcx, "tab enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.missing_focus, Some(0), "Tab wraps to Retry");
+        assert!(app.grid_state.is_none());
+    });
+    assert_eq!(picks(), before + 1, "↵ on Retry picks no folder");
+    keystrokes(vcx, "cmd-o");
+    assert_eq!(picks(), before + 2, "⌘O still chooses a library");
+}
+
+#[core::prelude::v1::test]
+fn missing_library_long_path_stays_in_the_column() {
+    let gone = std::env::temp_dir()
+        .join("lumina_uitest_never_created")
+        .join("a-very-long-folder-name-that-will-not-fit-".repeat(6))
+        .join("Lumina.library");
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = missing_at_startup(&mut cx, &gone);
+    let state = vcx.debug_bounds("welcome-missing-library").unwrap();
+    let pill = vcx.debug_bounds("missing-library-path").unwrap();
+    assert!(
+        f32::from(state.size.width) <= 450.0,
+        "the state column is at most 450 wide"
+    );
+    assert!(
+        pill.size.width <= state.size.width && pill.origin.x >= state.origin.x,
+        "a long path is truncated inside the pill, not widening it: {pill:?} in {state:?}"
+    );
+    assert_eq!(
+        f32::from(pill.size.height),
+        30.0,
+        "the pill stays one 30 px line"
+    );
+    let line = vcx.debug_bounds("missing-library-path-line").unwrap();
+    assert!(
+        line.right() <= pill.right() && f32::from(line.size.height) < 20.0,
+        "the path is one line cut in the middle, not wrapped or spilling: {line:?} in {pill:?}"
+    );
+    let retry = vcx.debug_bounds("missing-library-retry").unwrap();
+    let choose = vcx.debug_bounds("missing-library-choose").unwrap();
+    assert_eq!(
+        retry.origin.y, choose.origin.y,
+        "the buttons stay on one row"
+    );
+}
+
+#[core::prelude::v1::test]
+fn missing_library_stale_retry_never_replaces_an_opened_library() {
+    let library = temp_folder("stale_retry");
+    let other = temp_folder("stale_other");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        // The folder is back, but the state still shows it as missing.
+        app.welcome.missing = Some(library.to_path_buf());
+        cx.notify();
+    });
+    render_ui(vcx);
+    click_unparked(vcx, "missing-library-retry");
+    view.update(vcx, |app, cx| {
+        assert!(app.welcome.retrying, "control: Retry is in flight");
+        // The user chooses another library before Retry answers.
+        app.open_library(other.to_path_buf(), cx);
+    });
+    vcx.run_until_parked();
+    render_ui(vcx);
+    // The engine exposes no scan-cancelled state, so the cancel of the
+    // stale engine is not observable here; the open library is.
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(other.as_path()),
+            "a late Retry result must not replace the library the user opened"
+        );
+        assert!(!app.welcome.retrying, "no checking state is left behind");
+    });
+}
+
+#[core::prelude::v1::test]
+fn missing_library_back_returns_to_welcome_and_drops_retry() {
+    let library = temp_folder("back_retry");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![library.to_path_buf()]);
+    view.update(vcx, |app, cx| {
+        app.welcome.missing = Some(library.to_path_buf());
+        app.has_desktop_pics = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let (pictures, samples, imports) = (picture_opens(), sample_opens(), new_library_picks());
+    keystrokes(vcx, "shift-enter alt-enter cmd-shift-i");
+    assert_eq!(
+        picture_opens(),
+        pictures,
+        "hidden Pictures path takes no ⇧↵"
+    );
+    assert_eq!(sample_opens(), samples, "hidden sample path takes no ⌥↵");
+    assert_eq!(
+        new_library_picks(),
+        imports,
+        "hidden import path takes no ⇧⌘I"
+    );
+    // Esc dismisses an error banner before it leaves the state.
+    view.update(vcx, |app, cx| app.set_error("Could not open folder", cx));
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message.is_none(),
+            "the first Esc dismisses the banner"
+        );
+        assert!(app.welcome.missing.is_some(), "and stays in the state");
+    });
+    click_unparked(vcx, "missing-library-retry");
+    click_unparked(vcx, "missing-library-back");
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.welcome.missing.is_none(), "Back leaves the state");
+        assert!(!app.welcome.retrying, "Back clears the checking state");
+        assert!(
+            app.grid_state.is_none(),
+            "a Retry dropped by Back must not open the library afterwards"
+        );
+    });
+    for selector in ["welcome-open-btn", "welcome-recent-0"] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "{selector}: Back shows the normal welcome screen"
+        );
+    }
+}
+
+#[core::prelude::v1::test]
+fn missing_library_retry_dropped_by_back_stays_dropped_on_return() {
+    let library = temp_folder("back_again");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.welcome.set_missing(Some(library.to_path_buf()));
+        cx.notify();
+    });
+    render_ui(vcx);
+    click_unparked(vcx, "missing-library-retry");
+    click_unparked(vcx, "missing-library-back");
+    // The same library shows as missing again before the old Retry answers.
+    view.update(vcx, |app, cx| {
+        app.welcome.set_missing(Some(library.to_path_buf()));
+        cx.notify();
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.is_none(),
+            "a Retry the user left with Back must not open the library later"
+        );
+        assert!(!app.welcome.retrying, "and shows no checking state");
     });
 }

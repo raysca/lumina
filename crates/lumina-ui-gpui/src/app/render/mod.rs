@@ -16,7 +16,7 @@ use crate::views::viewer_state::ViewerRotation;
 
 pub(crate) mod bucket_cards;
 mod card;
-mod empty_state;
+pub(crate) mod empty_state;
 mod grid;
 pub(crate) mod mosaic;
 pub(crate) mod overlays;

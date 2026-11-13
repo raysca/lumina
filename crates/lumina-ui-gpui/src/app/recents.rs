@@ -20,6 +20,15 @@ pub(crate) const RECENT_LIBRARY_LIMIT: usize = 8;
 pub(crate) struct WelcomeState {
     /// The library that could not be found (at startup or when chosen).
     pub(crate) missing: Option<PathBuf>,
+    /// Retry is checking the missing library off the UI thread.
+    pub(crate) retrying: bool,
+    /// Why the last Retry could not open the missing library. Only a real
+    /// error: a folder that is simply not there has none.
+    pub(crate) missing_error: Option<String>,
+    /// Tab focus in the missing-library state: 0 Retry, 1 Choose.
+    pub(crate) missing_focus: Option<usize>,
+    /// Counts Retry starts; a result applies only to the newest one.
+    retry_generation: u64,
     /// The recent the keyboard has focused (↑/↓), as a list index.
     pub(crate) focused_recent: Option<usize>,
     /// Recents whose folder is not there. `None` = not checked yet, shown
@@ -29,6 +38,17 @@ pub(crate) struct WelcomeState {
     pub(crate) generating_sample: bool,
     /// The list the last availability check was started for.
     checked: Option<Vec<PathBuf>>,
+}
+
+impl WelcomeState {
+    /// Shows (or with `None` leaves) the unreachable-library state, dropping
+    /// any Retry still in flight: its result will no longer apply.
+    pub(crate) fn set_missing(&mut self, missing: Option<PathBuf>) {
+        self.missing = missing;
+        self.retrying = false;
+        self.missing_error = None;
+        self.missing_focus = None;
+    }
 }
 
 /// Puts `path` (canonicalised, so `/var` and `/private/var` are one entry)
@@ -73,7 +93,8 @@ pub(crate) fn library_name(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-/// The welcome notice for a library that is not where it was.
+/// The banner text for a recent that is not where it was, chosen while
+/// another library is open (the welcome state is not on screen then).
 pub(crate) fn missing_library_message(path: &Path) -> String {
     t("welcome.missing_library")
         .replace("{name}", &library_name(path))
@@ -90,7 +111,7 @@ impl LuminaApp {
         match startup {
             // Startup keeps the pending restore; a user-chosen folder clears it.
             StartupLibrary::Open(path) => self.open_library_inner(path, cx),
-            StartupLibrary::Missing(path) => self.welcome.missing = Some(path),
+            StartupLibrary::Missing(path) => self.welcome.set_missing(Some(path)),
             StartupLibrary::None => {}
         }
     }
@@ -109,12 +130,82 @@ impl LuminaApp {
                 // The welcome notice is not on screen; say it in the banner.
                 self.set_error(missing_library_message(&path), cx);
             }
-            self.welcome.missing = Some(path);
+            self.welcome.set_missing(Some(path));
             cx.notify();
             return;
         }
         // Through open_library, so a running download asks first.
         self.open_library(path, cx);
+    }
+
+    /// Retry in the unreachable-library state. The folder check and the
+    /// engine open run on the background executor (an unmounted network
+    /// volume can stall either for seconds); the result is applied here.
+    pub(crate) fn retry_missing_library(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.welcome.missing.clone() else {
+            return;
+        };
+        if self.welcome.retrying {
+            return;
+        }
+        self.welcome.retrying = true;
+        self.welcome.retry_generation += 1;
+        let generation = self.welcome.retry_generation;
+        cx.notify();
+        let task = cx.background_executor().spawn({
+            let path = path.clone();
+            async move {
+                path.is_dir()
+                    .then(|| crate::app::library::open_engine(&path))
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let opened = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| {
+                // Back, another library (Choose, ⌘O, a recent) or a newer
+                // Retry superseded this one: its result must not apply.
+                let current = app.welcome.retrying && app.welcome.retry_generation == generation;
+                if current {
+                    app.welcome.retrying = false;
+                    cx.notify();
+                }
+                if !current
+                    || app.grid_state.is_some()
+                    || app.welcome.missing.as_ref() != Some(&path)
+                {
+                    // The stale engine started its initial scan on open.
+                    if let Some(Ok((engine, _))) = &opened {
+                        engine.cancel_scan();
+                    }
+                    return;
+                }
+                match opened {
+                    // Still not there: the state stays, nothing has changed.
+                    None => app.welcome.missing_error = None,
+                    Some(Err(err)) => {
+                        log::warn!("retry could not open library at {path:?}: {err:#}");
+                        app.welcome.missing_error = Some(format!("{err:#}"));
+                    }
+                    Some(Ok((engine, rx))) => {
+                        // Only the startup library's saved view applies to it.
+                        if app.config.last_library_path.as_ref() != Some(&path) {
+                            app.pending_restore = None;
+                            app.config.clear_session_state();
+                        }
+                        app.finish_open_library(path, engine, rx, cx);
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Back (Esc) from the unreachable-library state to the welcome screen
+    /// and its recent libraries. A Retry still in flight is dropped.
+    pub(crate) fn leave_missing_library(&mut self, cx: &mut Context<Self>) {
+        self.welcome.set_missing(None);
+        cx.notify();
     }
 
     /// Opens the recent at `index`, if there is one.
@@ -214,6 +305,7 @@ impl LuminaApp {
         &self,
         cx: &mut Context<Self>,
     ) -> crate::views::onboarding::WelcomeProps {
+        use crate::views::missing_library::MissingLibraryProps;
         use crate::views::onboarding::{RecentRow, WelcomeProps};
         let recents = self
             .config
@@ -249,7 +341,31 @@ impl LuminaApp {
             sample_busy: self.welcome.generating_sample,
             has_desktop_pics: self.has_desktop_pics,
             recents,
-            missing_notice: self.welcome.missing.as_deref().map(missing_library_message),
+            missing: self.welcome.missing.as_deref().map(|path| {
+                let body = if self.welcome.missing_error.is_some() {
+                    t("welcome.missing_body_failed")
+                } else if path.starts_with("/Volumes") {
+                    t("welcome.missing_body_volume")
+                } else {
+                    t("welcome.missing_body_folder")
+                };
+                MissingLibraryProps {
+                    path: path.display().to_string(),
+                    body,
+                    checking: self.welcome.retrying,
+                    error: self.welcome.missing_error.clone(),
+                    focus: self.welcome.missing_focus,
+                    on_retry: Box::new(
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.retry_missing_library(cx)),
+                    ),
+                    on_choose: Box::new(
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.pick_folder_dialog(cx)),
+                    ),
+                    on_back: Box::new(
+                        cx.listener(|this, _: &ClickEvent, _, cx| this.leave_missing_library(cx)),
+                    ),
+                }
+            }),
         }
     }
 

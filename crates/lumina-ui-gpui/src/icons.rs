@@ -79,6 +79,9 @@ pub enum Icon {
     SearchX,
     CircleAlert,
     CircleCheck,
+    Unplug,
+    HardDrive,
+    RefreshCw,
 }
 
 impl Icon {
@@ -162,6 +165,9 @@ impl Icon {
         Icon::SearchX,
         Icon::CircleAlert,
         Icon::CircleCheck,
+        Icon::Unplug,
+        Icon::HardDrive,
+        Icon::RefreshCw,
     ];
 
     pub fn path(self) -> &'static str {
@@ -242,6 +248,9 @@ impl Icon {
             Self::SearchX => "icons/search-x.svg",
             Self::CircleAlert => "icons/circle-alert.svg",
             Self::CircleCheck => "icons/circle-check.svg",
+            Self::Unplug => "icons/unplug.svg",
+            Self::HardDrive => "icons/hard-drive.svg",
+            Self::RefreshCw => "icons/refresh-cw.svg",
         }
     }
 }

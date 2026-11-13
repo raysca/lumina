@@ -619,6 +619,20 @@ fn en_us(key: &str) -> Option<&'static str> {
             "Lumina can't find the library “{name}” at {path}. \
             If it is on a drive, connect the drive. If you moved it, open it from its new place."
         }
+        "welcome.missing_title" => "Can't reach your library",
+        "welcome.missing_body_volume" => {
+            "The volume isn't mounted, or the folder has moved. Nothing has been changed."
+        }
+        "welcome.missing_body_folder" => {
+            "The folder isn't there, or its drive isn't connected. Nothing has been changed."
+        }
+        "welcome.missing_body_failed" => {
+            "The folder is there, but the library could not be opened. Your photos have not been changed."
+        }
+        "welcome.missing_retry" => "Retry",
+        "welcome.missing_checking" => "Checking…",
+        "welcome.missing_choose" => "Choose another library…",
+        "welcome.missing_back" => "Back",
         "sidebar.albums" => "ALBUMS",
         "albums.title" => "Albums",
         "albums.tab_smart" => "Smart Albums",

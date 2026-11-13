@@ -58,7 +58,32 @@ impl LuminaApp {
         if self.grid_state.is_none() {
             let plain = !cmd_or_ctrl && !keystroke.modifiers.alt && !keystroke.modifiers.shift;
             let focused = self.welcome.focused_recent;
+            // The unreachable-library state replaces the welcome content: Tab
+            // moves between Retry and Choose, ↵ presses the focused one (Retry
+            // by default), Esc goes Back, and hidden controls take no keys.
+            let missing = self.welcome.missing.is_some();
             match key {
+                "tab" if missing && !cmd_or_ctrl && !keystroke.modifiers.alt => {
+                    // Two buttons: either direction toggles.
+                    self.welcome.missing_focus = Some(match self.welcome.missing_focus {
+                        Some(index) => 1 - index,
+                        None if keystroke.modifiers.shift => 1,
+                        None => 0,
+                    });
+                    cx.notify();
+                }
+                "enter" if missing && plain => match self.welcome.missing_focus {
+                    Some(1) => self.pick_folder_dialog(cx),
+                    _ => self.retry_missing_library(cx),
+                },
+                // Pictures (⇧↵), the sample (⌥↵) and the recents' keys
+                // belong to controls this state hides.
+                "enter" | "up" | "down" | "backspace" | "delete" if missing => {}
+                k if missing && k.eq_ignore_ascii_case("i") && cmd_or_ctrl => {}
+                // Esc always goes Back to the welcome screen (and its recents).
+                "escape" if missing && self.error_message.is_none() => {
+                    self.leave_missing_library(cx)
+                }
                 "enter"
                     if keystroke.modifiers.shift && !cmd_or_ctrl && !keystroke.modifiers.alt =>
                 {

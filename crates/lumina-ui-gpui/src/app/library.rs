@@ -3,8 +3,9 @@ use lumina_core::{
     Album, EngineEvent, ExportPreset, LuminaEngine, MediaId, MediaItem, SmartAlbum, SystemAlbum,
 };
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::app::history::NavigationSnapshot;
@@ -51,6 +52,26 @@ const SEEK_FRAME_TOLERANCE_SECS: f64 = 0.016;
 
 /// The action an error banner's Retry re-runs.
 pub type ErrorRetry = fn(&mut LuminaApp, &mut Context<LuminaApp>);
+
+/// Opens the engine for a library folder: the IO half of opening a library,
+/// safe to run on a background thread (it touches no app state).
+pub(crate) fn open_engine(
+    path: &Path,
+) -> anyhow::Result<(
+    Arc<LuminaEngine>,
+    impl IntoIterator<Item = EngineEvent> + Send + 'static,
+)> {
+    // Tests must never write the user's real config or catalogs: they keep
+    // the catalog inside the (temporary) library folder instead.
+    #[cfg(not(test))]
+    return LuminaEngine::open(path.to_path_buf());
+    #[cfg(test)]
+    LuminaEngine::open_with_paths(
+        path.to_path_buf(),
+        path.join("catalog.db"),
+        Some(path.join("cache")),
+    )
+}
 
 impl LuminaApp {
     pub fn handle_ui_message(&mut self, msg: UiMessage, cx: &mut Context<Self>) {
@@ -511,18 +532,7 @@ impl LuminaApp {
         self.close_compare(cx);
         self.drop_slideshow(cx);
 
-        // Tests must never write the user's real config or catalogs: they keep
-        // the catalog inside the (temporary) library folder instead.
-        #[cfg(not(test))]
-        let opened = LuminaEngine::open(path.clone());
-        #[cfg(test)]
-        let opened = LuminaEngine::open_with_paths(
-            path.clone(),
-            path.join("catalog.db"),
-            Some(path.join("cache")),
-        );
-
-        let (engine, rx) = match opened {
+        let (engine, rx) = match open_engine(&path) {
             Ok(res) => res,
             Err(e) => {
                 log::error!("failed to open library at {:?}: {e:?}", path);
@@ -530,6 +540,18 @@ impl LuminaApp {
                 return;
             }
         };
+        self.finish_open_library(path, engine, rx, cx);
+    }
+
+    /// The UI-thread half of opening a library: installs an engine that
+    /// [`open_engine`] opened (here or on the background executor).
+    pub(crate) fn finish_open_library(
+        &mut self,
+        path: PathBuf,
+        engine: Arc<LuminaEngine>,
+        rx: impl IntoIterator<Item = EngineEvent> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
         // Here, not earlier: a failed open keeps the current library and its
         // viewer. Not later: the old library's state tracks which video the
         // resume point belongs to.
@@ -552,7 +574,7 @@ impl LuminaApp {
         // Only a library that opened becomes the startup library and a recent.
         self.config.last_library_path = Some(path.clone());
         crate::app::recents::push_recent(&mut self.config.recent_libraries, &path);
-        self.welcome.missing = None;
+        self.welcome.set_missing(None);
         self.welcome.focused_recent = None;
         #[cfg(not(test))]
         if let Err(err) = self.config.save() {

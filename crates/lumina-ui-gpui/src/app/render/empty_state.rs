@@ -283,41 +283,11 @@ impl LuminaApp {
                     .flex_col()
                     .items_center()
                     .child(
-                        div()
-                            .debug_selector(|| "empty-state-glyph".to_string())
-                            .size(glyph)
-                            .rounded_full()
-                            .bg(theme::bg_2())
-                            .border_1()
-                            .border_color(theme::line())
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(render_icon(icon, px(20.0), theme::t2())),
+                        empty_glyph(glyph, icon, theme::t2())
+                            .debug_selector(|| "empty-state-glyph".to_string()),
                     )
-                    .child(
-                        div()
-                            .debug_selector(|| "empty-state-headline".to_string())
-                            .mt(px(14.0))
-                            .font_family(theme::FONT_DISPLAY)
-                            .text_size(px(18.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme::t1())
-                            .text_center()
-                            .children(text_marker("empty-state-headline", &title.clone().into()))
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .debug_selector(|| "empty-state-body".to_string())
-                            .mt(px(8.0))
-                            .text_size(px(12.5))
-                            .line_height(px(19.0))
-                            .text_color(theme::t2())
-                            .text_center()
-                            .children(text_marker("empty-state-body", &body.clone().into()))
-                            .child(body),
-                    )
+                    .child(empty_headline("empty-state-headline", title.into()))
+                    .child(empty_body("empty-state-body", body.into()))
                     .children(path.map(|path| {
                         div()
                             .mt(px(8.0))
@@ -458,31 +428,11 @@ impl LuminaApp {
         } else {
             "empty-secondary"
         };
-        let (button, ink) = if primary {
-            let button = theme::control_primary(id).font_weight(FontWeight::SEMIBOLD);
-            (button, theme::on_accent())
-        } else {
-            (
-                theme::control(id).border_color(theme::line_2()),
-                theme::t1(),
-            )
-        };
         let height = match size {
             EmptySize::Hero if primary => px(40.0),
             _ => px(34.0),
         };
-        button
-            .debug_selector(move || id.to_string())
-            .h(height)
-            .px(px(14.0))
-            .gap(px(7.0))
-            .rounded(theme::RADIUS_LG)
-            .text_size(px(12.5))
-            .role(Role::Button)
-            .aria_label(label.clone())
-            .children(icon.map(|icon| render_icon(icon, px(14.0), ink)))
-            .children(text_marker(id, &label.clone().into()))
-            .child(label)
+        empty_button(id, primary, label.into(), icon, height)
             .on_click(cx.listener(move |this, _event, _window, cx| {
                 this.perform_empty_action(action.clone(), cx);
             }))
@@ -520,4 +470,79 @@ impl LuminaApp {
         self.select_album(AlbumSelection::AllLibrary, cx);
         self.show_toast(crate::i18n::t("album.add_from_library_toast"), cx);
     }
+}
+
+/// The shell's round glyph: `bg_2` fill, `line` outline and a 20 px icon.
+/// Callers may restyle the fill and outline (the unreachable library's danger glyph).
+pub(crate) fn empty_glyph(size: Pixels, icon: Icon, ink: Rgba) -> Div {
+    div()
+        .size(size)
+        .flex_none()
+        .rounded_full()
+        .bg(theme::bg_2())
+        .border_1()
+        .border_color(theme::line())
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(render_icon(icon, px(20.0), ink))
+}
+
+/// The shell's headline: Inter Tight 18/600, centred, 14 px under the glyph.
+pub(crate) fn empty_headline(selector: &'static str, title: SharedString) -> Div {
+    div()
+        .debug_selector(move || selector.to_string())
+        .mt(px(14.0))
+        .font_family(theme::FONT_DISPLAY)
+        .text_size(px(18.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme::t1())
+        .text_center()
+        .children(text_marker(selector, &title))
+        .child(title)
+}
+
+/// The shell's body: 12.5/19 `t2`, centred.
+pub(crate) fn empty_body(selector: &'static str, body: SharedString) -> Div {
+    div()
+        .debug_selector(move || selector.to_string())
+        .mt(px(8.0))
+        .text_size(px(12.5))
+        .line_height(px(19.0))
+        .text_color(theme::t2())
+        .text_center()
+        .children(text_marker(selector, &body))
+        .child(body)
+}
+
+/// The shell's button: accent primary or `line_2` secondary, 12.5 text, an
+/// optional 14 px leading icon. `id` is also the selector; callers add the click.
+pub(crate) fn empty_button(
+    id: &'static str,
+    primary: bool,
+    label: SharedString,
+    icon: Option<Icon>,
+    height: Pixels,
+) -> Stateful<Div> {
+    let (button, ink) = if primary {
+        let button = theme::control_primary(id).font_weight(FontWeight::SEMIBOLD);
+        (button, theme::on_accent())
+    } else {
+        (
+            theme::control(id).border_color(theme::line_2()),
+            theme::t1(),
+        )
+    };
+    button
+        .debug_selector(move || id.to_string())
+        .h(height)
+        .px(px(14.0))
+        .gap(px(7.0))
+        .rounded(theme::RADIUS_LG)
+        .text_size(px(12.5))
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .children(icon.map(|icon| render_icon(icon, px(14.0), ink)))
+        .children(text_marker(id, &label))
+        .child(label)
 }

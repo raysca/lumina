@@ -1,6 +1,7 @@
 use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::missing_library::{missing_library_state, MissingLibraryProps};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
@@ -61,14 +62,17 @@ pub struct WelcomeProps {
     /// The sample photos are being written.
     pub sample_busy: bool,
     pub recents: Vec<RecentRow>,
-    /// The notice for a library that is not where it was.
-    pub missing_notice: Option<String>,
+    /// The library that is not where it was; replaces the welcome content.
+    pub missing: Option<MissingLibraryProps>,
 }
 
 pub struct OnboardingView;
 
 impl OnboardingView {
-    pub fn render(props: WelcomeProps) -> impl IntoElement {
+    pub fn render(props: WelcomeProps) -> AnyElement {
+        if let Some(missing) = props.missing {
+            return missing_library_state(missing);
+        }
         let WelcomeProps {
             on_open,
             on_import_new,
@@ -77,120 +81,121 @@ impl OnboardingView {
             on_sample,
             sample_busy,
             recents,
-            missing_notice,
+            missing: _,
         } = props;
-        welcome_column().child(
-            div()
-                .id("welcome-column")
-                .debug_selector(|| "welcome-column".to_string())
-                .w(px(520.0))
-                .flex()
-                .flex_col()
-                .items_start()
-                .gap_6()
-                .child(logo().debug_selector(|| "welcome-logo".to_string()))
-                .children(missing_notice.map(missing_library_notice))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_3xl()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(t("welcome.title")),
-                        )
-                        .child(
-                            div()
-                                .text_base()
-                                .text_color(theme::t2())
-                                .child(t("welcome.intro")),
-                        ),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .flex_col()
-                        .gap_4()
-                        .child(feature(
-                            Icon::Folder,
-                            t("welcome.in_place_title"),
-                            t("welcome.in_place_body"),
-                        ))
-                        .child(feature(
-                            Icon::Check,
-                            t("welcome.originals_title"),
-                            t("welcome.originals_body"),
-                        ))
-                        .child(feature(
-                            Icon::Database,
-                            t("welcome.catalog_title"),
-                            t("welcome.catalog_body"),
-                        )),
-                )
-                .when(!recents.is_empty(), |column| {
-                    column.child(recent_libraries(recents))
-                })
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .flex_row()
-                        .gap_3()
-                        .child(
-                            button("welcome-open-btn", t("welcome.open_existing"), true)
-                                .child(shortcut_hint("welcome-open-key", "↵"))
-                                .tooltip(theme::tooltip_label(format!(
-                                    "{} (↵)",
-                                    t("welcome.open_existing")
-                                )))
-                                .on_click(on_open),
-                        )
-                        .child(
-                            button("welcome-import-new-btn", t("welcome.import_new"), false)
-                                .child(shortcut_hint("welcome-import-new-key", "⇧⌘I"))
-                                .tooltip(theme::tooltip_label(format!(
-                                    "{} (⇧⌘I)",
-                                    t("welcome.import_new")
-                                )))
-                                .on_click(on_import_new),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .gap_6()
-                        .child(text_link(
-                            "welcome-sample-btn",
-                            Role::Button,
-                            if sample_busy {
-                                t("welcome.sample_preparing")
-                            } else {
-                                t("welcome.sample")
-                            },
-                            ("welcome-sample-key", "⌥↵"),
-                            on_sample,
-                        ))
-                        .children(has_desktop_pics.then(|| {
-                            text_link(
-                                "welcome-pictures-link",
-                                Role::Link,
-                                t("welcome.use_pictures"),
-                                ("welcome-pictures-key", "⇧↵"),
-                                on_pick_desktop_pics,
+        welcome_column()
+            .child(
+                div()
+                    .id("welcome-column")
+                    .debug_selector(|| "welcome-column".to_string())
+                    .w(px(520.0))
+                    .flex()
+                    .flex_col()
+                    .items_start()
+                    .gap_6()
+                    .child(logo().debug_selector(|| "welcome-logo".to_string()))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_3xl()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(t("welcome.title")),
                             )
-                        })),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::t2())
-                        .child(t("welcome.footer")),
-                ),
-        )
+                            .child(
+                                div()
+                                    .text_base()
+                                    .text_color(theme::t2())
+                                    .child(t("welcome.intro")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(feature(
+                                Icon::Folder,
+                                t("welcome.in_place_title"),
+                                t("welcome.in_place_body"),
+                            ))
+                            .child(feature(
+                                Icon::Check,
+                                t("welcome.originals_title"),
+                                t("welcome.originals_body"),
+                            ))
+                            .child(feature(
+                                Icon::Database,
+                                t("welcome.catalog_title"),
+                                t("welcome.catalog_body"),
+                            )),
+                    )
+                    .when(!recents.is_empty(), |column| {
+                        column.child(recent_libraries(recents))
+                    })
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_row()
+                            .gap_3()
+                            .child(
+                                button("welcome-open-btn", t("welcome.open_existing"), true)
+                                    .child(shortcut_hint("welcome-open-key", "↵"))
+                                    .tooltip(theme::tooltip_label(format!(
+                                        "{} (↵)",
+                                        t("welcome.open_existing")
+                                    )))
+                                    .on_click(on_open),
+                            )
+                            .child(
+                                button("welcome-import-new-btn", t("welcome.import_new"), false)
+                                    .child(shortcut_hint("welcome-import-new-key", "⇧⌘I"))
+                                    .tooltip(theme::tooltip_label(format!(
+                                        "{} (⇧⌘I)",
+                                        t("welcome.import_new")
+                                    )))
+                                    .on_click(on_import_new),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap_6()
+                            .child(text_link(
+                                "welcome-sample-btn",
+                                Role::Button,
+                                if sample_busy {
+                                    t("welcome.sample_preparing")
+                                } else {
+                                    t("welcome.sample")
+                                },
+                                ("welcome-sample-key", "⌥↵"),
+                                on_sample,
+                            ))
+                            .children(has_desktop_pics.then(|| {
+                                text_link(
+                                    "welcome-pictures-link",
+                                    Role::Link,
+                                    t("welcome.use_pictures"),
+                                    ("welcome-pictures-key", "⇧↵"),
+                                    on_pick_desktop_pics,
+                                )
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme::t2())
+                            .child(t("welcome.footer")),
+                    ),
+            )
+            .into_any_element()
     }
 }
 
@@ -226,27 +231,6 @@ fn text_link(
         .on_click(on_click)
         .child(label)
         .child(shortcut_hint(hint_id, keys))
-}
-
-/// The last or chosen library is not where it was.
-fn missing_library_notice(message: String) -> impl IntoElement {
-    div()
-        .id("welcome-missing-library")
-        .debug_selector(|| "welcome-missing-library".to_string())
-        .role(Role::Alert)
-        .aria_label(message.clone())
-        .w_full()
-        .flex()
-        .flex_row()
-        .items_start()
-        .gap_3()
-        .p_3()
-        .rounded(theme::RADIUS_LG)
-        .bg(theme::danger_soft())
-        .border_1()
-        .border_color(theme::danger_border())
-        .child(render_icon(Icon::TriangleAlert, px(15.0), theme::danger()))
-        .child(div().text_sm().text_color(theme::t1()).child(message))
 }
 
 /// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets.

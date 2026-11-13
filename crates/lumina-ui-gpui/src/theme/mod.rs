@@ -71,6 +71,9 @@ tokens_alpha! {
     accent_outline = 0xE9A23B59;
     /// Danger wash: error banners and panels.
     danger_soft = 0xE8584F1F;
+    /// Danger-tinted 1 px outlines: a failed card or danger row, and the
+    /// unreachable-library glyph (Design 10).
+    danger_outline = 0xE8584F4D;
 }
 
 // Colours the app needs that the design has no variable for.
@@ -224,6 +227,7 @@ mod tests {
             ("accent-outline", accent_outline(), 0xE9A23B59),
             ("danger", danger(), 0xE8584FFF),
             ("danger-soft", danger_soft(), 0xE8584F1F),
+            ("danger_outline", danger_outline(), 0xE8584F4D),
             ("positive", positive(), 0x5BC27AFF),
             ("warn", warn(), 0xE0A33BFF),
             ("on_accent", on_accent(), 0x1A1206FF),
