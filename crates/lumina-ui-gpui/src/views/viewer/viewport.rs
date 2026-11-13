@@ -342,8 +342,9 @@ impl ViewerViewport {
                             .overflow_hidden()
                             .bg(theme::bg_media())
                             .into_any_element()
-                    } else if is_failed {
+                    } else if is_failed && !is_missing {
                         // The decode gave up: say so, and how to see the file.
+                        // A missing file's card says why instead.
                         div()
                             .debug_selector(|| "viewer-stage-failed".to_string())
                             .size_full()
@@ -449,28 +450,7 @@ impl ViewerViewport {
                     ),
             )
             // The cached thumbnail may still show; say why it goes no further.
-            .when(is_missing, |d| {
-                d.child(
-                    div()
-                        .debug_selector(|| "viewer-missing".to_string())
-                        .absolute()
-                        .bottom(px(24.0))
-                        .px_3()
-                        .py_2()
-                        .rounded(theme::RADIUS_MD)
-                        .bg(theme::bg_float())
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(render_icon(Icon::TriangleAlert, px(14.0), theme::danger()))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(theme::t1())
-                                .child("The original file is missing."),
-                        ),
-                )
-            })
+            .children(super::missing::render(this, cx))
     }
 }
 

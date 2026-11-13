@@ -1123,6 +1123,7 @@ impl LuminaApp {
             self.item_flags = engine.get_flags_map();
             self.item_captions = engine.get_captions_map();
             self.missing_items = engine.get_missing_ids();
+            self.sync_missing_card();
             let months = engine.get_timeline_buckets("month");
             self.month_header.counts = months
                 .iter()

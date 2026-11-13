@@ -335,6 +335,7 @@ impl LuminaApp {
         // Closing the viewer (the Back button) discards an open draft.
         self.discard_edit_draft();
         self.viewer_state.reset();
+        self.missing_card.focus = None;
         if !self.video.in_pip {
             self.stop_video_player();
         }

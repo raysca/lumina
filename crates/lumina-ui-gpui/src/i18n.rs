@@ -902,6 +902,22 @@ fn en_us(key: &str) -> Option<&'static str> {
         "grid.preview_failed" => "Lumina can't show a preview of this file. Rescan to try again.",
         "viewer.preview_failed" => "Lumina can't show a preview of this file.",
         "viewer.open_default_hint" => "Press O to open it in its default app.",
+        "viewer.missing_preview" => {
+            "The original file is missing — you're looking at a cached preview."
+        }
+        "viewer.missing_no_preview" => "The original file is missing.",
+        "viewer.drive_preview" => "“{name}” is disconnected — you're looking at a cached preview.",
+        "viewer.drive_no_preview" => "“{name}” is disconnected.",
+        "viewer.missing_title" => "Original not available",
+        "viewer.missing_body_drive" => {
+            "Editing, export and full-size view need the original file. Reconnect the drive, or point Lumina at where the file lives now."
+        }
+        "viewer.missing_body" => {
+            "Editing, export and full-size view need the original file. Point Lumina at where the file lives now."
+        }
+        "viewer.missing_locate" => "Locate file…",
+        "viewer.missing_keep" => "Keep preview",
+        "viewer.missing_dismiss" => "Dismiss",
         "viewer.info_panel" => "Info",
         "view.all_media" => "All Media",
         "view.untagged" => "Untagged",

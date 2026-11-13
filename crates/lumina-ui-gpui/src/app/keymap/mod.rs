@@ -344,6 +344,11 @@ impl LuminaApp {
             return;
         }
 
+        // The viewer's "Original not available" card: Tab and a focused ↵.
+        if self.handle_missing_card_key(keystroke, cx) {
+            return;
+        }
+
         // Enter/Return: Close viewer if open, or open selected item
         if key == "enter" || key == "return" {
             if self.is_fullscreen_viewer {

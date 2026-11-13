@@ -482,6 +482,7 @@ impl LuminaApp {
             self.discard_edit_draft();
         }
         self.selected_item = Some(item.clone());
+        self.sync_missing_card();
         self.set_viewer_image(None);
         self.tag_input_active = false;
         self.tag_input_buffer.clear();

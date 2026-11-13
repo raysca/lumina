@@ -546,6 +546,8 @@ pub struct LuminaApp {
     pub item_captions: HashMap<MediaId, String>,
     /// Items whose file is gone from disk (badged in the grid).
     pub missing_items: HashSet<MediaId>,
+    /// The viewer's "Original not available" card (Design 10).
+    pub(crate) missing_card: crate::app::missing::MissingCardState,
     /// Import dialog and a running copy.
     pub(crate) import: crate::app::import::ImportState,
     /// Network video import dialog and running download.
@@ -750,6 +752,7 @@ impl LuminaApp {
             item_flags: HashMap::new(),
             item_captions: HashMap::new(),
             missing_items: HashSet::new(),
+            missing_card: Default::default(),
             import: Default::default(),
             network_import: Default::default(),
             jobs: Default::default(),

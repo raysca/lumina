@@ -96,8 +96,13 @@ tokens! {
     focus_ring = 0xAAAAA8;
     /// The album selection bar's fill (Design 07): a dark amber band.
     accent_surface = 0x17120B;
-    /// The album selection bar's bottom border (Design 07).
+    /// The album selection bar's bottom border (Design 07), and the line
+    /// of the viewer's original-offline bar (Design 10).
     warn_border = 0x3A2E1A;
+    /// Fill of the viewer's original-offline bar (Design 10).
+    warn_surface = 0x1C1708;
+    /// Text on a `warn_surface` fill.
+    on_warn = 0xE8D7B0;
     /// Border of a danger panel or button. Invalid-value outlines use `danger`.
     danger_border = 0x45211E;
     /// Fill of the global error banner (Design 10).
@@ -240,6 +245,8 @@ mod tests {
             ("on_danger", on_danger(), 0xF0C4C0FF),
             ("accent_surface", accent_surface(), 0x17120BFF),
             ("warn_border", warn_border(), 0x3A2E1AFF),
+            ("warn_surface", warn_surface(), 0x1C1708FF),
+            ("on_warn", on_warn(), 0xE8D7B0FF),
             ("chart_grey", chart_grey(), 0x4E4E5CFF),
         ] {
             assert_eq!(hex(token), want, "{name} must equal its lumina.pen value");

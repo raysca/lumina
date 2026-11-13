@@ -11,6 +11,7 @@ pub mod chapter_labels;
 pub mod crop_overlay;
 pub mod edit_bar;
 pub mod filmstrip;
+mod missing;
 pub mod scrub_preview;
 pub mod stage_controls;
 pub mod top_bar;
