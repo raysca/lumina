@@ -5,9 +5,10 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::smart_draft::{
-    field_icon, field_label, operator_label, DraftFocus, DraftRow, ValueKind,
+    field_icon, field_label, operator_label, rating_value_label, DraftFocus, DraftRow, ValueKind,
 };
 use crate::app::text_input::TextTarget;
+use crate::i18n::stars;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::LuminaApp;
@@ -148,6 +149,57 @@ pub(super) fn square_button(
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| on_click(this, cx)))
 }
 
+/// Five stars, filled up to the value, then "4 stars & up". A click sets the
+/// rating; with the control focused ←/→ step it (app/keymap/modals.rs).
+fn rating_stars(
+    i: usize,
+    row: &DraftRow,
+    focused: bool,
+    cx: &mut Context<LuminaApp>,
+) -> Stateful<Div> {
+    let value: i64 = row.text.parse().unwrap_or(0);
+    let buttons = (1..=5i64).map(|n| {
+        let (icon, color) = if n <= value {
+            (Icon::StarFilled, theme::accent())
+        } else {
+            (Icon::Star, theme::t3())
+        };
+        div()
+            .id(ElementId::Name(format!("album-rule-star-{i}-{n}").into()))
+            .debug_selector(move || format!("album-rule-star-{i}-{n}"))
+            .role(Role::Button)
+            .aria_label(stars(n))
+            .cursor_pointer()
+            .child(render_icon(icon, px(15.0), color))
+            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                // The value control's own click would only refocus it.
+                cx.stop_propagation();
+                this.set_draft_rating(i, n, cx);
+            }))
+    });
+    let sel = format!("album-rule-value-{i}");
+    row_control(div().id(ElementId::Name(sel.clone().into())))
+        .debug_selector(move || sel.clone())
+        .flex_1()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(10.0))
+        .border_1()
+        .border_color(ring(focused))
+        .child(div().flex().flex_row().gap(px(4.0)).children(buttons))
+        .child(
+            div()
+                .debug_selector(move || format!("album-rule-stars-label-{i}"))
+                .text_size(px(12.0))
+                .text_color(theme::t2())
+                .child(rating_value_label(&row.operator, &row.text)),
+        )
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            this.set_draft_focus(DraftFocus::Value(i), cx);
+        }))
+}
+
 pub(super) fn render_row(
     app: &LuminaApp,
     i: usize,
@@ -167,6 +219,9 @@ pub(super) fn render_row(
 
     let value: AnyElement = match kind {
         ValueKind::None => div().flex_1().into_any_element(),
+        ValueKind::Choice(_) if row.field == RuleField::Rating => {
+            rating_stars(i, row, focus == DraftFocus::Value(i), cx).into_any_element()
+        }
         ValueKind::Choice(_) | ValueKind::Tags => {
             let label = if row.text.is_empty() {
                 kind.placeholder().to_string()

@@ -65,6 +65,15 @@ pub fn smart_albums(n: usize) -> String {
     }
 }
 
+/// A star count: "1 star", "4 stars" (a rating star's aria label).
+pub fn stars(n: i64) -> String {
+    if n == 1 {
+        t("smart_album.star_one")
+    } else {
+        t("smart_album.stars_other").replace("{n}", &n.to_string())
+    }
+}
+
 /// The Tags page's count: "1 keyword", "612 keywords".
 pub fn keywords(n: usize) -> String {
     if n == 1 {
@@ -681,6 +690,10 @@ fn en_us(key: &str) -> Option<&'static str> {
         "smart_album.import_failed" => "Could not import smart album rules",
         "smart_album.imported" => "Imported “{title}”",
         "smart_album.untitled" => "Untitled Smart Album",
+        "smart_album.star_one" => "1 star",
+        "smart_album.stars_other" => "{n} stars",
+        "smart_album.rating_at_least" => "{stars} & up",
+        "smart_album.rating_at_most" => "{stars} or fewer",
         "smart_album.close" => "Close without saving (Esc)",
         "smart_album.empty_title" => "Nothing matches these rules yet",
         "smart_album.empty_body" => "This album fills itself. As soon as a photo matches, it appears here.",

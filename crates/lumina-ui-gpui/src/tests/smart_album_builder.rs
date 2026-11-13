@@ -260,9 +260,8 @@ fn editing_restores_rows_and_updates_the_album() {
         assert_eq!(app.album_draft.match_count, Some(1));
     });
 
-    // Stars: ★★★★ → ★ (option 0), then OK.
-    click(vcx, "album-rule-value-0");
-    click(vcx, "album-builder-option-0");
+    // Stars: four → one (click the first star), then OK.
+    click(vcx, "album-rule-star-0-1");
     click(vcx, "album-builder-save");
     let saved = engine.list_smart_albums();
     assert_eq!(saved.len(), 1, "editing updates, never duplicates");
@@ -497,6 +496,91 @@ fn condition_rows_match_design() {
         f32::from(second.top() - first.bottom()),
         10.0,
         "rows are 10 apart with no divider between them"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn rating_stars_click_and_arrow_keys() {
+    let (dir, engine, _ids) = library("sab_rating_stars");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    click(vcx, "album-rule-field-0");
+    pick_option(vcx, &view, DraftFocus::Field(0), "Rating");
+    click(vcx, "album-rule-op-0");
+    pick_option(vcx, &view, DraftFocus::Operator(0), "is at least");
+    render_ui(vcx);
+    for n in 1..=5 {
+        assert!(
+            vcx.debug_bounds(leak(format!("album-rule-star-0-{n}")))
+                .is_some(),
+            "the Rating row shows star {n}"
+        );
+    }
+
+    click(vcx, "album-rule-star-0-4");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows[0].text, "4", "star 4 sets the value");
+        assert_eq!(
+            app.album_draft.focus,
+            DraftFocus::Value(0),
+            "the stars take focus"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("album-rule-stars-label-0").is_some(),
+        "the stars are followed by their label"
+    );
+    assert_eq!(
+        crate::app::smart_draft::rating_value_label(&RuleOperator::AtLeast, "4"),
+        "4 stars & up"
+    );
+    // The AccessKit tree is not visible to the harness, so the star buttons'
+    // aria label is checked through the function that builds it.
+    assert_eq!(crate::i18n::stars(4), "4 stars");
+    assert_eq!(crate::i18n::stars(1), "1 star");
+
+    keystrokes(vcx, "space enter down");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.popup, None, "a Rating value opens no popup");
+        assert_eq!(app.album_draft.rows[0].text, "4");
+    });
+    keystrokes(vcx, "left");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows[0].text, "3", "← lowers the rating")
+    });
+    keystrokes(vcx, "right right right right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.rows[0].text, "5", "→ stops at 5")
+    });
+    keystrokes(vcx, "left left");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.draft_rules().unwrap()[0],
+            SmartAlbumRule {
+                field: RuleField::Rating,
+                operator: RuleOperator::AtLeast,
+                value: RuleValue::Integer(3),
+            },
+            "the rule the builder saves is unchanged"
+        )
+    });
+    keystrokes(vcx, "secondary-enter");
+    let saved = engine.list_smart_albums();
+    assert_eq!(saved.len(), 1, "⌘↵ saves the album");
+    // The catalog's untagged JSON reads a whole number back as Number.
+    assert_eq!(
+        saved[0].rules[0],
+        SmartAlbumRule {
+            field: RuleField::Rating,
+            operator: RuleOperator::AtLeast,
+            value: RuleValue::Number(3.0),
+        },
+        "the catalog holds Rating at least 3"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

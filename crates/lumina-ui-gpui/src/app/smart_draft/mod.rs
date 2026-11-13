@@ -9,7 +9,7 @@ use lumina_core::{
 };
 
 mod labels;
-pub use labels::{field_icon, field_label, match_label, operator_label};
+pub use labels::{field_icon, field_label, match_label, operator_label, rating_value_label};
 
 /// Fields offered in the field popup, in Photos-like order. Older albums may
 /// hold other fields (Year, City…); those still display, convert and save.

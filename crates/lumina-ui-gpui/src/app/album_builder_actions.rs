@@ -234,6 +234,10 @@ impl LuminaApp {
                     .map(|op| operator_label(&row.field, op).to_string())
                     .collect()
             }),
+            // Rating has no popup: its stars and ←/→ set it.
+            DraftFocus::Value(i) if rows.get(i).is_some_and(|r| r.field == RuleField::Rating) => {
+                Vec::new()
+            }
             DraftFocus::Value(i) => match rows.get(i).map(DraftRow::kind) {
                 Some(ValueKind::Choice(options)) => {
                     options.iter().map(|(_, label)| label.to_string()).collect()
@@ -398,6 +402,32 @@ impl LuminaApp {
                 }
             }
         }
+    }
+
+    /// Sets row `i`'s rating to `n` stars (a star click) and focuses it.
+    pub fn set_draft_rating(&mut self, i: usize, n: i64, cx: &mut Context<Self>) {
+        if let Some(row) = self.album_draft.rows.get_mut(i) {
+            row.text = n.clamp(1, 5).to_string();
+        }
+        self.set_draft_focus(DraftFocus::Value(i), cx);
+        self.refresh_draft_preview();
+    }
+
+    /// ←/→ on a focused Rating value; false when the focus is elsewhere.
+    pub fn step_draft_rating(&mut self, delta: i64, cx: &mut Context<Self>) -> bool {
+        let DraftFocus::Value(i) = self.album_draft.focus else {
+            return false;
+        };
+        let Some(row) = self.album_draft.rows.get(i) else {
+            return false;
+        };
+        if row.field != RuleField::Rating {
+            return false;
+        }
+        // An imported rating outside 1..5 is drawn as-is and clamped here, on the first ←/→.
+        let n = row.text.parse::<i64>().unwrap_or(1) + delta;
+        self.set_draft_rating(i, n, cx);
+        true
     }
 
     /// With no rows, `Add(0)` is the empty state's + and inserts at 0.
