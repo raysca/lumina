@@ -74,6 +74,8 @@ pub enum CommandId {
     Videos4k,
     /// Removes every filter token from the search, keeping its text.
     ClearFilters,
+    /// Empties the search query; shown only while there is one.
+    ClearSearch,
     /// Opens the Add filter menu under the header's Filter button.
     AddFilter,
     /// Sets the selection's rating; 0 clears it.
@@ -209,7 +211,7 @@ impl Command {
             ViewerZoom(ViewerZoomPreset::Fit) => Icon::Minimize,
             ViewerZoom(_) => Icon::Maximize,
             QuickFilter(_) | Videos4k => Icon::Search,
-            ClearFilters => Icon::X,
+            ClearFilters | ClearSearch => Icon::X,
             AddFilter => Icon::SlidersHorizontal,
             Rate(0) | RateMenu => Icon::Star,
             Rate(_) => Icon::StarFilled,
@@ -907,6 +909,12 @@ pub fn commands() -> &'static [Command] {
             keywords: "filter remove reset show everything all",
         },
         Command {
+            id: CommandId::ClearSearch,
+            key: "command.clear_search",
+            shortcut: "",
+            keywords: "search query empty reset remove all filters",
+        },
+        Command {
             id: CommandId::TogglePip,
             key: "command.toggle_pip",
             shortcut: "⌥P",
@@ -1248,6 +1256,7 @@ impl LuminaApp {
             }
             CommandId::ImportSmartAlbumRules => self.grid_state.is_some(),
             CommandId::ClearFilters => crate::app::search::query_has_filters(&self.search_query),
+            CommandId::ClearSearch => !self.search_query.trim().is_empty(),
             // Only in Videos (plain or 4K): elsewhere it would replace a
             // typed search with the 4K one.
             CommandId::Videos4k => self.videos_view(),
@@ -1679,6 +1688,7 @@ impl LuminaApp {
             CommandId::QuickFilter(token) => self.toggle_quick_filter(token, cx),
             CommandId::Videos4k => self.toggle_videos_4k(cx),
             CommandId::ClearFilters => self.clear_quick_filters(cx),
+            CommandId::ClearSearch => self.clear_search(cx),
             CommandId::AddFilter => self.open_filter_menu(false, cx),
             CommandId::Rate(rating) => {
                 self.set_rating_selected(rating, cx);

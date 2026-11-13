@@ -806,7 +806,7 @@ fn ui_automation_empty_search_state_offers_a_clear_action() {
     assert!(vcx.debug_bounds("empty-state").is_some());
     assert!(
         vcx.debug_bounds("empty-primary").is_none(),
-        "v3 no-results offers the term chips, not extra buttons"
+        "no-results offers term chips and Clear all filters, never a primary button"
     );
 
     click(vcx, "empty-search-term-0");

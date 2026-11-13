@@ -64,6 +64,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "rotate-ccw",
     "rotate-cw",
     "search",
+    "search-x",
     "settings",
     "share-2",
     "sliders-horizontal",

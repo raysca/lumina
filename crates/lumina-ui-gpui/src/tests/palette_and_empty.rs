@@ -160,6 +160,11 @@ fn empty_search_chips_keep_quoted_terms_whole() {
         vcx.debug_bounds("empty-search-term-2").is_none(),
         "a quoted phrase must be one chip, not one per word"
     );
+    assert!(
+        vcx.debug_bounds("empty-search-term-0-text:Drop “tag:new york”")
+            .is_some(),
+        "a quoted term's own quotes must not nest inside the chip's “…”"
+    );
 
     click(vcx, "empty-search-term-1");
     view.update(vcx, |app, _| {
@@ -401,4 +406,86 @@ fn palette_go_to_opens_screenshots_places_and_missing() {
         });
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn empty_search_drop_chips_and_clear_all() {
+    let (temp_dir, engine) = seed_library("empty_search_clear_all", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let palette_titles = |vcx: &mut gpui::VisualTestContext| {
+        focus_app(vcx, &view);
+        keystrokes(vcx, "secondary-k c l e a r space s e a r c h");
+        let titles: Vec<String> = view.update(vcx, |app, _| {
+            app.palette_rows().into_iter().map(|r| r.title).collect()
+        });
+        keystrokes(vcx, "escape");
+        titles
+    };
+
+    for (query, headline) in [
+        ("zzqx", "Nothing matches this filter"),
+        ("zzqx yyqx xxqx", "Nothing matches all three filters"),
+        ("zzqx yyqx", "Nothing matches both filters"),
+    ] {
+        view.update(vcx, |app, cx| app.set_search_query(query, cx));
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds(leak(format!("empty-state-headline-text:{headline}")))
+                .is_some(),
+            "{query:?} must read {headline:?}: the headline counts terms in words"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("empty-state-body-text:Try loosening one of them.")
+            .is_some(),
+        "two or more terms suggest loosening one"
+    );
+    assert!(
+        vcx.debug_bounds("empty-search-term-0-text:Drop “zzqx”")
+            .is_some(),
+        "each term chip reads Drop “term”"
+    );
+
+    click(vcx, "empty-secondary");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "Clear all filters must empty the query"
+        )
+    });
+
+    assert!(
+        !palette_titles(vcx).iter().any(|t| t == "Clear Search"),
+        "⌘K Clear Search is hidden while the query is empty"
+    );
+    view.update(vcx, |app, cx| app.set_search_query("zzqx yyqx", cx));
+    render_ui(vcx);
+    assert!(
+        palette_titles(vcx).iter().any(|t| t == "Clear Search"),
+        "⌘K offers Clear Search while there is a query"
+    );
+    run_palette_command(vcx, &view, "clear search");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "⌘K Clear Search must empty the query"
+        )
+    });
+
+    // Esc from the search field: hide suggestions, blur, then clear.
+    view.update(vcx, |app, cx| {
+        app.set_search_query("zzqx", cx);
+        app.inspector_open = false;
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-f escape escape escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "Esc from the search field must still clear the query"
+        )
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

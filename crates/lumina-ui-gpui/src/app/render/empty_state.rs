@@ -42,6 +42,7 @@ enum EmptyAction {
     Rescan,
     /// Drops one search term (as `tokenize_query` splits them) from the query.
     RemoveSearchTerm(usize),
+    ClearSearch,
 }
 
 /// What an empty view says and offers.
@@ -96,12 +97,25 @@ impl LuminaApp {
                 ..copy(Icon::Video, title, body)
             }
         } else if !search_terms.is_empty() {
-            // The chips are the only actions: removing one widens the search.
-            copy(
-                Icon::Search,
-                "No matches for these filters".into(),
-                "Remove a filter to widen the search:".into(),
-            )
+            // Each chip drops one term; Clear all filters drops them all.
+            // ponytail: no per-term counts or kind icons (plan 09 decisions).
+            let t = crate::i18n::t;
+            let (title, body) = match search_terms.len() {
+                1 => (t("search.empty_title_one"), t("search.empty_body_one")),
+                2 => (t("search.empty_title_two"), t("search.empty_body_many")),
+                n => {
+                    let n = match n {
+                        3..=10 => t(&format!("number.{n}")),
+                        _ => n.to_string(),
+                    };
+                    let title = t("search.empty_title_many").replace("{n}", &n);
+                    (title, t("search.empty_body_many"))
+                }
+            };
+            EmptyCopy {
+                secondary: Some((t("search.empty_clear_all"), EmptyAction::ClearSearch)),
+                ..copy(Icon::SearchX, title, body)
+            }
         } else {
             match &self.selection {
                 AlbumSelection::Trash => copy(
@@ -240,6 +254,7 @@ impl LuminaApp {
                 EmptyAction::AddFromLibrary => Some(Icon::Library),
                 EmptyAction::EditSmartAlbum(_) => Some(Icon::SlidersHorizontal),
                 EmptyAction::DeleteSmartAlbum(_) => Some(Icon::Trash),
+                EmptyAction::ClearSearch => Some(Icon::X),
                 _ => None,
             };
             self.empty_action_button(primary, label, icon, action, size, cx)
@@ -358,7 +373,7 @@ impl LuminaApp {
                                 )),
                         )
                     })
-                    // Each search term is a chip; removing one widens the search.
+                    // Each search term is a Drop chip; clicking one removes it.
                     .when(!search_terms.is_empty(), |col| {
                         col.child(
                             div()
@@ -369,27 +384,41 @@ impl LuminaApp {
                                 .justify_center()
                                 .gap_1p5()
                                 .children(search_terms.iter().enumerate().map(|(i, term)| {
+                                    // Display only: the term's own quotes would nest in “…”.
+                                    let shown = term.replace('"', "");
+                                    let label = SharedString::from(
+                                        crate::i18n::t("search.empty_drop")
+                                            .replace("{term}", &shown),
+                                    );
+                                    let tooltip = crate::i18n::t("search.empty_drop_tooltip")
+                                        .replace("{term}", &shown);
                                     div()
                                         .id(("empty-search-term", i as u64))
-                                        .h(px(24.0))
-                                        .px(px(10.0))
+                                        .debug_selector(move || format!("empty-search-term-{i}"))
+                                        .h(px(28.0))
+                                        .px(px(11.0))
                                         .rounded_full()
+                                        .bg(theme::accent_soft())
                                         .border_1()
-                                        .border_color(theme::line_2())
-                                        .bg(theme::bg_3())
-                                        .hover(|s| s.bg(theme::bg_3()))
-                                        .text_xs()
-                                        .text_color(theme::t1())
-                                        .cursor_pointer()
+                                        .border_color(theme::accent_outline())
                                         .flex()
                                         .flex_row()
                                         .items_center()
-                                        .debug_selector(move || format!("empty-search-term-{i}"))
-                                        .tooltip(theme::tooltip_label(format!("Remove {term}")))
-                                        .font_family(theme::FONT_MONO)
-                                        .gap_1p5()
-                                        .child(term.clone())
-                                        .child(render_icon(Icon::X, px(10.0), theme::t1()))
+                                        .gap(px(6.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme::accent())
+                                        .cursor_pointer()
+                                        .tooltip(theme::tooltip_label(tooltip))
+                                        .role(Role::Button)
+                                        .aria_label(label.clone())
+                                        .child(render_icon(Icon::X, px(12.0), theme::accent()))
+                                        .children(cfg!(test).then(|| {
+                                            let text = label.clone();
+                                            div().absolute().size_0().debug_selector(move || {
+                                                format!("empty-search-term-{i}-text:{text}")
+                                            })
+                                        }))
+                                        .child(label)
                                         .on_click(cx.listener(
                                             move |this, _e: &ClickEvent, _w, cx| {
                                                 this.perform_empty_action(
@@ -479,6 +508,7 @@ impl LuminaApp {
                 let query = rest.join(" ");
                 self.set_search_query(&query, cx);
             }
+            EmptyAction::ClearSearch => self.clear_search(cx),
         }
     }
 

@@ -76,6 +76,7 @@ pub enum Icon {
     CornerDownRight,
     Merge,
     Library,
+    SearchX,
 }
 
 impl Icon {
@@ -156,6 +157,7 @@ impl Icon {
         Icon::CornerDownRight,
         Icon::Merge,
         Icon::Library,
+        Icon::SearchX,
     ];
 
     pub fn path(self) -> &'static str {
@@ -233,6 +235,7 @@ impl Icon {
             Self::CornerDownRight => "icons/corner-down-right.svg",
             Self::Merge => "icons/merge.svg",
             Self::Library => "icons/library.svg",
+            Self::SearchX => "icons/search-x.svg",
         }
     }
 }

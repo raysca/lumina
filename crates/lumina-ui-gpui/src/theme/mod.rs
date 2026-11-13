@@ -66,6 +66,8 @@ tokens! {
 tokens_alpha! {
     /// Accent wash: selected cards, drag marquee.
     accent_soft = 0xE9A23B26;
+    /// Accent-tinted 1 px outlines: the empty search's Drop chips.
+    accent_outline = 0xE9A23B59;
     /// Danger wash: error banners and panels.
     danger_soft = 0xE8584F1F;
 }
@@ -214,6 +216,7 @@ mod tests {
             ("t2", t2(), 0x93939EFF),
             ("accent", accent(), 0xE9A23BFF),
             ("accent-soft", accent_soft(), 0xE9A23B26),
+            ("accent-outline", accent_outline(), 0xE9A23B59),
             ("danger", danger(), 0xE8584FFF),
             ("danger-soft", danger_soft(), 0xE8584F1F),
             ("positive", positive(), 0x5BC27AFF),
