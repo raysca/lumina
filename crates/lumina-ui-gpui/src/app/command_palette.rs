@@ -1242,7 +1242,9 @@ impl LuminaApp {
             CommandId::AddFromLibrary => self.empty_album_shown(),
             CommandId::RenameAlbum | CommandId::DeleteAlbum => self.palette_album().is_some(),
             // The panel is hidden on these pages; the toggle does nothing.
-            CommandId::ToggleInspector => !self.non_media_page_shown(),
+            CommandId::ToggleInspector => {
+                !self.non_media_page_shown() && !self.duplicates_review_shown()
+            }
             // Already there.
             CommandId::OpenTagManager => !self.tags_page_shown(),
             CommandId::SortTags => self.tags_page_shown(),

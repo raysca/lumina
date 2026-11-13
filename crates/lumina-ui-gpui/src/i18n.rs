@@ -47,6 +47,15 @@ pub fn items(n: usize) -> String {
     }
 }
 
+/// The duplicates review's group count: "1 group", "128 groups".
+pub fn duplicate_groups(n: usize) -> String {
+    if n == 1 {
+        t("duplicates.groups_one")
+    } else {
+        t("duplicates.groups_other").replace("{n}", &count(n))
+    }
+}
+
 /// The Albums overview's counts: "1 album", "24 albums".
 pub fn albums(n: usize) -> String {
     if n == 1 {
@@ -372,6 +381,34 @@ fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.tab_exact_hint" => "Files with identical content",
         "duplicates.tab_similar" => "Similar shots",
         "duplicates.tab_similar_hint" => "RAW + JPEG pairs and bursts (⌘K Show Similar Shots)",
+        "duplicates.review_title" => "Review Duplicates",
+        "duplicates.groups_one" => "1 group",
+        "duplicates.groups_other" => "{n} groups",
+        "duplicates.recoverable" => "{} recoverable",
+        "duplicates.copies" => "{} copies",
+        "duplicates.groups_head" => "GROUPS",
+        "duplicates.position" => "{} of {}",
+        "duplicates.group_position" => "group {} of {}",
+        "duplicates.groups_list" => "Duplicate groups",
+        "duplicates.kind_exact" => "Exact",
+        "duplicates.kind_exact_match" => "Exact match",
+        "duplicates.merge_groups_one" => "Merge 1 group",
+        "duplicates.merge_groups_other" => "Merge {n} groups",
+        "duplicates.merge_groups_hint" => "Keep one copy in every group and move the others to Recently Deleted",
+        "duplicates.merge_group" => "Merge group",
+        "duplicates.merge_group_hint" => "Keep the original and move the other copies to Recently Deleted",
+        "duplicates.prev" => "Previous group",
+        "duplicates.next" => "Next group",
+        "duplicates.original" => "ORIGINAL",
+        "duplicates.copy_n" => "COPY {}",
+        "duplicates.fact_size" => "File size",
+        "duplicates.fact_format" => "Format",
+        "duplicates.fact_edits" => "Edits",
+        "duplicates.fact_source" => "Source",
+        "duplicates.fact_captured" => "Captured",
+        "duplicates.fact_folder" => "Folder",
+        "duplicates.edited" => "Edited",
+        "duplicates.not_edited" => "None",
         "command.show_map" => "Show Map",
         "command.show_albums" => "Show Albums",
         "culling.delete_rejected_unavailable" => {

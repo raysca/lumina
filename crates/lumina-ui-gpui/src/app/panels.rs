@@ -38,8 +38,9 @@ impl LuminaApp {
 
     pub fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
         // The Albums overview and the Tags page hide the panel: a toggle
-        // there would flip and save a setting the user cannot see.
-        if self.non_media_page_shown() {
+        // there would flip and save a setting the user cannot see. So does
+        // Review Duplicates.
+        if self.non_media_page_shown() || self.duplicates_review_shown() {
             return;
         }
         if self.floating_inspector_window.is_some() {

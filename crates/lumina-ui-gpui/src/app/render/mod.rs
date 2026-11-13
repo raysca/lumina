@@ -544,9 +544,12 @@ impl Render for LuminaApp {
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
         // The Albums overview and the Tags page hold no media: the panel
         // would have nothing to show, so it stays hidden there (Info stays
-        // on for other views).
-        let inspector_shown =
-            self.inspector_open && !is_fullscreen_viewer && !self.non_media_page_shown();
+        // on for other views). Review Duplicates hides it too: the compare
+        // cards show each copy's facts.
+        let inspector_shown = self.inspector_open
+            && !is_fullscreen_viewer
+            && !self.non_media_page_shown()
+            && !self.duplicates_review_shown();
 
         let editing = self.edits.session.is_some();
         // Compare shows (not the viewer opened from it), or a slideshow

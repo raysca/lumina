@@ -55,11 +55,37 @@ pub struct StacksState {
     /// Bumped per read and per reset, so only the latest read lands.
     request: u64,
     pub scroll: UniformListScrollHandle,
+    /// The Exact copies review's group selection.
+    pub review: DuplicatesReview,
+}
+
+/// Which exact-copy group the review compares.
+#[derive(Default)]
+pub struct DuplicatesReview {
+    /// Index into `duplicate_groups`. Read through [`Self::selected`]: the
+    /// groups shrink after a merge, so the stored value may be past the end.
+    selected: usize,
+    pub scroll: UniformListScrollHandle,
+}
+
+impl DuplicatesReview {
+    /// The selected group, clamped to the last of `len` groups; None when
+    /// there are none.
+    pub fn selected(&self, len: usize) -> Option<usize> {
+        len.checked_sub(1).map(|last| self.selected.min(last))
+    }
+
+    /// Selects group `index` (clamped on read) and scrolls its row into view.
+    pub fn select(&mut self, index: usize) {
+        self.selected = index;
+        self.scroll.scroll_to_item(index, ScrollStrategy::Nearest);
+    }
 }
 
 impl StacksState {
     /// Back to Exact copies with no list; a read in flight is dropped.
     pub fn reset(&mut self) {
+        self.review = DuplicatesReview::default();
         self.tab = DuplicatesTab::Exact;
         self.list = StacksList::Loading;
         self.focused = 0;
@@ -98,6 +124,11 @@ impl LuminaApp {
             self.load_stacks(cx);
         }
         cx.notify();
+    }
+
+    /// The Exact copies review is on screen (its own header and actions).
+    pub(crate) fn duplicates_review_shown(&self) -> bool {
+        self.selection == AlbumSelection::Duplicates && self.stacks.tab == DuplicatesTab::Exact
     }
 
     /// Palette "Show Exact Copies" / "Show Similar Shots", from anywhere.
@@ -297,5 +328,20 @@ impl LuminaApp {
             _ => {}
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DuplicatesReview;
+
+    #[core::prelude::v1::test]
+    fn review_selection_never_reads_past_the_groups() {
+        let mut review = DuplicatesReview::default();
+        assert_eq!(review.selected(0), None, "no groups, no selection");
+        review.select(5);
+        assert_eq!(review.selected(2), Some(1), "clamped to the last group");
+        assert_eq!(review.selected(0), None, "groups merged away: none");
+        assert_eq!(review.selected(9), Some(5), "in range: as selected");
     }
 }

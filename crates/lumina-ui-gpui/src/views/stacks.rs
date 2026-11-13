@@ -77,10 +77,7 @@ pub fn render_duplicates(
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
     let body = match this.stacks.tab {
-        DuplicatesTab::Exact => {
-            crate::views::duplicates::DuplicatesView::render(this, total_count, cx)
-                .into_any_element()
-        }
+        DuplicatesTab::Exact => crate::views::duplicates::render(this, total_count, cx),
         DuplicatesTab::Similar => render_similar(this, cx),
     };
     div()

@@ -98,6 +98,9 @@ impl LuminaApp {
         if self.tags_page_shown() {
             return Some(crate::views::tag_manager::meta(self));
         }
+        if self.duplicates_review_shown() {
+            return Some(crate::views::duplicates::meta(self));
+        }
         if self.view_loading() && self.cached_active_count().is_none() {
             return None;
         }
@@ -154,6 +157,26 @@ impl LuminaApp {
             None => view_label.to_string(),
         };
         let toggle = self.render_sidebar_toggle(cx);
+        // Review Duplicates: no grid to sort or filter; one merge action.
+        if self.duplicates_review_shown() {
+            let actions = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(10.0))
+                .children(self.render_downloads_button(window, cx))
+                .when(!self.duplicate_groups.is_empty(), |bar| {
+                    bar.child(crate::views::duplicates::merge_all_button(self, cx))
+                })
+                .when(own_controls, |bar| bar.child(window_controls(window)));
+            return self.clear_traffic_lights(page_header(
+                toggle,
+                crate::i18n::t("duplicates.review_title"),
+                self.page_meta().map(Into::into),
+                actions,
+                own_controls,
+            ));
+        }
         // The Albums overview and the Tags page have their own actions: no
         // grid to sort or filter.
         if self.non_media_page_shown() {
