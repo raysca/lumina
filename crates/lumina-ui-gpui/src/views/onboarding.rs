@@ -8,7 +8,10 @@ use gpui::*;
 /// Welcome and first-scan column: left-aligned, 520px, 120px from the top.
 pub(crate) fn welcome_column() -> Div {
     div()
-        .size_full()
+        // At least the window's height, and taller when the content is, so
+        // the welcome body's scroll reaches the bottom.
+        .w_full()
+        .min_h_full()
         .bg(theme::bg_0())
         .text_color(theme::t1())
         .flex()

@@ -433,8 +433,9 @@ impl Render for LuminaApp {
                 }));
         }
 
-        // Welcome and first scan have no header: drop its popovers so their
-        // keys don't shadow these screens' and they don't return later.
+        // Welcome (a header without actions) and first scan have no header
+        // popovers: drop them so their keys don't shadow these screens' and
+        // they don't return later.
         if self.grid_state.is_none() || self.first_scan.is_some() {
             self.close_header_popovers();
         }
@@ -461,8 +462,44 @@ impl Render for LuminaApp {
                 .flex()
                 .flex_col()
                 .relative()
-                .child(self.render_error_banner(cx))
-                .child(OnboardingView::render(self.welcome_props(cx)))
+                .bg(theme::bg_0())
+                // Design 11: the app shell with a dormant sidebar and the
+                // All Media header, around the welcome.
+                .child(
+                    div()
+                        .flex_1()
+                        .size_full()
+                        .flex()
+                        .flex_row()
+                        .overflow_hidden()
+                        .child(crate::views::sidebar::dormant::render_dormant(self))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .h_full()
+                                .flex()
+                                .flex_col()
+                                .child(self.render_error_banner(cx))
+                                .child(crate::views::page_header::page_header(
+                                    Empty,
+                                    crate::i18n::t("view.all_media"),
+                                    Some(crate::i18n::t("header.no_media").into()),
+                                    Empty,
+                                    false,
+                                ))
+                                .child(
+                                    div()
+                                        .id("welcome-body")
+                                        .debug_selector(|| "welcome-body".to_string())
+                                        .flex_1()
+                                        .min_h_0()
+                                        // A small window scrolls the welcome.
+                                        .overflow_y_scroll()
+                                        .child(OnboardingView::render(self.welcome_props(cx))),
+                                ),
+                        ),
+                )
                 .child(self.render_toast_overlay(cx))
                 .child(motion::overlay_in(
                     self.preferences_open,

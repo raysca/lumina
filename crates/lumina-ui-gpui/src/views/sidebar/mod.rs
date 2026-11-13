@@ -1,4 +1,5 @@
 mod albums;
+pub(crate) mod dormant;
 pub(crate) mod nav;
 mod rail;
 mod sections;

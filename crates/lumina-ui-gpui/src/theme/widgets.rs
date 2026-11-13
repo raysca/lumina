@@ -18,6 +18,20 @@ pub fn nav_item(
     attention: bool,
     active: bool,
 ) -> Stateful<Div> {
+    nav_row(selector, icon, label, count, attention, active, true)
+}
+
+/// [`nav_item`] without the pointer cursor and hover background when not
+/// `clickable` (the dormant sidebar's rows).
+pub(crate) fn nav_row(
+    selector: String,
+    icon: Icon,
+    label: &str,
+    count: usize,
+    attention: bool,
+    active: bool,
+    clickable: bool,
+) -> Stateful<Div> {
     let (icon_selector, count_selector) = (format!("{selector}-icon"), format!("{selector}-count"));
     let active_selector = format!("{selector}-active");
     let aria = crate::i18n::nav_aria_label(label, count);
@@ -33,12 +47,14 @@ pub fn nav_item(
         .items_center()
         .gap(px(10.0))
         .rounded(RADIUS_LG)
-        .cursor_pointer()
+        .when(clickable, |row| row.cursor_pointer())
         .map(|row| {
             if active {
                 row.bg(bg_3())
-            } else {
+            } else if clickable {
                 row.hover(|s| s.bg(bg_2()))
+            } else {
+                row
             }
         })
         .child(

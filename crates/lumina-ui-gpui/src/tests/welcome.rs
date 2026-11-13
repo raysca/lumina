@@ -2,7 +2,7 @@
 
 use crate::app::first_scan::FirstScanState;
 use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library, wheel,
 };
 use crate::{LuminaApp, UiMessage};
 use gpui::{Entity, VisualTestContext};
@@ -21,10 +21,13 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
 
     let column = vcx.debug_bounds("welcome-column").expect("welcome renders");
     assert_eq!(f32::from(column.size.width), 520.0);
+    // Design 11 Task 1: the column now sits under the page header. Task 2
+    // rewrites this test for the centred empty state.
+    let header = vcx.debug_bounds("page-header").expect("header renders");
     assert_eq!(
-        f32::from(column.origin.y),
-        120.0,
-        "the column starts 120px down"
+        column.origin.y,
+        header.origin.y + header.size.height + gpui::px(120.0),
+        "the column starts 120px below the header"
     );
     let logo = vcx.debug_bounds("welcome-logo").unwrap();
     assert_eq!(f32::from(logo.size.width), 60.0);
@@ -74,6 +77,71 @@ fn welcome_is_a_left_aligned_column_with_two_equal_buttons() {
         picture_opens(),
         pictures_opens + 1,
         "the link opens the Pictures folder"
+    );
+}
+
+/// Design 11 Task 1: with no library the window keeps the app shell, a
+/// dormant sidebar and the "All Media" header, around the welcome body.
+#[core::prelude::v1::test]
+fn first_run_has_sidebar_and_header() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    render_ui(vcx);
+
+    let sidebar = vcx
+        .debug_bounds("sidebar")
+        .expect("the welcome paints the sidebar");
+    assert_eq!(f32::from(sidebar.size.width), 252.0, "sidebar is 252 wide");
+    assert!(
+        vcx.debug_bounds("page-title-text:All Media").is_some(),
+        "the header reads All Media"
+    );
+    assert!(
+        vcx.debug_bounds("page-meta-text:No media yet").is_some(),
+        "the meta line says there is no media"
+    );
+    let actions = vcx.debug_bounds("page-actions").expect("header renders");
+    assert_eq!(
+        f32::from(actions.size.width),
+        0.0,
+        "the first-run header has no actions"
+    );
+    for marker in [
+        "sidebar-nav-dormant-text:all",
+        "sidebar-nav-dormant-text:videos",
+        "sidebar-nav-dormant-text:favorites",
+    ] {
+        assert!(
+            vcx.debug_bounds(marker).is_some(),
+            "{marker}: a dormant row reads as unavailable"
+        );
+    }
+    for absent in [
+        "sidebar-nav-recently-added",
+        "search-input",
+        "search-shortcut",
+    ] {
+        assert!(
+            vcx.debug_bounds(absent).is_none(),
+            "{absent}: the dormant sidebar has three rows and no live controls"
+        );
+    }
+    let before = view.update(vcx, |app, _| app.selection.clone());
+    click(vcx, "sidebar-nav-all");
+    click(vcx, "sidebar-nav-videos");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.is_none(),
+            "a dormant row does nothing without a library"
+        );
+        assert_eq!(
+            app.selection, before,
+            "a dormant row never changes the selection"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("welcome-column").is_some(),
+        "the welcome body is still the main content"
     );
 }
 
@@ -347,6 +415,53 @@ fn welcome_lists_recents_and_enter_opens_focused() {
             "the opened library moves to the front"
         );
     });
+}
+
+/// Review Focus 1: in a 900×600 window the welcome sits under the header
+/// and scrolls, so its lowest control can still be reached.
+#[core::prelude::v1::test]
+fn small_window_welcome_scrolls_under_the_header() {
+    let folders: Vec<TempLibrary> = (0..6).map(|i| temp_folder(&format!("small_{i}"))).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) =
+        welcome_with_recents(&mut cx, folders.iter().map(|f| f.to_path_buf()).collect());
+    view.update(vcx, |app, cx| {
+        app.has_desktop_pics = true;
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));
+    render_ui(vcx);
+
+    let header = vcx.debug_bounds("page-header").expect("header renders");
+    let header_bottom = header.origin.y + header.size.height;
+    let open = vcx
+        .debug_bounds("welcome-open-btn")
+        .expect("buttons render");
+    assert!(
+        open.origin.y >= header_bottom,
+        "the welcome buttons never overlap the header"
+    );
+    let below = vcx.debug_bounds("welcome-sample-btn").expect("sample link");
+    assert!(
+        below.origin.y > gpui::px(600.0),
+        "precondition: at 900×600 the sample link starts below the window: {below:?}"
+    );
+    let body = vcx.debug_bounds("welcome-body").expect("body renders");
+    for _ in 0..5 {
+        wheel(
+            vcx,
+            body.center(),
+            gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-400.0))),
+            gpui::Modifiers::default(),
+        );
+    }
+    let sample = vcx
+        .debug_bounds("welcome-sample-btn")
+        .expect("the sample link renders");
+    assert!(
+        sample.origin.y >= header_bottom && sample.origin.y + sample.size.height <= gpui::px(600.0),
+        "scrolling brings the lowest control into the window: {sample:?}"
+    );
 }
 
 #[core::prelude::v1::test]
