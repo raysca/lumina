@@ -394,7 +394,7 @@ impl LuminaApp {
             Ok(change) => change,
             Err(err) => {
                 log::warn!("applying template {:?}: {err:?}", template.name);
-                self.set_error(format!("{}: {err}", t("template.error_apply")), cx);
+                self.set_error(format!("{}: {err:#}", t("template.error_apply")), cx);
                 return;
             }
         };

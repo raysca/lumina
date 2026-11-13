@@ -41,7 +41,7 @@ impl LuminaApp {
                     cx.notify();
                 }
             }
-            Err(err) => self.set_error(format!("Could not update Trash: {err}"), cx),
+            Err(err) => self.set_error(format!("Could not update Trash: {err:#}"), cx),
         }
     }
 
@@ -75,7 +75,7 @@ impl LuminaApp {
             Ok(())
         };
         if let Err(err) = result {
-            self.set_error(format!("Could not update Trash: {err}"), cx);
+            self.set_error(format!("Could not update Trash: {err:#}"), cx);
             return;
         }
         self.push_undo(UndoAction::Trashed { changes });
@@ -287,7 +287,7 @@ impl LuminaApp {
             Ok(n) => self.show_toast(format!("Restored {n} item(s)"), cx),
             // Restoring everything is idempotent, so Retry is safe here.
             Err(err) => self.set_error_with_retry(
-                format!("Could not restore items: {err}"),
+                format!("Could not restore items: {err:#}"),
                 Self::restore_all_trash,
                 cx,
             ),
@@ -311,7 +311,7 @@ impl LuminaApp {
         };
         if let Err(err) = result {
             // No Retry: it would act on whatever is selected by then.
-            self.set_error(format!("Could not restore items: {err}"), cx);
+            self.set_error(format!("Could not restore items: {err:#}"), cx);
             return;
         }
         self.push_undo(UndoAction::Trashed { changes });

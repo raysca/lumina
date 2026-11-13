@@ -262,7 +262,7 @@ impl LuminaApp {
             Ok(()) => true,
             Err(err) => {
                 self.config.recent_libraries = before;
-                self.set_error(format!("Could not save settings: {err}"), cx);
+                self.set_error(format!("Could not save settings: {err:#}"), cx);
                 false
             }
         }

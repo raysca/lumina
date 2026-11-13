@@ -96,7 +96,7 @@ impl LuminaApp {
             Ok(value) => Some(value),
             Err(err) => {
                 log::warn!("{action}: {err:?}");
-                self.set_error(format!("{action}: {err}"), cx);
+                self.set_error(format!("{action}: {err:#}"), cx);
                 None
             }
         }

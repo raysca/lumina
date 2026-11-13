@@ -83,7 +83,7 @@ impl LuminaApp {
                 Ok(copy) => this.open_item_in_external_editor(&copy.path, cx),
                 Err(err) => {
                     log::error!("Edit a Copy failed for item {}: {err:?}", id.0);
-                    this.set_error(format!("{EDIT_COPY_FAILED_MESSAGE} Reason: {err}."), cx);
+                    this.set_error(format!("{EDIT_COPY_FAILED_MESSAGE} Reason: {err:#}."), cx);
                 }
             })
             .ok();

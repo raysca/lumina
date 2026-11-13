@@ -66,7 +66,8 @@ impl LuminaApp {
         let engine = self.grid_state.as_ref()?.engine.clone();
         #[cfg(test)]
         let result = if ALBUM_WRITE_FAILS.with(std::cell::Cell::get) {
-            Err(anyhow::anyhow!("database is locked"))
+            // Shaped like a core error: a context over the SQLite cause.
+            Err(anyhow::anyhow!("database is locked").context("writing the album"))
         } else {
             write(&engine)
         };
@@ -77,7 +78,7 @@ impl LuminaApp {
             Err(err) => {
                 let action = t(action);
                 log::warn!("{action}: {err:?}");
-                self.set_error(format!("{action}: {err}"), cx);
+                self.set_error(format!("{action}: {err:#}"), cx);
                 None
             }
         }

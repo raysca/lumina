@@ -395,7 +395,7 @@ impl LuminaApp {
                 });
             });
         if let Err(err) = spawned {
-            log::error!("spawning a download thread: {err}");
+            log::error!("spawning a download thread: {err:#}");
             let entry = &mut self.downloads.entries[index];
             entry.row.state = DownloadState::Waiting;
             self.set_error("Couldn't start the download. Try again.", cx);

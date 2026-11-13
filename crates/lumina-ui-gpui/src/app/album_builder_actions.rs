@@ -173,7 +173,7 @@ impl LuminaApp {
                 cx.notify();
             }
             Ok(false) => self.set_error("Smart album not found", cx),
-            Err(err) => self.set_error(format!("Could not delete smart album: {err}"), cx),
+            Err(err) => self.set_error(format!("Could not delete smart album: {err:#}"), cx),
         }
     }
 
@@ -455,7 +455,7 @@ impl LuminaApp {
                 self.set_last_action(message.clone());
                 self.show_toast(message, cx);
             }
-            Err(err) => self.set_error(format!("Could not save smart album: {err}"), cx),
+            Err(err) => self.set_error(format!("Could not save smart album: {err:#}"), cx),
         }
     }
 }

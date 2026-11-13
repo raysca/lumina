@@ -333,7 +333,7 @@ impl LuminaApp {
                 .take(3)
                 .map(|(path, err)| {
                     let name = path.file_name().unwrap_or(path.as_os_str());
-                    format!("{}: {err}", name.to_string_lossy())
+                    format!("{}: {err:#}", name.to_string_lossy())
                 })
                 .collect();
             let more = report.failed.len() - details.len();

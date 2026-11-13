@@ -465,7 +465,7 @@ impl LuminaApp {
                 } else {
                     self.item_captions.remove(&item.id);
                 }
-                self.set_error(format!("Could not save caption: {err}"), cx);
+                self.set_error(format!("Could not save caption: {err:#}"), cx);
                 return;
             }
             self.push_undo(crate::app::undo::UndoAction::Caption {
@@ -612,7 +612,7 @@ impl LuminaApp {
             Ok(())
         };
         if let Err(err) = result {
-            self.set_error(format!("Could not save title: {err}"), cx);
+            self.set_error(format!("Could not save title: {err:#}"), cx);
             return;
         }
         if let Some(ref mut current) = self.selected_item {
@@ -696,7 +696,7 @@ impl LuminaApp {
             Ok(())
         };
         if let Err(err) = result {
-            self.set_error(format!("Could not save date: {err}"), cx);
+            self.set_error(format!("Could not save date: {err:#}"), cx);
             return;
         }
         self.push_undo(crate::app::undo::UndoAction::Date {
@@ -782,7 +782,7 @@ impl LuminaApp {
             Ok(())
         };
         if let Err(err) = result {
-            self.set_error(format!("Could not save location: {err}"), cx);
+            self.set_error(format!("Could not save location: {err:#}"), cx);
             return;
         }
         self.push_undo(crate::app::undo::UndoAction::Location {

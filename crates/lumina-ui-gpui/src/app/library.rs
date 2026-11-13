@@ -536,7 +536,7 @@ impl LuminaApp {
             Ok(res) => res,
             Err(e) => {
                 log::error!("failed to open library at {:?}: {e:?}", path);
-                self.set_error(format!("Could not open library: {e}"), cx);
+                self.set_error(format!("Could not open library: {e:#}"), cx);
                 return;
             }
         };
@@ -578,7 +578,7 @@ impl LuminaApp {
         self.welcome.focused_recent = None;
         #[cfg(not(test))]
         if let Err(err) = self.config.save() {
-            self.set_error(format!("Could not save settings: {err}"), cx);
+            self.set_error(format!("Could not save settings: {err:#}"), cx);
         }
 
         self.last_scan_at = None;
@@ -1192,7 +1192,7 @@ impl LuminaApp {
                     });
                 })
             {
-                log::warn!("failed to spawn lumina-duplicates-scan thread: {err}");
+                log::warn!("failed to spawn lumina-duplicates-scan thread: {err:#}");
             }
         }
     }

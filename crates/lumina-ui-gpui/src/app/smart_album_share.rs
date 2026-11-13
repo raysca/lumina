@@ -219,6 +219,6 @@ impl LuminaApp {
     fn rule_file_failed(&mut self, action: &str, err: &anyhow::Error, cx: &mut Context<Self>) {
         let action = t(action);
         log::warn!("{action}: {err:?}");
-        self.set_error(format!("{action}: {err}"), cx);
+        self.set_error(format!("{action}: {err:#}"), cx);
     }
 }

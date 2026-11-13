@@ -409,13 +409,40 @@ fn locate_outside_library_shows_banner() {
     view.update(vcx, |app, _| {
         let error = app.error_message.clone().unwrap_or_default();
         assert!(
-            error.starts_with("Choose a file inside the library folder"),
+            error.starts_with(
+                "Could not reconnect the file: Choose a file inside the library folder"
+            ),
             "a file outside the library is refused with a reason, got {error:?}"
         );
         assert!(app.missing_items.contains(&id), "the item stays missing");
     });
     drop(view);
     let _ = std::fs::remove_file(&outside);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn locate_vanished_file_names_the_cause() {
+    let (temp_dir, engine) = seed_library("missing_locate_vanished", 1);
+    let gone = temp_dir.join("photo_00.jpg");
+    std::fs::remove_file(&gone).unwrap();
+    let id = engine.catalog().mark_missing_under(&gone).unwrap().missing[0];
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // The chosen file is gone by the time Lumina reads it.
+    view.update(vcx, |app, cx| app.apply_locate(id, gone.clone(), cx));
+    vcx.run_until_parked();
+
+    view.update(vcx, |app, _| {
+        let error = app.error_message.clone().unwrap_or_default();
+        assert!(
+            error.starts_with("Could not reconnect the file: chosen file: ")
+                && error.contains("No such file"),
+            "the banner must say what failed and why, not only \"chosen file\": {error:?}"
+        );
+    });
+    drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 

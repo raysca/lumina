@@ -67,6 +67,8 @@ pub(crate) fn real_job(engine: Arc<LuminaEngine>) -> JobFn {
                 return JobOutcome::Cancelled;
             }
             log::warn!("downloading {}: {err:#}", request.url);
+            // ponytail: outer message only; inner causes can name the
+            // download tools or their paths, which UI copy must not show.
             JobOutcome::Failed(err.to_string())
         };
         let info = match inspect_url(&request.url, cancel) {

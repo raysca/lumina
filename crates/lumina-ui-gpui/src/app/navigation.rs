@@ -305,7 +305,7 @@ impl LuminaApp {
                     cx,
                 );
             }
-            Err(err) => self.set_error(format!("Could not update favorite: {err}"), cx),
+            Err(err) => self.set_error(format!("Could not update favorite: {err:#}"), cx),
         }
     }
 
@@ -1348,7 +1348,7 @@ impl LuminaApp {
                     });
                 })
             {
-                log::warn!("failed to spawn lumina-tag-refresh thread: {err}");
+                log::warn!("failed to spawn lumina-tag-refresh thread: {err:#}");
             }
         }
     }
@@ -1389,7 +1389,7 @@ impl LuminaApp {
                     cx,
                 );
             }
-            Err(err) => self.set_error(format!("Could not update favorites: {err}"), cx),
+            Err(err) => self.set_error(format!("Could not update favorites: {err:#}"), cx),
         }
     }
 

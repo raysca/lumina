@@ -230,6 +230,11 @@ fn failed_new_album_with_selection_leaves_no_album() {
             .error_message
             .as_deref()
             .is_some_and(|m| m.starts_with("Could not create album")));
+        let message = app.error_message.as_deref().unwrap_or_default();
+        assert!(
+            message.contains("database is locked"),
+            "the banner must name the cause, not only the outer context: {message}"
+        );
         assert!(app.albums.list.is_empty() && app.albums.renaming.is_none());
     });
     let _ = std::fs::remove_dir_all(&dir);

@@ -543,8 +543,8 @@ pub(crate) fn launch_result(
     let output = match output {
         Ok(output) => output,
         Err(err) => {
-            log::warn!("launcher could not start: {err}");
-            return Err(format!("{failed} Reason: {err}."));
+            log::warn!("launcher could not start: {err:#}");
+            return Err(format!("{failed} Reason: {err:#}."));
         }
     };
     if output.status.success() {

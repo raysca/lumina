@@ -197,7 +197,7 @@ impl LuminaApp {
                         app.refresh_album_counts();
                         app.show_toast("File reconnected", cx);
                     }
-                    Err(err) => app.set_error(err.to_string(), cx),
+                    Err(err) => app.set_error(format!("Could not reconnect the file: {err:#}"), cx),
                 }
                 cx.notify();
             });

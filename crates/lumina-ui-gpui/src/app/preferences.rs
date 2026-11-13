@@ -152,7 +152,7 @@ impl LuminaApp {
             Err(err) => {
                 self.preferences_cache_cleared = false;
                 self.set_error_with_retry(
-                    format!("Could not clear thumbnail cache: {err}"),
+                    format!("Could not clear thumbnail cache: {err:#}"),
                     Self::clear_thumbnail_cache,
                     cx,
                 )

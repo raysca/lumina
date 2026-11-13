@@ -35,8 +35,8 @@ fn main() {
         }
         Err(err) => {
             // A blocking modal here would hang automated launches; log and exit.
-            log::error!("{err}");
-            eprintln!("Lumina: {err}");
+            log::error!("{err:#}");
+            eprintln!("Lumina: {err:#}");
             return;
         }
     };

@@ -791,7 +791,7 @@ impl LuminaApp {
         match self.try_save_config() {
             Ok(()) => true,
             Err(err) => {
-                self.error_message = Some(format!("Could not save settings: {err}"));
+                self.error_message = Some(format!("Could not save settings: {err:#}"));
                 false
             }
         }

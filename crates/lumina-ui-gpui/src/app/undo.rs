@@ -561,7 +561,7 @@ impl LuminaApp {
                 Some(replay_note(skipped))
             }
             Err(err) => {
-                self.set_error(format!("History action failed: {err}"), cx);
+                self.set_error(format!("History action failed: {err:#}"), cx);
                 None
             }
         }

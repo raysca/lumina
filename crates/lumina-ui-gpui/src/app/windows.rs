@@ -134,7 +134,7 @@ pub fn open_floating_pip_window(
             if let Some(app) = weak_app.upgrade() {
                 app.update(cx, |this, cx| {
                     this.close_pip(cx);
-                    this.set_error(format!("Could not open Picture-in-Picture: {e}"), cx);
+                    this.set_error(format!("Could not open Picture-in-Picture: {e:#}"), cx);
                 });
             }
         }
