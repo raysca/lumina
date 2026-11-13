@@ -617,7 +617,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "welcome.sample_no_folder" => {
             "Could not prepare the sample library: this Mac has no Application Support folder"
         }
-        "welcome.recent_heading" => "Recent Libraries",
+        "welcome.recent_heading" => "RECENT LIBRARIES",
         "welcome.not_available" => "Not available",
         "welcome.open_recent" => "Open {name}",
         "welcome.remove_recent" => "Remove from Recent Libraries",

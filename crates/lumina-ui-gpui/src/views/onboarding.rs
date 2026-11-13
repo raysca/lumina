@@ -199,9 +199,8 @@ impl OnboardingView {
                                 "welcome.hint_device_body",
                             )),
                     )
-                    // ponytail: Task 3 restyles this list; it sits under the hints.
                     .when(!recents.is_empty(), |column| {
-                        column.child(div().mt(px(32.0)).w_full().child(recent_libraries(recents)))
+                        column.child(recent_libraries(recents))
                     }),
             )
             .into_any_element()
@@ -293,14 +292,25 @@ fn text_link(
         .child(shortcut_hint(hint_id, keys))
 }
 
-/// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets.
+/// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets. A
+/// 520 px list (the welcome body scrolls, so a long list needs no scroll of
+/// its own).
 fn recent_libraries(rows: Vec<RecentRow>) -> impl IntoElement {
     div()
-        .w_full()
+        .debug_selector(|| "welcome-recents".to_string())
+        .mt(px(32.0))
+        .w(px(520.0))
+        .max_w_full()
         .flex()
         .flex_col()
-        .gap_1()
-        .child(theme::section_label(t("welcome.recent_heading")).mb_1())
+        .gap(px(3.0))
+        // The sidebar's section label, 5 px over the rows like there.
+        .child(
+            div()
+                .px(px(10.0))
+                .pb(px(2.0))
+                .child(theme::section_label(t("welcome.recent_heading"))),
+        )
         .children(
             rows.into_iter()
                 .enumerate()
@@ -308,8 +318,11 @@ fn recent_libraries(rows: Vec<RecentRow>) -> impl IntoElement {
         )
 }
 
+/// One recent: a 32 px row (sidebar row tokens) with the name in t1 13 and
+/// the path in mono 10 t3, cut in the middle; its tooltip has the full path.
 fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
     let selector = format!("welcome-recent-{i}");
+    let path_selector = format!("welcome-recent-path-{i}");
     let remove_selector = format!("welcome-recent-remove-{i}");
     let remove_label = t("welcome.remove_recent_named").replace("{name}", &row.name);
     let on_remove = row.on_remove;
@@ -318,63 +331,75 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
         // Dimming alone says nothing to VoiceOver.
         open_label = format!("{open_label}, {}", t("welcome.not_available"));
     }
+    let path = SharedString::from(row.path);
     div()
         .id(("welcome-recent", i))
         .debug_selector(move || selector.clone())
         .role(Role::Button)
         .aria_label(open_label)
         .w_full()
-        .h(px(44.0))
-        .px_3()
+        .h(px(32.0))
+        .px(px(10.0))
         .flex()
         .flex_row()
         .items_center()
-        .gap_3()
+        .gap(px(10.0))
         .rounded(theme::RADIUS_LG)
+        // Always a border, so the focus ring never shifts the row.
         .border_1()
         .cursor_pointer()
         .map(|r| {
             if row.focused {
                 r.bg(theme::bg_3()).border_color(theme::focus_ring())
             } else {
-                r.border_color(theme::line()).hover(|s| s.bg(theme::bg_3()))
+                r.border_color(gpui::transparent_black())
+                    .hover(|s| s.bg(theme::bg_2()))
             }
         })
         .on_click(row.on_open)
-        .child(render_icon(
-            Icon::Folder,
-            px(15.0),
-            if row.unavailable {
-                theme::t3()
-            } else {
-                theme::t2()
-            },
-        ))
+        .child(
+            render_icon(
+                Icon::Folder,
+                px(16.0),
+                if row.unavailable {
+                    theme::t3()
+                } else {
+                    theme::t2()
+                },
+            )
+            .flex_none(),
+        )
         .child(
             div()
+                .flex_shrink_0()
+                .max_w(px(200.0))
+                .truncate()
+                .text_size(theme::TEXT_BODY)
+                .text_color(if row.unavailable {
+                    theme::t3()
+                } else {
+                    theme::t1()
+                })
+                .child(row.name),
+        )
+        .child(
+            div()
+                .id(("welcome-recent-path", i))
+                .debug_selector(move || path_selector.clone())
                 .flex_1()
                 .min_w_0()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(if row.unavailable {
-                            theme::t3()
-                        } else {
-                            theme::t1()
-                        })
-                        .truncate()
-                        .child(row.name),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme::t2())
-                        .truncate()
-                        .child(row.path),
-                ),
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis_middle()
+                .font_family(theme::FONT_MONO)
+                .text_size(px(10.0))
+                .text_color(theme::t3())
+                .tooltip(theme::tooltip_label(path.clone()))
+                .children(crate::views::page_header::text_marker(
+                    "welcome-recent-path",
+                    &path,
+                ))
+                .child(path),
         )
         .when(row.unavailable, |r| {
             let unavailable_selector = format!("welcome-recent-unavailable-{i}");
@@ -382,7 +407,7 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                 div()
                     .debug_selector(move || unavailable_selector.clone())
                     .flex_none()
-                    .text_xs()
+                    .text_size(px(11.0))
                     .text_color(theme::t2())
                     .child(t("welcome.not_available")),
             )

@@ -497,6 +497,80 @@ fn small_window_welcome_scrolls_under_the_header() {
     );
 }
 
+/// Design 11 Task 3: RECENT LIBRARIES is a 520 px list of 32 px rows under
+/// the hint cards, and keeps its keys.
+#[core::prelude::v1::test]
+fn recents_list_sits_under_the_hints_and_keeps_keys() {
+    let (a, b, c) = (
+        temp_folder("keys_a"),
+        temp_folder("keys_b"),
+        temp_folder("keys_c"),
+    );
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(
+        &mut cx,
+        vec![a.to_path_buf(), b.to_path_buf(), c.to_path_buf()],
+    );
+    let list = vcx
+        .debug_bounds("welcome-recents")
+        .expect("the list renders");
+    assert_eq!(f32::from(list.size.width), 520.0, "the list is 520 wide");
+    let hint = vcx.debug_bounds("welcome-hint-0").unwrap();
+    let row = vcx.debug_bounds("welcome-recent-0").unwrap();
+    assert!(
+        row.top() >= hint.bottom(),
+        "recents sit under the hint cards"
+    );
+    assert_eq!(f32::from(row.size.height), 32.0, "rows are 32 high");
+
+    keystrokes(vcx, "down backspace");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.recent_libraries,
+            vec![b.to_path_buf(), c.to_path_buf()],
+            "⌫ forgets the focused row"
+        );
+    });
+    keystrokes(vcx, "down enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(c.as_path()),
+            "↓ ↵ opens recent 1"
+        );
+    });
+}
+
+/// Review Focus 4: a long path is one line cut in the middle (GPUI's
+/// `text_ellipsis_middle`), inside its row, and the tooltip and the
+/// test marker carry the full path.
+#[core::prelude::v1::test]
+fn long_recent_path_is_one_line_inside_its_row() {
+    let base = temp_folder("long_path");
+    let deep = base
+        .join("a-very-long-folder-name-that-will-not-fit-".repeat(4))
+        .join("Holiday Photos");
+    std::fs::create_dir_all(&deep).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = welcome_with_recents(&mut cx, vec![deep.clone()]);
+    let row = vcx.debug_bounds("welcome-recent-0").unwrap();
+    let line = vcx
+        .debug_bounds("welcome-recent-path-0")
+        .expect("the path line renders");
+    assert!(
+        line.right() <= row.right() && line.left() >= row.left(),
+        "the path stays inside its row: {line:?} in {row:?}"
+    );
+    assert!(
+        f32::from(line.size.height) < 20.0,
+        "the path is one line, not wrapped: {line:?}"
+    );
+    assert!(
+        painted_text(vcx, format!("welcome-recent-path-text:{}", deep.display())),
+        "the row carries the full path"
+    );
+}
+
 #[core::prelude::v1::test]
 fn welcome_click_opens_a_recent() {
     let a = temp_folder("click_a");
