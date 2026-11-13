@@ -104,11 +104,11 @@ impl LuminaApp {
     /// take keys while hidden.
     pub(super) fn albums_blocked(&mut self, cx: &mut Context<Self>) -> bool {
         if self.edits.session.is_some() {
-            self.show_toast(t("album.finish_edit_first"), cx);
+            self.show_warning_toast(t("album.finish_edit_first"), cx);
             return true;
         }
         if self.import_blocked_by_modal() {
-            self.show_toast(t("album.close_dialog_first"), cx);
+            self.show_warning_toast(t("album.close_dialog_first"), cx);
             return true;
         }
         false

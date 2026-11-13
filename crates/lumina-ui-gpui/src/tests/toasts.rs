@@ -106,13 +106,13 @@ fn toast_renders_with_message_and_dismiss_control() {
         "toast must expose a dismiss control"
     );
     assert!(
-        vcx.debug_bounds("toast-undo").is_none(),
+        vcx.debug_bounds("toast-action").is_none(),
         "a non-reversible action must not offer Undo"
     );
     view.update(vcx, |app, _| {
         let toast = app.toast.current().expect("toast state must be visible");
         assert_eq!(toast.message, "Exported 4 item(s)");
-        assert!(!toast.undo_available);
+        assert!(toast.action.is_none());
     });
 
     click(vcx, "toast-dismiss");
@@ -161,7 +161,7 @@ fn toast_undo_invokes_undo_last() {
     render_ui(vcx);
 
     assert!(
-        vcx.debug_bounds("toast-undo").is_some(),
+        vcx.debug_bounds("toast-action").is_some(),
         "a toast for an undoable action must offer Undo"
     );
     view.update(vcx, |app, _| {
@@ -171,7 +171,7 @@ fn toast_undo_invokes_undo_last() {
         );
     });
 
-    click(vcx, "toast-undo");
+    click(vcx, "toast-action");
     view.update(vcx, |app, _| {
         assert!(
             !app.selected_item_tags.contains(&"travel".to_string()),
@@ -187,7 +187,7 @@ fn toast_undo_invokes_undo_last() {
             toast.message
         );
         assert!(
-            !toast.undo_available,
+            toast.action.is_none(),
             "an undo does not push another undo entry"
         );
     });
@@ -214,7 +214,7 @@ fn toast_rating_and_tag_hooks_offer_undo() {
             .current()
             .expect("rating must confirm with a toast");
         assert_eq!(toast.message, "Rated 1 item(s)");
-        assert!(toast.undo_available, "rating must offer Undo");
+        assert!(toast.action.is_some(), "rating must offer Undo");
         assert_eq!(app.get_item_rating(&item), 4);
     });
 
@@ -226,7 +226,7 @@ fn toast_rating_and_tag_hooks_offer_undo() {
             .current()
             .expect("adding a tag must confirm with a toast");
         assert_eq!(toast.message, "Added tag \"travel\"");
-        assert!(toast.undo_available, "tag add must offer Undo");
+        assert!(toast.action.is_some(), "tag add must offer Undo");
         assert!(
             app.selected_item_tags.contains(&"travel".to_string()),
             "the tag must be applied before Undo"
@@ -234,7 +234,7 @@ fn toast_rating_and_tag_hooks_offer_undo() {
     });
 
     // The toast's Undo reverses the most recent reversible action.
-    click(vcx, "toast-undo");
+    click(vcx, "toast-action");
     view.update(vcx, |app, _| {
         assert!(
             !app.selected_item_tags.contains(&"travel".to_string()),
@@ -403,7 +403,7 @@ fn toast_export_and_import_success_are_hooked() {
             "got {:?}",
             toast.message
         );
-        assert!(!toast.undo_available, "export is not reversible");
+        assert!(toast.action.is_none(), "export is not reversible");
         assert!(
             app.last_action
                 .as_deref()
@@ -441,8 +441,122 @@ fn toast_export_and_import_success_are_hooked() {
             toast.message
         );
         assert!(
-            !toast.undo_available,
+            toast.action.is_none(),
             "import is informational, not undoable"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn toast_kinds_show_accent_title_subtitle_and_action() {
+    use crate::views::toast::{ToastAction, ToastKind};
+
+    let (temp_dir, engine) = seed_library("kinds", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // Room for the toast inside the window, so the pointer can rest on it.
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.selected_indices.insert(0);
+        app.batch_add_tag("travel".to_string(), cx);
+        app.show_toast_kind(
+            ToastKind::Positive,
+            "Added tag \"travel\"",
+            Some("1 item"),
+            Some(ToastAction::Undo),
+            cx,
+        );
+    });
+    render_ui(vcx);
+
+    for selector in [
+        "toast-accent",
+        "toast-message",
+        "toast-subtitle",
+        "toast-action",
+        "toast-action-text:Undo",
+        "toast-icon-positive",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "a toast with a subtitle and an action must render {selector:?}"
+        );
+    }
+    let toast = vcx.debug_bounds("toast").expect("toast renders");
+    assert_eq!(
+        (f32::from(toast.size.width), f32::from(toast.size.height)),
+        (480.0, 62.0),
+        "the toast is 480 x 62 (Design 10)"
+    );
+    let accent = vcx.debug_bounds("toast-accent").unwrap();
+    assert_eq!(f32::from(accent.size.width), 3.0, "3px kind accent bar");
+    view.update(vcx, |app, _| {
+        let toast = app.toast.current().unwrap();
+        assert_eq!(toast.kind, ToastKind::Positive);
+        assert_eq!(toast.subtitle.as_deref(), Some("1 item"));
+    });
+
+    // The action runs its handler: Undo reverses the tag.
+    click(vcx, "toast-action");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_item_tags.contains(&"travel".to_string()),
+            "the Undo action must run undo_last"
+        );
+    });
+
+    // A refusal shows a warning toast: warning kind and icon, accent, no
+    // action or subtitle row.
+    view.update(vcx, |app, cx| {
+        // An open sort menu refuses the template editor.
+        app.sort_menu_open = true;
+        app.open_template_editor(cx);
+        app.sort_menu_open = false;
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let toast = app.toast.current().unwrap();
+        assert_eq!(
+            toast.kind,
+            ToastKind::Warning,
+            "a refused template editor is a warning, not a success"
+        );
+        assert!(toast.action.is_none());
+    });
+    assert!(vcx.debug_bounds("toast-accent").is_some());
+    assert!(
+        vcx.debug_bounds("toast-icon-warning").is_some(),
+        "a warning toast shows the warning icon"
+    );
+    assert!(vcx.debug_bounds("toast-icon-positive").is_none());
+    assert!(vcx.debug_bounds("toast-subtitle").is_none());
+    assert!(vcx.debug_bounds("toast-action").is_none());
+
+    // A toast replacing one under the resting pointer keeps the hover hold.
+    // The Undo click left the pointer over the toast without a move event,
+    // so step off and back on.
+    let toast = vcx.debug_bounds("toast").unwrap();
+    let away = gpui::point(gpui::px(5.0), gpui::px(5.0));
+    vcx.simulate_mouse_move(away, None, gpui::Modifiers::none());
+    vcx.simulate_mouse_move(toast.center(), None, gpui::Modifiers::none());
+    view.update(vcx, |app, cx| {
+        app.show_toast_kind(ToastKind::Warning, "Replaced", Some("held"), None, cx)
+    });
+    render_ui(vcx);
+    vcx.executor()
+        .advance_clock(crate::views::toast::TOAST_DURATION * 2);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast
+                .current()
+                .is_some_and(|t| t.hovered && t.message == "Replaced"),
+            "a replaced toast under the pointer must stay held"
         );
     });
 

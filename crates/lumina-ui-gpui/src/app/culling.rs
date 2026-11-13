@@ -230,7 +230,7 @@ impl LuminaApp {
         }
         // ↵ meant for another dialog must never reach a Delete dialog.
         if self.import_blocked_by_modal() {
-            self.show_toast(crate::i18n::t("album.close_dialog_first"), cx);
+            self.show_warning_toast(crate::i18n::t("album.close_dialog_first"), cx);
             return;
         }
         let Some(scope) = self.view_query().reject_scope() else {

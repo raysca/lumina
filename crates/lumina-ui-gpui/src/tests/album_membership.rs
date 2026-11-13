@@ -304,7 +304,7 @@ fn album_membership_undo_redo() {
     keystrokes(vcx, "cmd-a");
     keystrokes(vcx, "backspace");
     assert!(members(&engine, album.id).is_empty());
-    click(vcx, "toast-undo");
+    click(vcx, "toast-action");
     assert_eq!(members(&engine, album.id), chosen, "Undo puts them back");
     view.update(vcx, |app, _| {
         assert_eq!(app.albums.counts.get(&album.id), Some(&2));

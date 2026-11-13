@@ -1,8 +1,10 @@
-//! Compact toast for transient success feedback, bottom centre over the grid.
+//! Compact toast for transient feedback, bottom centre over the grid.
 //!
-//! Toasts are deliberately separate from the top error banner: recoverable
-//! failures keep using [`LuminaApp::set_error`], while successful actions get a
-//! short confirmation that can be dismissed or undone. Only one toast is shown
+//! Toasts are deliberately separate from the top error banner: catalog and
+//! config write failures keep using [`LuminaApp::set_error`] (AGENTS.md §2),
+//! while successful actions get a short confirmation that can be dismissed or
+//! undone. Warning and danger kinds are for transient notices that change no
+//! data. Only one toast is shown
 //! at a time; a newer toast replaces the previous one and invalidates the older
 //! auto-dismiss timer through its generation id.
 
@@ -14,18 +16,65 @@ use gpui::*;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::text_marker;
 
 /// How long a toast stays on screen before dismissing itself.
 /// Hovering holds it open; it closes on the first tick after the pointer leaves.
 pub const TOAST_DURATION: Duration = Duration::from_secs(8);
 
+/// What a toast reports; sets its accent bar, icon and action colour.
+// ponytail: no Danger kind; write failures go to the banner (AGENTS.md §2).
+// Add it with its first transient, data-free failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastKind {
+    /// A success.
+    Positive,
+    /// A refusal that changed nothing ("close the open dialog first").
+    Warning,
+}
+
+impl ToastKind {
+    fn colour(self) -> Rgba {
+        match self {
+            Self::Positive => theme::positive(),
+            Self::Warning => theme::warn(),
+        }
+    }
+
+    fn icon(self) -> Icon {
+        match self {
+            Self::Positive => Icon::CircleCheck,
+            Self::Warning => Icon::TriangleAlert,
+        }
+    }
+
+    /// Test marker name: `toast-icon-{name}`.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Positive => "positive",
+            Self::Warning => "warning",
+        }
+    }
+}
+
+/// The toast's text action.
+// ponytail: only Undo has a caller; View/Retry from the design land with
+// their first caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastAction {
+    /// Runs [`LuminaApp::undo_from_toast`].
+    Undo,
+}
+
 /// The single visible toast.
 #[derive(Debug, Clone)]
 pub struct Toast {
-    /// Short user-facing confirmation.
+    pub kind: ToastKind,
+    /// Short user-facing title.
     pub message: String,
-    /// True when pressing Undo should run [`LuminaApp::undo_last`].
-    pub undo_available: bool,
+    /// Optional second line under the title.
+    pub subtitle: Option<String>,
+    pub action: Option<ToastAction>,
     /// The pointer is over the toast, so its timer waits.
     pub hovered: bool,
     /// Generation id that pairs this toast with its auto-dismiss timer.
@@ -51,15 +100,23 @@ impl ToastState {
     }
 
     /// Replaces any visible toast and returns the new generation id.
-    fn show(&mut self, message: String, undo_available: bool) -> u64 {
+    fn show(
+        &mut self,
+        kind: ToastKind,
+        message: String,
+        subtitle: Option<String>,
+        action: Option<ToastAction>,
+    ) -> u64 {
         self.next_id = self.next_id.wrapping_add(1);
         let id = self.next_id;
         // A toast replacing one under a resting pointer gets no new hover
         // event (same element id), so it inherits the hover state.
         let hovered = self.current.as_ref().is_some_and(|toast| toast.hovered);
         self.current = Some(Toast {
+            kind,
             message,
-            undo_available,
+            subtitle,
+            action,
             hovered,
             id,
         });
@@ -101,7 +158,7 @@ enum Tick {
 impl LuminaApp {
     /// Shows a success toast and replaces any visible toast.
     pub fn show_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        self.show_toast_inner(message.into(), false, cx);
+        self.show_toast_kind(ToastKind::Positive, message, None, None, cx);
     }
 
     /// Shows a success toast whose Undo button runs [`LuminaApp::undo_last`].
@@ -109,7 +166,18 @@ impl LuminaApp {
     /// Call this from reversible actions after their undo entry was pushed, so
     /// Undo restores the state the message describes.
     pub fn show_undo_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        self.show_toast_inner(message.into(), true, cx);
+        self.show_toast_kind(
+            ToastKind::Positive,
+            message,
+            None,
+            Some(ToastAction::Undo),
+            cx,
+        );
+    }
+
+    /// Shows a warning toast: an action was refused and nothing changed.
+    pub fn show_warning_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.show_toast_kind(ToastKind::Warning, message, None, None, cx);
     }
 
     /// Dismisses the visible toast, if any.
@@ -125,8 +193,19 @@ impl LuminaApp {
         self.undo_last(cx);
     }
 
-    fn show_toast_inner(&mut self, message: String, undo_available: bool, cx: &mut Context<Self>) {
-        let id = self.toast.show(message, undo_available);
+    /// Shows a toast of `kind` with an optional second line and action,
+    /// replacing any visible toast.
+    pub fn show_toast_kind(
+        &mut self,
+        kind: ToastKind,
+        message: impl Into<String>,
+        subtitle: Option<&str>,
+        action: Option<ToastAction>,
+        cx: &mut Context<Self>,
+    ) {
+        let id = self
+            .toast
+            .show(kind, message.into(), subtitle.map(str::to_owned), action);
         // Auto-dismiss on the foreground task so no work blocks the UI thread.
         // The timer only clears the toast it was armed for: replacing a toast
         // leaves a stale task that becomes a no-op when it fires.
@@ -156,45 +235,38 @@ impl LuminaApp {
         let Some(toast) = self.toast.current() else {
             return Empty.into_any_element();
         };
+        let kind = toast.kind;
+        let colour = kind.colour();
         let message = toast.message.clone();
-        let undo_button = if toast.undo_available {
+        let subtitle = toast.subtitle.clone();
+        let action = toast.action.map(|ToastAction::Undo| {
+            let label = SharedString::from("Undo");
             div()
-                .id("toast-undo")
-                .debug_selector(|| "toast-undo".to_string())
-                .h(px(24.0))
-                .px(px(8.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .rounded(theme::RADIUS_MD)
-                .border_1()
-                .border_color(theme::line_2())
-                .bg(theme::bg_3())
-                .hover(|style| style.bg(theme::bg_3()))
-                .text_xs()
-                .text_color(theme::t1())
+                .id("toast-action")
+                .debug_selector(|| "toast-action".to_string())
+                .flex_none()
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(colour)
                 .cursor_pointer()
-                .child("Undo")
-                .child(
-                    div()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.0))
-                        .text_color(theme::t2())
-                        .child("⌘Z"),
-                )
+                .hover(|style| style.opacity(0.8))
+                .tooltip(theme::tooltip_label("Undo (⌘Z)"))
+                .role(Role::Button)
+                .aria_label("Undo (⌘Z)")
+                .children(text_marker("toast-action", &label))
+                .child(label)
                 .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                     this.undo_from_toast(cx);
                 }))
-                .into_any_element()
-        } else {
-            Empty.into_any_element()
-        };
+        });
 
         let toast = div()
             .id("toast")
             .debug_selector(|| "toast".to_string())
-            .w(px(360.0))
+            .w(px(480.0))
+            .h(px(62.0))
+            .relative()
+            .overflow_hidden()
             .occlude()
             .on_hover(cx.listener(|this, hovered: &bool, _w, _cx| {
                 this.toast.set_hovered(*hovered);
@@ -202,41 +274,81 @@ impl LuminaApp {
             .flex()
             .flex_row()
             .items_center()
-            .gap_2()
-            .px(px(10.0))
-            .py(px(8.0))
+            .gap(px(12.0))
+            .px(px(14.0))
             .bg(theme::bg_float())
             .border_1()
             .border_color(theme::line_2())
-            .rounded(theme::RADIUS_LG)
-            .shadow_lg()
-            .child(render_icon(Icon::Check, px(14.0), theme::positive()))
+            .rounded(px(10.0))
+            // media_scrim is exactly black at 65 %, the design's toast shadow.
+            .shadow(vec![BoxShadow::new(
+                px(0.0),
+                px(6.0),
+                theme::media_scrim().into(),
+            )
+            .blur_radius(px(12.0))])
             .child(
                 div()
-                    .id("toast-message")
-                    .debug_selector(|| "toast-message".to_string())
-                    .flex_1()
-                    .text_xs()
-                    .text_color(theme::t1())
-                    .child(message),
+                    .debug_selector(|| "toast-accent".to_string())
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(3.0))
+                    // Inside the 10 px card corner (1 px border).
+                    .rounded_tl(px(9.0))
+                    .rounded_bl(px(9.0))
+                    .bg(colour),
             )
-            .child(undo_button)
+            .child(
+                div()
+                    .debug_selector(move || format!("toast-icon-{}", kind.name()))
+                    .flex_none()
+                    .child(render_icon(kind.icon(), px(16.0), colour)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(3.0))
+                    .child(
+                        div()
+                            .id("toast-message")
+                            .debug_selector(|| "toast-message".to_string())
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::t1())
+                            .truncate()
+                            .child(message),
+                    )
+                    .children(subtitle.map(|subtitle| {
+                        div()
+                            .debug_selector(|| "toast-subtitle".to_string())
+                            .text_size(px(11.0))
+                            .text_color(theme::t3())
+                            .truncate()
+                            .child(subtitle)
+                    })),
+            )
+            .children(action)
             .child(
                 div()
                     .id("toast-dismiss")
                     .debug_selector(|| "toast-dismiss".to_string())
-                    .size(px(26.0))
+                    .size(px(20.0))
                     .flex_none()
                     .rounded(theme::RADIUS_MD)
-                    .border_1()
-                    .border_color(theme::line_2())
                     .hover(|s| s.bg(theme::bg_3()))
                     .flex()
                     .items_center()
                     .justify_center()
                     .cursor_pointer()
                     .tooltip(theme::tooltip_label("Dismiss"))
-                    .child(render_icon(Icon::X, px(12.0), theme::t2()))
+                    .role(Role::Button)
+                    .aria_label("Dismiss")
+                    .child(render_icon(Icon::X, px(12.0), theme::t3()))
                     .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
                         this.dismiss_toast(cx);
                     })),

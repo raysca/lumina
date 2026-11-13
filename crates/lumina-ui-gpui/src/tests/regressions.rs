@@ -217,7 +217,7 @@ fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
         "confirming deletes the album"
     );
     assert!(
-        vcx.debug_bounds("toast-undo").is_some(),
+        vcx.debug_bounds("toast-action").is_some(),
         "the toast offers Undo"
     );
 

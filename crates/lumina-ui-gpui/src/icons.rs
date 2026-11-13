@@ -78,6 +78,7 @@ pub enum Icon {
     Library,
     SearchX,
     CircleAlert,
+    CircleCheck,
 }
 
 impl Icon {
@@ -160,6 +161,7 @@ impl Icon {
         Icon::Library,
         Icon::SearchX,
         Icon::CircleAlert,
+        Icon::CircleCheck,
     ];
 
     pub fn path(self) -> &'static str {
@@ -239,6 +241,7 @@ impl Icon {
             Self::Library => "icons/library.svg",
             Self::SearchX => "icons/search-x.svg",
             Self::CircleAlert => "icons/circle-alert.svg",
+            Self::CircleCheck => "icons/circle-check.svg",
         }
     }
 }

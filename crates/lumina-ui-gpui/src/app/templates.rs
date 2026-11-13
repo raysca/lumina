@@ -156,7 +156,7 @@ impl LuminaApp {
     /// keys first but would draw under some of them.
     pub fn open_template_editor(&mut self, cx: &mut Context<Self>) {
         if self.import_blocked_by_modal() {
-            self.show_toast(t("template.error_other_dialog"), cx);
+            self.show_warning_toast(t("template.error_other_dialog"), cx);
             return;
         }
         let editing = (!self.config.templates.is_empty()).then_some(0);

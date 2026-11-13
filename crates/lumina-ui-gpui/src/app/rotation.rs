@@ -100,16 +100,16 @@ impl LuminaApp {
         // The import dialog is not in `import_blocked_by_modal`: its own
         // steps call that check.
         if self.import_blocked_by_modal() || self.import.dialog.is_some() {
-            self.show_toast(format!("Close the open dialog before {doing}"), cx);
+            self.show_warning_toast(format!("Close the open dialog before {doing}"), cx);
             return true;
         }
         if self.text_target().is_some() {
-            self.show_toast(format!("Finish editing the field before {doing}"), cx);
+            self.show_warning_toast(format!("Finish editing the field before {doing}"), cx);
             return true;
         }
         // The context menu hides Rotate here; keys, ⌘K and the menu match it.
         if self.selection == AlbumSelection::Trash {
-            self.show_toast(
+            self.show_warning_toast(
                 format!("Restore items from Recently Deleted to {verb} them"),
                 cx,
             );

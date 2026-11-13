@@ -549,7 +549,7 @@ fn template_delete_can_be_undone() {
         assert!(app.templates.editor.is_none());
     });
 
-    click(vcx, "toast-undo");
+    click(vcx, "toast-action");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.config.templates,

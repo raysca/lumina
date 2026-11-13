@@ -37,7 +37,11 @@ fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
         "74px above the status bar, got {gap}"
     );
     let dismiss = vcx.debug_bounds("toast-dismiss").unwrap();
-    assert_eq!(f32::from(dismiss.size.width), 26.0, "26px dismiss button");
+    assert_eq!(
+        f32::from(dismiss.size.width),
+        20.0,
+        "20px ghost dismiss button"
+    );
 
     // With a selection the toast stacks above the dock instead of covering it.
     click(vcx, leak(format!("media-card-{}", item.id.0)));

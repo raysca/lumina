@@ -60,6 +60,7 @@ tokens! {
     t3 = 0x7C7C88;
     accent = 0xE9A23B;
     danger = 0xE8584F;
+    warn = 0xE0A33B;
     positive = 0x5BC27A;
 }
 
@@ -224,6 +225,7 @@ mod tests {
             ("danger", danger(), 0xE8584FFF),
             ("danger-soft", danger_soft(), 0xE8584F1F),
             ("positive", positive(), 0x5BC27AFF),
+            ("warn", warn(), 0xE0A33BFF),
             ("on_accent", on_accent(), 0x1A1206FF),
             ("bg_float", bg_float(), 0x16161CFF),
             ("bg_stage", bg_stage(), 0x08080AFF),

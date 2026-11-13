@@ -254,7 +254,7 @@ impl LuminaApp {
     fn reject_in_stack(&mut self, mut ids: Vec<MediaId>, cx: &mut Context<Self>) {
         ids.retain(|id| self.item_flag(*id) != Flag::Reject);
         if ids.is_empty() {
-            self.show_toast(t("stacks.nothing_to_reject"), cx);
+            self.show_warning_toast(t("stacks.nothing_to_reject"), cx);
             return;
         }
         self.set_flag_on(&ids, Flag::Reject, false, cx);

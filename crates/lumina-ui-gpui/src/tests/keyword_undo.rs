@@ -103,7 +103,7 @@ fn undo_merge_restores_rows_and_rules() {
     );
     view.update(vcx, |app, _| {
         assert_eq!(app.undo.undo_stack.len(), 1, "the merge is one undo entry");
-        assert!(app.toast.current().is_some_and(|t| t.undo_available));
+        assert!(app.toast.current().is_some_and(|t| t.action.is_some()));
     });
 
     // ⌘Z with the tag manager still open.
@@ -372,7 +372,7 @@ fn undo_rename_restores_the_tag_view() {
     open_manager(&view, vcx);
     rename_in_manager(vcx, "tag-manager-row-cat", "kitty");
     view.update(vcx, |app, _| {
-        assert!(app.toast.current().is_some_and(|t| t.undo_available));
+        assert!(app.toast.current().is_some_and(|t| t.action.is_some()));
     });
     assert_eq!(sorted_tags(&engine, items[0].id), ["kitty"]);
     view.update(vcx, |app, cx| {

@@ -28,11 +28,11 @@ impl LuminaApp {
     /// queue keep running.
     pub fn open_network_import_dialog(&mut self, cx: &mut Context<Self>) {
         if self.grid_state.is_none() {
-            self.show_toast("Open a library before importing", cx);
+            self.show_warning_toast("Open a library before importing", cx);
             return;
         }
         if self.import_blocked_by_modal() {
-            self.show_toast("Close the open dialog before importing", cx);
+            self.show_warning_toast("Close the open dialog before importing", cx);
             return;
         }
         // ponytail: no clipboard read on open; macOS may prompt for every

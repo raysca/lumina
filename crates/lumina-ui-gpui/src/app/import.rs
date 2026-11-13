@@ -133,16 +133,16 @@ impl LuminaApp {
     /// be dropped; rfd cannot offer files and folders in one panel.)
     pub fn pick_import_folders(&mut self, cx: &mut Context<Self>) {
         if self.grid_state.is_none() {
-            self.show_toast("Open a library before importing", cx);
+            self.show_warning_toast("Open a library before importing", cx);
             return;
         }
         // Say so before the picker, not after the folders are chosen.
         if self.import.is_busy() {
-            self.show_toast("An import is already running", cx);
+            self.show_warning_toast("An import is already running", cx);
             return;
         }
         if self.import_blocked_by_modal() {
-            self.show_toast("Close the open dialog before importing", cx);
+            self.show_warning_toast("Close the open dialog before importing", cx);
             return;
         }
         // Tests count the request instead of opening a real dialog.
@@ -193,15 +193,15 @@ impl LuminaApp {
     /// Plans importing `paths` (dropped or picked) and opens the dialog.
     pub fn begin_import(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
-            self.show_toast("Open a library before importing", cx);
+            self.show_warning_toast("Open a library before importing", cx);
             return;
         };
         if self.import.is_busy() {
-            self.show_toast("An import is already running", cx);
+            self.show_warning_toast("An import is already running", cx);
             return;
         }
         if self.import_blocked_by_modal() {
-            self.show_toast("Close the open dialog before importing", cx);
+            self.show_warning_toast("Close the open dialog before importing", cx);
             return;
         }
         if paths.is_empty() {
