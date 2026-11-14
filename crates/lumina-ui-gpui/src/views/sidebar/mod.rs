@@ -26,6 +26,8 @@ pub enum AlbumSelection {
     AlbumsOverview,
     /// The Tags page (TAGS › Keywords): the keyword list and detail, no grid.
     Tags,
+    /// The Downloads screen: the download list in the main area, no grid.
+    Downloads,
 }
 
 pub fn tag_color(name: &str) -> Rgba {

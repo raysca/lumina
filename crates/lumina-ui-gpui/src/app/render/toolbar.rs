@@ -98,6 +98,9 @@ impl LuminaApp {
         if self.tags_page_shown() {
             return Some(crate::views::tag_manager::meta(self));
         }
+        if self.downloads_screen_shown() {
+            return self.downloads_meta();
+        }
         if self.duplicates_review_shown() {
             return Some(crate::views::duplicates::meta(self));
         }
@@ -191,6 +194,9 @@ impl LuminaApp {
                 .children(self.render_downloads_button(window, cx))
                 .when(self.albums_overview_shown(), |bar| {
                     bar.child(crate::views::albums_overview::new_album_button(self, cx))
+                })
+                .when(self.downloads_screen_shown(), |bar| {
+                    bar.child(crate::views::downloads_screen::header_actions(self, cx))
                 })
                 .when(own_controls, |bar| bar.child(window_controls(window)));
             return self.clear_traffic_lights(page_header(

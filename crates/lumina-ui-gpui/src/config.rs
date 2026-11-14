@@ -29,6 +29,8 @@ pub enum LastView {
     /// A hand-picked album, token `album:{id}`.
     Album(i64),
     Tag(String),
+    /// The Downloads screen.
+    Downloads,
 }
 
 impl LastView {
@@ -46,6 +48,7 @@ impl LastView {
             LastView::User(id) => format!("user:{id}"),
             LastView::Album(id) => format!("album:{id}"),
             LastView::Tag(tag) => format!("tag:{tag}"),
+            LastView::Downloads => "downloads".to_string(),
         }
     }
 
@@ -60,6 +63,7 @@ impl LastView {
             "places" => LastView::Places,
             "trash" => LastView::Trash,
             "untagged" => LastView::Untagged,
+            "downloads" => LastView::Downloads,
             other => {
                 if let Some(raw_id) = other.strip_prefix("user:") {
                     return match raw_id.parse::<i64>() {
@@ -101,6 +105,7 @@ impl LastView {
             AlbumSelection::Album(id) => LastView::Album(*id),
             AlbumSelection::Tag(tag) => LastView::Tag(tag.clone()),
             AlbumSelection::Untagged => LastView::Untagged,
+            AlbumSelection::Downloads => LastView::Downloads,
             // Duplicates, the Albums overview and the Tags page have no
             // persisted token; they restore as All.
             AlbumSelection::Duplicates | AlbumSelection::AlbumsOverview | AlbumSelection::Tags => {
@@ -126,6 +131,7 @@ impl LastView {
             LastView::User(id) => AlbumSelection::User(*id),
             LastView::Album(id) => AlbumSelection::Album(*id),
             LastView::Tag(tag) => AlbumSelection::Tag(tag.clone()),
+            LastView::Downloads => AlbumSelection::Downloads,
         }
     }
 }

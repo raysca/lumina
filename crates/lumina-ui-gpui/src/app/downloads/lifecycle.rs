@@ -98,6 +98,7 @@ impl LuminaApp {
                 if app.downloads.generation != generation {
                     return;
                 }
+                app.downloads.loaded = true;
                 match loaded {
                     Ok(rows) => {
                         // Rows added while this loaded stay after the stored ones.

@@ -21,13 +21,16 @@ use crate::views::grid::GridState;
 use crate::views::sidebar::AlbumSelection;
 
 /// Maps the persisted view onto the current library, falling back to All when
-/// the saved smart album or album no longer exists.
-fn resolve_restored_view(
+/// the saved smart album or album no longer exists, or the saved Downloads
+/// screen has no downloads to show (`downloads_empty`).
+pub(crate) fn resolve_restored_view(
     view: LastView,
     user_albums: &[SmartAlbum],
     albums: &[Album],
+    downloads_empty: bool,
 ) -> AlbumSelection {
     match view {
+        LastView::Downloads if downloads_empty => AlbumSelection::AllLibrary,
         LastView::User(id) if !user_albums.iter().any(|album| album.id == id) => {
             AlbumSelection::AllLibrary
         }
@@ -750,7 +753,9 @@ impl LuminaApp {
             // Cached by refresh_album_counts.
             AlbumSelection::Untagged => Some(self.untagged_count),
             AlbumSelection::Duplicates => Some(self.duplicate_items_count),
-            AlbumSelection::AlbumsOverview | AlbumSelection::Tags => Some(0),
+            AlbumSelection::AlbumsOverview | AlbumSelection::Tags | AlbumSelection::Downloads => {
+                Some(0)
+            }
         }
     }
 
@@ -959,8 +964,16 @@ impl LuminaApp {
             return;
         }
 
-        self.selection =
-            resolve_restored_view(restored.view, &self.user_smart_albums, &self.albums.list);
+        // ponytail: a queue still loading counts as not empty, so the
+        // screen restores and shows its empty state; the load is one small
+        // query started before the scan, so it has nearly always landed.
+        let downloads_empty = self.downloads.loaded && self.downloads.entries.is_empty();
+        self.selection = resolve_restored_view(
+            restored.view,
+            &self.user_smart_albums,
+            &self.albums.list,
+            downloads_empty,
+        );
         self.search_query = restored.search_query;
         // A session saved before D11 can hold an album with a query. The
         // trail is reset below, so no Back step is needed.
@@ -1311,12 +1324,12 @@ mod restore_tests {
     #[core::prelude::v1::test]
     fn removed_user_album_falls_back_to_all() {
         assert_eq!(
-            resolve_restored_view(LastView::User(7), &[], &[]),
+            resolve_restored_view(LastView::User(7), &[], &[], false),
             AlbumSelection::AllLibrary,
             "a removed smart album must not restore a phantom view"
         );
         assert_eq!(
-            resolve_restored_view(LastView::User(7), &[user_album(7)], &[]),
+            resolve_restored_view(LastView::User(7), &[user_album(7)], &[], false),
             AlbumSelection::User(7),
             "an existing smart album restores its view"
         );
@@ -1325,7 +1338,7 @@ mod restore_tests {
     #[core::prelude::v1::test]
     fn tag_view_restores_without_a_user_album() {
         assert_eq!(
-            resolve_restored_view(LastView::Tag("travel".to_string()), &[], &[]),
+            resolve_restored_view(LastView::Tag("travel".to_string()), &[], &[], false),
             AlbumSelection::Tag("travel".to_string()),
             "tag views do not depend on smart album ids"
         );

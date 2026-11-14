@@ -553,10 +553,10 @@ impl Render for LuminaApp {
         // The inspector stays while Info is on; with no selection it shows an
         // empty state rather than vanishing under a lit toggle.
         let is_fullscreen_viewer = self.is_fullscreen_viewer;
-        // The Albums overview and the Tags page hold no media: the panel
-        // would have nothing to show, so it stays hidden there (Info stays
-        // on for other views). Review Duplicates hides it too: the compare
-        // cards show each copy's facts.
+        // The Albums overview, the Tags page and the Downloads screen hold
+        // no media: the panel would have nothing to show, so it stays hidden
+        // there (Info stays on for other views). Review Duplicates hides it
+        // too: the compare cards show each copy's facts.
         let inspector_shown = self.inspector_open
             && !is_fullscreen_viewer
             && !self.non_media_page_shown()
@@ -627,6 +627,9 @@ impl Render for LuminaApp {
                 }))
                 .on_action(cx.listener(|this, _: &ToggleDownloads, _w, cx| {
                     this.toggle_downloads_panel(cx);
+                }))
+                .on_action(cx.listener(|this, _: &ShowAllDownloads, _w, cx| {
+                    this.show_downloads_screen(cx);
                 }))
                 .on_action(cx.listener(|this, _: &ImportXmp, _w, cx| {
                     this.import_sidecars_selected(cx);
@@ -837,6 +840,15 @@ impl Render for LuminaApp {
                                             .min_w_0()
                                             .h_full()
                                             .child(crate::views::albums_overview::render(self, cx))
+                                            .child(self.render_toast_overlay(cx))
+                                            .into_any_element()
+                                    } else if self.downloads_screen_shown() {
+                                        div()
+                                            .relative()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .child(crate::views::downloads_screen::render(self, cx))
                                             .child(self.render_toast_overlay(cx))
                                             .into_any_element()
                                     } else {

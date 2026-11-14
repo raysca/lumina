@@ -190,6 +190,15 @@ impl Catalog {
         )?)
     }
 
+    /// Clear completed (the Downloads screen): removes Done and Duplicate
+    /// rows only. Failed rows stay: they hold the link for Retry.
+    pub fn clear_completed_downloads(&self) -> Result<usize> {
+        Ok(self.conn.lock().execute(
+            "DELETE FROM download_queue WHERE state IN ('done', 'duplicate')",
+            [],
+        )?)
+    }
+
     /// Every row, in queue order.
     pub fn list_downloads(&self) -> Result<Vec<DownloadRow>> {
         let conn = self.conn.lock();
@@ -278,6 +287,35 @@ mod tests {
         assert_eq!(read.media_id, Some(MediaId(7)));
         assert_eq!(read.finished_epoch_ms, Some(42));
         assert!(!read.in_library, "media 7 does not exist");
+    }
+
+    #[test]
+    fn clear_completed_keeps_failed_and_active_rows() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        for (url, state) in [
+            ("https://a/waiting", DownloadState::Waiting),
+            ("https://a/running", DownloadState::Running),
+            ("https://a/paused", DownloadState::Paused),
+            ("https://a/failed", DownloadState::Failed),
+            ("https://a/done", DownloadState::Done),
+            ("https://a/duplicate", DownloadState::Duplicate),
+        ] {
+            let mut row = catalog.add_download(url).unwrap();
+            row.state = state;
+            catalog.update_download(&row).unwrap();
+        }
+        assert_eq!(catalog.clear_completed_downloads().unwrap(), 2);
+        let left: Vec<DownloadState> = states(&catalog).into_iter().map(|(_, s)| s).collect();
+        assert_eq!(
+            left,
+            [
+                DownloadState::Waiting,
+                DownloadState::Running,
+                DownloadState::Paused,
+                DownloadState::Failed
+            ],
+            "Clear completed removes only Done and Duplicate rows; a failed row keeps its link"
+        );
     }
 
     #[test]

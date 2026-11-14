@@ -437,6 +437,10 @@ fn downloads_row_follows_the_queue() {
     );
     click(vcx, "sidebar-nav-downloads");
     view.update(vcx, |app, _| {
-        assert!(app.downloads.open, "the row opens the downloads panel");
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::Downloads,
+            "the row opens the Downloads screen; ⌥⌘L keeps the panel"
+        );
     });
 }

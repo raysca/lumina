@@ -154,6 +154,7 @@ pub enum CommandId {
     ImportMedia,
     ImportNetworkVideo,
     ToggleDownloads,
+    ShowAllDownloads,
     /// Act on the download list; each shown only when it has rows to act on.
     PauseAllDownloads,
     ResumeAllDownloads,
@@ -264,7 +265,9 @@ impl Command {
             ShowMosaic => Icon::LayoutDashboard,
             SelectDay | ShowYears | ShowMonths | ShowDays => Icon::Calendar,
             LocateMissing => Icon::TriangleAlert,
-            ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
+            ImportMedia | ImportNetworkVideo | ToggleDownloads | ShowAllDownloads => {
+                Icon::ArrowDownToLine
+            }
             PauseAllDownloads => Icon::Pause,
             ResumeAllDownloads => Icon::Play,
             ClearFinishedDownloads => Icon::Check,
@@ -358,6 +361,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.toggle_downloads",
             shortcut: "⌥⌘L",
             keywords: "downloads queue progress url video",
+        },
+        Command {
+            id: CommandId::ShowAllDownloads,
+            key: "command.show_all_downloads",
+            shortcut: "",
+            keywords: "downloads screen list queue url video",
         },
         Command {
             id: CommandId::PauseAllDownloads,
@@ -1377,6 +1386,11 @@ impl LuminaApp {
             CommandId::Slideshow => self.grid_state.is_some() && !self.compare_holds_view(),
             CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
+            CommandId::ShowAllDownloads => {
+                self.grid_state.is_some()
+                    && !self.compare_holds_view()
+                    && !self.downloads_screen_shown()
+            }
             // Placeholders (insert not back yet) aren't paused, so they don't count.
             CommandId::PauseAllDownloads => self.downloads.entries.iter().any(|e| {
                 e.row.id > 0
@@ -1828,6 +1842,7 @@ impl LuminaApp {
             CommandId::ImportMedia => self.pick_import_folders(cx),
             CommandId::ImportNetworkVideo => self.open_network_import_dialog(cx),
             CommandId::ToggleDownloads => self.toggle_downloads_panel(cx),
+            CommandId::ShowAllDownloads => self.show_downloads_screen(cx),
             CommandId::PauseAllDownloads => self.pause_all_downloads(cx),
             CommandId::ResumeAllDownloads => self.resume_all_downloads(cx),
             CommandId::ClearFinishedDownloads => self.clear_finished_downloads(cx),

@@ -85,6 +85,8 @@ pub(crate) struct DownloadQueue {
     pub generation: u64,
     /// `None` until a library opens. Tests replace it.
     pub job: Option<JobFn>,
+    /// The stored rows have loaded (or failed to) since the library opened.
+    pub loaded: bool,
     /// Ids for rows whose insert hasn't returned yet (always negative).
     next_placeholder: i64,
     /// The "still running" prompt before quitting or switching library.
@@ -121,6 +123,7 @@ impl DownloadQueue {
         self.confirm = None;
         self.generation += 1;
         self.job = job;
+        self.loaded = false;
     }
 }
 

@@ -58,10 +58,11 @@ pub(super) fn render_library_section(
         .children(render_downloads_row(this, cx))
 }
 
-/// Downloads: shown while the download list has rows, with the count of
-/// unfinished ones as attention. Opens the downloads panel (⌥⌘L).
+/// Downloads: shown while the download list has rows (or its screen is
+/// selected), with the count of unfinished ones as attention. Opens the
+/// Downloads screen; ⌥⌘L keeps the dropdown.
 fn render_downloads_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Stateful<Div>> {
-    if this.downloads.entries.is_empty() {
+    if this.downloads.entries.is_empty() && this.selection != AlbumSelection::Downloads {
         return None;
     }
     let unfinished = this.download_badge_count();
@@ -71,8 +72,8 @@ fn render_downloads_row(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option
         Icon::ArrowDownToLine,
         unfinished,
         unfinished > 0,
-        this.downloads.open,
-        cx.listener(|this, _e: &ClickEvent, _w, cx| this.toggle_downloads_panel(cx)),
+        this.downloads_screen_shown(),
+        cx.listener(|this, _e: &ClickEvent, _w, cx| this.show_downloads_screen(cx)),
     ))
 }
 

@@ -2,7 +2,7 @@
 //! each row's main action, and Clear finished.
 
 use gpui::*;
-use lumina_core::{DownloadState, MediaId, SystemAlbum};
+use lumina_core::{Catalog, DownloadState, MediaId, SystemAlbum};
 
 use super::DownloadEntry;
 use crate::views::sidebar::AlbumSelection;
@@ -169,21 +169,45 @@ impl LuminaApp {
         false
     }
 
-    /// Clear finished: removes Done, Failed and Duplicate rows. The media
-    /// stays in the library.
+    /// Clear finished (dropdown, ⌘K): removes Done, Failed and Duplicate
+    /// rows. The media stays in the library.
     pub fn clear_finished_downloads(&mut self, cx: &mut Context<Self>) {
+        self.clear_downloads(
+            &[
+                DownloadState::Done,
+                DownloadState::Failed,
+                DownloadState::Duplicate,
+            ],
+            Catalog::clear_finished_downloads,
+            cx,
+        );
+    }
+
+    /// Clear completed (the Downloads screen): removes Done and Duplicate
+    /// rows. Failed rows stay, since they hold the link for Retry.
+    pub fn clear_completed_downloads(&mut self, cx: &mut Context<Self>) {
+        self.clear_downloads(
+            &[DownloadState::Done, DownloadState::Duplicate],
+            Catalog::clear_completed_downloads,
+            cx,
+        );
+    }
+
+    /// Removes rows in `states` at once, then from the catalog with `clear`
+    /// (which must delete the same states) off the UI thread. A failed write
+    /// puts them back and shows the banner.
+    fn clear_downloads(
+        &mut self,
+        states: &[DownloadState],
+        clear: fn(&Catalog) -> anyhow::Result<usize>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(catalog) = self.download_catalog() else {
             return;
         };
-        let finished = |entry: &DownloadEntry| {
-            matches!(
-                entry.row.state,
-                DownloadState::Done | DownloadState::Failed | DownloadState::Duplicate
-            )
-        };
         let (cleared, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.downloads.entries)
             .into_iter()
-            .partition(|entry| finished(entry));
+            .partition(|entry| states.contains(&entry.row.state));
         self.downloads.entries = kept;
         if cleared.is_empty() {
             return;
@@ -202,7 +226,7 @@ impl LuminaApp {
         let generation = self.downloads.generation;
         let clear = cx
             .background_executor()
-            .spawn(async move { catalog.clear_finished_downloads() });
+            .spawn(async move { clear(&catalog) });
         let mut cleared = Some(cleared);
         cx.spawn(async move |this, cx| {
             if let Err(err) = clear.await {

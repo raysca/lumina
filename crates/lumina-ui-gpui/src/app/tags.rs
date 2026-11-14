@@ -288,11 +288,12 @@ impl LuminaApp {
             && self.active_year.is_none()
     }
 
-    /// A page with no media shows (the Albums overview or the Tags page):
+    /// A page with no media shows (the Albums overview, the Tags page or
+    /// the Downloads screen):
     /// no grid, no inspector, and no selection for keys or commands to act
     /// on, so a viewer or a new copy is shown from All Media instead.
     pub(crate) fn non_media_page_shown(&self) -> bool {
-        self.albums_overview_shown() || self.tags_page_shown()
+        self.albums_overview_shown() || self.tags_page_shown() || self.downloads_screen_shown()
     }
 
     /// The toolbar Tags button, TAGS › Keywords, ⌘K Open Tags and the empty

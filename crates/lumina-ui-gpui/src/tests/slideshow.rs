@@ -567,6 +567,9 @@ fn menu_actions_are_disabled_while_the_slideshow_plays() {
         ("Show Downloads", |v| {
             v.dispatch_action(crate::actions::ToggleDownloads)
         }),
+        ("Show All Downloads", |v| {
+            v.dispatch_action(crate::actions::ShowAllDownloads)
+        }),
         ("Import XMP Metadata", |v| {
             v.dispatch_action(crate::actions::ImportXmp)
         }),

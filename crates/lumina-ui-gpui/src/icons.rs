@@ -91,6 +91,7 @@ pub enum Icon {
     Link,
     Link2,
     FolderDown,
+    CheckCheck,
 }
 
 impl Icon {
@@ -186,6 +187,7 @@ impl Icon {
         Icon::Link,
         Icon::Link2,
         Icon::FolderDown,
+        Icon::CheckCheck,
     ];
 
     pub fn path(self) -> &'static str {
@@ -278,6 +280,7 @@ impl Icon {
             Self::Link => "icons/link.svg",
             Self::Link2 => "icons/link-2.svg",
             Self::FolderDown => "icons/folder-down.svg",
+            Self::CheckCheck => "icons/check-check.svg",
         }
     }
 }
