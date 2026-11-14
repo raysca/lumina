@@ -118,7 +118,16 @@ fn render_row(
         })
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.downloads.focused = Some(id);
-            this.download_main_action(id, cx);
+            // ↵ pauses a running row; a stray click must not, since Resume
+            // starts over.
+            let running = this
+                .downloads
+                .entries
+                .iter()
+                .any(|e| e.row.id == id && e.row.state == DownloadState::Running);
+            if !running {
+                this.download_main_action(id, cx);
+            }
         }))
         .child(
             div()

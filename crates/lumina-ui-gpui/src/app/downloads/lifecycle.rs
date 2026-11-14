@@ -134,17 +134,97 @@ impl LuminaApp {
 
     /// Resume All: every paused row, in list order.
     pub fn resume_all_downloads(&mut self, cx: &mut Context<Self>) {
-        let paused: Vec<i64> = self
+        let paused: Vec<(i64, bool)> = self
             .downloads
             .entries
             .iter()
             .filter(|entry| entry.row.state == DownloadState::Paused)
-            .map(|entry| entry.row.id)
+            .map(|entry| (entry.row.id, entry.skip_prior_check))
             .collect();
-        // ponytail: one write each; the catalog lock keeps them apart, but
-        // they may land out of order. One batched write if order matters.
-        for row_id in paused {
-            self.resume_download(row_id, cx);
+        self.requeue_downloads(paused, cx);
+    }
+
+    pub(crate) fn requeue_download(
+        &mut self,
+        row_id: i64,
+        skip_prior_check: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.requeue_downloads(vec![(row_id, skip_prior_check)], cx);
+    }
+
+    /// Starts `(row, skip_prior_check)` rows over at the end of the queue,
+    /// in the order given: one background task writes them one after the
+    /// other, so each takes the next queue position.
+    pub(crate) fn requeue_downloads(&mut self, mut rows: Vec<(i64, bool)>, cx: &mut Context<Self>) {
+        let Some(catalog) = self.download_catalog() else {
+            return;
+        };
+        rows.retain(|(row_id, _)| {
+            let Some(index) = self.downloads.index_of(*row_id) else {
+                return false;
+            };
+            let entry = &mut self.downloads.entries[index];
+            // Only finished-without-success rows start over; a running or
+            // waiting one is already on its way.
+            let restartable = matches!(
+                entry.row.state,
+                DownloadState::Failed | DownloadState::Paused | DownloadState::Duplicate
+            );
+            if entry.requeueing || !restartable {
+                return false;
+            }
+            entry.requeueing = true;
+            true
+        });
+        if rows.is_empty() {
+            return;
         }
+        let generation = self.downloads.generation;
+        let ids: Vec<i64> = rows.iter().map(|(row_id, _)| *row_id).collect();
+        let requeue = cx.background_executor().spawn(async move {
+            ids.into_iter()
+                .map(|row_id| catalog.requeue_download(row_id))
+                .collect::<Vec<_>>()
+        });
+        cx.spawn(async move |this, cx| {
+            let requeued = requeue.await;
+            let _ = this.update(cx, |app, cx| {
+                if app.downloads.generation != generation {
+                    return;
+                }
+                let mut failed = false;
+                for ((row_id, skip_prior_check), result) in rows.into_iter().zip(requeued) {
+                    let Some(index) = app.downloads.index_of(row_id) else {
+                        continue;
+                    };
+                    app.downloads.entries[index].requeueing = false;
+                    match result {
+                        Ok(row) => {
+                            let mut entry = app.downloads.entries.remove(index);
+                            entry.row = row;
+                            entry.skip_prior_check = skip_prior_check;
+                            // Placeholders (not stored yet) stay last.
+                            let at = app
+                                .downloads
+                                .entries
+                                .iter()
+                                .position(|entry| entry.row.id < 0)
+                                .unwrap_or(app.downloads.entries.len());
+                            app.downloads.entries.insert(at, entry);
+                        }
+                        Err(err) => {
+                            log::error!("requeueing download {row_id}: {err:#}");
+                            failed = true;
+                        }
+                    }
+                }
+                if failed {
+                    app.set_error("Couldn't restart the download. Try again.", cx);
+                }
+                app.pump_downloads(cx);
+            });
+        })
+        .detach();
     }
 }

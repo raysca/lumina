@@ -44,10 +44,18 @@ ones downloading, waiting or paused, a ring for their combined progress, and
 a red dot when one failed since the list was last opened. ⌥⌘L, View > Show
 Downloads and the command palette open it too. The list groups rows into
 Downloading, Waiting, Paused, Failed and Done. In it, ↑/↓ move, ↵ retries a
-failed row, resumes a paused one or shows a finished one in the library (⌘↵
-downloads an "already in your library" row again), ⌫ cancels or removes a
-row, and Esc closes it. Finished rows stay until Clear finished. Pasting a
-link already in the list highlights its row instead of adding it again.
+failed row, pauses a downloading one, resumes a paused one or shows a
+finished one in the library (⌘↵ downloads an "already in your library" row
+again), ⌫ cancels or removes a row, and Esc closes it. Finished rows stay
+until Clear finished. Pasting a link already in the list highlights its row
+instead of adding it again. The command palette has Pause All Downloads,
+Resume All Downloads and Clear Finished Downloads, each listed only when
+there is something to act on.
+
+Pausing stops the download and keeps its row, and the next waiting download
+takes its place. Resume starts the download over from the beginning: the
+part already downloaded is discarded, not continued. A download that
+finishes just as it is paused stays done.
 
 Quitting or opening another library while downloads run asks first.
 Confirming stops them; the next time the library opens they come back

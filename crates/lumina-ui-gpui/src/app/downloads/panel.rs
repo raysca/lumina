@@ -43,6 +43,14 @@ impl LuminaApp {
             .collect()
     }
 
+    /// Whether any row is in one of `states`: the palette's download entries.
+    pub(crate) fn any_download_in(&self, states: &[DownloadState]) -> bool {
+        self.downloads
+            .entries
+            .iter()
+            .any(|entry| states.contains(&entry.row.state))
+    }
+
     /// Bytes done over bytes expected, across running downloads whose size
     /// is known: the toolbar ring. `None` when no size is known.
     pub(crate) fn download_progress(&self) -> Option<f32> {
@@ -119,8 +127,9 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// ⏎ on a row and a click on its body: Retry on a failed row, Resume on
-    /// a paused one, Show in Library on a finished one.
+    /// ⏎ on a row and a click on its body: Retry on a failed row, Pause on
+    /// a running one (⏎ only; the click skips it), Resume on a paused one,
+    /// Show in Library on a finished one.
     pub(crate) fn download_main_action(&mut self, row_id: i64, cx: &mut Context<Self>) {
         let Some(entry) = self.downloads.entries.iter().find(|e| e.row.id == row_id) else {
             return;
@@ -128,6 +137,7 @@ impl LuminaApp {
         match (entry.row.state, entry.row.media_id) {
             (DownloadState::Failed, _) if entry.row.can_retry => self.retry_download(row_id, cx),
             (DownloadState::Paused, _) => self.resume_download(row_id, cx),
+            (DownloadState::Running, _) => self.pause_download(row_id, cx),
             (DownloadState::Done | DownloadState::Duplicate, Some(id)) if entry.row.in_library => {
                 // Trashed or hidden since it finished: say so on the row.
                 let shown = self.show_download_in_library(id, cx);

@@ -1,7 +1,7 @@
 //! Keyboard command palette (Cmd+K).
 
 use gpui::*;
-use lumina_core::{SortDirection, SortField};
+use lumina_core::{DownloadState, SortDirection, SortField};
 
 use crate::icons::Icon;
 use crate::views::inspector::InspectorTab;
@@ -154,6 +154,10 @@ pub enum CommandId {
     ImportMedia,
     ImportNetworkVideo,
     ToggleDownloads,
+    /// Act on the download list; each shown only when it has rows to act on.
+    PauseAllDownloads,
+    ResumeAllDownloads,
+    ClearFinishedDownloads,
     CancelImport,
     /// Get Info actions, so they have a keyboard path (§11).
     AdjustDate,
@@ -261,6 +265,9 @@ impl Command {
             SelectDay | ShowYears | ShowMonths | ShowDays => Icon::Calendar,
             LocateMissing => Icon::TriangleAlert,
             ImportMedia | ImportNetworkVideo | ToggleDownloads => Icon::ArrowDownToLine,
+            PauseAllDownloads => Icon::Pause,
+            ResumeAllDownloads => Icon::Play,
+            ClearFinishedDownloads => Icon::Check,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
             OpenTagManager | AddKeywordAlias | ApplyTemplate => Icon::Tag,
@@ -351,6 +358,24 @@ pub fn commands() -> &'static [Command] {
             key: "command.toggle_downloads",
             shortcut: "⌥⌘L",
             keywords: "downloads queue progress url video",
+        },
+        Command {
+            id: CommandId::PauseAllDownloads,
+            key: "command.pause_all_downloads",
+            shortcut: "",
+            keywords: "downloads stop queue url video",
+        },
+        Command {
+            id: CommandId::ResumeAllDownloads,
+            key: "command.resume_all_downloads",
+            shortcut: "",
+            keywords: "downloads continue start queue url video",
+        },
+        Command {
+            id: CommandId::ClearFinishedDownloads,
+            key: "command.clear_finished_downloads",
+            shortcut: "",
+            keywords: "downloads done completed remove list",
         },
         Command {
             id: CommandId::CancelImport,
@@ -1352,6 +1377,17 @@ impl LuminaApp {
             CommandId::Slideshow => self.grid_state.is_some() && !self.compare_holds_view(),
             CommandId::SlideshowInterval(secs) => self.config.slideshow_interval_secs != secs,
             CommandId::ToggleDownloads => !self.downloads.entries.is_empty(),
+            // Placeholders (insert not back yet) aren't paused, so they don't count.
+            CommandId::PauseAllDownloads => self.downloads.entries.iter().any(|e| {
+                e.row.id > 0
+                    && matches!(e.row.state, DownloadState::Running | DownloadState::Waiting)
+            }),
+            CommandId::ResumeAllDownloads => self.any_download_in(&[DownloadState::Paused]),
+            CommandId::ClearFinishedDownloads => self.any_download_in(&[
+                DownloadState::Done,
+                DownloadState::Failed,
+                DownloadState::Duplicate,
+            ]),
             CommandId::ExportSelection | CommandId::ExportJpeg => self.jobs.export.is_none(),
             // Similar shots holds no selection, so it offers no Share….
             CommandId::Share => {
@@ -1792,6 +1828,9 @@ impl LuminaApp {
             CommandId::ImportMedia => self.pick_import_folders(cx),
             CommandId::ImportNetworkVideo => self.open_network_import_dialog(cx),
             CommandId::ToggleDownloads => self.toggle_downloads_panel(cx),
+            CommandId::PauseAllDownloads => self.pause_all_downloads(cx),
+            CommandId::ResumeAllDownloads => self.resume_all_downloads(cx),
+            CommandId::ClearFinishedDownloads => self.clear_finished_downloads(cx),
             CommandId::CancelImport => self.cancel_running_import(cx),
             CommandId::AdjustDate => {
                 self.open_get_info_at(InspectorTab::Info, cx);

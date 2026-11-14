@@ -9,6 +9,7 @@
 mod job;
 mod lifecycle;
 mod panel;
+mod pause;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
@@ -146,6 +147,8 @@ struct Finished {
     outcome: JobOutcome,
     /// The row couldn't be stored; the details are in the log.
     write_failed: bool,
+    /// The run's cancel flag: tells this run from a later one of the row.
+    cancel: Arc<AtomicBool>,
 }
 
 impl LuminaApp {
@@ -337,6 +340,7 @@ impl LuminaApp {
                     row,
                     outcome,
                     write_failed,
+                    cancel,
                 });
             });
         if let Err(err) = spawned {
@@ -416,19 +420,35 @@ impl LuminaApp {
         if self.downloads.generation != generation {
             return;
         }
-        // Removed (✕) while it ran: the row stays gone, but a file that
-        // made it into the catalog still shows in the library.
-        let Some(index) = self.downloads.index_of(finished.row.id) else {
+        // Removed (✕) while it ran, or paused and resumed so a later run
+        // owns the row (a step that ignores the cancel flag can end this
+        // run late): the row is left alone, but a file that made it into
+        // the catalog still shows in the library. This run's stored result
+        // is overwritten by the later run's own writes when it ends; until
+        // then it says Done for a file that really was catalogued.
+        let current = self
+            .downloads
+            .index_of(finished.row.id)
+            .filter(|&at| Arc::ptr_eq(&self.downloads.entries[at].cancel, &finished.cancel));
+        let Some(index) = current else {
             if matches!(finished.outcome, JobOutcome::Imported { .. }) {
                 self.refresh_album_counts();
                 self.refresh_active_view(cx);
             }
             return;
         };
+        let entry = &mut self.downloads.entries[index];
         if matches!(finished.outcome, JobOutcome::Cancelled) {
+            // Paused while it ran: store it now that the job can write no
+            // more. With a Resume write in flight, that write stores the row.
+            // A Resume pressed after this still converges: its run's thread
+            // stores Running first, and a row left waiting reopens paused.
+            if entry.row.state == DownloadState::Paused && !entry.requeueing {
+                let row = entry.row.clone();
+                self.store_paused(vec![row], false, cx);
+            }
             return;
         }
-        let entry = &mut self.downloads.entries[index];
         // The job's copy of the row predates its inspection.
         let mut row = finished.row;
         row.title = row.title.or(entry.row.title.take());
@@ -527,67 +547,6 @@ impl LuminaApp {
     /// Download Again on a row found to be in the library already.
     pub fn download_again(&mut self, row_id: i64, cx: &mut Context<Self>) {
         self.requeue_download(row_id, true, cx);
-    }
-
-    pub(crate) fn requeue_download(
-        &mut self,
-        row_id: i64,
-        skip_prior_check: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let (Some(index), Some(catalog)) =
-            (self.downloads.index_of(row_id), self.download_catalog())
-        else {
-            return;
-        };
-        let entry = &mut self.downloads.entries[index];
-        // Only finished-without-success rows start over; a running or
-        // waiting one is already on its way.
-        let restartable = matches!(
-            entry.row.state,
-            DownloadState::Failed | DownloadState::Paused | DownloadState::Duplicate
-        );
-        if entry.requeueing || !restartable {
-            return;
-        }
-        entry.requeueing = true;
-        let generation = self.downloads.generation;
-        let requeue = cx
-            .background_executor()
-            .spawn(async move { catalog.requeue_download(row_id) });
-        cx.spawn(async move |this, cx| {
-            let requeued = requeue.await;
-            let _ = this.update(cx, |app, cx| {
-                if app.downloads.generation != generation {
-                    return;
-                }
-                let Some(index) = app.downloads.index_of(row_id) else {
-                    return;
-                };
-                app.downloads.entries[index].requeueing = false;
-                match requeued {
-                    Ok(row) => {
-                        let mut entry = app.downloads.entries.remove(index);
-                        entry.row = row;
-                        entry.skip_prior_check = skip_prior_check;
-                        // Placeholders (not stored yet) stay last.
-                        let at = app
-                            .downloads
-                            .entries
-                            .iter()
-                            .position(|entry| entry.row.id < 0)
-                            .unwrap_or(app.downloads.entries.len());
-                        app.downloads.entries.insert(at, entry);
-                        app.pump_downloads(cx);
-                    }
-                    Err(err) => {
-                        log::error!("requeueing download {row_id}: {err:#}");
-                        app.set_error("Couldn't restart the download. Try again.", cx);
-                    }
-                }
-            });
-        })
-        .detach();
     }
 }
 
