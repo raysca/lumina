@@ -3,8 +3,8 @@
 //! network.
 
 use super::downloads::{imported, install, persisted, queue_app, settle, states, submit};
-use super::ui_automation::{app_with_library, click, render_ui};
-use crate::app::downloads::{DownloadEntry, JobOutcome};
+use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use crate::app::downloads::{DownloadEntry, DownloadFilter, JobOutcome};
 use crate::config::{AppConfig, LastView};
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
@@ -321,4 +321,108 @@ fn downloads_screen_buttons_act() {
     view.update(vcx, |app, _| {
         assert_eq!(states(app), [DownloadState::Failed])
     });
+}
+
+/// Which `downloads-screen-row-{id}` rows paint, for ids 1..=7.
+fn shown_rows(vcx: &mut VisualTestContext) -> Vec<i64> {
+    (1..=7)
+        .filter(|id| marker(vcx, format!("downloads-screen-row-{id}")))
+        .collect()
+}
+
+#[core::prelude::v1::test]
+fn download_filter_chips_count_and_filter() {
+    let (_dir, engine, fake, mut cx) = queue_app("dls_filter");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    // Ids 1-7: two running, then waiting, paused, failed, done, duplicate.
+    set_rows(
+        &view,
+        vcx,
+        &[
+            DownloadState::Running,
+            DownloadState::Running,
+            DownloadState::Waiting,
+            DownloadState::Paused,
+            DownloadState::Failed,
+            DownloadState::Done,
+            DownloadState::Duplicate,
+        ],
+    );
+    view.update(vcx, |app, cx| app.show_downloads_screen(cx));
+    render_ui(vcx);
+    for (key, n) in [
+        ("all", 7),
+        ("downloading", 2),
+        ("queued", 1),
+        ("paused", 1),
+        ("failed", 1),
+        ("completed", 2),
+    ] {
+        assert!(
+            marker(vcx, format!("downloads-filter-{key}")),
+            "the {key} chip paints"
+        );
+        assert!(
+            marker(vcx, format!("downloads-filter-count-text:{key} {n}")),
+            "the {key} chip counts {n}"
+        );
+    }
+    assert_eq!(
+        shown_rows(vcx),
+        (1..=7).collect::<Vec<_>>(),
+        "All lists every row"
+    );
+    assert!(
+        marker(vcx, "downloads-limits-text:3 at a time".into()),
+        "the limits text reads the live concurrency"
+    );
+
+    click(vcx, "downloads-filter-failed");
+    assert_eq!(shown_rows(vcx), [5], "Failed leaves only failed rows");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.downloads.filter, DownloadFilter::Failed)
+    });
+
+    // Keyboard: ←/→ move between chips, stopping at the ends.
+    focus_app(vcx, &view);
+    keystrokes(vcx, "right");
+    assert_eq!(
+        shown_rows(vcx),
+        [6, 7],
+        "→ moves to Completed (Done and Duplicate)"
+    );
+    keystrokes(vcx, "right");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.downloads.filter,
+            DownloadFilter::Completed,
+            "→ stops at the last chip"
+        )
+    });
+    keystrokes(vcx, "left left left");
+    assert_eq!(shown_rows(vcx), [3], "← moves back to Queued");
+    keystrokes(vcx, "left left left");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.downloads.filter, DownloadFilter::All, "← stops at All")
+    });
+
+    click(vcx, "downloads-settings");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.preferences_open,
+            "the settings button opens Preferences"
+        )
+    });
+    view.update(vcx, |app, cx| app.close_preferences(cx));
+
+    // Narrow main area: the limits text hides; the chips stay.
+    vcx.simulate_resize(gpui::size(gpui::px(1000.0), gpui::px(800.0)));
+    render_ui(vcx);
+    assert!(
+        !marker(vcx, "downloads-limits".into()),
+        "below 900 px the limits text hides first"
+    );
+    assert!(marker(vcx, "downloads-filter-completed".into()));
 }

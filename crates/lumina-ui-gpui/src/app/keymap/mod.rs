@@ -343,6 +343,11 @@ impl LuminaApp {
             return;
         }
 
+        // The Downloads screen: ←/→ move between its filter chips.
+        if self.handle_downloads_screen_key(keystroke, cx) {
+            return;
+        }
+
         // Mosaic's Years and Months take arrows/↵/Esc and absorb the grid's
         // keys (the selection is not on screen).
         if self.handle_bucket_cards_key(keystroke, cx) {

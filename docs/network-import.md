@@ -67,7 +67,9 @@ The sidebar's Downloads row (shown while the list has rows), View > Show
 All Downloads and the command palette open the Downloads screen: the same
 list in the main area, with Pause all (Resume all when nothing runs and
 something is paused), Clear completed (finished downloads only; failed
-ones stay for Retry) and Add URL above it. Lumina reopens
+ones stay for Retry) and Add URL above it. Filter chips (All, Downloading,
+Queued, Paused, Failed, Completed) narrow the list, with ←/→ moving between
+them; beside them the screen shows how many download at a time. Lumina reopens
 on it if it was showing at quit and the list still has rows.
 
 The Downloaded album in the sidebar lists everything downloaded from a link

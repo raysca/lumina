@@ -848,7 +848,9 @@ impl Render for LuminaApp {
                                             .flex_1()
                                             .min_w_0()
                                             .h_full()
-                                            .child(crate::views::downloads_screen::render(self, cx))
+                                            .child(crate::views::downloads_screen::render(
+                                                self, window, cx,
+                                            ))
                                             .child(self.render_toast_overlay(cx))
                                             .into_any_element()
                                     } else {

@@ -13,6 +13,7 @@ mod pause;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
+pub(crate) use panel::DownloadFilter;
 
 use gpui::*;
 use lumina_core::net_import::{
@@ -87,6 +88,8 @@ pub(crate) struct DownloadQueue {
     pub job: Option<JobFn>,
     /// The stored rows have loaded (or failed to) since the library opened.
     pub loaded: bool,
+    /// The Downloads screen's chip. Session only, never saved.
+    pub filter: DownloadFilter,
     /// Ids for rows whose insert hasn't returned yet (always negative).
     next_placeholder: i64,
     /// The "still running" prompt before quitting or switching library.
@@ -124,6 +127,7 @@ impl DownloadQueue {
         self.generation += 1;
         self.job = job;
         self.loaded = false;
+        self.filter = DownloadFilter::All;
     }
 }
 

@@ -5,8 +5,68 @@ use gpui::*;
 use lumina_core::{Catalog, DownloadState, MediaId, SystemAlbum};
 
 use super::DownloadEntry;
+use crate::icons::Icon;
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
+
+/// The Downloads screen's filter chips, left to right. Session only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum DownloadFilter {
+    #[default]
+    All,
+    Downloading,
+    Queued,
+    Paused,
+    Failed,
+    Completed,
+}
+
+impl DownloadFilter {
+    pub(crate) const ALL: [DownloadFilter; 6] = [
+        DownloadFilter::All,
+        DownloadFilter::Downloading,
+        DownloadFilter::Queued,
+        DownloadFilter::Paused,
+        DownloadFilter::Failed,
+        DownloadFilter::Completed,
+    ];
+
+    /// The chip's selector suffix and i18n key suffix.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            DownloadFilter::All => "all",
+            DownloadFilter::Downloading => "downloading",
+            DownloadFilter::Queued => "queued",
+            DownloadFilter::Paused => "paused",
+            DownloadFilter::Failed => "failed",
+            DownloadFilter::Completed => "completed",
+        }
+    }
+
+    pub(crate) fn icon(self) -> Icon {
+        match self {
+            DownloadFilter::All => Icon::Layers,
+            DownloadFilter::Downloading => Icon::ArrowDownToLine,
+            DownloadFilter::Queued => Icon::ListOrdered,
+            DownloadFilter::Paused => Icon::Pause,
+            DownloadFilter::Failed => Icon::TriangleAlert,
+            DownloadFilter::Completed => Icon::Check,
+        }
+    }
+
+    pub(crate) fn matches(self, state: DownloadState) -> bool {
+        match self {
+            DownloadFilter::All => true,
+            DownloadFilter::Downloading => state == DownloadState::Running,
+            DownloadFilter::Queued => state == DownloadState::Waiting,
+            DownloadFilter::Paused => state == DownloadState::Paused,
+            DownloadFilter::Failed => state == DownloadState::Failed,
+            DownloadFilter::Completed => {
+                matches!(state, DownloadState::Done | DownloadState::Duplicate)
+            }
+        }
+    }
+}
 
 /// The dropdown's sections, top to bottom.
 const SECTIONS: [(&str, &[DownloadState]); 5] = [
@@ -41,6 +101,31 @@ impl LuminaApp {
             .into_iter()
             .flat_map(|(_, rows)| rows)
             .collect()
+    }
+
+    /// Rows the screen's filter keeps.
+    pub(crate) fn download_filter_count(&self, filter: DownloadFilter) -> usize {
+        self.downloads
+            .entries
+            .iter()
+            .filter(|entry| filter.matches(entry.row.state))
+            .count()
+    }
+
+    /// A chip click, and ←/→ on the screen (`step`, stopping at the ends).
+    pub(crate) fn set_download_filter(&mut self, filter: DownloadFilter, cx: &mut Context<Self>) {
+        self.downloads.filter = filter;
+        cx.notify();
+    }
+
+    pub(crate) fn move_download_filter(&mut self, step: isize, cx: &mut Context<Self>) {
+        let all = DownloadFilter::ALL;
+        let at = all
+            .iter()
+            .position(|f| *f == self.downloads.filter)
+            .unwrap_or(0);
+        let next = (at as isize + step).clamp(0, all.len() as isize - 1) as usize;
+        self.set_download_filter(all[next], cx);
     }
 
     /// Whether any row is in one of `states`: the palette's download entries.

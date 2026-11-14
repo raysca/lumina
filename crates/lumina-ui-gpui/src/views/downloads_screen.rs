@@ -187,8 +187,13 @@ fn text_button(
         .child(label)
 }
 
-/// The screen body: the empty state, or one plain line per row.
-pub(crate) fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+/// The screen body: the empty state, or the filter bar over one plain line
+/// per row the filter keeps.
+pub(crate) fn render(
+    app: &LuminaApp,
+    window: &Window,
+    cx: &mut Context<LuminaApp>,
+) -> Stateful<Div> {
     let body = div()
         .id("downloads-screen")
         .debug_selector(|| "downloads-screen".to_string())
@@ -224,15 +229,35 @@ pub(crate) fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<D
                 ),
             );
     }
+    let filter = app.downloads.filter;
+    let rows: Vec<_> = app
+        .download_display_order()
+        .into_iter()
+        .filter(|entry| filter.matches(entry.row.state))
+        .collect();
+    let empty = rows.is_empty();
     // ponytail: a plain, display-only list until the sections land (Task 5);
     // it does nothing on click, so no key or click acts on a hidden row.
-    body.overflow_y_scroll()
+    let list = div()
+        .id("downloads-list")
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
         .px(px(28.0))
         .py(px(18.0))
         .flex()
         .flex_col()
         .gap(px(6.0))
-        .children(app.download_display_order().into_iter().map(|entry| {
+        .when(empty, |list| {
+            list.child(
+                div()
+                    .debug_selector(|| "downloads-filter-empty".to_string())
+                    .text_size(px(12.5))
+                    .text_color(theme::t2())
+                    .child(t("downloads.filter_empty")),
+            )
+        })
+        .children(rows.into_iter().map(|entry| {
             let row = &entry.row;
             let title = row.title.clone().unwrap_or_else(|| row.url.clone());
             let id = row.id;
@@ -265,7 +290,11 @@ pub(crate) fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<D
                         .text_color(theme::t3())
                         .child(state_word(row.state)),
                 )
-        }))
+        }));
+    body.flex()
+        .flex_col()
+        .child(crate::views::downloads_filter_bar::render(app, window, cx))
+        .child(list)
 }
 
 fn state_word(state: DownloadState) -> &'static str {

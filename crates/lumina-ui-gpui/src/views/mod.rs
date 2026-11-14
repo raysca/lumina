@@ -8,6 +8,7 @@ pub mod compare;
 pub mod context_menu;
 pub mod delete_modal;
 pub mod downloads_confirm;
+pub mod downloads_filter_bar;
 pub mod downloads_panel;
 pub mod downloads_screen;
 pub mod duplicates;
