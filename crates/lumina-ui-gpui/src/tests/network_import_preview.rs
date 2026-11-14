@@ -4,7 +4,7 @@
 
 use super::downloads::{install, queue_app, seed_prior_download, settle, FakeJobs};
 use super::network_import::without_yt_dlp;
-use super::ui_automation::{app_with_library, keystrokes, leak, render_ui};
+use super::ui_automation::{app_with_library, focus_app, keystrokes, leak, render_ui};
 use crate::app::network_import::{InspectFn, NetworkImportStage};
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -344,4 +344,131 @@ fn net_import_offers_an_earlier_download_even_without_the_helper() {
         other => panic!("expected Already Downloaded, got {other:?}"),
     });
     assert_eq!(inspector.calls(), 0, "the link is not inspected");
+}
+
+#[core::prelude::v1::test]
+fn checking_stage_keeps_the_input_layout() {
+    let (_dir, jobs, _inspector, mut cx, engine) =
+        dialog_app("net_preview_checking", Answer::Info { uploader: None });
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &jobs);
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stage_cancel = cancel.clone();
+    view.update(vcx, |app, cx| {
+        app.open_network_import_dialog(cx);
+        app.network_import.stage = Some(NetworkImportStage::Checking {
+            url: URL.to_string(),
+            cancel: stage_cancel,
+        });
+        cx.notify();
+    });
+    render_ui(vcx);
+    let field = vcx
+        .debug_bounds("net-import-url-readonly")
+        .expect("the link stays on screen, read-only");
+    let line = vcx
+        .debug_bounds("net-import-checking")
+        .expect("a checking line where the preview will go");
+    assert!(
+        line.top() >= field.bottom(),
+        "the checking line sits below the field"
+    );
+    assert!(
+        painted(
+            vcx,
+            "net-import-checking-text:Checking example.com…".to_string()
+        ),
+        "the line names the site being checked"
+    );
+    assert!(
+        vcx.debug_bounds("net-import-url-input").is_none(),
+        "the field can't be edited while checking"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            matches!(
+                app.network_import.stage,
+                Some(NetworkImportStage::Checking { .. })
+            ),
+            "↵ while checking does nothing"
+        );
+        assert!(
+            app.downloads.entries.is_empty(),
+            "↵ while checking queues nothing"
+        );
+    });
+    assert!(jobs.requests().is_empty(), "no job runs");
+
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(app.network_import.stage.is_none(), "Esc closes the dialog");
+    });
+    assert!(
+        cancel.load(Ordering::SeqCst),
+        "Esc while checking stops the inspection"
+    );
+}
+
+#[core::prelude::v1::test]
+fn already_downloaded_uses_dialog_shell() {
+    let (_dir, jobs, inspector, mut cx, engine) =
+        dialog_app("net_preview_already", Answer::Info { uploader: None });
+    seed_prior_download(&engine, URL);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &jobs);
+    use_inspector(&view, vcx, &inspector);
+    let already = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext| {
+        submit(view, vcx, URL);
+        vcx.run_until_parked();
+        view.update(vcx, |app, _| {
+            assert!(
+                matches!(
+                    app.network_import.stage,
+                    Some(NetworkImportStage::AlreadyDownloaded { .. })
+                ),
+                "a link downloaded before asks first"
+            )
+        });
+        render_ui(vcx);
+    };
+
+    already(&view, vcx);
+    let close = vcx.debug_bounds("net-import-close").expect("close button");
+    let body = vcx
+        .debug_bounds("net-import-already-downloaded")
+        .expect("the date line");
+    assert!(close.bottom() <= body.top(), "close sits in the header");
+    let footer = vcx.debug_bounds("net-import-footer").expect("footer bar");
+    for selector in [
+        "net-import-cancel",
+        "net-import-download-again",
+        "net-import-show-in-library",
+    ] {
+        let button = vcx.debug_bounds(selector).expect(selector);
+        assert!(
+            footer.contains(&button.center()),
+            "{selector} sits in the footer bar"
+        );
+    }
+
+    // ↵ shows the earlier download and queues nothing.
+    focus_app(vcx, &view);
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(app.network_import.stage.is_none(), "↵ closes the dialog");
+        assert!(app.downloads.entries.is_empty(), "↵ queues nothing");
+    });
+
+    // ⌘↵ downloads it again, skipping the same check.
+    already(&view, vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-enter");
+    settle(vcx, &view, "⌘↵ queues the link again", |_| {
+        jobs.requests().len() == 1
+    });
+    assert!(jobs.requests()[0].skip_prior_check, "⌘↵ is Download Again");
+    assert_eq!(inspector.calls(), 0, "nothing was inspected");
 }

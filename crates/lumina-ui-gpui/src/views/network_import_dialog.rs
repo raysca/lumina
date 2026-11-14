@@ -185,12 +185,32 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 buttons: vec![cancel().into_any_element(), import.into_any_element()],
             }
         }
-        NetworkImportStage::Checking { url, .. } => StageParts {
-            title: "Checking Link…",
-            body: div().child(text(format!("Checking {}…", host_of(url)))),
-            hint: None,
-            buttons: vec![cancel().into_any_element()],
-        },
+        NetworkImportStage::Checking { url, .. } => {
+            let checking = format!("Checking {}…", host_of(url));
+            // ponytail: a static line, not a spinner; `motion` has no
+            // looping animation.
+            let line = div()
+                .debug_selector(|| "net-import-checking".to_string())
+                .children(text_marker("net-import-checking", &checking.clone().into()))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(render_icon(Icon::Link2, px(13.0), theme::t3()))
+                .child(text(checking));
+            StageParts {
+                title: "Checking Link…",
+                body: div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(text(SUBTITLE.to_string()))
+                    .child(preview::read_only_field(url))
+                    .child(line),
+                hint: None,
+                buttons: vec![cancel().into_any_element()],
+            }
+        }
         NetworkImportStage::AlreadyDownloaded { prior, .. } => {
             let media_id = prior.media_id;
             let again =

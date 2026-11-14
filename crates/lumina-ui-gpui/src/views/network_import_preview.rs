@@ -62,6 +62,7 @@ fn badge(selector: &'static str, text: String) -> Div {
 /// quieter outline.
 pub(crate) fn read_only_field(url: &str) -> Div {
     div()
+        .debug_selector(|| "net-import-url-readonly".to_string())
         .w_full()
         .h(px(46.0))
         .px(px(13.0))
