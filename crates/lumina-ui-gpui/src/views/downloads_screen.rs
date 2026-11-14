@@ -52,14 +52,7 @@ impl LuminaApp {
                 .filter(|entry| states.contains(&entry.row.state))
                 .count()
         };
-        let speed: u64 = self
-            .downloads
-            .entries
-            .iter()
-            .filter(|entry| entry.row.state == DownloadState::Running)
-            .filter_map(|entry| entry.progress.as_ref())
-            .map(|progress| progress.speed_bytes_per_sec)
-            .sum();
+        let speed = self.download_speed();
         let completed: &[DownloadState] = &[DownloadState::Done, DownloadState::Duplicate];
         let mut parts: Vec<String> = [
             (&[DownloadState::Running][..], "downloads.meta_downloading"),
@@ -294,6 +287,7 @@ pub(crate) fn render(
     body.flex()
         .flex_col()
         .child(crate::views::downloads_filter_bar::render(app, window, cx))
+        .children(crate::views::downloads_status_bar::render(app))
         .child(list)
 }
 

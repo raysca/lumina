@@ -426,3 +426,131 @@ fn download_filter_chips_count_and_filter() {
     );
     assert!(marker(vcx, "downloads-filter-completed".into()));
 }
+
+const MB: u64 = 1024 * 1024;
+
+/// Gives running row `index` its progress.
+fn progress(app: &mut LuminaApp, index: usize, done: u64, total: Option<u64>, speed: u64) {
+    let mut p = NetworkDownloadProgress::new(DownloadPhase::Downloading, "");
+    p.bytes_downloaded = done;
+    p.total_bytes = total;
+    p.speed_bytes_per_sec = speed;
+    app.downloads.entries[index].progress = Some(p);
+}
+
+#[core::prelude::v1::test]
+fn downloads_status_bar_sums_running_rows() {
+    let (_dir, engine, fake, mut cx) = queue_app("dls_status");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    set_rows(
+        &view,
+        vcx,
+        &[
+            DownloadState::Running,
+            DownloadState::Running,
+            DownloadState::Waiting,
+        ],
+    );
+    view.update(vcx, |app, cx| {
+        progress(app, 0, 100 * MB, Some(400 * MB), 5 * MB);
+        progress(app, 1, 50 * MB, Some(100 * MB), 5 * MB);
+        app.show_downloads_screen(cx);
+    });
+    render_ui(vcx);
+    assert!(
+        marker(vcx, "downloads-status-bar".into()),
+        "a running download shows the bar"
+    );
+    assert!(
+        marker(
+            vcx,
+            "downloads-status-headline-text:Downloading 2 of 3 items".into()
+        ),
+        "the headline counts running rows of the unfinished ones"
+    );
+    assert!(
+        marker(vcx, "downloads-overall-text:30%".into()),
+        "150 of 500 MB is 30% overall"
+    );
+    assert!(
+        marker(
+            vcx,
+            "downloads-status-detail-text:150.0 MB of 500.0 MB · 10.0 MB/s combined · about 35 s remaining"
+                .into()
+        ),
+        "the detail sums bytes and speed across running rows"
+    );
+
+    set_rows(&view, vcx, &[DownloadState::Paused, DownloadState::Done]);
+    render_ui(vcx);
+    assert!(
+        !marker(vcx, "downloads-status-bar".into()),
+        "with nothing running there is no status bar"
+    );
+}
+
+#[core::prelude::v1::test]
+fn downloads_status_bar_drops_unknown_parts() {
+    let (_dir, engine, fake, mut cx) = queue_app("dls_status_unknown");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    set_rows(
+        &view,
+        vcx,
+        &[DownloadState::Running, DownloadState::Running],
+    );
+    view.update(vcx, |app, cx| {
+        progress(app, 0, 50 * MB, None, MB);
+        progress(app, 1, 10 * MB, Some(20 * MB), 0);
+        app.show_downloads_screen(cx);
+    });
+    render_ui(vcx);
+    assert!(
+        marker(
+            vcx,
+            "downloads-status-detail-text:60.0 MB · 1.0 MB/s combined".into()
+        ),
+        "an unknown total drops the \"of\" and \"remaining\" parts"
+    );
+    assert!(
+        !marker(vcx, "downloads-overall".into()),
+        "without a total for every row there is no overall percentage to agree with"
+    );
+
+    // No speed known either: the speed part goes too.
+    view.update(vcx, |app, cx| {
+        progress(app, 0, 50 * MB, None, 0);
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(marker(vcx, "downloads-status-detail-text:60.0 MB".into()));
+}
+
+#[core::prelude::v1::test]
+fn speed_history_clears_when_the_last_download_ends() {
+    const A: &str = "https://example.com/a.mp4";
+    let (_dir, engine, fake, mut cx) = queue_app("dls_speed_clear");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    submit(&view, vcx, A);
+    settle(vcx, &view, "A runs", |app| {
+        states(app) == [DownloadState::Running]
+    });
+    view.update(vcx, |app, _| {
+        app.downloads
+            .speed
+            .record(std::time::Instant::now(), 5 * MB)
+    });
+    fake.finish(A, imported(&engine));
+    settle(vcx, &view, "A is done", |app| {
+        states(app) == [DownloadState::Done]
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.downloads.speed.samples().count(),
+            0,
+            "a later run starts with no old bars"
+        )
+    });
+}

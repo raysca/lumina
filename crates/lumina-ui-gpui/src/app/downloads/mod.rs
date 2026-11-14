@@ -10,10 +10,12 @@ mod job;
 mod lifecycle;
 mod panel;
 mod pause;
+mod speed;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
 pub(crate) use panel::DownloadFilter;
+pub(crate) use speed::{SpeedHistory, SAMPLES as SPEED_SAMPLES};
 
 use gpui::*;
 use lumina_core::net_import::{
@@ -90,6 +92,8 @@ pub(crate) struct DownloadQueue {
     pub loaded: bool,
     /// The Downloads screen's chip. Session only, never saved.
     pub filter: DownloadFilter,
+    /// Combined speed, one sample a second, for the throughput bars.
+    pub speed: SpeedHistory,
     /// Ids for rows whose insert hasn't returned yet (always negative).
     next_placeholder: i64,
     /// The "still running" prompt before quitting or switching library.
@@ -128,6 +132,7 @@ impl DownloadQueue {
         self.job = job;
         self.loaded = false;
         self.filter = DownloadFilter::All;
+        self.speed = SpeedHistory::default();
     }
 }
 
@@ -290,6 +295,10 @@ impl LuminaApp {
             self.start_download(index, job.clone(), catalog.clone(), cx);
             running += 1;
         }
+        // The last one ended: a later run starts with no old bars.
+        if running == 0 {
+            self.downloads.speed = SpeedHistory::default();
+        }
         cx.notify();
     }
 
@@ -420,6 +429,11 @@ impl LuminaApp {
                 JobEvent::Progress(progress) => entry.progress = Some(progress),
             }
         }
+        // Progress events are the clock: no timer runs while nothing does.
+        let combined = self.download_speed();
+        self.downloads
+            .speed
+            .record(std::time::Instant::now(), combined);
         cx.notify();
     }
 

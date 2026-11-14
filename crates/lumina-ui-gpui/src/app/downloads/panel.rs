@@ -136,6 +136,17 @@ impl LuminaApp {
             .any(|entry| states.contains(&entry.row.state))
     }
 
+    /// Bytes a second across running downloads; 0 when none reports one.
+    pub(crate) fn download_speed(&self) -> u64 {
+        self.downloads
+            .entries
+            .iter()
+            .filter(|entry| entry.row.state == DownloadState::Running)
+            .filter_map(|entry| entry.progress.as_ref())
+            .map(|progress| progress.speed_bytes_per_sec)
+            .sum()
+    }
+
     /// Bytes done over bytes expected, across running downloads whose size
     /// is known: the toolbar ring. `None` when no size is known.
     pub(crate) fn download_progress(&self) -> Option<f32> {

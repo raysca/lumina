@@ -11,6 +11,7 @@ pub mod downloads_confirm;
 pub mod downloads_filter_bar;
 pub mod downloads_panel;
 pub mod downloads_screen;
+pub mod downloads_status_bar;
 pub mod duplicates;
 pub mod filter_bar;
 pub mod first_scan;
