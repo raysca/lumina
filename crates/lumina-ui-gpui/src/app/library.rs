@@ -590,6 +590,7 @@ impl LuminaApp {
         // Downloads belong to the library they were started in.
         self.downloads
             .reset(Some(crate::app::downloads::real_job(engine.clone())));
+        self.network_import.inspect = Some(crate::app::network_import::real_inspect());
         let grid_state =
             GridState::with_resume_positions(engine, self.config.resume_positions.clone());
         if let Some(old) = self.grid_state.replace(grid_state) {

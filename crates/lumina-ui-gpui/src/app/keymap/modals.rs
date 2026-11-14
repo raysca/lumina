@@ -147,6 +147,9 @@ impl LuminaApp {
                         let media_id = prior.media_id;
                         self.show_download_in_library(media_id, cx);
                     }
+                    crate::app::network_import::NetworkImportStage::Ready { .. } => {
+                        self.import_inspected_link(cx);
+                    }
                     crate::app::network_import::NetworkImportStage::Checking { .. } => {}
                 },
                 _ => {}

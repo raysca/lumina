@@ -14,7 +14,9 @@ pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
 
 use gpui::*;
-use lumina_core::net_import::{classify_url, NetworkDownloadProgress, MISSING_PART};
+use lumina_core::net_import::{
+    classify_url, NetworkDownloadProgress, NetworkMediaInfo, MISSING_PART,
+};
 use lumina_core::{Catalog, DownloadRow, DownloadState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -30,17 +32,20 @@ pub(crate) struct DownloadEntry {
     pub progress: Option<NetworkDownloadProgress>,
     /// Download Again: skip the "already in your library" check.
     pub skip_prior_check: bool,
+    /// The dialog's inspection, handed to the first run of the job.
+    info: Option<NetworkMediaInfo>,
     cancel: Arc<AtomicBool>,
     /// A Retry/Resume write is on its way; repeat presses wait for it.
     requeueing: bool,
 }
 
 impl DownloadEntry {
-    fn new(row: DownloadRow, skip_prior_check: bool) -> Self {
+    fn new(row: DownloadRow, skip_prior_check: bool, info: Option<NetworkMediaInfo>) -> Self {
         Self {
             row,
             progress: None,
             skip_prior_check,
+            info,
             cancel: Arc::new(AtomicBool::new(false)),
             requeueing: false,
         }
@@ -48,7 +53,7 @@ impl DownloadEntry {
 
     #[cfg(test)]
     pub(crate) fn for_test(row: DownloadRow) -> Self {
-        Self::new(row, false)
+        Self::new(row, false, None)
     }
 
     fn is_active(&self) -> bool {
@@ -95,7 +100,7 @@ impl DownloadQueue {
         self.entries.iter().position(|entry| entry.row.id == id)
     }
 
-    fn active_for(&self, url: &str) -> Option<i64> {
+    pub(crate) fn active_for(&self, url: &str) -> Option<i64> {
         self.entries
             .iter()
             .find(|entry| entry.is_active() && entry.matches_url(url))
@@ -163,76 +168,13 @@ impl LuminaApp {
             .count()
     }
 
-    /// The dialog's Import: checks the link, then either queues it, points
-    /// at the row already in the list, or asks about an earlier download.
-    pub fn submit_network_url(&mut self, url: String, cx: &mut Context<Self>) {
-        use crate::app::network_import::NetworkImportStage;
-        if matches!(
-            self.network_import.stage,
-            Some(NetworkImportStage::Checking { .. })
-        ) {
-            return;
-        }
-        let url = url.trim().to_string();
-        if url.is_empty() {
-            self.set_network_input_error(url, "Enter a video link".to_string(), cx);
-            return;
-        }
-        if let Err(err) = classify_url(&url) {
-            self.set_network_input_error(url, err.to_string(), cx);
-            return;
-        }
-        if let Some(id) = self.downloads.active_for(&url) {
-            self.network_import.stage = None;
-            self.downloads.open = true;
-            self.downloads.highlight = Some(id);
-            cx.notify();
-            return;
-        }
-        let Some(catalog) = self.download_catalog() else {
-            return;
-        };
-        self.network_import.stage = Some(NetworkImportStage::Checking { url: url.clone() });
-        cx.notify();
-
-        let lookup_url = url.clone();
-        let lookup = cx
-            .background_executor()
-            .spawn(async move { catalog.find_prior_download(&lookup_url) });
-        cx.spawn(async move |this, cx| {
-            let prior = lookup.await;
-            let _ = this.update(cx, |app, cx| {
-                // The dialog was closed or changed meanwhile.
-                if !matches!(
-                    &app.network_import.stage,
-                    Some(NetworkImportStage::Checking { url: checking }) if *checking == url
-                ) {
-                    return;
-                }
-                match prior {
-                    Ok(Some(prior)) => {
-                        app.network_import.stage =
-                            Some(NetworkImportStage::AlreadyDownloaded { url, prior });
-                    }
-                    other => {
-                        if let Err(err) = other {
-                            log::warn!("looking up earlier downloads of {url}: {err:#}");
-                        }
-                        app.network_import.stage = None;
-                        app.enqueue_download(url, false, cx);
-                    }
-                }
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
     /// Adds `url` to the end of the queue and starts it when a slot is free.
+    /// `info` is the dialog's inspection of the link, if it made one.
     pub fn enqueue_download(
         &mut self,
         url: String,
         skip_prior_check: bool,
+        info: Option<NetworkMediaInfo>,
         cx: &mut Context<Self>,
     ) {
         if let Some(id) = self.downloads.active_for(&url) {
@@ -263,6 +205,7 @@ impl LuminaApp {
                 in_library: false,
             },
             skip_prior_check,
+            info,
         ));
         cx.notify();
 
@@ -363,6 +306,8 @@ impl LuminaApp {
             url: entry.row.url.clone(),
             kind,
             skip_prior_check: entry.skip_prior_check,
+            // Only the first run: Retry and Resume inspect again.
+            info: entry.info.take(),
         };
         let cancel = entry.cancel.clone();
         let mut row = entry.row.clone();

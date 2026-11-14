@@ -105,7 +105,7 @@ impl LuminaApp {
                         let mut entries: Vec<DownloadEntry> = rows
                             .into_iter()
                             .filter(|row| added.iter().all(|e| e.row.id != row.id))
-                            .map(|row| DownloadEntry::new(row, false))
+                            .map(|row| DownloadEntry::new(row, false, None))
                             .collect();
                         entries.extend(added);
                         app.downloads.entries = entries;

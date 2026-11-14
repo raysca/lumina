@@ -67,6 +67,9 @@ tokens! {
 tokens_alpha! {
     /// Accent wash: selected cards, drag marquee.
     accent_soft = 0xE9A23B26;
+    /// Positive wash: the link preview's ready tick (Design 12). The alpha
+    /// follows `accent_soft`.
+    positive_soft = 0x5BC27A26;
     /// Accent-tinted 1 px outlines: the empty search's Drop chips.
     accent_outline = 0xE9A23B59;
     /// Danger wash: error banners and panels.

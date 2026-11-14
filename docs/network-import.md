@@ -18,8 +18,13 @@ catalogue (e.g. WebM) are refused with a message.
 
 1. Paste a link (⌘V) and press ↵ (Import). Lumina checks whether that link
    was downloaded before and is still in the library; if so it says when and
-   offers Show in Library (↵) or Download Again (⌘↵). Otherwise the dialog
-   closes and the link joins the download list.
+   offers Show in Library (↵) or Download Again (⌘↵). Otherwise it inspects
+   the link (the same request the download would make first) and shows a
+   preview: title, site and uploader, length, container and size when the
+   site reports them. No thumbnail is fetched. Esc stops the check. A link
+   that can't be downloaded shows its message under the field, and nothing is
+   queued. Import (↵) on the preview closes the dialog and the link joins the
+   download list; the download reuses that inspection.
 2. Up to three downloads run at once; the rest wait in the order they were
    added and move up as others finish or are removed.
 3. Each download stages in a hidden `.…lumina-import` folder inside

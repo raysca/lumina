@@ -1,9 +1,11 @@
-//! One queued download from start to finish: inspect the link, check it
+//! One queued download from start to finish: inspect the link (unless the
+//! dialog already did), check it
 //! isn't already in the library, download, catalogue. Runs on its own
 //! thread; the scheduler in `super` decides when.
 
 use lumina_core::net_import::{
-    helper_missing, inspect_url, NetworkDownloadProgress, NetworkSourceKind, ProgressCallback,
+    helper_missing, inspect_url, NetworkDownloadProgress, NetworkMediaInfo, NetworkSourceKind,
+    ProgressCallback,
 };
 use lumina_core::{LuminaEngine, MediaItem, PriorDownload};
 use std::path::PathBuf;
@@ -18,6 +20,10 @@ pub(crate) struct JobRequest {
     pub kind: NetworkSourceKind,
     /// Download Again: the user already saw it is in the library.
     pub skip_prior_check: bool,
+    /// The dialog's inspection of the link, so the job need not inspect it
+    /// again. `None` for rows restored after a restart, Retry and Download
+    /// Again: those inspect here.
+    pub info: Option<NetworkMediaInfo>,
 }
 
 /// Reported while a job runs.
@@ -71,9 +77,12 @@ pub(crate) fn real_job(engine: Arc<LuminaEngine>) -> JobFn {
             // download tools or their paths, which UI copy must not show.
             JobOutcome::Failed(err.to_string())
         };
-        let info = match inspect_url(&request.url, cancel) {
-            Ok(info) => info,
-            Err(err) => return failed(err),
+        let info = match request.info.clone() {
+            Some(info) => info,
+            None => match inspect_url(&request.url, cancel) {
+                Ok(info) => info,
+                Err(err) => return failed(err),
+            },
         };
         let _ = events.send_blocking(JobEvent::Inspected {
             canonical_url: info.url.clone(),

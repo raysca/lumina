@@ -130,16 +130,35 @@ pub(crate) fn queue_app(
     )
 }
 
+/// Installs the fake job, and an inspector that answers at once without
+/// the network.
 pub(crate) fn install(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, fake: &FakeJobs) {
     let job = fake.job();
-    view.update(vcx, |app, _| app.downloads.job = Some(job));
+    let inspect: crate::app::network_import::InspectFn = Arc::new(|url, _cancel| {
+        Ok(lumina_core::net_import::NetworkMediaInfo {
+            url: url.to_string(),
+            kind: lumina_core::net_import::classify_url(url)?,
+            title: title_for(url),
+            duration_secs: None,
+            uploader: None,
+            expected_bytes: None,
+            extension: "mp4",
+        })
+    });
+    view.update(vcx, |app, _| {
+        app.downloads.job = Some(job);
+        app.network_import.inspect = Some(inspect);
+    });
 }
 
+/// Types `url` into the dialog and, once its preview shows, presses Import.
 pub(crate) fn submit(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, url: &str) {
     view.update(vcx, |app, cx| {
         app.open_network_import_dialog(cx);
         app.submit_network_url(url.to_string(), cx);
     });
+    vcx.run_until_parked();
+    view.update(vcx, |app, cx| app.import_inspected_link(cx));
 }
 
 pub(crate) fn states(app: &LuminaApp) -> Vec<DownloadState> {
@@ -349,13 +368,18 @@ fn double_submit_adds_one_row() {
         app.submit_network_url(URL.to_string(), cx);
         app.submit_network_url(URL.to_string(), cx);
     });
+    vcx.run_until_parked();
+    view.update(vcx, |app, cx| {
+        app.import_inspected_link(cx);
+        app.import_inspected_link(cx);
+    });
     settle(vcx, &view, "the job runs", |app| {
         count(app, DownloadState::Running) == 1
     });
     vcx.run_until_parked();
     assert_eq!(persisted(&engine).len(), 1, "one URL, one row");
     view.update(vcx, |app, cx| {
-        app.enqueue_download(URL.to_string(), false, cx)
+        app.enqueue_download(URL.to_string(), false, None, cx)
     });
     vcx.run_until_parked();
     assert_eq!(
@@ -384,7 +408,7 @@ fn same_url_in_queue_highlights_existing_row() {
     });
 }
 
-fn seed_prior_download(engine: &LuminaEngine, url: &str) -> MediaId {
+pub(crate) fn seed_prior_download(engine: &LuminaEngine, url: &str) -> MediaId {
     let item = engine
         .catalog()
         .get_item_by_id(MediaId(1))
@@ -820,7 +844,7 @@ fn done_row_click_selects_item_in_downloaded_album() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     install(&view, vcx, &fake);
     view.update(vcx, |app, cx| {
-        app.enqueue_download(URL.to_string(), true, cx)
+        app.enqueue_download(URL.to_string(), true, None, cx)
     });
     settle(vcx, &view, "the job runs", |app| {
         count(app, DownloadState::Running) == 1
@@ -855,7 +879,7 @@ fn done_row_for_trashed_item_says_removed() {
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     install(&view, vcx, &fake);
     view.update(vcx, |app, cx| {
-        app.enqueue_download(URL.to_string(), true, cx)
+        app.enqueue_download(URL.to_string(), true, None, cx)
     });
     settle(vcx, &view, "the job runs", |app| {
         count(app, DownloadState::Running) == 1
@@ -924,7 +948,7 @@ fn finished_rows_keep_title_and_state() {
     };
     fake.finish(URL, JobOutcome::AlreadyInLibrary(prior));
     view.update(vcx, |app, cx| {
-        app.enqueue_download(URL.to_string(), false, cx)
+        app.enqueue_download(URL.to_string(), false, None, cx)
     });
     settle(vcx, &view, "the row is a duplicate", |app| {
         count(app, DownloadState::Duplicate) == 1

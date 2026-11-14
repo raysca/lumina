@@ -10,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 
 /// Points the yt-dlp lookup at a path that does not exist, so no test ever
 /// runs a real yt-dlp against the network.
-fn without_yt_dlp() {
+pub(crate) fn without_yt_dlp() {
     std::env::set_var(YT_DLP_ENV, "/nonexistent/lumina-test/yt-dlp");
 }
 
@@ -399,6 +399,7 @@ fn download_job_reports_a_missing_helper_without_inspecting() {
             url: url.to_string(),
             kind,
             skip_prior_check: false,
+            info: None,
         };
         assert!(
             matches!(

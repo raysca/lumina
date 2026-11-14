@@ -8,7 +8,8 @@ use crate::app::network_import::NetworkImportStage;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::import_dialog::dialog_footer_button;
-use crate::views::page_header::header_icon_button;
+use crate::views::network_import_preview::{self as preview, host_of};
+use crate::views::page_header::{header_icon_button, text_marker};
 use crate::LuminaApp;
 
 /// "Oct 2, 2026" in local time.
@@ -22,10 +23,28 @@ fn format_day(epoch_ms: i64) -> String {
         .unwrap_or_else(|| "an earlier day".to_string())
 }
 
-/// The host part of a URL ("www.youtube.com"), for status text.
-fn host_of(url: &str) -> &str {
-    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    rest.split(['/', '?', '#']).next().unwrap_or(rest)
+/// The preview's footer hint: "Joins your downloads", plus the size when
+/// known.
+fn hint(bytes: Option<u64>) -> Div {
+    let label = match bytes {
+        Some(bytes) => format!("Joins your downloads · {}", preview::size_label(bytes)),
+        None => "Joins your downloads".to_string(),
+    };
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(7.0))
+        .child(render_icon(Icon::FolderDown, px(13.0), theme::t3()))
+        .child(
+            div()
+                .debug_selector(|| "net-import-hint".to_string())
+                .children(text_marker("net-import-hint", &label.clone().into()))
+                .font_family(theme::FONT_MONO)
+                .text_size(px(10.5))
+                .text_color(theme::t3())
+                .child(label),
+        )
 }
 
 const SUBTITLE: &str =
@@ -135,19 +154,6 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .text_color(theme::danger())
                         .child(err.clone())
                 }));
-            let hint = div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(7.0))
-                .child(render_icon(Icon::FolderDown, px(13.0), theme::t3()))
-                .child(
-                    div()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(10.5))
-                        .text_color(theme::t3())
-                        .child("Joins your downloads"),
-                );
             let import = dialog_footer_button("net-import-inspect", "Import", "↵", true).on_click(
                 cx.listener(move |this, _e: &ClickEvent, _w, cx| {
                     this.submit_network_url(inspect_url.clone(), cx);
@@ -156,11 +162,30 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             StageParts {
                 title: "Import Video from URL",
                 body,
-                hint: Some(hint),
+                hint: None,
                 buttons: vec![cancel().into_any_element(), import.into_any_element()],
             }
         }
-        NetworkImportStage::Checking { url } => StageParts {
+        NetworkImportStage::Ready { url, info } => {
+            let import = dialog_footer_button("net-import-confirm", "Import", "↵", true).on_click(
+                cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                    this.import_inspected_link(cx);
+                }),
+            );
+            StageParts {
+                title: "Import Video from URL",
+                body: div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(text(SUBTITLE.to_string()))
+                    .child(preview::read_only_field(url))
+                    .child(preview::render(info)),
+                hint: Some(hint(info.expected_bytes)),
+                buttons: vec![cancel().into_any_element(), import.into_any_element()],
+            }
+        }
+        NetworkImportStage::Checking { url, .. } => StageParts {
             title: "Checking Link…",
             body: div().child(text(format!("Checking {}…", host_of(url)))),
             hint: None,

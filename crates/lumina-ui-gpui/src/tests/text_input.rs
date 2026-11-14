@@ -621,6 +621,7 @@ fn the_link_dialog_takes_keys_while_it_checks() {
     view.update(vcx, |app, cx| {
         app.network_import.stage = Some(crate::app::network_import::NetworkImportStage::Checking {
             url: "https://example.com/v".to_string(),
+            cancel: Default::default(),
         });
         cx.notify();
     });
