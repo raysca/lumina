@@ -681,6 +681,38 @@ fn confirm_escape_and_backdrop_cancel() {
 }
 
 #[core::prelude::v1::test]
+fn downloads_confirm_buttons_in_footer() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_quit_footer");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    submit(&view, vcx, URL);
+    settle(vcx, &view, "the job runs", |app| {
+        count(app, DownloadState::Running) == 1
+    });
+    quit_via_menu(&view, vcx);
+    render_ui(vcx);
+    let footer = vcx
+        .debug_bounds("downloads-confirm-footer")
+        .expect("the prompt has a footer bar");
+    let card = vcx
+        .debug_bounds("downloads-confirm-card")
+        .expect("the prompt card paints");
+    assert!(
+        footer.bottom() >= card.bottom() - gpui::px(2.0),
+        "the footer is the card's bottom bar"
+    );
+    for button in ["downloads-confirm-cancel", "downloads-confirm-ok"] {
+        let bounds = vcx
+            .debug_bounds(button)
+            .unwrap_or_else(|| panic!("{button} paints"));
+        assert!(
+            footer.contains(&bounds.center()),
+            "{button} sits in the footer"
+        );
+    }
+}
+
+#[core::prelude::v1::test]
 fn paused_rows_load_without_starting() {
     let (dir, engine, fake, mut cx) = queue_app("dl_reopen");
     for (url, state) in [

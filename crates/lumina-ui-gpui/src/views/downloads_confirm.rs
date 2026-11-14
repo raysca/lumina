@@ -4,6 +4,7 @@ use gpui::*;
 
 use crate::app::downloads::DownloadsConfirm;
 use crate::theme;
+use crate::views::import_dialog::dialog_footer_button;
 use crate::LuminaApp;
 
 /// The prompt for `downloads.confirm`, or nothing when it is unset.
@@ -20,22 +21,6 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let (question, action) = match confirm {
         DownloadsConfirm::Quit => ("Quit anyway?", "Quit"),
         DownloadsConfirm::OpenLibrary(_) => ("Open another library anyway?", "Open"),
-    };
-
-    let button = |id: &'static str, label: &'static str| {
-        div()
-            .id(id)
-            .debug_selector(move || id.to_string())
-            .h(px(30.0))
-            .px_3()
-            .rounded(theme::RADIUS_MD)
-            .cursor_pointer()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_2()
-            .text_xs()
-            .child(label)
     };
 
     div()
@@ -64,17 +49,17 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                     cx.stop_propagation();
                 })
                 .w(px(400.0))
-                .p_5()
                 .bg(theme::bg_1())
                 .border_1()
                 .border_color(theme::line_2())
-                .rounded(theme::RADIUS_LG)
+                .rounded(px(16.0))
+                .overflow_hidden()
                 .shadow_2xl()
                 .flex()
                 .flex_col()
-                .gap_4()
                 .child(
                     div()
+                        .p(px(22.0))
                         .flex()
                         .flex_col()
                         .gap_1()
@@ -85,33 +70,39 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                                 .text_color(theme::t1())
                                 .child(format!("{running} {question}")),
                         )
-                        .child(div().text_xs().text_color(theme::t2()).child(
+                        .child(div().text_size(px(13.0)).text_color(theme::t2()).child(
                             "They stop now and wait in your downloads, paused, for you to resume.",
                         )),
                 )
+                // The footer bar, as in the Import Video from URL dialog.
                 .child(
                     div()
+                        .debug_selector(|| "downloads-confirm-footer".to_string())
+                        .h(px(61.5))
+                        .px(px(22.0))
+                        .bg(theme::bg_2())
+                        .border_t_1()
+                        .border_color(theme::line())
                         .flex()
                         .flex_row()
+                        .items_center()
                         .justify_end()
                         .gap_2()
                         .child(
-                            button("downloads-confirm-cancel", "Cancel")
-                                .bg(theme::bg_2())
-                                .hover(|s| s.bg(theme::bg_3()))
-                                .text_color(theme::t1())
-                                .child(theme::kbd("Esc"))
-                                .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                            dialog_footer_button(
+                                "downloads-confirm-cancel",
+                                "Cancel",
+                                "Esc",
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                |this, _e: &ClickEvent, _w, cx| {
                                     this.dismiss_downloads_prompt(cx);
-                                })),
+                                },
+                            )),
                         )
                         .child(
-                            button("downloads-confirm-ok", action)
-                                .bg(theme::accent())
-                                .hover(|s| s.bg(theme::accent_hover()))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme::on_accent())
-                                .child(theme::kbd("↵"))
+                            dialog_footer_button("downloads-confirm-ok", action, "↵", true)
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.confirm_downloads_prompt(cx);
                                 })),
