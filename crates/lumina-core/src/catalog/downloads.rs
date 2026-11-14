@@ -174,6 +174,26 @@ impl Catalog {
         Self::download_by_id(&conn, id)
     }
 
+    /// Move up: swaps two rows' places in the queue (their `added_epoch_ms`)
+    /// in one transaction, so a failure leaves both where they were.
+    pub fn swap_download_order(&self, a: i64, b: i64) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let added = |id: i64| -> Result<i64> {
+            Ok(tx.query_row(
+                "SELECT added_epoch_ms FROM download_queue WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )?)
+        };
+        let (added_a, added_b) = (added(a)?, added(b)?);
+        let set = "UPDATE download_queue SET added_epoch_ms = ?2 WHERE id = ?1";
+        tx.execute(set, params![a, added_b])?;
+        tx.execute(set, params![b, added_a])?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn remove_download(&self, id: i64) -> Result<()> {
         self.conn
             .lock()
@@ -405,6 +425,28 @@ mod tests {
         let rows = catalog.list_downloads().unwrap();
         assert_eq!(rows.len(), 1, "purging the media keeps the queue record");
         assert!(!rows[0].in_library);
+    }
+
+    #[test]
+    fn swap_download_order_swaps_two_rows() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let ids: Vec<i64> = ["https://a/1", "https://a/2", "https://a/3"]
+            .iter()
+            .map(|url| catalog.add_download(url).unwrap().id)
+            .collect();
+        catalog.swap_download_order(ids[2], ids[1]).unwrap();
+        let urls: Vec<String> = states(&catalog).into_iter().map(|(u, _)| u).collect();
+        assert_eq!(
+            urls,
+            ["https://a/1", "https://a/3", "https://a/2"],
+            "Move up swaps the two rows' places in the queue"
+        );
+        assert!(
+            catalog.swap_download_order(ids[0], 999).is_err(),
+            "a missing row is an error, not a silent no-op"
+        );
+        let urls: Vec<String> = states(&catalog).into_iter().map(|(u, _)| u).collect();
+        assert_eq!(urls[0], "https://a/1", "a failed swap changes nothing");
     }
 
     #[test]

@@ -72,6 +72,17 @@ Queued, Paused, Failed, Completed) narrow the list, with ←/→ moving between
 them; beside them the screen shows how many download at a time. Lumina reopens
 on it if it was showing at quit and the list still has rows.
 
+The screen groups rows into Active, Needs attention (paused and failed),
+Queued and Completed (newest first). Each header has an action: Pause all,
+Retry all (failures that can be retried; also Retry Failed Downloads in the
+command palette), Clear queue (waiting rows only) and View all (the
+Downloaded album). A failed row shows its message and when it was last
+tried. Queued rows can move up one place (the arrow, or ⌥⌘↑); there is no
+dragging. A completed row has Show in Library and a "…" menu with Show in
+Library, Download Again (rows already in the library) and Remove from List.
+On the screen ↑/↓ move between rows, ↵, ⌘↵ and ⌫ work as in the list, and
+Esc drops the focus. A click on a row focuses it; its buttons act.
+
 The Downloaded album in the sidebar lists everything downloaded from a link
 (not items whose source only came from an imported sidecar). It shows once
 it has something in it.

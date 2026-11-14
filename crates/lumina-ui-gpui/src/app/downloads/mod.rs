@@ -10,11 +10,13 @@ mod job;
 mod lifecycle;
 mod panel;
 mod pause;
+mod screen;
 mod speed;
 
 pub(crate) use job::{real_job, JobEvent, JobFn, JobOutcome, JobRequest};
 pub(crate) use lifecycle::DownloadsConfirm;
-pub(crate) use panel::DownloadFilter;
+pub(crate) use panel::{DownloadFilter, DownloadSurface};
+pub(crate) use screen::row_menu_items;
 pub(crate) use speed::{SpeedHistory, SAMPLES as SPEED_SAMPLES};
 
 use gpui::*;
@@ -100,6 +102,13 @@ pub(crate) struct DownloadQueue {
     pub confirm: Option<DownloadsConfirm>,
     /// The dropdown body, so keyboard focus can scroll into view.
     pub scroll: ScrollHandle,
+    /// Row with keyboard focus on the Downloads screen, and its list.
+    pub screen_focused: Option<i64>,
+    pub screen_scroll: ScrollHandle,
+    /// A completed row's "…" menu: the row and the highlighted item.
+    pub row_menu: Option<(i64, usize)>,
+    /// A Move up is being stored; another waits until it lands.
+    pub moving: bool,
     /// Set where the app would quit (the test platform's quit does nothing).
     #[cfg(test)]
     pub quit_requested: bool,
@@ -133,6 +142,9 @@ impl DownloadQueue {
         self.loaded = false;
         self.filter = DownloadFilter::All;
         self.speed = SpeedHistory::default();
+        self.screen_focused = None;
+        self.row_menu = None;
+        self.moving = false;
     }
 }
 
@@ -606,6 +618,10 @@ fn apply_outcome(row: &mut DownloadRow, outcome: &JobOutcome) -> bool {
             row.can_retry = false;
         }
         JobOutcome::Cancelled => return false,
+    }
+    // "last tried 14:05" on a failed row; Done rows show when they ended.
+    if row.state == DownloadState::Failed {
+        row.finished_epoch_ms = Some(now_ms());
     }
     true
 }

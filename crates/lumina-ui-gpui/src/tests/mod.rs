@@ -24,6 +24,7 @@ mod downloads;
 mod downloads_panel;
 mod downloads_pause;
 mod downloads_screen;
+mod downloads_sections;
 mod duplicates;
 mod duplicates_keyboard;
 mod duplicates_review;

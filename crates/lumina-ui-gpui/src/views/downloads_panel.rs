@@ -6,13 +6,13 @@ use gpui::*;
 use lumina_core::net_import::{DownloadPhase, NetworkDownloadProgress};
 use lumina_core::DownloadState;
 
-use crate::app::downloads::DownloadEntry;
+use crate::app::downloads::{DownloadEntry, DownloadSurface};
 use crate::app::types::format_bytes;
 use crate::theme;
 use crate::LuminaApp;
 
 /// "2 min left", from what is left and the current speed.
-fn time_left(progress: &NetworkDownloadProgress) -> Option<String> {
+pub(crate) fn time_left(progress: &NetworkDownloadProgress) -> Option<String> {
     let total = progress.total_bytes?;
     if progress.speed_bytes_per_sec == 0 || total <= progress.bytes_downloaded {
         return None;
@@ -279,7 +279,7 @@ pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>)
         .flex()
         .flex_col()
         .gap_0p5();
-    for (label, rows) in app.download_sections() {
+    for (label, rows) in app.download_sections(DownloadSurface::Panel) {
         body = body.child(
             theme::section_label(label.to_uppercase())
                 .px_2()

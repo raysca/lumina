@@ -1,5 +1,6 @@
 use gpui::*;
 
+use crate::app::downloads::DownloadSurface;
 use crate::app::LuminaApp;
 use lumina_core::DeletionTarget;
 
@@ -218,14 +219,21 @@ impl LuminaApp {
             return true;
         }
 
+        // 1d6. Downloads screen row "…" menu: ↑/↓ move, ↵ runs, Escape
+        // closes; other keys stay here, so ⌫ never removes a row behind it.
+        if self.downloads.row_menu.is_some() {
+            self.handle_download_row_menu_key(key, cx);
+            return true;
+        }
+
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {
             let focused = self.downloads.focused;
             match key {
                 "escape" => self.close_downloads_panel(cx),
-                "up" => self.move_download_focus(-1, cx),
-                "down" => self.move_download_focus(1, cx),
+                "up" => self.move_download_focus(-1, DownloadSurface::Panel, cx),
+                "down" => self.move_download_focus(1, DownloadSurface::Panel, cx),
                 // ⌘↵: Download Again on an "already in your library" row.
                 "enter" | "return" if cmd_or_ctrl => {
                     if let Some(id) = focused {

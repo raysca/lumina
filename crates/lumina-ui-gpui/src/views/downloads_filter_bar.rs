@@ -1,6 +1,6 @@
 //! The Downloads screen's filter bar: one chip per [`DownloadFilter`] with
 //! its count, the concurrency limit and a settings button. ←/→ move between
-//! the chips while the screen shows.
+//! the chips (see `app/downloads/screen.rs`).
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -15,30 +15,6 @@ use crate::LuminaApp;
 /// Below this main-area width the limits text hides, before the chips
 /// start to scroll.
 const LIMITS_MIN_WIDTH: f32 = 900.0;
-
-impl LuminaApp {
-    /// ←/→ on the Downloads screen move between the filter chips. Text
-    /// fields and modals take keys before this; other keys go on as before.
-    pub(crate) fn handle_downloads_screen_key(
-        &mut self,
-        keystroke: &Keystroke,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if !self.downloads_screen_shown() || self.is_fullscreen_viewer || self.search_focused {
-            return false;
-        }
-        let m = &keystroke.modifiers;
-        if m.platform || m.control || m.alt || m.shift || m.function {
-            return false;
-        }
-        match keystroke.key.as_str() {
-            "left" => self.move_download_filter(-1, cx),
-            "right" => self.move_download_filter(1, cx),
-            _ => return false,
-        }
-        true
-    }
-}
 
 /// The bar under the top bar: 51.5 high, 28 side padding, bottom border.
 /// The chips scroll sideways when the area is narrow.

@@ -12,7 +12,7 @@ use gpui::{Entity, VisualTestContext};
 use lumina_core::net_import::{DownloadPhase, NetworkDownloadProgress};
 use lumina_core::{DownloadRow, DownloadState};
 
-fn row(id: i64, state: DownloadState) -> DownloadRow {
+pub(super) fn row(id: i64, state: DownloadState) -> DownloadRow {
     DownloadRow {
         id,
         url: format!("https://example.com/{id}.mp4"),
@@ -29,7 +29,11 @@ fn row(id: i64, state: DownloadState) -> DownloadRow {
 }
 
 /// Puts rows in the list as if they had loaded; no job runs.
-fn set_rows(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, states: &[DownloadState]) {
+pub(super) fn set_rows(
+    view: &Entity<LuminaApp>,
+    vcx: &mut VisualTestContext,
+    states: &[DownloadState],
+) {
     view.update(vcx, |app, cx| {
         app.downloads.entries = states
             .iter()
@@ -230,7 +234,7 @@ fn downloads_screen_empty_state() {
     });
 }
 
-fn marker(vcx: &mut VisualTestContext, selector: String) -> bool {
+pub(super) fn marker(vcx: &mut VisualTestContext, selector: String) -> bool {
     let selector: &'static str = Box::leak(selector.into_boxed_str());
     vcx.debug_bounds(selector).is_some()
 }

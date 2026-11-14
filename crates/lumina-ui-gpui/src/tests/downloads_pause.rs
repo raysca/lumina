@@ -392,7 +392,7 @@ fn pause_write_failure_reverts_and_shows_banner() {
 }
 
 /// Whether the palette lists `id` for `query`.
-fn offers(
+pub(super) fn offers(
     view: &Entity<LuminaApp>,
     vcx: &mut VisualTestContext,
     id: CommandId,
@@ -409,7 +409,7 @@ fn offers(
     })
 }
 
-fn run_palette(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, query: &str) {
+pub(super) fn run_palette(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, query: &str) {
     view.update(vcx, |app, cx| {
         app.open_command_palette(cx);
         app.command_query = query.to_string();

@@ -68,8 +68,17 @@ impl DownloadFilter {
     }
 }
 
-/// The dropdown's sections, top to bottom.
-const SECTIONS: [(&str, &[DownloadState]); 5] = [
+/// Which list a section order is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DownloadSurface {
+    /// The toolbar dropdown.
+    Panel,
+    /// The Downloads screen, under its filter chip.
+    Screen,
+}
+
+/// The dropdown's sections, top to bottom, by label.
+const PANEL_SECTIONS: [(&str, &[DownloadState]); 5] = [
     ("Downloading", &[DownloadState::Running]),
     ("Waiting", &[DownloadState::Waiting]),
     ("Paused", &[DownloadState::Paused]),
@@ -77,27 +86,51 @@ const SECTIONS: [(&str, &[DownloadState]); 5] = [
     ("Done", &[DownloadState::Done, DownloadState::Duplicate]),
 ];
 
+/// The screen's sections, top to bottom, by selector key.
+const SCREEN_SECTIONS: [(&str, &[DownloadState]); 4] = [
+    ("active", &[DownloadState::Running]),
+    ("attention", &[DownloadState::Paused, DownloadState::Failed]),
+    ("queued", &[DownloadState::Waiting]),
+    (
+        "completed",
+        &[DownloadState::Done, DownloadState::Duplicate],
+    ),
+];
+
 impl LuminaApp {
-    /// The dropdown's non-empty sections, each label with its rows.
-    pub(crate) fn download_sections(&self) -> Vec<(&'static str, Vec<&DownloadEntry>)> {
-        SECTIONS
+    /// The non-empty sections of `surface`, each label (Panel) or key
+    /// (Screen) with its rows in queue order; the screen's completed rows
+    /// newest first, and only the rows its filter keeps.
+    pub(crate) fn download_sections(
+        &self,
+        surface: DownloadSurface,
+    ) -> Vec<(&'static str, Vec<&DownloadEntry>)> {
+        let (sections, filter): (&[(&str, &[DownloadState])], _) = match surface {
+            DownloadSurface::Panel => (&PANEL_SECTIONS, DownloadFilter::All),
+            DownloadSurface::Screen => (&SCREEN_SECTIONS, self.downloads.filter),
+        };
+        sections
             .iter()
             .map(|(label, states)| {
-                let rows = self
+                let mut rows: Vec<&DownloadEntry> = self
                     .downloads
                     .entries
                     .iter()
                     .filter(|entry| states.contains(&entry.row.state))
+                    .filter(|entry| filter.matches(entry.row.state))
                     .collect();
+                if *label == "completed" {
+                    rows.sort_by_key(|e| std::cmp::Reverse((e.row.finished_epoch_ms, e.row.id)));
+                }
                 (*label, rows)
             })
-            .filter(|(_, rows): &(_, Vec<_>)| !rows.is_empty())
+            .filter(|(_, rows)| !rows.is_empty())
             .collect()
     }
 
-    /// Rows in the order the dropdown shows them.
-    pub(crate) fn download_display_order(&self) -> Vec<&DownloadEntry> {
-        self.download_sections()
+    /// Rows in the order `surface` shows them.
+    pub(crate) fn download_display_order(&self, surface: DownloadSurface) -> Vec<&DownloadEntry> {
+        self.download_sections(surface)
             .into_iter()
             .flat_map(|(_, rows)| rows)
             .collect()
@@ -176,7 +209,10 @@ impl LuminaApp {
         }
         self.downloads.open = true;
         self.downloads.unseen_failure = false;
-        self.downloads.focused = self.download_display_order().first().map(|e| e.row.id);
+        self.downloads.focused = self
+            .download_display_order(DownloadSurface::Panel)
+            .first()
+            .map(|e| e.row.id);
         cx.notify();
     }
 
@@ -187,38 +223,52 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// ↑/↓ in the open dropdown.
-    pub(crate) fn move_download_focus(&mut self, step: isize, cx: &mut Context<Self>) {
+    /// ↑/↓ in the open dropdown (`Panel`) or on the Downloads screen.
+    pub(crate) fn move_download_focus(
+        &mut self,
+        step: isize,
+        surface: DownloadSurface,
+        cx: &mut Context<Self>,
+    ) {
         let order: Vec<i64> = self
-            .download_display_order()
+            .download_display_order(surface)
             .iter()
             .map(|entry| entry.row.id)
             .collect();
         if order.is_empty() {
             return;
         }
-        let next = match self
-            .downloads
-            .focused
-            .and_then(|id| order.iter().position(|o| *o == id))
-        {
+        let focused = match surface {
+            DownloadSurface::Panel => self.downloads.focused,
+            DownloadSurface::Screen => self.downloads.screen_focused,
+        };
+        let next = match focused.and_then(|id| order.iter().position(|o| *o == id)) {
             Some(at) => (at as isize + step).clamp(0, order.len() as isize - 1) as usize,
             None => 0,
         };
         let id = order[next];
-        self.downloads.focused = Some(id);
-        // The body lists each non-empty section's label, then its rows.
+        // Both lists show each non-empty section's header, then its rows.
         let mut child = 0;
         let mut target = None;
-        for (_, rows) in self.download_sections() {
+        for (_, rows) in self.download_sections(surface) {
             if let Some(at) = rows.iter().position(|entry| entry.row.id == id) {
                 target = Some(child + 1 + at);
                 break;
             }
             child += 1 + rows.len();
         }
+        let scroll = match surface {
+            DownloadSurface::Panel => {
+                self.downloads.focused = Some(id);
+                &self.downloads.scroll
+            }
+            DownloadSurface::Screen => {
+                self.downloads.screen_focused = Some(id);
+                &self.downloads.screen_scroll
+            }
+        };
         if let Some(target) = target {
-            self.downloads.scroll.scroll_to_item(target);
+            scroll.scroll_to_item(target);
         }
         cx.notify();
     }
@@ -315,7 +365,10 @@ impl LuminaApp {
             .focused
             .is_some_and(|id| self.downloads.entries.iter().any(|e| e.row.id == id))
         {
-            self.downloads.focused = self.download_display_order().first().map(|e| e.row.id);
+            self.downloads.focused = self
+                .download_display_order(DownloadSurface::Panel)
+                .first()
+                .map(|e| e.row.id);
         }
         cx.notify();
 

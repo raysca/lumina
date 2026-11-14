@@ -158,6 +158,7 @@ pub enum CommandId {
     /// Act on the download list; each shown only when it has rows to act on.
     PauseAllDownloads,
     ResumeAllDownloads,
+    RetryFailedDownloads,
     ClearFinishedDownloads,
     CancelImport,
     /// Get Info actions, so they have a keyboard path (§11).
@@ -270,6 +271,7 @@ impl Command {
             }
             PauseAllDownloads => Icon::Pause,
             ResumeAllDownloads => Icon::Play,
+            RetryFailedDownloads => Icon::RotateCcw,
             ClearFinishedDownloads => Icon::Check,
             CancelImport => Icon::X,
             RetryError => Icon::RotateCw,
@@ -379,6 +381,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.resume_all_downloads",
             shortcut: "",
             keywords: "downloads continue start queue url video",
+        },
+        Command {
+            id: CommandId::RetryFailedDownloads,
+            key: "command.retry_failed_downloads",
+            shortcut: "",
+            keywords: "downloads again error try queue",
         },
         Command {
             id: CommandId::ClearFinishedDownloads,
@@ -1397,6 +1405,11 @@ impl LuminaApp {
                     && matches!(e.row.state, DownloadState::Running | DownloadState::Waiting)
             }),
             CommandId::ResumeAllDownloads => self.any_download_in(&[DownloadState::Paused]),
+            CommandId::RetryFailedDownloads => self
+                .downloads
+                .entries
+                .iter()
+                .any(|e| e.row.state == DownloadState::Failed && e.row.can_retry),
             CommandId::ClearFinishedDownloads => self.any_download_in(&[
                 DownloadState::Done,
                 DownloadState::Failed,
@@ -1845,6 +1858,7 @@ impl LuminaApp {
             CommandId::ShowAllDownloads => self.show_downloads_screen(cx),
             CommandId::PauseAllDownloads => self.pause_all_downloads(cx),
             CommandId::ResumeAllDownloads => self.resume_all_downloads(cx),
+            CommandId::RetryFailedDownloads => self.retry_all_downloads(cx),
             CommandId::ClearFinishedDownloads => self.clear_finished_downloads(cx),
             CommandId::CancelImport => self.cancel_running_import(cx),
             CommandId::AdjustDate => {

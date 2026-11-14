@@ -15,6 +15,7 @@ macro_rules! lucide {
 static LUCIDE: &[(&str, &str)] = lucide!(
     "aperture",
     "arrow-down-to-line",
+    "arrow-up",
     "arrow-up-narrow-wide",
     "audio-lines",
     "calendar",

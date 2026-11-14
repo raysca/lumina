@@ -99,6 +99,10 @@ impl LuminaApp {
         if !self.tags_page_shown() || self.search_focused {
             self.tag_manager.close_popovers();
         }
+        // Likewise the Downloads screen's row menu.
+        if !self.downloads_screen_shown() || self.search_focused {
+            self.downloads.row_menu = None;
+        }
     }
 
     /// Plain field resets, no notify: called from render.
@@ -109,6 +113,7 @@ impl LuminaApp {
         self.albums.overview.card_menu = None;
         self.albums.page.menu = None;
         self.tag_manager.close_popovers();
+        self.downloads.row_menu = None;
         if self.downloads.open {
             self.downloads.open = false;
             self.downloads.focused = None;
@@ -128,6 +133,7 @@ impl LuminaApp {
             || self.albums.overview.sort_menu.is_some()
             || self.albums.overview.card_menu.is_some()
             || self.albums.page.menu.is_some()
+            || self.downloads.row_menu.is_some()
     }
 
     /// "Import…": a folder picker allowing several folders. (Loose files can

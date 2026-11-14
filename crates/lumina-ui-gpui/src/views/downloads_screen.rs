@@ -1,12 +1,13 @@
 //! The Downloads screen (frame `ttuOX`): the download list in the main area,
 //! under a top bar with Pause all / Resume all, Clear completed and Add URL.
-//! The body is a plain list for now; filter chips, the status bar and
-//! sections come later.
+//! The body is the filter bar, the status bar and the sectioned list
+//! (rows in `downloads_rows`).
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::DownloadState;
+use lumina_core::{DownloadState, SystemAlbum};
 
+use crate::app::downloads::DownloadSurface;
 use crate::app::render::empty_state::{empty_body, empty_button, empty_glyph, empty_headline};
 use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
@@ -180,8 +181,8 @@ fn text_button(
         .child(label)
 }
 
-/// The screen body: the empty state, or the filter bar over one plain line
-/// per row the filter keeps.
+/// The screen body: the empty state, or the filter bar and status bar over
+/// the sectioned list.
 pub(crate) fn render(
     app: &LuminaApp,
     window: &Window,
@@ -222,81 +223,133 @@ pub(crate) fn render(
                 ),
             );
     }
-    let filter = app.downloads.filter;
-    let rows: Vec<_> = app
-        .download_display_order()
-        .into_iter()
-        .filter(|entry| filter.matches(entry.row.state))
-        .collect();
-    let empty = rows.is_empty();
-    // ponytail: a plain, display-only list until the sections land (Task 5);
-    // it does nothing on click, so no key or click acts on a hidden row.
-    let list = div()
+    body.relative()
+        .flex()
+        .flex_col()
+        .child(crate::views::downloads_filter_bar::render(app, window, cx))
+        .children(crate::views::downloads_status_bar::render(app))
+        .child(render_list(app, cx))
+        .children(menu_backdrop(app, cx))
+}
+
+/// The scrolling list: each non-empty section's header, then its rows, as
+/// direct children (`move_download_focus` scrolls by that index).
+pub(crate) fn render_list(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    let sections = app.download_sections(DownloadSurface::Screen);
+    let empty = sections.is_empty();
+    let mut list = div()
         .id("downloads-list")
+        .debug_selector(|| "downloads-list".to_string())
+        .role(Role::List)
+        .aria_label(t("downloads.title"))
+        .track_scroll(&app.downloads.screen_scroll)
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
         .px(px(28.0))
-        .py(px(18.0))
+        .pb(px(24.0))
         .flex()
         .flex_col()
-        .gap(px(6.0))
+        .gap(px(8.0))
         .when(empty, |list| {
             list.child(
                 div()
                     .debug_selector(|| "downloads-filter-empty".to_string())
+                    .pt(px(18.0))
                     .text_size(px(12.5))
                     .text_color(theme::t2())
                     .child(t("downloads.filter_empty")),
             )
-        })
-        .children(rows.into_iter().map(|entry| {
-            let row = &entry.row;
-            let title = row.title.clone().unwrap_or_else(|| row.url.clone());
-            let id = row.id;
-            div()
-                .debug_selector(move || format!("downloads-screen-row-{id}"))
-                .h(px(40.0))
-                .px(px(14.0))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(12.0))
-                .rounded(theme::RADIUS_LG)
-                .bg(theme::bg_1())
-                .border_1()
-                .border_color(theme::line())
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(px(13.0))
-                        .text_color(theme::t1())
-                        .child(title),
-                )
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.0))
-                        .text_color(theme::t3())
-                        .child(state_word(row.state)),
-                )
-        }));
-    body.flex()
-        .flex_col()
-        .child(crate::views::downloads_filter_bar::render(app, window, cx))
-        .children(crate::views::downloads_status_bar::render(app))
-        .child(list)
+        });
+    for (key, rows) in sections {
+        list = list.child(section_header(app, key, rows.len(), cx));
+        for (n, entry) in rows.iter().enumerate() {
+            let row = match key {
+                "queued" => crate::views::downloads_rows::queued_row(
+                    app,
+                    entry,
+                    n,
+                    rows.get(n.wrapping_sub(1)),
+                    cx,
+                ),
+                "completed" => crate::views::downloads_rows::completed_row(app, entry, cx),
+                _ => crate::views::downloads_rows::card_row(app, entry, cx),
+            };
+            list = list.child(row);
+        }
+    }
+    list
 }
 
-fn state_word(state: DownloadState) -> &'static str {
-    match state {
-        DownloadState::Running => "Downloading",
-        DownloadState::Waiting => "Queued",
-        DownloadState::Paused => "Paused",
-        DownloadState::Failed => "Failed",
-        DownloadState::Done | DownloadState::Duplicate => "Completed",
-    }
+/// "NEEDS ATTENTION · 2" on the left, the section's action on the right.
+fn section_header(
+    app: &LuminaApp,
+    key: &'static str,
+    count: usize,
+    cx: &mut Context<LuminaApp>,
+) -> Div {
+    let selector = format!("downloads-section-{key}");
+    let action_selector = format!("downloads-section-{key}-action");
+    let label: SharedString = t(&format!("downloads.section_{key}_action")).into();
+    // Retry all only when a failure can be retried.
+    let can_act = key != "attention"
+        || app
+            .downloads
+            .entries
+            .iter()
+            .any(|e| e.row.state == DownloadState::Failed && e.row.can_retry);
+    let action = div()
+        .id(SharedString::from(action_selector.clone()))
+        .debug_selector(move || action_selector.clone())
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .text_size(px(12.0))
+        .text_color(theme::t2())
+        .cursor_pointer()
+        .hover(|s| s.text_color(theme::t1()))
+        .child(label)
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| match key {
+            "active" => this.pause_all_downloads(cx),
+            "attention" => this.retry_all_downloads(cx),
+            "queued" => this.clear_queue(cx),
+            _ => this.select_album(AlbumSelection::System(SystemAlbum::Downloaded), cx),
+        }));
+    div()
+        .debug_selector(move || selector.clone())
+        .pt(px(18.0))
+        .pb(px(2.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(
+            div()
+                .font_family(theme::FONT_MONO)
+                .text_size(px(11.0))
+                .text_color(theme::t3())
+                .child(format!(
+                    "{} · {count}",
+                    t(&format!("downloads.section_{key}"))
+                )),
+        )
+        .when(can_act, |header| header.child(action))
+}
+
+/// The dismiss backdrop over the list while a row menu is open; the card
+/// hangs from its "…" button, painted above this.
+pub(crate) fn menu_backdrop(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Div> {
+    app.downloads.row_menu?;
+    Some(
+        div()
+            .debug_selector(|| "downloads-row-menu-backdrop".to_string())
+            .absolute()
+            .inset_0()
+            .occlude()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _e: &MouseDownEvent, _w, cx| {
+                    this.close_download_row_menu(cx);
+                }),
+            ),
+    )
 }

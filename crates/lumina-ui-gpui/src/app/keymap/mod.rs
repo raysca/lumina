@@ -343,7 +343,7 @@ impl LuminaApp {
             return;
         }
 
-        // The Downloads screen: ←/→ move between its filter chips.
+        // The Downloads screen: ←/→ chips, ↑/↓ rows, ↵, ⌘↵, ⌫, ⌥⌘↑ and Esc.
         if self.handle_downloads_screen_key(keystroke, cx) {
             return;
         }
