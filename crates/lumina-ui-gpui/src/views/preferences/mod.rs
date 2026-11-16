@@ -4,7 +4,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-use crate::app::preferences::PreferencesTab;
+use crate::app::preferences::{PreferencesTab, SettingsButton};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -76,7 +76,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         PreferencesTab::Library => library::render_library(app, cx),
         PreferencesTab::Downloads => downloads::render_downloads(app, cx),
         PreferencesTab::Storage => storage::render_storage(app, cx),
-        PreferencesTab::About => about::render_about(cx),
+        PreferencesTab::About => about::render_about(app, cx),
     };
     let Category { label, meta, .. } = category(tab);
     let close = header_icon_button("preferences-close", Icon::X, "Close", Some("Esc"), false)
@@ -90,7 +90,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .items_center()
         .gap(px(8.0))
         .when(tab == PreferencesTab::General, |s| {
-            s.child(reset_button(cx))
+            s.child(reset_button(app, cx))
         })
         .child(close);
     let confirm = if app.preferences_reset_confirm {
@@ -150,10 +150,11 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
 
 /// The General TopBar's "Reset to defaults" (h 32, r 8, `bg_2`, line
 /// outline, refresh icon, 12.5).
-fn reset_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    let button = SettingsButton::Reset;
     div()
-        .id("settings-reset")
-        .debug_selector(|| "settings-reset".to_string())
+        .id(button.id())
+        .debug_selector(move || button.id().to_string())
         .role(Role::Button)
         .aria_label(SharedString::from("Reset to defaults"))
         .h(px(32.0))
@@ -165,7 +166,7 @@ fn reset_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .gap(px(6.0))
         .rounded(px(8.0))
         .border_1()
-        .border_color(theme::line())
+        .border_color(rows::focus_border(app, button, theme::line()))
         .bg(theme::bg_2())
         .hover(|s| s.bg(theme::bg_3()))
         .whitespace_nowrap()
@@ -174,8 +175,8 @@ fn reset_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
         .cursor_pointer()
         .child(render_icon(Icon::RefreshCw, px(14.0), theme::t2()))
         .child("Reset to defaults")
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.prompt_reset_preferences(cx);
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            button.press(this, cx);
         }))
 }
 

@@ -5,6 +5,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
+use crate::app::preferences::SettingsButton;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -156,17 +157,17 @@ pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
         )
 }
 
-type RowAction = fn(&mut LuminaApp, &mut Context<LuminaApp>);
-
 /// A 34 px row button (`bg_3`, `line_2` outline, 12.5/500), with an
-/// optional 14 px icon before its label. It never shrinks or wraps.
+/// optional 14 px icon before its label. It never shrinks or wraps. The
+/// Tab walk's focus shows as a `focus_ring` outline.
 pub(super) fn row_button(
+    app: &LuminaApp,
     cx: &mut Context<LuminaApp>,
-    id: &'static str,
+    button: SettingsButton,
     label: &'static str,
     icon: Option<Icon>,
-    action: RowAction,
 ) -> Stateful<Div> {
+    let id = button.id();
     div()
         .id(id)
         .debug_selector(move || id.to_string())
@@ -181,7 +182,7 @@ pub(super) fn row_button(
         .gap(px(6.0))
         .rounded(px(9.0))
         .border_1()
-        .border_color(theme::line_2())
+        .border_color(focus_border(app, button, theme::line_2()))
         .bg(theme::bg_3())
         .hover(|s| s.bg(theme::line_2()))
         .whitespace_nowrap()
@@ -197,6 +198,15 @@ pub(super) fn row_button(
                 .child(label),
         )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            action(this, cx);
+            button.press(this, cx);
         }))
+}
+
+/// `focus_ring` while the Tab walk is on `button`, else `rest`.
+pub(super) fn focus_border(app: &LuminaApp, button: SettingsButton, rest: impl Into<Hsla>) -> Hsla {
+    if app.settings_focus == Some(button) {
+        theme::focus_ring().into()
+    } else {
+        rest.into()
+    }
 }

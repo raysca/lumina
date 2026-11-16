@@ -4,6 +4,7 @@
 use gpui::*;
 
 use super::rows::{controls, row, row_button, section, value};
+use crate::app::preferences::SettingsButton;
 use crate::app::LuminaApp;
 use crate::config::LaunchView;
 use crate::theme;
@@ -36,11 +37,11 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                             .debug_selector(|| "preferences-external-editor".to_string()),
                     )
                     .child(row_button(
+                        app,
                         cx,
-                        "preferences-choose-editor",
+                        SettingsButton::ChooseEditor,
                         "Choose Editor…",
                         None,
-                        |this, cx| this.choose_external_editor(cx),
                     )),
             )
             .debug_selector(|| "settings-row-editor".to_string())],

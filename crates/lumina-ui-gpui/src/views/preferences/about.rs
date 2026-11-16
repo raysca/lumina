@@ -3,11 +3,12 @@
 use gpui::*;
 
 use super::rows::row_button;
+use crate::app::preferences::SettingsButton;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 
-pub(super) fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
+pub(super) fn render_about(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     div()
         .pt(px(30.0))
         .flex()
@@ -57,18 +58,18 @@ pub(super) fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex_row()
                 .gap_2()
                 .child(row_button(
+                    app,
                     cx,
-                    "preferences-license",
+                    SettingsButton::License,
                     "MIT License",
                     None,
-                    |this, cx| this.open_bundled_doc("LICENSE", cx),
                 ))
                 .child(row_button(
+                    app,
                     cx,
-                    "preferences-acknowledgements",
+                    SettingsButton::Acknowledgements,
                     "Acknowledgements",
                     None,
-                    |this, cx| this.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
                 )),
         )
         .into_any_element()

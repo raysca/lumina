@@ -5,6 +5,7 @@ use gpui::*;
 
 use super::rows::{controls, path_pill, row, row_button, section};
 use super::tilde;
+use crate::app::preferences::SettingsButton;
 use crate::app::LuminaApp;
 use crate::config::DOWNLOAD_CONCURRENCY_CHOICES;
 use crate::theme;
@@ -21,11 +22,11 @@ pub(super) fn render_downloads(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> 
                 controls()
                     .child(path_pill("settings-downloads-path", tilde(&folder)))
                     .child(row_button(
+                        app,
                         cx,
-                        "settings-downloads-reveal",
+                        SettingsButton::RevealDownloads,
                         "Show in Finder",
                         None,
-                        |this, cx| this.reveal_downloads_folder(cx),
                     )),
             )
             .debug_selector(|| "settings-row-downloads-path".to_string())],

@@ -532,6 +532,8 @@ pub struct LuminaApp {
     pub preferences_storage: Option<crate::app::library_storage::LibraryStorage>,
     /// Settings › Reset to defaults is asking for confirmation.
     pub preferences_reset_confirm: bool,
+    /// The settings button Tab/⇧Tab is on; ↵ or Space presses it.
+    pub settings_focus: Option<crate::app::preferences::SettingsButton>,
     pub command_palette_open: bool,
     pub command_query: String,
     /// The platform text input behind the active field; see app/text_input.rs.
@@ -747,6 +749,7 @@ impl LuminaApp {
             preferences_cache_cleared: false,
             preferences_storage: None,
             preferences_reset_confirm: false,
+            settings_focus: None,
             command_palette_open: false,
             command_query: String::new(),
             field_input: None,

@@ -4,7 +4,7 @@ use gpui::*;
 
 use super::rows::{controls, path_pill, row, row_button, section, value};
 use super::tilde;
-use crate::app::preferences::thumbnail_cache_dir;
+use crate::app::preferences::{thumbnail_cache_dir, SettingsButton};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -35,11 +35,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                             tilde(&thumbnail_cache_dir()),
                         ))
                         .child(row_button(
+                            app,
                             cx,
-                            "preferences-reveal-cache",
+                            SettingsButton::RevealCache,
                             "Reveal Cache",
                             None,
-                            |this, cx| this.reveal_cache_directory(cx),
                         )),
                 )
                 .debug_selector(|| "settings-row-cache".to_string()),
@@ -65,11 +65,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                                 .child("Cleared")
                         }))
                         .child(row_button(
+                            app,
                             cx,
-                            "preferences-clear-cache",
+                            SettingsButton::ClearCache,
                             "Clear Cache",
                             None,
-                            |this, cx| this.clear_thumbnail_cache(cx),
                         )),
                 )
                 .debug_selector(|| "settings-row-cache-size".to_string()),
@@ -87,11 +87,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                         tilde(&crate::config::AppConfig::config_path()),
                     ))
                     .child(row_button(
+                        app,
                         cx,
-                        "preferences-reveal-config",
+                        SettingsButton::RevealConfig,
                         "Reveal Config",
                         None,
-                        |this, cx| this.reveal_config(cx),
                     )),
             )
             .debug_selector(|| "settings-row-config".to_string())],
@@ -108,11 +108,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                         tilde(&crate::logging::log_file_path()),
                     ))
                     .child(row_button(
+                        app,
                         cx,
-                        "preferences-reveal-logs",
+                        SettingsButton::RevealLogs,
                         "Reveal Logs",
                         None,
-                        |this, cx| this.reveal_logs(cx),
                     )),
             )
             .debug_selector(|| "settings-row-logs".to_string())],

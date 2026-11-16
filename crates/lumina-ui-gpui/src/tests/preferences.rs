@@ -1570,3 +1570,248 @@ fn downloads_path_row_reveals_imports() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// The settings button the Tab walk is on, by its selector.
+fn settings_focus(
+    view: &gpui::Entity<crate::app::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+) -> Option<&'static str> {
+    view.update(vcx, |app, _| app.settings_focus.map(|b| b.id()))
+}
+
+#[core::prelude::v1::test]
+fn settings_tab_walks_buttons_and_return_activates() {
+    use crate::app::preferences::REVEALED;
+    let (temp_dir, engine) = seed_library("settings_tab_walk", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-, down down down");
+    assert_eq!(
+        view.update(vcx, |app, _| app.preferences_tab),
+        PreferencesTab::Storage
+    );
+    assert_eq!(
+        settings_focus(&view, vcx),
+        None,
+        "nothing is focused at first"
+    );
+    keystrokes(vcx, "secondary-tab alt-tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        None,
+        "⌘Tab and ⌥Tab stay absorbed and move no focus"
+    );
+
+    let order = [
+        "preferences-reveal-cache",
+        "preferences-clear-cache",
+        "preferences-reveal-config",
+        "preferences-reveal-logs",
+    ];
+    for expected in order {
+        keystrokes(vcx, "tab");
+        assert_eq!(
+            settings_focus(&view, vcx),
+            Some(expected),
+            "Tab walks Storage's buttons in order"
+        );
+        assert!(vcx.debug_bounds(expected).is_some(), "{expected} renders");
+    }
+    keystrokes(vcx, "tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some(order[0]),
+        "Tab past the last button wraps to the first"
+    );
+    keystrokes(vcx, "shift-tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some(order[3]),
+        "⇧Tab before the first button wraps to the last"
+    );
+    keystrokes(vcx, "shift-tab");
+    assert_eq!(settings_focus(&view, vcx), Some(order[2]), "⇧Tab goes back");
+
+    // ↵ on Clear Cache clears this test's cache folder.
+    let cache = thumbnail_cache_dir();
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("1.jpg"), b"thumb").unwrap();
+    keystrokes(vcx, "shift-tab");
+    assert_eq!(settings_focus(&view, vcx), Some(order[1]));
+    keystrokes(vcx, "enter");
+    assert!(
+        !cache.join("1.jpg").exists(),
+        "↵ on Clear Cache clears the cache, as a click does"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_cache_cleared, "and confirms inline");
+    });
+
+    // Space on Reveal Cache reveals it, as a click does.
+    REVEALED.with(|r| r.borrow_mut().clear());
+    keystrokes(vcx, "shift-tab space");
+    assert_eq!(settings_focus(&view, vcx), Some(order[0]));
+    assert_eq!(
+        REVEALED.with(|r| r.borrow_mut().drain(..).collect::<Vec<_>>()),
+        vec![cache.clone()],
+        "Space on Reveal Cache reveals the cache folder"
+    );
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        REVEALED.with(|r| r.borrow_mut().drain(..).collect::<Vec<_>>()),
+        vec![cache.clone()],
+        "↵ on Reveal Cache reveals the cache folder"
+    );
+    assert!(
+        view.update(vcx, |app, _| app.preferences_open),
+        "↵ and Space do not close settings"
+    );
+
+    keystrokes(vcx, "escape");
+    assert_eq!(settings_focus(&view, vcx), None, "closing clears the focus");
+
+    let _ = std::fs::remove_dir_all(&cache);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn settings_tab_focus_resets_on_category_change() {
+    use crate::app::preferences::REVEALED;
+    let (temp_dir, engine) = seed_library("settings_tab_reset", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-, down down down tab");
+    assert_eq!(settings_focus(&view, vcx), Some("preferences-reveal-cache"));
+    keystrokes(vcx, "down");
+    assert_eq!(
+        view.update(vcx, |app, _| app.preferences_tab),
+        PreferencesTab::About
+    );
+    assert_eq!(
+        settings_focus(&view, vcx),
+        None,
+        "changing category clears the focus"
+    );
+    REVEALED.with(|r| r.borrow_mut().clear());
+    keystrokes(vcx, "enter space");
+    assert!(
+        REVEALED.with(|r| r.borrow().is_empty()),
+        "with nothing focused ↵ and Space do nothing"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "↵ does not close settings");
+        assert!(app.error_message.is_none());
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn settings_tab_on_library_rescans_and_opens_another() {
+    use crate::app::library::FOLDER_PICKS;
+    let (temp_dir, engine) = seed_library("settings_tab_library", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-, down");
+    render_ui(vcx);
+    storage_report(&view, vcx);
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("settings-storage-card").is_some());
+
+    keystrokes(vcx, "tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some("settings-storage-clear-cache"),
+        "the storage card's Clear cache comes first"
+    );
+    // The card goes: a stale focus must not press the button now first.
+    let picks = FOLDER_PICKS.with(|n| n.get());
+    view.update(vcx, |app, _| app.preferences_storage = None);
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("settings-storage-card").is_none());
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        FOLDER_PICKS.with(|n| n.get()),
+        picks,
+        "↵ on a button that is gone presses nothing"
+    );
+    view.update(vcx, |app, _| assert!(!app.preferences_cache_cleared));
+
+    keystrokes(vcx, "tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some("preferences-change-library")
+    );
+    keystrokes(vcx, "enter");
+    assert_eq!(
+        FOLDER_PICKS.with(|n| n.get()),
+        picks + 1,
+        "↵ on Open Another… asks for another library folder"
+    );
+
+    view.update(vcx, |app, _| {
+        if let Some(state) = app.grid_state.as_mut() {
+            state.is_scanning = false;
+        }
+    });
+    keystrokes(vcx, "tab");
+    assert_eq!(settings_focus(&view, vcx), Some("preferences-rescan"));
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.as_ref().is_some_and(|s| s.is_scanning),
+            "↵ on Rescan Library starts a scan"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn settings_tab_on_general_reaches_editor_and_reset() {
+    let (temp_dir, engine) = seed_library("settings_tab_general", 1);
+    crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    let before = ui_prefs(&view, vcx);
+    keystrokes(vcx, "secondary-,");
+
+    keystrokes(vcx, "tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some("settings-reset"),
+        "the TopBar's Reset to defaults comes first"
+    );
+    keystrokes(vcx, "tab");
+    assert_eq!(
+        settings_focus(&view, vcx),
+        Some("preferences-choose-editor")
+    );
+    keystrokes(vcx, "shift-tab enter");
+    assert!(reset_dialog_shown(vcx), "↵ on Reset asks first");
+
+    // The confirmation takes the keys: Tab, Space and ↓ act on nothing.
+    keystrokes(vcx, "tab space down");
+    assert!(reset_dialog_shown(vcx), "the confirmation stays up");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.preferences_tab, PreferencesTab::General);
+        assert_eq!(app.settings_focus.map(|b| b.id()), Some("settings-reset"));
+    });
+    keystrokes(vcx, "escape");
+    assert!(!reset_dialog_shown(vcx), "Esc cancels");
+    assert_eq!(ui_prefs(&view, vcx), before, "nothing behind it fired");
+    assert!(
+        view.update(vcx, |app, _| app.preferences_open),
+        "Esc closes only the confirmation"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

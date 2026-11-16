@@ -27,6 +27,61 @@ impl PreferencesTab {
     ];
 }
 
+/// A settings button: its selector and what pressing it does. Clicks and
+/// the Tab walk (Tab/⇧Tab, ↵ or Space) both press it through
+/// [`SettingsButton::press`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsButton {
+    Reset,
+    ChooseEditor,
+    StorageCardClear,
+    OpenAnother,
+    Rescan,
+    RevealDownloads,
+    RevealCache,
+    ClearCache,
+    RevealConfig,
+    RevealLogs,
+    License,
+    Acknowledgements,
+}
+
+impl SettingsButton {
+    /// The button's `id` and `debug_selector`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Reset => "settings-reset",
+            Self::ChooseEditor => "preferences-choose-editor",
+            Self::StorageCardClear => "settings-storage-clear-cache",
+            Self::OpenAnother => "preferences-change-library",
+            Self::Rescan => "preferences-rescan",
+            Self::RevealDownloads => "settings-downloads-reveal",
+            Self::RevealCache => "preferences-reveal-cache",
+            Self::ClearCache => "preferences-clear-cache",
+            Self::RevealConfig => "preferences-reveal-config",
+            Self::RevealLogs => "preferences-reveal-logs",
+            Self::License => "preferences-license",
+            Self::Acknowledgements => "preferences-acknowledgements",
+        }
+    }
+
+    pub fn press(self, app: &mut LuminaApp, cx: &mut Context<LuminaApp>) {
+        match self {
+            Self::Reset => app.prompt_reset_preferences(cx),
+            Self::ChooseEditor => app.choose_external_editor(cx),
+            Self::StorageCardClear | Self::ClearCache => app.clear_thumbnail_cache(cx),
+            Self::OpenAnother => app.pick_folder_dialog(cx),
+            Self::Rescan => app.rescan_library(cx),
+            Self::RevealDownloads => app.reveal_downloads_folder(cx),
+            Self::RevealCache => app.reveal_cache_directory(cx),
+            Self::RevealConfig => app.reveal_config(cx),
+            Self::RevealLogs => app.reveal_logs(cx),
+            Self::License => app.open_bundled_doc("LICENSE", cx),
+            Self::Acknowledgements => app.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
+        }
+    }
+}
+
 /// Thumbnail cache directory used by Lumina.
 pub fn thumbnail_cache_dir() -> PathBuf {
     // Tests click Clear Cache; they must never touch the real cache.
@@ -237,6 +292,7 @@ impl LuminaApp {
         }
         self.preferences_open = true;
         self.preferences_tab = tab;
+        self.settings_focus = None;
         self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
         if tab == PreferencesTab::Library {
@@ -247,17 +303,69 @@ impl LuminaApp {
 
     pub fn close_preferences(&mut self, cx: &mut Context<Self>) {
         self.preferences_open = false;
+        self.settings_focus = None;
         cx.notify();
     }
 
     pub fn set_preferences_tab(&mut self, tab: PreferencesTab, cx: &mut Context<Self>) {
         self.preferences_tab = tab;
+        self.settings_focus = None;
         match tab {
             PreferencesTab::Storage => self.refresh_cache_usage(),
             PreferencesTab::Library => self.refresh_library_storage(cx),
             _ => {}
         }
         cx.notify();
+    }
+
+    /// The buttons on the shown settings page, in Tab order (top to bottom,
+    /// left to right). It must match what the page draws: the card and the
+    /// Downloads path row only show with a library open.
+    pub fn settings_buttons(&self) -> Vec<SettingsButton> {
+        use SettingsButton::*;
+        match self.preferences_tab {
+            PreferencesTab::General => vec![Reset, ChooseEditor],
+            PreferencesTab::Library => {
+                let card = self.library_storage().map(|_| StorageCardClear);
+                card.into_iter().chain([OpenAnother, Rescan]).collect()
+            }
+            PreferencesTab::Downloads => self
+                .downloads_folder()
+                .map(|_| RevealDownloads)
+                .into_iter()
+                .collect(),
+            PreferencesTab::Storage => vec![RevealCache, ClearCache, RevealConfig, RevealLogs],
+            PreferencesTab::About => vec![License, Acknowledgements],
+        }
+    }
+
+    /// The focused button, while it is still on the page: a button that went
+    /// (the storage card) is never pressed in its place.
+    fn shown_settings_focus(&self) -> Option<(usize, SettingsButton)> {
+        let focus = self.settings_focus?;
+        let at = self.settings_buttons().iter().position(|b| *b == focus)?;
+        Some((at, focus))
+    }
+
+    /// Tab / ⇧Tab in settings: the next or previous button, wrapping. From
+    /// nothing (or a button that went) Tab starts at the first, ⇧Tab the last.
+    pub fn step_settings_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let buttons = self.settings_buttons();
+        let n = buttons.len() as isize;
+        self.settings_focus = match self.shown_settings_focus() {
+            _ if n == 0 => None,
+            Some((at, _)) => Some(buttons[(at as isize + delta).rem_euclid(n) as usize]),
+            None if delta < 0 => buttons.last().copied(),
+            None => buttons.first().copied(),
+        };
+        cx.notify();
+    }
+
+    /// ↵ or Space in settings: presses the focused button, as a click does.
+    pub fn press_settings_focus(&mut self, cx: &mut Context<Self>) {
+        if let Some((_, button)) = self.shown_settings_focus() {
+            button.press(self, cx);
+        }
     }
 
     /// ↑/↓ in settings: the previous or next category, stopping at the ends.

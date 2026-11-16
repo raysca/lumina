@@ -278,7 +278,11 @@ currently sees little beyond the window frame. Mitigations:
   full-window page drawn by Lumina: `⌘,` opens and closes it, `↑`/`↓` move
   between its categories (General, Library, Downloads, Storage, About),
   `←`/`→` choose General's Default view on launch (Library or Last viewed)
-  and Downloads' Simultaneous downloads (1, 2, 3 or 5), `Esc` closes it,
+  and Downloads' Simultaneous downloads (1, 2, 3 or 5), `Tab`/`⇧Tab` move
+  a focus ring between the page's buttons (wrapping; a new category clears
+  it, and a button that goes is skipped), `↵` or `Space` presses the
+  focused one as a click does (the ring is drawn by Lumina, so VoiceOver
+  does not follow it), `Esc` closes it,
   and library shortcuts do nothing while it is open. ⌘K Settings:
   Downloads opens it on Downloads, as do the settings buttons on the
   Downloads screen and in the downloads popover. General's Reset to

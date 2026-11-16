@@ -5,6 +5,7 @@ use gpui::*;
 
 use super::rows::{controls, path_pill, row, row_button, section, value};
 use super::storage_card::render_storage_card;
+use crate::app::preferences::SettingsButton;
 use crate::app::types::format_bytes;
 use crate::app::LuminaApp;
 use crate::icons::Icon;
@@ -23,7 +24,7 @@ pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
         .flex_col()
         .gap(px(14.0))
         // No reading yet (or none for this library): no card.
-        .children(storage.map(|storage| render_storage_card(storage, cx)))
+        .children(storage.map(|storage| render_storage_card(app, storage, cx)))
         .child(section(
             "LIBRARY",
             None,
@@ -34,11 +35,11 @@ pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                     controls()
                         .child(path_pill("settings-path-library", app.library_path_label()))
                         .child(row_button(
+                            app,
                             cx,
-                            "preferences-change-library",
+                            SettingsButton::OpenAnother,
                             "Open Another…",
                             None,
-                            |this, cx| this.pick_folder_dialog(cx),
                         )),
                 )
                 .debug_selector(|| "settings-row-library".to_string()),
@@ -55,11 +56,11 @@ pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                                 })),
                         )
                         .child(row_button(
+                            app,
                             cx,
-                            "preferences-rescan",
+                            SettingsButton::Rescan,
                             "Rescan Library",
                             Some(Icon::Wrench),
-                            |this, cx| this.rescan_library(cx),
                         )),
                 )
                 .debug_selector(|| "settings-row-library-size".to_string()),

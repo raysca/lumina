@@ -87,6 +87,13 @@ impl LuminaApp {
                 "," if cmd_or_ctrl => self.close_preferences(cx),
                 "up" => self.step_preferences_tab(-1, cx),
                 "down" => self.step_preferences_tab(1, cx),
+                // The page's buttons: Tab/⇧Tab walk them, ↵ or Space press.
+                // ⌘/⌃/⌥-Tab stay absorbed, as on the welcome screen.
+                "tab" if !cmd_or_ctrl && !keystroke.modifiers.alt => {
+                    let delta = if keystroke.modifiers.shift { -1 } else { 1 };
+                    self.step_settings_focus(delta, cx);
+                }
+                "enter" | "return" | "space" => self.press_settings_focus(cx),
                 // Each page's one segmented control: General's Default view
                 // on launch, Downloads' Simultaneous downloads.
                 "left" | "right"

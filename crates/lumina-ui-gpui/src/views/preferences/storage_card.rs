@@ -4,7 +4,9 @@
 
 use gpui::*;
 
+use super::rows::focus_border;
 use crate::app::library_storage::LibraryStorage;
+use crate::app::preferences::SettingsButton;
 use crate::app::types::format_bytes;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
@@ -19,6 +21,7 @@ struct Part {
 }
 
 pub(super) fn render_storage_card(
+    app: &LuminaApp,
     storage: &LibraryStorage,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
@@ -110,9 +113,10 @@ pub(super) fn render_storage_card(
         }));
     let clear_label = format!("Clear cache · {}", format_bytes(cache));
     let clear_marker = clear_label.clone();
+    let button = SettingsButton::StorageCardClear;
     let clear = div()
-        .id("settings-storage-clear-cache")
-        .debug_selector(|| "settings-storage-clear-cache".to_string())
+        .id(button.id())
+        .debug_selector(move || button.id().to_string())
         .role(Role::Button)
         .aria_label(SharedString::from(clear_label.clone()))
         .h(px(28.0))
@@ -123,6 +127,8 @@ pub(super) fn render_storage_card(
         .items_center()
         .gap(px(6.0))
         .rounded(px(8.0))
+        .border_1()
+        .border_color(focus_border(app, button, transparent_black()))
         .bg(theme::bg_2())
         .hover(|s| s.bg(theme::bg_3()))
         .cursor_pointer()
@@ -135,8 +141,8 @@ pub(super) fn render_storage_card(
                 .debug_selector(move || format!("settings-storage-clear-cache-text:{clear_marker}"))
                 .child(clear_label),
         )
-        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-            this.clear_thumbnail_cache(cx);
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            button.press(this, cx);
         }));
 
     div()
