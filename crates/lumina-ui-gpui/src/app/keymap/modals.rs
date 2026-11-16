@@ -70,10 +70,15 @@ impl LuminaApp {
             return true;
         }
 
-        // 0b. Preferences modal
+        // 0b. Settings: every other key stays here, so library shortcuts
+        // never act on the hidden library. ⌘, toggles it.
         if self.preferences_open {
-            if key == "escape" {
-                self.close_preferences(cx);
+            match key {
+                "escape" => self.close_preferences(cx),
+                "," if cmd_or_ctrl => self.close_preferences(cx),
+                "up" => self.step_preferences_tab(-1, cx),
+                "down" => self.step_preferences_tab(1, cx),
+                _ => {}
             }
             return true;
         }

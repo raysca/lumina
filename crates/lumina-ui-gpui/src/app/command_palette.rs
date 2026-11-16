@@ -1261,7 +1261,9 @@ impl LuminaApp {
         // change media behind the sheet (the menu item reaches here, not the
         // keymap). Nor over edit mode: they would act on the photo under the
         // draft. The Tags page holds no media selection, so ⌘K works there.
-        if self.templates.editor.is_some() || self.edits.session.is_some() {
+        // Nor over settings: they would act on the library hidden under it.
+        if self.templates.editor.is_some() || self.edits.session.is_some() || self.preferences_open
+        {
             return;
         }
         self.command_palette_open = true;

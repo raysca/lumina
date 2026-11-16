@@ -121,6 +121,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
             ("⌘O", "Open library…"),
             ("⇧⌘I", "Import…"),
             ("⌘,", "Preferences"),
+            ("↑ / ↓ in Preferences", "Previous / next category"),
             ("⌘R", "Rescan library"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘[ / ⌘]", "Back / Forward"),
@@ -490,7 +491,10 @@ impl Render for LuminaApp {
                                 .h_full()
                                 .flex()
                                 .flex_col()
-                                .child(self.render_error_banner(cx))
+                                // Settings draws the banner while it covers this.
+                                .when(!self.preferences_open, |col| {
+                                    col.child(self.render_error_banner(cx))
+                                })
                                 .child(crate::views::page_header::page_header(
                                     Empty,
                                     crate::i18n::t("view.all_media"),
@@ -794,7 +798,10 @@ impl Render for LuminaApp {
                             .h_full()
                             .flex()
                             .flex_col()
-                            .child(self.render_error_banner(cx))
+                            // Settings draws the banner while it covers this.
+                            .when(!self.preferences_open, |col| {
+                                col.child(self.render_error_banner(cx))
+                            })
                             .child(if self.search_screen_shown() {
                                 self.render_search_header(cx).into_any_element()
                             } else if let Some(id) = self.album_page_album() {
@@ -1035,7 +1042,7 @@ impl Render for LuminaApp {
                 self.render_shortcuts_overlay(cx),
                 "shortcuts-in",
             ))
-            // 12. Preferences / About
+            // 12. Settings (About is its last category): a full-window page
             .child(motion::overlay_in(
                 self.preferences_open,
                 crate::views::preferences::render_preferences_modal(self, cx),

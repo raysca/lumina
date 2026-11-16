@@ -948,17 +948,35 @@ fn first_scan_quit_reaches_the_app() {
 fn welcome_preferences_paint_and_escape_closes() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
 
     vcx.dispatch_action(crate::actions::OpenPreferences);
     render_ui(vcx);
-    assert!(
-        vcx.debug_bounds("preferences-card").is_some(),
-        "Preferences paints on the welcome screen when opened"
+    let page = vcx
+        .debug_bounds("settings-page")
+        .expect("settings paint on the welcome screen when opened");
+    assert_eq!(
+        (f32::from(page.size.width), f32::from(page.size.height)),
+        (1024.0, 560.0),
+        "with no library, settings fill the window"
+    );
+    let sidebar = vcx
+        .debug_bounds("settings-sidebar")
+        .expect("settings bring their own category sidebar");
+    assert_eq!(
+        f32::from(sidebar.size.height),
+        560.0,
+        "the category sidebar runs the window's full height"
     );
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
         assert!(!app.preferences_open, "Esc closes Preferences")
     });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-page").is_none(),
+        "Esc returns to the welcome screen"
+    );
 
     keystrokes(vcx, "secondary-,");
     view.update(vcx, |app, _| {

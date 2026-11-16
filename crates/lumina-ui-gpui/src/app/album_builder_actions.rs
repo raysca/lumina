@@ -97,6 +97,10 @@ impl LuminaApp {
         rules: &[SmartAlbumRule],
         cx: &mut Context<Self>,
     ) {
+        // Settings covers the window: the sheet would open unseen under it.
+        if self.preferences_open {
+            return;
+        }
         let rows: Vec<DraftRow> = rules.iter().map(DraftRow::from_rule).collect();
         let cameras = self.grid_state.as_ref().map_or_else(Vec::new, |state| {
             state.engine.distinct_cameras().unwrap_or_else(|err| {

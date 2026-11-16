@@ -14,6 +14,11 @@ pub enum PreferencesTab {
     About,
 }
 
+impl PreferencesTab {
+    /// Sidebar order; ↑/↓ walk it.
+    pub const ALL: [Self; 3] = [Self::General, Self::Storage, Self::About];
+}
+
 /// Thumbnail cache directory used by Lumina.
 pub fn thumbnail_cache_dir() -> PathBuf {
     // Tests click Clear Cache; they must never touch the real cache.
@@ -126,6 +131,17 @@ impl LuminaApp {
             self.refresh_cache_usage();
         }
         cx.notify();
+    }
+
+    /// ↑/↓ in settings: the previous or next category, stopping at the ends.
+    pub fn step_preferences_tab(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let all = PreferencesTab::ALL;
+        let at = all.iter().position(|t| *t == self.preferences_tab);
+        let next = at
+            .unwrap_or(0)
+            .saturating_add_signed(delta)
+            .min(all.len() - 1);
+        self.set_preferences_tab(all[next], cx);
     }
 
     pub fn refresh_cache_usage(&mut self) {

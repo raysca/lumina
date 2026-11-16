@@ -1,7 +1,226 @@
-//! v3 Preferences sheet: grouped rows per tab, and the sheet fits the window.
+//! Settings: a full-window page with a category sidebar, grouped rows per
+//! category, and it fits a small window.
 
-use super::ui_automation::{app_with_library, click, render_ui, seed_library};
-use crate::app::preferences::{thumbnail_cache_dir, CacheUsage};
+use super::ui_automation::{
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+};
+use crate::app::preferences::{thumbnail_cache_dir, CacheUsage, PreferencesTab};
+
+#[core::prelude::v1::test]
+fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
+    let (temp_dir, engine) = seed_library("settings_shell", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    let page = vcx.debug_bounds("settings-page").expect("settings renders");
+    assert_eq!(
+        (f32::from(page.size.width), f32::from(page.size.height)),
+        (1024.0, 560.0),
+        "settings fills the whole window"
+    );
+    let sidebar = vcx
+        .debug_bounds("settings-sidebar")
+        .expect("the settings sidebar renders");
+    assert!(
+        (f32::from(sidebar.size.width) - 252.0).abs() <= 1.0,
+        "the settings sidebar is 252 px wide, got {:?}",
+        sidebar.size.width
+    );
+    let tops: Vec<f32> = [
+        "settings-category-general",
+        "settings-category-storage",
+        "settings-category-about",
+    ]
+    .into_iter()
+    .map(|selector| {
+        let bounds = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} renders"));
+        assert!(
+            bounds.bottom() <= gpui::px(560.0),
+            "{selector} stays visible in a 560 px window"
+        );
+        f32::from(bounds.top())
+    })
+    .collect();
+    assert!(
+        tops.windows(2).all(|pair| pair[0] < pair[1]),
+        "categories run General, Storage, About: {tops:?}"
+    );
+    let close = vcx
+        .debug_bounds("preferences-close")
+        .expect("the close control renders");
+    assert!(
+        close.top() >= gpui::px(0.0) && close.bottom() <= gpui::px(560.0),
+        "the TopBar close control stays visible in a small window"
+    );
+
+    let library = |vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, _| {
+            let count = app
+                .grid_state
+                .as_ref()
+                .map(|s| s.engine.total_count())
+                .expect("a library is open");
+            (app.selected_index, count)
+        })
+    };
+    let before = library(vcx);
+    keystrokes(vcx, "down backspace secondary-backspace");
+    assert_eq!(
+        library(vcx),
+        before,
+        "library keys must not move the selection or delete media under settings"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.delete_confirm_state.is_none(),
+            "⌫ under settings must not open the delete dialog"
+        );
+    });
+    keystrokes(vcx, "up");
+
+    let selected =
+        |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.preferences_tab);
+    assert_eq!(selected(vcx), PreferencesTab::General);
+    keystrokes(vcx, "down");
+    assert_eq!(selected(vcx), PreferencesTab::Storage, "↓ moves to Storage");
+    keystrokes(vcx, "down down");
+    assert_eq!(selected(vcx), PreferencesTab::About, "↓ stops at About");
+    keystrokes(vcx, "up");
+    assert_eq!(selected(vcx), PreferencesTab::Storage, "↑ moves back");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "arrows keep settings open");
+    });
+
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.preferences_open, "Esc closes"));
+    keystrokes(vcx, "secondary-,");
+    view.update(vcx, |app, _| assert!(app.preferences_open, "⌘, opens"));
+    keystrokes(vcx, "secondary-,");
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_open, "⌘, closes settings again")
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn menu_overlays_do_not_open_under_settings() {
+    let (temp_dir, engine) = seed_library("settings_menu_guard", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-,");
+
+    vcx.dispatch_action(crate::actions::ShowShortcuts);
+    vcx.dispatch_action(crate::actions::ImportNetworkVideo);
+    vcx.dispatch_action(crate::actions::DeleteRejected);
+    vcx.dispatch_action(crate::actions::NewSmartAlbum);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.shortcuts_overlay_open,
+            "the shortcut sheet must not open hidden under settings"
+        );
+        assert!(app.network_import.stage.is_none(), "no URL import sheet");
+        assert!(app.delete_confirm_state.is_none(), "no delete dialog");
+        assert!(!app.album_draft.modal_open, "no smart album sheet");
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_open, "Esc still closes settings");
+        assert!(!app.shortcuts_overlay_open, "and nothing opens behind it");
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn command_palette_menu_item_does_not_open_under_settings() {
+    let (temp_dir, engine) = seed_library("settings_palette_guard", 2);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.selected_index = Some(0);
+        app.open_preferences(cx);
+    });
+    focus_app(vcx, &view);
+    vcx.dispatch_action(crate::actions::ShowCommandPalette);
+    keystrokes(vcx, "r a t e space 5 enter");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.command_palette_open,
+            "the palette must not open over settings"
+        );
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied().unwrap_or(0),
+            0,
+            "a command must never rate the selection hidden under settings"
+        );
+        assert!(app.preferences_open, "settings stays open");
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn downloads_list_does_not_open_under_settings() {
+    use super::downloads::{install, queue_app};
+    let (_dir, engine, fake, mut cx) = queue_app("settings_downloads_guard");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    super::downloads_panel::queue(&view, vcx, &["https://example.com/a.mp4"]);
+    view.update(vcx, |app, cx| app.close_downloads_panel(cx));
+    focus_app(vcx, &view);
+    vcx.dispatch_action(crate::actions::ToggleDownloads);
+    view.update(vcx, |app, cx| {
+        assert!(app.downloads.open, "the menu item opens the list normally");
+        app.close_downloads_panel(cx);
+        app.open_preferences(cx);
+    });
+    vcx.dispatch_action(crate::actions::ToggleDownloads);
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.downloads.open,
+            "the downloads list must not open hidden under settings"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn error_banner_shows_inside_settings_once() {
+    let (temp_dir, engine) = seed_library("settings_banner", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.open_preferences(cx);
+        app.set_error("Could not clear thumbnail cache: disk full", cx);
+    });
+    render_ui(vcx);
+    let page = vcx.debug_bounds("settings-page").expect("settings renders");
+    let banner = vcx
+        .debug_bounds("error-banner")
+        .expect("the error banner shows while settings is open");
+    assert!(
+        banner.top() == page.top() && banner.right() == page.right(),
+        "the error banner must be drawn on the settings page, where it can be seen"
+    );
+    assert_eq!(
+        vcx.debug_bounds("settings-sidebar").map(|b| b.right()),
+        Some(banner.left()),
+        "the banner sits in the settings column, not in the hidden library"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
 
 #[core::prelude::v1::test]
 fn preferences_tabs_group_actions_and_fit_a_small_window() {
@@ -12,10 +231,14 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
     view.update(vcx, |app, cx| app.open_preferences(cx));
     render_ui(vcx);
 
-    let card = vcx.debug_bounds("preferences-card").expect("sheet renders");
-    assert!(
-        card.bottom() <= gpui::px(560.0),
-        "the Preferences sheet must fit inside a 560px-tall window"
+    let header = vcx.debug_bounds("page-header").expect("TopBar renders");
+    let body = vcx
+        .debug_bounds("preferences-body")
+        .expect("settings content renders");
+    assert_eq!(
+        (body.top(), body.bottom()),
+        (header.bottom(), gpui::px(560.0)),
+        "the content scrolls in the space under the TopBar, never past the window"
     );
     for selector in [
         "preferences-change-library",
@@ -45,7 +268,7 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
         );
     });
 
-    click(vcx, "preferences-tab-storage");
+    click(vcx, "settings-category-storage");
     for selector in [
         "preferences-clear-cache",
         "preferences-reveal-config",
@@ -57,7 +280,7 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
         );
     }
 
-    click(vcx, "preferences-tab-about");
+    click(vcx, "settings-category-about");
     assert!(
         vcx.debug_bounds("preferences-version").is_some(),
         "About must show the version"
@@ -100,7 +323,7 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     std::fs::create_dir_all(cache.join("ab")).unwrap();
     std::fs::write(cache.join("ab/1.jpg"), b"thumb").unwrap();
     std::fs::write(cache.join("2.jpg"), b"thumb").unwrap();
-    click(vcx, "preferences-tab-storage");
+    click(vcx, "settings-category-storage");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.preferences_cache,

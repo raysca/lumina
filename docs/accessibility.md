@@ -240,7 +240,7 @@ Lumina is designed to be usable without a mouse:
 - **External editor**: `⌘E` opens the selected item in the editor set in
   Preferences and `⌥⌘E` opens a copy of it (Edit a Copy), also ⌘K, the
   Image menu and the context menu. With no editor set they open
-  Preferences on its General tab, where the editor row is. A focused text
+  Preferences on its General category, where the editor row is. A focused text
   field and edit mode absorb both keys.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
@@ -274,7 +274,11 @@ currently sees little beyond the window frame. Mitigations:
 - the shortcut sheet documents all keyboard paths;
 - the video scrub preview is pointer-only; `,` `.`, J/K/L and the arrows
   seek and show the frame itself;
-- file dialogs, Preferences content and menus are native/accessible.
+- file dialogs and menus are native/accessible. Preferences is a
+  full-window page drawn by Lumina: `⌘,` opens and closes it, `↑`/`↓` move
+  between its categories (General, Storage, About), `Esc` closes it, and
+  library shortcuts do nothing while it is open. Its category items set a
+  button role and label (not yet checked with VoiceOver); its rows do not.
 
 Controls that do set a role and a label (none checked with VoiceOver yet):
 

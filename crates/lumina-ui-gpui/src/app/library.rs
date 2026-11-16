@@ -803,6 +803,11 @@ impl LuminaApp {
     }
 
     pub fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
+        // Settings covers the window: the sheet would open unseen under it
+        // and take its keys.
+        if self.preferences_open && !self.shortcuts_overlay_open {
+            return;
+        }
         self.shortcuts_overlay_open = !self.shortcuts_overlay_open;
         self.shortcuts_scroll.set_offset(Point::default());
         cx.notify();

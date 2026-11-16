@@ -1296,14 +1296,14 @@ fn ui_automation_preferences_modal() {
         assert!(app.preferences_cache.is_some());
     });
 
-    click(vcx, "preferences-tab-storage");
+    click(vcx, "settings-category-storage");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.preferences_tab,
             crate::app::preferences::PreferencesTab::Storage
         );
     });
-    click(vcx, "preferences-tab-about");
+    click(vcx, "settings-category-about");
     view.update(vcx, |app, _| {
         assert_eq!(
             app.preferences_tab,
