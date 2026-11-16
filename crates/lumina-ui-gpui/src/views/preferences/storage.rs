@@ -38,9 +38,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                             cx,
                             "preferences-reveal-cache",
                             "Reveal Cache",
+                            None,
                             |this, cx| this.reveal_cache_directory(cx),
                         )),
-                ),
+                )
+                .debug_selector(|| "settings-row-cache".to_string()),
                 row(
                     "Size on disk",
                     Some("Clearing is safe; thumbnails rebuild on their own."),
@@ -66,9 +68,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                             cx,
                             "preferences-clear-cache",
                             "Clear Cache",
+                            None,
                             |this, cx| this.clear_thumbnail_cache(cx),
                         )),
-                ),
+                )
+                .debug_selector(|| "settings-row-cache-size".to_string()),
             ],
         ))
         .child(section(
@@ -86,9 +90,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                         cx,
                         "preferences-reveal-config",
                         "Reveal Config",
+                        None,
                         |this, cx| this.reveal_config(cx),
                     )),
-            )],
+            )
+            .debug_selector(|| "settings-row-config".to_string())],
         ))
         .child(section(
             "DIAGNOSTICS",
@@ -105,9 +111,11 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                         cx,
                         "preferences-reveal-logs",
                         "Reveal Logs",
+                        None,
                         |this, cx| this.reveal_logs(cx),
                     )),
-            )],
+            )
+            .debug_selector(|| "settings-row-logs".to_string())],
         ))
         .into_any_element()
 }

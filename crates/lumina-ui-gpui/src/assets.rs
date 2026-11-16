@@ -101,6 +101,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "volume-2",
     "volume-x",
     "wand-sparkles",
+    "wrench",
     "x",
     "zap",
     "zoom-in",

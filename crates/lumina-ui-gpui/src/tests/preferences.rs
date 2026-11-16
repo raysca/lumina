@@ -34,6 +34,8 @@ fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
     );
     let tops: Vec<f32> = [
         "settings-category-general",
+        "settings-category-library",
+        "settings-category-downloads",
         "settings-category-storage",
         "settings-category-about",
     ]
@@ -51,7 +53,7 @@ fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
     .collect();
     assert!(
         tops.windows(2).all(|pair| pair[0] < pair[1]),
-        "categories run General, Storage, About: {tops:?}"
+        "categories run General, Library, Downloads, Storage, About: {tops:?}"
     );
     let close = vcx
         .debug_bounds("preferences-close")
@@ -90,7 +92,13 @@ fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
         |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.preferences_tab);
     assert_eq!(selected(vcx), PreferencesTab::General);
     keystrokes(vcx, "down");
-    assert_eq!(selected(vcx), PreferencesTab::Storage, "↓ moves to Storage");
+    assert_eq!(selected(vcx), PreferencesTab::Library, "↓ moves to Library");
+    keystrokes(vcx, "down down");
+    assert_eq!(
+        selected(vcx),
+        PreferencesTab::Storage,
+        "↓↓ moves to Storage"
+    );
     keystrokes(vcx, "down down");
     assert_eq!(selected(vcx), PreferencesTab::About, "↓ stops at About");
     keystrokes(vcx, "up");
@@ -241,17 +249,18 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
         (header.bottom(), gpui::px(560.0)),
         "the content scrolls in the space under the TopBar, never past the window"
     );
-    for selector in [
-        "preferences-change-library",
-        "preferences-rescan",
-        "preferences-choose-editor",
-    ] {
+    assert!(
+        vcx.debug_bounds("preferences-choose-editor").is_some(),
+        "General must offer preferences-choose-editor"
+    );
+
+    click(vcx, "settings-category-library");
+    for selector in ["preferences-change-library", "preferences-rescan"] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
-            "General must offer {selector}"
+            "Library must offer {selector}"
         );
     }
-
     view.update(vcx, |app, _| {
         if let Some(state) = app.grid_state.as_mut() {
             state.is_scanning = false;
@@ -295,24 +304,9 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     let (temp_dir, engine) = seed_library("prefs_v3_details", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
-    view.update(vcx, |app, cx| {
-        app.handle_ui_message(
-            crate::app::types::UiMessage::Engine(lumina_core::EngineEvent::ScanComplete {
-                total_items: 2,
-            }),
-            cx,
-        );
-        assert!(
-            app.last_scan_at.is_some(),
-            "a finished scan records its time"
-        );
-    });
-    view.update(vcx, |app, cx| {
-        app.last_scan_at =
-            std::time::Instant::now().checked_sub(std::time::Duration::from_secs(125));
-        app.open_preferences(cx);
-    });
+    view.update(vcx, |app, cx| app.open_preferences(cx));
     render_ui(vcx);
+    click(vcx, "settings-category-library");
     assert!(vcx.debug_bounds("preferences-indexed").is_some());
     assert!(
         vcx.debug_bounds("preferences-reveal-library").is_none(),
@@ -378,19 +372,8 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
         });
     }
 
-    // Switching library drops the previous library's scan time.
-    let (other_dir, _) = seed_library("prefs_v3_other", 1);
-    view.update(vcx, |app, cx| {
-        app.open_library(other_dir.clone(), cx);
-        assert!(
-            app.last_scan_at.is_none(),
-            "a new library has no scan time yet"
-        );
-    });
-
     let _ = std::fs::remove_dir_all(&cache);
     let _ = std::fs::remove_dir_all(&temp_dir);
-    let _ = std::fs::remove_dir_all(&other_dir);
 }
 
 #[core::prelude::v1::test]
@@ -426,21 +409,24 @@ fn settings_rows_match_design_heights() {
     view.update(vcx, |app, cx| app.open_preferences(cx));
     render_ui(vcx);
 
-    let plain = height(vcx, "settings-row-library");
-    assert!(
-        (plain - 43.5).abs() <= 1.0,
-        "a plain settings row is 43.5 tall (frame l85pQN), got {plain}"
-    );
     let described = height(vcx, "settings-row-editor");
     assert!(
         (described - 62.5).abs() <= 1.0,
         "a settings row with a description is 62.5 tall, got {described}"
     );
-    for button in [
-        "preferences-change-library",
-        "preferences-rescan",
-        "preferences-choose-editor",
-    ] {
+    assert_eq!(height(vcx, "preferences-choose-editor"), 34.0);
+    click(vcx, "settings-category-library");
+    let plain = height(vcx, "settings-row-library-size");
+    assert!(
+        (plain - 43.5).abs() <= 1.0,
+        "a plain settings row is 43.5 tall (frame l85pQN), got {plain}"
+    );
+    let location = height(vcx, "settings-row-library");
+    assert!(
+        (location - 62.5).abs() <= 1.0,
+        "Library location has a description: 62.5 tall, got {location}"
+    );
+    for button in ["preferences-change-library", "preferences-rescan"] {
         assert_eq!(
             height(vcx, button),
             34.0,
@@ -460,7 +446,8 @@ fn settings_rows_match_design_heights() {
 fn long_library_path_truncates_inside_its_row() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
-    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
+    // The window's minimum size (main.rs).
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(600.0)));
     let deep: std::path::PathBuf = [
         "/Volumes",
         "Photo Archive External Drive",
@@ -475,7 +462,7 @@ fn long_library_path_truncates_inside_its_row() {
     view.update(vcx, |app, cx| {
         app.grid_state = None;
         app.config.last_library_path = Some(deep);
-        app.open_preferences(cx);
+        app.open_preferences_at(PreferencesTab::Library, cx);
     });
     render_ui(vcx);
 
@@ -487,7 +474,7 @@ fn long_library_path_truncates_inside_its_row() {
         .expect("the path pill renders");
     let button = vcx
         .debug_bounds("preferences-change-library")
-        .expect("Change… renders");
+        .expect("Open Another… renders");
     assert!(
         pill.left() > row.left() + gpui::px(100.0) && pill.right() <= button.left(),
         "a long path truncates: the pill leaves room for the label and ends before \
@@ -500,11 +487,11 @@ fn long_library_path_truncates_inside_its_row() {
     assert_eq!(
         f32::from(button.size.height),
         34.0,
-        "Change… never wraps to a second line"
+        "Open Another… never wraps to a second line"
     );
     assert!(
-        (f32::from(row.size.height) - 43.5).abs() <= 1.0,
-        "a long path keeps the row one line tall, got {:?}",
+        (f32::from(row.size.height) - 62.5).abs() <= 1.0,
+        "a long path keeps the row at its described height, got {:?}",
         row.size.height
     );
 
@@ -517,6 +504,39 @@ fn long_library_path_truncates_inside_its_row() {
         vcx.debug_bounds(leak(tooltip)).is_some(),
         "hovering the truncated pill shows the full path in a tooltip"
     );
+
+    // At the minimum window every row keeps its controls inside it.
+    let inside = |vcx: &mut gpui::VisualTestContext, row: &'static str, control: &'static str| {
+        let row = vcx
+            .debug_bounds(row)
+            .unwrap_or_else(|| panic!("{row} renders"));
+        let control = vcx
+            .debug_bounds(control)
+            .unwrap_or_else(|| panic!("{control} renders"));
+        assert!(
+            control.left() >= row.left() + gpui::px(240.0)
+                && control.right() <= row.right()
+                && control.top() >= row.top()
+                && control.bottom() <= row.bottom(),
+            "at 960×600 {control:?} stays inside its row {row:?}, right of the label"
+        );
+        assert_eq!(f32::from(control.size.height), 34.0, "it never wraps");
+    };
+    inside(vcx, "settings-row-library-size", "preferences-rescan");
+    click(vcx, "settings-category-general");
+    inside(vcx, "settings-row-editor", "preferences-choose-editor");
+    click(vcx, "settings-category-storage");
+    for (row, control) in [
+        ("settings-row-cache", "settings-path-cache"),
+        ("settings-row-cache", "preferences-reveal-cache"),
+        ("settings-row-cache-size", "preferences-clear-cache"),
+        ("settings-row-config", "settings-path-config"),
+        ("settings-row-config", "preferences-reveal-config"),
+        ("settings-row-logs", "settings-path-logs"),
+        ("settings-row-logs", "preferences-reveal-logs"),
+    ] {
+        inside(vcx, row, control);
+    }
 }
 
 #[core::prelude::v1::test]
@@ -535,12 +555,20 @@ fn general_shows_general_rows_and_launch_view() {
         "settings-launch-view-library",
         "settings-launch-view-last",
         "preferences-choose-editor",
-        "preferences-change-library",
-        "preferences-rescan",
     ] {
         assert!(
             vcx.debug_bounds(selector).is_some(),
             "General must show {selector}"
+        );
+    }
+    for moved in [
+        "preferences-change-library",
+        "preferences-rescan",
+        "preferences-indexed",
+    ] {
+        assert!(
+            vcx.debug_bounds(moved).is_none(),
+            "{moved} moved to the Library category"
         );
     }
     // The rendered note itself: a missing, hard-coded or misspelt version fails.
@@ -944,4 +972,186 @@ fn reset_to_defaults_reverts_when_the_save_fails() {
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn settings_has_library_downloads_and_storage_categories() {
+    use crate::app::library::FOLDER_PICKS;
+    let (temp_dir, engine) = seed_library("settings_categories", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    let sidebar = vcx
+        .debug_bounds("settings-sidebar")
+        .expect("the settings sidebar renders");
+    let tops: Vec<f32> = [
+        "settings-category-general",
+        "settings-category-library",
+        "settings-category-downloads",
+        "settings-category-storage",
+        "settings-category-about",
+    ]
+    .into_iter()
+    .map(|selector| {
+        let bounds = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} renders"));
+        assert!(
+            sidebar.contains(&bounds.center()),
+            "{selector} sits in the settings sidebar"
+        );
+        f32::from(bounds.top())
+    })
+    .collect();
+    assert!(
+        tops.windows(2).all(|pair| pair[0] < pair[1]),
+        "the sidebar runs General, Library, Downloads, Storage, About: {tops:?}"
+    );
+    assert!(
+        vcx.debug_bounds("page-meta-text:Launch and external editor")
+            .is_some(),
+        "General's meta no longer mentions the library"
+    );
+
+    let selected =
+        |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.preferences_tab);
+    keystrokes(vcx, "down");
+    render_ui(vcx);
+    assert_eq!(
+        selected(vcx),
+        PreferencesTab::Library,
+        "↓ from General is Library"
+    );
+    for marker in [
+        "page-title-text:Library",
+        "page-meta-text:Where the library lives and how big it is",
+        "preferences-change-library-text:Open Another…",
+        "preferences-indexed-text:2 items",
+        "preferences-rescan-text:Rescan Library",
+    ] {
+        assert!(
+            vcx.debug_bounds(marker).is_some(),
+            "the Library page shows {marker}"
+        );
+    }
+    let row = vcx
+        .debug_bounds("settings-row-library")
+        .expect("the Library location row renders");
+    assert!(
+        row.contains(&vcx.debug_bounds("settings-path-library").unwrap().center()),
+        "the path pill sits in the Library location row"
+    );
+
+    let picks = FOLDER_PICKS.with(|n| n.get());
+    click(vcx, "preferences-change-library");
+    assert_eq!(
+        FOLDER_PICKS.with(|n| n.get()),
+        picks + 1,
+        "Open Another… asks for another library folder"
+    );
+    view.update(vcx, |app, _| {
+        if let Some(state) = app.grid_state.as_mut() {
+            state.is_scanning = false;
+        }
+    });
+    click(vcx, "preferences-rescan");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.as_ref().is_some_and(|s| s.is_scanning),
+            "Rescan Library on the Library page starts a scan"
+        );
+    });
+
+    click(vcx, "settings-category-downloads");
+    assert_eq!(selected(vcx), PreferencesTab::Downloads);
+    for marker in [
+        "page-title-text:Downloads",
+        "page-meta-text:How videos from links are downloaded and filed away",
+        "settings-section-note:Applies to videos imported from a link",
+        "settings-concurrency-text:3",
+    ] {
+        assert!(
+            vcx.debug_bounds(marker).is_some(),
+            "the Downloads page shows {marker}"
+        );
+    }
+
+    click(vcx, "settings-category-storage");
+    assert_eq!(selected(vcx), PreferencesTab::Storage);
+    for selector in [
+        "preferences-reveal-cache",
+        "preferences-cache-size",
+        "preferences-clear-cache",
+        "preferences-reveal-config",
+        "preferences-reveal-logs",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "Storage keeps {selector}"
+        );
+    }
+
+    // Keyboard path: ⌘K Settings: Downloads.
+    keystrokes(vcx, "escape");
+    keystrokes(vcx, "secondary-k");
+    type_text(vcx, "settings downloads");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "Settings: Downloads opens settings");
+        assert_eq!(
+            app.preferences_tab,
+            PreferencesTab::Downloads,
+            "on the Downloads category"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn downloads_settings_buttons_open_downloads_category() {
+    use super::downloads::{install, queue_app};
+    use super::downloads_screen::set_rows;
+    let (_dir, engine, fake, mut cx) = queue_app("settings_downloads_buttons");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
+    set_rows(&view, vcx, &[lumina_core::DownloadState::Done]);
+    view.update(vcx, |app, cx| app.show_downloads_screen(cx));
+    render_ui(vcx);
+
+    click(vcx, "downloads-settings");
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.preferences_open,
+            "the screen's settings button opens settings"
+        );
+        assert_eq!(
+            app.preferences_tab,
+            PreferencesTab::Downloads,
+            "on the Downloads category"
+        );
+        app.close_preferences(cx);
+        app.toggle_downloads_panel(cx);
+        assert!(app.downloads.open, "the popover opens");
+    });
+    render_ui(vcx);
+
+    click(vcx, "downloads-header-settings");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.downloads.open,
+            "the popover's settings button closes it"
+        );
+        assert!(app.preferences_open, "and opens settings");
+        assert_eq!(
+            app.preferences_tab,
+            PreferencesTab::Downloads,
+            "on the Downloads category"
+        );
+    });
 }

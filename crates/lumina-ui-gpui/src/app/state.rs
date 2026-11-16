@@ -530,8 +530,6 @@ pub struct LuminaApp {
     pub preferences_cache_cleared: bool,
     /// Settings › Reset to defaults is asking for confirmation.
     pub preferences_reset_confirm: bool,
-    /// When the last scan finished in this session (not persisted).
-    pub last_scan_at: Option<std::time::Instant>,
     pub command_palette_open: bool,
     pub command_query: String,
     /// The platform text input behind the active field; see app/text_input.rs.
@@ -746,7 +744,6 @@ impl LuminaApp {
             preferences_cache: None,
             preferences_cache_cleared: false,
             preferences_reset_confirm: false,
-            last_scan_at: None,
             command_palette_open: false,
             command_query: String::new(),
             field_input: None,

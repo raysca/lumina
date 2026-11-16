@@ -6,6 +6,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::DownloadState;
 
+use crate::app::preferences::PreferencesTab;
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -37,8 +38,8 @@ pub(crate) fn popover_button(
 }
 
 /// "Downloads", the "N active" pill, then Pause all (or Resume all when
-/// nothing runs and some rows are paused) and the Downloads screen. The
-/// settings button waits for Design 15.
+/// nothing runs and some rows are paused), the Downloads screen and
+/// settings on its Downloads category.
 pub(crate) fn header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
     let active = app.running_or_waiting_count();
     let any_paused = app.any_download_in(&[DownloadState::Paused]);
@@ -123,6 +124,21 @@ pub(crate) fn header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
             )
             .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                 this.show_downloads_screen(cx);
+            })),
+        )
+        .child(
+            popover_button(
+                "downloads-header-settings".into(),
+                Icon::Settings2,
+                t("downloads.settings"),
+                plain,
+            )
+            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+                this.open_preferences_at(PreferencesTab::Downloads, cx);
+                // An edit draft refuses settings; then the popover stays.
+                if this.preferences_open {
+                    this.close_downloads_panel(cx);
+                }
             })),
         )
 }

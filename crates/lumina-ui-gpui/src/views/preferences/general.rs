@@ -1,20 +1,14 @@
-//! Settings › General: the launch view, the library rows, the external
-//! editor and the version.
+//! Settings › General: the launch view, the external editor and the
+//! version.
 
 use gpui::*;
 
-use super::rows::{controls, path_pill, row, row_button, section, value};
-use crate::app::preferences::ago;
+use super::rows::{controls, row, row_button, section, value};
 use crate::app::LuminaApp;
 use crate::config::LaunchView;
 use crate::theme;
 
 pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let mut indexed = app.total_library_count.to_string();
-    // ponytail: session-only; persist the scan time if users want it across launches.
-    if let Some(elapsed) = app.last_scan_at.map(|at| at.elapsed()) {
-        indexed.push_str(&format!(" · last scan {}", ago(elapsed)));
-    }
     let editor_set = app.config.validated_external_editor().is_some();
     div()
         .flex()
@@ -28,40 +22,6 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                 Some("Where Lumina opens after a restart."),
                 controls().child(launch_view_control(app, cx)),
             )],
-        ))
-        .child(section(
-            "LIBRARY",
-            None,
-            [
-                row(
-                    "Library folder",
-                    None,
-                    controls()
-                        .child(path_pill("settings-path-library", app.library_path_label()))
-                        .child(row_button(
-                            cx,
-                            "preferences-change-library",
-                            "Change…",
-                            |this, cx| this.pick_folder_dialog(cx),
-                        )),
-                )
-                .debug_selector(|| "settings-row-library".to_string()),
-                row(
-                    "Items indexed",
-                    None,
-                    controls()
-                        .child(
-                            value(&indexed, true)
-                                .debug_selector(|| "preferences-indexed".to_string()),
-                        )
-                        .child(row_button(
-                            cx,
-                            "preferences-rescan",
-                            "Rescan Library",
-                            |this, cx| this.rescan_library(cx),
-                        )),
-                ),
-            ],
         ))
         .child(section(
             "EXTERNAL EDITOR",
@@ -79,6 +39,7 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                         cx,
                         "preferences-choose-editor",
                         "Choose Editor…",
+                        None,
                         |this, cx| this.choose_external_editor(cx),
                     )),
             )

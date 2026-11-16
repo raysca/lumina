@@ -60,12 +60,14 @@ pub(super) fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                     cx,
                     "preferences-license",
                     "MIT License",
+                    None,
                     |this, cx| this.open_bundled_doc("LICENSE", cx),
                 ))
                 .child(row_button(
                     cx,
                     "preferences-acknowledgements",
                     "Acknowledgements",
+                    None,
                     |this, cx| this.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
                 )),
         )

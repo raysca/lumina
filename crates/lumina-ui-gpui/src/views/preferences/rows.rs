@@ -72,8 +72,9 @@ pub(super) fn row(label: &'static str, description: Option<&'static str>, contro
         .child(
             div()
                 .flex_1()
-                // A long path squeezes its pill, not the label.
-                .min_w(px(120.0))
+                // A long path squeezes its pill, not the label: room for a
+                // one-line description beside it.
+                .min_w(px(240.0))
                 .flex()
                 .flex_col()
                 .when(description.is_some(), |s| s.py(px(14.0)))
@@ -154,12 +155,13 @@ pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
 
 type RowAction = fn(&mut LuminaApp, &mut Context<LuminaApp>);
 
-/// A 34 px row button (`bg_3`, `line_2` outline, 12.5/500). It never
-/// shrinks or wraps.
+/// A 34 px row button (`bg_3`, `line_2` outline, 12.5/500), with an
+/// optional 14 px icon before its label. It never shrinks or wraps.
 pub(super) fn row_button(
     cx: &mut Context<LuminaApp>,
     id: &'static str,
     label: &'static str,
+    icon: Option<Icon>,
     action: RowAction,
 ) -> Stateful<Div> {
     div()
@@ -184,7 +186,13 @@ pub(super) fn row_button(
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme::t1())
         .cursor_pointer()
-        .child(label)
+        .children(icon.map(|icon| render_icon(icon, px(14.0), theme::t2())))
+        // Tests read the label as `<id>-text:<label>`.
+        .child(
+            div()
+                .debug_selector(move || format!("{id}-text:{label}"))
+                .child(label),
+        )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             action(this, cx);
         }))

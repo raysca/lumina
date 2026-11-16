@@ -11,7 +11,9 @@ use crate::theme;
 use crate::views::page_header::{header_icon_button, page_header};
 
 mod about;
+mod downloads;
 mod general;
+mod library;
 mod rows;
 mod storage;
 
@@ -32,7 +34,19 @@ fn category(tab: PreferencesTab) -> Category {
             label: "General",
             icon: Icon::Settings,
             selector: "settings-category-general",
-            meta: "Launch, library and external editor",
+            meta: "Launch and external editor",
+        },
+        PreferencesTab::Library => Category {
+            label: "Library",
+            icon: Icon::Library,
+            selector: "settings-category-library",
+            meta: "Where the library lives and how big it is",
+        },
+        PreferencesTab::Downloads => Category {
+            label: "Downloads",
+            icon: Icon::Download,
+            selector: "settings-category-downloads",
+            meta: "How videos from links are downloaded and filed away",
         },
         PreferencesTab::Storage => Category {
             label: "Storage",
@@ -58,6 +72,8 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
     let tab = app.preferences_tab;
     let content = match tab {
         PreferencesTab::General => general::render_general(app, cx),
+        PreferencesTab::Library => library::render_library(app, cx),
+        PreferencesTab::Downloads => downloads::render_downloads(),
         PreferencesTab::Storage => storage::render_storage(app, cx),
         PreferencesTab::About => about::render_about(cx),
     };

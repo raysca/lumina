@@ -10,13 +10,21 @@ use crate::app::LuminaApp;
 pub enum PreferencesTab {
     #[default]
     General,
+    Library,
+    Downloads,
     Storage,
     About,
 }
 
 impl PreferencesTab {
     /// Sidebar order; ↑/↓ walk it.
-    pub const ALL: [Self; 3] = [Self::General, Self::Storage, Self::About];
+    pub const ALL: [Self; 5] = [
+        Self::General,
+        Self::Library,
+        Self::Downloads,
+        Self::Storage,
+        Self::About,
+    ];
 }
 
 /// Thumbnail cache directory used by Lumina.
@@ -180,24 +188,22 @@ impl LuminaApp {
     }
 
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
+        self.open_preferences_at(PreferencesTab::General, cx);
+    }
+
+    pub fn open_about(&mut self, cx: &mut Context<Self>) {
+        self.open_preferences_at(PreferencesTab::About, cx);
+    }
+
+    /// Opens settings on `tab` (⌘K Settings: Downloads, the downloads
+    /// settings buttons). Refused while an edit draft is open.
+    pub fn open_preferences_at(&mut self, tab: PreferencesTab, cx: &mut Context<Self>) {
         // Its sheet would take the keys over an open draft (Done/Cancel).
         if self.edits.session.is_some() {
             return;
         }
         self.preferences_open = true;
-        self.preferences_tab = PreferencesTab::General;
-        self.preferences_cache_cleared = false;
-        self.refresh_cache_usage();
-        cx.notify();
-    }
-
-    pub fn open_about(&mut self, cx: &mut Context<Self>) {
-        // About is a Preferences tab: the same sheet, the same rule.
-        if self.edits.session.is_some() {
-            return;
-        }
-        self.preferences_open = true;
-        self.preferences_tab = PreferencesTab::About;
+        self.preferences_tab = tab;
         self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
         cx.notify();

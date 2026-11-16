@@ -577,8 +577,9 @@ fn downloads_popover_shell() {
         "no Resume all while something runs"
     );
     assert!(
-        vcx.debug_bounds("downloads-header-settings").is_none(),
-        "the settings button waits for Design 15"
+        vcx.debug_bounds("downloads-header-settings")
+            .is_some_and(|b| header.contains(&b.center())),
+        "the header has the settings button"
     );
     let head = vcx
         .debug_bounds("downloads-earlier-head")

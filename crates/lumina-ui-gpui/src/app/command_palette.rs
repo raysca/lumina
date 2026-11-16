@@ -21,6 +21,8 @@ pub enum CommandId {
     Preferences,
     /// Settings › Reset to defaults (asks first).
     ResetPreferences,
+    /// Settings on its Downloads category.
+    SettingsDownloads,
     About,
     ShowLicense,
     ShowAcknowledgements,
@@ -210,9 +212,8 @@ impl Command {
             OpenLibrary => Icon::Folder,
             Rescan => Icon::RotateCw,
             ResetPreferences => Icon::RefreshCw,
-            Preferences | SortDate | SortName | SortSize | SortRating | SortAsc | SortDesc => {
-                Icon::Sliders
-            }
+            Preferences | SettingsDownloads | SortDate | SortName | SortSize | SortRating
+            | SortAsc | SortDesc => Icon::Sliders,
             About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
             ToggleSidebar => Icon::PanelLeft,
@@ -414,6 +415,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.preferences",
             shortcut: "⌘,",
             keywords: "settings config cache",
+        },
+        Command {
+            id: CommandId::SettingsDownloads,
+            key: "command.settings_downloads",
+            shortcut: "",
+            keywords: "preferences concurrency simultaneous url video",
         },
         Command {
             id: CommandId::ResetPreferences,
@@ -1742,6 +1749,9 @@ impl LuminaApp {
             CommandId::Rescan => self.rescan_library(cx),
             CommandId::Preferences => self.open_preferences(cx),
             CommandId::ResetPreferences => self.prompt_reset_preferences(cx),
+            CommandId::SettingsDownloads => {
+                self.open_preferences_at(crate::app::preferences::PreferencesTab::Downloads, cx)
+            }
             CommandId::About => self.open_about(cx),
             CommandId::ShowLicense => self.open_bundled_doc("LICENSE", cx),
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),

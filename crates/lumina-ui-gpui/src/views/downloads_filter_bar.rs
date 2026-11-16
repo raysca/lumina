@@ -6,6 +6,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::downloads::{DownloadFilter, MAX_RUNNING};
+use crate::app::preferences::PreferencesTab;
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme::{self, ChipKind};
@@ -129,10 +130,8 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
                 .hover(|s| s.bg(theme::bg_3()))
                 .cursor_pointer()
                 .child(render_icon(Icon::Settings2, px(14.0), theme::t2()))
-                // ponytail: Preferences has no Downloads tab until Design 15;
-                // this opens it on its default tab.
                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                    this.open_preferences(cx);
+                    this.open_preferences_at(PreferencesTab::Downloads, cx);
                 })),
         )
 }

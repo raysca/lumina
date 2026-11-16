@@ -97,6 +97,7 @@ pub enum Icon {
     Layers,
     ListOrdered,
     Settings2,
+    Wrench,
 }
 
 impl Icon {
@@ -198,6 +199,7 @@ impl Icon {
         Icon::Layers,
         Icon::ListOrdered,
         Icon::Settings2,
+        Icon::Wrench,
     ];
 
     pub fn path(self) -> &'static str {
@@ -296,6 +298,7 @@ impl Icon {
             Self::Layers => "icons/layers.svg",
             Self::ListOrdered => "icons/list-ordered.svg",
             Self::Settings2 => "icons/settings-2.svg",
+            Self::Wrench => "icons/wrench.svg",
         }
     }
 }

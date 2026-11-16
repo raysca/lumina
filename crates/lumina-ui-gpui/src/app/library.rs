@@ -195,7 +195,6 @@ impl LuminaApp {
                         EngineEvent::ScanComplete { total_items } => {
                             // Done: the library opens on its own.
                             self.first_scan = None;
-                            self.last_scan_at = Some(std::time::Instant::now());
                             state.total_count = total_items;
                             state.is_scanning = false;
                             should_refresh_counts = true;
@@ -584,7 +583,6 @@ impl LuminaApp {
             self.set_error(format!("Could not save settings: {err:#}"), cx);
         }
 
-        self.last_scan_at = None;
         // Share the config's resume map so playback positions recorded in the
         // grid are what the next config save writes to disk.
         // An empty catalog gets the "Building your library" screen.
