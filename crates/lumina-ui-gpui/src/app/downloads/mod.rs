@@ -1,5 +1,7 @@
-//! The URL download queue: up to [`MAX_RUNNING`] jobs at once, the rest
-//! waiting in the order they were added. Rows live in the catalog
+//! The URL download queue: up to the Simultaneous downloads setting
+//! (`AppConfig::download_concurrency`) jobs at once, the rest waiting in
+//! the order they were added. Lowering the setting never cancels a running
+//! job; it only holds back new starts. Rows live in the catalog
 //! (`download_queue`) so they survive a restart; progress is memory only.
 //!
 //! Every catalog write runs off the UI thread. Writes for a finished job
@@ -28,9 +30,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::LuminaApp;
-
-/// Downloads that run at the same time.
-pub(crate) const MAX_RUNNING: usize = 3;
 
 /// One row of the list, with what only the running app knows.
 pub(crate) struct DownloadEntry {
@@ -284,7 +283,8 @@ impl LuminaApp {
             .detach();
     }
 
-    /// Starts waiting rows, oldest first, until [`MAX_RUNNING`] run.
+    /// Starts waiting rows, oldest first, until the Simultaneous downloads
+    /// setting's number run.
     pub(crate) fn pump_downloads(&mut self, cx: &mut Context<Self>) {
         let (Some(job), Some(catalog)) = (self.downloads.job.clone(), self.download_catalog())
         else {
@@ -297,7 +297,7 @@ impl LuminaApp {
             .filter(|entry| entry.row.state == DownloadState::Running)
             .count();
         for index in 0..self.downloads.entries.len() {
-            if running >= MAX_RUNNING {
+            if running >= self.config.download_concurrency {
                 break;
             }
             let entry = &self.downloads.entries[index];

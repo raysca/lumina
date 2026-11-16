@@ -73,7 +73,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
     let content = match tab {
         PreferencesTab::General => general::render_general(app, cx),
         PreferencesTab::Library => library::render_library(app, cx),
-        PreferencesTab::Downloads => downloads::render_downloads(),
+        PreferencesTab::Downloads => downloads::render_downloads(app, cx),
         PreferencesTab::Storage => storage::render_storage(app, cx),
         PreferencesTab::About => about::render_about(cx),
     };

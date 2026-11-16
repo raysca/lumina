@@ -118,6 +118,24 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Settings › Downloads › Simultaneous downloads. Raising it starts
+    /// waiting rows at once; lowering it lets running jobs finish. A failed
+    /// save puts the old number back and shows the error banner.
+    pub fn set_download_concurrency(&mut self, n: usize, cx: &mut Context<Self>) {
+        let previous = self.config.download_concurrency;
+        if previous == n || !crate::config::DOWNLOAD_CONCURRENCY_CHOICES.contains(&n) {
+            return;
+        }
+        self.config.download_concurrency = n;
+        if !self.save_config() {
+            self.config.download_concurrency = previous;
+            cx.notify();
+            return;
+        }
+        self.pump_downloads(cx);
+        cx.notify();
+    }
+
     /// The General TopBar's Reset to defaults and ⌘K Reset Settings to
     /// Defaults: settings (General) with the confirmation over them.
     pub fn prompt_reset_preferences(&mut self, cx: &mut Context<Self>) {

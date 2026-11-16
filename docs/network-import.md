@@ -25,8 +25,10 @@ catalogue (e.g. WebM) are refused with a message.
    that can't be downloaded shows its message under the field, and nothing is
    queued. Import (↵) on the preview closes the dialog and the link joins the
    download list; the download reuses that inspection.
-2. Up to three downloads run at once; the rest wait in the order they were
-   added and move up as others finish or are removed.
+2. By default, up to three downloads run at once (Settings › Downloads ›
+   Simultaneous downloads: 1, 2, 3 or 5); the rest wait in the order they were
+   added and move up as others finish or are removed. Lowering the number lets
+   running downloads finish; raising it starts waiting ones at once.
 3. Each download stages in a hidden `.…lumina-import` folder inside
    `Imports/YYYY/YYYY-MM-DD/`, then takes a free name there (an existing file
    or catalogued item is never replaced; the new one gets " 2"). Web videos

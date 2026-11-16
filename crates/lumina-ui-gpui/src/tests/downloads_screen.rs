@@ -421,6 +421,14 @@ fn download_filter_chips_count_and_filter() {
     });
     view.update(vcx, |app, cx| app.close_preferences(cx));
 
+    // The limits text follows the Simultaneous downloads setting.
+    view.update(vcx, |app, cx| app.set_download_concurrency(5, cx));
+    render_ui(vcx);
+    assert!(
+        marker(vcx, "downloads-limits-text:5 at a time".into()),
+        "the limits text follows the Simultaneous downloads setting"
+    );
+
     // Narrow main area: the limits text hides; the chips stay.
     vcx.simulate_resize(gpui::size(gpui::px(1000.0), gpui::px(800.0)));
     render_ui(vcx);

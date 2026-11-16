@@ -28,7 +28,7 @@ pub(super) fn queue(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, urls:
                 && app.downloads.entries.iter().all(|e| e.row.id > 0)
         });
     }
-    let expected = urls.len().min(crate::app::downloads::MAX_RUNNING);
+    let expected = urls.len().min(crate::config::DEFAULT_DOWNLOAD_CONCURRENCY);
     settle(vcx, view, "the downloads run", |app| {
         running(app) == expected
     });

@@ -5,7 +5,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-use crate::app::downloads::{DownloadFilter, MAX_RUNNING};
+use crate::app::downloads::DownloadFilter;
 use crate::app::preferences::PreferencesTab;
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
@@ -69,8 +69,12 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
             this.set_download_filter(filter, cx);
         }))
     });
-    // ponytail: no speed cap until Design 15 adds one; then "· N MB/s cap".
-    let limits: SharedString = t_with("downloads.limits", &[&MAX_RUNNING.to_string()]).into();
+    // ponytail: no speed cap (Design 15 decision 5 left it to a separate plan).
+    let limits: SharedString = t_with(
+        "downloads.limits",
+        &[&app.config.download_concurrency.to_string()],
+    )
+    .into();
     let settings_label = t("downloads.settings");
     div()
         .debug_selector(|| "downloads-filter-bar".to_string())

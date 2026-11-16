@@ -1072,7 +1072,7 @@ fn settings_has_library_downloads_and_storage_categories() {
         "page-title-text:Downloads",
         "page-meta-text:How videos from links are downloaded and filed away",
         "settings-section-note:Applies to videos imported from a link",
-        "settings-concurrency-text:3",
+        "settings-concurrency",
     ] {
         assert!(
             vcx.debug_bounds(marker).is_some(),
@@ -1154,4 +1154,83 @@ fn downloads_settings_buttons_open_downloads_category() {
             "on the Downloads category"
         );
     });
+}
+
+#[core::prelude::v1::test]
+fn concurrency_segmented_responds_to_keys() {
+    let (temp_dir, engine) = seed_library("settings_concurrency_keys", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Downloads, cx)
+    });
+    render_ui(vcx);
+    let concurrency = |vcx: &mut gpui::VisualTestContext| {
+        view.update(vcx, |app, _| app.config.download_concurrency)
+    };
+    assert_eq!(concurrency(vcx), 3, "3 at once is the default");
+    for selector in [
+        "settings-concurrency",
+        "settings-concurrency-1",
+        "settings-concurrency-2",
+        "settings-concurrency-3",
+        "settings-concurrency-5",
+        "settings-row-concurrency",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "the Downloads page shows {selector}"
+        );
+    }
+
+    keystrokes(vcx, "right");
+    assert_eq!(concurrency(vcx), 5, "→ moves 3 to 5");
+    keystrokes(vcx, "right");
+    assert_eq!(concurrency(vcx), 5, "→ stops at 5");
+    keystrokes(vcx, "left left");
+    assert_eq!(concurrency(vcx), 2, "← moves 5 to 3, then 2");
+    click(vcx, "settings-concurrency-1");
+    assert_eq!(concurrency(vcx), 1, "clicking 1 picks it");
+    keystrokes(vcx, "left");
+    assert_eq!(concurrency(vcx), 1, "← stops at 1");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "←/→ keep settings open");
+        assert_eq!(app.preferences_tab, PreferencesTab::Downloads);
+    });
+
+    // ←/→ on another category leave the setting alone.
+    keystrokes(vcx, "up right");
+    assert_eq!(concurrency(vcx), 1, "→ on Library changes nothing");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn concurrency_save_failure_reverts() {
+    let (temp_dir, engine) = seed_library("settings_concurrency_fails", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Downloads, cx)
+    });
+    render_ui(vcx);
+
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    click(vcx, "settings-concurrency-5");
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.download_concurrency, 3,
+            "a failed save puts the control back (AGENTS §2)"
+        );
+        assert!(
+            app.error_message.is_some(),
+            "the failure is in the error banner"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

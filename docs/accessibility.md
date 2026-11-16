@@ -277,18 +277,19 @@ currently sees little beyond the window frame. Mitigations:
 - file dialogs and menus are native/accessible. Preferences is a
   full-window page drawn by Lumina: `⌘,` opens and closes it, `↑`/`↓` move
   between its categories (General, Library, Downloads, Storage, About),
-  `←`/`→` choose General's Default view on launch (Library or Last
-  viewed), `Esc` closes it, and library shortcuts do nothing while it is
-  open. ⌘K Settings: Downloads opens it on Downloads, as do the settings
-  buttons on the Downloads screen and in the downloads popover. General's
-  Reset to defaults (also ⌘K Reset Settings to Defaults…, which opens
-  settings) asks first: `↵` resets the panels (widths, shown or hidden),
-  grid size, sort orders (grid and albums), layout and grouping, the album
-  panel and the view on launch, `Esc` cancels, and the confirmation takes
-  every other key. It never touches the library, recents or resume points.
-  Its category items and row buttons set a button role and label, and
-  Default view on launch is a radio group of two labelled radio buttons
-  (none checked with VoiceOver yet).
+  `←`/`→` choose General's Default view on launch (Library or Last viewed)
+  and Downloads' Simultaneous downloads (1, 2, 3 or 5), `Esc` closes it,
+  and library shortcuts do nothing while it is open. ⌘K Settings:
+  Downloads opens it on Downloads, as do the settings buttons on the
+  Downloads screen and in the downloads popover. General's Reset to
+  defaults (also ⌘K Reset Settings to Defaults…, which opens settings)
+  asks first: `↵` resets the panels (widths, shown or hidden), grid size,
+  sort orders (grid and albums), layout and grouping, the album panel and
+  the view on launch, `Esc` cancels, and the confirmation takes every
+  other key. It never touches the library, recents or resume points. Its
+  category items and row buttons set a button role and label, and Default
+  view on launch and Simultaneous downloads are radio groups of labelled
+  radio buttons (none checked with VoiceOver yet).
 
 Controls that do set a role and a label (none checked with VoiceOver yet):
 

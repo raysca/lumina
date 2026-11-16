@@ -464,6 +464,35 @@ pub struct AppConfig {
     /// as Last viewed.
     #[serde(default, deserialize_with = "lenient_launch_view")]
     pub launch_view: LaunchView,
+    /// Settings › Downloads › Simultaneous downloads, one of
+    /// [`DOWNLOAD_CONCURRENCY_CHOICES`]. Anything else reads as the default.
+    #[serde(
+        default = "default_download_concurrency",
+        deserialize_with = "lenient_download_concurrency"
+    )]
+    pub download_concurrency: usize,
+}
+
+/// The Simultaneous downloads choices.
+pub const DOWNLOAD_CONCURRENCY_CHOICES: [usize; 4] = [1, 2, 3, 5];
+/// Downloads that run at once until the user picks another number.
+pub const DEFAULT_DOWNLOAD_CONCURRENCY: usize = 3;
+
+fn default_download_concurrency() -> usize {
+    DEFAULT_DOWNLOAD_CONCURRENCY
+}
+
+/// Reads `download_concurrency` so a hand-edited value outside the choices
+/// falls back to the default instead of failing the whole config.
+fn lenient_download_concurrency<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<usize, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|n| DOWNLOAD_CONCURRENCY_CHOICES.contains(n))
+        .unwrap_or(DEFAULT_DOWNLOAD_CONCURRENCY))
 }
 
 /// Where Lumina opens after a restart.
@@ -663,6 +692,7 @@ impl Default for AppConfig {
             album_sort: AlbumSort::Name,
             album_panel_hidden: false,
             launch_view: LaunchView::LastViewed,
+            download_concurrency: DEFAULT_DOWNLOAD_CONCURRENCY,
         }
     }
 }
@@ -1584,6 +1614,56 @@ mod tests {
             (loaded.launch_view, loaded.grid_columns),
             (LaunchView::LastViewed, 6),
             "an unknown value reads as Last viewed without resetting the config"
+        );
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn download_concurrency_reads_leniently() {
+        let path = temp_config_path("download_concurrency");
+        for (json, expected, why) in [
+            (
+                r#"{"grid_columns":6}"#,
+                3,
+                "a config written before the setting runs 3",
+            ),
+            (
+                r#"{"download_concurrency":5,"grid_columns":6}"#,
+                5,
+                "a choice round-trips",
+            ),
+            (
+                r#"{"download_concurrency":4,"grid_columns":6}"#,
+                3,
+                "4 is not a choice",
+            ),
+            (
+                r#"{"download_concurrency":0,"grid_columns":6}"#,
+                3,
+                "0 would stall the queue",
+            ),
+            (
+                r#"{"download_concurrency":"two","grid_columns":6}"#,
+                3,
+                "a string reads as 3",
+            ),
+        ] {
+            std::fs::write(&path, json).unwrap();
+            let loaded = AppConfig::load_from(&path);
+            assert_eq!(
+                (loaded.download_concurrency, loaded.grid_columns),
+                (expected, 6),
+                "{why}, without resetting the rest of the config"
+            );
+        }
+        let mut cfg = AppConfig {
+            download_concurrency: 1,
+            ..AppConfig::default()
+        };
+        cfg.reset_ui_preferences();
+        assert_eq!(
+            cfg.download_concurrency, 1,
+            "Reset to defaults keeps the download setting"
         );
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

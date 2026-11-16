@@ -2,8 +2,9 @@
 //! persistence, driven through a fake job so nothing touches the network.
 
 use super::ui_automation::{app_with_library, render_ui, seed_library};
-use crate::app::downloads::{DownloadsConfirm, JobFn, JobOutcome, JobRequest, MAX_RUNNING};
+use crate::app::downloads::{DownloadsConfirm, JobFn, JobOutcome, JobRequest};
 use crate::app::network_import::NetworkImportStage;
+use crate::config::DEFAULT_DOWNLOAD_CONCURRENCY;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::{DownloadState, LuminaEngine, MediaId, PriorDownload};
@@ -244,7 +245,7 @@ fn fourth_download_waits_until_a_slot_frees() {
         });
     }
     settle(vcx, &view, "three run", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
     });
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -261,7 +262,8 @@ fn fourth_download_waits_until_a_slot_frees() {
 
     fake.finish("https://example.com/2.mp4", imported(&engine));
     settle(vcx, &view, "the fourth starts", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING && count(app, DownloadState::Done) == 1
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
+            && count(app, DownloadState::Done) == 1
     });
     assert_eq!(fake.requests().len(), 4);
 }
@@ -278,7 +280,7 @@ fn cancel_while_inspecting_starts_next() {
         });
     }
     settle(vcx, &view, "three run", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
     });
 
     // No progress has arrived: the job is still inspecting.
@@ -759,7 +761,8 @@ fn resume_all_starts_up_to_three() {
     });
     view.update(vcx, |app, cx| app.resume_all_downloads(cx));
     settle(vcx, &view, "three run, one waits", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING && count(app, DownloadState::Waiting) == 1
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
+            && count(app, DownloadState::Waiting) == 1
     });
 }
 
@@ -1118,4 +1121,71 @@ fn command_enter_downloads_again_from_dialog_and_list() {
     settle(vcx, &view, "⌘↵ on the row downloads it again", |app| {
         count(app, DownloadState::Running) == 1
     });
+}
+
+#[core::prelude::v1::test]
+fn concurrency_setting_limits_running_jobs() {
+    let (_dir, engine, fake, mut cx) = queue_app("dl_concurrency");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    view.update(vcx, |app, cx| app.set_download_concurrency(1, cx));
+    let url = |n: usize| format!("https://example.com/{n}.mp4");
+    let tally = |app: &LuminaApp| {
+        (
+            count(app, DownloadState::Running),
+            count(app, DownloadState::Waiting),
+        )
+    };
+
+    for n in 1..=4 {
+        submit(&view, vcx, &url(n));
+        settle(vcx, &view, "the row is stored", |app| {
+            app.downloads.entries.len() == n && app.downloads.entries.iter().all(|e| e.row.id > 0)
+        });
+    }
+    settle(vcx, &view, "one runs", |app| tally(app) == (1, 3));
+    assert_eq!(
+        fake.requests().len(),
+        1,
+        "with the setting at 1 only one of four queued rows runs"
+    );
+
+    view.update(vcx, |app, cx| app.set_download_concurrency(3, cx));
+    settle(vcx, &view, "raising to 3 starts two more at once", |app| {
+        tally(app) == (3, 1)
+    });
+
+    view.update(vcx, |app, cx| app.set_download_concurrency(1, cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            tally(app),
+            (3, 1),
+            "lowering the setting never cancels running jobs"
+        )
+    });
+
+    // Slots free up, but nothing new starts until fewer than 1 run.
+    for (n, running) in [(1, 2), (2, 1)] {
+        fake.finish(&url(n), imported(&engine));
+        settle(vcx, &view, "the finished job ends", |app| {
+            count(app, DownloadState::Done) == n
+        });
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                tally(app),
+                (running, 1),
+                "a freed slot above the lowered setting starts nothing"
+            )
+        });
+        assert_eq!(fake.requests().len(), 3, "no new job was requested");
+    }
+    fake.finish(&url(3), imported(&engine));
+    settle(
+        vcx,
+        &view,
+        "the last running job ends; the waiting row starts",
+        |app| count(app, DownloadState::Done) == 3 && tally(app) == (1, 0),
+    );
+    assert_eq!(fake.requests().len(), 4);
 }

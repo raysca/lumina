@@ -6,7 +6,8 @@ use super::downloads::{
 };
 use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
 use crate::app::command_palette::{CommandId, PaletteTarget};
-use crate::app::downloads::{JobFn, JobOutcome, MAX_RUNNING};
+use crate::app::downloads::{JobFn, JobOutcome};
+use crate::config::DEFAULT_DOWNLOAD_CONCURRENCY;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::{DownloadState, LuminaEngine};
@@ -34,7 +35,7 @@ fn queue_n(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, n: usize) {
         });
     }
     settle(vcx, view, "the downloads run", |app| {
-        count(app, DownloadState::Running) == n.min(MAX_RUNNING)
+        count(app, DownloadState::Running) == n.min(DEFAULT_DOWNLOAD_CONCURRENCY)
     });
 }
 
@@ -67,7 +68,7 @@ fn pause_download_stops_job_and_keeps_row() {
         );
     });
     settle(vcx, &view, "the waiting row starts", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
     });
     assert_eq!(started(&fake, &url(4)), 1, "the freed slot starts the next");
     // Paused is stored only once the cancelled job has ended.
@@ -190,7 +191,7 @@ fn late_finish_of_paused_run_leaves_resumed_run_alone() {
     });
     assert_eq!(
         live.load(Ordering::SeqCst),
-        MAX_RUNNING,
+        DEFAULT_DOWNLOAD_CONCURRENCY,
         "no extra job starts on a slot that isn't free"
     );
 
@@ -248,7 +249,8 @@ fn pause_all_then_resume_all_round_trips() {
 
     view.update(vcx, |app, cx| app.resume_all_downloads(cx));
     settle(vcx, &view, "three run again, two wait", |app| {
-        count(app, DownloadState::Running) == MAX_RUNNING && count(app, DownloadState::Waiting) == 2
+        count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
+            && count(app, DownloadState::Waiting) == 2
     });
     let order: Vec<String> = (1..=5).map(url).collect();
     view.update(vcx, |app, _| {

@@ -87,7 +87,8 @@ impl LuminaApp {
                 "," if cmd_or_ctrl => self.close_preferences(cx),
                 "up" => self.step_preferences_tab(-1, cx),
                 "down" => self.step_preferences_tab(1, cx),
-                // General's one segmented control: Default view on launch.
+                // Each page's one segmented control: General's Default view
+                // on launch, Downloads' Simultaneous downloads.
                 "left" | "right"
                     if self.preferences_tab == crate::app::preferences::PreferencesTab::General =>
                 {
@@ -97,6 +98,22 @@ impl LuminaApp {
                         crate::config::LaunchView::LastViewed
                     };
                     self.set_launch_view(view, cx);
+                }
+                "left" | "right"
+                    if self.preferences_tab
+                        == crate::app::preferences::PreferencesTab::Downloads =>
+                {
+                    let choices = crate::config::DOWNLOAD_CONCURRENCY_CHOICES;
+                    let at = choices
+                        .iter()
+                        .position(|n| *n == self.config.download_concurrency)
+                        .unwrap_or(0);
+                    let next = if key == "left" {
+                        at.saturating_sub(1)
+                    } else {
+                        (at + 1).min(choices.len() - 1)
+                    };
+                    self.set_download_concurrency(choices[next], cx);
                 }
                 _ => {}
             }
