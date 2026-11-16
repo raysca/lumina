@@ -20,7 +20,7 @@ fn running(app: &LuminaApp) -> usize {
 }
 
 /// Queues `urls` and waits until they are stored and as many as fit run.
-fn queue(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, urls: &[&str]) {
+pub(super) fn queue(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, urls: &[&str]) {
     for (n, url) in urls.iter().enumerate() {
         submit(view, vcx, url);
         settle(vcx, view, "the row is stored", |app| {
@@ -366,6 +366,8 @@ fn keyboard_focus_scrolls_into_view() {
             let mut row = template.clone();
             row.id = 2_000 + n;
             row.state = DownloadState::Done;
+            // Earlier lists newest first: 2_039 finished first, so it's last.
+            row.finished_epoch_ms = Some(10_000 - n);
             app.downloads
                 .entries
                 .push(crate::app::downloads::DownloadEntry::for_test(row));
@@ -400,36 +402,48 @@ fn long_failure_reason_wraps() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     install(&view, vcx, &fake);
     queue(&view, vcx, &[A]);
-    view.update(vcx, |app, cx| {
-        let template = app.downloads.entries[0].row.clone();
-        let mut done = template.clone();
-        done.id = 3_000;
-        done.state = DownloadState::Done;
-        let mut failed = template;
-        failed.id = 3_001;
-        failed.state = DownloadState::Failed;
-        failed.error = Some(
+    let reasons = [
+        (3_000, "This video is private.".to_string()),
+        (
+            3_001,
             "The video was saved as \"A long clip name.mp4\" in your Imports folder \
              but couldn't be added to Lumina. Rescan the library to add it."
-                .into(),
-        );
-        for row in [done, failed] {
+                .to_string(),
+        ),
+        (
+            3_002,
+            "The site stopped answering partway through. ".repeat(20),
+        ),
+    ];
+    view.update(vcx, |app, cx| {
+        let template = app.downloads.entries[0].row.clone();
+        for (id, reason) in &reasons {
+            let mut failed = template.clone();
+            failed.id = *id;
+            failed.state = DownloadState::Failed;
+            failed.error = Some(reason.clone());
             app.downloads
                 .entries
-                .push(crate::app::downloads::DownloadEntry::for_test(row));
+                .push(crate::app::downloads::DownloadEntry::for_test(failed));
         }
         app.toggle_downloads_panel(cx);
     });
     render_ui(vcx);
-    let done = vcx
-        .debug_bounds("download-row-3000")
-        .expect("done row paints");
-    let failed = vcx
-        .debug_bounds("download-row-3001")
-        .expect("failed row paints");
+    let meta = |vcx: &mut VisualTestContext, id: i64| {
+        vcx.debug_bounds(leak(format!("download-meta-{id}")))
+            .unwrap_or_else(|| panic!("row {id}'s meta paints"))
+            .size
+            .height
+    };
+    let one_line = meta(vcx, 3_000);
     assert!(
-        failed.size.height > done.size.height,
+        meta(vcx, 3_001) > one_line,
         "a long reason wraps onto more lines instead of losing its last sentence"
+    );
+    let clamped = meta(vcx, 3_002);
+    assert!(
+        clamped > one_line * 2.0 && clamped <= one_line * 3.0 + gpui::px(1.0),
+        "a very long reason stops at 3 lines: {clamped:?} with lines of {one_line:?}"
     );
 }
 

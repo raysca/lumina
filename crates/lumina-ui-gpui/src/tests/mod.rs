@@ -23,6 +23,7 @@ mod design_system;
 mod downloads;
 mod downloads_panel;
 mod downloads_pause;
+mod downloads_popover;
 mod downloads_screen;
 mod downloads_sections;
 mod duplicates;

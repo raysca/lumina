@@ -44,7 +44,7 @@ fn row_shell(app: &LuminaApp, entry: &DownloadEntry, cx: &mut Context<LuminaApp>
         }))
 }
 
-fn title_of(entry: &DownloadEntry) -> SharedString {
+pub(crate) fn title_of(entry: &DownloadEntry) -> SharedString {
     entry
         .row
         .title
@@ -54,7 +54,7 @@ fn title_of(entry: &DownloadEntry) -> SharedString {
 }
 
 /// A bg-3 placeholder with the film glyph, or the item's thumbnail.
-fn thumb(app: &LuminaApp, entry: &DownloadEntry, w: f32, h: f32) -> Div {
+pub(crate) fn thumb(app: &LuminaApp, entry: &DownloadEntry, w: f32, h: f32) -> Div {
     let row = &entry.row;
     let texture = row
         .media_id

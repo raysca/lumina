@@ -1,15 +1,14 @@
-//! The downloads dropdown under the toolbar button: Downloading, Waiting,
-//! Paused, Failed and Earlier, each row with its status and actions.
+//! The downloads dropdown under the toolbar button: the Active group
+//! (downloading, paused, waiting, failed), a divider, then Earlier.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use lumina_core::net_import::{DownloadPhase, NetworkDownloadProgress};
+use lumina_core::net_import::NetworkDownloadProgress;
 use lumina_core::DownloadState;
 
-use crate::app::downloads::{DownloadEntry, DownloadSurface};
-use crate::app::types::format_bytes;
+use crate::app::downloads::DownloadSurface;
 use crate::theme;
-use crate::views::downloads_popover;
+use crate::views::{downloads_popover, downloads_popover_rows};
 use crate::LuminaApp;
 
 /// "2 min left", from what is left and the current speed.
@@ -24,208 +23,6 @@ pub(crate) fn time_left(progress: &NetworkDownloadProgress) -> Option<String> {
         60..=3599 => format!("{} min left", secs / 60),
         _ => format!("{} h {} min left", secs / 3600, (secs % 3600) / 60),
     })
-}
-
-/// The grey line under a row's title.
-fn status(entry: &DownloadEntry, first_waiting: bool, highlighted: bool) -> String {
-    if highlighted {
-        return "Already in your downloads".to_string();
-    }
-    let row = &entry.row;
-    match row.state {
-        DownloadState::Running => match entry.progress.as_ref() {
-            None => "Getting ready…".to_string(),
-            Some(p) if p.phase == DownloadPhase::Finalizing => "Finishing…".to_string(),
-            Some(p) if p.phase == DownloadPhase::Connecting || p.bytes_downloaded == 0 => {
-                "Getting ready…".to_string()
-            }
-            Some(p) => {
-                let mut text = match p.total_bytes {
-                    Some(total) => format!(
-                        "{} of {}",
-                        format_bytes(p.bytes_downloaded),
-                        format_bytes(total)
-                    ),
-                    None => format_bytes(p.bytes_downloaded),
-                };
-                if let Some(left) = time_left(p) {
-                    text.push_str(" · ");
-                    text.push_str(&left);
-                }
-                text
-            }
-        },
-        DownloadState::Waiting if first_waiting => "Next up".to_string(),
-        DownloadState::Waiting => "Waiting".to_string(),
-        DownloadState::Paused => "Paused".to_string(),
-        DownloadState::Failed => row.error.clone().unwrap_or_else(|| "Failed".to_string()),
-        DownloadState::Done if row.in_library => "Added to library".to_string(),
-        DownloadState::Done => "Removed from library".to_string(),
-        DownloadState::Duplicate => "Already in your library".to_string(),
-    }
-}
-
-/// A small text button on a row ("Retry", "Resume", "✕").
-fn row_button(id: String, label: &'static str, tooltip: &'static str) -> Stateful<Div> {
-    let selector = id.clone();
-    div()
-        .id(SharedString::from(id))
-        .debug_selector(move || selector.clone())
-        .flex_shrink_0()
-        .px_1p5()
-        .py_0p5()
-        .rounded(theme::RADIUS_SM)
-        .cursor_pointer()
-        .text_xs()
-        .text_color(theme::t2())
-        .hover(|s| s.bg(theme::bg_3()).text_color(theme::t1()))
-        .tooltip(theme::tooltip_label(tooltip))
-        .child(label)
-}
-
-fn render_row(
-    entry: &DownloadEntry,
-    first_waiting: bool,
-    app: &LuminaApp,
-    cx: &mut Context<LuminaApp>,
-) -> AnyElement {
-    let row = &entry.row;
-    let id = row.id;
-    let focused = app.downloads.focused == Some(id);
-    let highlighted = app.downloads.highlight == Some(id);
-    let title = row.title.clone().unwrap_or_else(|| row.url.clone());
-    let fraction = (row.state == DownloadState::Running)
-        .then(|| entry.progress.as_ref().and_then(|p| p.percent()))
-        .flatten()
-        .map(|percent| (percent / 100.0).clamp(0.0, 1.0));
-    let selector = format!("download-row-{id}");
-
-    div()
-        .id(SharedString::from(selector.clone()))
-        .debug_selector(move || selector.clone())
-        .w_full()
-        .min_w_0()
-        .px_2()
-        .py_1p5()
-        .rounded(theme::RADIUS_MD)
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .when(focused || highlighted, |el| el.bg(theme::bg_3()))
-        .when(!(focused || highlighted), |el| {
-            // A lighter step than the focused row (bg_3), so keyboard focus stays visible.
-            el.hover(|s| s.bg(theme::bg_2()))
-        })
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            this.downloads.focused = Some(id);
-            // ↵ pauses a running row; a stray click must not, since Resume
-            // starts over.
-            let running = this
-                .downloads
-                .entries
-                .iter()
-                .any(|e| e.row.id == id && e.row.state == DownloadState::Running);
-            if !running {
-                this.download_main_action(id, cx);
-            }
-        }))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_0p5()
-                .child(
-                    div()
-                        .truncate()
-                        .text_xs()
-                        .text_color(theme::t1())
-                        .child(title),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if row.state == DownloadState::Failed {
-                            theme::danger()
-                        } else {
-                            theme::t2()
-                        })
-                        // A failure reason ends with what to do; let it wrap.
-                        .map(|el| {
-                            if row.state == DownloadState::Failed {
-                                el.line_clamp(4).text_ellipsis()
-                            } else {
-                                el.truncate()
-                            }
-                        })
-                        .child(status(entry, first_waiting, highlighted)),
-                )
-                .children(fraction.map(|fraction| {
-                    div()
-                        .h(px(3.0))
-                        .w_full()
-                        .rounded_full()
-                        .bg(theme::bg_2())
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative(fraction))
-                                .rounded_full()
-                                .bg(theme::accent()),
-                        )
-                })),
-        )
-        .when(row.state == DownloadState::Failed && row.can_retry, |el| {
-            el.child(
-                row_button(format!("download-retry-{id}"), "Retry", "Try again").on_click(
-                    cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                        cx.stop_propagation();
-                        this.retry_download(id, cx);
-                    }),
-                ),
-            )
-        })
-        .when(row.state == DownloadState::Paused, |el| {
-            el.child(
-                row_button(format!("download-resume-{id}"), "Resume", "Start over").on_click(
-                    cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                        cx.stop_propagation();
-                        this.resume_download(id, cx);
-                    }),
-                ),
-            )
-        })
-        .when(row.state == DownloadState::Duplicate, |el| {
-            el.child(
-                row_button(
-                    format!("download-again-{id}"),
-                    "Download Again",
-                    "Make a second copy (⌘↵)",
-                )
-                .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    cx.stop_propagation();
-                    this.download_again(id, cx);
-                })),
-            )
-        })
-        .child(
-            row_button(
-                format!("download-remove-{id}"),
-                "✕",
-                if row.state == DownloadState::Running {
-                    "Cancel download"
-                } else {
-                    "Remove from list"
-                },
-            )
-            .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                cx.stop_propagation();
-                this.cancel_or_remove_download(id, cx);
-            })),
-        )
-        .into_any_element()
 }
 
 /// The dismiss backdrop behind the downloads list. The list itself hangs
@@ -266,35 +63,54 @@ pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>)
         .iter()
         .find(|e| e.row.state == DownloadState::Waiting)
         .map(|e| e.row.id);
-    // Each section head and row is a direct child: `scroll_to_item` counts
-    // them (`move_download_focus`), so nothing else may go in here.
+    // Each Earlier head and row is a direct child: `scroll_to_item` counts
+    // them (`move_download_focus`), so nothing else may go in here. The
+    // Active group has no head; the divider belongs to the Earlier head.
     let mut body = div()
         .id("downloads-panel-body")
         .debug_selector(|| "downloads-panel-body".to_string())
+        .role(Role::List)
+        .aria_label(crate::i18n::t("downloads.title"))
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
         .track_scroll(&app.downloads.scroll)
-        .p_1()
+        .p(px(8.0))
         .flex()
         .flex_col()
-        .gap_0p5();
-    for (label, rows) in app.download_sections(DownloadSurface::Panel) {
-        body = body.child(if label == "Earlier" {
-            downloads_popover::earlier_head(cx)
-        } else {
-            theme::section_label(label.to_uppercase())
-                .px_2()
-                .pt_2()
-                .pb_0p5()
-        });
+        .gap(px(4.0));
+    let sections = app.download_sections(DownloadSurface::Panel);
+    let any_active = sections.iter().any(|(label, _)| *label == "Active");
+    for (label, rows) in sections {
+        let earlier = label == "Earlier";
+        if earlier {
+            body = body.child(
+                div()
+                    .flex_shrink_0()
+                    .flex()
+                    .flex_col()
+                    .when(any_active, |el| {
+                        el.child(
+                            div()
+                                .debug_selector(|| "downloads-divider".to_string())
+                                .h(px(1.0))
+                                .bg(theme::line()),
+                        )
+                    })
+                    .child(downloads_popover::earlier_head(cx)),
+            );
+        }
         for entry in rows {
-            body = body.child(render_row(
-                entry,
-                first_waiting == Some(entry.row.id),
-                app,
-                cx,
-            ));
+            body = body.child(if earlier {
+                downloads_popover_rows::earlier_row(app, entry, cx)
+            } else {
+                downloads_popover_rows::active_row(
+                    app,
+                    entry,
+                    first_waiting == Some(entry.row.id),
+                    cx,
+                )
+            });
         }
     }
 

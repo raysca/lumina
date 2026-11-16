@@ -11,6 +11,7 @@ pub mod downloads_confirm;
 pub mod downloads_filter_bar;
 pub mod downloads_panel;
 pub mod downloads_popover;
+pub mod downloads_popover_rows;
 pub mod downloads_rows;
 pub mod downloads_screen;
 pub mod downloads_status_bar;

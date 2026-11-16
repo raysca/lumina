@@ -77,12 +77,18 @@ pub(crate) enum DownloadSurface {
     Screen,
 }
 
-/// The dropdown's sections, top to bottom, by label.
-const PANEL_SECTIONS: [(&str, &[DownloadState]); 5] = [
-    ("Downloading", &[DownloadState::Running]),
-    ("Waiting", &[DownloadState::Waiting]),
-    ("Paused", &[DownloadState::Paused]),
-    ("Failed", &[DownloadState::Failed]),
+/// The dropdown's groups, top to bottom, by label. Active rows follow these
+/// states in order, then the queue; Earlier rows are newest first.
+const PANEL_SECTIONS: [(&str, &[DownloadState]); 2] = [
+    (
+        "Active",
+        &[
+            DownloadState::Running,
+            DownloadState::Paused,
+            DownloadState::Waiting,
+            DownloadState::Failed,
+        ],
+    ),
     ("Earlier", &[DownloadState::Done, DownloadState::Duplicate]),
 ];
 
@@ -119,8 +125,11 @@ impl LuminaApp {
                     .filter(|entry| states.contains(&entry.row.state))
                     .filter(|entry| filter.matches(entry.row.state))
                     .collect();
-                if *label == "completed" {
+                if *label == "completed" || *label == "Earlier" {
                     rows.sort_by_key(|e| std::cmp::Reverse((e.row.finished_epoch_ms, e.row.id)));
+                } else if surface == DownloadSurface::Panel {
+                    // Stable: queue order within each state.
+                    rows.sort_by_key(|e| states.iter().position(|s| *s == e.row.state));
                 }
                 (*label, rows)
             })
@@ -247,15 +256,18 @@ impl LuminaApp {
             None => 0,
         };
         let id = order[next];
-        // Both lists show each non-empty section's header, then its rows.
+        // Both lists show each non-empty section's header (one child; the
+        // dropdown's divider is part of the Earlier head), then its rows.
+        // The dropdown's Active group has no header.
         let mut child = 0;
         let mut target = None;
-        for (_, rows) in self.download_sections(surface) {
+        for (label, rows) in self.download_sections(surface) {
+            let head = usize::from(!(surface == DownloadSurface::Panel && label == "Active"));
             if let Some(at) = rows.iter().position(|entry| entry.row.id == id) {
-                target = Some(child + 1 + at);
+                target = Some(child + head + at);
                 break;
             }
-            child += 1 + rows.len();
+            child += head + rows.len();
         }
         let scroll = match surface {
             DownloadSurface::Panel => {
