@@ -2,7 +2,7 @@
 
 use gpui::*;
 
-use super::{button, group, note, row, section_title, value};
+use super::rows::{controls, path_pill, row, row_button, section, value};
 use crate::app::preferences::ago;
 use crate::app::LuminaApp;
 use crate::theme;
@@ -17,41 +17,61 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
     div()
         .flex()
         .flex_col()
-        .child(section_title("LIBRARY", false))
-        .child(group([
-            row("Library folder", value(&app.library_path_label(), true)).child(button(
-                cx,
-                "preferences-change-library",
-                "Change…",
-                |this, cx| this.pick_folder_dialog(cx),
-            )),
-            row(
-                "Items indexed",
-                value(&indexed, false).debug_selector(|| "preferences-indexed".to_string()),
+        .gap(px(14.0))
+        .child(section(
+            "LIBRARY",
+            None,
+            [
+                row(
+                    "Library folder",
+                    None,
+                    controls()
+                        .child(path_pill("settings-path-library", app.library_path_label()))
+                        .child(row_button(
+                            cx,
+                            "preferences-change-library",
+                            "Change…",
+                            |this, cx| this.pick_folder_dialog(cx),
+                        )),
+                )
+                .debug_selector(|| "settings-row-library".to_string()),
+                row(
+                    "Items indexed",
+                    None,
+                    controls()
+                        .child(
+                            value(&indexed, true)
+                                .debug_selector(|| "preferences-indexed".to_string()),
+                        )
+                        .child(row_button(
+                            cx,
+                            "preferences-rescan",
+                            "Rescan Library",
+                            |this, cx| this.rescan_library(cx),
+                        )),
+                ),
+            ],
+        ))
+        .child(section(
+            "EXTERNAL EDITOR",
+            None,
+            [row(
+                "Editor",
+                Some("Edits happen in that app; Edit a Copy keeps the original."),
+                controls()
+                    .child(
+                        value(&app.external_editor_label(), false)
+                            .text_color(if editor_set { theme::t1() } else { theme::t2() })
+                            .debug_selector(|| "preferences-external-editor".to_string()),
+                    )
+                    .child(row_button(
+                        cx,
+                        "preferences-choose-editor",
+                        "Choose Editor…",
+                        |this, cx| this.choose_external_editor(cx),
+                    )),
             )
-            .child(button(
-                cx,
-                "preferences-rescan",
-                "Rescan Library",
-                |this, cx| this.rescan_library(cx),
-            )),
-        ]))
-        .child(section_title("EXTERNAL EDITOR", true))
-        .child(group([row(
-            "Editor",
-            value(&app.external_editor_label(), false)
-                .text_color(if editor_set { theme::t1() } else { theme::t2() })
-                .debug_selector(|| "preferences-external-editor".to_string()),
-        )
-        .child(button(
-            cx,
-            "preferences-choose-editor",
-            "Choose Editor…",
-            |this, cx| this.choose_external_editor(cx),
-        ))]))
-        .child(note(
-            "Used by 'Edit in External Editor'. Lumina never changes your original \
-             files; edits happen in the app you choose.",
+            .debug_selector(|| "settings-row-editor".to_string())],
         ))
         .into_any_element()
 }

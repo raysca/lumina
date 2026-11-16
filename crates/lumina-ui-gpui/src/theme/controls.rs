@@ -145,42 +145,45 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
         .child(label.into())
 }
 
-/// Segmented control container.
+/// Segmented control container (frame `l85pQN`): `bg_0`, 9px radius,
+/// `line_2` outline, 3px inset, 2px between segments.
 pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
     div()
         .id(id)
-        .h(px(28.0))
-        .p(px(2.0))
+        .p(px(3.0))
         .flex()
         .flex_row()
         .items_center()
         .gap(px(2.0))
-        .rounded(RADIUS_MD)
-        .bg(bg_2())
+        .rounded(px(9.0))
+        .bg(bg_0())
         .border_1()
-        .border_color(line())
+        .border_color(line_2())
 }
 
-/// Segmented control item. Hover lifts only the text: bg-3 marks the
-/// selected segment, so an idle one never takes it.
+/// Segmented control item: 28px, 6px radius, 12.5. The selected one is
+/// bg-3, t1 and medium; hover lifts only an idle one's text, so bg-3 keeps
+/// meaning selected.
 pub fn segmented_item(id: impl Into<ElementId>, active: bool) -> Stateful<Div> {
     let base = div()
         .id(id)
-        .h(px(24.0))
-        .px(px(8.0))
+        .h(px(28.0))
+        .px(px(12.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
         .gap_1()
-        .rounded(RADIUS_SM)
-        .text_xs()
+        .rounded(RADIUS_MD)
+        .text_size(px(12.5))
         .cursor_pointer();
 
     if active {
-        base.bg(bg_3()).text_color(t1())
+        base.bg(bg_3())
+            .text_color(t1())
+            .font_weight(gpui::FontWeight::MEDIUM)
     } else {
-        base.text_color(t2()).hover(|s| s.text_color(t1()))
+        base.text_color(t3()).hover(|s| s.text_color(t1()))
     }
 }
 

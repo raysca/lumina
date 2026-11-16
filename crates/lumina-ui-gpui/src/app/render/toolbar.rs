@@ -393,6 +393,7 @@ impl LuminaApp {
                 .px(px(10.0))
                 .gap(px(6.0))
                 .text_size(px(12.0))
+                .font_weight(FontWeight::NORMAL)
                 .when(!on, |s| s.text_color(theme::t3()))
                 .child(
                     crate::icons::render_icon(
@@ -413,6 +414,9 @@ impl LuminaApp {
                 .h(px(32.0))
                 .p(px(2.0))
                 .rounded(px(9.0))
+                // Design 01's header fill, not the settings segmented look.
+                .bg(theme::bg_2())
+                .border_color(theme::line())
                 .flex_shrink_0()
                 .child(
                     segment(

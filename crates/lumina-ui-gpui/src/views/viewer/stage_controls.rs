@@ -93,6 +93,14 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
         let active = (this.viewer_state.zoom_scale - preset.scale(Some(canvas))).abs() < 0.005;
         theme::segmented_item(SharedString::from(id.clone()), active)
             .debug_selector(move || id.clone())
+            // The viewer keeps its compact presets: 24 high, 8 px sides,
+            // regular weight, idle text t2.
+            .h(px(24.0))
+            .px(px(8.0))
+            .rounded(theme::RADIUS_SM)
+            .text_xs()
+            .font_weight(FontWeight::NORMAL)
+            .text_color(if active { theme::t1() } else { theme::t2() })
             .role(Role::Button)
             .aria_label(hint.clone())
             .tooltip(theme::tooltip_label(hint))
@@ -150,7 +158,15 @@ fn render_navigator(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<Any
             .items_end()
             .gap_2()
             .child(overview)
-            .child(theme::segmented("viewer-zoom-presets").children(buttons))
+            .child(
+                theme::segmented("viewer-zoom-presets")
+                    .h(px(28.0))
+                    .p(px(2.0))
+                    .rounded(theme::RADIUS_MD)
+                    .bg(theme::bg_2())
+                    .border_color(theme::line())
+                    .children(buttons),
+            )
             .into_any_element(),
     )
 }

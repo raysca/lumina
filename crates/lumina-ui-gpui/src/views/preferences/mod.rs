@@ -11,6 +11,7 @@ use crate::views::page_header::{header_icon_button, page_header};
 
 mod about;
 mod general;
+mod rows;
 mod storage;
 
 /// Width of the settings sidebar (frame `l85pQN`).
@@ -158,88 +159,4 @@ pub(crate) fn tilde(path: &std::path::Path) -> String {
         Some(rest) => format!("~/{}", rest.display()),
         None => path.display().to_string(),
     }
-}
-
-pub(super) fn section_title(text: &'static str, spaced: bool) -> Div {
-    theme::section_label(text)
-        .mt(px(if spaced { 22.0 } else { 0.0 }))
-        .mb(px(8.0))
-}
-
-/// A bordered group of rows with dividers between them.
-pub(super) fn group(rows: impl IntoIterator<Item = Div>) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .rounded(theme::RADIUS_LG)
-        .border_1()
-        .border_color(theme::line())
-        .bg(theme::bg_0())
-        .children(rows.into_iter().enumerate().map(|(i, row)| {
-            if i == 0 {
-                row
-            } else {
-                row.border_t_1().border_color(theme::line())
-            }
-        }))
-}
-
-/// One 44px row: fixed-width label, truncating value, then action buttons.
-pub(super) fn row(label: &'static str, value: Div) -> Div {
-    div()
-        .min_h(px(44.0))
-        .px(px(14.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(12.0))
-        .text_sm()
-        .child(
-            div()
-                .w(px(130.0))
-                .flex_shrink_0()
-                .text_color(theme::t2())
-                .child(label),
-        )
-        .child(value)
-}
-
-pub(super) fn value(text: &str, mono: bool) -> Div {
-    let v = div()
-        .flex_1()
-        .min_w(px(0.0))
-        .truncate()
-        .text_color(theme::t1())
-        .child(text.to_string());
-    if mono {
-        v.font_family(theme::FONT_MONO).text_xs()
-    } else {
-        v
-    }
-}
-
-pub(super) fn note(text: &'static str) -> Div {
-    div()
-        .mt(px(10.0))
-        .mx(px(2.0))
-        .text_xs()
-        .text_color(theme::t2())
-        .child(text)
-}
-
-type PreferencesAction = fn(&mut LuminaApp, &mut Context<LuminaApp>);
-
-pub(super) fn button(
-    cx: &mut Context<LuminaApp>,
-    id: &'static str,
-    label: &'static str,
-    action: PreferencesAction,
-) -> Stateful<Div> {
-    theme::control(id)
-        .debug_selector(move || id.to_string())
-        .flex_shrink_0()
-        .child(label)
-        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-            action(this, cx);
-        }))
 }

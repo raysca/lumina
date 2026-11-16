@@ -2,7 +2,7 @@
 //! category, and it fits a small window.
 
 use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::app::preferences::{thumbnail_cache_dir, CacheUsage, PreferencesTab};
 
@@ -406,4 +406,114 @@ fn library_folder_reads_from_home() {
             "the Library folder row shortens the home directory to ~"
         );
     });
+}
+
+/// Height of a debug selector's bounds, in pixels.
+fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
+    let bounds = vcx
+        .debug_bounds(selector)
+        .unwrap_or_else(|| panic!("{selector} renders"));
+    f32::from(bounds.size.height)
+}
+
+#[core::prelude::v1::test]
+fn settings_rows_match_design_heights() {
+    let (temp_dir, engine) = seed_library("settings_rows", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
+    view.update(vcx, |app, cx| app.open_preferences(cx));
+    render_ui(vcx);
+
+    let plain = height(vcx, "settings-row-library");
+    assert!(
+        (plain - 43.5).abs() <= 1.0,
+        "a plain settings row is 43.5 tall (frame l85pQN), got {plain}"
+    );
+    let described = height(vcx, "settings-row-editor");
+    assert!(
+        (described - 62.5).abs() <= 1.0,
+        "a settings row with a description is 62.5 tall, got {described}"
+    );
+    for button in [
+        "preferences-change-library",
+        "preferences-rescan",
+        "preferences-choose-editor",
+    ] {
+        assert_eq!(
+            height(vcx, button),
+            34.0,
+            "{button} is a 34 tall row button"
+        );
+    }
+    assert_eq!(
+        height(vcx, "settings-path-library"),
+        34.0,
+        "the library path pill is 34 tall"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn long_library_path_truncates_inside_its_row() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));
+    vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
+    let deep: std::path::PathBuf = [
+        "/Volumes",
+        "Photo Archive External Drive",
+        "Family and Friends",
+        "Every Year Since The Very Beginning",
+        "Raw Imports Awaiting Review",
+        "Lumina Library",
+    ]
+    .iter()
+    .collect();
+    let tooltip = format!("tooltip-{}", deep.display());
+    view.update(vcx, |app, cx| {
+        app.grid_state = None;
+        app.config.last_library_path = Some(deep);
+        app.open_preferences(cx);
+    });
+    render_ui(vcx);
+
+    let row = vcx
+        .debug_bounds("settings-row-library")
+        .expect("the library row renders");
+    let pill = vcx
+        .debug_bounds("settings-path-library")
+        .expect("the path pill renders");
+    let button = vcx
+        .debug_bounds("preferences-change-library")
+        .expect("Change… renders");
+    assert!(
+        pill.left() > row.left() + gpui::px(100.0) && pill.right() <= button.left(),
+        "a long path truncates: the pill leaves room for the label and ends before \
+         the button, row {row:?}, pill {pill:?}, button {button:?}"
+    );
+    assert!(
+        button.right() <= row.right(),
+        "the button stays inside its row, row {row:?}, button {button:?}"
+    );
+    assert_eq!(
+        f32::from(button.size.height),
+        34.0,
+        "Change… never wraps to a second line"
+    );
+    assert!(
+        (f32::from(row.size.height) - 43.5).abs() <= 1.0,
+        "a long path keeps the row one line tall, got {:?}",
+        row.size.height
+    );
+
+    vcx.simulate_mouse_move(pill.center(), None, gpui::Modifiers::default());
+    vcx.background_executor
+        .advance_clock(std::time::Duration::from_millis(600));
+    vcx.run_until_parked();
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds(leak(tooltip)).is_some(),
+        "hovering the truncated pill shows the full path in a tooltip"
+    );
 }

@@ -2,7 +2,7 @@
 
 use gpui::*;
 
-use super::button;
+use super::rows::row_button;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
@@ -56,13 +56,13 @@ pub(super) fn render_about(cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex()
                 .flex_row()
                 .gap_2()
-                .child(button(
+                .child(row_button(
                     cx,
                     "preferences-license",
                     "MIT License",
                     |this, cx| this.open_bundled_doc("LICENSE", cx),
                 ))
-                .child(button(
+                .child(row_button(
                     cx,
                     "preferences-acknowledgements",
                     "Acknowledgements",
