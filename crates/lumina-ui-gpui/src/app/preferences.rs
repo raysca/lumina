@@ -101,11 +101,18 @@ pub fn bundled_doc(name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// What the reveal buttons asked Finder to show, for tests.
+    pub(crate) static REVEALED: std::cell::RefCell<Vec<PathBuf>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn reveal(path: &Path) {
     // Tests click these buttons; never open Finder from a test.
-    if cfg!(test) {
-        return;
-    }
+    #[cfg(test)]
+    REVEALED.with(|r| r.borrow_mut().push(path.to_path_buf()));
+    #[cfg(not(test))]
     if let Err(err) = std::process::Command::new("open").arg(path).spawn() {
         log::warn!("could not open {path:?}: {err:?}");
     }
@@ -303,6 +310,33 @@ impl LuminaApp {
         let dir = thumbnail_cache_dir();
         let _ = std::fs::create_dir_all(&dir);
         reveal(&dir);
+        cx.notify();
+    }
+
+    /// Where downloads are filed: `<library>/Imports`, or None with no
+    /// library open.
+    pub fn downloads_folder(&self) -> Option<PathBuf> {
+        let state = self.grid_state.as_ref()?;
+        Some(
+            state
+                .engine
+                .library_root()
+                .join(lumina_core::import::IMPORTS_DIR),
+        )
+    }
+
+    /// Settings › Downloads › Show in Finder. Before the first download
+    /// there is no Imports folder; the library folder is shown instead,
+    /// and nothing is created.
+    pub fn reveal_downloads_folder(&mut self, cx: &mut Context<Self>) {
+        let Some(imports) = self.downloads_folder() else {
+            return;
+        };
+        if imports.is_dir() {
+            reveal(&imports);
+        } else {
+            reveal(imports.parent().unwrap_or(&imports));
+        }
         cx.notify();
     }
 

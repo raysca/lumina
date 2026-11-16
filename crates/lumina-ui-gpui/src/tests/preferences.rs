@@ -1506,3 +1506,67 @@ fn storage_card_hides_without_a_reading_for_this_library() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn downloads_path_row_reveals_imports() {
+    use crate::app::preferences::REVEALED;
+    let (temp_dir, engine) = seed_library("settings_downloads_path", 1);
+    let root = engine.library_root().to_path_buf();
+    let imports = root.join(lumina_core::import::IMPORTS_DIR);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Downloads, cx)
+    });
+    render_ui(vcx);
+
+    let shown = crate::views::preferences::tilde(&imports);
+    for selector in [
+        "settings-row-downloads-path",
+        "settings-downloads-path",
+        "settings-downloads-reveal-text:Show in Finder",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "the Downloads page shows {selector}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds(leak(format!("settings-downloads-path-text:{shown}")))
+            .is_some(),
+        "the path pill reads {shown}, the library's Imports folder"
+    );
+
+    let revealed = || REVEALED.with(|r| r.borrow_mut().drain(..).collect::<Vec<_>>());
+    revealed();
+    // No download yet: Imports does not exist, so the library is revealed.
+    assert!(!imports.exists(), "a fresh library has no Imports folder");
+    click(vcx, "settings-downloads-reveal");
+    assert_eq!(
+        revealed(),
+        std::slice::from_ref(&root),
+        "with no Imports folder, Show in Finder reveals the library"
+    );
+    assert!(!imports.exists(), "revealing creates no folder");
+
+    std::fs::create_dir_all(&imports).unwrap();
+    click(vcx, "settings-downloads-reveal");
+    assert_eq!(
+        revealed(),
+        std::slice::from_ref(&imports),
+        "Show in Finder reveals the Imports folder"
+    );
+
+    // No library open: there is nowhere downloads go.
+    view.update(vcx, |app, _| app.grid_state = None);
+    render_ui(vcx);
+    for gone in ["settings-downloads-path", "settings-downloads-reveal"] {
+        assert!(
+            vcx.debug_bounds(gone).is_none(),
+            "{gone} hides with no library open"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

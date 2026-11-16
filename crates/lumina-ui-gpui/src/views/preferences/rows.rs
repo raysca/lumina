@@ -124,6 +124,7 @@ pub(super) fn value(text: &str, mono: bool) -> Div {
 /// A path in a 34 px pill with a folder icon. It truncates from the start,
 /// keeping the folder name, and its tooltip shows the full path.
 pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
+    let marker = path.clone();
     div()
         .id(id)
         .debug_selector(move || id.to_string())
@@ -142,6 +143,8 @@ pub(super) fn path_pill(id: &'static str, path: String) -> Stateful<Div> {
         .child(render_icon(Icon::Folder, px(14.0), theme::t3()).flex_shrink_0())
         .child(
             div()
+                // Tests read the path as `<id>-text:<path>`.
+                .debug_selector(move || format!("{id}-text:{marker}"))
                 .min_w_0()
                 .overflow_hidden()
                 .whitespace_nowrap()

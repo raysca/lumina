@@ -1,24 +1,52 @@
-//! Settings › Downloads: how videos from links are downloaded.
+//! Settings › Downloads: how videos from links are downloaded and where
+//! they are filed.
 
 use gpui::*;
 
-use super::rows::{controls, row, section};
+use super::rows::{controls, path_pill, row, row_button, section};
+use super::tilde;
 use crate::app::LuminaApp;
 use crate::config::DOWNLOAD_CONCURRENCY_CHOICES;
 use crate::theme;
 
 pub(super) fn render_downloads(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
-    section(
-        "TRANSFERS",
-        Some("Applies to videos imported from a link".into()),
-        [row(
-            "Simultaneous downloads",
-            Some("Extra items wait in the queue until a slot frees up."),
-            controls().child(concurrency_control(app, cx)),
+    // With no library open there is nowhere downloads go.
+    let saving = app.downloads_folder().map(|folder| {
+        section(
+            "SAVING",
+            None,
+            [row(
+                "Downloads go to",
+                Some("Each download is filed by date and added to the library."),
+                controls()
+                    .child(path_pill("settings-downloads-path", tilde(&folder)))
+                    .child(row_button(
+                        cx,
+                        "settings-downloads-reveal",
+                        "Show in Finder",
+                        None,
+                        |this, cx| this.reveal_downloads_folder(cx),
+                    )),
+            )
+            .debug_selector(|| "settings-row-downloads-path".to_string())],
         )
-        .debug_selector(|| "settings-row-concurrency".to_string())],
-    )
-    .into_any_element()
+    });
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(14.0))
+        .child(section(
+            "TRANSFERS",
+            Some("Applies to videos imported from a link".into()),
+            [row(
+                "Simultaneous downloads",
+                Some("Extra items wait in the queue until a slot frees up."),
+                controls().child(concurrency_control(app, cx)),
+            )
+            .debug_selector(|| "settings-row-concurrency".to_string())],
+        ))
+        .children(saving)
+        .into_any_element()
 }
 
 /// 1 / 2 / 3 / 5. A radio group for VoiceOver; ←/→ pick a segment while
