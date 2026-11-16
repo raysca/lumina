@@ -1450,3 +1450,61 @@ fn palette_steps_frames_for_an_open_video() {
         "frame steps are offered only for an open video: {titles:?}"
     );
 }
+
+/// A paused, loadable video ready for clicks on its picture: a frame on the
+/// stage and no load failure (the sample path does not exist on disk).
+fn open_clickable_video(
+    cx: &mut gpui::TestAppContext,
+) -> (
+    Fixture,
+    gpui::Entity<crate::LuminaApp>,
+    &mut VisualTestContext,
+) {
+    let (fixture, view, vcx) = open_video(cx);
+    view.update(vcx, |app, cx| {
+        app.video.load_error = None;
+        app.viewer_image = Some(crate::app::types::generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            1920,
+            1080,
+        ));
+        cx.notify();
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    (fixture, view, vcx)
+}
+
+#[core::prelude::v1::test]
+fn clicking_the_video_picture_toggles_playback() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_clickable_video(&mut cx);
+    // Off the centre badge: a quarter in from the picture's top-left.
+    let media = bounds(vcx, "viewer-media");
+    let x = f32::from(media.left()) + f32::from(media.size.width) * 0.25;
+    let y = f32::from(media.top()) + f32::from(media.size.height) * 0.25;
+
+    crate::tests::ui_automation::click_point(vcx, x, y);
+    assert!(
+        view.update(vcx, |app, _| app.video.is_playing),
+        "a click on a paused video's picture must start playback"
+    );
+    render_ui(vcx);
+    crate::tests::ui_automation::click_point(vcx, x, y);
+    assert!(
+        !view.update(vcx, |app, _| app.video.is_playing),
+        "a click on a playing video's picture must pause it"
+    );
+}
+
+#[core::prelude::v1::test]
+fn the_centre_play_badge_starts_playback_once() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_fixture, view, vcx) = open_clickable_video(&mut cx);
+    click(vcx, "viewer-center-play");
+    assert!(
+        view.update(vcx, |app, _| app.video.is_playing),
+        "the badge sits on the picture: one click must toggle once, not twice"
+    );
+}

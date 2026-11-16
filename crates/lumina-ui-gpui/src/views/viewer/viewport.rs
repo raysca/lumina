@@ -266,13 +266,24 @@ impl ViewerViewport {
                             // GPUI rounds the fitted picture, not the
                             // letterboxed element.
                             .rounded(px(PHOTO_RADIUS))
-                            .on_click(cx.listener(|this, e: &ClickEvent, _w, cx| {
+                            .on_click(cx.listener(move |this, e: &ClickEvent, _w, cx| {
                                 // The element fills the canvas; only the
                                 // visible media (not its letterbox) toggles.
-                                if e.click_count() >= 2
-                                    && this.viewer_state.hits_media(e.position())
-                                {
+                                if !this.viewer_state.hits_media(e.position()) {
+                                    return;
+                                }
+                                if e.click_count() >= 2 {
                                     this.toggle_viewer_zoom(cx);
+                                } else if is_video
+                                    && !this.video.in_pip
+                                    && this.slideshow.is_none()
+                                    && this.edits.session.is_none()
+                                {
+                                    // A single click plays or pauses, like
+                                    // QuickTime. Not while PiP owns the
+                                    // player or a slideshow/edit holds the
+                                    // stage.
+                                    this.toggle_video_play(cx);
                                 }
                             }));
                         if is_zoomed {
@@ -422,6 +433,9 @@ impl ViewerViewport {
                                 .child(render_icon(Icon::Play, px(28.0), theme::t1()))
                                 .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
                                     this.toggle_video_play(cx);
+                                    // The badge sits on the picture, whose own
+                                    // click toggles too; one click, one toggle.
+                                    cx.stop_propagation();
                                 }))
                                 .into_any_element()
                         } else {
