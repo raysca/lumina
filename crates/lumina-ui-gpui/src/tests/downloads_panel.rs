@@ -37,6 +37,7 @@ fn queue(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, urls: &[&str]) {
 
 const A: &str = "https://example.com/a.mp4";
 const B: &str = "https://example.com/b.mp4";
+const C: &str = "https://example.com/c.mp4";
 
 #[core::prelude::v1::test]
 fn toolbar_icon_hidden_without_downloads() {
@@ -285,10 +286,17 @@ fn clear_finished_keeps_active_rows() {
     let (_dir, engine, fake, mut cx) = queue_app("dlp_clear");
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     install(&view, vcx, &fake);
-    queue(&view, vcx, &[A, B]);
+    queue(&view, vcx, &[A, B, C]);
     fake.finish(A, imported(&engine));
-    settle(vcx, &view, "A is done", |app| {
-        states(app).contains(&DownloadState::Done)
+    fake.finish(C, JobOutcome::Failed("The connection dropped".into()));
+    settle(vcx, &view, "A is done and C failed", |app| {
+        states(app).contains(&DownloadState::Done) && states(app).contains(&DownloadState::Failed)
+    });
+    settle(vcx, &view, "both outcomes are stored", |_| {
+        persisted(&engine).len() == 3
+            && persisted(&engine)
+                .iter()
+                .any(|(_, s)| *s == DownloadState::Failed)
     });
     view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
     render_ui(vcx);
@@ -296,12 +304,16 @@ fn clear_finished_keeps_active_rows() {
     view.update(vcx, |app, _| {
         assert_eq!(
             states(app),
-            [DownloadState::Running],
-            "only finished rows go"
+            [DownloadState::Running, DownloadState::Failed],
+            "the Earlier head's Clear removes only Earlier rows; the failed row above stays for Retry"
         );
     });
     settle(vcx, &view, "the clear is stored", |_| {
-        persisted(&engine) == [(B.to_string(), DownloadState::Running)]
+        persisted(&engine)
+            == [
+                (B.to_string(), DownloadState::Running),
+                (C.to_string(), DownloadState::Failed),
+            ]
     });
 }
 
@@ -369,15 +381,16 @@ fn keyboard_focus_scrolls_into_view() {
     render_ui(vcx);
     let last = view.update(vcx, |app, _| app.downloads.focused.unwrap());
     assert_eq!(last, 2_039, "focus reached the last row");
-    let panel = vcx
-        .debug_bounds("downloads-panel")
-        .expect("the list paints");
+    let body = vcx
+        .debug_bounds("downloads-panel-body")
+        .expect("the scroll body paints");
     let row = vcx
         .debug_bounds(leak(format!("download-row-{last}")))
         .expect("the focused row paints");
     assert!(
-        row.top() >= panel.top() && row.bottom() <= panel.bottom(),
-        "the focused row is scrolled into view: {row:?} in {panel:?}"
+        row.top() >= body.top() && row.bottom() <= body.bottom(),
+        "the focused row is scrolled into the body, not under the header or footer: \
+         {row:?} in {body:?}"
     );
 }
 
@@ -497,4 +510,128 @@ fn downloads_badge_and_dot_sit_on_the_34px_button() {
         vcx.debug_bounds("downloads-failure-dot").is_none(),
         "opening the list clears the dot"
     );
+}
+
+#[core::prelude::v1::test]
+fn downloads_popover_shell() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_shell");
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    install(&view, vcx, &fake);
+    queue(&view, vcx, &[A, B]);
+    fake.finish(A, imported(&engine));
+    settle(vcx, &view, "A is done", |app| {
+        states(app).contains(&DownloadState::Done)
+    });
+    view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
+    render_ui(vcx);
+
+    let window = vcx.update(|window, _| window.viewport_size());
+    let panel = vcx
+        .debug_bounds("downloads-panel")
+        .expect("the popover paints");
+    let button = vcx
+        .debug_bounds("downloads-toolbar-btn")
+        .expect("the button paints");
+    assert_eq!(panel.size.width, gpui::px(420.0), "the popover is 420 wide");
+    assert!(
+        panel.size.height <= gpui::px(550.0),
+        "the popover is at most 550 tall: {panel:?}"
+    );
+    assert!(
+        (panel.right() - button.right()).abs() <= gpui::px(1.0),
+        "the button anchors the popover's right edge: {panel:?} under {button:?}"
+    );
+    // The frame's "right 28" is where its button sits; the button anchors
+    // the popover, wherever the header puts it.
+    assert!(
+        panel.right() <= window.width,
+        "the popover stays inside the window: {panel:?} in {window:?}"
+    );
+    let header = vcx
+        .debug_bounds("downloads-header")
+        .expect("the header paints");
+    assert!(
+        vcx.debug_bounds("downloads-header-count-text:1 active")
+            .is_some(),
+        "the header pill reads \"1 active\""
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.running_or_waiting_count(), 1, "\"1 active\" counts B")
+    });
+    assert!(
+        vcx.debug_bounds("downloads-header-resume").is_none(),
+        "no Resume all while something runs"
+    );
+    assert!(
+        vcx.debug_bounds("downloads-header-settings").is_none(),
+        "the settings button waits for Design 15"
+    );
+    let head = vcx
+        .debug_bounds("downloads-earlier-head")
+        .expect("the Earlier head paints");
+    let clear = vcx
+        .debug_bounds("downloads-clear-finished")
+        .expect("Clear paints");
+    assert!(
+        head.left() <= clear.left()
+            && clear.right() <= head.right()
+            && head.top() <= clear.top()
+            && clear.bottom() <= head.bottom(),
+        "Clear lives in the Earlier head: {clear:?} in {head:?}"
+    );
+    let footer = vcx
+        .debug_bounds("downloads-show-all")
+        .expect("the footer paints");
+    assert!(
+        header.bottom() <= head.top() && head.bottom() <= footer.top(),
+        "header on top, footer at the bottom"
+    );
+    for gone in ["downloads-resume-all", "downloads-show-album"] {
+        assert!(
+            vcx.debug_bounds(gone).is_none(),
+            "{gone} moved to the header or the Downloads screen"
+        );
+    }
+
+    // Pause all, then the same button resumes all.
+    click(vcx, "downloads-header-pause");
+    view.update(vcx, |app, _| {
+        assert_eq!(running(app), 0, "the header's pause pauses all")
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("downloads-header-pause").is_none(),
+        "pause turns into Resume all once nothing runs"
+    );
+    click(vcx, "downloads-header-resume");
+    settle(vcx, &view, "Resume all requeues the paused row", |app| {
+        running(app) == 1
+    });
+
+    click(vcx, "downloads-show-all");
+    view.update(vcx, |app, _| {
+        assert!(!app.downloads.open, "Show all downloads closes the popover");
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::Downloads,
+            "and opens the Downloads screen"
+        );
+    });
+    view.update(vcx, |app, cx| {
+        app.select_album(crate::views::sidebar::AlbumSelection::AllLibrary, cx);
+        app.toggle_downloads_panel(cx);
+    });
+    render_ui(vcx);
+    click(vcx, "downloads-header-expand");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.downloads.open,
+            "the header's expand closes the popover"
+        );
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::Downloads,
+            "and opens the Downloads screen too"
+        );
+    });
 }

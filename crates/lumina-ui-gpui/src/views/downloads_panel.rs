@@ -1,5 +1,5 @@
 //! The downloads dropdown under the toolbar button: Downloading, Waiting,
-//! Paused, Failed and Done, each row with its status and actions.
+//! Paused, Failed and Earlier, each row with its status and actions.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -9,6 +9,7 @@ use lumina_core::DownloadState;
 use crate::app::downloads::{DownloadEntry, DownloadSurface};
 use crate::app::types::format_bytes;
 use crate::theme;
+use crate::views::downloads_popover;
 use crate::LuminaApp;
 
 /// "2 min left", from what is left and the current speed.
@@ -256,7 +257,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         .into_any_element()
 }
 
-/// The downloads list card: 320 wide, at most 60% of the window high.
+/// The downloads popover: 420 wide (less on a narrow window), at most 550
+/// high. Header and footer stay put; only the rows scroll.
 pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let first_waiting = app
         .downloads
@@ -264,13 +266,11 @@ pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>)
         .iter()
         .find(|e| e.row.state == DownloadState::Waiting)
         .map(|e| e.row.id);
-    let any_paused = app
-        .downloads
-        .entries
-        .iter()
-        .any(|e| e.row.state == DownloadState::Paused);
+    // Each section head and row is a direct child: `scroll_to_item` counts
+    // them (`move_download_focus`), so nothing else may go in here.
     let mut body = div()
         .id("downloads-panel-body")
+        .debug_selector(|| "downloads-panel-body".to_string())
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
@@ -280,12 +280,14 @@ pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>)
         .flex_col()
         .gap_0p5();
     for (label, rows) in app.download_sections(DownloadSurface::Panel) {
-        body = body.child(
+        body = body.child(if label == "Earlier" {
+            downloads_popover::earlier_head(cx)
+        } else {
             theme::section_label(label.to_uppercase())
                 .px_2()
                 .pt_2()
-                .pb_0p5(),
-        );
+                .pb_0p5()
+        });
         for entry in rows {
             body = body.child(render_row(
                 entry,
@@ -296,73 +298,25 @@ pub fn panel_card(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaApp>)
         }
     }
 
+    let viewport = window.viewport_size();
     div()
         .debug_selector(|| "downloads-panel".to_string())
-        .w(px(320.0))
         .id("downloads-panel")
+        .role(Role::Dialog)
+        .aria_label(crate::i18n::t("downloads.title"))
         .occlude()
-        .max_h(window.viewport_size().height * 0.6)
+        .w(px(420.0).min(viewport.width - px(32.0)))
+        // Room for the toolbar above it.
+        .max_h(px(550.0).min(viewport.height - px(80.0)))
         .bg(theme::bg_1())
         .border_1()
-        .border_color(theme::line())
-        .rounded(theme::RADIUS_LG)
+        .border_color(theme::line_2())
+        .rounded(px(14.0))
         .shadow_2xl()
+        .overflow_hidden()
         .flex()
         .flex_col()
-        // Each label and row is a direct child: `scroll_to_item`
-        // counts them.
+        .child(downloads_popover::header(app, cx))
         .child(body)
-        .child(
-            div()
-                .flex_shrink_0()
-                .flex()
-                .flex_row()
-                .justify_between()
-                .px_3()
-                .py_2()
-                .border_t_1()
-                .border_color(theme::line())
-                .text_xs()
-                .child(
-                    div()
-                        .id("downloads-clear-finished")
-                        .debug_selector(|| "downloads-clear-finished".to_string())
-                        .cursor_pointer()
-                        .text_color(theme::accent())
-                        .child("Clear finished")
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.clear_finished_downloads(cx);
-                        })),
-                )
-                .when(any_paused, |el| {
-                    el.child(
-                        div()
-                            .id("downloads-resume-all")
-                            .debug_selector(|| "downloads-resume-all".to_string())
-                            .cursor_pointer()
-                            .text_color(theme::accent())
-                            .child("Resume all")
-                            .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                                this.resume_all_downloads(cx);
-                            })),
-                    )
-                })
-                .child(
-                    div()
-                        .id("downloads-show-album")
-                        .debug_selector(|| "downloads-show-album".to_string())
-                        .cursor_pointer()
-                        .text_color(theme::accent())
-                        .child("Show Downloaded")
-                        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
-                            this.close_downloads_panel(cx);
-                            this.select_album(
-                                crate::views::sidebar::AlbumSelection::System(
-                                    lumina_core::SystemAlbum::Downloaded,
-                                ),
-                                cx,
-                            );
-                        })),
-                ),
-        )
+        .child(downloads_popover::footer(cx))
 }

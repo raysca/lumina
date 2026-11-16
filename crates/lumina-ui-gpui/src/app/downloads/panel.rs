@@ -83,7 +83,7 @@ const PANEL_SECTIONS: [(&str, &[DownloadState]); 5] = [
     ("Waiting", &[DownloadState::Waiting]),
     ("Paused", &[DownloadState::Paused]),
     ("Failed", &[DownloadState::Failed]),
-    ("Done", &[DownloadState::Done, DownloadState::Duplicate]),
+    ("Earlier", &[DownloadState::Done, DownloadState::Duplicate]),
 ];
 
 /// The screen's sections, top to bottom, by selector key.

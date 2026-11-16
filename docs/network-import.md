@@ -43,12 +43,15 @@ A toolbar icon appears once the library has any downloads: a count of the
 ones downloading, waiting or paused, a ring for their combined progress, and
 a red dot when one failed since the list was last opened. ⌥⌘L, View > Show
 Downloads and the command palette open it too. The list groups rows into
-Downloading, Waiting, Paused, Failed and Done. In it, ↑/↓ move, ↵ retries a
-failed row, pauses a downloading one, resumes a paused one or shows a
-finished one in the library (⌘↵ downloads an "already in your library" row
-again), ⌫ cancels or removes a row, and Esc closes it. Finished rows stay
-until Clear finished. Pasting a link already in the list highlights its row
-instead of adding it again. The command palette has Pause All Downloads,
+Downloading, Waiting, Paused, Failed and Earlier, under a header with Pause
+all (Resume all when nothing runs and something is paused) and a button for
+the Downloads screen; "Show all downloads" at the bottom opens it too. In
+it, ↑/↓ move, ↵ retries a failed row, pauses a downloading one, resumes a
+paused one or shows a finished one in the library (⌘↵ downloads an
+"already in your library" row again), ⌫ cancels or removes a row, and Esc
+closes it. Finished rows stay until Clear in the Earlier head (finished
+rows only; failed ones stay for Retry) or Clear finished. Pasting a link already in the list highlights its row instead of
+adding it again. The command palette has Pause All Downloads,
 Resume All Downloads and Clear Finished Downloads, each listed only when
 there is something to act on.
 
