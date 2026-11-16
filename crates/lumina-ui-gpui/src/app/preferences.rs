@@ -110,6 +110,75 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// The General TopBar's Reset to defaults and ⌘K Reset Settings to
+    /// Defaults: settings (General) with the confirmation over them.
+    pub fn prompt_reset_preferences(&mut self, cx: &mut Context<Self>) {
+        if !self.preferences_open {
+            self.open_preferences(cx);
+        }
+        // Still closed: an edit draft has the keys.
+        if self.preferences_open {
+            self.preferences_tab = PreferencesTab::General;
+            self.preferences_reset_confirm = true;
+        }
+        cx.notify();
+    }
+
+    pub fn cancel_reset_preferences(&mut self, cx: &mut Context<Self>) {
+        self.preferences_reset_confirm = false;
+        cx.notify();
+    }
+
+    /// Puts the UI preferences back to their defaults, live and saved (see
+    /// [`crate::config::AppConfig::reset_ui_preferences`]). A failed save
+    /// puts every value back and shows the error banner.
+    pub fn confirm_reset_preferences(&mut self, cx: &mut Context<Self>) {
+        self.preferences_reset_confirm = false;
+        let mut before = self.config.clone();
+        self.layout_into(&mut before);
+        let mut reset = before.clone();
+        reset.reset_ui_preferences();
+        self.apply_ui_preferences(reset, cx);
+        if self.save_config() {
+            self.set_last_action("Settings reset to defaults");
+        } else {
+            self.apply_ui_preferences(before, cx);
+        }
+        cx.notify();
+    }
+
+    /// Copies the live layout (panels, grid density, sort) into `cfg`, as a
+    /// save writes it.
+    pub(crate) fn layout_into(&self, cfg: &mut crate::config::AppConfig) {
+        cfg.sidebar_width = self.sidebar_width;
+        cfg.inspector_width = self.inspector_width;
+        cfg.sidebar_visible = !self.sidebar_collapsed;
+        cfg.inspector_visible = self.inspector_open;
+        cfg.grid_columns = self.grid_columns.clamp(2, 8);
+        cfg.card_fit_mode = self.card_fit_mode;
+        cfg.sort_field = Some(self.sort.field_key().to_string());
+        cfg.sort_direction = Some(self.sort.direction_key().to_string());
+    }
+
+    /// Makes `cfg` the config and the live layout follow it. A new sort
+    /// reorders the grid, so the position-based selection is cleared.
+    fn apply_ui_preferences(&mut self, cfg: crate::config::AppConfig, cx: &mut Context<Self>) {
+        self.config = cfg;
+        self.sidebar_width = self.config.sidebar_width;
+        self.inspector_width = self.config.inspector_width;
+        self.sidebar_collapsed = !self.config.sidebar_visible;
+        // The View menu names what Show/Hide Sidebar will do next.
+        cx.set_menus(crate::menus::build_menus(self.sidebar_collapsed));
+        self.inspector_open = self.config.inspector_visible;
+        self.grid_columns = crate::views::search_bar::ladder_columns(self.config.grid_columns);
+        self.card_fit_mode = self.config.card_fit_mode;
+        let sort = self.config.restored_sort();
+        if sort != self.sort {
+            self.sort = sort;
+            self.clear_selection(cx);
+        }
+    }
+
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
         // Its sheet would take the keys over an open draft (Done/Cancel).
         if self.edits.session.is_some() {

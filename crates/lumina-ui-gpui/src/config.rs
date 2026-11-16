@@ -673,6 +673,29 @@ impl AppConfig {
         base.join("lumina").join("config.json")
     }
 
+    /// Settings › Reset to defaults: the UI preferences (panel widths and
+    /// visibility, grid density and fit, sort, browse layout and grouping,
+    /// album order and panel, Default view on launch) go back to their
+    /// defaults. The library, recents, resume points, restored session,
+    /// window bounds, inspector tab, editor, playback, slideshow and
+    /// templates are kept: they are the user's data or where they left off.
+    pub fn reset_ui_preferences(&mut self) {
+        let d = Self::default();
+        self.sidebar_width = d.sidebar_width;
+        self.inspector_width = d.inspector_width;
+        self.sidebar_visible = d.sidebar_visible;
+        self.inspector_visible = d.inspector_visible;
+        self.grid_columns = d.grid_columns;
+        self.card_fit_mode = d.card_fit_mode;
+        self.sort_field = d.sort_field;
+        self.sort_direction = d.sort_direction;
+        self.browse_layout = d.browse_layout;
+        self.group_level = d.group_level;
+        self.album_sort = d.album_sort;
+        self.album_panel_hidden = d.album_panel_hidden;
+        self.launch_view = d.launch_view;
+    }
+
     #[cfg_attr(test, allow(dead_code))] // production startup path only
     pub fn load() -> Self {
         Self::load_from(&Self::config_path())

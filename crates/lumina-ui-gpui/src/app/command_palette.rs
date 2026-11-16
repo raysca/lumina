@@ -19,6 +19,8 @@ pub enum CommandId {
     OpenLibrary,
     Rescan,
     Preferences,
+    /// Settings › Reset to defaults (asks first).
+    ResetPreferences,
     About,
     ShowLicense,
     ShowAcknowledgements,
@@ -207,6 +209,7 @@ impl Command {
         match self.id {
             OpenLibrary => Icon::Folder,
             Rescan => Icon::RotateCw,
+            ResetPreferences => Icon::RefreshCw,
             Preferences | SortDate | SortName | SortSize | SortRating | SortAsc | SortDesc => {
                 Icon::Sliders
             }
@@ -411,6 +414,12 @@ pub fn commands() -> &'static [Command] {
             key: "command.preferences",
             shortcut: "⌘,",
             keywords: "settings config cache",
+        },
+        Command {
+            id: CommandId::ResetPreferences,
+            key: "command.reset_preferences",
+            shortcut: "",
+            keywords: "settings preferences restore default layout sort sidebar columns",
         },
         Command {
             id: CommandId::About,
@@ -1732,6 +1741,7 @@ impl LuminaApp {
             CommandId::OpenLibrary => self.pick_folder_dialog(cx),
             CommandId::Rescan => self.rescan_library(cx),
             CommandId::Preferences => self.open_preferences(cx),
+            CommandId::ResetPreferences => self.prompt_reset_preferences(cx),
             CommandId::About => self.open_about(cx),
             CommandId::ShowLicense => self.open_bundled_doc("LICENSE", cx),
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),

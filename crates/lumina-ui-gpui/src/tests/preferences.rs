@@ -2,7 +2,8 @@
 //! category, and it fits a small window.
 
 use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
+    app_with_library, click, click_point, focus_app, keystrokes, leak, render_ui, seed_library,
+    type_text,
 };
 use crate::app::preferences::{thumbnail_cache_dir, CacheUsage, PreferencesTab};
 
@@ -605,6 +606,342 @@ fn general_shows_general_rows_and_launch_view() {
             "the failure is in the error banner"
         );
     });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// UI preferences away from their defaults, plus library, session and
+/// editor values Reset must keep.
+fn changed_config() -> crate::config::AppConfig {
+    use crate::config::{AlbumSort, AppConfig, BrowseLayout, GroupLevel, LaunchView};
+    AppConfig {
+        sidebar_width: 320.0,
+        inspector_width: 360.0,
+        sidebar_visible: false,
+        inspector_visible: true,
+        grid_columns: 6,
+        card_fit_mode: false,
+        sort_field: Some("name".into()),
+        sort_direction: Some("asc".into()),
+        browse_layout: BrowseLayout::Mosaic,
+        group_level: GroupLevel::Months,
+        album_sort: AlbumSort::Created,
+        album_panel_hidden: true,
+        launch_view: LaunchView::Library,
+        last_library_path: Some("/nonexistent/lumina-reset-test/Library".into()),
+        recent_libraries: vec![
+            "/nonexistent/lumina-reset-test/Library".into(),
+            "/nonexistent/lumina-reset-test/Other".into(),
+        ],
+        external_editor: Some("com.example.editor".into()),
+        last_view: Some("favorites".into()),
+        slideshow_interval_secs: 10,
+        video_speed: Some(1.5),
+        ..AppConfig::default()
+    }
+}
+
+/// The UI preferences, live and in the config, as Reset sees them.
+#[derive(Debug, PartialEq)]
+struct UiPrefs {
+    sidebar_width: f32,
+    inspector_width: f32,
+    sidebar_collapsed: bool,
+    inspector_open: bool,
+    grid_columns: usize,
+    card_fit_mode: bool,
+    sort: lumina_core::SortSpec,
+    browse_layout: crate::config::BrowseLayout,
+    group_level: crate::config::GroupLevel,
+    album_sort: crate::config::AlbumSort,
+    album_panel_hidden: bool,
+    launch_view: crate::config::LaunchView,
+}
+
+fn ui_prefs(
+    view: &gpui::Entity<crate::app::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+) -> UiPrefs {
+    view.update(vcx, |app, _| UiPrefs {
+        sidebar_width: app.sidebar_width,
+        inspector_width: app.inspector_width,
+        sidebar_collapsed: app.sidebar_collapsed,
+        inspector_open: app.inspector_open,
+        grid_columns: app.grid_columns,
+        card_fit_mode: app.card_fit_mode,
+        sort: app.sort,
+        browse_layout: app.config.browse_layout,
+        group_level: app.config.group_level,
+        album_sort: app.config.album_sort,
+        album_panel_hidden: app.config.album_panel_hidden,
+        launch_view: app.config.launch_view,
+    })
+}
+
+/// What `AppConfig::default()` means for the live UI.
+fn default_prefs() -> UiPrefs {
+    let d = crate::config::AppConfig::default();
+    UiPrefs {
+        sidebar_width: d.sidebar_width,
+        inspector_width: d.inspector_width,
+        sidebar_collapsed: !d.sidebar_visible,
+        inspector_open: d.inspector_visible,
+        grid_columns: d.grid_columns,
+        card_fit_mode: d.card_fit_mode,
+        sort: d.restored_sort(),
+        browse_layout: d.browse_layout,
+        group_level: d.group_level,
+        album_sort: d.album_sort,
+        album_panel_hidden: d.album_panel_hidden,
+        launch_view: d.launch_view,
+    }
+}
+
+/// The values Reset must never touch.
+fn kept_values(
+    view: &gpui::Entity<crate::app::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+) -> serde_json::Value {
+    view.update(vcx, |app, _| {
+        let c = &app.config;
+        serde_json::json!({
+            "last_library_path": c.last_library_path,
+            "recent_libraries": c.recent_libraries,
+            "external_editor": c.external_editor,
+            "last_view": c.last_view,
+            "slideshow_interval_secs": c.slideshow_interval_secs,
+            "video_speed": c.video_speed,
+            "resume_library": c.resume_library,
+            "templates": c.templates.len(),
+        })
+    })
+}
+
+/// The View menu's action titles, as the menu bar shows them.
+fn view_menu_items(vcx: &mut gpui::VisualTestContext) -> Vec<String> {
+    vcx.update(|_, cx| {
+        cx.get_menus()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.name.as_ref() == "View")
+            .flat_map(|m| m.items)
+            .filter_map(|item| match item {
+                gpui::OwnedMenuItem::Action { name, .. } => Some(name.to_string()),
+                _ => None,
+            })
+            .collect()
+    })
+}
+
+fn reset_dialog_shown(vcx: &mut gpui::VisualTestContext) -> bool {
+    render_ui(vcx);
+    vcx.debug_bounds("settings-reset-dialog").is_some()
+}
+
+#[core::prelude::v1::test]
+fn reset_to_defaults_asks_then_resets_ui_preferences_only() {
+    let (temp_dir, engine) = seed_library("settings_reset", 2);
+    crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    let before = ui_prefs(&view, vcx);
+    let kept = kept_values(&view, vcx);
+    assert_ne!(
+        before,
+        default_prefs(),
+        "the test starts away from the defaults"
+    );
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    let reset = vcx
+        .debug_bounds("settings-reset")
+        .expect("General's TopBar shows Reset to defaults");
+    let header = vcx.debug_bounds("page-header").expect("the TopBar renders");
+    assert!(
+        header.contains(&reset.center()),
+        "settings-reset sits in the TopBar actions"
+    );
+    assert_eq!(f32::from(reset.size.height), 32.0, "the button is 32 tall");
+
+    click(vcx, "settings-reset");
+    assert!(reset_dialog_shown(vcx), "Reset asks first");
+    assert_eq!(ui_prefs(&view, vcx), before, "asking changes nothing");
+    click(vcx, "settings-reset-cancel");
+    assert!(!reset_dialog_shown(vcx), "Cancel closes the confirmation");
+    assert_eq!(ui_prefs(&view, vcx), before, "Cancel changes nothing");
+
+    click(vcx, "settings-reset");
+    assert!(reset_dialog_shown(vcx));
+    keystrokes(vcx, "escape");
+    assert!(!reset_dialog_shown(vcx), "Esc closes the confirmation");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.preferences_open,
+            "Esc in the confirmation keeps settings open"
+        )
+    });
+    assert_eq!(ui_prefs(&view, vcx), before, "Esc changes nothing");
+
+    click(vcx, "settings-reset");
+    assert!(reset_dialog_shown(vcx));
+    let backdrop = vcx
+        .debug_bounds("settings-reset-backdrop")
+        .expect("the confirmation has a dismiss backdrop");
+    let card = vcx
+        .debug_bounds("settings-reset-dialog")
+        .expect("the confirmation card renders");
+    // A point on the backdrop, outside the card.
+    click_point(
+        vcx,
+        f32::from(backdrop.left()) + 8.0,
+        f32::from(card.top()) / 2.0,
+    );
+    assert!(
+        !reset_dialog_shown(vcx),
+        "a backdrop click closes the confirmation"
+    );
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "a backdrop click keeps settings open")
+    });
+    assert_eq!(
+        ui_prefs(&view, vcx),
+        before,
+        "a backdrop click changes nothing"
+    );
+
+    // Sort changes reorder the grid: a position-based selection must go.
+    view.update(vcx, |app, cx| app.select_index(0, cx));
+    assert!(
+        view.update(vcx, |app, _| app.selected_index.is_some()),
+        "the test selects an item first"
+    );
+    click(vcx, "settings-reset");
+    click(vcx, "settings-reset-confirm");
+    assert!(!reset_dialog_shown(vcx), "Reset closes the confirmation");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.selected_index.is_none() && app.selected_indices.is_empty(),
+            "a reset that changes the sort clears the selection (AGENTS §5.3)"
+        )
+    });
+    assert!(
+        view_menu_items(vcx).iter().any(|n| n == "Hide Sidebar"),
+        "the View menu follows the reset (sidebar shown): {:?}",
+        view_menu_items(vcx)
+    );
+    assert_eq!(
+        ui_prefs(&view, vcx),
+        default_prefs(),
+        "Reset puts the UI preferences, live and saved, back to the defaults"
+    );
+    view.update(vcx, |app, _| {
+        let d = crate::config::AppConfig::default();
+        assert_eq!(
+            (app.config.sidebar_width, app.config.grid_columns),
+            (d.sidebar_width, d.grid_columns),
+            "the config the next save writes holds the defaults too"
+        );
+        assert!(app.error_message.is_none(), "a good save shows no error");
+    });
+    assert_eq!(
+        kept_values(&view, vcx),
+        kept,
+        "library, recents, session, editor and playback settings are kept"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn reset_to_defaults_by_keyboard() {
+    let (temp_dir, engine) = seed_library("settings_reset_keys", 2);
+    crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    let before = ui_prefs(&view, vcx);
+    let palette_reset = |vcx: &mut gpui::VisualTestContext| {
+        keystrokes(vcx, "secondary-k");
+        type_text(vcx, "reset settings");
+        keystrokes(vcx, "enter");
+    };
+
+    palette_reset(vcx);
+    assert!(
+        reset_dialog_shown(vcx),
+        "⌘K Reset Settings to Defaults opens settings with the confirmation"
+    );
+    // The confirmation takes every key: no category or segment moves under it.
+    keystrokes(vcx, "down left secondary-backspace");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.preferences_open,
+            "settings are open behind the confirmation"
+        );
+        assert_eq!(
+            app.preferences_tab,
+            PreferencesTab::General,
+            "↓ is absorbed"
+        );
+        assert!(app.delete_confirm_state.is_none(), "⌘⌫ is absorbed");
+    });
+    assert_eq!(ui_prefs(&view, vcx), before, "absorbed keys change nothing");
+    keystrokes(vcx, "escape");
+    assert!(!reset_dialog_shown(vcx), "Esc cancels");
+    assert_eq!(ui_prefs(&view, vcx), before, "Esc changes nothing");
+
+    keystrokes(vcx, "escape");
+    palette_reset(vcx);
+    assert!(reset_dialog_shown(vcx));
+    keystrokes(vcx, "enter");
+    assert!(!reset_dialog_shown(vcx), "↵ confirms");
+    assert_eq!(ui_prefs(&view, vcx), default_prefs(), "↵ resets");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn reset_to_defaults_reverts_when_the_save_fails() {
+    let (temp_dir, engine) = seed_library("settings_reset_fails", 2);
+    crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    let before = ui_prefs(&view, vcx);
+    let kept = kept_values(&view, vcx);
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    click(vcx, "settings-reset");
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    click(vcx, "settings-reset-confirm");
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+    assert_eq!(
+        ui_prefs(&view, vcx),
+        before,
+        "a failed save puts every preference back, live and in the config (AGENTS §2)"
+    );
+    assert_eq!(kept_values(&view, vcx), kept, "kept values stay kept");
+    assert!(
+        view_menu_items(vcx).iter().any(|n| n == "Show Sidebar"),
+        "the View menu follows the revert (sidebar hidden): {:?}",
+        view_menu_items(vcx)
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message.is_some(),
+            "the failure is in the error banner"
+        );
+    });
+    assert!(
+        !reset_dialog_shown(vcx),
+        "the confirmation closes either way"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

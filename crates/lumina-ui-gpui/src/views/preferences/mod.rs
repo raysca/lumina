@@ -1,11 +1,12 @@
 //! Settings: a full-window page with its own category sidebar, a TopBar per
 //! category and scrolling grouped label/value/action rows.
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::app::preferences::PreferencesTab;
 use crate::app::LuminaApp;
-use crate::icons::Icon;
+use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::{header_icon_button, page_header};
 
@@ -65,6 +66,32 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.close_preferences(cx);
         }));
+    // Reset puts no Storage or About value back, so it is General's alone.
+    let actions = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(8.0))
+        .when(tab == PreferencesTab::General, |s| {
+            s.child(reset_button(cx))
+        })
+        .child(close);
+    let confirm = if app.preferences_reset_confirm {
+        crate::views::smart_album_delete::confirm_dialog(
+            "settings-reset",
+            "Reset settings to defaults?".into(),
+            "Panels, grid size, sort orders, layout and grouping, and the view on \
+             launch go back to how they first were. Your library and files are not \
+             affected."
+                .into(),
+            ("Cancel".into(), "Reset".into()),
+            LuminaApp::cancel_reset_preferences,
+            LuminaApp::confirm_reset_preferences,
+            cx,
+        )
+    } else {
+        Empty.into_any_element()
+    };
 
     div()
         .id("settings-page")
@@ -85,7 +112,7 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .flex_col()
                 // The library's banner is hidden under this page.
                 .child(app.render_error_banner(cx))
-                .child(page_header(Empty, label, Some(meta.into()), close, false))
+                .child(page_header(Empty, label, Some(meta.into()), actions, false))
                 .child(
                     div()
                         .id("preferences-body")
@@ -100,7 +127,39 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                         .child(content),
                 ),
         )
+        .child(confirm)
         .into_any_element()
+}
+
+/// The General TopBar's "Reset to defaults" (h 32, r 8, `bg_2`, line
+/// outline, refresh icon, 12.5).
+fn reset_button(cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    div()
+        .id("settings-reset")
+        .debug_selector(|| "settings-reset".to_string())
+        .role(Role::Button)
+        .aria_label(SharedString::from("Reset to defaults"))
+        .h(px(32.0))
+        .px(px(12.0))
+        .flex_shrink_0()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .rounded(px(8.0))
+        .border_1()
+        .border_color(theme::line())
+        .bg(theme::bg_2())
+        .hover(|s| s.bg(theme::bg_3()))
+        .whitespace_nowrap()
+        .text_size(px(12.5))
+        .text_color(theme::t1())
+        .cursor_pointer()
+        .child(render_icon(Icon::RefreshCw, px(14.0), theme::t2()))
+        .child("Reset to defaults")
+        .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
+            this.prompt_reset_preferences(cx);
+        }))
 }
 
 /// The 252 px category sidebar: wordmark, "SETTINGS" and one nav item per

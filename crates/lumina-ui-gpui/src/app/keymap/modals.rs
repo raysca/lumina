@@ -73,6 +73,15 @@ impl LuminaApp {
         // 0b. Settings: every other key stays here, so library shortcuts
         // never act on the hidden library. ⌘, toggles it.
         if self.preferences_open {
+            // Reset to defaults asks first; its card takes every key.
+            if self.preferences_reset_confirm {
+                match key {
+                    "escape" => self.cancel_reset_preferences(cx),
+                    "enter" | "return" => self.confirm_reset_preferences(cx),
+                    _ => {}
+                }
+                return true;
+            }
             match key {
                 "escape" => self.close_preferences(cx),
                 "," if cmd_or_ctrl => self.close_preferences(cx),

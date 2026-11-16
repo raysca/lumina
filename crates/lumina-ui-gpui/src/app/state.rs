@@ -528,6 +528,8 @@ pub struct LuminaApp {
     pub preferences_cache: Option<crate::app::preferences::CacheUsage>,
     /// Inline "Cleared" after Clear Cache; reset when Preferences reopens.
     pub preferences_cache_cleared: bool,
+    /// Settings › Reset to defaults is asking for confirmation.
+    pub preferences_reset_confirm: bool,
     /// When the last scan finished in this session (not persisted).
     pub last_scan_at: Option<std::time::Instant>,
     pub command_palette_open: bool,
@@ -743,6 +745,7 @@ impl LuminaApp {
             preferences_tab: crate::app::preferences::PreferencesTab::General,
             preferences_cache: None,
             preferences_cache_cleared: false,
+            preferences_reset_confirm: false,
             last_scan_at: None,
             command_palette_open: false,
             command_query: String::new(),
@@ -835,15 +838,8 @@ impl LuminaApp {
         #[cfg(not(test))]
         {
             let mut cfg = self.config.clone();
-            cfg.sidebar_width = self.sidebar_width;
-            cfg.inspector_width = self.inspector_width;
-            cfg.sidebar_visible = !self.sidebar_collapsed;
-            cfg.inspector_visible = self.inspector_open;
-            cfg.grid_columns = self.grid_columns.clamp(2, 8);
-            cfg.card_fit_mode = self.card_fit_mode;
+            self.layout_into(&mut cfg);
             cfg.inspector_tab = Some(self.inspector_tab.config_key().to_string());
-            cfg.sort_field = Some(self.sort.field_key().to_string());
-            cfg.sort_direction = Some(self.sort.direction_key().to_string());
             // Keep the on-disk session intact until the startup restore has been
             // applied; otherwise a window-bounds save during the initial scan could
             // overwrite it before it is used.

@@ -284,6 +284,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "command.open_library" => "Open Library…",
         "command.rescan" => "Rescan Library",
         "command.preferences" => "Preferences…",
+        "command.reset_preferences" => "Reset Settings to Defaults…",
         "command.about" => "About Lumina",
         "command.empty_trash" => "Empty Trash…",
         "command.restore_all" => "Restore All from Trash",
