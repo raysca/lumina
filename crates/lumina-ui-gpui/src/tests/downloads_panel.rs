@@ -444,3 +444,57 @@ fn downloads_row_follows_the_queue() {
         );
     });
 }
+
+/// True when `outer` covers the point (`x`, `y`).
+fn covers(outer: gpui::Bounds<gpui::Pixels>, x: gpui::Pixels, y: gpui::Pixels) -> bool {
+    outer.left() <= x && x <= outer.right() && outer.top() <= y && y <= outer.bottom()
+}
+
+#[core::prelude::v1::test]
+fn downloads_badge_and_dot_sit_on_the_34px_button() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_badge_dot");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    queue(&view, vcx, &[A, B]);
+    let button = vcx
+        .debug_bounds("downloads-toolbar-btn")
+        .expect("the button paints");
+    let badge = vcx
+        .debug_bounds("downloads-badge")
+        .expect("the badge paints");
+    assert!(
+        covers(badge, button.right(), button.top()),
+        "the badge sits on the button's top-right corner: {badge:?} on {button:?}"
+    );
+    assert!(
+        vcx.debug_bounds("downloads-failure-dot").is_none(),
+        "no failure dot before anything fails"
+    );
+
+    fake.finish(A, JobOutcome::Failed("This video is private".into()));
+    settle(vcx, &view, "A fails", |app| app.downloads.unseen_failure);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.download_badge_count(),
+            1,
+            "the badge counts unfinished rows; the failure shows as the dot"
+        )
+    });
+    let button = vcx
+        .debug_bounds("downloads-toolbar-btn")
+        .expect("the button paints");
+    let dot = vcx
+        .debug_bounds("downloads-failure-dot")
+        .expect("a failure while the list is closed shows the dot");
+    assert!(
+        covers(dot, button.right(), button.bottom()),
+        "the dot sits on the button's bottom-right corner: {dot:?} on {button:?}"
+    );
+
+    click(vcx, "downloads-toolbar-btn");
+    assert!(
+        vcx.debug_bounds("downloads-failure-dot").is_none(),
+        "opening the list clears the dot"
+    );
+}
