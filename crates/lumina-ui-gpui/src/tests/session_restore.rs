@@ -355,3 +355,42 @@ fn a_restored_album_with_a_query_comes_back_as_library() {
     });
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Starts the app from a config whose last view is Favorites.
+fn launch_with(view_on_launch: crate::config::LaunchView, name: &str) -> AlbumSelection {
+    let (dir, engine) = seed_library(name, 4);
+    crate::app::state::TEST_CONFIG.with(|c| {
+        *c.borrow_mut() = Some(crate::config::AppConfig {
+            last_view: Some(LastView::Favorites.token()),
+            launch_view: view_on_launch,
+            ..Default::default()
+        })
+    });
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    finish_scan(&view, vcx);
+    let selection = view.update(vcx, |app, _| {
+        assert!(app.pending_restore.is_none(), "the restore ran");
+        app.selection.clone()
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    selection
+}
+
+#[core::prelude::v1::test]
+fn launch_view_library_opens_all_media_instead_of_last_view() {
+    assert_eq!(
+        launch_with(crate::config::LaunchView::Library, "launch_library"),
+        AlbumSelection::AllLibrary,
+        "Default view on launch = Library opens All Media, not the last view"
+    );
+}
+
+#[core::prelude::v1::test]
+fn launch_view_last_viewed_still_restores_last_view() {
+    assert_eq!(
+        launch_with(crate::config::LaunchView::LastViewed, "launch_last"),
+        FAVORITES,
+        "Last viewed still reopens the last view"
+    );
+}

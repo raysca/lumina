@@ -460,6 +460,30 @@ pub struct AppConfig {
     /// The user hid the album settings panel (⌘K Hide Album Settings).
     #[serde(default)]
     pub album_panel_hidden: bool,
+    /// Settings › General › Default view on launch. An unknown value reads
+    /// as Last viewed.
+    #[serde(default, deserialize_with = "lenient_launch_view")]
+    pub launch_view: LaunchView,
+}
+
+/// Where Lumina opens after a restart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchView {
+    /// All Media.
+    Library,
+    /// The view open at quit (the behaviour before this setting).
+    #[default]
+    LastViewed,
+}
+
+/// Reads `launch_view` so a hand-edited or future value falls back to Last
+/// viewed instead of failing the whole config.
+fn lenient_launch_view<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<LaunchView, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 /// The Albums overview's card order (its "Sort ▾" control).
@@ -638,6 +662,7 @@ impl Default for AppConfig {
             group_level: GroupLevel::Days,
             album_sort: AlbumSort::Name,
             album_panel_hidden: false,
+            launch_view: LaunchView::LastViewed,
         }
     }
 }
@@ -751,6 +776,17 @@ impl AppConfig {
     /// Malformed view tokens already decode to All; callers still validate user
     /// smart albums against the opened library before applying the result.
     pub fn restored_session(&self) -> RestoredSession {
+        // Default view on launch = Library: a clean All Media, with no
+        // search, year, selection or scroll position from the last session.
+        if self.launch_view == LaunchView::Library {
+            return RestoredSession {
+                view: LastView::All,
+                search_query: String::new(),
+                active_year: None,
+                selected_media_id: None,
+                scroll_anchor_id: None,
+            };
+        }
         let view = match self.last_view.as_deref() {
             Some(token) => LastView::from_token(token),
             None => LastView::All,
@@ -1490,5 +1526,81 @@ mod tests {
         );
         assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn launch_view_defaults_to_last_viewed_and_round_trips() {
+        let path = temp_config_path("launch_view");
+        std::fs::write(&path, br#"{"last_view":"favorites","grid_columns":6}"#).unwrap();
+        let mut loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.launch_view,
+            LaunchView::LastViewed,
+            "a config written before the setting keeps today's behaviour"
+        );
+        assert_eq!(loaded.restored_session().view, LastView::Favorites);
+
+        loaded.launch_view = LaunchView::Library;
+        loaded.save_to(&path).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            loaded.launch_view,
+            LaunchView::Library,
+            "the choice round-trips"
+        );
+        assert_eq!(
+            loaded.restored_session().view,
+            LastView::All,
+            "Library reopens All Media"
+        );
+        assert_eq!(loaded.grid_columns, 6, "and keeps the rest of the config");
+
+        std::fs::write(&path, br#"{"launch_view":"albums","grid_columns":6}"#).unwrap();
+        let loaded = AppConfig::load_from(&path);
+        assert_eq!(
+            (loaded.launch_view, loaded.grid_columns),
+            (LaunchView::LastViewed, 6),
+            "an unknown value reads as Last viewed without resetting the config"
+        );
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn launch_view_library_restores_a_clean_all_media() {
+        let saved = AppConfig {
+            last_view: Some(LastView::Favorites.token()),
+            last_search_query: Some("camera:sony".to_string()),
+            last_active_year: Some(2024),
+            last_selected_media_id: Some(42),
+            last_scroll_anchor_id: Some(7),
+            launch_view: LaunchView::Library,
+            ..Default::default()
+        };
+        assert_eq!(
+            saved.restored_session(),
+            RestoredSession {
+                view: LastView::All,
+                search_query: String::new(),
+                active_year: None,
+                selected_media_id: None,
+                scroll_anchor_id: None,
+            },
+            "Library opens unfiltered All Media with nothing selected"
+        );
+        let last = AppConfig {
+            launch_view: LaunchView::LastViewed,
+            ..saved
+        };
+        assert_eq!(
+            last.restored_session(),
+            RestoredSession {
+                view: LastView::Favorites,
+                search_query: "camera:sony".to_string(),
+                active_year: Some(2024),
+                selected_media_id: Some(42),
+                scroll_anchor_id: Some(7),
+            },
+            "Last viewed still restores the whole session"
+        );
     }
 }

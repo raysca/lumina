@@ -1,10 +1,12 @@
-//! Settings › General: the library rows and the external editor.
+//! Settings › General: the launch view, the library rows, the external
+//! editor and the version.
 
 use gpui::*;
 
 use super::rows::{controls, path_pill, row, row_button, section, value};
 use crate::app::preferences::ago;
 use crate::app::LuminaApp;
+use crate::config::LaunchView;
 use crate::theme;
 
 pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
@@ -18,6 +20,15 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
         .flex()
         .flex_col()
         .gap(px(14.0))
+        .child(section(
+            "GENERAL",
+            None,
+            [row(
+                "Default view on launch",
+                Some("Where Lumina opens after a restart."),
+                controls().child(launch_view_control(app, cx)),
+            )],
+        ))
         .child(section(
             "LIBRARY",
             None,
@@ -73,5 +84,53 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
             )
             .debug_selector(|| "settings-row-editor".to_string())],
         ))
+        .child(section(
+            "UPDATES",
+            Some(format!("Lumina {}", env!("CARGO_PKG_VERSION")).into()),
+            [],
+        ))
         .into_any_element()
+}
+
+/// Library or Last viewed. A radio group for VoiceOver; ←/→ pick a
+/// segment while General is shown (`app/keymap/modals.rs`).
+fn launch_view_control(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
+    let current = app.config.launch_view;
+    theme::segmented("settings-launch-view")
+        .debug_selector(|| "settings-launch-view".to_string())
+        .role(Role::RadioGroup)
+        .aria_label("Default view on launch")
+        .child(launch_view_item(
+            cx,
+            LaunchView::Library,
+            "settings-launch-view-library",
+            "Library",
+            current,
+        ))
+        .child(launch_view_item(
+            cx,
+            LaunchView::LastViewed,
+            "settings-launch-view-last",
+            "Last viewed",
+            current,
+        ))
+}
+
+fn launch_view_item(
+    cx: &mut Context<LuminaApp>,
+    view: LaunchView,
+    id: &'static str,
+    label: &'static str,
+    current: LaunchView,
+) -> Stateful<Div> {
+    let on = view == current;
+    theme::segmented_item(id, on)
+        .debug_selector(move || id.to_string())
+        .role(Role::RadioButton)
+        .aria_label(label)
+        .aria_toggled(if on { Toggled::True } else { Toggled::False })
+        .child(label)
+        .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+            this.set_launch_view(view, cx);
+        }))
 }

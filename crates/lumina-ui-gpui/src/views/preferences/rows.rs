@@ -10,12 +10,13 @@ use crate::icons::{render_icon, Icon};
 use crate::theme;
 
 /// A section: its 10/600 label (with an optional 11.5 note on the right),
-/// 9 px above a group of rows.
+/// 9 px above a group of rows. With no rows it is the label line alone.
 pub(super) fn section(
     label: &'static str,
     note: Option<SharedString>,
     rows: impl IntoIterator<Item = Div>,
 ) -> Div {
+    let rows: Vec<Div> = rows.into_iter().collect();
     div()
         .flex()
         .flex_col()
@@ -28,13 +29,16 @@ pub(super) fn section(
                 .justify_between()
                 .child(theme::section_label(label))
                 .children(note.map(|note| {
+                    let marker = note.clone();
                     div()
+                        // Tests read the note as `settings-section-note:<text>`.
+                        .debug_selector(move || format!("settings-section-note:{marker}"))
                         .text_size(px(11.5))
                         .text_color(theme::t3())
                         .child(note)
                 })),
         )
-        .child(group(rows))
+        .when(!rows.is_empty(), |s| s.child(group(rows)))
 }
 
 /// A `bg_1` card, 12 px radius, with a bottom line between its rows.

@@ -122,6 +122,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
             ("⇧⌘I", "Import…"),
             ("⌘,", "Preferences"),
             ("↑ / ↓ in Preferences", "Previous / next category"),
+            ("← / → in General", "Default view on launch"),
             ("⌘R", "Rescan library"),
             ("⌘Z / ⇧⌘Z", "Undo / redo"),
             ("⌘[ / ⌘]", "Back / Forward"),

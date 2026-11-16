@@ -276,9 +276,12 @@ currently sees little beyond the window frame. Mitigations:
   seek and show the frame itself;
 - file dialogs and menus are native/accessible. Preferences is a
   full-window page drawn by Lumina: `⌘,` opens and closes it, `↑`/`↓` move
-  between its categories (General, Storage, About), `Esc` closes it, and
-  library shortcuts do nothing while it is open. Its category items set a
-  button role and label (not yet checked with VoiceOver); its rows do not.
+  between its categories (General, Storage, About), `←`/`→` choose
+  General's Default view on launch (Library or Last viewed), `Esc` closes
+  it, and library shortcuts do nothing while it is open. Its category items
+  and row buttons set a button role and label, and Default view on launch is
+  a radio group of two labelled radio buttons (none checked with
+  VoiceOver yet).
 
 Controls that do set a role and a label (none checked with VoiceOver yet):
 

@@ -31,7 +31,7 @@ fn category(tab: PreferencesTab) -> Category {
             label: "General",
             icon: Icon::Settings,
             selector: "settings-category-general",
-            meta: "Library and external editor",
+            meta: "Launch, library and external editor",
         },
         PreferencesTab::Storage => Category {
             label: "Storage",

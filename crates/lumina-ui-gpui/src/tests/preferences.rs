@@ -517,3 +517,94 @@ fn long_library_path_truncates_inside_its_row() {
         "hovering the truncated pill shows the full path in a tooltip"
     );
 }
+
+#[core::prelude::v1::test]
+fn general_shows_general_rows_and_launch_view() {
+    use crate::config::LaunchView;
+    let (temp_dir, engine) = seed_library("settings_general", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    for selector in [
+        "settings-launch-view",
+        "settings-launch-view-library",
+        "settings-launch-view-last",
+        "preferences-choose-editor",
+        "preferences-change-library",
+        "preferences-rescan",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "General must show {selector}"
+        );
+    }
+    // The rendered note itself: a missing, hard-coded or misspelt version fails.
+    let note = leak(format!(
+        "settings-section-note:Lumina {}",
+        env!("CARGO_PKG_VERSION")
+    ));
+    assert!(
+        vcx.debug_bounds(note).is_some(),
+        "the UPDATES note names the real build version: {note}"
+    );
+    let launch =
+        |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.config.launch_view);
+    assert_eq!(
+        launch(vcx),
+        LaunchView::LastViewed,
+        "Last viewed is the default: today's behaviour"
+    );
+
+    click(vcx, "settings-launch-view-library");
+    assert_eq!(launch(vcx), LaunchView::Library, "clicking Library sets it");
+    click(vcx, "settings-launch-view-last");
+    assert_eq!(
+        launch(vcx),
+        LaunchView::LastViewed,
+        "clicking Last viewed sets it"
+    );
+
+    // Keyboard path: ←/→ pick the segment while General is shown.
+    keystrokes(vcx, "left");
+    assert_eq!(launch(vcx), LaunchView::Library, "← picks Library");
+    keystrokes(vcx, "right");
+    assert_eq!(launch(vcx), LaunchView::LastViewed, "→ picks Last viewed");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "←/→ keep settings open");
+        assert_eq!(
+            app.preferences_tab,
+            PreferencesTab::General,
+            "←/→ do not change category"
+        );
+    });
+    keystrokes(vcx, "down left");
+    assert_eq!(
+        launch(vcx),
+        LaunchView::LastViewed,
+        "← does nothing on another category"
+    );
+    keystrokes(vcx, "up");
+
+    // A failed save keeps the saved value and says so (AGENTS §2).
+    crate::app::state::SAVE_FAILS.with(|f| f.set(true));
+    keystrokes(vcx, "left");
+    click(vcx, "settings-launch-view-library");
+    crate::app::state::SAVE_FAILS.with(|f| f.set(false));
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.launch_view,
+            LaunchView::LastViewed,
+            "a failed save reverts the control"
+        );
+        assert!(
+            app.error_message.is_some(),
+            "the failure is in the error banner"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

@@ -78,6 +78,17 @@ impl LuminaApp {
                 "," if cmd_or_ctrl => self.close_preferences(cx),
                 "up" => self.step_preferences_tab(-1, cx),
                 "down" => self.step_preferences_tab(1, cx),
+                // General's one segmented control: Default view on launch.
+                "left" | "right"
+                    if self.preferences_tab == crate::app::preferences::PreferencesTab::General =>
+                {
+                    let view = if key == "left" {
+                        crate::config::LaunchView::Library
+                    } else {
+                        crate::config::LaunchView::LastViewed
+                    };
+                    self.set_launch_view(view, cx);
+                }
                 _ => {}
             }
             return true;

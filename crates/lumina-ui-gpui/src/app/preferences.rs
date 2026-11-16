@@ -96,6 +96,20 @@ fn reveal(path: &Path) {
 }
 
 impl LuminaApp {
+    /// Settings › General › Default view on launch. A failed save puts the
+    /// old choice back and shows the error banner.
+    pub fn set_launch_view(&mut self, view: crate::config::LaunchView, cx: &mut Context<Self>) {
+        let previous = self.config.launch_view;
+        if previous == view {
+            return;
+        }
+        self.config.launch_view = view;
+        if !self.save_config() {
+            self.config.launch_view = previous;
+        }
+        cx.notify();
+    }
+
     pub fn open_preferences(&mut self, cx: &mut Context<Self>) {
         // Its sheet would take the keys over an open draft (Done/Cancel).
         if self.edits.session.is_some() {
