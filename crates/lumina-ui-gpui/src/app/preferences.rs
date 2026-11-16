@@ -30,8 +30,16 @@ impl PreferencesTab {
 /// Thumbnail cache directory used by Lumina.
 pub fn thumbnail_cache_dir() -> PathBuf {
     // Tests click Clear Cache; they must never touch the real cache.
+    // Per test thread too: tests run in parallel and each clears its own.
     if cfg!(test) {
-        return std::env::temp_dir().join(format!("lumina-test-thumbs-{}", std::process::id()));
+        let thread: String = format!("{:?}", std::thread::current().id())
+            .chars()
+            .filter(char::is_ascii_digit)
+            .collect();
+        return std::env::temp_dir().join(format!(
+            "lumina-test-thumbs-{}-{thread}",
+            std::process::id()
+        ));
     }
     dirs::cache_dir()
         .unwrap_or_else(std::env::temp_dir)
@@ -46,7 +54,7 @@ pub struct CacheUsage {
     pub files: usize,
 }
 
-fn directory_usage(path: &Path) -> CacheUsage {
+pub(crate) fn directory_usage(path: &Path) -> CacheUsage {
     let mut usage = CacheUsage::default();
     let Ok(entries) = std::fs::read_dir(path) else {
         return usage;
@@ -224,6 +232,9 @@ impl LuminaApp {
         self.preferences_tab = tab;
         self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
+        if tab == PreferencesTab::Library {
+            self.refresh_library_storage(cx);
+        }
         cx.notify();
     }
 
@@ -234,8 +245,10 @@ impl LuminaApp {
 
     pub fn set_preferences_tab(&mut self, tab: PreferencesTab, cx: &mut Context<Self>) {
         self.preferences_tab = tab;
-        if tab == PreferencesTab::Storage {
-            self.refresh_cache_usage();
+        match tab {
+            PreferencesTab::Storage => self.refresh_cache_usage(),
+            PreferencesTab::Library => self.refresh_library_storage(cx),
+            _ => {}
         }
         cx.notify();
     }
@@ -269,6 +282,8 @@ impl LuminaApp {
         match result {
             Ok(()) => {
                 self.refresh_cache_usage();
+                // The Library page's card shows the cache too.
+                self.refresh_library_storage(cx);
                 self.preferences_cache_cleared = true;
                 self.set_last_action("Thumbnail cache cleared");
             }

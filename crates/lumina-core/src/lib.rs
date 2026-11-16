@@ -36,8 +36,8 @@ pub use cache::DiskCache;
 pub use catalog::{
     Album, AlbumCard, AlbumStats, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget,
     DownloadRow, DownloadState, Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload,
-    RejectedItems, Rights, TagChange, TagReplay, TemplateChange, ViewScope, ViewTotals,
-    SCHEMA_VERSION,
+    RejectedItems, Rights, StorageSummary, TagChange, TagReplay, TemplateChange, ViewScope,
+    ViewTotals, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -471,6 +471,11 @@ impl LuminaEngine {
 
     pub fn total_count(&self) -> usize {
         self.read("total count", self.catalog.total_count())
+    }
+
+    /// Bytes by kind for Settings › Library (see [`StorageSummary`]).
+    pub fn storage_summary(&self) -> StorageSummary {
+        self.read("storage summary", self.catalog.storage_summary())
     }
 
     pub fn get_item_slice(&self, range: Range<usize>) -> Vec<MediaItem> {

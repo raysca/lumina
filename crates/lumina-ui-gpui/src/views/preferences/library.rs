@@ -1,18 +1,29 @@
-//! Settings › Library: where the library lives and how big it is.
+//! Settings › Library: where the library lives, how big it is and what it
+//! takes on disk.
 
 use gpui::*;
 
 use super::rows::{controls, path_pill, row, row_button, section, value};
+use super::storage_card::render_storage_card;
+use crate::app::types::format_bytes;
 use crate::app::LuminaApp;
 use crate::icons::Icon;
 
 pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let size = crate::i18n::items(app.total_library_count);
+    let storage = app.library_storage();
+    let items = crate::i18n::items(app.total_library_count);
+    // The size waits for the first reading; the count is known at once.
+    let size = match storage {
+        Some(s) => format!("{} · {items}", format_bytes(s.library_bytes())),
+        None => items,
+    };
     let marker = size.clone();
     div()
         .flex()
         .flex_col()
         .gap(px(14.0))
+        // No reading yet (or none for this library): no card.
+        .children(storage.map(|storage| render_storage_card(storage, cx)))
         .child(section(
             "LIBRARY",
             None,

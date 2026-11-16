@@ -4,6 +4,7 @@ fn main() {
         cc::Build::new()
             .file("src/player/macos_bridge.m")
             .file("src/share/macos_share.m")
+            .file("src/storage/macos_volume.m")
             .flag("-fobjc-arc")
             .flag("-Wno-deprecated-declarations")
             .flag("-Werror=unguarded-availability-new")
@@ -17,5 +18,6 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=CoreGraphics");
         println!("cargo:rerun-if-changed=src/player/macos_bridge.m");
         println!("cargo:rerun-if-changed=src/share/macos_share.m");
+        println!("cargo:rerun-if-changed=src/storage/macos_volume.m");
     }
 }

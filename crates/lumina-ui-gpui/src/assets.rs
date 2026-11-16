@@ -36,6 +36,7 @@ static LUCIDE: &[(&str, &str)] = lucide!(
     "database",
     "download",
     "ellipsis",
+    "eraser",
     "external-link",
     "file-image",
     "film",

@@ -26,6 +26,8 @@ pub use places::PlaceCount;
 mod rights;
 pub use rights::Rights;
 mod schema;
+mod storage;
+pub use storage::StorageSummary;
 mod tag_undo;
 mod tags;
 mod templates;

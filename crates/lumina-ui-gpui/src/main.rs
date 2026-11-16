@@ -14,6 +14,7 @@ mod motion;
 mod player;
 #[cfg(target_os = "macos")]
 mod share;
+mod storage;
 mod theme;
 mod views;
 

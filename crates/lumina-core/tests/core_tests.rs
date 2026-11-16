@@ -7579,3 +7579,60 @@ fn camera_equals_matches_the_stored_make_and_model_exactly() {
         "each stored camera once, in index order; items with no camera, or only spaces, are skipped"
     );
 }
+
+#[test]
+fn storage_summary_sums_by_kind() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let sized = |path: &str, kind: MediaType, bytes: u64| MediaItem {
+        file_size: bytes,
+        ..sample_media_item(path, kind, 1000, None, None)
+    };
+    catalog
+        .insert_or_update_batch(&[
+            sized("/lib/a.jpg", MediaType::Image, 100),
+            sized("/lib/b.dng", MediaType::Raw, 200),
+            sized("/lib/c.mp4", MediaType::Video, 4_000),
+        ])
+        .unwrap();
+    catalog
+        .insert_with_source(
+            &sized("/lib/Imports/2026/d.mp4", MediaType::Video, 50_000),
+            "https://example.com/watch?v=1",
+            None,
+        )
+        .unwrap();
+    // A sidecar's web address alone is not a download: still a video.
+    let sidecar = catalog
+        .insert_or_update_batch(&[sized("/lib/e.mp4", MediaType::Video, 600_000)])
+        .unwrap()[0]
+        .id;
+    catalog
+        .record_media_source(sidecar, "https://example.com/e", None)
+        .unwrap();
+    // Trashed items are left out, as the library's item count leaves them out.
+    let trashed = catalog
+        .insert_or_update_batch(&[sized("/lib/f.jpg", MediaType::Image, 7_000_000)])
+        .unwrap()[0]
+        .id;
+    catalog.set_trashed(trashed, true).unwrap();
+
+    let summary = catalog.storage_summary().unwrap();
+    assert_eq!(
+        summary,
+        lumina_core::StorageSummary {
+            photo_bytes: 300,
+            video_bytes: 604_000,
+            download_bytes: 50_000,
+        },
+        "photos (images and RAW), videos and downloads are summed apart; \
+         a download counts once, as a download"
+    );
+    assert_eq!(
+        Catalog::open_in_memory()
+            .unwrap()
+            .storage_summary()
+            .unwrap(),
+        lumina_core::StorageSummary::default(),
+        "an empty library sums to zero"
+    );
+}

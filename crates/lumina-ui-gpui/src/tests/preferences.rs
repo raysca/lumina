@@ -1030,7 +1030,6 @@ fn settings_has_library_downloads_and_storage_categories() {
         "page-title-text:Library",
         "page-meta-text:Where the library lives and how big it is",
         "preferences-change-library-text:Open Another…",
-        "preferences-indexed-text:2 items",
         "preferences-rescan-text:Rescan Library",
     ] {
         assert!(
@@ -1038,6 +1037,14 @@ fn settings_has_library_downloads_and_storage_categories() {
             "the Library page shows {marker}"
         );
     }
+    let size = format!(
+        "preferences-indexed-text:{} · 2 items",
+        crate::app::types::format_bytes(storage_report(&view, vcx).library_bytes())
+    );
+    assert!(
+        vcx.debug_bounds(leak(size.clone())).is_some(),
+        "Library size reads {size}"
+    );
     let row = vcx
         .debug_bounds("settings-row-library")
         .expect("the Library location row renders");
@@ -1231,6 +1238,271 @@ fn concurrency_save_failure_reverts() {
             "the failure is in the error banner"
         );
     });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// A seeded item copied as a `kind` file of `bytes` at `name` in `root`.
+fn sized_item(
+    base: &lumina_core::MediaItem,
+    root: &std::path::Path,
+    name: &str,
+    kind: lumina_core::MediaType,
+    bytes: u64,
+) -> lumina_core::MediaItem {
+    let path = root.join(name);
+    lumina_core::MediaItem {
+        id: lumina_core::MediaId(0),
+        parent_dir: path.parent().unwrap().to_string_lossy().to_string(),
+        file_name: path.file_name().unwrap().to_string_lossy().to_string(),
+        path,
+        media_type: kind,
+        file_size: bytes,
+        ..base.clone()
+    }
+}
+
+fn storage_report(
+    view: &gpui::Entity<crate::app::LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+) -> crate::app::library_storage::LibraryStorage {
+    view.update(vcx, |app, _| app.preferences_storage.clone())
+        .expect("the storage report lands once the Library category shows")
+}
+
+#[core::prelude::v1::test]
+fn storage_card_shows_segments() {
+    use crate::app::types::format_bytes;
+    use lumina_core::MediaType;
+    let (temp_dir, engine) = seed_library("settings_storage_card", 2);
+    let base = engine.get_item_slice(0..1)[0].clone();
+    let photo = base.file_size;
+    let catalog = engine.catalog();
+    catalog
+        .insert_or_update_batch(&[sized_item(
+            &base,
+            &temp_dir,
+            "clip.mp4",
+            MediaType::Video,
+            4096,
+        )])
+        .unwrap();
+    catalog
+        .insert_with_source(
+            &sized_item(&base, &temp_dir, "Imports/dl.mp4", MediaType::Video, 8192),
+            "https://example.com/watch?v=1",
+            None,
+        )
+        .unwrap();
+    let cache = thumbnail_cache_dir();
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("thumb.jpg"), vec![0u8; 1024]).unwrap();
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Library, cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+
+    let report = storage_report(&view, vcx);
+    assert_eq!(
+        report.summary,
+        lumina_core::StorageSummary {
+            photo_bytes: 2 * photo,
+            video_bytes: 4096,
+            download_bytes: 8192,
+        },
+        "the card sums the library by kind, the download once"
+    );
+    assert_eq!(report.cache.bytes, 1024, "and the thumbnail cache");
+
+    let bar = vcx
+        .debug_bounds("settings-storage-bar")
+        .expect("the storage bar renders");
+    assert_eq!(f32::from(bar.size.height), 10.0, "the bar is 10 tall");
+    let parts = [
+        ("photos", 2 * photo),
+        ("videos", 4096),
+        ("downloads", 8192),
+        ("cache", 1024),
+    ];
+    let sum: u64 = parts.iter().map(|(_, b)| b).sum();
+    for (name, bytes) in parts {
+        let seg = vcx
+            .debug_bounds(leak(format!("settings-storage-seg-{name}")))
+            .unwrap_or_else(|| panic!("the {name} segment renders"));
+        let want = f32::from(bar.size.width) * bytes as f32 / sum as f32;
+        assert!(
+            (f32::from(seg.size.width) - want).abs() <= 1.0,
+            "the {name} segment is its share of the bar: {:?} vs {want}",
+            seg.size.width
+        );
+    }
+    for (label, bytes) in [
+        ("Photos", 2 * photo),
+        ("Videos", 4096),
+        ("Downloads", 8192),
+        ("Cache", 1024),
+    ] {
+        let marker = leak(format!(
+            "settings-storage-legend-text:{label} {}",
+            format_bytes(bytes)
+        ));
+        assert!(
+            vcx.debug_bounds(marker).is_some(),
+            "the legend shows {marker}"
+        );
+    }
+    let used = match report.capacity {
+        Some((total, available)) => format!(
+            "{} of {} used",
+            format_bytes(total - available),
+            format_bytes(total)
+        ),
+        None => format_bytes(report.library_bytes()),
+    };
+    assert!(
+        vcx.debug_bounds(leak(format!("settings-storage-used-text:{used}")))
+            .is_some(),
+        "the card's header reads {used}"
+    );
+    let size = leak(format!(
+        "preferences-indexed-text:{} · 4 items",
+        format_bytes(2 * photo + 4096 + 8192)
+    ));
+    assert!(
+        vcx.debug_bounds(size).is_some(),
+        "Library size reads {size}"
+    );
+
+    assert!(
+        vcx.debug_bounds("settings-storage-clear-cache-text:Clear cache · 1.0 KB")
+            .is_some(),
+        "the Clear cache button names the cache size"
+    );
+    click(vcx, "settings-storage-clear-cache");
+    render_ui(vcx);
+    let left = std::fs::read_dir(&cache).map(|d| d.count()).unwrap_or(0);
+    assert_eq!(left, 0, "Clear cache empties the thumbnail cache");
+    assert_eq!(
+        storage_report(&view, vcx).cache.bytes,
+        0,
+        "and the card refreshes"
+    );
+    assert!(
+        vcx.debug_bounds("settings-storage-legend-text:Cache 0 B")
+            .is_some(),
+        "the legend shows the emptied cache"
+    );
+
+    let _ = std::fs::remove_dir_all(&cache);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn storage_card_handles_empty_library() {
+    use crate::app::library_storage::CAPACITY_UNKNOWN;
+    let (temp_dir, engine) = seed_library("settings_storage_empty", 0);
+    let _ = std::fs::remove_dir_all(thumbnail_cache_dir());
+    CAPACITY_UNKNOWN.with(|c| c.set(true));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Library, cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    CAPACITY_UNKNOWN.with(|c| c.set(false));
+
+    let report = storage_report(&view, vcx);
+    assert_eq!(report.summary, lumina_core::StorageSummary::default());
+    assert_eq!(report.capacity, None, "the seam hides the volume");
+    assert!(
+        vcx.debug_bounds("settings-storage-bar").is_some(),
+        "an empty bar still renders"
+    );
+    for name in ["photos", "videos", "downloads", "cache"] {
+        assert!(
+            vcx.debug_bounds(leak(format!("settings-storage-seg-{name}")))
+                .is_none(),
+            "nothing to show: no {name} segment"
+        );
+    }
+    for label in ["Photos", "Videos", "Downloads", "Cache"] {
+        let marker = leak(format!("settings-storage-legend-text:{label} 0 B"));
+        assert!(
+            vcx.debug_bounds(marker).is_some(),
+            "the legend lists {marker}"
+        );
+    }
+    assert!(
+        vcx.debug_bounds("settings-storage-used-text:0 B").is_some(),
+        "an unknown volume shows the library total alone, with no \"of\""
+    );
+    assert!(
+        vcx.debug_bounds("preferences-indexed-text:0 B · 0 items")
+            .is_some(),
+        "Library size reads 0 B · 0 items"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn storage_card_hides_without_a_reading_for_this_library() {
+    let (temp_dir, engine) = seed_library("settings_storage_stale", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Library, cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    let reading = storage_report(&view, vcx);
+    let sized = leak(format!(
+        "preferences-indexed-text:{} · 2 items",
+        crate::app::types::format_bytes(reading.library_bytes())
+    ));
+    assert!(vcx.debug_bounds("settings-storage-card").is_some());
+    assert!(
+        vcx.debug_bounds(sized).is_some(),
+        "Library size reads {sized}"
+    );
+
+    let hidden = |vcx: &mut gpui::VisualTestContext, why: &str| {
+        render_ui(vcx);
+        assert!(
+            vcx.debug_bounds("settings-storage-card").is_none(),
+            "{why}: no storage card"
+        );
+        assert!(
+            vcx.debug_bounds("preferences-indexed-text:2 items")
+                .is_some(),
+            "{why}: Library size shows the count alone"
+        );
+    };
+    // No reading yet (settings just opened).
+    view.update(vcx, |app, _| app.preferences_storage = None);
+    hidden(vcx, "before the first reading lands");
+    // A reading for another library.
+    view.update(vcx, |app, _| {
+        app.preferences_storage = Some(crate::app::library_storage::LibraryStorage {
+            root: "/nonexistent/lumina-other-library".into(),
+            ..reading.clone()
+        })
+    });
+    hidden(vcx, "a reading for another library is not shown");
+    // No library open.
+    view.update(vcx, |app, _| {
+        app.preferences_storage = Some(reading.clone());
+        app.grid_state = None;
+    });
+    hidden(vcx, "with no library open");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

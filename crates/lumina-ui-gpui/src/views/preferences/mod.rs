@@ -16,6 +16,7 @@ mod general;
 mod library;
 mod rows;
 mod storage;
+mod storage_card;
 
 /// Width of the settings sidebar (frame `l85pQN`).
 const SIDEBAR_WIDTH: f32 = 252.0;
