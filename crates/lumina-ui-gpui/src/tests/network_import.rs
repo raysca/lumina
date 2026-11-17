@@ -15,21 +15,20 @@ pub(crate) fn without_yt_dlp() {
 }
 
 #[core::prelude::v1::test]
-fn network_import_dialog_open_and_dismiss_via_cancel() {
+fn network_import_opens_by_shortcut_and_closes_by_escape_or_cancel() {
     let (_library, engine) = seed_library("net_import_open", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
 
-    // Open network import dialog
-    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    keystrokes(vcx, "alt-secondary-u");
     view.update(vcx, |app, _| {
         assert!(
             matches!(
                 app.network_import.stage,
                 Some(NetworkImportStage::Input { .. })
             ),
-            "dialog should open in Input stage"
+            "⌥⌘U opens the dialog in its Input stage"
         );
     });
 
@@ -38,32 +37,21 @@ fn network_import_dialog_open_and_dismiss_via_cancel() {
     assert!(vcx.debug_bounds("network-import-card").is_some());
     assert!(vcx.debug_bounds("net-import-url-input").is_some());
 
-    // Click cancel button
-    click(vcx, "net-import-cancel");
-    view.update(vcx, |app, _| {
-        assert!(
-            app.network_import.stage.is_none(),
-            "dialog should be closed"
-        );
-    });
-}
-
-#[core::prelude::v1::test]
-fn network_import_dismiss_via_escape() {
-    let (_library, engine) = seed_library("net_import_esc", 1);
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    focus_app(vcx, &view);
-
-    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
-    render_ui(vcx);
-
-    // Press Escape
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
         assert!(
             app.network_import.stage.is_none(),
             "escape should close the modal"
+        );
+    });
+
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    render_ui(vcx);
+    click(vcx, "net-import-cancel");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.network_import.stage.is_none(),
+            "dialog should be closed"
         );
     });
 }
@@ -182,24 +170,6 @@ fn network_import_url_typing_and_backspace() {
             assert_eq!(url, "https://example.com/stream.mp");
         }
         _ => panic!("expected Input stage after backspace"),
-    });
-}
-
-#[core::prelude::v1::test]
-fn network_import_shortcut_alt_cmd_u() {
-    let (_library, engine) = seed_library("net_import_shortcut", 1);
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    focus_app(vcx, &view);
-
-    // Press ⌥⌘U via keystrokes
-    keystrokes(vcx, "alt-secondary-u");
-
-    view.update(vcx, |app, _| {
-        assert!(
-            app.network_import.stage.is_some(),
-            "⌥⌘U should open the network import dialog"
-        );
     });
 }
 

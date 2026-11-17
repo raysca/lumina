@@ -923,11 +923,11 @@ fn expand_over_a_page_shows_the_video_from_all_media(prefix: &str, page_row: &'s
 }
 
 #[core::prelude::v1::test]
-fn expand_over_the_albums_overview_shows_the_video_from_all_media() {
-    expand_over_a_page_shows_the_video_from_all_media("expand_overview", "sidebar-albums-header");
-}
-
-#[core::prelude::v1::test]
-fn expand_over_the_tags_page_shows_the_video_from_all_media() {
-    expand_over_a_page_shows_the_video_from_all_media("expand_tags", "sidebar-nav-keywords");
+fn expand_over_a_media_less_page_shows_the_video_from_all_media() {
+    for (prefix, page_row) in [
+        ("expand_overview", "sidebar-albums-header"),
+        ("expand_tags", "sidebar-nav-keywords"),
+    ] {
+        expand_over_a_page_shows_the_video_from_all_media(prefix, page_row);
+    }
 }

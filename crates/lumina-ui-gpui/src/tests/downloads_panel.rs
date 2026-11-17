@@ -90,7 +90,7 @@ fn badge_counts_active_rows() {
 }
 
 #[core::prelude::v1::test]
-fn clicking_icon_toggles_panel() {
+fn panel_toggles_by_click_and_shortcut_and_closes_on_a_click_outside() {
     let (_dir, engine, fake, mut cx) = queue_app("dlp_click");
     let (view, vcx) = app_with_library(&mut cx, engine);
     install(&view, vcx, &fake);
@@ -104,28 +104,7 @@ fn clicking_icon_toggles_panel() {
     view.update(vcx, |app, _| {
         assert!(!app.downloads.open, "a second click closes it")
     });
-}
 
-#[core::prelude::v1::test]
-fn backdrop_click_closes_panel() {
-    let (_dir, engine, fake, mut cx) = queue_app("dlp_backdrop");
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    install(&view, vcx, &fake);
-    queue(&view, vcx, &[A]);
-    view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
-    render_ui(vcx);
-    super::ui_automation::click_point(vcx, 40.0, 400.0);
-    view.update(vcx, |app, _| {
-        assert!(!app.downloads.open, "a click outside closes the list")
-    });
-}
-
-#[core::prelude::v1::test]
-fn shortcut_toggles_panel() {
-    let (_dir, engine, fake, mut cx) = queue_app("dlp_shortcut");
-    let (view, vcx) = app_with_library(&mut cx, engine);
-    install(&view, vcx, &fake);
-    queue(&view, vcx, &[A]);
     focus_app(vcx, &view);
     keystrokes(vcx, "alt-secondary-l");
     view.update(vcx, |app, _| {
@@ -134,6 +113,13 @@ fn shortcut_toggles_panel() {
     keystrokes(vcx, "alt-secondary-l");
     view.update(vcx, |app, _| {
         assert!(!app.downloads.open, "⌥⌘L closes it again")
+    });
+
+    view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
+    render_ui(vcx);
+    super::ui_automation::click_point(vcx, 40.0, 400.0);
+    view.update(vcx, |app, _| {
+        assert!(!app.downloads.open, "a click outside closes the list")
     });
 }
 

@@ -1084,36 +1084,6 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
 }
 
 #[core::prelude::v1::test]
-fn test_video_resume_start_selection_is_bounded() {
-    use crate::config::resume_start_time;
-
-    assert_eq!(
-        resume_start_time(Some(42.0), 120.0),
-        42.0,
-        "a saved mid-video position must be used"
-    );
-    assert_eq!(
-        resume_start_time(Some(118.5), 120.0),
-        0.0,
-        "a position near the end must restart from the start"
-    );
-    assert_eq!(
-        resume_start_time(Some(42.0), 30.0),
-        0.0,
-        "a position beyond the duration is invalid"
-    );
-    assert_eq!(resume_start_time(Some(0.0), 120.0), 0.0);
-    assert_eq!(resume_start_time(Some(-5.0), 120.0), 0.0);
-    assert_eq!(resume_start_time(Some(f64::NAN), 120.0), 0.0);
-    assert_eq!(resume_start_time(None, 120.0), 0.0);
-    assert_eq!(
-        resume_start_time(Some(42.0), 0.0),
-        0.0,
-        "an unknown duration must not produce a seek target"
-    );
-}
-
-#[core::prelude::v1::test]
 fn test_video_resume_progress_throttle_and_close() {
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));

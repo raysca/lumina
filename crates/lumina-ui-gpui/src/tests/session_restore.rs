@@ -222,43 +222,26 @@ fn restore_scrolls_to_saved_anchor_item() {
 }
 
 #[core::prelude::v1::test]
-fn restore_reveals_selection_outside_the_anchored_view() {
-    let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, ids) = big_library("restore_far", &mut cx);
-    start_with_pending(
-        &view,
-        vcx,
-        session(LastView::All, Some(ids[180].0), Some(ids[24].0)),
-    );
-    finish_scan(&view, vcx);
-    let (top, rows) = visible_rows(&view, vcx);
-    assert!(
-        (top..top + rows.max(1)).contains(&45),
-        "the selected row (45) must be visible, viewport rows {top}..{}",
-        top + rows
-    );
+fn restore_reveals_selection_outside_the_anchored_view_or_without_an_anchor() {
+    for (case, anchor) in [("restore_far", None), ("restore_noanchor", Some(u64::MAX))] {
+        let mut cx = crate::tests::TestApp::single();
+        let (dir, view, vcx, ids) = big_library(case, &mut cx);
+        let anchor = anchor.unwrap_or(ids[24].0);
+        start_with_pending(
+            &view,
+            vcx,
+            session(LastView::All, Some(ids[180].0), Some(anchor)),
+        );
+        finish_scan(&view, vcx);
+        let (top, rows) = visible_rows(&view, vcx);
+        assert!(
+            (top..top + rows.max(1)).contains(&45),
+            "{case}: the selected row (45) must be visible, viewport rows {top}..{}",
+            top + rows
+        );
 
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[core::prelude::v1::test]
-fn restore_with_missing_anchor_reveals_selection() {
-    let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, ids) = big_library("restore_noanchor", &mut cx);
-    start_with_pending(
-        &view,
-        vcx,
-        session(LastView::All, Some(ids[180].0), Some(u64::MAX)),
-    );
-    finish_scan(&view, vcx);
-    let (top, rows) = visible_rows(&view, vcx);
-    assert!(
-        (top..top + rows.max(1)).contains(&45),
-        "a missing anchor falls back to revealing the selection, rows {top}..{}",
-        top + rows
-    );
-
-    let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[core::prelude::v1::test]

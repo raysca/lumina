@@ -183,21 +183,33 @@ fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
 }
 
 #[core::prelude::v1::test]
-fn sidebar_runs_full_height_beside_the_status_bar() {
+fn sidebar_runs_full_height_beside_the_header_and_status_bar() {
     let (dir, engine) = seed_library("br_layout", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
+    let window = vcx.update(|window, _| window.viewport_size());
     let sidebar = vcx.debug_bounds("sidebar").expect("sidebar");
     let status = vcx.debug_bounds("status-bar").expect("status bar");
     assert_eq!(
         f32::from(sidebar.top()),
         0.0,
-        "the sidebar starts at the window top, beside the header"
+        "the sidebar starts at the window top, not under a toolbar"
+    );
+    assert_eq!(
+        sidebar.size.height, window.height,
+        "the sidebar runs the full window height"
     );
     assert!(
         sidebar.bottom() >= status.bottom(),
         "the sidebar runs to the window bottom: sidebar={sidebar:?} status={status:?}"
+    );
+    let area = vcx
+        .debug_bounds("toolbar-drag-area")
+        .expect("toolbar-drag-area");
+    assert!(
+        area.left() >= sidebar.right(),
+        "the header sits in the main column, beside the sidebar"
     );
     assert!(
         status.left() >= sidebar.right(),

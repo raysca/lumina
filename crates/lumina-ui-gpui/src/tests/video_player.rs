@@ -585,7 +585,7 @@ fn clear_loop_range_restores_full_loop() {
 }
 
 #[core::prelude::v1::test]
-fn out_before_in_is_refused() {
+fn a_loop_point_on_the_wrong_side_of_the_other_is_refused() {
     let mut cx = crate::tests::TestApp::single();
     let (_fixture, view, vcx) = open_video(&mut cx);
     with_range(&view, vcx, Some(10.0), None);
@@ -602,12 +602,8 @@ fn out_before_in_is_refused() {
         Some(crate::i18n::t("video.loop_end_before_start")),
         "a refused out point says why"
     );
-}
 
-#[core::prelude::v1::test]
-fn in_after_out_is_refused() {
-    let mut cx = crate::tests::TestApp::single();
-    let (_fixture, view, vcx) = open_video(&mut cx);
+    view.update(vcx, |app, cx| app.clear_loop_range(cx));
     with_range(&view, vcx, None, Some(20.0));
     for at in [20.0, 30.0] {
         with_range(&view, vcx, Some(at), None);
