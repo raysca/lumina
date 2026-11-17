@@ -378,36 +378,8 @@ fn test_viewer_player_ux_and_navigation_controls() {
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
-    // Deterministic library: navigation must not depend on the developer's real config.
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_viewer_nav_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    std::fs::write(
-        temp_dir.join("photo1.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .unwrap();
-    std::fs::write(
-        temp_dir.join("photo2.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .unwrap();
-    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv() {
-        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (temp_dir, engine) = seed_library("viewer_nav", 2);
+    let _cleanup = super::downloads::TempLibrary(temp_dir);
     assert!(engine.total_count() >= 2);
 
     let sample = get_sample_items();
@@ -683,35 +655,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
 
 #[core::prelude::v1::test]
 fn test_viewer_fit_button_floats_below_the_top_bar() {
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_viewer_zoom_hud_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    std::fs::write(
-        temp_dir.join("photo1.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .unwrap();
-    std::fs::write(
-        temp_dir.join("photo2.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .unwrap();
-    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (temp_dir, engine) = seed_library("viewer_zoom_hud", 2);
     assert!(engine.total_count() >= 2);
 
     let mut cx = crate::tests::TestApp::single();
@@ -1040,35 +984,8 @@ fn test_video_scrub_resets_on_viewer_close_and_media_change() {
 fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
     // The root render path shows onboarding when no library is open, so the
     // scrubber can only be verified through a real (temporary) library.
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_video_scrub_drag_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock must be after the Unix epoch")
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).expect("temp library dir must be creatable");
-    std::fs::write(
-        temp_dir.join("photo1.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .expect("temp photo must be writable");
-    std::fs::write(
-        temp_dir.join("photo2.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .expect("temp photo must be writable");
-    let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .expect("temp engine must open");
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (temp_dir, engine) = seed_library("video_scrub_drag", 2);
+    let _cleanup = super::downloads::TempLibrary(temp_dir);
     assert!(engine.total_count() >= 2);
 
     let mut cx = crate::tests::TestApp::single();
@@ -1164,8 +1081,6 @@ fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
             app.video.playback_time
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -2115,7 +2030,7 @@ fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
 
 #[core::prelude::v1::test]
 fn scrub_drag_keeps_tracking_after_leaving_the_control() {
-    let (temp_dir, engine) = crate::tests::ui_automation::seed_library("drag_off_control", 2);
+    let (temp_dir, engine) = seed_library("drag_off_control", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();

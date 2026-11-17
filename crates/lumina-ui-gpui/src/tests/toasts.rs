@@ -1,91 +1,11 @@
 //! UI automation for the bottom-right toast: rendering, undo, dismissal, and
 //! stale-timer handling.
-//!
-//! Helpers mirror `tests/ui_automation.rs` so this file stays self-contained and
-//! can reuse the same deterministic rendering pattern without editing it.
 
+use super::ui_automation::{
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+};
 use crate::*;
-use lumina_core::{EngineEvent, LuminaEngine};
 use std::time::Duration;
-
-fn seed_library(prefix: &str, count: usize) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_toast_{}_{}",
-        prefix,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    for i in 0..count {
-        std::fs::write(
-            temp_dir.join(format!("photo_{:02}.jpg", i)),
-            crate::tests::ui_automation::tiny_jpeg(),
-        )
-        .unwrap();
-    }
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
-    (temp_dir, engine)
-}
-
-/// Draws the registered root view so layout, hit-testing and debug_bounds are
-/// populated for the current app state.
-fn render_ui(cx: &mut VisualTestContext) {
-    cx.update(|window, cx| {
-        window.refresh();
-        window.draw(cx).clear(cx);
-    });
-    cx.run_until_parked();
-}
-
-fn app_with_library(
-    cx: &mut TestAppContext,
-    engine: std::sync::Arc<LuminaEngine>,
-) -> (Entity<LuminaApp>, &mut VisualTestContext) {
-    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-    view.update(vcx, |app, cx| {
-        app.grid_state = Some(crate::views::grid::GridState::new(engine));
-        app.refresh_album_counts();
-        cx.notify();
-    });
-    render_ui(vcx);
-    (view, vcx)
-}
-
-fn bounds_center(cx: &mut VisualTestContext, selector: &'static str) -> gpui::Point<gpui::Pixels> {
-    cx.debug_bounds(selector)
-        .unwrap_or_else(|| panic!("no rendered bounds for selector {selector:?}"))
-        .center()
-}
-
-fn click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_click(position, gpui::Modifiers::default());
-    render_ui(cx);
-}
-
-fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
-    cx.update(|window, cx| {
-        let handle = view.read(cx).focus_handle.clone();
-        window.focus(&handle, cx);
-    });
-}
-
-fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
-    cx.simulate_keystrokes(&crate::tests::ui_automation::platform_test_keys(keys));
-    render_ui(cx);
-}
 
 #[core::prelude::v1::test]
 fn toast_renders_with_message_and_dismiss_control() {

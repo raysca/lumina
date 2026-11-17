@@ -2,15 +2,11 @@
 //! keyboard paths, Clear finished, long rows.
 
 use super::downloads::{imported, install, persisted, queue_app, row_id, settle, states, submit};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::ui_automation::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::app::downloads::JobOutcome;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::DownloadState;
-
-fn leak(selector: String) -> &'static str {
-    Box::leak(selector.into_boxed_str())
-}
 
 fn running(app: &LuminaApp) -> usize {
     states(app)

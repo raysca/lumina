@@ -5,7 +5,7 @@
 use super::downloads::{install, persisted, queue_app, row_id, settle, states, submit};
 use super::downloads_pause::{offers, run_palette};
 use super::downloads_screen::{marker, set_rows};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::ui_automation::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::app::command_palette::CommandId;
 use crate::app::downloads::{DownloadFilter, DownloadSurface, JobOutcome};
 use crate::views::sidebar::AlbumSelection;
@@ -22,10 +22,6 @@ const URLS: [&str; 7] = [
     "https://example.com/f.mp4",
     "https://example.com/g.mp4",
 ];
-
-fn leak(selector: String) -> &'static str {
-    Box::leak(selector.into_boxed_str())
-}
 
 fn top(vcx: &mut VisualTestContext, selector: String) -> f32 {
     let bounds = vcx

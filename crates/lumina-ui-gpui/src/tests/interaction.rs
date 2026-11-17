@@ -1,36 +1,9 @@
 use crate::*;
 use lumina_core::{EngineEvent, LuminaEngine};
 
-/// Creates an isolated 12-image library and returns the engine after its initial scan.
+/// An isolated 12-image library, scanned.
 fn scanned_engine(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_interaction_{}_{}",
-        prefix,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    for i in 0..12 {
-        std::fs::write(
-            temp_dir.join(format!("photo_{:02}.jpg", i)),
-            crate::tests::ui_automation::tiny_jpeg(),
-        )
-        .unwrap();
-    }
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
-    (temp_dir, engine)
+    super::ui_automation::seed_library(prefix, 12)
 }
 
 #[core::prelude::v1::test]

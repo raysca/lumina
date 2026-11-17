@@ -6,14 +6,17 @@
 use std::path::Path;
 
 use gpui::*;
-use lumina_core::{EngineEvent, LuminaEngine};
+use lumina_core::LuminaEngine;
+
+use super::ui_automation::{
+    app_with_library, click, double_click, leak, render_ui, right_click, seed_library,
+};
 
 use crate::app::viewer_actions::{
     external_editor_command, EXTERNAL_EDITOR_FILE_MISSING_MESSAGE, EXTERNAL_EDITOR_INVALID_MESSAGE,
     EXTERNAL_EDITOR_UNSET_MESSAGE,
 };
 use crate::config::{validate_external_editor, AppConfig};
-use crate::LuminaApp;
 
 fn temp_config_path(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -26,113 +29,6 @@ fn temp_config_path(name: &str) -> std::path::PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join("config.json")
-}
-
-fn seed_library(prefix: &str, count: usize) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_editor_handoff_{}_{}",
-        prefix,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    for i in 0..count {
-        std::fs::write(
-            temp_dir.join(format!("photo_{:02}.jpg", i)),
-            crate::tests::ui_automation::tiny_jpeg(),
-        )
-        .unwrap();
-    }
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
-    (temp_dir, engine)
-}
-
-fn leak(selector: String) -> &'static str {
-    Box::leak(selector.into_boxed_str())
-}
-
-/// Draws the registered root view so layout, hit-testing and debug_bounds are
-/// populated for the current app state.
-fn render_ui(cx: &mut VisualTestContext) {
-    cx.update(|window, cx| {
-        window.refresh();
-        window.draw(cx).clear(cx);
-    });
-    cx.run_until_parked();
-}
-
-fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
-    cx.update(|window, cx| {
-        let handle = view.read(cx).focus_handle.clone();
-        window.focus(&handle, cx);
-    });
-}
-
-fn bounds_center(cx: &mut VisualTestContext, selector: &'static str) -> gpui::Point<gpui::Pixels> {
-    cx.debug_bounds(selector)
-        .unwrap_or_else(|| panic!("no rendered bounds for selector {selector:?}"))
-        .center()
-}
-
-fn click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_click(position, gpui::Modifiers::default());
-    render_ui(cx);
-}
-
-fn double_click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_event(gpui::MouseDownEvent {
-        position,
-        modifiers: gpui::Modifiers::default(),
-        button: gpui::MouseButton::Left,
-        click_count: 2,
-        first_mouse: false,
-    });
-    cx.simulate_event(gpui::MouseUpEvent {
-        position,
-        modifiers: gpui::Modifiers::default(),
-        button: gpui::MouseButton::Left,
-        click_count: 2,
-    });
-    render_ui(cx);
-}
-
-fn right_click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_mouse_down(
-        position,
-        gpui::MouseButton::Right,
-        gpui::Modifiers::default(),
-    );
-    render_ui(cx);
-}
-
-fn app_with_library(
-    cx: &mut TestAppContext,
-    engine: std::sync::Arc<LuminaEngine>,
-) -> (Entity<LuminaApp>, &mut VisualTestContext) {
-    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-    view.update(vcx, |app, cx| {
-        app.grid_state = Some(crate::views::grid::GridState::new(engine));
-        app.refresh_album_counts();
-        cx.notify();
-    });
-    render_ui(vcx);
-    focus_app(vcx, &view);
-    (view, vcx)
 }
 
 fn media_card(engine: &LuminaEngine) -> &'static str {
