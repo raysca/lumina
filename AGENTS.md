@@ -14,6 +14,9 @@ Lumina is a local-first macOS photo and video manager:
   `gpui-pre` 0.3.11; imported as `gpui`): state, views, player bridge,
   icons, theme, and UI automation tests.
 - Rust stable (1.95 or newer), edition 2021, workspace resolver 2.
+- macOS is the only supported platform. A Linux port is in development
+  (GStreamer player, system ffmpeg previews, internal `.deb`); it is not
+  supported or released. See `RELEASING.md` and `docs/linux.md`.
 - Version is synchronized across `crates/*/Cargo.toml`, `resources/Info.plist`,
   and the `Makefile`; release builds fail on mismatch.
 
@@ -133,7 +136,22 @@ docs/             roadmap, architecture, accessibility, notes
   release scripts). Headless core stays cross-platform where practical.
 - Windows and Linux are planned release targets, not current support. Do not add
   platform claims, CI release jobs, or "portable" abstractions until the porting
-  and acceptance criteria in `RELEASING.md` are met.
+  and acceptance criteria in `RELEASING.md` are met. Approved exceptions:
+  Lumina is built for macOS and Linux on GitHub. CI has a Linux build/test
+  job; its `package-linux` job builds, checks and uploads an unsigned `.deb`,
+  and its `bundle-macos` job uploads an ad-hoc signed `Lumina.app` zip, both
+  as 14-day workflow artifacts on pushes to main and on pull requests. The
+  release workflow also builds and checks the unsigned `.deb` as a workflow
+  artifact. These are internal, short-lived build artifacts: never attached to
+  a GitHub release and never presented as a supported or distributable
+  release (Linux not until `RELEASING.md`'s acceptance checks pass).
+- Linux plays video through GStreamer (`player/linux.rs`). On Linux only,
+  local previews (large photos, TIFF, video posters and scrub frames) may run
+  the system ffmpeg (a `.deb` runtime dependency) as a separate process
+  through the native tool timeout helper, restricted to the file protocol so
+  it never uses the network. UI copy never names GStreamer or ffmpeg; their
+  errors go to the log. macOS copy (Finder, the macOS Trash) stays as is;
+  Linux wording lives beside it, cfg-selected, in `i18n::platform`.
 - No telemetry, analytics, crash uploaders, or network calls without explicit
   product approval and documentation.
 - Do not add Google Photos, iCloud Photos, Dropbox, OneDrive or Google Drive
@@ -383,10 +401,10 @@ A change is done only when all applicable items are true:
   drafts until verified and published.
 - DMG creation may be blocked in sandboxed sessions; use `LUMINA_SKIP_DMG=1`
   only for local verification, not as a release substitute.
-- Windows and Linux are planned release targets but are not supported yet: the
-  UI shell, real player, macOS decode fallbacks, live UI harness and release
-  scripts still have macOS-specific paths. Keep releases macOS-only until the
-  acceptance criteria in `RELEASING.md` are met.
+- Windows and Linux are planned release targets but are not supported yet.
+  Linux is in development (GStreamer player, ffmpeg previews, no HEIC or RAW
+  previews); its CI job and internal `.deb` are not a release. Keep releases
+  macOS-only until the acceptance criteria in `RELEASING.md` are met.
 - S3-compatible backup is planned for the mid-roadmap (0.5) and is not
   implemented. Cloud photo-library accounts (Google/iCloud) and two-way sync are
   out of scope; do not describe them as supported.
