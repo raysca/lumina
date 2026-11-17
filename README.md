@@ -5,7 +5,8 @@ A native, local-first photo & video manager for macOS, built in Rust with
 framework). The interface targets 120 FPS ProMotion rendering while a headless
 core handles cataloguing, decoding, and search.
 
-> **Platform status:** macOS 12+ is the only supported and released platform.
+> **Platform status:** macOS 12+ is the only supported platform; no release
+> has been tagged yet.
 > Linux development is underway, but its build, media and package paths have
 > not completed the release acceptance checks. Windows remains planned. See
 > [Linux development notes](docs/linux.md) and
@@ -20,8 +21,9 @@ core handles cataloguing, decoding, and search.
   (`places/europe/paris`): `tag:places` includes sub-keywords, and so do
   smart-album "tag is" / "is not" rules.
 - **Deep metadata** — EXIF camera/exposure/ISO data, GPS, and offline reverse
-  geocoding against a bundled GeoNames dataset.
-- **Smart albums** — 10 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
+  geocoding against a built-in table of about 150 major cities (the nearest
+  one within about 250 km; `crates/lumina-core/src/geocoder.rs`).
+- **Smart albums** — 12 system albums plus a Photos-style builder (⌥⌘N or ⌘K):
   match all/any of conditions on kind, favorite, date (including "in the
   last N days/weeks/months"), tag, stars, pick/reject flag, color label,
   camera, lens, aperture, ISO, focal length, filename and place, with a live
@@ -227,11 +229,14 @@ core handles cataloguing, decoding, and search.
   cheat sheet (⌘/), manual rescan (⌘R), Hide/Show Sidebar (⌃⌘S), and a native
   macOS menu bar (Open Library, Rescan, Hide/Show Sidebar, Inspector,
   Preferences ⌘, About, Quit).
-- **Preferences** — in-app General/Storage/About panel: library path and item
-  count, rescan, log/database locations, thumbnail-cache size with clear/reveal,
-  and version/settings-file details.
+- **Settings** — a full-window page (⌘,) with five categories: General,
+  Library, Downloads, Storage and About. It covers the launch view and the
+  external editor; the library's location, size, rescan and a storage
+  breakdown; the downloads folder and how many downloads run at once; the
+  thumbnail cache (size, clear, reveal) and the settings and log files; and
+  the version, licence and acknowledgements.
 
-> **Status note:** local semantic/AI search ("Phase 10" in the roadmap) is a
+> **Status note:** local semantic/AI search (milestone 1.2 in the roadmap) is a
 > planned feature and is **not implemented** in this tree.
 
 ## Supported formats
@@ -272,7 +277,7 @@ Limits:
 
 ## Requirements
 
-- macOS 12 or newer for the supported release. Linux remains in development;
+- macOS 12 or newer (the supported platform). Linux remains in development;
   its internal amd64 package targets Ubuntu 24.04 (glibc 2.39), and other
   distributions are not yet validated. See `docs/linux.md` and `RELEASING.md`.
 - Xcode Command Line Tools (cc, AVFoundation, AppKit) on macOS
@@ -304,17 +309,21 @@ other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog i
 | `make lint` | Clippy (--all-targets --all-features) |
 | `make fmt` / `make fmt-fix` | Check / apply rustfmt |
 | `make bench` | Run performance benchmarks |
+| `make run-release` | Run the desktop app (optimized release build) |
 | `make ui-smoke` | Launch the real app window and verify it appears |
+| `make ui-e2e` | OS-level UI automation (needs Accessibility permission; skips without it) |
+| `make bundle-deps` | Fetch the pinned yt-dlp and ffmpeg that URL import bundles |
 | `make bundle` | Build Lumina.app (universal when both rustup targets are installed) |
+| `make bundle-linux` | Build the internal, unsigned Linux `.deb` (development only) |
 | `make release` | Build, sign, and package .zip/.dmg with SHA256SUMS |
 | `make notarize` | Developer ID notarization + stapling, then package |
 | `make icon` | Regenerate resources/Lumina.icns |
 
 > Performance gates live in `crates/lumina-core/tests/benchmark_test.rs` and are
 > **opt-in** so the normal test suite is not timing-sensitive: run them with
-> `make bench` (which passes `--include-ignored`). The desktop-pics benchmark
-> falls back to synthetic images when `~/Desktop/pics` is absent; thumbnail
-> decoding is best-effort headlessly, and `LUMINA_STRICT_BENCH=1` requires every
+> `make bench` (which passes `--include-ignored`). The media benchmark uses
+> synthetic images by default; set `LUMINA_BENCH_MEDIA_DIR` to a folder of your
+> own photos to run it on those. Thumbnail decoding is best-effort headlessly, and `LUMINA_STRICT_BENCH=1` requires every
 > thumbnail to decode.
 
 ## UI testing
@@ -344,8 +353,8 @@ Three layers of UI coverage live alongside the unit tests:
 
    Launch/window/screenshot/config/catalog checks run without extra permissions.
    The synthetic-input tests require **Accessibility** ("PostEvent") permission for
-   the harness app (System Settings → Privacy & Security → Accessibility → DeepSeek
-   Harness / your terminal). Without it the script reports SKIP and exits 0; set
+   the app running the harness, for example your terminal (System Settings →
+   Privacy & Security → Accessibility). Without it the script reports SKIP and exits 0; set
    `LUMINA_REQUIRE_UI_PERMISSIONS=1` to make a missing grant fatal.
 
 ## Diagnostics & safety
@@ -369,15 +378,25 @@ Three layers of UI coverage live alongside the unit tests:
 ## Continuous integration
 
 - **test**: rustfmt, clippy `-D warnings`, workspace tests, debug build, live
-  UI smoke and the OS-level UI harness (both skip cleanly on headless runners).
+  UI smoke and the OS-level UI harness on macOS (both skip cleanly on headless
+  runners).
+- **linux**: native Ubuntu 24.04 build with rustfmt, clippy, workspace tests,
+  and X11 and Wayland live smokes under Xvfb (Linux is in development, not
+  supported).
+- **package-linux**: builds the unsigned amd64 `.deb`, installs, launches and
+  removes it, and keeps it as a 14-day internal workflow artifact.
+- **bundle-macos**: builds an ad-hoc signed arm64 `Lumina.app` zip as a 14-day
+  internal workflow artifact (not Developer ID signed or notarized).
 - **perf**: runs the opt-in benchmark suite (`make bench`, serialized for stable
   measurements); debug-mode budgets are intentionally looser than the strict
   release gates (seek <1 ms, structured query <5 ms, smart album <8 ms).
 - **quality**: `cargo llvm-cov` summary + LCOV artifact, and a non-blocking
   `cargo audit` advisory report.
-- **release** (`.github/workflows/release.yml`): tag-driven universal build,
-  optional Developer ID signing/notarization, zip/DMG/checksums and a draft
-  GitHub release.
+- **release** (`.github/workflows/release.yml`): tag-driven universal macOS
+  build, optional Developer ID signing/notarization, zip/DMG/checksums and a
+  draft GitHub release. Its `linux` job builds and checks the unsigned `.deb`
+  and keeps it as a 30-day workflow artifact; it is not attached to the
+  release.
 
 ## Layout
 
@@ -388,18 +407,16 @@ crates/
   lumina-ui-gpui/    GPUI app: app/ state & actions, views/, player/, icons,
                      theme, assets
 resources/           Bundled fonts, app icon, Info.plist
-docs/                Roadmap, system design, technical notes
+docs/                Linux, URL import, search and accessibility notes
 ```
 
 ## Documentation
 
 - [Product roadmap](ROADMAP.md)
-- [Everyday interaction UX audit](docs/ux_audit.md)
-- [v0.2 implementation plan (historical)](docs/roadmap_v2.md)
-- [System design](docs/system_design_v2.md)
-- [Technical notes](docs/tech.md)
+- [Known issues](BUGS.md)
 - [Search syntax](docs/search.md)
-- [Implementation plan](docs/implementation_plan.md)
+- [Import Video from URL](docs/network-import.md)
+- [Linux development notes](docs/linux.md)
 - [Releasing & notarization](RELEASING.md)
 - [Accessibility & localization](docs/accessibility.md)
 - [Engineering & review guide](AGENTS.md)

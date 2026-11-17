@@ -134,13 +134,13 @@ docs/             roadmap, architecture, accessibility, notes
   concrete need, license review, and CI/platform compatibility.
 - macOS-only code stays in clearly marked modules (`build.rs`, player bridge,
   release scripts). Headless core stays cross-platform where practical.
-- Windows and Linux are planned release targets, not current support. Do not add
-  platform claims, CI release jobs, or "portable" abstractions until the porting
-  and acceptance criteria in `RELEASING.md` are met. Approved exceptions:
-  Lumina is built for macOS and Linux on GitHub. CI has a Linux build/test
-  job; its `package-linux` job builds, checks and uploads an unsigned `.deb`,
-  and its `bundle-macos` job uploads an ad-hoc signed `Lumina.app` zip, both
-  as 14-day workflow artifacts on pushes to main and on pull requests. The
+- Windows is a planned release target; Linux is in development, not supported.
+  Do not add platform claims, CI release jobs, or "portable" abstractions until
+  the porting and acceptance criteria in `RELEASING.md` are met. CI builds
+  Lumina for macOS and Linux: it has a Linux build/test job; its
+  `package-linux` job builds, checks and uploads an unsigned `.deb`, and its
+  `bundle-macos` job uploads an ad-hoc signed `Lumina.app` zip, both as
+  14-day workflow artifacts on pushes to main and on pull requests. The
   release workflow also builds and checks the unsigned `.deb` as a workflow
   artifact. These are internal, short-lived build artifacts: never attached to
   a GitHub release and never presented as a supported or distributable
@@ -309,7 +309,7 @@ Review checklist:
 - [ ] No unrelated changes, dead code, or speculative features.
 - [ ] Query plans/indexes considered; no blocking work on the UI thread.
 - [ ] Keyboard path and accessibility impact considered.
-- [ ] Docs/help/CHANGELOG or release notes updated when user-visible.
+- [ ] Docs/help or release notes updated when user-visible.
 - [ ] No secrets, generated artifacts, or local config added.
 
 ## 10. Performance testing

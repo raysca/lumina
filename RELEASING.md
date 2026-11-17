@@ -4,13 +4,13 @@
 
 | Platform | Status | Current artifacts |
 | --- | --- | --- |
-| macOS 12+ (arm64 + x86_64) | **Supported and released** | Universal `Lumina.app`, `.zip`, `.dmg` |
+| macOS 12+ (arm64 + x86_64) | **Supported** (no release tagged yet) | Universal `Lumina.app`, `.zip`, `.dmg` |
 | Windows (x86_64; arm64 later) | **Planned, not supported yet** | None today |
 | Linux (x86_64; arm64 later) | **In development, not supported yet** | Internal Ubuntu 24.04 amd64 `.deb` (glibc 2.39+); not released |
 
-Only macOS is supported and released from this tree. Linux now has a native
-GStreamer player, ffmpeg video previews, a Debian packaging path and Linux CI
-work in progress, but its window, install lifecycle and end-to-end library/viewer
+Only macOS is supported from this tree. Linux now has a native GStreamer
+player, ffmpeg video previews, a Debian packaging path and a native Linux CI
+build/test job that passes on GitHub, but its window, install lifecycle and end-to-end library/viewer
 flow have not completed the acceptance checks below. Windows remains planned.
 Do not publish or support Linux artifacts until those checks pass.
 
@@ -138,8 +138,8 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
   Wayland. The X11 check launches the app, scans an isolated H.264 video,
   displays its viewer frame and loads the GStreamer player; the Wayland check
   verifies the app creates a Wayland window. The workflow runs both on Ubuntu,
-  and local Ubuntu container runs pass; the hosted native x86_64 CI job still
-  needs to pass. Dialogs,
+  and they pass in the hosted native x86_64 CI job, as does `package-linux`.
+  Dialogs,
   drag/drop, audio output and other real-session interactions still need desktop
   validation. The separate CoreGraphics/Swift window probe remains macOS-only.
 - **Metadata and paths** — Linux uses XDG paths. Startup migration and broader
@@ -147,9 +147,9 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
 
 ### Porting workstreams
 
-1. **Compile/test matrix**: Linux now has native Ubuntu build/test/clippy CI;
-   run it successfully and keep the macOS job green. Windows still needs its
-   own matrix.
+1. **Compile/test matrix**: Linux has native Ubuntu build/test/clippy CI, and
+   it passes on GitHub along with the package job; keep both and the macOS job
+   green. Windows still needs its own matrix.
 2. **Core portability**: isolate OS backends behind traits; add portable decode
    fallbacks and document which formats are unsupported per platform.
 3. **UI portability**: Linux now has a native titlebar, platform shortcut
@@ -183,6 +183,8 @@ supported yet, and the ad-hoc app is not Developer ID signed or notarized.
 ### Acceptance criteria before calling Windows/Linux supported
 
 - [ ] Native CI job passes formatting, clippy, core/UI tests and produces a launchable artifact.
+      (Linux: passes on GitHub with a `.deb` that installs and launches;
+      Windows: no job yet.)
 - [ ] Window smoke test opens, scans a fixture library, opens media in the viewer and quits cleanly.
 - [ ] Core catalog, search, smart albums, metadata editing, undo and XMP sidecars
       pass the existing test suite on that platform.
