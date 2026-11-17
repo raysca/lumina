@@ -493,14 +493,6 @@ double lumina_player_get_position(void* player) {
     }
 }
 
-double lumina_player_get_duration(void* player) {
-    if (!player) return 0.0;
-    @autoreleasepool {
-        LuminaPlayerBridge *bridge = (__bridge LuminaPlayerBridge *)player;
-        return bridge.duration;
-    }
-}
-
 void lumina_player_set_rate(void* player, float rate) {
     if (!player) return;
     @autoreleasepool {

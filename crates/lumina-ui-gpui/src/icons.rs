@@ -104,7 +104,7 @@ pub enum Icon {
 impl Icon {
     /// Every icon the UI can render. Kept in sync with the embedded assets so a
     /// missing SVG fails the asset-resolution test instead of silently rendering blank.
-    #[allow(dead_code)] // exercised by `every_icon_resolves_in_asset_source`
+    #[cfg(test)] // exercised by `every_icon_resolves_in_asset_source`
     pub const ALL: &[Icon] = &[
         Icon::Heart,
         Icon::HeartFilled,

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use anyhow::Result;
 use std::path::Path;
 
@@ -30,14 +29,19 @@ pub trait VideoPlayerBackend: Send {
         self.seek(target);
     }
     fn position(&self) -> f64;
-    fn duration(&self) -> f64;
     fn set_rate(&mut self, rate: f32);
-    fn rate(&self) -> f32;
     fn set_volume(&mut self, volume: f32);
-    fn volume(&self) -> f32;
     fn set_muted(&mut self, muted: bool);
-    fn is_muted(&self) -> bool;
     fn set_looping(&mut self, looping: bool);
+    // The app keeps its own copy of these settings; the getters read the
+    // player back so tests can check what the UI applied.
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn rate(&self) -> f32;
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn volume(&self) -> f32;
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn is_muted(&self) -> bool;
+    #[cfg_attr(not(test), allow(dead_code))]
     fn is_looping(&self) -> bool;
     /// Fetches the latest decoded video frame if available.
     fn next_frame(&mut self) -> Option<VideoFrame>;

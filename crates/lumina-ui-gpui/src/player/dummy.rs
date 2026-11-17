@@ -29,9 +29,6 @@ impl VideoPlayerBackend for DummyPlayer {
     fn position(&self) -> f64 {
         0.0
     }
-    fn duration(&self) -> f64 {
-        0.0
-    }
     fn set_rate(&mut self, _rate: f32) {}
     fn rate(&self) -> f32 {
         1.0

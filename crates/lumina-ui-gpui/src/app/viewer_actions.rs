@@ -517,12 +517,6 @@ fn default_app_command(path: &Path) -> Command {
     let mut command = Command::new("open");
     #[cfg(target_os = "linux")]
     let mut command = Command::new("xdg-open");
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut command = Command::new("cmd");
-        command.args(["/c", "start", ""]);
-        command
-    };
     command.arg(path);
     command
 }
@@ -570,12 +564,6 @@ fn reveal_command(path: &Path) -> Option<Command> {
     {
         let mut command = Command::new("xdg-open");
         command.arg(path.parent()?);
-        Some(command)
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let mut command = Command::new("explorer");
-        command.arg(format!("/select,\"{}\"", path.display()));
         Some(command)
     }
 }

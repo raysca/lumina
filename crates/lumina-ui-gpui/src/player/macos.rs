@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use super::backend::{VideoFrame, VideoMetadata, VideoPlayerBackend};
 use anyhow::{anyhow, Result};
 use std::ffi::{c_char, c_int, c_void, CString};
@@ -20,15 +19,10 @@ extern "C" {
     fn lumina_player_seek(player: *mut c_void, seconds: f64);
     fn lumina_player_step(player: *mut c_void, frames: i32);
     fn lumina_player_get_position(player: *mut c_void) -> f64;
-    fn lumina_player_get_duration(player: *mut c_void) -> f64;
     fn lumina_player_set_rate(player: *mut c_void, rate: f32);
-    fn lumina_player_get_rate(player: *mut c_void) -> f32;
     fn lumina_player_set_volume(player: *mut c_void, volume: f32);
-    fn lumina_player_get_volume(player: *mut c_void) -> f32;
     fn lumina_player_set_muted(player: *mut c_void, muted: c_int);
-    fn lumina_player_is_muted(player: *mut c_void) -> c_int;
     fn lumina_player_set_looping(player: *mut c_void, looping: c_int);
-    fn lumina_player_is_looping(player: *mut c_void) -> c_int;
     fn lumina_player_copy_frame(
         player: *mut c_void,
         out_width: *mut c_int,
@@ -54,6 +48,15 @@ extern "C" {
     fn lumina_player_chapter_title(player: *mut c_void, index: c_int) -> *mut c_char;
     fn lumina_player_free_string(s: *mut c_char);
     fn lumina_window_set_up_pip(ns_view: *mut c_void);
+}
+
+// Read back only by tests (see `VideoPlayerBackend::rate`).
+#[cfg_attr(not(test), allow(dead_code))]
+extern "C" {
+    fn lumina_player_get_rate(player: *mut c_void) -> f32;
+    fn lumina_player_get_volume(player: *mut c_void) -> f32;
+    fn lumina_player_is_muted(player: *mut c_void) -> c_int;
+    fn lumina_player_is_looping(player: *mut c_void) -> c_int;
 }
 
 /// Takes ownership of a malloc'd UTF-8 string from the bridge. Null is "".
@@ -169,10 +172,6 @@ impl VideoPlayerBackend for AvFoundationPlayer {
 
     fn position(&self) -> f64 {
         unsafe { lumina_player_get_position(self.handle) }
-    }
-
-    fn duration(&self) -> f64 {
-        unsafe { lumina_player_get_duration(self.handle) }
     }
 
     fn set_rate(&mut self, rate: f32) {

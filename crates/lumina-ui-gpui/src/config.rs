@@ -726,7 +726,6 @@ impl AppConfig {
         self.launch_view = d.launch_view;
     }
 
-    #[cfg_attr(test, allow(dead_code))] // production startup path only
     pub fn load() -> Self {
         Self::load_from(&Self::config_path())
     }

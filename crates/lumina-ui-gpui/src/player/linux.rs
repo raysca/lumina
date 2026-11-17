@@ -371,6 +371,16 @@ impl GStreamerPlayer {
             height: self.height,
         })
     }
+
+    /// The pipeline's duration in seconds, or the one read at load.
+    fn duration(&self) -> f64 {
+        self.playbin
+            .as_ref()
+            .and_then(|playbin| playbin.query_duration::<gst::ClockTime>())
+            .map(|duration| duration.nseconds() as f64 / 1_000_000_000.0)
+            .filter(|duration| duration.is_finite() && *duration > 0.0)
+            .unwrap_or(self.duration_secs)
+    }
 }
 
 impl VideoPlayerBackend for GStreamerPlayer {
@@ -463,15 +473,6 @@ impl VideoPlayerBackend for GStreamerPlayer {
             .and_then(|playbin| playbin.query_position::<gst::ClockTime>())
             .map(|position| position.nseconds() as f64 / 1_000_000_000.0)
             .unwrap_or(0.0)
-    }
-
-    fn duration(&self) -> f64 {
-        self.playbin
-            .as_ref()
-            .and_then(|playbin| playbin.query_duration::<gst::ClockTime>())
-            .map(|duration| duration.nseconds() as f64 / 1_000_000_000.0)
-            .filter(|duration| duration.is_finite() && *duration > 0.0)
-            .unwrap_or(self.duration_secs)
     }
 
     fn set_rate(&mut self, rate: f32) {
