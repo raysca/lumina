@@ -807,9 +807,10 @@ fn keyboard_browses_tags_and_renames_the_focused_one() {
     assert!(
         engine
             .catalog()
-            .get_all_tags()
+            .query_tag_counts()
             .unwrap()
-            .contains(&"gamma".to_string()),
+            .iter()
+            .any(|(tag, _)| tag == "gamma"),
         "the rename must reach the catalog"
     );
 

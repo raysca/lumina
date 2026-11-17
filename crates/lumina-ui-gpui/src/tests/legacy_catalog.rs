@@ -110,7 +110,7 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
     // Hand-picked albums and smart-album pins (schema v19) on the upgraded
     // catalog. No album UI yet, so through the engine the UI will call.
     let album = engine
-        .create_album("Keepers")
+        .create_album_with("Keepers", &[])
         .expect("creating an album must work on an upgraded catalog");
     assert_eq!(
         engine

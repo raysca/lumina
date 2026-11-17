@@ -12,7 +12,7 @@ use lumina_core::SortSpec;
 #[core::prelude::v1::test]
 fn album_write_failure_shows_banner() {
     let (dir, engine) = seed_library("album_write_fail", 1);
-    let album = engine.create_album("Kept").unwrap();
+    let album = engine.create_album_with("Kept", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let fail = |on: bool| crate::app::albums::ALBUM_WRITE_FAILS.with(|f| f.set(on));
@@ -299,7 +299,7 @@ fn new_album_waits_for_photo_edits_and_sheets() {
 fn opening_another_library_resets_album_state() {
     let (dir, engine) = seed_library("album_switch", 1);
     let (other, _other_engine) = seed_library("album_switch_other", 1);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -335,7 +335,7 @@ fn opening_another_library_resets_album_state() {
 fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
     use crate::tests::quick_edit::{edit_library, open_viewer_on};
     let (dir, engine, photos, _) = edit_library("album_rename_in_edit_mode");
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -399,7 +399,7 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
 fn opening_another_library_clears_undo_history() {
     let (dir, engine) = seed_library("album_switch_undo", 1);
     let (other, other_engine) = seed_library("album_switch_undo_other", 1);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {

@@ -318,9 +318,11 @@ fn smart_row_and_album_grid_scroll_as_one_page() {
         .create_smart_album("A", "sparkles", MatchMode::All, &[photos()])
         .unwrap();
     for i in 0..59 {
-        engine.create_album(&format!("Album {i:02}")).unwrap();
+        engine
+            .create_album_with(&format!("Album {i:02}"), &[])
+            .unwrap();
     }
-    let last = engine.create_album("Album 59").unwrap().id;
+    let last = engine.create_album_with("Album 59", &[]).unwrap().id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_overview_at_1600(vcx);

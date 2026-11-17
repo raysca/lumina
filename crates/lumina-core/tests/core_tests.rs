@@ -1,8 +1,9 @@
 use lumina_core::{
     read_sidecar, write_sidecar, Catalog, DecodedFrame, DeletionTarget, DiskCache, EngineEvent,
-    Flag, LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder, PixelFormat,
-    Rights, RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata, SmartAlbumRule,
-    SortDirection, SortField, SortSpec, StructuredQuery, SystemAlbum, SCHEMA_VERSION,
+    ExportPreset, Flag, LuminaEngine, MatchMode, MediaId, MediaItem, MediaType, OfflineGeocoder,
+    PixelFormat, Rights, RuleField, RuleOperator, RuleValue, Scanner, SidecarMetadata,
+    SmartAlbumRule, SortDirection, SortField, SortSpec, StructuredQuery, SystemAlbum,
+    SCHEMA_VERSION,
 };
 use std::fs::File;
 use std::io::Write;
@@ -197,15 +198,21 @@ fn test_fts5_search() {
 
     catalog.insert_or_update_batch(&[item1, item2]).unwrap();
 
-    let matches_kyoto = catalog.search_fts("Kyoto", 10).unwrap();
+    let matches_kyoto = catalog
+        .search_structured(&StructuredQuery::parse("Kyoto"), 10, 0)
+        .unwrap();
     assert_eq!(matches_kyoto.len(), 1);
     assert_eq!(matches_kyoto[0].city.as_deref(), Some("Kyoto"));
 
-    let matches_paris = catalog.search_fts("Paris", 10).unwrap();
+    let matches_paris = catalog
+        .search_structured(&StructuredQuery::parse("Paris"), 10, 0)
+        .unwrap();
     assert_eq!(matches_paris.len(), 1);
     assert_eq!(matches_paris[0].city.as_deref(), Some("Paris"));
 
-    let matches_camera = catalog.search_fts("A7IV", 10).unwrap();
+    let matches_camera = catalog
+        .search_structured(&StructuredQuery::parse("A7IV"), 10, 0)
+        .unwrap();
     assert_eq!(matches_camera.len(), 1);
     assert_eq!(matches_camera[0].model.as_deref(), Some("A7IV"));
 }
@@ -230,12 +237,16 @@ fn test_fts5_caption_searchable() {
         .set_caption(id, "A lone elephant drinking at the river")
         .unwrap();
 
-    let matches = catalog.search_fts("elephant", 10).unwrap();
+    let matches = catalog
+        .search_structured(&StructuredQuery::parse("elephant"), 10, 0)
+        .unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].id, id);
 
     // Metadata columns remain searchable alongside the new caption column.
-    let by_city = catalog.search_fts("Kyoto", 10).unwrap();
+    let by_city = catalog
+        .search_structured(&StructuredQuery::parse("Kyoto"), 10, 0)
+        .unwrap();
     assert_eq!(by_city.len(), 1);
     assert_eq!(by_city[0].id, id);
 
@@ -244,7 +255,13 @@ fn test_fts5_caption_searchable() {
     let mut rescanned = item;
     rescanned.mtime_epoch_ms = 2000;
     catalog.insert_or_update_batch(&[rescanned]).unwrap();
-    assert_eq!(catalog.search_fts("elephant", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("elephant"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -264,11 +281,22 @@ fn test_fts5_caption_edit_reindexes() {
     catalog
         .set_caption(id, "sleepy walrus on the dock")
         .unwrap();
-    assert_eq!(catalog.search_fts("walrus", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("walrus"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 
     catalog.set_caption(id, "crimson giraffe at dawn").unwrap();
-    assert!(catalog.search_fts("walrus", 10).unwrap().is_empty());
-    let matches = catalog.search_fts("giraffe", 10).unwrap();
+    assert!(catalog
+        .search_structured(&StructuredQuery::parse("walrus"), 10, 0)
+        .unwrap()
+        .is_empty());
+    let matches = catalog
+        .search_structured(&StructuredQuery::parse("giraffe"), 10, 0)
+        .unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].id, id);
 }
@@ -288,10 +316,19 @@ fn test_fts5_caption_clear_unindexes() {
     let id = inserted[0].id;
 
     catalog.set_caption(id, "hidden badger").unwrap();
-    assert_eq!(catalog.search_fts("badger", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("badger"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 
     catalog.set_caption(id, "   ").unwrap();
-    assert!(catalog.search_fts("badger", 10).unwrap().is_empty());
+    assert!(catalog
+        .search_structured(&StructuredQuery::parse("badger"), 10, 0)
+        .unwrap()
+        .is_empty());
     assert!(!catalog.get_captions_map().unwrap().contains_key(&id));
 
     // Clearing an already-empty caption stays a no-op.
@@ -334,7 +371,13 @@ fn test_fts5_caption_removed_when_media_deleted() {
         .set_caption(doomed_id, "unique narwhal sighting")
         .unwrap();
     catalog.set_caption(keep_id, "landscape panorama").unwrap();
-    assert_eq!(catalog.search_fts("narwhal", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("narwhal"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 
     let removed = catalog
         .permanently_delete_items(&[doomed_id], DeletionTarget::CatalogOnly)
@@ -342,9 +385,18 @@ fn test_fts5_caption_removed_when_media_deleted() {
     assert_eq!(removed, 1);
 
     // The deleted media row no longer surfaces through the FTS join.
-    assert!(catalog.search_fts("narwhal", 10).unwrap().is_empty());
+    assert!(catalog
+        .search_structured(&StructuredQuery::parse("narwhal"), 10, 0)
+        .unwrap()
+        .is_empty());
     // The FTS index remains usable for the surviving rows.
-    assert_eq!(catalog.search_fts("panorama", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("panorama"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
     // The caption row itself was removed by the foreign-key cascade.
     assert!(!catalog.get_captions_map().unwrap().contains_key(&doomed_id));
 
@@ -432,7 +484,9 @@ fn test_fts5_caption_schema_migration_backfills() {
 
     // Reopening migrates the FTS table and backfills the stored caption.
     let catalog = Catalog::open(&db_path).expect("reopen catalog");
-    let matches = catalog.search_fts("elephant", 10).unwrap();
+    let matches = catalog
+        .search_structured(&StructuredQuery::parse("elephant"), 10, 0)
+        .unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(
         catalog
@@ -446,7 +500,13 @@ fn test_fts5_caption_schema_migration_backfills() {
     // Reopening again is idempotent: the caption column is detected and kept.
     drop(catalog);
     let catalog = Catalog::open(&db_path).expect("reopen catalog again");
-    assert_eq!(catalog.search_fts("elephant", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("elephant"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(catalog.total_count().unwrap(), 1);
     drop(catalog);
 
@@ -1235,8 +1295,15 @@ fn test_batch_operations_and_keywords() {
     ];
     catalog.add_tags_batch(&ids, &tags).unwrap();
 
-    let all_tags = catalog.get_all_tags().unwrap();
-    assert_eq!(all_tags, vec!["nature", "travel", "vacation"]);
+    let all_tags = catalog.query_tag_counts().unwrap();
+    assert_eq!(
+        all_tags,
+        vec![
+            ("nature".to_string(), 3),
+            ("travel".to_string(), 3),
+            ("vacation".to_string(), 3)
+        ]
+    );
 
     let tags_for_1 = catalog.get_tags_for_item(ids[0]).unwrap();
     assert_eq!(tags_for_1.len(), 3);
@@ -1698,14 +1765,23 @@ fn test_clear_all_resets_catalog_and_fts() {
     catalog.set_caption(id, "unique hedgehog at dusk").unwrap();
 
     assert_eq!(catalog.total_count().unwrap(), 1);
-    assert_eq!(catalog.search_fts("hedgehog", 10).unwrap().len(), 1);
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("hedgehog"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 
     catalog
         .clear_all()
         .expect("clear_all must handle contentless FTS5");
 
     assert_eq!(catalog.total_count().unwrap(), 0);
-    assert!(catalog.search_fts("hedgehog", 10).unwrap().is_empty());
+    assert!(catalog
+        .search_structured(&StructuredQuery::parse("hedgehog"), 10, 0)
+        .unwrap()
+        .is_empty());
     assert!(catalog.get_captions_map().unwrap().is_empty());
     assert!(catalog.get_tags_for_item(id).unwrap().is_empty());
 
@@ -1715,8 +1791,17 @@ fn test_clear_all_resets_catalog_and_fts() {
     catalog
         .set_caption(inserted2[0].id, "second entry")
         .unwrap();
-    assert!(catalog.search_fts("hedgehog", 10).unwrap().is_empty());
-    assert_eq!(catalog.search_fts("second", 10).unwrap().len(), 1);
+    assert!(catalog
+        .search_structured(&StructuredQuery::parse("hedgehog"), 10, 0)
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        catalog
+            .search_structured(&StructuredQuery::parse("second"), 10, 0)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -1922,7 +2007,10 @@ fn test_edit_timestamp_rebuilds_buckets_and_location() {
         "new coordinates must re-derive the place"
     );
     assert_eq!(
-        catalog.search_fts("Paris", 10).unwrap().len(),
+        catalog
+            .search_structured(&StructuredQuery::parse("Paris"), 10, 0)
+            .unwrap()
+            .len(),
         1,
         "the derived place is searchable"
     );
@@ -2346,7 +2434,14 @@ fn test_export_items_copies_files_and_writes_xmp_sidecars() {
 
     let ids: Vec<MediaId> = items.iter().map(|item| item.id).collect();
     let destination = tmp_dir.join("exported");
-    let report = engine.export_items(&ids, &destination).unwrap();
+    let report = engine
+        .export_items_with(
+            &ids,
+            &destination,
+            ExportPreset::Originals,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
     assert_eq!(report.exported, 2);
     assert_eq!(report.sidecars, 1, "only the annotated item gets a sidecar");
     assert!(
@@ -2366,7 +2461,14 @@ fn test_export_items_copies_files_and_writes_xmp_sidecars() {
     assert_eq!(metadata.color_label, 5, "the color label is exported");
 
     // Re-exporting must not overwrite the first copy.
-    let second = engine.export_items(&[rated.id], &destination).unwrap();
+    let second = engine
+        .export_items_with(
+            &[rated.id],
+            &destination,
+            ExportPreset::Originals,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
     assert_eq!(second.exported, 1);
     let renamed = destination.join(format!(
         "{} (1).jpg",
@@ -3308,7 +3410,12 @@ fn sidecars_are_not_rewritten_when_captions_cannot_be_read() {
         "an unreadable caption table must fail the write, not write no caption"
     );
     assert!(engine
-        .export_items(&[item.id], &tmp_dir.join("exported"))
+        .export_items_with(
+            &[item.id],
+            &tmp_dir.join("exported"),
+            ExportPreset::Originals,
+            &std::sync::atomic::AtomicBool::new(false)
+        )
         .is_err());
     let kept = read_sidecar(&item.path).unwrap().unwrap();
     assert_eq!(
@@ -3351,7 +3458,7 @@ fn a_rescan_stops_when_the_catalog_file_list_cannot_be_read() {
 fn a_label_alone_gets_a_sidecar_and_a_labelless_sidecar_keeps_the_label() {
     let (tmp_dir, _db_path, engine, _rx) = scanned_library("label_sidecar");
     let item = engine.get_item_slice(0..1).remove(0);
-    engine.set_color_label(item.id, 2).unwrap();
+    engine.set_color_labels(&[(item.id, 2)]).unwrap();
     assert_eq!(
         engine.write_metadata_sidecars(&[item.id]).unwrap().written,
         1,
@@ -3794,25 +3901,11 @@ fn test_duplicate_detection_and_merging() {
     let slice = engine.query_duplicate_items_slice(0, 10);
     assert_eq!(slice.len(), 2);
 
-    // Test import duplicate checking
-    // 1. Single file check
+    // Import duplicate pre-check: one copy of content A, one unique file.
     let external_dup = tmp_dir.join("external_dup.jpg");
     std::fs::write(&external_dup, &content_a).unwrap();
-    let match_result = engine.check_file_is_duplicate(&external_dup).unwrap();
-    assert!(
-        match_result.is_some(),
-        "external file with content A matched existing library item"
-    );
-
     let external_unique = tmp_dir.join("external_unique.jpg");
     std::fs::write(&external_unique, b"totally unique external photo bytes").unwrap();
-    let no_match = engine.check_file_is_duplicate(&external_unique).unwrap();
-    assert!(
-        no_match.is_none(),
-        "unique external file is not a duplicate"
-    );
-
-    // 2. Batch import pre-check
     let candidates = engine
         .check_import_duplicates(
             &[external_dup.clone(), external_unique.clone()],
@@ -3821,7 +3914,10 @@ fn test_duplicate_detection_and_merging() {
         .unwrap();
     assert_eq!(candidates.len(), 2);
     let cand_dup = candidates.iter().find(|c| c.path == external_dup).unwrap();
-    assert!(cand_dup.is_duplicate);
+    assert!(
+        cand_dup.is_duplicate,
+        "external file with content A matched existing library item"
+    );
     assert!(cand_dup.matched_item_id.is_some());
     let cand_unique = candidates
         .iter()
@@ -3873,6 +3969,7 @@ fn test_network_import_source_attribution_and_cascade() {
 
     // Record source attribution
     engine
+        .catalog()
         .record_media_source(item.id, source_url, Some(uploader))
         .unwrap();
 
@@ -4072,7 +4169,8 @@ fn exclusion_plan_uses_fts_index() {
         )])
         .expect("insert items");
     for text in ["-beach", "-beach is:favorite", "sunset -beach"] {
-        let (sql, params) = StructuredQuery::parse(text).synthesize_query(50, 0);
+        let (sql, params) =
+            StructuredQuery::parse(text).synthesize_query_sorted(50, 0, SortSpec::default());
         let rows = catalog
             .explain_query_plan(&inline_sql_params(&sql, &params))
             .expect("explain");
@@ -4128,7 +4226,7 @@ fn rating_and_color_filter_plans_use_an_index() {
                 .is_empty(),
             "{text:?} must match a seeded row"
         );
-        let (sql, params) = q.synthesize_query(50, 0);
+        let (sql, params) = q.synthesize_query_sorted(50, 0, SortSpec::default());
         let plan = catalog
             .explain_query_plan(&inline_sql_params(&sql, &params))
             .expect("explain")
@@ -4492,7 +4590,11 @@ fn migration_adds_color_index_idempotently() {
             SCHEMA_VERSION,
             "{stage}: user_version must be stamped to the current schema"
         );
-        let (sql, params) = StructuredQuery::parse("color:red").synthesize_query(50, 450);
+        let (sql, params) = StructuredQuery::parse("color:red").synthesize_query_sorted(
+            50,
+            450,
+            SortSpec::default(),
+        );
         let plan = catalog
             .explain_query_plan(&inline_sql_params(&sql, &params))
             .expect("explain")
@@ -4713,7 +4815,7 @@ fn query_rule_plan_uses_fts_index() {
         .expect("insert items");
     for text in ["sunset", "sunset camera:Sony rating:>=3", "sunset -beach"] {
         let (sql, params) = query_rule_album(text)
-            .synthesize_query(50, 0)
+            .synthesize_query_sorted(50, 0, SortSpec::default())
             .expect("compiles");
         let rows = catalog
             .explain_query_plan(&inline_sql_params(&sql, &params))
@@ -4738,7 +4840,7 @@ fn query_rule_plan_uses_fts_index() {
 
 fn search_ids(catalog: &Catalog, query: &str) -> Vec<MediaId> {
     catalog
-        .search_fts(query, 50)
+        .search_structured(&StructuredQuery::parse(query), 50, 0)
         .expect("search must run")
         .into_iter()
         .map(|item| item.id)
@@ -4985,7 +5087,11 @@ fn tag_filter_plan_uses_index() {
             .map(|text| {
                 (
                     text.to_string(),
-                    StructuredQuery::parse(text).synthesize_query(50, 0),
+                    StructuredQuery::parse(text).synthesize_query_sorted(
+                        50,
+                        0,
+                        SortSpec::default(),
+                    ),
                 )
             })
             .collect();
@@ -4993,7 +5099,9 @@ fn tag_filter_plan_uses_index() {
         let album = tag_album(operator.clone(), "places");
         queries.push((
             format!("album {operator:?}"),
-            album.synthesize_query(50, 0).expect("compiles"),
+            album
+                .synthesize_query_sorted(50, 0, SortSpec::default())
+                .expect("compiles"),
         ));
     }
     for (label, (sql, params)) in queries {
@@ -6327,7 +6435,14 @@ fn originals_export_is_byte_identical() {
     let (tmp_dir, engine) = export_library("originals_bytes", &[("raw.jpg", payload.clone())]);
     let item = item_named(&engine, "raw.jpg");
     let destination = tmp_dir.join("out");
-    let report = engine.export_items(&[item.id], &destination).unwrap();
+    let report = engine
+        .export_items_with(
+            &[item.id],
+            &destination,
+            ExportPreset::Originals,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
     assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
     assert_eq!(
         std::fs::read(destination.join("raw.jpg")).unwrap(),
@@ -6358,7 +6473,14 @@ fn originals_export_keeps_mode_dates_and_xattrs() {
     let source_mtime = std::fs::metadata(&item.path).unwrap().modified().unwrap();
 
     let destination = tmp_dir.join("out");
-    let report = engine.export_items(&[item.id], &destination).unwrap();
+    let report = engine
+        .export_items_with(
+            &[item.id],
+            &destination,
+            ExportPreset::Originals,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
     assert_eq!(report.exported, 1, "failures: {:?}", report.failed);
     let copy = destination.join("kept.jpg");
     let meta = std::fs::metadata(&copy).unwrap();
@@ -6629,7 +6751,8 @@ fn is_edited_matches_items_with_edits_or_rotation() {
 
     // The plan drives from the edited ids (rowid lookups into media_items),
     // never a walk of the whole timeline index or a scan of media_items.
-    let (sql, params) = StructuredQuery::parse("is:edited").synthesize_query(50, 0);
+    let (sql, params) =
+        StructuredQuery::parse("is:edited").synthesize_query_sorted(50, 0, SortSpec::default());
     let rows = catalog
         .explain_query_plan(&inline_sql_params(&sql, &params))
         .expect("explain");
@@ -6773,7 +6896,8 @@ fn migration_adds_rotation_index_idempotently() {
             SCHEMA_VERSION,
             "pass {pass}: opening stamps the current schema version"
         );
-        let (sql, params) = StructuredQuery::parse("is:edited").synthesize_query(50, 0);
+        let (sql, params) =
+            StructuredQuery::parse("is:edited").synthesize_query_sorted(50, 0, SortSpec::default());
         let plan = catalog
             .explain_query_plan(&inline_sql_params(&sql, &params))
             .expect("explain")

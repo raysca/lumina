@@ -25,10 +25,6 @@ pub struct SortSpec {
 }
 
 impl SortSpec {
-    pub fn is_default(&self) -> bool {
-        *self == SortSpec::default()
-    }
-
     pub fn field_key(self) -> &'static str {
         match self.field {
             SortField::DateTaken => "date",

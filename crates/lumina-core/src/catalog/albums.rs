@@ -9,12 +9,6 @@ use crate::text::{clean_text, MAX_NAME_CHARS};
 use crate::{MediaItem, SortSpec};
 
 impl Catalog {
-    /// High-speed full-text search over filename, city, region, country, camera model, year, and tags.
-    pub fn search_fts(&self, query: &str, limit: usize) -> Result<Vec<MediaItem>> {
-        let q = StructuredQuery::parse(query);
-        self.search_structured(&q, limit, 0)
-    }
-
     /// Executes a structured search query with optional FTS5 matching and metadata predicates.
     pub fn search_structured(
         &self,

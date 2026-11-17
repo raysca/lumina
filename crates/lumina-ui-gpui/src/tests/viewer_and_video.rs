@@ -1345,6 +1345,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
 
     assert_eq!(
         engine
+            .catalog()
             .get_rotation(item_id)
             .expect("rotation read must work"),
         0,
@@ -1377,6 +1378,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     view.update(vcx, |app, _| {
         assert_eq!(
             engine
+                .catalog()
                 .get_rotation(item_id)
                 .expect("rotation read must work"),
             1,
@@ -1402,6 +1404,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     view.update(vcx, |app, _| {
         assert_eq!(
             engine
+                .catalog()
                 .get_rotation(item_id)
                 .expect("rotation read must work"),
             1,
@@ -1434,6 +1437,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     view.update(vcx, |app, _| {
         assert_eq!(
             engine
+                .catalog()
                 .get_rotation(item_id)
                 .expect("rotation read must work"),
             2,
@@ -1502,7 +1506,12 @@ fn rotation_batch_library(
 
 fn rotations(engine: &lumina_core::LuminaEngine, ids: &[lumina_core::MediaId]) -> Vec<u8> {
     ids.iter()
-        .map(|id| engine.get_rotation(*id).expect("rotation read must work"))
+        .map(|id| {
+            engine
+                .catalog()
+                .get_rotation(*id)
+                .expect("rotation read must work")
+        })
         .collect()
 }
 
@@ -1547,7 +1556,7 @@ fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
         "R must turn every selected photo one quarter clockwise"
     );
     assert_eq!(
-        engine.get_rotation(video).expect("rotation read"),
+        engine.catalog().get_rotation(video).expect("rotation read"),
         2,
         "R must leave a selected video untouched"
     );
@@ -1583,7 +1592,10 @@ fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
         seeded.to_vec(),
         "one ⌘Z must restore each photo's own previous rotation"
     );
-    assert_eq!(engine.get_rotation(video).expect("rotation read"), 2);
+    assert_eq!(
+        engine.catalog().get_rotation(video).expect("rotation read"),
+        2
+    );
 
     // Redo turns them again and must drop what was painted at the old angle.
     put_test_texture(&view, vcx, photos[0]);

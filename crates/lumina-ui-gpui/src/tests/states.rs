@@ -549,7 +549,7 @@ fn videos_meta_updates_after_a_clip_is_trashed() {
 #[core::prelude::v1::test]
 fn empty_state_shell_matches_design() {
     let (dir, engine) = seed_library("states_empty_shell", 1);
-    let album = engine.create_album("Nothing yet").unwrap();
+    let album = engine.create_album_with("Nothing yet", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -588,7 +588,7 @@ fn empty_album_offers_add_from_library() {
     use crate::app::command_palette::CommandId;
 
     let (dir, engine) = seed_library("states_empty_album_add", 1);
-    let album = engine.create_album("Iceland 2024").unwrap();
+    let album = engine.create_album_with("Iceland 2024", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let open_album = |vcx: &mut gpui::VisualTestContext| {
@@ -659,7 +659,7 @@ fn empty_album_long_title_wraps_and_keeps_the_button_in_view() {
     let (dir, engine) = seed_library("states_empty_album_long", 1);
     let title = "A very long album title for the Iceland road trip of summer 2024 and more";
     assert!(title.chars().count() >= 60);
-    let album = engine.create_album(title).unwrap();
+    let album = engine.create_album_with(title, &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));

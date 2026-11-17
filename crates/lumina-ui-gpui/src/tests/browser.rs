@@ -215,7 +215,7 @@ const FAVORITES: AlbumSelection = AlbumSelection::System(lumina_core::SystemAlbu
 fn palette_filter_toggles_query_token() {
     let (dir, engine) = seed_library("br_quick_filter", 4);
     let rated = engine.get_item_slice(0..1)[0].id;
-    engine.set_rating(rated, 4).expect("seed a rating");
+    engine.set_ratings(&[(rated, 4)]).expect("seed a rating");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 

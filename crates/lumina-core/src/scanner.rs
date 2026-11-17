@@ -49,10 +49,6 @@ impl Scanner {
         self
     }
 
-    pub fn cancel_handle(&self) -> Arc<AtomicBool> {
-        self.cancel_flag.clone()
-    }
-
     pub fn scan(&self) -> Result<usize> {
         self.scan_files()
     }

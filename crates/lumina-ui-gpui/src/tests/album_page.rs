@@ -309,7 +309,7 @@ fn album_header_popovers_keep_the_band() {
 fn album_header_empty_album_shows_zero_items() {
     let (dir, engine) = seed_library("album_header_empty", 1);
     let _dir = super::downloads::TempLibrary(dir);
-    let album = engine.create_album("Nothing yet").unwrap();
+    let album = engine.create_album_with("Nothing yet", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_album(&view, vcx, album.id);

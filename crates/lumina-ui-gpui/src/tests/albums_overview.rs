@@ -29,7 +29,7 @@ fn assert_on_overview(vcx: &mut gpui::VisualTestContext, how: &str) {
 #[core::prelude::v1::test]
 fn albums_overview_opens_from_sidebar_and_palette() {
     let (dir, engine) = seed_library("albums_overview_nav", 2);
-    let album = engine.create_album("Lisbon").unwrap();
+    let album = engine.create_album_with("Lisbon", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     assert!(vcx.debug_bounds("media-grid-surface").is_some());
@@ -86,8 +86,8 @@ pub(super) fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) 
 #[core::prelude::v1::test]
 fn albums_header_and_tabs_match_design() {
     let (dir, engine) = seed_library("albums_overview_header", 2);
-    engine.create_album("Lisbon").unwrap();
-    engine.create_album("Family").unwrap();
+    engine.create_album_with("Lisbon", &[]).unwrap();
+    engine.create_album_with("Family", &[]).unwrap();
     let rule = SmartAlbumRule {
         field: RuleField::IsFavorite,
         operator: RuleOperator::Equals,

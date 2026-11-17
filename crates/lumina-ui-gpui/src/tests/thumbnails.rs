@@ -344,7 +344,7 @@ fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {
     let (raw, clip, fav) = (id("a.arw"), id("clip.mov"), id("fav.jpg"));
     engine.toggle_favorite(fav, true).unwrap();
     engine.set_flags(&[(fav, Flag::Pick)]).unwrap();
-    engine.set_rating(clip, 3).unwrap();
+    engine.set_ratings(&[(clip, 3)]).unwrap();
 
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
@@ -440,7 +440,7 @@ fn small_tiles_keep_state_badges_apart() {
     let clip = engine.catalog().insert_or_update_batch(&[clip]).unwrap()[0].id;
     engine.toggle_favorite(clip, true).unwrap();
     engine.set_flags(&[(clip, Flag::Pick)]).unwrap();
-    engine.set_rating(clip, 5).unwrap();
+    engine.set_ratings(&[(clip, 5)]).unwrap();
 
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| crate::LuminaApp::new(cx));

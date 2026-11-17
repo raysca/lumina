@@ -555,18 +555,6 @@ impl LuminaEngine {
         self.search_structured_count(&q)
     }
 
-    pub fn query_system_album(
-        &self,
-        album: SystemAlbum,
-        limit: usize,
-        offset: usize,
-    ) -> Vec<MediaItem> {
-        self.read(
-            "query system album",
-            self.catalog.query_system_album(album, limit, offset),
-        )
-    }
-
     pub fn query_system_album_sorted(
         &self,
         album: SystemAlbum,
@@ -632,12 +620,8 @@ impl LuminaEngine {
         self.catalog.set_smart_album_pinned(id, pinned)
     }
 
-    /// Creates an empty hand-picked album.
-    pub fn create_album(&self, title: &str) -> Result<Album> {
-        self.catalog.create_album(title)
-    }
-
-    /// Creates an album holding `members` in one transaction.
+    /// Creates an album holding `members` (none for an empty album) in one
+    /// transaction.
     pub fn create_album_with(&self, title: &str, members: &[MediaId]) -> Result<Album> {
         self.catalog.create_album_with(title, members)
     }
@@ -781,10 +765,6 @@ impl LuminaEngine {
         self.catalog.batch_set_favorite(ids, is_favorite)
     }
 
-    pub fn set_rating(&self, id: MediaId, rating: u8) -> Result<()> {
-        self.catalog.set_rating(id, rating)
-    }
-
     /// Batch edits: each `set_*s` writes every change in one transaction.
     pub fn set_ratings(&self, changes: &[(MediaId, u8)]) -> Result<()> {
         self.catalog.set_ratings(changes)
@@ -792,10 +772,6 @@ impl LuminaEngine {
 
     pub fn get_ratings_map(&self) -> std::collections::HashMap<MediaId, u8> {
         self.read("get ratings map", self.catalog.get_ratings_map())
-    }
-
-    pub fn set_color_label(&self, id: MediaId, label: u8) -> Result<()> {
-        self.catalog.set_color_label(id, label)
     }
 
     /// Sets each item's culling flag in one transaction.
@@ -881,11 +857,6 @@ impl LuminaEngine {
     /// Every item with an edit or a rotation.
     pub fn edited_ids(&self) -> Result<HashSet<MediaId>> {
         self.catalog.edited_ids()
-    }
-
-    /// Persisted clockwise quarter turns for an item (0 when unset).
-    pub fn get_rotation(&self, id: MediaId) -> Result<u8> {
-        self.catalog.get_rotation(id)
     }
 
     pub fn set_title(&self, id: MediaId, title: Option<&str>) -> Result<()> {
@@ -1233,16 +1204,6 @@ impl LuminaEngine {
         self.read("get captions map", self.catalog.get_captions_map())
     }
 
-    pub fn record_media_source(
-        &self,
-        media_id: MediaId,
-        source_url: &str,
-        uploader: Option<&str>,
-    ) -> Result<()> {
-        self.catalog
-            .record_media_source(media_id, source_url, uploader)
-    }
-
     pub fn get_media_source(
         &self,
         media_id: MediaId,
@@ -1538,47 +1499,6 @@ impl LuminaEngine {
     /// Ids of items whose file is missing from disk.
     pub fn get_missing_ids(&self) -> std::collections::HashSet<MediaId> {
         self.read("get missing ids", self.catalog.get_missing_ids())
-    }
-
-    /// Checks whether an external file is an exact duplicate of any item in the library.
-    pub fn check_file_is_duplicate(&self, path: &Path) -> Result<Option<MediaItem>> {
-        let meta = match fs::metadata(path) {
-            Ok(m) => m,
-            Err(_) => return Ok(None),
-        };
-        let file_size = meta.len();
-        if file_size == 0 {
-            return Ok(None);
-        }
-        let candidates = self.catalog.find_candidates_by_size(file_size)?;
-        if candidates.is_empty() {
-            return Ok(None);
-        }
-
-        let candidate_hash = compute_file_hash(path)?;
-
-        let matched = self.catalog.find_items_by_hash(&candidate_hash)?;
-        if let Some(item) = matched.into_iter().next() {
-            return Ok(Some(item));
-        }
-
-        let mut new_hashes = Vec::new();
-        let mut matched_item = None;
-        for (cand_id, cand_path) in candidates {
-            if let Ok(h) = compute_file_hash(&cand_path) {
-                if h == candidate_hash && matched_item.is_none() {
-                    matched_item = self.catalog.get_item_by_id(cand_id)?;
-                }
-                new_hashes.push((cand_id, file_size, h));
-            }
-        }
-        if !new_hashes.is_empty() {
-            if let Err(err) = self.catalog.batch_insert_hashes(&new_hashes) {
-                log::warn!("failed to cache candidate hashes: {err:#}");
-            }
-        }
-
-        Ok(matched_item)
     }
 
     /// Evaluates candidate files before importing them into the library.
@@ -2224,6 +2144,7 @@ mod tests {
             .expect("scanned image must be cataloged");
         assert_eq!(
             engine
+                .catalog
                 .get_rotation(item.id)
                 .expect("rotation read must work"),
             0,
@@ -2246,7 +2167,10 @@ mod tests {
         engine
             .set_rotations(&[(item.id, 1)])
             .expect("rotation write must succeed");
-        assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 1);
+        assert_eq!(
+            engine.catalog.get_rotation(item.id).expect("rotation read"),
+            1
+        );
         assert!(
             cache_file.exists(),
             "rotating must keep the cached decode: it holds the unrotated frame"
@@ -2273,7 +2197,10 @@ mod tests {
         engine
             .set_rotations(&[(item.id, 3), (MediaId(9_999), 3)])
             .expect("unknown ids must not fail the batch");
-        assert_eq!(engine.get_rotation(item.id).expect("rotation read"), 3);
+        assert_eq!(
+            engine.catalog.get_rotation(item.id).expect("rotation read"),
+            3
+        );
 
         drop(engine);
         let _ = fs::remove_dir_all(&dir);

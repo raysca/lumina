@@ -193,6 +193,7 @@ impl Catalog {
 mod tests {
     use super::*;
     use crate::catalog::tests_support::video_item as item;
+    use crate::search::StructuredQuery;
     use crate::smart_albums::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
     use crate::MediaId;
 
@@ -208,7 +209,7 @@ mod tests {
 
     fn search(catalog: &Catalog, query: &str) -> Vec<MediaId> {
         let mut ids: Vec<MediaId> = catalog
-            .search_fts(query, 50)
+            .search_structured(&StructuredQuery::parse(query), 50, 0)
             .unwrap()
             .into_iter()
             .map(|item| item.id)

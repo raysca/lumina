@@ -58,8 +58,8 @@ fn top(vcx: &mut gpui::VisualTestContext, selector: String) -> f32 {
 #[core::prelude::v1::test]
 fn pinned_albums_render_first() {
     let (dir, engine) = seed_library("album_pinned_first", 1);
-    let loose = engine.create_album("Loose").unwrap();
-    let kept = engine.create_album("Kept").unwrap();
+    let loose = engine.create_album_with("Loose", &[]).unwrap();
+    let kept = engine.create_album_with("Kept", &[]).unwrap();
     assert!(engine.set_album_pinned(kept.id, true).unwrap());
     let smart_loose = two_rule_album(&engine, "Smart loose");
     let smart_kept = two_rule_album(&engine, "Smart kept");
@@ -144,7 +144,7 @@ fn pinned_albums_render_first() {
 #[core::prelude::v1::test]
 fn pin_write_failure_shows_banner_and_keeps_order() {
     let (dir, engine) = seed_library("album_pin_fail", 1);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, leak(format!("album-row-{}", album.id)));

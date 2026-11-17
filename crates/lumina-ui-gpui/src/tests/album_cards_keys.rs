@@ -133,7 +133,7 @@ fn deleting_the_focused_card_focuses_a_neighbour() {
     let (dir, engine) = seed_library("album_cards_refocus", 1);
     let ids: Vec<i64> = ["A", "B", "C"]
         .iter()
-        .map(|t| engine.create_album(t).unwrap().id)
+        .map(|t| engine.create_album_with(t, &[]).unwrap().id)
         .collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);

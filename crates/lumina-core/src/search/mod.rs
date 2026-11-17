@@ -94,7 +94,7 @@ pub(crate) enum GeoIndex {
 
 impl StructuredQuery {
     /// Builds a parameterized SQL WHERE clause and parameters. The FTS match
-    /// needs `media_search_fts` joined, as [`Self::synthesize_query`] does;
+    /// needs `media_search_fts` joined, as [`Self::synthesize_query_sorted`] does;
     /// CROSS JOIN it first so an equality index never drives the MATCH per row.
     pub fn build_sql(&self) -> (String, Vec<rusqlite::types::Value>) {
         self.where_clause(FtsMatch::Joined, GeoIndex::Use)
@@ -390,14 +390,6 @@ impl StructuredQuery {
     }
 
     /// Synthesizes the full query with SELECT columns and optional FTS5 JOIN.
-    pub fn synthesize_query(
-        &self,
-        limit: usize,
-        offset: usize,
-    ) -> (String, Vec<rusqlite::types::Value>) {
-        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
-    }
-
     pub fn synthesize_query_sorted(
         &self,
         limit: usize,

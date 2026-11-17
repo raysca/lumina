@@ -228,19 +228,6 @@ impl Catalog {
         Ok(found)
     }
 
-    /// Returns all distinct tags in the catalog, ordered alphabetically.
-    pub fn get_all_tags(&self) -> Result<Vec<String>> {
-        let conn = self.conn.lock();
-        let mut stmt =
-            conn.prepare_cached("SELECT DISTINCT tag FROM media_tags ORDER BY tag ASC;")?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        let mut tags = Vec::new();
-        for r in rows {
-            tags.push(r?);
-        }
-        Ok(tags)
-    }
-
     /// Returns all tags along with their active (non-trashed, non-hidden) item counts.
     pub fn query_tag_counts(&self) -> Result<Vec<(String, usize)>> {
         let conn = self.conn.lock();

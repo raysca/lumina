@@ -39,8 +39,8 @@ fn picker_open(view: &Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) -> 
 #[core::prelude::v1::test]
 fn add_to_album_via_keyboard_picker() {
     let (dir, engine) = seed_library("picker_keys", 3);
-    let kyoto = engine.create_album("Kyoto").unwrap();
-    let paris = engine.create_album("Paris").unwrap();
+    let kyoto = engine.create_album_with("Kyoto", &[]).unwrap();
+    let paris = engine.create_album_with("Paris", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -133,7 +133,7 @@ fn add_to_album_via_keyboard_picker() {
 #[core::prelude::v1::test]
 fn context_menu_add_to_album() {
     let (dir, engine) = seed_library("picker_context", 2);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let first = engine.get_item_slice(0..1)[0].id;
     let card = leak(format!("media-card-{}", first.0));
     let mut cx = crate::tests::TestApp::single();
@@ -319,7 +319,7 @@ fn album_membership_undo_redo() {
 #[core::prelude::v1::test]
 fn shift_cmd_a_opens_picker_not_select_all() {
     let (dir, engine) = seed_library("shift_cmd_a", 3);
-    engine.create_album("Trip").unwrap();
+    engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -391,7 +391,7 @@ fn album_picker_absorbs_delete_and_text() {
 fn album_membership_write_failure_shows_banner() {
     let (dir, engine) = seed_library("membership_fail", 2);
     let (album, ids) = album_with_members(&engine, "Trip", 1);
-    let other = engine.create_album("Other").unwrap();
+    let other = engine.create_album_with("Other", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let fail = |on: bool| crate::app::albums::ALBUM_WRITE_FAILS.with(|f| f.set(on));

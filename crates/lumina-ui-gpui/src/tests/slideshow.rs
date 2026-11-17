@@ -925,7 +925,7 @@ fn large_selection_is_cleared_when_rows_reorder_at_same_count() {
     });
     render_ui(vcx);
     let first = ids(&view, vcx);
-    engine.set_rating(first[0], 5).unwrap();
+    engine.set_ratings(&[(first[0], 5)]).unwrap();
     view.update(vcx, |app, cx| app.refresh_active_view(cx));
     vcx.run_until_parked();
     render_ui(vcx);
@@ -939,7 +939,7 @@ fn large_selection_is_cleared_when_rows_reorder_at_same_count() {
     // Another writer rates an unselected row: it moves to row 1, under the
     // focus, and every row between shifts down by one. The count is the same.
     let outsider = rows[LARGE - 5];
-    engine.set_rating(outsider, 4).unwrap();
+    engine.set_ratings(&[(outsider, 4)]).unwrap();
     view.update(vcx, |app, cx| app.refresh_active_view(cx));
     vcx.run_until_parked();
     assert_eq!(

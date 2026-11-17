@@ -45,11 +45,11 @@ fn album_cards_render_and_open() {
     engine
         .set_timestamp(items[2].id, utc_ms(2023, 3, 4))
         .unwrap();
-    let lisbon = engine.create_album("Lisbon").unwrap();
+    let lisbon = engine.create_album_with("Lisbon", &[]).unwrap();
     engine
         .add_to_album(lisbon.id, &[items[0].id, items[1].id])
         .unwrap();
-    let family = engine.create_album("Family").unwrap();
+    let family = engine.create_album_with("Family", &[]).unwrap();
     engine.add_to_album(family.id, &[items[2].id]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -152,9 +152,9 @@ fn album_sort_is_saved_and_reverts_on_a_failed_save() {
     use crate::config::AlbumSort;
     let (dir, engine) = seed_library("album_cards_sort", 3);
     let items = engine.get_item_slice(0..3);
-    let small = engine.create_album("Alpha").unwrap();
+    let small = engine.create_album_with("Alpha", &[]).unwrap();
     engine.add_to_album(small.id, &[items[0].id]).unwrap();
-    let big = engine.create_album("Beta").unwrap();
+    let big = engine.create_album_with("Beta", &[]).unwrap();
     engine
         .add_to_album(big.id, &[items[1].id, items[2].id])
         .unwrap();
@@ -256,8 +256,8 @@ fn albums_tab_without_albums_offers_new_album() {
 fn empty_album_card_shows_a_folder_placeholder() {
     let (dir, engine) = seed_library("album_cards_placeholder", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
-    let empty = engine.create_album("Empty").unwrap();
-    let full = engine.create_album("Full").unwrap();
+    let empty = engine.create_album_with("Empty", &[]).unwrap();
+    let full = engine.create_album_with("Full", &[]).unwrap();
     engine.add_to_album(full.id, &[item.id]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
@@ -284,7 +284,12 @@ fn album_grid_is_virtualised_and_keeps_the_focus_in_view() {
     let (dir, engine) = seed_library("album_cards_many", 1);
     // 103 = 20 rows of 5 and a short last row of 3.
     let ids: Vec<i64> = (0..103)
-        .map(|i| engine.create_album(&format!("Album {i:03}")).unwrap().id)
+        .map(|i| {
+            engine
+                .create_album_with(&format!("Album {i:03}"), &[])
+                .unwrap()
+                .id
+        })
         .collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -347,9 +352,9 @@ pub(super) fn two_album_overview<'a>(
 ) {
     let (dir, engine) = seed_library(prefix, 2);
     let items = engine.get_item_slice(0..2);
-    let alpha = engine.create_album("Alpha").unwrap();
+    let alpha = engine.create_album_with("Alpha", &[]).unwrap();
     engine.add_to_album(alpha.id, &[items[0].id]).unwrap();
-    let beta = engine.create_album("Beta").unwrap();
+    let beta = engine.create_album_with("Beta", &[]).unwrap();
     let (view, vcx) = app_with_library(cx, engine.clone());
     open_overview_at_1600(vcx);
     (dir, engine, [alpha.id, beta.id], view, vcx)

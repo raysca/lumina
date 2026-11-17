@@ -515,7 +515,7 @@ fn toggle_label_follows_state() {
 #[core::prelude::v1::test]
 fn new_album_is_last_album_row() {
     let (dir, engine) = seed_library("sb_new_album", 2);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);

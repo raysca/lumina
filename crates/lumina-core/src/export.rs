@@ -68,18 +68,6 @@ pub enum ExportPreset {
 }
 
 impl LuminaEngine {
-    /// Copies the given items into destination, writing an XMP sidecar for each
-    /// item that has rating/tags/caption metadata. Existing files are never
-    /// overwritten; collisions get a numbered suffix.
-    pub fn export_items(&self, ids: &[MediaId], destination: &Path) -> Result<ExportReport> {
-        self.export_items_with(
-            ids,
-            destination,
-            ExportPreset::Originals,
-            &AtomicBool::new(false),
-        )
-    }
-
     /// Exports the given items into destination as `preset` says. Existing
     /// files are never overwritten; collisions get a numbered suffix. A
     /// missing or unreadable item is reported in `failed` and the rest still

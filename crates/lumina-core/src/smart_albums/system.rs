@@ -118,14 +118,6 @@ impl SystemAlbum {
         }
     }
 
-    pub fn synthesize_query(
-        &self,
-        limit: usize,
-        offset: usize,
-    ) -> (String, Vec<rusqlite::types::Value>) {
-        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
-    }
-
     pub fn synthesize_query_sorted(
         &self,
         limit: usize,

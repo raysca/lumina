@@ -49,7 +49,7 @@ fn delete_rejected_opens_dialog_with_only_rejects() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let all = ids(&view, vcx);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     engine.add_to_album(album.id, &all[..4]).unwrap();
     // In the album: two rejects, a pick, an unflagged item. Outside it: one
     // more reject that must never reach the dialog.

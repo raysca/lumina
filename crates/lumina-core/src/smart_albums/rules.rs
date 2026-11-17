@@ -168,14 +168,6 @@ impl SmartAlbum {
         Ok((combined, params))
     }
 
-    pub fn synthesize_query(
-        &self,
-        limit: usize,
-        offset: usize,
-    ) -> Result<(String, Vec<rusqlite::types::Value>)> {
-        self.synthesize_query_sorted(limit, offset, crate::SortSpec::default())
-    }
-
     pub fn synthesize_query_sorted(
         &self,
         limit: usize,

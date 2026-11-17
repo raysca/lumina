@@ -110,7 +110,7 @@ fn remove_records_only_ids_it_removed() {
 #[core::prelude::v1::test]
 fn add_to_album_hidden_in_trash() {
     let (dir, engine) = seed_library("album_trash_hidden", 2);
-    engine.create_album("Trip").unwrap();
+    engine.create_album_with("Trip", &[]).unwrap();
     let first = engine.get_item_slice(0..1)[0].id;
     engine.batch_set_trashed(&[first], true).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -143,7 +143,7 @@ fn restored_album_with_year_opens_on_library() {
     use crate::config::{LastView, RestoredSession};
     use lumina_core::EngineEvent;
     let (dir, engine) = seed_library("album_year_restore", 2);
-    let album = engine.create_album("Trip").unwrap();
+    let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {

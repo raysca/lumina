@@ -957,6 +957,7 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::search::StructuredQuery;
     use crate::SCHEMA_VERSION;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1230,10 +1231,19 @@ mod tests {
             .unwrap();
         assert_eq!(triggers, 0, "legacy search triggers must be dropped");
         assert!(
-            catalog.search_fts("Oldtown", 10).unwrap().is_empty(),
+            catalog
+                .search_structured(&StructuredQuery::parse("Oldtown"), 10, 0)
+                .unwrap()
+                .is_empty(),
             "stale legacy index entries must not match after the upgrade"
         );
-        assert_eq!(catalog.search_fts("Lisbon", 10).unwrap().len(), 1);
+        assert_eq!(
+            catalog
+                .search_structured(&StructuredQuery::parse("Lisbon"), 10, 0)
+                .unwrap()
+                .len(),
+            1
+        );
 
         drop(catalog);
         let _ = std::fs::remove_dir_all(dir);
@@ -1275,7 +1285,7 @@ mod tests {
         break_index(15);
         let ids = |catalog: &Catalog| -> Vec<MediaId> {
             catalog
-                .search_fts("kyoto", 10)
+                .search_structured(&StructuredQuery::parse("kyoto"), 10, 0)
                 .unwrap()
                 .into_iter()
                 .map(|item| item.id)

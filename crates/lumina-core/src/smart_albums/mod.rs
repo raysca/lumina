@@ -14,11 +14,12 @@ mod tests {
         MAX_KEYWORDS, MAX_PORTABLE_BYTES, MAX_PORTABLE_RULES, MAX_PORTABLE_TEXT_CHARS,
     };
     use super::*;
+    use crate::SortSpec;
 
     #[test]
     fn test_system_albums_sql_generation() {
         for album in SystemAlbum::all() {
-            let (query_sql, params) = album.synthesize_query(50, 0);
+            let (query_sql, params) = album.synthesize_query_sorted(50, 0, SortSpec::default());
             assert!(query_sql.contains("LIMIT ?1 OFFSET ?2"));
             assert_eq!(params.len(), 2);
 
@@ -55,7 +56,9 @@ mod tests {
             rules,
         );
 
-        let (sql, params) = album.synthesize_query(20, 0).unwrap();
+        let (sql, params) = album
+            .synthesize_query_sorted(20, 0, SortSpec::default())
+            .unwrap();
         assert!(sql.contains("m.is_favorite = ?"));
         assert!(sql.contains("m.make LIKE ?"));
         assert!(sql.contains("m.iso > ?"));

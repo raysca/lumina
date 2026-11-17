@@ -232,7 +232,7 @@ fn invalid_typed_value_blocks_enter_and_says_why() {
 #[core::prelude::v1::test]
 fn editing_restores_rows_and_updates_the_album() {
     let (dir, engine, ids) = library("sab_edit");
-    engine.set_rating(ids[2], 5).unwrap();
+    engine.set_ratings(&[(ids[2], 5)]).unwrap();
     let album = engine
         .create_smart_album(
             "Best",

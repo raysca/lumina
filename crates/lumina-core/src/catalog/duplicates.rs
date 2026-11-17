@@ -542,6 +542,7 @@ mod tests {
     use super::*;
     use crate::catalog::tests_support::{album_members, video_item};
     use crate::catalog::{CropRect, Edits};
+    use crate::search::StructuredQuery;
     use crate::Flag;
 
     fn plain(catalog: &Catalog, path: &str) -> MediaId {
@@ -572,7 +573,9 @@ mod tests {
             .merge_duplicate_group(keep, &[dup])
             .expect("merging an edited, tagged duplicate must not corrupt the search index");
         let beach = |catalog: &Catalog| -> Vec<MediaId> {
-            let found = catalog.search_fts("beach", 10).unwrap();
+            let found = catalog
+                .search_structured(&StructuredQuery::parse("beach"), 10, 0)
+                .unwrap();
             found.iter().map(|item| item.id).collect()
         };
         assert_eq!(beach(&catalog), vec![keep], "the merged tag is searchable");
@@ -760,7 +763,7 @@ mod tests {
             "only the keeper is active"
         );
         let found: Vec<MediaId> = catalog
-            .search_fts("beach", 10)
+            .search_structured(&StructuredQuery::parse("beach"), 10, 0)
             .unwrap()
             .iter()
             .map(|item| item.id)
