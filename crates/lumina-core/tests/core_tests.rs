@@ -78,6 +78,74 @@ fn sample_media_item(
     }
 }
 
+/// A fresh, empty directory under the system temp dir, unique per call.
+fn unique_temp_dir(tag: &str) -> PathBuf {
+    static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "lumina_{tag}_{}_{nanos}_{}",
+        std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    dir
+}
+
+/// Waits for the next `ScanComplete` and returns its total; a scan that does
+/// not finish within ten seconds fails the test.
+fn wait_for_scan(rx: &crossbeam_channel::Receiver<EngineEvent>) -> usize {
+    loop {
+        match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+            Ok(EngineEvent::ScanComplete { total_items }) => return total_items,
+            Ok(_) => {}
+            Err(err) => panic!("the scan must finish: {err}"),
+        }
+    }
+}
+
+/// A scanned library holding `files` in `<tmp>/library`, with its catalog at
+/// `<tmp>/catalog.db`; returns the temp root, the engine and its events.
+fn library_with(
+    prefix: &str,
+    files: &[(&str, Vec<u8>)],
+) -> (
+    PathBuf,
+    std::sync::Arc<LuminaEngine>,
+    crossbeam_channel::Receiver<EngineEvent>,
+) {
+    let tmp_dir = unique_temp_dir(prefix);
+    let media_dir = tmp_dir.join("library");
+    std::fs::create_dir_all(&media_dir).unwrap();
+    for (name, bytes) in files {
+        std::fs::write(media_dir.join(name), bytes).unwrap();
+    }
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        media_dir,
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    wait_for_scan(&rx);
+    (tmp_dir, engine, rx)
+}
+
+/// A scanned one-photo library, with its catalog path for breaking it.
+fn scanned_library(
+    prefix: &str,
+) -> (
+    PathBuf,
+    PathBuf,
+    std::sync::Arc<LuminaEngine>,
+    crossbeam_channel::Receiver<EngineEvent>,
+) {
+    let (tmp_dir, engine, rx) = library_with(prefix, &[("one.jpg", b"test-jpeg-content".to_vec())]);
+    let db_path = tmp_dir.join("catalog.db");
+    (tmp_dir, db_path, engine, rx)
+}
+
 #[test]
 fn test_catalog_in_memory() {
     let catalog = Catalog::open_in_memory().expect("open in memory catalog");
@@ -338,14 +406,7 @@ fn test_fts5_caption_clear_unindexes() {
 
 #[test]
 fn test_fts5_caption_removed_when_media_deleted() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_caption_delete_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("caption_delete");
     let db_path = tmp_dir.join("catalog.db");
     let catalog = Catalog::open(&db_path).expect("open catalog");
 
@@ -421,14 +482,7 @@ fn test_fts5_caption_removed_when_media_deleted() {
 
 #[test]
 fn test_fts5_caption_schema_migration_backfills() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_caption_migration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("caption_migration");
     let db_path = tmp_dir.join("catalog.db");
 
     // Seed a catalog, then downgrade its FTS schema to the pre-caption layout.
@@ -566,15 +620,7 @@ fn test_offline_geocoder_nearest_lookup() {
 
 #[test]
 fn test_disk_cache() {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_test_cache_{}_{}",
-        std::process::id(),
-        nanos
-    ));
+    let temp_dir = unique_temp_dir("test_cache");
     let cache = DiskCache::with_directory(&temp_dir).expect("create test cache");
     cache.clear().expect("clear test cache");
 
@@ -606,15 +652,7 @@ fn test_disk_cache() {
 
 #[test]
 fn test_scanner_on_temp_dir() {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_test_scanner_{}_{}",
-        std::process::id(),
-        nanos
-    ));
+    let temp_dir = unique_temp_dir("test_scanner");
     let _ = std::fs::remove_dir_all(&temp_dir);
     std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -660,15 +698,7 @@ fn test_scanner_on_temp_dir() {
 
 #[test]
 fn test_desktop_pics_integration() {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_test_engine_{}_{}",
-        std::process::id(),
-        nanos
-    ));
+    let temp_dir = unique_temp_dir("test_engine");
     let media_dir = temp_dir.join("media");
     let db_path = temp_dir.join("isolated_catalog.db");
     let cache_dir = temp_dir.join("isolated_cache");
@@ -694,15 +724,7 @@ fn test_desktop_pics_integration() {
         lumina_core::LuminaEngine::open_with_paths(media_dir.clone(), db_path, Some(cache_dir))
             .expect("open engine with isolated paths");
 
-    let mut total_discovered = 0;
-    while let Ok(evt) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
-        if let lumina_core::EngineEvent::ScanComplete { total_items } = evt {
-            total_discovered = total_items;
-            break;
-        }
-    }
-
-    assert_eq!(total_discovered, 3, "Should discover all 3 media items");
+    assert_eq!(wait_for_scan(&rx), 3, "Should discover all 3 media items");
 
     let slice = engine.get_item_slice(0..10);
     assert_eq!(slice.len(), 3);
@@ -747,11 +769,7 @@ fn test_desktop_pics_integration() {
 
     // Trigger rescan
     engine.rescan();
-    while let Ok(evt) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
-        if let lumina_core::EngineEvent::ScanComplete { .. } = evt {
-            break;
-        }
-    }
+    wait_for_scan(&rx);
 
     // Assert favorite and tags survived rescan
     let rescanned_slice = engine.get_item_slice(0..10);
@@ -1032,70 +1050,24 @@ fn test_system_smart_albums() {
         ])
         .expect("insert batch");
 
-    // Verify all 9 system albums
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Favorites, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Videos, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Raw, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Screenshots, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::LongExposures, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Panoramas, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Bursts, 10, 0)
-            .unwrap()
-            .len(),
-        2
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::RecentlyDeleted, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        catalog
-            .query_system_album(SystemAlbum::Places, 10, 0)
-            .unwrap()
-            .len(),
-        1
-    );
+    let expected = [
+        (SystemAlbum::Favorites, 1),
+        (SystemAlbum::Videos, 1),
+        (SystemAlbum::Raw, 1),
+        (SystemAlbum::Screenshots, 1),
+        (SystemAlbum::LongExposures, 1),
+        (SystemAlbum::Panoramas, 1),
+        (SystemAlbum::Bursts, 2),
+        (SystemAlbum::RecentlyDeleted, 1),
+        (SystemAlbum::Places, 1),
+    ];
+    for (album, count) in expected {
+        assert_eq!(
+            catalog.query_system_album(album, 10, 0).unwrap().len(),
+            count,
+            "{album:?} must hold exactly its seeded items"
+        );
+    }
 
     // Verify count queries
     for album in SystemAlbum::all() {
@@ -1476,14 +1448,7 @@ fn test_tag_management_lifecycle() {
 fn test_deletion_lifecycle_and_trash_restoration() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
 
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_del_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("del_test");
 
     let file_path1 = tmp_dir.join("photo_del_1.jpg");
     let file_path2 = tmp_dir.join("photo_del_2.jpg");
@@ -1612,14 +1577,7 @@ fn test_deletion_lifecycle_and_trash_restoration() {
 
 #[test]
 fn test_extract_video_duration_synthetic() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_test_duration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("test_duration");
     let video_path = tmp_dir.join("test.mp4");
 
     // Write a minimal MP4 container with mvhd (version 0, timescale 1000, duration 45200 ms)
@@ -1806,14 +1764,7 @@ fn test_clear_all_resets_catalog_and_fts() {
 
 #[test]
 fn test_catalog_schema_version_integrity_and_backup() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_catalog_hardening_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("catalog_hardening");
     let db_path = tmp_dir.join("catalog.db");
 
     let catalog = Catalog::open(&db_path).expect("open catalog");
@@ -1964,14 +1915,7 @@ fn test_sort_orders_library_search_and_albums() {
 
 #[test]
 fn test_edit_timestamp_rebuilds_buckets_and_location() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_edit_meta_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("edit_meta");
     let catalog = Catalog::open(tmp_dir.join("catalog.db")).unwrap();
     let item = sample_media_item(
         "/photos/edit/meta.jpg",
@@ -2079,28 +2023,7 @@ fn date_shift_crossing_month_rebuilds_buckets() {
 
 #[test]
 fn test_import_sidecars_applies_title_caption_rating_and_tags() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_import_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-    let media_path = tmp_dir.join("import_me.jpg");
-    std::fs::write(&media_path, b"test-jpeg-content").unwrap();
-
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        tmp_dir.clone(),
-        tmp_dir.join("catalog.db"),
-        Some(tmp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("import");
     let item = engine.get_item_slice(0..1).remove(0);
 
     write_sidecar(
@@ -2149,27 +2072,7 @@ fn test_import_sidecars_applies_title_caption_rating_and_tags() {
 
 #[test]
 fn import_never_clears_rights() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_rights_import_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-    std::fs::write(tmp_dir.join("photo.jpg"), b"test-jpeg-content").unwrap();
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        tmp_dir.clone(),
-        tmp_dir.join("catalog.db"),
-        Some(tmp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("rights_import");
     let item = engine.get_item_slice(0..1).remove(0);
     let full = Rights {
         creator: Some("Ada".to_string()),
@@ -2222,41 +2125,9 @@ fn import_never_clears_rights() {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
-/// One scanned `photo.jpg` in a fresh temp library.
-fn one_photo_library(
-    prefix: &str,
-) -> (
-    PathBuf,
-    std::sync::Arc<LuminaEngine>,
-    crossbeam_channel::Receiver<EngineEvent>,
-) {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_{prefix}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-    std::fs::write(tmp_dir.join("photo.jpg"), b"test-jpeg-content").unwrap();
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        tmp_dir.clone(),
-        tmp_dir.join("catalog.db"),
-        Some(tmp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
-    (tmp_dir, engine, rx)
-}
-
 #[test]
 fn unedited_date_is_not_written() {
-    let (tmp_dir, engine, _rx) = one_photo_library("xmp_unedited_date");
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("xmp_unedited_date");
     let item = engine.get_item_slice(0..1).remove(0);
     engine.catalog().set_rating(item.id, 3).unwrap();
     engine.write_metadata_sidecars(&[item.id]).unwrap();
@@ -2304,7 +2175,7 @@ fn unedited_date_is_not_written() {
 
 #[test]
 fn date_only_sidecar_keeps_the_time_of_day() {
-    let (tmp_dir, engine, _rx) = one_photo_library("xmp_date_only");
+    let (tmp_dir, _db_path, engine, _rx) = scanned_library("xmp_date_only");
     let item = engine.get_item_slice(0..1).remove(0);
     let time_of_day = chrono::DateTime::from_timestamp_millis(item.timestamp_epoch_ms)
         .unwrap()
@@ -2340,7 +2211,7 @@ fn date_only_sidecar_keeps_the_time_of_day() {
 
 #[test]
 fn import_sets_edited_flags_so_rescan_keeps_date() {
-    let (tmp_dir, engine, rx) = one_photo_library("xmp_import_date");
+    let (tmp_dir, _db_path, engine, rx) = scanned_library("xmp_import_date");
     let item = engine.get_item_slice(0..1).remove(0);
     let date = chrono::DateTime::from_timestamp(1_400_000_000, 0)
         .unwrap()
@@ -2367,11 +2238,7 @@ fn import_sets_edited_flags_so_rescan_keeps_date() {
     // A changed file is re-read by the rescan; the imported values win.
     std::fs::write(&item.path, b"test-jpeg-content, edited elsewhere").unwrap();
     engine.rescan();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    wait_for_scan(&rx);
     let after = engine.get_item_by_id(item.id).unwrap();
     assert_ne!(
         after.file_size, item.file_size,
@@ -2393,30 +2260,13 @@ fn import_sets_edited_flags_so_rescan_keeps_date() {
 
 #[test]
 fn test_export_items_copies_files_and_writes_xmp_sidecars() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_export_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let media_dir = tmp_dir.join("library");
-    std::fs::create_dir_all(&media_dir).unwrap();
-    for name in ["trip_01.jpg", "trip_02.jpg"] {
-        std::fs::write(media_dir.join(name), b"test-jpeg-content").unwrap();
-    }
-
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        media_dir.clone(),
-        tmp_dir.join("catalog.db"),
-        Some(tmp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    let (tmp_dir, engine, _rx) = library_with(
+        "export",
+        &[
+            ("trip_01.jpg", b"test-jpeg-content".to_vec()),
+            ("trip_02.jpg", b"test-jpeg-content".to_vec()),
+        ],
+    );
 
     let items = engine.get_item_slice(0..10);
     assert_eq!(items.len(), 2, "both seeded files should be indexed");
@@ -2778,10 +2628,13 @@ fn smart_album_builder_rules_match_expected_rows() {
 fn test_added_date_is_stamped_once_and_survives_rescans() {
     let catalog = Catalog::open_in_memory().unwrap();
     let item = sample_media_item("/photos/added/a.jpg", MediaType::Image, 1000, None, None);
-    let before = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let now_ms = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64
+    };
+    let before = now_ms();
     let id = catalog
         .insert_or_update_batch(std::slice::from_ref(&item))
         .unwrap()[0]
@@ -2795,7 +2648,10 @@ fn test_added_date_is_stamped_once_and_survives_rescans() {
         "added date must be now, got {added} vs {before}"
     );
 
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    // Let the clock move on so a re-stamp would show as a different value.
+    while now_ms() <= added {
+        std::hint::spin_loop();
+    }
     let rescanned = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
     assert_eq!(rescanned, id);
     assert_eq!(
@@ -2807,14 +2663,7 @@ fn test_added_date_is_stamped_once_and_survives_rescans() {
 
 #[test]
 fn test_schema_v9_migration_adds_added_date_column() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_added_migration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("added_migration");
     let db_path = tmp_dir.join("catalog.db");
     let id = {
         let catalog = Catalog::open(&db_path).unwrap();
@@ -2850,14 +2699,7 @@ fn test_read_media_details_reads_exif_and_tolerates_plain_files() {
     use exif::experimental::Writer;
     use exif::{Field, In, Rational, SRational, Tag, Value};
 
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_details_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("details");
 
     let fields = [
         Field {
@@ -2964,14 +2806,7 @@ fn tkhd_box(a: i32, b: i32, width: u32, height: u32) -> Vec<u8> {
 
 #[test]
 fn video_size_comes_from_the_first_visual_track_and_honours_rotation() {
-    let dir = std::env::temp_dir().join(format!(
-        "lumina_test_vsize_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = unique_temp_dir("test_vsize");
     let write = |name: &str, tracks: &[Vec<u8>]| {
         let path = dir.join(name);
         std::fs::write(&path, tracks.concat()).unwrap();
@@ -3310,35 +3145,6 @@ fn panorama_rule_uses_oriented_dims() {
     );
 }
 
-/// A one-photo library, scanned, with its catalog path for breaking it.
-fn scanned_library(
-    prefix: &str,
-) -> (
-    PathBuf,
-    PathBuf,
-    std::sync::Arc<LuminaEngine>,
-    crossbeam_channel::Receiver<EngineEvent>,
-) {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_{prefix}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let media_dir = tmp_dir.join("library");
-    std::fs::create_dir_all(&media_dir).unwrap();
-    std::fs::write(media_dir.join("one.jpg"), b"test-jpeg-content").unwrap();
-    let db_path = tmp_dir.join("catalog.db");
-    let (engine, rx) =
-        LuminaEngine::open_with_paths(media_dir, db_path.clone(), Some(tmp_dir.join("cache")))
-            .unwrap();
-    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
-        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
-    assert!(scanned, "the initial scan must finish");
-    (tmp_dir, db_path, engine, rx)
-}
-
 /// A second connection to break the catalog; waits out a watcher write.
 fn raw_catalog(db_path: &std::path::Path) -> rusqlite::Connection {
     let conn = rusqlite::Connection::open(db_path).unwrap();
@@ -3592,14 +3398,7 @@ fn a_changed_file_keeps_its_edited_date_and_place() {
 
 #[test]
 fn a_v9_catalog_migrates_and_protects_later_edits() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_edited_migration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("edited_migration");
     let db_path = tmp_dir.join("catalog.db");
     let item = sample_media_item("/photos/old/c.jpg", MediaType::Image, 1_000, None, None);
     let id = {
@@ -3728,9 +3527,8 @@ fn a_batch_that_fails_partway_changes_nothing() {
     )
     .unwrap();
     engine.rescan();
-    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
-        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
-    assert!(scanned && engine.total_count() == 2, "both photos indexed");
+    wait_for_scan(&rx);
+    assert_eq!(engine.total_count(), 2, "both photos indexed");
     let ids: Vec<MediaId> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
     let first = engine.get_item_by_id(ids[0]).unwrap();
     engine.set_caption(ids[0], "old caption").unwrap();
@@ -3818,13 +3616,7 @@ fn a_batch_that_fails_partway_changes_nothing() {
 
 #[test]
 fn test_duplicate_detection_and_merging() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_dup_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let tmp_dir = unique_temp_dir("dup_test");
     let library_dir = tmp_dir.join("library");
     let cache_dir = tmp_dir.join("cache");
     let db_dir = tmp_dir.join("db");
@@ -4195,8 +3987,11 @@ fn exclusion_plan_uses_fts_index() {
     }
 }
 
+/// Rating, label and flag filters under the default date sort walk an
+/// `idx_media_` index: `is:pick` / `is:reject` seek `idx_media_flag` in
+/// timeline order instead of sorting every match in a temp B-tree.
 #[test]
-fn rating_and_color_filter_plans_use_an_index() {
+fn rating_color_and_flag_filter_plans_use_an_index() {
     let catalog = Catalog::open_in_memory().expect("open catalog");
     let items: Vec<_> = (0..20)
         .map(|i| sample_media_item(&format!("/p/{i}.jpg"), MediaType::Image, i, None, None))
@@ -4216,15 +4011,25 @@ fn rating_and_color_filter_plans_use_an_index() {
     catalog
         .set_color_labels(&[(ids[0], 1), (ids[3], 3)])
         .expect("seed labels");
+    catalog
+        .set_flags(&[(ids[4], Flag::Pick), (ids[5], Flag::Reject)])
+        .expect("seed flags");
 
-    for text in ["rating:>=4", "color:red", "is:unrated", "is:unlabeled"] {
+    // (query, rows it matches, index the plan must name, temp B-tree banned)
+    let cases = [
+        ("rating:>=4", 2, "idx_media_", false),
+        ("color:red", 1, "idx_media_", false),
+        ("is:unrated", 17, "idx_media_", false),
+        ("is:unlabeled", 18, "idx_media_", false),
+        ("is:pick", 1, "idx_media_flag", true),
+        ("is:reject", 1, "idx_media_flag", true),
+    ];
+    for (text, matches, index, no_temp_sort) in cases {
         let q = StructuredQuery::parse(text);
-        assert!(
-            !catalog
-                .search_structured(&q, 50, 0)
-                .expect("search")
-                .is_empty(),
-            "{text:?} must match a seeded row"
+        assert_eq!(
+            catalog.search_structured(&q, 50, 0).expect("search").len(),
+            matches,
+            "{text:?} must match its seeded rows"
         );
         let (sql, params) = q.synthesize_query_sorted(50, 0, SortSpec::default());
         let plan = catalog
@@ -4232,8 +4037,8 @@ fn rating_and_color_filter_plans_use_an_index() {
             .expect("explain")
             .join(" | ");
         assert!(
-            plan.contains("idx_media_"),
-            "{text:?}: the default-sort plan must use an idx_media_ index, got: {plan}"
+            plan.contains(index),
+            "{text:?}: the default-sort plan must use {index}, got: {plan}"
         );
         assert!(
             !plan
@@ -4241,49 +4046,8 @@ fn rating_and_color_filter_plans_use_an_index() {
                 .any(|row| row.contains("SCAN m") && !row.contains("INDEX")),
             "{text:?}: media_items must not be scanned without an index, got: {plan}"
         );
-    }
-}
-
-/// `is:pick` / `is:reject` under the default date sort seek the flag in
-/// `idx_media_flag` and walk it in timeline order, instead of filtering the
-/// whole timeline index or sorting every match in a temp B-tree.
-#[test]
-fn flag_filter_plans_use_the_flag_index() {
-    let catalog = Catalog::open_in_memory().expect("open catalog");
-    let items: Vec<_> = (0..20)
-        .map(|i| sample_media_item(&format!("/p/{i}.jpg"), MediaType::Image, i, None, None))
-        .collect();
-    catalog
-        .insert_or_update_batch(&items)
-        .expect("insert items");
-    let ids: Vec<_> = catalog
-        .get_item_slice(0, 20)
-        .expect("slice")
-        .into_iter()
-        .map(|m| m.id)
-        .collect();
-    catalog
-        .set_flags(&[(ids[0], Flag::Pick), (ids[1], Flag::Reject)])
-        .expect("seed flags");
-
-    for text in ["is:pick", "is:reject"] {
-        let q = StructuredQuery::parse(text);
-        assert_eq!(
-            catalog.search_structured(&q, 50, 0).expect("search").len(),
-            1,
-            "{text:?} must match its seeded row"
-        );
-        let (sql, params) = q.synthesize_query_sorted(50, 0, SortSpec::default());
-        let plan = catalog
-            .explain_query_plan(&inline_sql_params(&sql, &params))
-            .expect("explain")
-            .join(" | ");
         assert!(
-            plan.contains("idx_media_flag"),
-            "{text:?}: the date-sorted plan must seek idx_media_flag, got: {plan}"
-        );
-        assert!(
-            !plan.contains("USE TEMP B-TREE"),
+            !no_temp_sort || !plan.contains("USE TEMP B-TREE"),
             "{text:?}: the date sort must stay an index walk, got: {plan}"
         );
     }
@@ -4566,14 +4330,7 @@ fn within_query_plan() {
 /// timeline. Covers a fresh catalog, a second open, and a v14 upgrade.
 #[test]
 fn migration_adds_color_index_idempotently() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_color_index_migration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("color_index_migration");
     // Removes the temp dir even when an assertion below panics.
     struct Cleanup(std::path::PathBuf);
     impl Drop for Cleanup {
@@ -4838,13 +4595,16 @@ fn query_rule_plan_uses_fts_index() {
     }
 }
 
+/// The ids a structured search returns, sorted by id.
 fn search_ids(catalog: &Catalog, query: &str) -> Vec<MediaId> {
-    catalog
-        .search_structured(&StructuredQuery::parse(query), 50, 0)
+    let mut ids: Vec<MediaId> = catalog
+        .search_structured(&StructuredQuery::parse(query), 100, 0)
         .expect("search must run")
         .into_iter()
         .map(|item| item.id)
-        .collect()
+        .collect();
+    ids.sort_by_key(|id| id.0);
+    ids
 }
 
 #[test]
@@ -4938,41 +4698,9 @@ fn merge_keeps_search_index_in_sync() {
 
 /// One item per tag, in order; returns the catalog and the ids.
 fn catalog_with_tags(tags: &[&str]) -> (Catalog, Vec<MediaId>) {
-    let catalog = Catalog::open_in_memory().expect("open catalog");
-    let items: Vec<_> = (0..tags.len())
-        .map(|i| {
-            sample_media_item(
-                &format!("/photos/kw/{i}.jpg"),
-                MediaType::Image,
-                1_000 + i as i64,
-                None,
-                None,
-            )
-        })
-        .collect();
-    let ids: Vec<MediaId> = catalog
-        .insert_or_update_batch(&items)
-        .expect("insert items")
-        .iter()
-        .map(|it| it.id)
-        .collect();
-    for (id, tag) in ids.iter().zip(tags) {
-        catalog
-            .add_tags_batch(&[*id], &[tag.to_string()])
-            .expect("add tag");
-    }
-    (catalog, ids)
-}
-
-fn structured_ids(catalog: &Catalog, text: &str) -> Vec<MediaId> {
-    let mut ids: Vec<MediaId> = catalog
-        .search_structured(&StructuredQuery::parse(text), 100, 0)
-        .expect("structured search runs")
-        .into_iter()
-        .map(|item| item.id)
-        .collect();
-    ids.sort_by_key(|id| id.0);
-    ids
+    let sets: Vec<[&str; 1]> = tags.iter().map(|tag| [*tag]).collect();
+    let sets: Vec<&[&str]> = sets.iter().map(|set| set.as_slice()).collect();
+    catalog_with_tag_sets(&sets)
 }
 
 fn tag_album(operator: RuleOperator, tag: &str) -> lumina_core::SmartAlbum {
@@ -5014,7 +4742,7 @@ fn tag_filter_matches_descendants_not_siblings() {
     let (catalog, ids) = catalog_with_tags(&SIBLING_TAGS);
     let expected = vec![ids[0], ids[1]];
     assert_eq!(
-        structured_ids(&catalog, "tag:places"),
+        search_ids(&catalog, "tag:places"),
         expected,
         "tag:places matches places and places/europe/paris, never a sibling prefix"
     );
@@ -5027,7 +4755,7 @@ fn tag_filter_matches_descendants_not_siblings() {
     by_tag.sort_by_key(|id| id.0);
     assert_eq!(by_tag, expected, "the tag view matches the same subtree");
     assert_eq!(
-        structured_ids(&catalog, "tag:places/europe"),
+        search_ids(&catalog, "tag:places/europe"),
         vec![ids[1]],
         "a mid-level keyword matches its descendants"
     );
@@ -5037,7 +4765,7 @@ fn tag_filter_matches_descendants_not_siblings() {
 fn negated_tag_filter_excludes_descendants_only() {
     let (catalog, ids) = catalog_with_tags(&["places", "places/europe", "places-old", "other"]);
     assert_eq!(
-        structured_ids(&catalog, "-tag:places"),
+        search_ids(&catalog, "-tag:places"),
         vec![ids[2], ids[3]],
         "-tag:places drops places and places/europe but keeps places-old"
     );
@@ -5055,7 +4783,7 @@ fn items_by_parent_tag_are_not_duplicated() {
         vec![ids[0]],
         "an item with two matching children appears once"
     );
-    assert_eq!(structured_ids(&catalog, "tag:a"), vec![ids[0]]);
+    assert_eq!(search_ids(&catalog, "tag:a"), vec![ids[0]]);
 }
 
 #[test]
@@ -5342,12 +5070,12 @@ fn filter_values_are_normalized_like_stored_paths() {
         "tag:Places//Europe",
     ] {
         assert_eq!(
-            structured_ids(&catalog, text),
+            search_ids(&catalog, text),
             vec![ids[0]],
             "{text:?} matches the stored path"
         );
     }
-    assert_eq!(structured_ids(&catalog, "-tag:places/"), vec![ids[1]]);
+    assert_eq!(search_ids(&catalog, "-tag:places/"), vec![ids[1]]);
     assert_eq!(
         album_ids(
             &catalog,
@@ -5371,12 +5099,12 @@ fn tag_filter_keeps_spaced_and_unicode_siblings_apart() {
     let (catalog, ids) =
         catalog_with_tags(&["places x", "places/a", "café", "café/paris", "cafée"]);
     assert_eq!(
-        structured_ids(&catalog, "tag:places"),
+        search_ids(&catalog, "tag:places"),
         vec![ids[1]],
         "`places x` is a sibling"
     );
     assert_eq!(
-        structured_ids(&catalog, "tag:café"),
+        search_ids(&catalog, "tag:café"),
         vec![ids[2], ids[3]],
         "café matches café/paris but not cafée"
     );
@@ -5456,9 +5184,11 @@ fn rename_parent_moves_subtree_and_merges() {
         "b/x already existed: nothing added"
     );
     assert_eq!(change.affected_ids(), vec![ids[0]]);
-    let mut found = search_ids(&catalog, "b");
-    found.sort_by_key(|id| id.0);
-    assert_eq!(found, ids, "the search index finds the new parent");
+    assert_eq!(
+        search_ids(&catalog, "b"),
+        ids,
+        "the search index finds the new parent"
+    );
     assert!(
         search_ids(&catalog, "a").is_empty(),
         "the old parent no longer finds the item"
@@ -6029,35 +5759,6 @@ fn with_exif(jpeg: &[u8], fields: &[exif::Field]) -> Vec<u8> {
     out
 }
 
-/// A scanned library holding `files`; returns the temp root and the engine.
-fn export_library(
-    prefix: &str,
-    files: &[(&str, Vec<u8>)],
-) -> (PathBuf, std::sync::Arc<LuminaEngine>) {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_{prefix}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let media_dir = tmp_dir.join("library");
-    std::fs::create_dir_all(&media_dir).unwrap();
-    for (name, bytes) in files {
-        std::fs::write(media_dir.join(name), bytes).unwrap();
-    }
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        media_dir,
-        tmp_dir.join("catalog.db"),
-        Some(tmp_dir.join("cache")),
-    )
-    .unwrap();
-    let scanned = std::iter::from_fn(|| rx.recv_timeout(std::time::Duration::from_secs(10)).ok())
-        .any(|event| matches!(event, EngineEvent::ScanComplete { .. }));
-    assert!(scanned, "the initial scan must finish");
-    (tmp_dir, engine)
-}
-
 fn item_named(engine: &LuminaEngine, name: &str) -> MediaItem {
     engine
         .get_item_slice(0..100)
@@ -6090,7 +5791,7 @@ fn has_app1(jpeg: &[u8]) -> bool {
 fn jpeg_export_applies_rotation_and_strips_gps() {
     let source = with_gps_exif(&red_jpeg(64, 32));
     assert!(has_app1(&source), "control: the fixture carries EXIF GPS");
-    let (tmp_dir, engine) = export_library("jpeg_rotation", &[("photo.jpg", source)]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_rotation", &[("photo.jpg", source)]);
     let photo = item_named(&engine, "photo.jpg");
     engine.set_rotations(&[(photo.id, 1)]).unwrap();
 
@@ -6120,7 +5821,7 @@ fn jpeg_export_applies_rotation_and_strips_gps() {
 
 #[test]
 fn jpeg_export_applies_quick_edit_crop() {
-    let (tmp_dir, engine) = export_library("jpeg_crop", &[("photo.jpg", red_jpeg(64, 32))]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_crop", &[("photo.jpg", red_jpeg(64, 32))]);
     let photo = item_named(&engine, "photo.jpg");
     let edits = lumina_core::Edits {
         rotation: 0,
@@ -6151,7 +5852,7 @@ fn jpeg_export_applies_quick_edit_crop() {
 
 #[test]
 fn jpeg_export_never_overwrites() {
-    let (tmp_dir, engine) = export_library("jpeg_collide", &[("photo.jpg", red_jpeg(16, 16))]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_collide", &[("photo.jpg", red_jpeg(16, 16))]);
     let photo = item_named(&engine, "photo.jpg");
     let destination = tmp_dir.join("out");
     std::fs::create_dir_all(&destination).unwrap();
@@ -6174,7 +5875,7 @@ fn jpeg_export_never_overwrites() {
 
 #[test]
 fn export_cancel_stops_between_files() {
-    let (tmp_dir, engine) = export_library(
+    let (tmp_dir, engine, _rx) = library_with(
         "jpeg_cancel",
         &[("a.jpg", red_jpeg(16, 16)), ("b.jpg", red_jpeg(16, 16))],
     );
@@ -6205,7 +5906,7 @@ fn export_cancel_stops_between_files() {
 
 #[test]
 fn missing_source_reported_not_fatal() {
-    let (tmp_dir, engine) = export_library(
+    let (tmp_dir, engine, _rx) = library_with(
         "jpeg_missing",
         &[
             ("gone.jpg", red_jpeg(16, 16)),
@@ -6237,7 +5938,7 @@ fn missing_source_reported_not_fatal() {
 #[test]
 fn jpeg_export_copies_videos_as_originals() {
     let video = b"not really a movie".to_vec();
-    let (tmp_dir, engine) = export_library(
+    let (tmp_dir, engine, _rx) = library_with(
         "jpeg_videos",
         &[
             ("photo.jpg", red_jpeg(16, 16)),
@@ -6278,7 +5979,7 @@ fn jpeg_export_copies_videos_as_originals() {
 
 #[test]
 fn jpeg_export_pixels_are_rgb_not_bgr() {
-    let (tmp_dir, engine) = export_library("jpeg_red", &[("red.jpg", red_jpeg(32, 32))]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_red", &[("red.jpg", red_jpeg(32, 32))]);
     let red = item_named(&engine, "red.jpg");
     let destination = tmp_dir.join("out");
     let report = export_jpeg(&engine, &[red.id], &destination);
@@ -6297,7 +5998,7 @@ fn jpeg_export_pixels_are_rgb_not_bgr() {
 
 #[test]
 fn jpeg_export_caps_long_side_at_2048() {
-    let (tmp_dir, engine) = export_library("jpeg_cap", &[("wide.jpg", red_jpeg(2560, 1280))]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_cap", &[("wide.jpg", red_jpeg(2560, 1280))]);
     let wide = item_named(&engine, "wide.jpg");
     let destination = tmp_dir.join("out");
     let report = export_jpeg(&engine, &[wide.id], &destination);
@@ -6324,7 +6025,7 @@ fn jpeg_export_caps_a_crop_of_an_exif_rotated_photo() {
             value: Value::Short(vec![6]),
         }],
     );
-    let (tmp_dir, engine) = export_library("jpeg_cap_crop", &[("turned.jpg", source)]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_cap_crop", &[("turned.jpg", source)]);
     let turned = item_named(&engine, "turned.jpg");
     let edits = lumina_core::Edits {
         rotation: 0,
@@ -6363,14 +6064,7 @@ fn jpeg_export_caps_a_crop_of_an_exif_rotated_photo() {
 #[cfg(target_os = "macos")]
 #[test]
 fn jpeg_export_never_upscales_a_small_heic() {
-    let scratch = std::env::temp_dir().join(format!(
-        "lumina_heic_src_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&scratch).unwrap();
+    let scratch = unique_temp_dir("heic_src");
     let png = scratch.join("small.png");
     image::RgbImage::from_pixel(64, 32, image::Rgb([230, 10, 10]))
         .save(&png)
@@ -6390,7 +6084,7 @@ fn jpeg_export_never_upscales_a_small_heic() {
     let bytes = std::fs::read(&heic).unwrap();
     let _ = std::fs::remove_dir_all(&scratch);
 
-    let (tmp_dir, engine) = export_library("jpeg_heic", &[("small.heic", bytes)]);
+    let (tmp_dir, engine, _rx) = library_with("jpeg_heic", &[("small.heic", bytes)]);
     let small = item_named(&engine, "small.heic");
     let destination = tmp_dir.join("out");
     let report = export_jpeg(&engine, &[small.id], &destination);
@@ -6410,7 +6104,7 @@ fn jpeg_export_never_upscales_a_small_heic() {
 #[test]
 fn jpeg_export_counts_videos_that_lose_their_rotation() {
     let video = b"not really a movie".to_vec();
-    let (tmp_dir, engine) = export_library(
+    let (tmp_dir, engine, _rx) = library_with(
         "jpeg_video_rotation",
         &[("turned.mp4", video.clone()), ("plain.mp4", video)],
     );
@@ -6432,7 +6126,7 @@ fn jpeg_export_counts_videos_that_lose_their_rotation() {
 #[test]
 fn originals_export_is_byte_identical() {
     let payload: Vec<u8> = (0..=255u8).cycle().take(300_000).collect();
-    let (tmp_dir, engine) = export_library("originals_bytes", &[("raw.jpg", payload.clone())]);
+    let (tmp_dir, engine, _rx) = library_with("originals_bytes", &[("raw.jpg", payload.clone())]);
     let item = item_named(&engine, "raw.jpg");
     let destination = tmp_dir.join("out");
     let report = engine
@@ -6458,7 +6152,7 @@ fn originals_export_is_byte_identical() {
 #[test]
 fn originals_export_keeps_mode_dates_and_xattrs() {
     use std::os::unix::fs::PermissionsExt;
-    let (tmp_dir, engine) = export_library("originals_meta", &[("kept.jpg", b"jpeg".to_vec())]);
+    let (tmp_dir, engine, _rx) = library_with("originals_meta", &[("kept.jpg", b"jpeg".to_vec())]);
     let item = item_named(&engine, "kept.jpg");
     let ok = |cmd: &mut std::process::Command| {
         assert!(cmd.status().unwrap().success(), "fixture command {cmd:?}");
@@ -6519,7 +6213,7 @@ fn reopening_an_old_catalog_fixes_portrait_dims_once() {
         value: exif::Value::Short(vec![6]),
     };
     let jpeg = with_exif(&red_jpeg(16, 8), &[orientation_6]);
-    let (tmp_dir, engine) = export_library("dims_backfill", &[("portrait.jpg", jpeg)]);
+    let (tmp_dir, engine, _rx) = library_with("dims_backfill", &[("portrait.jpg", jpeg)]);
     let id = item_named(&engine, "portrait.jpg").id;
     let size = |engine: &LuminaEngine| {
         let item = engine.catalog().get_item_by_id(id).unwrap().unwrap();
@@ -6713,23 +6407,13 @@ fn is_edited_matches_items_with_edits_or_rotation() {
         .set_rotations(&[(ids[1], 1)])
         .expect("rotate a quarter turn");
 
-    let names = |text: &str| -> Vec<String> {
-        let mut names: Vec<String> = catalog
-            .search_structured(&StructuredQuery::parse(text), 50, 0)
-            .expect("search runs")
-            .into_iter()
-            .map(|m| m.file_name)
-            .collect();
-        names.sort();
-        names
-    };
     assert_eq!(
-        names("is:edited"),
+        names_for(&catalog, "is:edited"),
         ["cropped.jpg", "rotated.jpg"],
         "is:edited matches an edits row or a rotation"
     );
     assert_eq!(
-        names("-is:edited"),
+        names_for(&catalog, "-is:edited"),
         ["plain.jpg"],
         "-is:edited matches only items with neither edits nor rotation"
     );
@@ -6790,28 +6474,18 @@ fn is_4k_matches_long_edge_3840() {
         ])
         .expect("insert items");
 
-    let names = |text: &str| -> Vec<String> {
-        let mut names: Vec<String> = catalog
-            .search_structured(&StructuredQuery::parse(text), 50, 0)
-            .expect("search runs")
-            .into_iter()
-            .map(|m| m.file_name)
-            .collect();
-        names.sort();
-        names
-    };
     assert_eq!(
-        names("is:4k"),
+        names_for(&catalog, "is:4k"),
         ["landscape.mov", "portrait.mov"],
         "is:4k matches a long edge of 3840 or more, either orientation"
     );
     assert_eq!(
-        names("-is:4k"),
+        names_for(&catalog, "-is:4k"),
         ["almost.mov", "hd.mov"],
         "-is:4k matches only items whose long edge is under 3840"
     );
     assert_eq!(
-        names("IS:4K is:video"),
+        names_for(&catalog, "IS:4K is:video"),
         ["landscape.mov", "portrait.mov"],
         "the token is case-insensitive like the other is: values"
     );
@@ -6854,14 +6528,7 @@ fn is_4k_matches_long_edge_3840() {
 
 #[test]
 fn migration_adds_rotation_index_idempotently() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_rotation_index_migration_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("rotation_index_migration");
     // Removes the temp dir even when an assertion below panics.
     struct Cleanup(std::path::PathBuf);
     impl Drop for Cleanup {
@@ -7236,14 +6903,7 @@ fn album_stats_counts_kinds_and_range() {
 
 #[test]
 fn album_cover_set_cleared_on_purge_and_migrated() {
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "lumina_album_cover_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let tmp_dir = unique_temp_dir("album_cover");
     // Removes the temp dir even when an assertion below panics.
     struct Cleanup(std::path::PathBuf);
     impl Drop for Cleanup {
@@ -7420,10 +7080,8 @@ fn merge_keeps_source_as_alias() {
         "golden hour",
         "typing the merged name must apply the target"
     );
-    let mut hits = search_ids(&catalog, "hour");
-    hits.sort_by_key(|id| id.0);
     assert_eq!(
-        hits,
+        search_ids(&catalog, "hour"),
         vec![ids[0], ids[1]],
         "the merged item is indexed under the target"
     );
