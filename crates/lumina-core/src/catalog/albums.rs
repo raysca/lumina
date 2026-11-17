@@ -1,433 +1,505 @@
-use crate::search::SqlParts;
-use anyhow::{Context, Result};
+//! Hand-picked albums: one `albums` row per album and one `album_items` row
+//! per member. Members follow the view's [`SortSpec`]; there is no manual
+//! position. Both sides of `album_items` cascade, so
+//! purging media or deleting an album never leaves orphan rows. Trash is a
+//! flag, so a trashed member keeps its membership and returns with it.
+
+use anyhow::{bail, Context, Result};
 use rusqlite::{params, OptionalExtension};
 
 use super::Catalog;
 use crate::now_ms;
-use crate::search::{GeoIndex, StructuredQuery};
-use crate::smart_albums::{MatchMode, SmartAlbum, SmartAlbumRule, SystemAlbum};
 use crate::text::{clean_text, MAX_NAME_CHARS};
-use crate::{MediaItem, SortSpec};
+use crate::{MediaId, MediaItem, SortSpec};
 
-impl Catalog {
-    /// Executes a structured search query with optional FTS5 matching and metadata predicates.
-    pub fn search_structured(
-        &self,
-        query: &StructuredQuery,
-        limit: usize,
-        offset: usize,
-    ) -> Result<Vec<MediaItem>> {
-        self.search_structured_sorted(query, limit, offset, SortSpec::default())
-    }
-
-    pub fn search_structured_sorted(
-        &self,
-        query: &StructuredQuery,
-        limit: usize,
-        offset: usize,
-        sort: SortSpec,
-    ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = self.search_sql_sorted(query, limit, offset, sort)?;
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(&sql)?;
-        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
-    }
-
-    /// The SQL and parameters [`Self::search_structured_sorted`] runs.
-    /// Public so plan tests can `EXPLAIN` the real query.
-    ///
-    /// A `within:` page either walks the sort index and filters the box, or
-    /// seeks `idx_media_geo` and sorts the box's matches. With
-    /// `cap = sqrt((offset + limit) * rows)`: a box with fewer than `cap`
-    /// matches seeks the index (an index-only count decides). Otherwise a
-    /// probe reads the first `cap` rows of the walk: if they already hold
-    /// the page, the walk reads at most `cap` rows (proven only when
-    /// `within:` is the sole filter: both probes test the box alone, so a
-    /// dense box with a rare second filter can still walk far, no worse than
-    /// that filter alone) and the box is written so the geo index cannot
-    /// serve it; if not, the matches lie far down the sort order (an old
-    /// trip) and sorting them is cheaper.
-    pub fn search_sql_sorted(
-        &self,
-        query: &StructuredQuery,
-        limit: usize,
-        offset: usize,
-        sort: SortSpec,
-    ) -> Result<SqlParts> {
-        let geo = if query.within.is_some() {
-            self.geo_index_choice(query, limit, offset, sort)?
-        } else {
-            GeoIndex::Use
-        };
-        Ok(query.synthesize_query_geo(limit, offset, sort, geo))
-    }
-
-    /// The probe behind [`Self::search_sql_sorted`] for a `within:` query.
-    fn geo_index_choice(
-        &self,
-        query: &StructuredQuery,
-        limit: usize,
-        offset: usize,
-        sort: SortSpec,
-    ) -> Result<GeoIndex> {
-        let conn = self.conn.lock();
-        // ponytail: max(rowid) stands in for the row count (O(1)); it
-        // overcounts after deletes, which only raises the cap. Ceiling: the
-        // walk probe reads `cap` rows of the sort index (~2.2k for page 0 at
-        // 100k), and runs only for a box with at least `cap` matches; on a
-        // deep page `cap` grows (~55k for a world box @30000), so the total
-        // stays within ~2 x cap.
-        // Follow-up, not done: a deep page of a dense box still sorts every
-        // match (100k rows, ~8.9k in the box, @8500: 8.5 ms; `camera:` or
-        // `iso:` at that depth take 25-30 ms); an id-only sort through a
-        // covering geo index would cut it.
-        let rows: i64 = conn
-            .prepare_cached("SELECT coalesce(max(rowid), 0) FROM media_items;")?
-            .query_row([], |row| row.get(0))?;
-        let cap = (((offset + limit) as f64) * rows as f64).sqrt().max(1.0) as usize;
-        let Some((probe, params)) = query.walk_probe_sql(cap, sort) else {
-            return Ok(GeoIndex::Use);
-        };
-        // Fewer than `cap` matches: sorting them is already within the bound,
-        // and this index-only count is far cheaper than the walk probe on a
-        // deep page (which would read `cap` ~ 29k rows at 100k, @8500).
-        if let Some((count_sql, count_params)) = query.box_count_sql(cap) {
-            let matches: i64 = conn
-                .prepare_cached(&count_sql)?
-                .query_row(rusqlite::params_from_iter(count_params.iter()), |row| {
-                    row.get(0)
-                })
-                .context("counting the within: box")?;
-            if (matches as usize) < cap {
-                return Ok(GeoIndex::Use);
-            }
-        }
-        let found: i64 = conn
-            .prepare_cached(&probe)?
-            .query_row(rusqlite::params_from_iter(params.iter()), |row| row.get(0))
-            .context("probing the within: box")?;
-        Ok(if found as usize >= offset + limit {
-            GeoIndex::Skip
-        } else {
-            GeoIndex::Use
-        })
-    }
-
-    pub fn search_structured_count(&self, query: &StructuredQuery) -> Result<usize> {
-        let (sql, params) = query.synthesize_count_query();
-        let conn = self.conn.lock();
-        let count: i64 =
-            conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
-                row.get(0)
-            })?;
-        Ok(count as usize)
-    }
-
-    /// Queries a built-in System Smart Album (Favorites, Videos, RAW, Screenshots, Places, etc.).
-    pub fn query_system_album(
-        &self,
-        album: SystemAlbum,
-        limit: usize,
-        offset: usize,
-    ) -> Result<Vec<MediaItem>> {
-        self.query_system_album_sorted(album, limit, offset, SortSpec::default())
-    }
-
-    pub fn query_system_album_sorted(
-        &self,
-        album: SystemAlbum,
-        limit: usize,
-        offset: usize,
-        sort: SortSpec,
-    ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = album.synthesize_query_sorted(limit, offset, sort);
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(&sql)?;
-        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
-    }
-
-    pub fn query_system_album_count(&self, album: SystemAlbum) -> Result<usize> {
-        let (sql, params) = album.synthesize_count_query();
-        let conn = self.conn.lock();
-        let count: i64 =
-            conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
-                row.get(0)
-            })?;
-        Ok(count as usize)
-    }
-
-    /// Re-inserts a deleted album with its original id and creation time, so
-    /// undoing a delete brings back the same album (and redo can delete it
-    /// again by id).
-    pub fn restore_smart_album(&self, album: &SmartAlbum) -> Result<()> {
-        let conn = self.conn.lock();
-        let rules_json = serde_json::to_string(&album.rules)?;
-        let match_str = match album.match_mode {
-            MatchMode::All => "all",
-            MatchMode::Any => "any",
-        };
-        conn.execute(
-            "INSERT INTO smart_albums (id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
-            params![
-                album.id,
-                album.title,
-                album.icon_name,
-                match_str,
-                rules_json,
-                album.created_at_epoch_ms,
-                album.pinned as i64
-            ],
-        )?;
-        Ok(())
-    }
-
-    /// Creates and persists a user-defined Smart Album.
-    pub fn create_smart_album(
-        &self,
-        title: &str,
-        icon_name: &str,
-        match_mode: MatchMode,
-        rules: &[SmartAlbumRule],
-    ) -> Result<SmartAlbum> {
-        let title = clean_text(title, MAX_NAME_CHARS);
-        let conn = self.conn.lock();
-        let rules_json = serde_json::to_string(rules)?;
-        let match_str = match match_mode {
-            MatchMode::All => "all",
-            MatchMode::Any => "any",
-        };
-        let now_ms = now_ms();
-
-        let id: i64 = conn.query_row(
-            r#"
-            INSERT INTO smart_albums (title, icon_name, match_mode, rules_json, created_at_epoch_ms)
-            VALUES (?1, ?2, ?3, ?4, ?5)
-            RETURNING id;
-            "#,
-            params![title, icon_name, match_str, rules_json, now_ms],
-            |row| row.get(0),
-        )?;
-
-        Ok(SmartAlbum {
-            id,
-            title: title.to_string(),
-            icon_name: icon_name.to_string(),
-            match_mode,
-            rules: rules.to_vec(),
-            created_at_epoch_ms: now_ms,
-            pinned: false,
-        })
-    }
-
-    pub fn get_smart_album(&self, id: i64) -> Result<Option<SmartAlbum>> {
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            r#"
-            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned
-            FROM smart_albums
-            WHERE id = ?1;
-            "#,
-        )?;
-
-        let res = stmt
-            .query_row(params![id], |row| {
-                let id: i64 = row.get(0)?;
-                let title: String = row.get(1)?;
-                let icon_name: String = row.get(2)?;
-                let match_str: String = row.get(3)?;
-                let rules_json: String = row.get(4)?;
-                let created_at: i64 = row.get(5)?;
-                let pinned: i64 = row.get(6)?;
-
-                let match_mode = if match_str == "any" {
-                    MatchMode::Any
-                } else {
-                    MatchMode::All
-                };
-                let rules = decode_rules(id, &rules_json);
-
-                Ok(SmartAlbum {
-                    id,
-                    title,
-                    icon_name,
-                    match_mode,
-                    rules,
-                    created_at_epoch_ms: created_at,
-                    pinned: pinned != 0,
-                })
-            })
-            .optional()?;
-
-        Ok(res)
-    }
-
-    pub fn list_smart_albums(&self) -> Result<Vec<SmartAlbum>> {
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            r#"
-            SELECT id, title, icon_name, match_mode, rules_json, created_at_epoch_ms, pinned
-            FROM smart_albums
-            ORDER BY created_at_epoch_ms ASC, id ASC;
-            "#,
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            let id: i64 = row.get(0)?;
-            let title: String = row.get(1)?;
-            let icon_name: String = row.get(2)?;
-            let match_str: String = row.get(3)?;
-            let rules_json: String = row.get(4)?;
-            let created_at: i64 = row.get(5)?;
-            let pinned: i64 = row.get(6)?;
-
-            let match_mode = if match_str == "any" {
-                MatchMode::Any
-            } else {
-                MatchMode::All
-            };
-            let rules = decode_rules(id, &rules_json);
-
-            Ok(SmartAlbum {
-                id,
-                title,
-                icon_name,
-                match_mode,
-                rules,
-                created_at_epoch_ms: created_at,
-                pinned: pinned != 0,
-            })
-        })?;
-
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
-    }
-
-    pub fn update_smart_album(
-        &self,
-        id: i64,
-        title: &str,
-        icon_name: &str,
-        match_mode: MatchMode,
-        rules: &[SmartAlbumRule],
-    ) -> Result<bool> {
-        let title = clean_text(title, MAX_NAME_CHARS);
-        let conn = self.conn.lock();
-        let rules_json = serde_json::to_string(rules)?;
-        let match_str = match match_mode {
-            MatchMode::All => "all",
-            MatchMode::Any => "any",
-        };
-        let affected = conn.execute(
-            "UPDATE smart_albums
-             SET title = ?1, icon_name = ?2, match_mode = ?3, rules_json = ?4
-             WHERE id = ?5;",
-            params![title, icon_name, match_str, rules_json, id],
-        )?;
-        Ok(affected > 0)
-    }
-
-    /// Pins or unpins a smart album; false when no smart album has `id`.
-    pub fn set_smart_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
-        let conn = self.conn.lock();
-        let affected = conn.execute(
-            "UPDATE smart_albums SET pinned = ?1 WHERE id = ?2;",
-            params![pinned as i64, id],
-        )?;
-        Ok(affected > 0)
-    }
-
-    pub fn delete_smart_album(&self, id: i64) -> Result<bool> {
-        let conn = self.conn.lock();
-        let affected = conn.execute("DELETE FROM smart_albums WHERE id = ?1;", params![id])?;
-        Ok(affected > 0)
-    }
-
-    pub fn query_smart_album(
-        &self,
-        album: &SmartAlbum,
-        limit: usize,
-        offset: usize,
-    ) -> Result<Vec<MediaItem>> {
-        self.query_smart_album_sorted(album, limit, offset, SortSpec::default())
-    }
-
-    pub fn query_smart_album_sorted(
-        &self,
-        album: &SmartAlbum,
-        limit: usize,
-        offset: usize,
-        sort: SortSpec,
-    ) -> Result<Vec<MediaItem>> {
-        let (sql, params) = album.synthesize_query_sorted(limit, offset, sort)?;
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(&sql)?;
-        Self::map_query_rows(&mut stmt, rusqlite::params_from_iter(params.iter()))
-    }
-
-    pub fn query_smart_album_count(&self, album: &SmartAlbum) -> Result<usize> {
-        let (sql, params) = album.synthesize_count_query()?;
-        let conn = self.conn.lock();
-        let count: i64 =
-            conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
-                row.get(0)
-            })?;
-        Ok(count as usize)
-    }
-
-    /// Every camera in the library as stored `(make, model)`, "" for a
-    /// missing part, for the smart album "Camera is" list. Spellings are
-    /// kept apart ("Canon" / "canon"): the builder groups them under one
-    /// name and the rule matches each stored pair exactly.
-    /// Trashed and hidden items count, so the list does not shift as items
-    /// move in and out of Trash.
-    pub fn distinct_cameras(&self) -> Result<Vec<(String, String)>> {
-        let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(DISTINCT_CAMERAS_SQL)?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, Option<String>>(0)?.unwrap_or_default(),
-                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-            ))
-        })?;
-        rows.collect::<rusqlite::Result<Vec<_>>>()
-            .context("list cameras")
-    }
+/// A hand-picked album. Its members live in `album_items`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Album {
+    pub id: i64,
+    pub title: String,
+    pub created_at_epoch_ms: i64,
+    pub pinned: bool,
+    /// The key photo the user picked, as stored. It may no longer be an
+    /// active member (removed, trashed or hidden since); [`AlbumCard::cover`]
+    /// and [`AlbumStats::cover`] give the cover actually shown. Purging the
+    /// media clears it (`ON DELETE SET NULL`).
+    pub cover_media_id: Option<MediaId>,
 }
 
-/// Served by `idx_media_camera (make, model)` as a covering index: one pass
-/// over the index, no table rows and no temp b-tree for DISTINCT or ORDER BY.
-/// `trim` drops a camera of only spaces, which would be a blank option.
-const DISTINCT_CAMERAS_SQL: &str = "SELECT DISTINCT make, model FROM media_items \
-     WHERE trim(make) <> '' OR trim(model) <> '' ORDER BY make, model";
+/// What an album card needs beyond the album row. "Active" is not trashed
+/// and not hidden, the rule the album counts use, so a card never shows a
+/// cover its count leaves out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlbumCard {
+    /// The album this card is for.
+    pub album_id: i64,
+    /// The key photo while it is still an active member, else the newest
+    /// active member by capture time, the larger id on a tie; `None` when
+    /// the album has no active member.
+    pub cover: Option<MediaId>,
+    /// The cover's capture time; `None` when there is no cover or the cover
+    /// is undated (a capture time of 0, as in `view_scope`).
+    pub newest_epoch_ms: Option<i64>,
+}
 
-/// Decodes a stored album's rules. An unreadable `rules_json` (say, from a
-/// newer build) still yields no rules, as before, but is logged instead of
-/// passing silently.
-fn decode_rules(album_id: i64, rules_json: &str) -> Vec<SmartAlbumRule> {
-    serde_json::from_str(rules_json).unwrap_or_else(|err| {
-        log::warn!("smart album {album_id}: rules could not be read, so it has no rules: {err}");
-        Vec::new()
+/// An album page's header numbers, over its active (not trashed, not
+/// hidden) members, as the album counts read them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AlbumStats {
+    /// Active members that are not videos.
+    pub photos: usize,
+    pub videos: usize,
+    /// The oldest dated member's capture time; `None` when no member is
+    /// dated (a capture time of 0 is undated, as in `view_scope`).
+    pub first_epoch_ms: Option<i64>,
+    /// The newest dated member's capture time.
+    pub last_epoch_ms: Option<i64>,
+    /// The album's cover, by the [`AlbumCard::cover`] rule.
+    pub cover: Option<MediaId>,
+}
+
+/// The cover rule, once for [`Catalog::album_cards`] and
+/// [`Catalog::album_stats`]: the album's key photo while it is an active
+/// member (the `album_items` join drops a removed one, so removal never has
+/// to clear it), else the newest active member by capture time, the larger
+/// id on a tie. `$album` is the SQL for the album id. The key photo costs
+/// three primary-key lookups (album, membership, media).
+macro_rules! album_cover {
+    ($album:literal) => {
+        concat!(
+            "SELECT COALESCE((SELECT k.id FROM albums ka \
+             JOIN album_items kai ON kai.album_id = ka.id AND kai.media_id = ka.cover_media_id \
+             JOIN media_items k ON k.id = kai.media_id \
+             WHERE ka.id = ",
+            $album,
+            " AND k.is_trashed = 0 AND k.is_hidden = 0), \
+             (SELECT m.id FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+             WHERE ai.album_id = ",
+            $album,
+            " AND m.is_trashed = 0 AND m.is_hidden = 0 \
+             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC LIMIT 1))"
+        )
+    };
+}
+
+/// The SQL [`Catalog::album_cards`] runs.
+///
+/// Per album, a correlated `ORDER BY … LIMIT 1` seeks that album's members
+/// through the `album_items` primary key (`SEARCH ai USING PRIMARY KEY
+/// (album_id=?)`), looks each media row up by id, sorts that album's active
+/// members and takes the first; the cover row is then read by id. `m.id DESC` breaks
+/// timestamp ties deterministically, which `MAX()` with bare columns would
+/// not. Nothing is materialised.
+///
+/// Measured against a `ROW_NUMBER() OVER (PARTITION BY album_id)` window
+/// over all memberships (125k memberships in 50 albums, in-memory, release
+/// build): 7.9 ms here against 48.6 ms for the window, which sorts every
+/// album in full and needed a `MATERIALIZED` CTE to avoid an automatic
+/// index over every ranked row.
+///
+/// Cost: an album with a shown key photo takes three PK lookups and skips
+/// the member sort (COALESCE stops at the first non-NULL). Every other album
+/// costs one pass over its active memberships plus one PK lookup per
+/// member, which is inherent, since it needs its newest member.
+/// ponytail: O(memberships of albums without a key photo) per call, once per
+/// album refresh on a background thread.
+const ALBUM_CARDS_SQL: &str = concat!(
+    "SELECT a.id, c.id, c.timestamp_epoch_ms FROM albums a \
+     LEFT JOIN media_items c ON c.id = (",
+    album_cover!("a.id"),
+    ") ORDER BY a.created_at_epoch_ms ASC, a.id ASC;"
+);
+
+/// Adds one member only while its media row exists. `OR IGNORE` skips a
+/// member already there but not a foreign-key failure, so without the
+/// `SELECT` an id purged meanwhile would abort a restore or an undo.
+const INSERT_MEMBER_SQL: &str = "INSERT OR IGNORE INTO album_items (album_id, media_id)
+     SELECT ?1, id FROM media_items WHERE id = ?2;";
+
+const ALBUM_COLUMNS: &str = "id, title, created_at_epoch_ms, pinned, cover_media_id";
+
+fn map_album(row: &rusqlite::Row) -> rusqlite::Result<Album> {
+    Ok(Album {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        created_at_epoch_ms: row.get(2)?,
+        pinned: row.get::<_, i64>(3)? != 0,
+        cover_media_id: row.get::<_, Option<i64>>(4)?.map(|id| MediaId(id as u64)),
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// `title` cleaned to one line; an album needs a name.
+fn album_title(title: &str) -> Result<String> {
+    let title = clean_text(title, MAX_NAME_CHARS);
+    if title.is_empty() {
+        bail!("an album needs a name");
+    }
+    Ok(title)
+}
 
-    #[test]
-    fn distinct_cameras_reads_only_the_camera_index() {
-        let catalog = Catalog::open_in_memory().expect("open catalog");
-        let plan = catalog
-            .explain_query_plan(DISTINCT_CAMERAS_SQL)
-            .expect("plan")
-            .join(" | ");
-        assert!(
-            plan.contains("USING COVERING INDEX idx_media_camera"),
-            "the camera list reads the (make, model) index, not the table: {plan}"
+impl Catalog {
+    /// Creates an empty album.
+    pub fn create_album(&self, title: &str) -> Result<Album> {
+        self.create_album_with(title, &[])
+    }
+
+    /// Creates an album holding `members`, in one transaction: a failed
+    /// member insert leaves no album behind. Ids no longer in the catalog
+    /// are skipped.
+    pub fn create_album_with(&self, title: &str, members: &[MediaId]) -> Result<Album> {
+        let title = album_title(title)?;
+        let now_ms = now_ms();
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let id = tx
+            .query_row(
+                "INSERT INTO albums (title, created_at_epoch_ms) VALUES (?1, ?2) RETURNING id;",
+                params![title, now_ms],
+                |row| row.get(0),
+            )
+            .context("creating an album")?;
+        {
+            let mut stmt = tx.prepare_cached(INSERT_MEMBER_SQL)?;
+            for media in members {
+                stmt.execute(params![id, media.0 as i64])
+                    .context("adding to the new album")?;
+            }
+        }
+        tx.commit()?;
+        Ok(Album {
+            id,
+            title,
+            created_at_epoch_ms: now_ms,
+            pinned: false,
+            cover_media_id: None,
+        })
+    }
+
+    /// Renames an album; false when no album has `id`.
+    pub fn rename_album(&self, id: i64, title: &str) -> Result<bool> {
+        let title = album_title(title)?;
+        let conn = self.conn.lock();
+        let changed = conn
+            .execute(
+                "UPDATE albums SET title = ?1 WHERE id = ?2;",
+                params![title, id],
+            )
+            .context("renaming an album")?;
+        Ok(changed > 0)
+    }
+
+    /// Deletes an album and returns it with every member (trashed and hidden
+    /// ones too), so [`Self::restore_album`] can undo it. `None` when no
+    /// album has `id`. The media themselves are untouched.
+    pub fn delete_album(&self, id: i64) -> Result<Option<(Album, Vec<MediaId>)>> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let album = tx
+            .query_row(
+                &format!("SELECT {ALBUM_COLUMNS} FROM albums WHERE id = ?1;"),
+                params![id],
+                map_album,
+            )
+            .optional()?;
+        let Some(album) = album else {
+            return Ok(None);
+        };
+        let members = {
+            let mut stmt = tx.prepare_cached(
+                "SELECT media_id FROM album_items WHERE album_id = ?1 ORDER BY media_id;",
+            )?;
+            let rows = stmt.query_map(params![id], |row| row.get::<_, i64>(0))?;
+            rows.map(|row| row.map(|id| MediaId(id as u64)))
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        // ON DELETE CASCADE removes the album_items rows.
+        tx.execute("DELETE FROM albums WHERE id = ?1;", params![id])
+            .context("deleting an album")?;
+        tx.commit()?;
+        Ok(Some((album, members)))
+    }
+
+    /// Re-inserts a deleted album under its old id with its members (undo of
+    /// [`Self::delete_album`]). Members and a key photo purged since are
+    /// skipped.
+    pub fn restore_album(&self, album: &Album, members: &[MediaId]) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        tx.execute(
+            &format!(
+                "INSERT INTO albums ({ALBUM_COLUMNS}) \
+                 SELECT ?1, ?2, ?3, ?4, (SELECT id FROM media_items WHERE id = ?5);"
+            ),
+            params![
+                album.id,
+                album.title,
+                album.created_at_epoch_ms,
+                album.pinned as i64,
+                album.cover_media_id.map(|id| id.0 as i64)
+            ],
+        )
+        .context("restoring an album")?;
+        {
+            let mut stmt = tx.prepare_cached(INSERT_MEMBER_SQL)?;
+            for media in members {
+                stmt.execute(params![album.id, media.0 as i64])
+                    .context("restoring album members")?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Every album with its count of active (not trashed, not hidden)
+    /// members, oldest album first, in one query for the sidebar refresh.
+    pub fn list_albums_with_counts(&self) -> Result<Vec<(Album, usize)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(
+            r#"
+            SELECT a.id, a.title, a.created_at_epoch_ms, a.pinned, a.cover_media_id, COUNT(m.id)
+            FROM albums a
+            LEFT JOIN album_items ai ON ai.album_id = a.id
+            LEFT JOIN media_items m
+                ON m.id = ai.media_id AND m.is_trashed = 0 AND m.is_hidden = 0
+            GROUP BY a.id
+            ORDER BY a.created_at_epoch_ms ASC, a.id ASC;
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((map_album(row)?, row.get::<_, i64>(5)? as usize))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// One [`AlbumCard`] per album, in [`Self::list_albums_with_counts`]
+    /// order.
+    pub fn album_cards(&self) -> Result<Vec<AlbumCard>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(ALBUM_CARDS_SQL)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(AlbumCard {
+                album_id: row.get(0)?,
+                cover: row.get::<_, Option<i64>>(1)?.map(|id| MediaId(id as u64)),
+                // A capture time of 0 is undated: keep the cover, drop the date.
+                newest_epoch_ms: row.get::<_, Option<i64>>(2)?.filter(|&ts| ts != 0),
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Photo and video counts, the capture range and the cover of an
+    /// album's active members: one pass over its `album_items` rows
+    /// (primary key seek) with a media lookup per member, plus the cover's
+    /// seek. An unknown album reads as empty.
+    pub fn album_stats(&self, id: i64) -> Result<AlbumStats> {
+        const SQL: &str = concat!(
+            "SELECT COUNT(m.id), COALESCE(SUM(m.media_type = 'video'), 0), \
+                    MIN(NULLIF(m.timestamp_epoch_ms, 0)), \
+                    MAX(NULLIF(m.timestamp_epoch_ms, 0)), (",
+            album_cover!("?1"),
+            ") FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+             WHERE ai.album_id = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0;"
         );
-        assert!(
-            !plan.contains("TEMP B-TREE"),
-            "the index already orders and de-duplicates the pairs: {plan}"
-        );
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(SQL)?;
+        let stats = stmt
+            .query_row([id], |row| {
+                let total = row.get::<_, i64>(0)? as usize;
+                let videos = row.get::<_, i64>(1)? as usize;
+                Ok(AlbumStats {
+                    photos: total - videos,
+                    videos,
+                    first_epoch_ms: row.get(2)?,
+                    last_epoch_ms: row.get(3)?,
+                    cover: row.get::<_, Option<i64>>(4)?.map(|id| MediaId(id as u64)),
+                })
+            })
+            .context("reading album stats")?;
+        Ok(stats)
+    }
+
+    /// Adds media to an album and returns how many were not members yet.
+    /// Ids no longer in the catalog are skipped, so undoing a remove cannot
+    /// fail on an item purged meanwhile. An unknown album is an error.
+    pub fn add_to_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        Ok(self.add_new_to_album(id, media)?.len())
+    }
+
+    /// [`Self::add_to_album`], returning the ids that were not members yet
+    /// (in `media` order), so undo removes only what the add put in.
+    pub fn add_new_to_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut added = Vec::new();
+        {
+            let mut stmt = tx.prepare_cached(INSERT_MEMBER_SQL)?;
+            for item in media {
+                if stmt
+                    .execute(params![id, item.0 as i64])
+                    .context("adding to an album")?
+                    > 0
+                {
+                    added.push(*item);
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(added)
+    }
+
+    /// Removes media from an album (never from the catalog) and returns how
+    /// many were members.
+    pub fn remove_from_album(&self, id: i64, media: &[MediaId]) -> Result<usize> {
+        Ok(self.remove_members_from_album(id, media)?.len())
+    }
+
+    /// [`Self::remove_from_album`], returning the ids that were members (in
+    /// `media` order), so undo adds back only what the remove took out.
+    pub fn remove_members_from_album(&self, id: i64, media: &[MediaId]) -> Result<Vec<MediaId>> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut removed = Vec::new();
+        {
+            let mut stmt = tx
+                .prepare_cached("DELETE FROM album_items WHERE album_id = ?1 AND media_id = ?2;")?;
+            for item in media {
+                if stmt
+                    .execute(params![id, item.0 as i64])
+                    .context("removing from an album")?
+                    > 0
+                {
+                    removed.push(*item);
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(removed)
+    }
+
+    /// The SQL [`Self::query_album_sorted`] runs: `?1` album id, `?2` limit,
+    /// `?3` offset. Public so the query plan can be checked.
+    ///
+    /// The members are found through the album's primary key, so no media
+    /// index can give the order and every page sorts the whole album. The
+    /// subquery sorts only ids and sort keys, and full rows are read for
+    /// the one page. For a 20k-member album (release build) that took the
+    /// first page from 11.4 ms to 2.6 ms, and 4.7 ms near the last page,
+    /// against the 8 ms album gate.
+    /// ponytail: the sort is still per page, O(members); a big album needs
+    /// seek pagination (last row's sort key) if it outgrows the gate.
+    pub fn album_slice_sql(sort: SortSpec) -> String {
+        format!(
+            r#"
+            SELECT
+                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
+                m.media_type, m.width, m.height, m.duration_ms,
+                m.timestamp_epoch_ms, m.year, m.month, m.day,
+                m.latitude, m.longitude, m.altitude,
+                m.country_code, m.admin1_region, m.city,
+                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
+                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            FROM media_items m
+            WHERE m.id IN (
+                SELECT am.id FROM album_items ai
+                JOIN media_items am ON am.id = ai.media_id
+                WHERE ai.album_id = ?1 AND am.is_trashed = 0 AND am.is_hidden = 0
+                ORDER BY {}
+                LIMIT ?2 OFFSET ?3
+            )
+            ORDER BY {};
+            "#,
+            sort.order_by("am."),
+            sort.order_by("m.")
+        )
+    }
+
+    /// A page of an album's active members in `sort` order.
+    pub fn query_album_sorted(
+        &self,
+        id: i64,
+        limit: usize,
+        offset: usize,
+        sort: SortSpec,
+    ) -> Result<Vec<MediaItem>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(&Self::album_slice_sql(sort))?;
+        Self::map_query_rows(&mut stmt, params![id, limit as i64, offset as i64])
+    }
+
+    /// How many active members an album has.
+    pub fn query_album_count(&self, id: i64) -> Result<usize> {
+        let conn = self.conn.lock();
+        let count: i64 = conn.query_row(
+            r#"
+            SELECT COUNT(*) FROM album_items ai
+            JOIN media_items m ON m.id = ai.media_id
+            WHERE ai.album_id = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0;
+            "#,
+            params![id],
+            |row| row.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
+    /// Sets an album's key photo, or clears it with `None`. The photo must
+    /// be a member of the album; an unknown album is an error. A trashed or
+    /// hidden member is stored but not shown as the cover until it is
+    /// restored or unhidden; until then the newest active member is.
+    pub fn set_album_cover(&self, id: i64, cover: Option<MediaId>) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let exists = tx
+            .prepare_cached("SELECT 1 FROM albums WHERE id = ?1;")?
+            .exists(params![id])?;
+        if !exists {
+            bail!("the album no longer exists");
+        }
+        let changed = match cover {
+            Some(media) => tx
+                .execute(
+                    "UPDATE albums SET cover_media_id = ?2 WHERE id = ?1 AND EXISTS \
+                     (SELECT 1 FROM album_items WHERE album_id = ?1 AND media_id = ?2);",
+                    params![id, media.0 as i64],
+                )
+                .context("setting the album cover")?,
+            None => tx
+                .execute(
+                    "UPDATE albums SET cover_media_id = NULL WHERE id = ?1;",
+                    params![id],
+                )
+                .context("clearing the album cover")?,
+        };
+        if changed == 0 {
+            bail!("the cover must be an item in the album");
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Whether `media` is a member of album `id` (trashed and hidden
+    /// members count, as for [`Self::set_album_cover`]). One primary-key
+    /// lookup.
+    pub fn album_contains(&self, id: i64, media: MediaId) -> Result<bool> {
+        let conn = self.conn.lock();
+        let found = conn
+            .prepare_cached("SELECT 1 FROM album_items WHERE album_id = ?1 AND media_id = ?2;")?
+            .exists(params![id, media.0 as i64])
+            .context("checking album membership")?;
+        Ok(found)
+    }
+
+    /// Pins or unpins an album; false when no album has `id`.
+    pub fn set_album_pinned(&self, id: i64, pinned: bool) -> Result<bool> {
+        let conn = self.conn.lock();
+        let changed = conn
+            .execute(
+                "UPDATE albums SET pinned = ?1 WHERE id = ?2;",
+                params![pinned as i64, id],
+            )
+            .context("pinning an album")?;
+        Ok(changed > 0)
     }
 }
+
+#[cfg(test)]
+mod tests;

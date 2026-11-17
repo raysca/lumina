@@ -6,7 +6,7 @@ use rusqlite::{params, OptionalExtension};
 use std::path::{Path, PathBuf};
 
 use super::Catalog;
-use crate::MediaId;
+use crate::{now_ms, MediaId};
 
 /// A library item (not in the trash) that Lumina downloaded from a URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +65,71 @@ impl Catalog {
             params![prefix],
         )?;
         Ok(decided)
+    }
+
+    /// Records the web address an imported sidecar names (`dc:source`).
+    /// This alone never makes an item a download.
+    pub fn record_media_source(
+        &self,
+        media_id: MediaId,
+        source_url: &str,
+        uploader: Option<&str>,
+    ) -> Result<()> {
+        Self::record_source_in(&self.conn.lock(), media_id, source_url, uploader, false)
+    }
+
+    pub(super) fn record_source_in(
+        conn: &rusqlite::Connection,
+        media_id: MediaId,
+        source_url: &str,
+        uploader: Option<&str>,
+        downloaded: bool,
+    ) -> Result<()> {
+        let now_ms = now_ms();
+        conn.execute(
+            r#"
+            INSERT INTO media_sources (media_id, source_url, uploader, imported_epoch_ms, downloaded)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            ON CONFLICT(media_id) DO UPDATE SET
+                -- A sidecar imported onto a download keeps it a download,
+                -- with its address, uploader and download date.
+                source_url = CASE
+                    WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
+                    THEN media_sources.source_url
+                    ELSE excluded.source_url END,
+                uploader = CASE
+                    WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
+                    THEN media_sources.uploader
+                    ELSE excluded.uploader END,
+                imported_epoch_ms = CASE
+                    WHEN media_sources.downloaded = 1 AND excluded.downloaded = 0
+                    THEN media_sources.imported_epoch_ms
+                    ELSE excluded.imported_epoch_ms END,
+                downloaded = MAX(COALESCE(media_sources.downloaded, 0), excluded.downloaded);
+            "#,
+            params![media_id.0 as i64, source_url, uploader, now_ms, downloaded as i64],
+        )?;
+        Ok(())
+    }
+
+    /// Returns `(source_url, uploader, imported_epoch_ms)` for an item if it was imported from the network.
+    pub fn get_media_source(
+        &self,
+        media_id: MediaId,
+    ) -> Result<Option<(String, Option<String>, i64)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare_cached(
+            "SELECT source_url, uploader, imported_epoch_ms FROM media_sources WHERE media_id = ?1;",
+        )?;
+        let mut rows = stmt.query(params![media_id.0 as i64])?;
+        if let Some(row) = rows.next()? {
+            let url: String = row.get(0)?;
+            let uploader: Option<String> = row.get(1)?;
+            let epoch_ms: i64 = row.get(2)?;
+            Ok(Some((url, uploader, epoch_ms)))
+        } else {
+            Ok(None)
+        }
     }
 }
 

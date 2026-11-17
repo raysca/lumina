@@ -1,7 +1,7 @@
 mod albums;
-mod curated;
+mod captions;
 mod dims;
-pub use curated::{Album, AlbumCard, AlbumStats};
+pub use albums::{Album, AlbumCard, AlbumStats};
 mod downloads;
 mod duplicates;
 mod edits;
@@ -26,6 +26,8 @@ pub use places::PlaceCount;
 mod rights;
 pub use rights::Rights;
 mod schema;
+mod search;
+mod smart;
 mod storage;
 pub use storage::StorageSummary;
 mod tag_undo;
