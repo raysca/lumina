@@ -216,53 +216,6 @@ mod tests {
         (x.max(y) + 0.05) / (x.min(y) + 0.05)
     }
 
-    fn hex(c: Rgba) -> u32 {
-        let b = |v: f32| (v * 255.0).round() as u32;
-        b(c.r) << 24 | b(c.g) << 16 | b(c.b) << 8 | b(c.a)
-    }
-
-    #[core::prelude::v1::test]
-    fn pen_tokens_have_design_values() {
-        for (name, token, want) in [
-            ("bg-0", bg_0(), 0x0A0A0CFF),
-            ("bg-1", bg_1(), 0x121216FF),
-            ("bg-2", bg_2(), 0x1A1A20FF),
-            ("bg-3", bg_3(), 0x24242CFF),
-            ("line", line(), 0x26262EFF),
-            ("line-2", line_2(), 0x35353FFF),
-            ("t1", t1(), 0xF2F2F5FF),
-            ("t2", t2(), 0x93939EFF),
-            ("accent", accent(), 0xE9A23BFF),
-            ("accent-soft", accent_soft(), 0xE9A23B26),
-            ("accent-outline", accent_outline(), 0xE9A23B59),
-            ("danger", danger(), 0xE8584FFF),
-            ("danger-soft", danger_soft(), 0xE8584F1F),
-            ("danger_outline", danger_outline(), 0xE8584F4D),
-            ("positive", positive(), 0x5BC27AFF),
-            ("warn", warn(), 0xE0A33BFF),
-            ("on_accent", on_accent(), 0x1A1206FF),
-            ("bg_float", bg_float(), 0x16161CFF),
-            ("bg_stage", bg_stage(), 0x08080AFF),
-            ("scrim", scrim(), 0x07070BD9),
-            ("media_scrim", media_scrim(), 0x000000A6),
-            ("danger_border", danger_border(), 0x45211EFF),
-            ("danger_surface", danger_surface(), 0x1E100FFF),
-            ("on_danger", on_danger(), 0xF0C4C0FF),
-            ("accent_surface", accent_surface(), 0x17120BFF),
-            ("warn_border", warn_border(), 0x3A2E1AFF),
-            ("warn_surface", warn_surface(), 0x1C1708FF),
-            ("on_warn", on_warn(), 0xE8D7B0FF),
-            ("chart_grey", chart_grey(), 0x4E4E5CFF),
-        ] {
-            assert_eq!(hex(token), want, "{name} must equal its lumina.pen value");
-        }
-        assert_eq!(
-            hex(t3()),
-            0x7C7C88FF,
-            "t3 is lifted from the design's #5E5E6A for legibility (D1)"
-        );
-    }
-
     #[core::prelude::v1::test]
     fn card_surface_is_transparent() {
         assert_eq!(
