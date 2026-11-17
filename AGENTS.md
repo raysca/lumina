@@ -64,23 +64,28 @@ Run commands from the repository root unless a task says otherwise.
 
 ```text
 crates/lumina-core/src/
-  catalog/        schema, migrations, media/tags/albums, backups
-  scanner.rs      filesystem scan and EXIF extraction
+  lib.rs          LuminaEngine API, events; public types in types.rs
+  engine/         engine scans, thumbnails, duplicates, XMP sidecars
+  catalog/        schema and migrations, media, tags, albums, smart and
+                  system albums, search, trash, downloads, backups
+  scanner.rs      filesystem scan and EXIF extraction (scanner/mp4.rs)
   decoder.rs      frame decode, native tool timeouts
   watcher.rs      incremental library watcher
-  search.rs       structured query and FTS5 SQL
-  smart_albums/   rule evaluation and SQL synthesis
-  xmp.rs          sidecar render/parse/write
+  search/         structured query and FTS5 SQL
+  smart_albums/   rule evaluation and SQL synthesis (rules_sql.rs)
+  xmp/            sidecar render/parse/write
+  net_import/     user-initiated URL video import
   cache.rs        memory/disk thumbnail cache
-  lib.rs          LuminaEngine API, scans, events
 crates/lumina-ui-gpui/src/
-  app/            state, actions, keymap, undo, sort, command palette
+  app/            state, actions, keymap, selection, undo, sort, command
+                  palette, render
   views/          inspector, viewer, sidebar, modals, preferences
-  player/         AVFoundation bridge
+  i18n/           en-US catalog (en_us.rs), plurals, per-platform copy
+  player/         AVFoundation (macOS) and GStreamer (Linux) players
   tests/          in-process UI automation
-scripts/          live smoke/e2e and release scripts
-resources/        Info.plist, icns, fonts, entitlements
-docs/             roadmap, architecture, accessibility, notes
+scripts/          live smoke/e2e, Linux packaging and release scripts
+resources/        Info.plist, icns, icons, fonts, entitlements
+docs/             accessibility, search, network import, Linux
 ```
 
 ## 5. Rust coding standards
@@ -179,7 +184,8 @@ docs/             roadmap, architecture, accessibility, notes
 ### 6.1 Layers
 
 1. Core unit tests live beside code in `lumina-core/src/**`.
-2. Core integration tests live in `crates/lumina-core/tests/core_tests.rs`.
+2. Core integration tests live in `crates/lumina-core/tests/` (`core_tests.rs`
+   plus import, watcher, URL import, format and benchmark tests).
 3. UI automation tests live in `crates/lumina-ui-gpui/src/tests/` and drive the
    real GPUI view tree with synthetic input. They run headlessly in CI.
 4. Live smoke/e2e scripts launch the real process; see section 8.
@@ -337,14 +343,15 @@ Review checklist:
 - Keep focus and selection states visible, and preserve scroll-into-view for
   keyboard navigation.
 - GPUI reports elements to VoiceOver through AccessKit only when they have an
-  `id` and a `.role(...)` (plus `aria_label` and friends). Apart from the
-  text fields (`app/text_input.rs`), Lumina's controls do not set roles yet,
-  so VoiceOver still sees little beyond the window.
+  `id` and a `.role(...)` (plus `aria_label` and friends). The text fields
+  and many controls (buttons, menus, lists, toolbars, alerts) set roles, but
+  coverage is partial and the tree has not been checked with VoiceOver.
   Give new controls a role and label. Do not claim screen-reader support that
   has not been checked with VoiceOver; native menus and the command palette
   are the practical paths. See `docs/accessibility.md`.
-- Localization: user-facing command labels go through `src/i18n.rs`. New strings
-  should use catalog keys where practical; en-US is the only shipped locale today.
+- Localization: user-facing command labels go through `src/i18n/` (`i18n::t`,
+  `i18n::plural`). New strings should use catalog keys where practical; en-US
+  is the only shipped locale today.
 
 ## 12. YAGNI and design review
 
@@ -394,17 +401,17 @@ A change is done only when all applicable items are true:
 - Semantic/AI search is not implemented in this tree; do not describe it as
   complete.
 - OS-level UI interaction tests require Accessibility permission; skip explicitly.
-- Lumina's controls, apart from the text fields, set no AccessKit roles yet,
-  so VoiceOver sees almost no element tree; native menus and palette are the
-  current accessible paths.
+- AccessKit roles cover the text fields and many controls but not all, and
+  the element tree has not been checked with VoiceOver; native menus and the
+  palette are the current accessible paths.
 - Signing/notarization requires Apple credentials; CI release artifacts are
   drafts until verified and published.
 - DMG creation may be blocked in sandboxed sessions; use `LUMINA_SKIP_DMG=1`
   only for local verification, not as a release substitute.
-- Windows and Linux are planned release targets but are not supported yet.
-  Linux is in development (GStreamer player, ffmpeg previews, no HEIC or RAW
-  previews); its CI job and internal `.deb` are not a release. Keep releases
-  macOS-only until the acceptance criteria in `RELEASING.md` are met.
+- Windows is a planned release target; Linux is in development (GStreamer
+  player, ffmpeg previews, no HEIC or RAW previews); its CI job and internal
+  `.deb` are not a release. Keep releases macOS-only until the acceptance
+  criteria in `RELEASING.md` are met.
 - S3-compatible backup is planned for the mid-roadmap (0.5) and is not
   implemented. Cloud photo-library accounts (Google/iCloud) and two-way sync are
   out of scope; do not describe them as supported.
