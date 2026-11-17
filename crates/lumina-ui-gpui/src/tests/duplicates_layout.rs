@@ -467,3 +467,72 @@ fn selection_dock_hides_on_duplicates_and_the_toast_clears_the_footer() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// Bounds of the compare head's parts, measured at the current window size.
+fn compare_head(vcx: &mut gpui::VisualTestContext) -> [gpui::Bounds<gpui::Pixels>; 6] {
+    [
+        "duplicates-compare-head",
+        "duplicates-compare-title",
+        "duplicates-compare-badge",
+        "duplicates-compare-summary",
+        "duplicates-prev",
+        "duplicates-next",
+    ]
+    .map(|s| vcx.debug_bounds(s).unwrap_or_else(|| panic!("{s} renders")))
+}
+
+#[core::prelude::v1::test]
+fn compare_head_keeps_the_title_and_step_buttons_at_960() {
+    // A name long enough to need truncating at 960 px but not at 1280.
+    let photo = super::ui_automation::shaded_jpeg(10);
+    let names: Vec<String> = (1..=3)
+        .map(|i| format!("harbour-at-sunset-{i}.jpg"))
+        .collect();
+    let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &photo[..])).collect();
+    let (temp_dir, engine) = seed_files("dup_layout_head", &files);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // Natural widths, where the row has room for everything.
+    open(vcx, 1600.0, 840.0);
+    let [_, wide_title, _, wide_summary, ..] = compare_head(vcx);
+
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+    let [_, _, _, summary, ..] = compare_head(vcx);
+    assert!(
+        (f32::from(summary.size.width) - f32::from(wide_summary.size.width)).abs() <= 0.5,
+        "at 1280 px the summary is shown in full: {:?} of its natural {:?}",
+        summary.size.width,
+        wide_summary.size.width
+    );
+
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(840.0)));
+    render_ui(vcx);
+    let window = vcx.update(|window, _| window.viewport_size());
+    let [head, title, badge, summary, prev, next] = compare_head(vcx);
+    let want = f32::from(wide_title.size.width).min(60.0);
+    assert!(
+        f32::from(title.size.width) >= want - 0.5,
+        "the group name stays readable at 960 px: {:?} wide, wants {want}",
+        title.size.width
+    );
+    for (name, b) in [("badge", badge), ("prev", prev), ("next", next)] {
+        assert!(
+            b.left() >= head.left() && b.right() <= head.right() && b.right() <= window.width,
+            "the {name} is fully visible at 960 px: {b:?} in head {head:?}, window {:?}",
+            window.width
+        );
+    }
+    assert!(
+        f32::from(badge.size.width) > 40.0,
+        "the badge keeps its width at 960 px: {:?}",
+        badge.size.width
+    );
+    assert!(
+        summary.right() <= prev.left(),
+        "the summary never runs under the prev button: {summary:?} vs {prev:?}"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

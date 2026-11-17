@@ -243,6 +243,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
     let step = |i: usize| (i < len).then_some(i);
     let title = group_title(group);
     div()
+        .debug_selector(|| "duplicates-compare-head".to_string())
         .h(px(55.5))
         .flex_shrink_0()
         .px(px(24.0))
@@ -255,6 +256,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
         .child(
             div()
                 .id("duplicates-compare-title")
+                .debug_selector(|| "duplicates-compare-title".to_string())
                 .min_w_0()
                 .truncate()
                 .tooltip(theme::tooltip_label(title.clone()))
@@ -266,6 +268,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
         )
         .child(
             div()
+                .debug_selector(|| "duplicates-compare-badge".to_string())
                 .flex_shrink_0()
                 .h(px(20.0))
                 .px(px(7.0))
@@ -280,7 +283,13 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
         )
         .child(
             div()
-                .flex_shrink_0()
+                .debug_selector(|| "duplicates-compare-summary".to_string())
+                // Gives way well before the group name does: a narrow window
+                // shortens the summary and, at the 960 px minimum, hides it,
+                // so the name stays readable.
+                .flex_shrink(8.0)
+                .min_w_0()
+                .truncate()
                 .font_family(theme::FONT_MONO)
                 .text_size(px(10.5))
                 .text_color(theme::t3())
