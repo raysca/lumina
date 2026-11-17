@@ -522,12 +522,13 @@ impl Render for LuminaApp {
                                 ),
                         ),
                 )
-                .child(self.render_toast_overlay(cx))
                 .child(motion::overlay_in(
                     self.preferences_open,
                     crate::views::preferences::render_preferences_modal(self, cx),
                     "preferences-in",
                 ))
+                // Above settings, which is opaque.
+                .child(self.render_toast_overlay(cx))
                 .into_any_element();
         }
 
@@ -584,6 +585,10 @@ impl Render for LuminaApp {
         // The viewer opened from compare, too: these would play, move or
         // trash the view behind compare (the palette leaves them out).
         let holds_view = self.compare_holds_view();
+        // Settings is an opaque full-window layer: items that open a dialog
+        // under it or act on the hidden library are disabled.
+        let settings = self.preferences_open;
+        let open_ok = !editing && !presenting && !settings;
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
             cx,
@@ -602,7 +607,11 @@ impl Render for LuminaApp {
                 root.on_action(cx.listener(|this, _: &ShowShortcuts, _w, cx| {
                     this.toggle_shortcuts_overlay(cx);
                 }))
-                .on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
+            })
+            // Under settings a toggle would flip and save a setting the user
+            // cannot see.
+            .when(!slideshow && !settings, |root| {
+                root.on_action(cx.listener(|this, _: &ToggleSidebar, _w, cx| {
                     this.toggle_sidebar(cx);
                 }))
                 .on_action(cx.listener(|this, _: &ToggleInspector, _w, cx| {
@@ -625,13 +634,18 @@ impl Render for LuminaApp {
                 .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
                     this.open_about(cx);
                 }))
-                .on_action(cx.listener(|this, _: &ShowCommandPalette, _w, cx| {
-                    this.open_command_palette(cx);
-                }))
+                // Settings › Library offers Rescan too, so it stays on there.
                 .on_action(cx.listener(|this, _: &RescanLibrary, _w, cx| {
                     this.rescan_library(cx);
                 }))
-                .on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
+                .on_action(cx.listener(
+                    |this, _: &ShowCommandPalette, _w, cx| {
+                        this.open_command_palette(cx);
+                    },
+                ))
+            })
+            .when(open_ok, |root| {
+                root.on_action(cx.listener(|this, _: &ImportMedia, _w, cx| {
                     this.pick_import_folders(cx);
                 }))
                 .on_action(cx.listener(|this, _: &ImportNetworkVideo, _w, cx| {
@@ -687,7 +701,7 @@ impl Render for LuminaApp {
                     },
                 ))
             })
-            .when(!editing && !presenting && !holds_view, |root| {
+            .when(open_ok && !holds_view, |root| {
                 root.on_action(cx.listener(|this, _: &DeleteRejected, _w, cx| {
                     this.delete_rejected(cx);
                 }))
@@ -707,7 +721,7 @@ impl Render for LuminaApp {
                     this.navigate_forward(cx);
                 }))
             })
-            .when(!presenting, |root| {
+            .when(!presenting && !settings, |root| {
                 root.on_action(cx.listener(|this, _: &RotateLeft, _w, cx| {
                     this.rotate_selection(ViewerRotation::Left, cx);
                 }))
@@ -846,7 +860,9 @@ impl Render for LuminaApp {
                                             .child(crate::views::tag_manager::render(
                                                 self, window, cx,
                                             ))
-                                            .child(self.render_toast_overlay(cx))
+                                            .when(!self.preferences_open, |d| {
+                                                d.child(self.render_toast_overlay(cx))
+                                            })
                                             .into_any_element()
                                     } else if self.albums_overview_shown() {
                                         div()
@@ -855,7 +871,9 @@ impl Render for LuminaApp {
                                             .min_w_0()
                                             .h_full()
                                             .child(crate::views::albums_overview::render(self, cx))
-                                            .child(self.render_toast_overlay(cx))
+                                            .when(!self.preferences_open, |d| {
+                                                d.child(self.render_toast_overlay(cx))
+                                            })
                                             .into_any_element()
                                     } else if self.downloads_screen_shown() {
                                         div()
@@ -866,7 +884,9 @@ impl Render for LuminaApp {
                                             .child(crate::views::downloads_screen::render(
                                                 self, window, cx,
                                             ))
-                                            .child(self.render_toast_overlay(cx))
+                                            .when(!self.preferences_open, |d| {
+                                                d.child(self.render_toast_overlay(cx))
+                                            })
                                             .into_any_element()
                                     } else {
                                         div()
@@ -912,7 +932,9 @@ impl Render for LuminaApp {
                                                     // column only, stacked bottom-up: dock, pill, toast.
                                                     .child(self.render_zoom_pill(cx))
                                                     .child(self.render_action_dock(cx))
-                                                    .child(self.render_toast_overlay(cx)),
+                                                    .when(!self.preferences_open, |d| {
+                                                        d.child(self.render_toast_overlay(cx))
+                                                    }),
                                             )
                                             .child(self.render_status_bar(total_count, cx))
                                             .into_any_element()
@@ -1056,6 +1078,11 @@ impl Render for LuminaApp {
                 crate::views::preferences::render_preferences_modal(self, cx),
                 "preferences-in",
             ))
+            // 12b. The toast over settings (opaque); the columns draw it
+            // otherwise.
+            .when(self.preferences_open, |root| {
+                root.child(self.render_toast_overlay(cx))
+            })
             // 13. Command palette (topmost)
             .child(motion::overlay_in(
                 self.command_palette_open,

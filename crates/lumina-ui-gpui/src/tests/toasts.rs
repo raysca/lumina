@@ -562,3 +562,56 @@ fn toast_kinds_show_accent_title_subtitle_and_action() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn refusals_show_warning_toast_not_success() {
+    use crate::views::toast::ToastKind;
+
+    let (temp_dir, engine) = seed_library("refusals", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Nothing is selected, no smart album is open, no search is typed and
+    // no import runs, so each action refuses and changes nothing.
+    type Refusal = fn(&mut LuminaApp, &mut Context<LuminaApp>);
+    let refusals: [(&str, Refusal); 7] = [
+        ("new album", |app, cx| app.new_album_with_selection(cx)),
+        ("album picker", |app, cx| app.open_album_picker(cx)),
+        ("edit smart album", |app, cx| {
+            app.edit_selected_smart_album(cx)
+        }),
+        ("delete smart album", |app, cx| {
+            app.delete_selected_smart_album(cx)
+        }),
+        ("save search", |app, cx| {
+            app.save_current_search_as_album(cx)
+        }),
+        ("cancel import", |app, cx| app.cancel_running_import(cx)),
+        ("compare", |app, cx| app.open_compare(cx)),
+    ];
+    for (name, refuse) in refusals {
+        view.update(vcx, |app, cx| {
+            app.dismiss_toast(cx);
+            refuse(app, cx);
+        });
+        render_ui(vcx);
+        view.update(vcx, |app, _| {
+            let toast = app
+                .toast
+                .current()
+                .unwrap_or_else(|| panic!("{name}: a refusal must say why"));
+            assert_eq!(
+                toast.kind,
+                ToastKind::Warning,
+                "{name}: a refusal ({:?}) must not show the success check",
+                toast.message
+            );
+        });
+        assert!(
+            vcx.debug_bounds("toast-icon-warning").is_some(),
+            "{name}: a refusal shows the warning icon"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

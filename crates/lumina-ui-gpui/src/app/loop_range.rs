@@ -71,7 +71,7 @@ impl LuminaApp {
             return;
         }
         if at >= self.video.loop_range.end(self.video_scrub_duration()) {
-            self.show_toast(t("video.loop_start_after_end"), cx);
+            self.show_warning_toast(t("video.loop_start_after_end"), cx);
             return;
         }
         self.video.loop_range.in_point = Some(at);
@@ -90,7 +90,7 @@ impl LuminaApp {
             return;
         }
         if at <= self.video.loop_range.start() {
-            self.show_toast(t("video.loop_end_before_start"), cx);
+            self.show_warning_toast(t("video.loop_end_before_start"), cx);
             return;
         }
         self.video.loop_range.out_point = Some(at);

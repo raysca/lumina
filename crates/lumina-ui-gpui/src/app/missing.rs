@@ -144,7 +144,7 @@ impl LuminaApp {
             .clone()
             .filter(|item| selected == [item.id] && self.missing_items.contains(&item.id))
         else {
-            self.show_toast("Select one missing item to locate it", cx);
+            self.show_warning_toast("Select one missing item to locate it", cx);
             return;
         };
         let root = state.engine.library_root().to_path_buf();

@@ -315,3 +315,118 @@ fn action_dock_add_tags_keeps_the_multi_selection_and_starts_input() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+/// Settings is an opaque full-window layer: a toast raised under it must
+/// still be seen and clickable, so it is drawn above settings.
+#[core::prelude::v1::test]
+fn toast_raised_with_settings_open_is_drawn_above_it() {
+    let (temp_dir, engine) = seed_library("settings_toast", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.open_preferences(cx);
+        app.show_toast("Settings saved", cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-page").is_some(),
+        "settings shows"
+    );
+
+    // A click on the toast's dismiss control reaches it, not settings.
+    // Plain bottom offset, centred in the window: the hidden grid's zoom
+    // pill, dock and year rail do not move it.
+    let toast = vcx.debug_bounds("toast").expect("the toast renders");
+    let page = vcx.debug_bounds("settings-page").unwrap();
+    assert_eq!(
+        f32::from(page.bottom() - toast.bottom()),
+        crate::app::render::overlays::DOCK_BOTTOM,
+        "over settings the toast sits at the plain bottom offset"
+    );
+    assert!(
+        (f32::from(toast.center().x) - f32::from(page.center().x)).abs() <= 1.0,
+        "over settings the toast is centred, with no year-rail padding"
+    );
+
+    click(vcx, "toast-dismiss");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.toast.current().is_none(),
+            "the toast is above settings, so its dismiss control takes the click"
+        );
+        assert!(app.preferences_open, "the click did not reach settings");
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// View > Toggle Sidebar would flip and save a setting hidden behind
+/// settings; Help > About goes to settings' About and drops the reset
+/// question, which belongs to General.
+#[core::prelude::v1::test]
+fn menu_actions_under_settings_leave_the_hidden_library_alone() {
+    let (temp_dir, engine) = seed_library("settings_menus", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let root = view.read_with(vcx, |app, _| app.focus_handle.clone());
+    vcx.update(|window, cx| window.focus(&root, cx));
+    view.update(vcx, |app, cx| app.prompt_reset_preferences(cx));
+    render_ui(vcx);
+    let collapsed = view.read_with(vcx, |app, _| app.sidebar_collapsed);
+
+    vcx.dispatch_action(crate::actions::ToggleSidebar);
+    render_ui(vcx);
+    view.read_with(vcx, |app, _| {
+        assert_eq!(
+            app.sidebar_collapsed, collapsed,
+            "Toggle Sidebar must do nothing while settings covers the sidebar"
+        );
+    });
+
+    // Dialogs would draw under the opaque settings layer: their menu items
+    // have no handler, so nothing opens and no refusal toast appears.
+    let item = view.read_with(vcx, |app, _| {
+        app.grid_state.as_ref().unwrap().engine.get_item_slice(0..1)[0].clone()
+    });
+    view.update(vcx, |app, _| {
+        app.selected_item = Some(item);
+        app.selected_indices.insert(0);
+    });
+    vcx.dispatch_action(crate::actions::AddToAlbum);
+    vcx.dispatch_action(crate::actions::ManageTemplates);
+    vcx.dispatch_action(crate::actions::ImportNetworkVideo);
+    render_ui(vcx);
+    view.read_with(vcx, |app, _| {
+        assert!(app.albums.picker.is_none(), "Add to Album is disabled");
+        assert!(
+            app.templates.editor.is_none(),
+            "Manage Templates is disabled"
+        );
+        assert!(
+            app.network_import.stage.is_none(),
+            "Import Video from URL is disabled"
+        );
+        assert!(
+            app.toast.current().is_none(),
+            "a disabled item does nothing, not even a refusal: {:?}",
+            app.toast.current().map(|t| &t.message)
+        );
+    });
+
+    vcx.dispatch_action(crate::actions::ShowAbout);
+    render_ui(vcx);
+    view.read_with(vcx, |app, _| {
+        assert!(app.preferences_open, "About stays in settings");
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::About,
+            "Help > About goes to the About category"
+        );
+        assert!(
+            !app.preferences_reset_confirm,
+            "the reset question is General's; About must not keep it open"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

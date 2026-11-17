@@ -293,6 +293,8 @@ impl LuminaApp {
         self.preferences_open = true;
         self.preferences_tab = tab;
         self.settings_focus = None;
+        // Help > About over the reset question: Reset is General's alone.
+        self.preferences_reset_confirm = false;
         self.preferences_cache_cleared = false;
         self.refresh_cache_usage();
         if tab == PreferencesTab::Library {

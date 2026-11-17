@@ -81,7 +81,7 @@ impl LuminaApp {
         // Similar shots draws stacks, not the view's items: a slideshow
         // would play the hidden Exact copies.
         if self.similar_shots_shown() {
-            self.show_toast(t("stacks.no_slideshow"), cx);
+            self.show_warning_toast(t("stacks.no_slideshow"), cx);
             return;
         }
         // The map holds no selection: the show plays Places from the grid.
@@ -90,7 +90,7 @@ impl LuminaApp {
         }
         let count = self.navigation_count();
         if count == 0 {
-            self.show_toast(t("slideshow.empty"), cx);
+            self.show_warning_toast(t("slideshow.empty"), cx);
             return;
         }
         // Holding by id reads the selected span (at the start and at the

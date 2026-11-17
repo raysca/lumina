@@ -131,7 +131,7 @@ impl LuminaApp {
         }
         let ids: Vec<MediaId> = self.get_selected_items().iter().map(|i| i.id).collect();
         if ids.is_empty() {
-            self.show_toast(t("album.select_first"), cx);
+            self.show_warning_toast(t("album.select_first"), cx);
             return;
         }
         self.create_album_with(t("album.untitled"), &ids, cx);

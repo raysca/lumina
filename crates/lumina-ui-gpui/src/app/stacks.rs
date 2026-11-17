@@ -301,7 +301,7 @@ impl LuminaApp {
                 .iter()
                 .all(|r| !r.is_trashed && !r.is_hidden && !self.missing_items.contains(&r.id));
         if !live {
-            self.show_toast(t("stacks.changed"), cx);
+            self.show_warning_toast(t("stacks.changed"), cx);
             self.load_stacks(cx);
             return None;
         }
@@ -315,7 +315,7 @@ impl LuminaApp {
             return;
         };
         if !ids.iter().any(|id| self.item_flag(*id) == Flag::Pick) {
-            self.show_toast(t("stacks.pick_first"), cx);
+            self.show_warning_toast(t("stacks.pick_first"), cx);
             return;
         }
         let rest = ids

@@ -356,9 +356,11 @@ impl LuminaApp {
         // The toast is the top layer: above the zoom pill when it shows,
         // else above the dock, else at the dock's own offset.
         use crate::app::render::overlays::{ABOVE_DOCK, DOCK_BOTTOM, STACK_GAP};
-        let bottom = match self.zoom_pill_bottom() {
+        // Over settings the grid's pill, dock and rail are hidden.
+        let over_grid = !self.preferences_open;
+        let bottom = match self.zoom_pill_bottom().filter(|_| over_grid) {
             Some(pill) => pill + crate::views::zoom_pill::PILL_HEIGHT + STACK_GAP,
-            None if self.selection_dock_shown() => ABOVE_DOCK,
+            None if over_grid && self.selection_dock_shown() => ABOVE_DOCK,
             None => DOCK_BOTTOM,
         };
         div()
@@ -366,7 +368,7 @@ impl LuminaApp {
             .left_0()
             .right_0()
             .bottom(px(bottom))
-            .when(self.timeline_rail_shown(), |d| {
+            .when(over_grid && self.timeline_rail_shown(), |d| {
                 d.pr(px(crate::views::grid::YEAR_RAIL_WIDTH))
             })
             .flex()

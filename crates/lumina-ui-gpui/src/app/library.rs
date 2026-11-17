@@ -690,7 +690,7 @@ impl LuminaApp {
         // Refuse before the picker, so the user does not choose a folder
         // only to be told an export is already running.
         if self.jobs.export.is_some() {
-            self.show_toast(crate::i18n::t("jobs.export_running"), cx);
+            self.show_warning_toast(crate::i18n::t("jobs.export_running"), cx);
             return;
         }
         let selected = self.get_selected_ids();

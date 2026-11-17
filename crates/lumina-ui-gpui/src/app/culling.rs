@@ -234,7 +234,7 @@ impl LuminaApp {
             return;
         }
         let Some(scope) = self.view_query().reject_scope() else {
-            self.show_toast(crate::i18n::t("culling.delete_rejected_unavailable"), cx);
+            self.show_warning_toast(crate::i18n::t("culling.delete_rejected_unavailable"), cx);
             return;
         };
         let key = self.view_key();
@@ -252,7 +252,7 @@ impl LuminaApp {
                 }
                 match found {
                     Ok(found) if found.ids.is_empty() => {
-                        app.show_toast("No rejected items here", cx);
+                        app.show_warning_toast("No rejected items here", cx);
                     }
                     Ok(found) => {
                         app.delete_confirm_state = Some(DeleteConfirmState {

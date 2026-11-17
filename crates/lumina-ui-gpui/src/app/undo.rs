@@ -477,7 +477,7 @@ impl LuminaApp {
         // ⌘Z is absorbed in edit mode, but the toast's Undo is not: never
         // change the catalog under an open draft.
         if self.edits.session.is_some() {
-            self.show_toast("Finish editing the photo first", cx);
+            self.show_warning_toast("Finish editing the photo first", cx);
             return None;
         }
         if let UndoAction::TemplateDeleted { index, template } = action {

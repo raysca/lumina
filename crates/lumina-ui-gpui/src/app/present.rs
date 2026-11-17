@@ -102,7 +102,7 @@ impl LuminaApp {
             self.selected_indices.len()
         };
         if count > COMPARE_MAX {
-            self.show_toast(t("compare.too_many"), cx);
+            self.show_warning_toast(t("compare.too_many"), cx);
             return;
         }
         let items = if count >= 2 {
@@ -111,7 +111,7 @@ impl LuminaApp {
             Vec::new()
         };
         if items.len() < 2 {
-            self.show_toast(t("compare.too_few"), cx);
+            self.show_warning_toast(t("compare.too_few"), cx);
             return;
         }
         let generation = GENERATION.fetch_add(1, Ordering::Relaxed);
@@ -353,7 +353,7 @@ impl LuminaApp {
         match stack.last() {
             Some(UndoAction::Flag { .. } | UndoAction::Rating { .. }) => {}
             Some(_) => {
-                self.show_toast(t("compare.history_outside"), cx);
+                self.show_warning_toast(t("compare.history_outside"), cx);
                 return;
             }
             None => return,
@@ -378,7 +378,7 @@ impl LuminaApp {
             Ok(Some(item)) if !item.is_trashed => Some(item),
             Ok(_) => {
                 self.drop_compare_pane(cx);
-                self.show_toast(t("compare.pane_gone"), cx);
+                self.show_warning_toast(t("compare.pane_gone"), cx);
                 None
             }
             Err(err) => {

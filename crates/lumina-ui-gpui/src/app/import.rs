@@ -309,11 +309,11 @@ impl LuminaApp {
                 cancel.store(true, Ordering::Relaxed);
                 cx.notify();
             }
-            None => self.show_toast("No import is running", cx),
+            None => self.show_warning_toast("No import is running", cx),
         }
     }
 
-    fn finish_import(&mut self, report: CopyImportReport, cx: &mut Context<Self>) {
+    pub(crate) fn finish_import(&mut self, report: CopyImportReport, cx: &mut Context<Self>) {
         let total = self
             .import
             .progress

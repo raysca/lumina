@@ -38,7 +38,7 @@ impl LuminaApp {
             .and_then(|id| self.smart_album(id).cloned());
         match album {
             Some(album) => self.open_album_builder_for_edit(album, cx),
-            None => self.show_toast("Open a smart album to edit it", cx),
+            None => self.show_warning_toast("Open a smart album to edit it", cx),
         }
     }
 
@@ -47,7 +47,7 @@ impl LuminaApp {
     pub fn delete_selected_smart_album(&mut self, cx: &mut Context<Self>) {
         match self.palette_smart_album() {
             Some(id) => self.prompt_delete_smart_album(id, cx),
-            None => self.show_toast("Open a smart album to delete it", cx),
+            None => self.show_warning_toast("Open a smart album to delete it", cx),
         }
     }
 
@@ -57,7 +57,7 @@ impl LuminaApp {
     pub fn save_current_search_as_album(&mut self, cx: &mut Context<Self>) {
         let query = self.search_query.trim().to_string();
         if query.is_empty() {
-            self.show_toast("Type a search to save it", cx);
+            self.show_warning_toast("Type a search to save it", cx);
             return;
         }
         let rule = SmartAlbumRule {

@@ -41,7 +41,7 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) {
         if self.jobs.export.is_some() {
-            self.show_toast(t("jobs.export_running"), cx);
+            self.show_warning_toast(t("jobs.export_running"), cx);
             return;
         }
         let ids = self.get_selected_ids();
@@ -143,7 +143,7 @@ impl LuminaApp {
     /// selection in the background. A second import while one runs is refused.
     pub fn import_sidecars_selected(&mut self, cx: &mut Context<Self>) {
         if self.jobs.xmp.is_some() {
-            self.show_toast(t("jobs.xmp_running"), cx);
+            self.show_warning_toast(t("jobs.xmp_running"), cx);
             return;
         }
         let ids = self.get_selected_ids();

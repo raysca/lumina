@@ -39,7 +39,7 @@ impl LuminaApp {
             return;
         }
         let Some(album) = self.open_smart_album() else {
-            self.show_toast(t("smart_album.open_first"), cx);
+            self.show_warning_toast(t("smart_album.open_first"), cx);
             return;
         };
         let title = clean_text(
@@ -64,7 +64,7 @@ impl LuminaApp {
     /// rules, then [`Self::export_smart_album_rules_to`].
     pub fn export_selected_smart_album_rules(&mut self, cx: &mut Context<Self>) {
         let Some(album) = self.open_smart_album() else {
-            self.show_toast(t("smart_album.open_first"), cx);
+            self.show_warning_toast(t("smart_album.open_first"), cx);
             return;
         };
         // Tests count the request instead of opening a real dialog.

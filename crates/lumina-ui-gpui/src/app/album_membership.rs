@@ -39,7 +39,7 @@ impl LuminaApp {
         }
         let ids = self.selected_media_ids();
         if ids.is_empty() {
-            self.show_toast(t("album.select_first"), cx);
+            self.show_warning_toast(t("album.select_first"), cx);
             return;
         }
         // The filter takes the keys, not a search left focused.
@@ -132,7 +132,7 @@ impl LuminaApp {
             return;
         };
         if added.is_empty() {
-            self.show_toast(t("album.already_in").replace("{album}", &title), cx);
+            self.show_warning_toast(t("album.already_in").replace("{album}", &title), cx);
             return;
         }
         let message = count_message("album.added", added.len(), &title);
@@ -174,7 +174,7 @@ impl LuminaApp {
         };
         if removed.is_empty() {
             self.refresh_album_counts();
-            self.show_toast(t("album.not_in").replace("{album}", &title), cx);
+            self.show_warning_toast(t("album.not_in").replace("{album}", &title), cx);
             return;
         }
         let message = count_message("album.removed", removed.len(), &title);

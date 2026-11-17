@@ -153,8 +153,22 @@ pub fn results(n: usize) -> String {
 }
 
 /// The import result banner title: "Imported 1,284 of 1,310. 26 files
-/// failed."
+/// failed." A copy stopped early (a full disk) never tried the rest, so it
+/// counts every file not copied instead: "Imported 3 of 10. 7 files not
+/// copied."
 pub fn import_failed(copied: usize, total: usize, failed: usize) -> String {
+    let not_copied = total.saturating_sub(copied);
+    if not_copied > failed {
+        let key = if not_copied == 1 {
+            "import.not_copied_one"
+        } else {
+            "import.not_copied_other"
+        };
+        return t(key)
+            .replace("{copied}", &count(copied))
+            .replace("{total}", &count(total))
+            .replace("{n}", &count(not_copied));
+    }
     let key = if failed == 1 {
         "import.failed_one"
     } else {
@@ -995,6 +1009,8 @@ fn en_us(key: &str) -> Option<&'static str> {
         "header.filter" => "Filter",
         "import.failed_one" => "Imported {copied} of {total}. 1 file failed.",
         "import.failed_other" => "Imported {copied} of {total}. {n} files failed.",
+        "import.not_copied_one" => "Imported {copied} of {total}. 1 file not copied.",
+        "import.not_copied_other" => "Imported {copied} of {total}. {n} files not copied.",
         "import.failed_more" => " and {n} more",
         "filter.matches_one" => "1 match",
         "filter.matches_other" => "{n} matches",
@@ -1185,6 +1201,16 @@ mod tests {
         assert_eq!(
             import_failed(1_284, 1_310, 26),
             "Imported 1,284 of 1,310. 26 files failed."
+        );
+        assert_eq!(
+            import_failed(3, 10, 1),
+            "Imported 3 of 10. 7 files not copied.",
+            "a copy stopped early counts the untried files too"
+        );
+        assert_eq!(
+            import_failed(2, 3, 0),
+            "Imported 2 of 3. 1 file not copied.",
+            "one file not copied is singular"
         );
     }
 

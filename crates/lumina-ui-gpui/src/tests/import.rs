@@ -445,3 +445,32 @@ fn partial_import_banner_reads_imported_x_of_y() {
         "the rest are counted: {detail}"
     );
 }
+
+#[core::prelude::v1::test]
+fn import_stopped_by_a_full_disk_counts_the_files_not_copied() {
+    let (library, engine) = seed_library("disk_full", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // 10 planned; 3 copied, the 4th hit a full disk and the copy stopped,
+    // so files 5 to 10 were never tried.
+    let report = lumina_core::import::CopyImportReport {
+        copied: 3,
+        failed: vec![(PathBuf::from("/src/d.jpg"), "No space left".into())],
+        cancelled: false,
+    };
+    view.update(vcx, |app, cx| {
+        app.import.progress = Some((4, 10));
+        app.finish_import(report, cx);
+    });
+    let message = view.update(vcx, |app, _| app.error_message.clone());
+    let message = message.expect("a stopped import sets the banner");
+    let (title, detail) = message.split_once(": ").expect("title and detail");
+    assert_eq!(
+        title, "Imported 3 of 10. 7 files not copied.",
+        "copied plus not copied must add up to the total"
+    );
+    assert!(detail.starts_with("d.jpg: No space left"), "{detail}");
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&library);
+}
