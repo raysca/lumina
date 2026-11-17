@@ -111,7 +111,7 @@ fn video_transport_is_docked_full_width() {
         "the readout renders m:ss / m:ss"
     );
     assert_eq!(
-        crate::app::types::format_clock(7322.0),
+        crate::app::types::format_clock(7322.0, false),
         "2:02:02",
         "a long clip switches to h:mm:ss"
     );

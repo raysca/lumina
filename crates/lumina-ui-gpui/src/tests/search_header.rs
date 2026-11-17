@@ -85,13 +85,17 @@ fn query_tokens_render_as_chips_with_connectors() {
     view.update(vcx, |app, _| {
         assert_eq!(
             app.search_result_label(),
-            Some(crate::i18n::results(app.displayed_count())),
+            Some(crate::i18n::plural("search.results", app.displayed_count())),
             "the count reads the displayed results"
         );
     });
-    assert_eq!(crate::i18n::results(0), "0 results");
-    assert_eq!(crate::i18n::results(1), "1 result", "singular");
-    assert_eq!(crate::i18n::results(1284), "1,284 results");
+    assert_eq!(crate::i18n::plural("search.results", 0), "0 results");
+    assert_eq!(
+        crate::i18n::plural("search.results", 1),
+        "1 result",
+        "singular"
+    );
+    assert_eq!(crate::i18n::plural("search.results", 1284), "1,284 results");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -868,7 +872,7 @@ fn results_head_shows_count_and_opens_sort() {
         assert_eq!(app.displayed_count(), 3);
         assert_eq!(
             count,
-            crate::i18n::items(app.displayed_count()),
+            crate::i18n::plural("header.items", app.displayed_count()),
             "the count is the grid's displayed count"
         );
         assert_eq!(

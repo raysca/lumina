@@ -1286,13 +1286,7 @@ impl LuminaApp {
 
                 self.refresh_album_counts();
                 self.refresh_duplicates();
-                self.show_toast(
-                    format!(
-                        "Merged {count} duplicate{}",
-                        if count == 1 { "" } else { "s" }
-                    ),
-                    cx,
-                );
+                self.show_toast(merged_message(count), cx);
                 cx.notify();
             }
             Err(err) => {
@@ -1328,13 +1322,7 @@ impl LuminaApp {
 
                 self.refresh_album_counts();
                 self.refresh_duplicates();
-                self.show_toast(
-                    format!(
-                        "Merged {total_merged} duplicate{}",
-                        if total_merged == 1 { "" } else { "s" }
-                    ),
-                    cx,
-                );
+                self.show_toast(merged_message(total_merged), cx);
                 cx.notify();
             }
             Err(err) => {
@@ -1342,6 +1330,11 @@ impl LuminaApp {
             }
         }
     }
+}
+
+/// The toast after a merge: "Merged 1 duplicate", "Merged 12 duplicates".
+fn merged_message(n: usize) -> String {
+    crate::i18n::t(&crate::i18n::plural_key("duplicates.merged", n)).replace("{n}", &n.to_string())
 }
 
 #[cfg(test)]

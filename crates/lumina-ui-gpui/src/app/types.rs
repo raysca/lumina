@@ -229,7 +229,9 @@ pub fn format_duration_badge(secs: f64) -> String {
 }
 
 /// "1:18", or "2:02:02" from an hour up: the transport's clock readout.
-pub fn format_clock(secs: f64) -> String {
+/// `pad_minutes` gives minutes two digits under an hour ("04:12"), as the
+/// URL import preview shows. Unknown or negative times read zero.
+pub fn format_clock(secs: f64, pad_minutes: bool) -> String {
     let total = if secs.is_finite() && secs > 0.0 {
         secs as u64
     } else {
@@ -238,26 +240,26 @@ pub fn format_clock(secs: f64) -> String {
     let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60);
     if h > 0 {
         format!("{h}:{m:02}:{s:02}")
+    } else if pad_minutes {
+        format!("{m:02}:{s:02}")
     } else {
         format!("{m}:{s:02}")
     }
 }
 
+/// "512 B", "1.5 KB", up to "1.8 TB": binary units, one decimal from KB.
 pub fn format_bytes(bytes: u64) -> String {
     if bytes < 1024 {
-        format!("{} B", bytes)
-    } else if bytes < 1024 * 1024 {
-        format!("{:.1} KB", bytes as f64 / 1024.0)
-    } else if bytes < 1024 * 1024 * 1024 {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else if bytes < 1024 * 1024 * 1024 * 1024 {
-        format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
-    } else {
-        format!(
-            "{:.1} TB",
-            bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0)
-        )
+        return format!("{bytes} B");
     }
+    let mut value = bytes as f64 / 1024.0;
+    for unit in ["KB", "MB", "GB"] {
+        if value < 1024.0 {
+            return format!("{value:.1} {unit}");
+        }
+        value /= 1024.0;
+    }
+    format!("{value:.1} TB")
 }
 
 pub fn format_time_fractional(seconds: f64) -> String {
@@ -362,7 +364,27 @@ pub fn get_sample_items() -> Vec<MediaItem> {
 
 #[cfg(test)]
 mod format_bytes_tests {
-    use super::format_bytes;
+    use super::{format_bytes, format_clock};
+
+    #[core::prelude::v1::test]
+    fn format_clock_pads_minutes_only_when_asked() {
+        assert_eq!(format_clock(78.9, false), "1:18");
+        assert_eq!(format_clock(252.0, true), "04:12");
+        assert_eq!(format_clock(7322.0, false), "2:02:02");
+        assert_eq!(format_clock(3723.0, true), "1:02:03", "hours never pad");
+        assert_eq!(format_clock(-3.0, false), "0:00");
+        assert_eq!(format_clock(f64::NAN, true), "00:00");
+    }
+
+    #[core::prelude::v1::test]
+    fn format_bytes_reads_each_unit() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(1023), "1023 B");
+        assert_eq!(format_bytes(1024), "1.0 KB");
+        assert_eq!(format_bytes(1536), "1.5 KB");
+        assert_eq!(format_bytes(1024 * 1024 - 1), "1024.0 KB");
+        assert_eq!(format_bytes(5 * 1024 * 1024), "5.0 MB");
+    }
 
     #[core::prelude::v1::test]
     fn format_bytes_steps_up_to_terabytes() {

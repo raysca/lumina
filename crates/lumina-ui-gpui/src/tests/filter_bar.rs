@@ -92,7 +92,7 @@ fn filter_tokens_render_as_chips_with_count_and_clear_all() {
             "nothing in the seed was shot in Lisbon"
         );
     });
-    assert_eq!(crate::i18n::matches(1284), "1,284 matches");
+    assert_eq!(crate::i18n::plural("filter.matches", 1284), "1,284 matches");
 
     click(vcx, "filter-clear-all");
     assert_eq!(query(&view, vcx), "", "Clear all drops every filter token");

@@ -26,7 +26,7 @@ pub(crate) fn meta(app: &LuminaApp) -> String {
     let keywords = app.library_tag_counts.len();
     let total = app.total_library_count;
     if keywords > 0 && total == 0 {
-        return crate::i18n::keywords(keywords);
+        return crate::i18n::plural("tags.keywords", keywords);
     }
     let tagged = total.saturating_sub(app.untagged_count);
     // Never 0% or 100% unless it is exactly that.
@@ -36,7 +36,10 @@ pub(crate) fn meta(app: &LuminaApp) -> String {
         (t, n) => ((t * 100 + n / 2) / n).clamp(1, 99),
     };
     t("tags.meta")
-        .replace("{keywords}", &crate::i18n::keywords(keywords))
+        .replace(
+            "{keywords}",
+            &crate::i18n::plural("tags.keywords", keywords),
+        )
         .replace("{percent}", &percent.to_string())
 }
 

@@ -3,7 +3,7 @@
 
 use lumina_core::{MatchMode, RuleField, RuleOperator};
 
-use crate::i18n::{stars, t};
+use crate::i18n::{plural, t};
 use crate::icons::Icon;
 
 pub fn field_label(field: &RuleField) -> &'static str {
@@ -123,7 +123,7 @@ pub fn match_label(mode: MatchMode) -> &'static str {
 /// The Rating row's words after its stars: "4 stars & up", "2 stars or
 /// fewer", "3 stars". `value` is the row's text ("1".."5").
 pub fn rating_value_label(op: &RuleOperator, value: &str) -> String {
-    let stars = stars(value.parse().unwrap_or(0));
+    let stars = plural("smart_album.stars", value.parse().unwrap_or(0));
     match op {
         RuleOperator::AtLeast => t("smart_album.rating_at_least").replace("{stars}", &stars),
         RuleOperator::AtMost => t("smart_album.rating_at_most").replace("{stars}", &stars),

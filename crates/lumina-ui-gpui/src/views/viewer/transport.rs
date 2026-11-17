@@ -79,7 +79,7 @@ pub(super) fn transport_height(this: &LuminaApp) -> f32 {
 
 /// The accent time pill hanging under the playhead at `pct` of the track.
 fn playhead_pill(pct: f32, time: f64) -> Div {
-    let text: SharedString = format_clock(time).into();
+    let text: SharedString = format_clock(time, false).into();
     // ponytail: width from the mono advance (9.5px * 0.6) plus padding.
     let width = text.chars().count() as f32 * 5.7 + 14.0;
     div()

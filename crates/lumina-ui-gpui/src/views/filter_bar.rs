@@ -164,7 +164,8 @@ impl LuminaApp {
     /// "{n} matches" for the row: the latest fetched count, kept while the
     /// next one loads so the row does not jump. None before any fetch.
     pub(crate) fn filter_match_label(&self) -> Option<String> {
-        self.last_fetched_count().map(crate::i18n::matches)
+        self.last_fetched_count()
+            .map(|n| crate::i18n::plural("filter.matches", n))
     }
 
     /// Whether the header's Filter button carries the menu: opened there,

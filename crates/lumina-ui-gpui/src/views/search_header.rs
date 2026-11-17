@@ -85,7 +85,7 @@ impl LuminaApp {
     pub(crate) fn search_result_label(&self) -> Option<String> {
         let known = !self.view_loading() || self.cached_active_count().is_some();
         (known && !self.search_query.trim().is_empty())
-            .then(|| crate::i18n::results(self.displayed_count()))
+            .then(|| crate::i18n::plural("search.results", self.displayed_count()))
     }
 
     /// The caret sits at the start of the bar's typed text with chips before

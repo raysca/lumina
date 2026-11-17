@@ -151,8 +151,8 @@ impl LuminaApp {
     pub(crate) fn albums_overview_meta(&self) -> String {
         format!(
             "{} · {}",
-            crate::i18n::albums(self.albums.list.len()),
-            crate::i18n::smart_albums(self.user_smart_albums.len())
+            crate::i18n::plural("albums.count", self.albums.list.len()),
+            crate::i18n::plural("albums.smart_count", self.user_smart_albums.len())
         )
     }
 

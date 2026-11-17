@@ -106,7 +106,7 @@ fn card(
         TopMatchKind::Tag(_) => (Icon::Tag, "search.match_tag"),
     };
     let kind = t(kind_key);
-    let items = crate::i18n::items(found.count);
+    let items = crate::i18n::plural("header.items", found.count);
     let label = t("search.match_label")
         .replace("{kind}", &kind)
         .replace("{title}", &found.title)

@@ -12,7 +12,7 @@ use crate::icons::Icon;
 
 pub(super) fn render_library(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let storage = app.library_storage();
-    let items = crate::i18n::items(app.total_library_count);
+    let items = crate::i18n::plural("header.items", app.total_library_count);
     // The size waits for the first reading; the count is known at once.
     let size = match storage {
         Some(s) => format!("{} · {items}", format_bytes(s.library_bytes())),

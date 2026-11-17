@@ -15,12 +15,7 @@ use crate::views::sidebar::AlbumSelection;
 
 /// "Added 1 item to “Trip”" / "Added 3 items to “Trip”".
 fn count_message(key: &str, n: usize, album: &str) -> String {
-    let key = if n == 1 {
-        format!("{key}_one")
-    } else {
-        format!("{key}_other")
-    };
-    t(&key)
+    t(&crate::i18n::plural_key(key, n))
         .replace("{n}", &n.to_string())
         .replace("{album}", album)
 }

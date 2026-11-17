@@ -329,9 +329,9 @@ impl LuminaApp {
     /// "N items".
     pub(crate) fn count_label(&self, n: usize) -> String {
         if self.videos_view() {
-            crate::i18n::clips(n)
+            crate::i18n::plural("header.clips", n)
         } else {
-            crate::i18n::items(n)
+            crate::i18n::plural("header.items", n)
         }
     }
 

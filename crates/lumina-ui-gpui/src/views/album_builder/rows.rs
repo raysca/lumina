@@ -8,7 +8,7 @@ use crate::app::smart_draft::{
     field_icon, field_label, operator_label, rating_value_label, DraftFocus, DraftRow, ValueKind,
 };
 use crate::app::text_input::TextTarget;
-use crate::i18n::{stars, t, t_with};
+use crate::i18n::{plural, t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::text_marker;
@@ -178,7 +178,7 @@ fn rating_stars(
             .id(ElementId::Name(format!("album-rule-star-{i}-{n}").into()))
             .debug_selector(move || format!("album-rule-star-{i}-{n}"))
             .role(Role::Button)
-            .aria_label(stars(n))
+            .aria_label(plural("smart_album.stars", n as usize))
             .cursor_pointer()
             .child(render_icon(icon, px(15.0), color))
             .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {

@@ -21,8 +21,7 @@ impl ForegroundJobs {
     /// The status-bar line for a running job, export first.
     pub(crate) fn status_text(&self) -> Option<String> {
         let line = |key: &str, n: usize| {
-            let key = format!("{key}_{}", if n == 1 { "one" } else { "other" });
-            t(&key).replace("{n}", &n.to_string())
+            t(&crate::i18n::plural_key(key, n)).replace("{n}", &n.to_string())
         };
         self.export
             .map(|n| line("status.exporting", n))

@@ -54,7 +54,10 @@ pub(super) fn render(
     cx: &mut Context<LuminaApp>,
 ) -> Div {
     let video = &this.video;
-    let (elapsed, total) = (format_clock(current_time), format_clock(duration));
+    let (elapsed, total) = (
+        format_clock(current_time, false),
+        format_clock(duration, false),
+    );
     let readout: SharedString = format!("{elapsed} / {total}").into();
     let play_label = t(if video.is_playing {
         "video.pause"

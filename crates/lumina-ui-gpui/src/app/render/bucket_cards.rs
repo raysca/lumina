@@ -410,7 +410,7 @@ fn card(
     cover: Option<MediaId>,
     offset: usize,
 ) -> BucketCard {
-    let count = crate::i18n::items(count);
+    let count = crate::i18n::plural("header.items", count);
     BucketCard {
         aria_label: format!("{title}, {count}"),
         selector,

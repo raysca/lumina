@@ -13,11 +13,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         return Empty.into_any_element();
     };
     let count = app.downloads_cut_by_leaving();
-    let running = if count == 1 {
-        "1 download is still running.".to_string()
-    } else {
-        format!("{count} downloads are still running.")
-    };
+    let running = crate::i18n::t(&crate::i18n::plural_key("downloads.still_running", count))
+        .replace("{n}", &count.to_string());
     let (question, action) = match confirm {
         DownloadsConfirm::Quit => ("Quit anyway?", "Quit"),
         DownloadsConfirm::OpenLibrary(_) => ("Open another library anyway?", "Open"),

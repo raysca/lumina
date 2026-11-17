@@ -45,7 +45,7 @@ pub fn render_detail(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement
             .into_any_element();
     };
     // The keyword and everything below it, loaded on focus.
-    let items_label = crate::i18n::items(app.tag_manager.focused_count);
+    let items_label = crate::i18n::plural("header.items", app.tag_manager.focused_count);
 
     panel
         .child(render_header(app, &tag, &items_label, cx))

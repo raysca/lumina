@@ -144,11 +144,13 @@ pub fn render_command_palette(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> A
                             div()
                                 .id("command-result-count")
                                 .debug_selector(|| "command-result-count".to_string())
-                                .child(if result_count == 1 {
-                                    "1 result".to_string()
-                                } else {
-                                    format!("{result_count} results")
-                                }),
+                                .child(
+                                    crate::i18n::t(&crate::i18n::plural_key(
+                                        "search.results",
+                                        result_count,
+                                    ))
+                                    .replace("{n}", &result_count.to_string()),
+                                ),
                         ),
                 ),
         )

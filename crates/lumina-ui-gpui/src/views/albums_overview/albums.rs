@@ -242,7 +242,7 @@ fn empty_state(cx: &mut Context<LuminaApp>) -> Div {
 /// "284 items · Jun 2025", the count alone without a dated cover.
 fn card_meta(count: usize, newest_epoch_ms: Option<i64>) -> String {
     use chrono::Datelike;
-    let items = crate::i18n::items(count);
+    let items = crate::i18n::plural("header.items", count);
     match newest_epoch_ms.and_then(chrono::DateTime::from_timestamp_millis) {
         Some(date) => t("header.meta").replace("{items}", &items).replace(
             "{range}",

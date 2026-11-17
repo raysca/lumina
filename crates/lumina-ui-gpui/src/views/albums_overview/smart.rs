@@ -179,7 +179,7 @@ fn card(this: &LuminaApp, album: &SmartAlbum, cx: &mut Context<LuminaApp>) -> An
     let title: SharedString = album.title.clone().into();
     let count = this.user_album_counts.get(&id).copied().unwrap_or(0);
     let meta: SharedString = t("albums.smart_meta")
-        .replace("{items}", &crate::i18n::items(count))
+        .replace("{items}", &crate::i18n::plural("header.items", count))
         .into();
     let focused = this.albums.overview.focus == Some(OverviewFocus::SmartCard(id));
     div()

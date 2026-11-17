@@ -15,12 +15,12 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
     let size = app.preferences_cache.map_or_else(
         || "Calculating…".to_string(),
         |usage| {
-            format!(
-                "{} · {} thumbnail{}",
-                format_bytes(usage.bytes),
+            let files = crate::i18n::t(&crate::i18n::plural_key(
+                "preferences.thumbnails",
                 usage.files,
-                if usage.files == 1 { "" } else { "s" }
-            )
+            ))
+            .replace("{n}", &usage.files.to_string());
+            format!("{} · {files}", format_bytes(usage.bytes))
         },
     );
     let size_marker = size.clone();

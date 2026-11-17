@@ -4,25 +4,10 @@
 use gpui::*;
 use lumina_core::net_import::NetworkMediaInfo;
 
-use crate::app::types::format_bytes;
+use crate::app::types::{format_bytes, format_clock};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::text_marker;
-
-/// "04:12", or "1:02:03" from an hour up.
-pub(crate) fn clock(secs: f64) -> String {
-    let total = if secs.is_finite() && secs > 0.0 {
-        secs as u64
-    } else {
-        0
-    };
-    let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60);
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m:02}:{s:02}")
-    }
-}
 
 /// "384 MB": `format_bytes` without a trailing ".0".
 pub(crate) fn size_label(bytes: u64) -> String {
@@ -103,7 +88,7 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
         .justify_center()
         .child(render_icon(Icon::Film, px(22.0), theme::t3()))
         .children(info.duration_secs.map(|secs| {
-            marked("net-import-preview-duration", clock(secs))
+            marked("net-import-preview-duration", format_clock(secs, true))
                 .absolute()
                 .right(px(6.0))
                 .bottom(px(6.0))
@@ -189,17 +174,4 @@ pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
                 .justify_center()
                 .child(render_icon(Icon::Check, px(13.0), theme::positive())),
         )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::clock;
-
-    #[core::prelude::v1::test]
-    fn clock_pads_minutes_and_shows_hours_from_an_hour_up() {
-        assert_eq!(clock(252.0), "04:12", "under an hour reads mm:ss");
-        assert_eq!(clock(3723.0), "1:02:03", "an hour up reads h:mm:ss");
-        assert_eq!(clock(0.0), "00:00", "zero reads 00:00");
-        assert_eq!(clock(f64::NAN), "00:00", "an unknown length reads 00:00");
-    }
 }

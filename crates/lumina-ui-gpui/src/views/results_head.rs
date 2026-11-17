@@ -29,7 +29,7 @@ impl LuminaApp {
             (None, Some(videos)) if videos > 0 => "search.results_videos",
             _ => "search.results_photos",
         };
-        (t(key), crate::i18n::items(count))
+        (t(key), crate::i18n::plural("header.items", count))
     }
 
     /// The current sort field and ▾ ("Date taken ▾"); results have no

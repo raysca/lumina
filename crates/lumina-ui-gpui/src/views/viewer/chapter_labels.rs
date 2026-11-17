@@ -44,7 +44,11 @@ pub(crate) fn chapter_labels(
         .iter()
         .enumerate()
         .map(|(index, (start, _))| {
-            let text = format!("{} {}", chapter_name(chapters, index), format_clock(*start));
+            let text = format!(
+                "{} {}",
+                chapter_name(chapters, index),
+                format_clock(*start, false)
+            );
             let width = text.chars().count() as f32 * GLYPH;
             // Kept inside the track at the far end.
             let x = ((start / duration) as f32 * track_width).min(track_width - width);

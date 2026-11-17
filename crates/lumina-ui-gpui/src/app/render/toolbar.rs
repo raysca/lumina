@@ -117,7 +117,7 @@ impl LuminaApp {
                 totals.duration_ms,
                 &crate::app::types::format_bytes(totals.bytes),
             ),
-            None => crate::i18n::clips(count),
+            None => crate::i18n::plural("header.clips", count),
         })
     }
 

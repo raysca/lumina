@@ -376,8 +376,9 @@ and label, then check the result with VoiceOver before claiming support.
 
 ## Localization
 
-User-facing command labels go through `src/i18n.rs`; the catalog is keyed and
-currently ships **en-US** only. `LUMINA_LANG` is read and unknown locales fall
-back to English. Adding a locale means adding a catalog arm and a `Locale`
-variant; remaining hard-coded strings can be migrated incrementally without
+User-facing command labels go through `src/i18n/`; the catalog is keyed and
+currently ships **en-US** only (`src/i18n/en_us.rs`), with no locale switch.
+Counts use `i18n::plural`, which reads `{key}_one` and `{key}_other`. Adding a
+locale means adding its catalog file and choosing between catalogs in `t`;
+remaining hard-coded strings can be migrated incrementally without
 changing UI structure.

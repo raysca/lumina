@@ -417,7 +417,7 @@ impl LuminaApp {
                     let width = (m.count as f32 / max * BAR_MAX).max(2.0);
                     let label = t("timeline.month")
                         .replace("{month}", &crate::i18n::month_year(year, month))
-                        .replace("{items}", &crate::i18n::items(m.count));
+                        .replace("{items}", &crate::i18n::plural("header.items", m.count));
                     let group: SharedString = format!("timeline-bar-{year}-{month}").into();
                     // A taller hit target than the 4 px bar, so it is clickable.
                     div()

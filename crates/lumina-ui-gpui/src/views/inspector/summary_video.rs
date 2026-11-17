@@ -59,7 +59,11 @@ pub(crate) fn video_panel(this: &LuminaApp, item: &MediaItem) -> Option<VideoPan
                 index,
                 start: *start,
                 name: chapter_name(chapters, index),
-                range: format!("{} — {}", format_clock(*start), format_clock(end)),
+                range: format!(
+                    "{} — {}",
+                    format_clock(*start, false),
+                    format_clock(end, false)
+                ),
                 thumb: this.scrub_preview_at(*start).map(|(_, image)| image),
                 current: Some(index) == playing,
             }
@@ -78,7 +82,11 @@ pub(crate) fn format_duration_ms(secs: f64) -> String {
     } else {
         0
     };
-    format!("{}.{:03}", format_clock((ms / 1000) as f64), ms % 1000)
+    format!(
+        "{}.{:03}",
+        format_clock((ms / 1000) as f64, false),
+        ms % 1000
+    )
 }
 
 /// Playback rows: the facts Lumina knows (no "—" rows).

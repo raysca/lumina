@@ -324,14 +324,14 @@ impl LuminaApp {
         self.import.running = None;
         self.import.progress = None;
         self.refresh_album_counts();
-        let noun = if report.copied == 1 { "item" } else { "items" };
+        let copied = |key: &str| {
+            i18n::t(&i18n::plural_key(key, report.copied))
+                .replace("{n}", &report.copied.to_string())
+        };
         if report.cancelled {
-            self.show_toast(
-                format!("Import cancelled after {} {noun}", report.copied),
-                cx,
-            );
+            self.show_toast(copied("import.cancelled"), cx);
         } else if report.failed.is_empty() {
-            self.show_toast(format!("Imported {} {noun}", report.copied), cx);
+            self.show_toast(copied("import.imported"), cx);
         }
         // ponytail: failures only in the banner (it says X of Y); the
         // failed-file panel is a separate plan.

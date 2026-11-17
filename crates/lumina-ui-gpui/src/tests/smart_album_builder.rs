@@ -545,8 +545,8 @@ fn rating_stars_click_and_arrow_keys() {
     );
     // The AccessKit tree is not visible to the harness, so the star buttons'
     // aria label is checked through the function that builds it.
-    assert_eq!(crate::i18n::stars(4), "4 stars");
-    assert_eq!(crate::i18n::stars(1), "1 star");
+    assert_eq!(crate::i18n::plural("smart_album.stars", 4), "4 stars");
+    assert_eq!(crate::i18n::plural("smart_album.stars", 1), "1 star");
 
     keystrokes(vcx, "space enter down");
     view.update(vcx, |app, _| {

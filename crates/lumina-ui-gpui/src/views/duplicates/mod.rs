@@ -59,8 +59,8 @@ pub(crate) fn meta(this: &LuminaApp) -> String {
     let bytes: u64 = groups.iter().map(|g| g.potential_reclaimable_bytes).sum();
     format!(
         "{} · {} · {}",
-        crate::i18n::duplicate_groups(groups.len()),
-        crate::i18n::items(items),
+        crate::i18n::plural("duplicates.groups", groups.len()),
+        crate::i18n::plural("header.items", items),
         t_with("duplicates.recoverable", &[&format_bytes(bytes)])
     )
 }
