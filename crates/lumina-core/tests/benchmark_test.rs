@@ -440,7 +440,7 @@ fn benchmark_scale_and_gates() {
     // last page of ~495 rows: the deep-page case for a rare filter. Both have
     // their own index (`idx_media_color`, `idx_media_flag`); at this 25k
     // scale a date-index walk would still pass, so the plan tests in
-    // core_tests.rs are what guard those indexes.
+    // search_tests.rs are what guard those indexes.
     let gate = |text: &str, offset: usize, note: &str| {
         let q = StructuredQuery::parse(text);
         let first = catalog
