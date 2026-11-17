@@ -262,7 +262,7 @@ fn net_import_card_absorbs_clicks_and_backdrop_closes() {
 }
 
 #[core::prelude::v1::test]
-fn net_import_url_field_is_46_tall_with_clear_button() {
+fn net_import_url_field_has_a_clear_button() {
     let (_library, engine) = seed_library("net_import_field", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);

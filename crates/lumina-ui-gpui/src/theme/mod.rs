@@ -265,6 +265,21 @@ mod tests {
         }
         assert!(contrast(on_accent(), accent()) >= 4.5);
         assert!(
+            contrast(on_danger(), danger_surface()) >= 4.5,
+            "error banner text is AA on its surface"
+        );
+        assert!(
+            contrast(on_warn(), warn_surface()) >= 4.5,
+            "warning text is AA on its surface"
+        );
+        for bg in [bg_0(), bg_1(), bg_2(), bg_float()] {
+            assert!(
+                contrast(positive(), bg) >= 4.5,
+                "success text is AA on panels"
+            );
+            assert!(contrast(warn(), bg) >= 4.5, "warning text is AA on panels");
+        }
+        assert!(
             contrast(bg_0(), danger()) >= 4.5,
             "text on a danger fill is drawn in bg_0"
         );

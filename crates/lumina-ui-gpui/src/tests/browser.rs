@@ -7,7 +7,7 @@ use crate::tests::ui_automation::{
 use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]
-fn top_bar_actions_are_32px_icon_buttons_and_back_is_keyboard_only() {
+fn top_bar_actions_are_icon_buttons_and_back_is_keyboard_only() {
     let (dir, engine) = seed_library("br_topbar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);

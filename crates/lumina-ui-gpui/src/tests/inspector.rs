@@ -132,7 +132,7 @@ fn tags_field_adds_and_removes_plain_chips() {
 }
 
 #[core::prelude::v1::test]
-fn footer_is_pinned_and_rating_targets_are_22px() {
+fn footer_is_pinned_and_label_targets_set_the_color() {
     let mut cx = crate::tests::TestApp::single();
     let (dir, engine, item, view, vcx) = docked("inspector_footer", &mut cx);
 
