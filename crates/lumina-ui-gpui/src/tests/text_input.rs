@@ -155,8 +155,8 @@ fn search_inserts_typed_text_at_the_caret() {
             "← moves the caret and typing lands there, not at the end"
         );
     });
-    // Focused, the Search screen shows and its query bar holds the input
-    // (Design 03 Task 2); the sidebar field mirrors the query.
+    // Focused, the Search screen shows and its query bar holds the input;
+    // the sidebar field mirrors the query.
     let field = vcx
         .debug_bounds("search-query-bar")
         .expect("query bar drawn");

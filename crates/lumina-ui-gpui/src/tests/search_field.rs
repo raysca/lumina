@@ -1,4 +1,4 @@
-//! Design 03 Task 1: the search field lives in the sidebar.
+//! The search field lives in the sidebar.
 
 use crate::tests::ui_automation::{
     app_with_library, focus_app, keystrokes, render_ui, seed_library, type_text,
@@ -78,7 +78,7 @@ fn cmd_f_focuses_the_sidebar_field_and_typing_searches() {
     view.update(vcx, |app, _| {
         assert!(app.search_focused, "⌘F focuses search")
     });
-    // Focus shows the Search screen (Design 03 Task 2): the dropdown hangs
+    // Focus shows the Search screen: the dropdown hangs
     // under its query bar, which takes the typing.
     let bar = vcx.debug_bounds("search-query-bar").expect("query bar");
     let panel = vcx

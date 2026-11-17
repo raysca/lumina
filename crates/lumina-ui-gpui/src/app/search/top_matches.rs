@@ -1,4 +1,4 @@
-//! Top matches under the search header (Design 03 Task 5, decision 7):
+//! Top matches under the search header:
 //! places, smart albums, months and tags that the query's free text names.
 //! Computed off the UI thread when the query or the catalog changes, and
 //! cached by both.

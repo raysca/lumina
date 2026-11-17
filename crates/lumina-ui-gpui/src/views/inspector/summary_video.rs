@@ -1,4 +1,4 @@
-//! The video InfoPanel sections (Design 06): Chapters (only when the file
+//! The video InfoPanel sections: Chapters (only when the file
 //! has chapters; click seeks) and Playback (duration and pixel size; frame
 //! rate, codec, bitrate and audio wait for a player-side info read).
 

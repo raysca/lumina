@@ -1,4 +1,4 @@
-//! Keyword hierarchy in the UI (plan 4, Task 4): tree rows in the tag
+//! Keyword hierarchy in the UI: tree rows in the tag
 //! manager, path-aware autocomplete with aliases, Move to…, the alias editor,
 //! and the Untagged view surviving a relaunch.
 

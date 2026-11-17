@@ -1,4 +1,4 @@
-//! Deleting albums and album write failures (plan 5, Task A2), plus the
+//! Deleting albums and album write failures, plus the
 //! guards that keep album actions from running under a photo edit or a
 //! sheet. Data-changing tests read the catalog rows back.
 

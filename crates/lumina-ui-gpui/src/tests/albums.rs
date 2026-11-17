@@ -1,4 +1,4 @@
-//! Hand-picked albums (plan 5, Task A2): the sidebar section, the album
+//! Hand-picked albums: the sidebar section, the album
 //! view, New Album (⌘N), rename, delete and their undo. Every data-changing
 //! test reads the catalog rows back, not only the app state.
 

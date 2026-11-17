@@ -1,4 +1,4 @@
-//! The main column's page header (Library frame `t0zQL`): title over a meta
+//! The main column's page header: title over a meta
 //! line on the left, an empty drag area, then the page's actions.
 
 use gpui::prelude::FluentBuilder;
@@ -120,7 +120,7 @@ pub(crate) struct PageTab {
     pub active: bool,
 }
 
-/// The tab bar under the page header (Albums frame `a0sLrG`): 51.5 high,
+/// The tab bar under the page header: 51.5 high,
 /// tabs 34 high with a mono count. The active tab sits on bg-2; it takes
 /// the focus ring while the bar has keyboard focus (`focused`). A click
 /// calls `on_select` with the tab's id.

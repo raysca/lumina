@@ -1,4 +1,4 @@
-//! The detail panel's ALIASES and ORGANISE sections (frame `L3F8Cs`).
+//! The detail panel's ALIASES and ORGANISE sections.
 
 use crate::app::text_input::TextTarget;
 use gpui::*;

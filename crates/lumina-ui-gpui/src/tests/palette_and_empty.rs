@@ -490,7 +490,7 @@ fn empty_search_drop_chips_and_clear_all() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
-/// Design 11 Task 4: an empty library after its scan uses the First Run
+/// An empty library after its scan uses the First Run
 /// (Hero) glyph and buttons; other empty views keep the default size.
 #[core::prelude::v1::test]
 fn empty_library_state_uses_first_run_glyph_and_buttons() {

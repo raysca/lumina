@@ -1,4 +1,4 @@
-//! Design 03 Task 2: the search header with its token query bar, and the
+//! The search header with its token query bar, and the
 //! rule that decides between the Search screen and the Library.
 
 use crate::tests::ui_automation::{
@@ -334,7 +334,7 @@ fn emptying_the_typed_text_keeps_the_chips() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// Task 3: Save as Smart Album and the Narrow by chips.
+// Save as Smart Album and the Narrow by chips.
 
 #[core::prelude::v1::test]
 fn save_button_opens_the_prefilled_builder() {
@@ -591,7 +591,7 @@ fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// Task 5: Top matches.
+// Top matches.
 
 /// Lets the matches' debounced fetch run and land.
 fn settle(vcx: &mut VisualTestContext) {
@@ -827,7 +827,7 @@ fn arrow_to_a_card_deselects_the_chip() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// Task 6: the Photos section head.
+// The Photos section head.
 
 #[core::prelude::v1::test]
 fn results_head_shows_count_and_opens_sort() {

@@ -1081,7 +1081,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "filter.camera" => "Camera…",
         "filter.place" => "Place…",
         "filter.date" => "Date…",
-        // The Videos chip row (Design 04 Task 4).
+        // The Videos chip row.
         "filter.all_clips" => "All clips",
         "filter.4k" => "4K",
         "command.filter_videos_4k" => "Filter: 4K Videos",

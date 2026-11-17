@@ -1,4 +1,4 @@
-//! The album settings panel (Design 07 Task 3, frame `w4zpqh`): the right
+//! The album settings panel: the right
 //! column of an open album while Info is off. It holds KEY PHOTO and
 //! Delete Album; the design's SORT ORDER and sharing sections are dropped
 //! by decision.

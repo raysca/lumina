@@ -68,7 +68,7 @@ pub struct SearchSuggestionState {
     pub selected: Option<usize>,
 }
 
-/// The search header's query bar (Design 03).
+/// The search header's query bar.
 #[derive(Debug, Default)]
 pub struct QueryBarState {
     /// The typed text after the chips: the search input's buffer, rebuilt
@@ -466,7 +466,7 @@ pub struct LuminaApp {
     pub ui_tx: async_channel::Sender<UiMessage>,
     pub focus_handle: FocusHandle,
 
-    // Phase 5 Presentation Shell State
+    // Presentation shell
     pub sidebar_collapsed: bool,
     pub sidebar_width: f32,
     /// The sidebar's and the collapsed rail's list scroll, which outlive
@@ -520,13 +520,13 @@ pub struct LuminaApp {
     #[cfg_attr(test, allow(dead_code))]
     pub(crate) session_save: SessionSaveState,
 
-    // Phase 8 Visual Smart Album Builder State
+    // Smart album builder
     pub album_draft: AlbumDraftState,
 
-    // Phase 13 Deletion Management State
+    // Delete confirmation
     pub delete_confirm_state: Option<DeleteConfirmState>,
 
-    // Phase 15 Photo Zoom & Grid Density State
+    // Viewer zoom and grid density
     pub viewer_state: ViewerState,
     pub viewer_shortcuts_open: bool,
     pub grid_columns: usize,
@@ -560,7 +560,7 @@ pub struct LuminaApp {
     /// Lets the shortcut sheet scroll from the keyboard.
     pub shortcuts_scroll: ScrollHandle,
 
-    // Phase 16 Hardware-Accelerated Video Player
+    // Video playback
     pub video: VideoPlaybackState,
 
     // Zero-SQLite UI Rendering Caches
@@ -595,7 +595,7 @@ pub struct LuminaApp {
     pub item_captions: HashMap<MediaId, String>,
     /// Items whose file is gone from disk (badged in the grid).
     pub missing_items: HashSet<MediaId>,
-    /// The viewer's "Original not available" card (Design 10).
+    /// The viewer's "Original not available" card.
     pub(crate) missing_card: crate::app::missing::MissingCardState,
     /// Import dialog and a running copy.
     pub(crate) import: crate::app::import::ImportState,
@@ -961,8 +961,8 @@ impl LuminaApp {
         )
     }
 
-    /// True where the Grid draws an open album's filled tiles (Design 07
-    /// `w4zpqh`): the album page in Grid layout (its Mosaic is unchanged).
+    /// True where the Grid draws an open album's filled tiles: the
+    /// album page in Grid layout (its Mosaic is unchanged).
     pub(crate) fn album_tiles(&self) -> bool {
         self.config.browse_layout == crate::config::BrowseLayout::Grid
             && self.album_page_album().is_some()

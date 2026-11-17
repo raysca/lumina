@@ -1,4 +1,4 @@
-//! Tags page header (frame `L3F8Cs`): meta, the Keywords tab, the filter
+//! Tags page header: meta, the Keywords tab, the filter
 //! field and the Most used / A–Z sort menu.
 
 use super::tag_manager::open;

@@ -1,4 +1,4 @@
-//! The caption under a Videos tile (design 04, frame `DoXZy`): the display
+//! The caption under a Videos tile: the display
 //! title over a mono "14 Jun 2025 · 4K · 1:18" line, one line each.
 
 use gpui::prelude::FluentBuilder;

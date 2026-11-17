@@ -1,4 +1,4 @@
-//! The album key photo (Design 07 Task 5): the panel's KEY PHOTO section,
+//! The album key photo: the panel's KEY PHOTO section,
 //! its Change pick mode and the badge on the cover's grid card. The cover
 //! shown is the effective one from the page's stats (the stored key photo,
 //! else the newest member), read off the UI thread; nothing here queries

@@ -1,4 +1,4 @@
-//! Adding to and removing from albums (plan 5, Task A3): the picker (⇧⌘A,
+//! Adding to and removing from albums: the picker (⇧⌘A,
 //! context menu, palette), ⌫ in an album view, and their undo. Every
 //! data-changing test reads the catalog rows back.
 

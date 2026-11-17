@@ -1,5 +1,5 @@
-//! Shared design components from `lumina.pen`: NavItem (`S9a9Iv`) and Chip
-//! (`aisTo`). Callers add handlers and trailing children.
+//! Shared design components from `lumina.pen`: NavItem and Chip.
+//! Callers add handlers and trailing children.
 use super::*;
 use crate::icons::{render_icon, Icon};
 use gpui::{div, px, rgba, ElementId, FontWeight, Role, Stateful};

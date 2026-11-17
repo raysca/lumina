@@ -67,7 +67,7 @@ tokens! {
 tokens_alpha! {
     /// Accent wash: selected cards, drag marquee.
     accent_soft = 0xE9A23B26;
-    /// Positive wash: the link preview's ready tick (Design 12). The alpha
+    /// Positive wash: the link preview's ready tick. The alpha
     /// follows `accent_soft`.
     positive_soft = 0x5BC27A26;
     /// Accent-tinted 1 px outlines: the empty search's Drop chips.
@@ -75,7 +75,7 @@ tokens_alpha! {
     /// Danger wash: error banners and panels.
     danger_soft = 0xE8584F1F;
     /// Danger-tinted 1 px outlines: a failed card or danger row, and the
-    /// unreachable-library glyph (Design 10).
+    /// unreachable-library glyph.
     danger_outline = 0xE8584F4D;
 }
 
@@ -97,18 +97,18 @@ tokens! {
     accent_hint = 0x5A4214;
     /// Keyboard focus on fields and controls. Neutral: amber means selection.
     focus_ring = 0xAAAAA8;
-    /// The album selection bar's fill (Design 07): a dark amber band.
+    /// The album selection bar's fill: a dark amber band.
     accent_surface = 0x17120B;
-    /// The album selection bar's bottom border (Design 07), and the line
-    /// of the viewer's original-offline bar (Design 10).
+    /// The album selection bar's bottom border, and the line
+    /// of the viewer's original-offline bar.
     warn_border = 0x3A2E1A;
-    /// Fill of the viewer's original-offline bar (Design 10).
+    /// Fill of the viewer's original-offline bar.
     warn_surface = 0x1C1708;
     /// Text on a `warn_surface` fill.
     on_warn = 0xE8D7B0;
     /// Border of a danger panel or button. Invalid-value outlines use `danger`.
     danger_border = 0x45211E;
-    /// Fill of the global error banner (Design 10).
+    /// Fill of the global error banner.
     danger_surface = 0x1E100F;
     /// Text on a `danger_surface` fill.
     on_danger = 0xF0C4C0;
@@ -146,7 +146,7 @@ tokens_alpha! {
     modal_dim = 0x00000066;
     /// Badges and buttons drawn over media.
     media_scrim = 0x000000A6;
-    /// The key photo badge on an album's cover card (Design 07, 70% black).
+    /// The key photo badge on an album's cover card (70% black).
     key_photo_scrim = 0x000000B3;
     /// Video scrub strip frames after the playhead (42% black).
     strip_dim = 0x0000006B;
@@ -162,7 +162,7 @@ tokens_alpha! {
     header_fade_top = 0x00000066;
     /// Bottom of [`header_fade`], behind the title and meta line.
     header_fade_bottom = 0x000000CC;
-    /// Unselected check circle on a tile in selection mode (Design 07).
+    /// Unselected check circle on a tile in selection mode.
     check_idle = 0x00000059;
     /// Library card surface. Cards are transparent by request: thumbnails sit
     /// directly on the library background; selection shows as an outline.

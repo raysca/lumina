@@ -1,4 +1,4 @@
-//! Similar shots members (plan 5 D2 re-check): a burst of RAW+JPEG pairs
+//! Similar shots members: a burst of RAW+JPEG pairs
 //! keeps its images, a stack wider than the pane says how many members are
 //! not drawn, and Show Similar Shots from the viewer leaves no selection.
 

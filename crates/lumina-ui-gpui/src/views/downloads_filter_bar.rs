@@ -69,7 +69,7 @@ pub(crate) fn render(app: &LuminaApp, window: &Window, cx: &mut Context<LuminaAp
             this.set_download_filter(filter, cx);
         }))
     });
-    // ponytail: no speed cap (Design 15 decision 5 left it to a separate plan).
+    // ponytail: no speed cap yet.
     let limits: SharedString = t_with(
         "downloads.limits",
         &[&app.config.download_concurrency.to_string()],

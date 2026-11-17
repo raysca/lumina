@@ -1,4 +1,4 @@
-//! Format matrix (plan 5, Task E1): for every image path the decoder takes,
+//! Format matrix: for every image path the decoder takes,
 //! does a photo come out upright, in sRGB, and with the right catalog size?
 //!
 //! Fixtures are built in a temp dir at test time from one 64x32 PNG with a

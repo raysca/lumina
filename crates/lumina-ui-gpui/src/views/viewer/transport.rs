@@ -195,7 +195,7 @@ impl ViewerTransport {
             .id("video-transport")
             .debug_selector(|| "video-transport".to_string())
             .on_hover(cx.listener(|this, on: &bool, _w, _cx| this.set_pointer_on_hud(*on)))
-            // Docked across the stage, under the frame (Design 06).
+            // Docked across the stage, under the frame.
             .w_full()
             .flex_none()
             .px(px(28.0))

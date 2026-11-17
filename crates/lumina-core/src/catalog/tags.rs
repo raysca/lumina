@@ -345,10 +345,10 @@ impl Catalog {
 /// The `get_items_by_tag` query, one `?` per subtree value then limit and
 /// offset. Shared with the plan test.
 ///
-/// `IN`, not `EXISTS`: the plan asked for `EXISTS` to avoid one row per
-/// matching tag, and `IN` does that too, but lets SQLite start from the tag
-/// range and sort the few hits instead of walking the whole timeline with a
-/// correlated subquery per row (a rare tag on 100k items: ~60 µs vs ~56 ms).
+/// `IN`, not `EXISTS`: both avoid one row per matching tag, but `IN`
+/// lets SQLite start from the tag range and sort the few hits instead of
+/// walking the whole timeline with a correlated subquery per row (a rare
+/// tag on 100k items: ~60 µs vs ~56 ms).
 // ponytail: even with LIMIT 24 every match is read and sorted, so the cost
 // grows with the tag's size (a 50k-item tag: tens of ms, on the UI thread in
 // the tag manager, about 2x the old JOIN). Load the tag manager's grid off the

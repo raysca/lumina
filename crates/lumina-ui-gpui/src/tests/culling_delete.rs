@@ -1,4 +1,4 @@
-//! Finishing a cull (plan 5 B3): Delete Rejected… sends exactly the current
+//! Finishing a cull: Delete Rejected… sends exactly the current
 //! view's rejects to the Delete dialog, and a smart album on the flag
 //! recounts after a flag key.
 

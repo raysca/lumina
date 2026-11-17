@@ -90,7 +90,7 @@ pub(crate) fn read_only_field(url: &str) -> Div {
 /// The card: placeholder thumbnail with the length, title, host and
 /// uploader, container and size badges, and the ready tick.
 pub(crate) fn render(info: &NetworkMediaInfo) -> Stateful<Div> {
-    // ponytail: no remote thumbnail (decision 2); a film placeholder.
+    // ponytail: no remote thumbnail; a film placeholder.
     let thumb = div()
         .relative()
         .flex_none()

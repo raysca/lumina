@@ -1,4 +1,4 @@
-//! Playback failed (Design 10): a video the player cannot open says so in
+//! Playback failed: a video the player cannot open says so in
 //! the viewer and in PiP, with Try Again and Reveal in Finder.
 
 use crate::app::playback_failed::VIDEO_LOADS;

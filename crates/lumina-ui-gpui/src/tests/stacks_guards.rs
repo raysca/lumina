@@ -1,4 +1,4 @@
-//! Similar shots guards (plan 5 D2 review): no hidden selection while the
+//! Similar shots guards: no hidden selection while the
 //! tab shows, a stale list never flags items that left the library, every
 //! way back onto Duplicates starts on Exact copies, and the error state.
 

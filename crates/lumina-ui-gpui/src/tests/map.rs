@@ -1,4 +1,4 @@
-//! Offline map (plan 5 C4): the header's Grid/Map view mode shows Places
+//! Offline map: the header's Grid/Map view mode shows Places
 //! on the map. The map draws the bundled land outline and clusters of
 //! geotagged items; Tab and the arrows focus clusters west to east, ↵
 //! searches `within:` the focused cluster, Esc returns to the grid, and

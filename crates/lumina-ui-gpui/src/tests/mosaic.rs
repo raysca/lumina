@@ -1,4 +1,4 @@
-//! Mosaic layout (plan 01b Task 4): the header's Mosaic segment swaps the
+//! Mosaic layout: the header's Mosaic segment swaps the
 //! uniform grid for justified rows, persisted as `browse_layout`. The
 //! layout is fetched and justified off the UI thread; scrolling reads only
 //! the cached layout and rows.

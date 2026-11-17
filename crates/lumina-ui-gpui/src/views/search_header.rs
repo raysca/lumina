@@ -1,4 +1,4 @@
-//! The Search screen's header (frame `XKkZe`): the token query bar, with
+//! The Search screen's header: the token query bar, with
 //! the parsed filter tokens as chips, the typed text after them, and the
 //! result count. It replaces the page header while the Search screen shows.
 
@@ -12,14 +12,14 @@ use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 
-/// Height of the search header (Task 3's Narrow by row fills the rest).
+/// Height of the search header (the Narrow by row fills the rest).
 const SEARCH_HEADER_HEIGHT: f32 = 131.5;
 
 /// The query bar's height; the suggestions hang 4px under it.
 const QUERY_BAR_HEIGHT: f32 = 48.0;
 
 impl LuminaApp {
-    /// The decided screen rule (Design 03 Task 2): free text in the query,
+    /// The decided screen rule: free text in the query,
     /// or a focused search field, shows the Search screen; filter tokens
     /// alone show the Library with its chip row. A header popover (Sort,
     /// Add filter, Downloads) hangs from the page header's buttons, so the

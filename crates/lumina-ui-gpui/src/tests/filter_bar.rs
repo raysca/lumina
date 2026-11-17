@@ -1,4 +1,4 @@
-//! Design 01 Task 4: the filter chip row under the page header and the Add
+//! The filter chip row under the page header and the Add
 //! filter menu.
 
 use crate::app::command_palette::CommandId;
@@ -230,8 +230,8 @@ fn menu_rows_take_clicks_above_the_backdrop() {
 
     // Camera… starts a camera: token, outside an unclosed quote, and
     // focuses the search field for its value.
-    // Free text shows the Search screen, whose header has no Filter button
-    // (Design 03 Task 2): the palette's Add Filter opens the menu, and the
+    // Free text shows the Search screen, whose header has no Filter button:
+    // the palette's Add Filter opens the menu, and the
     // page header comes back to carry it.
     set_query(&view, vcx, r#""golden hour"#);
     view.update(vcx, |app, cx| app.execute_command(CommandId::AddFilter, cx));

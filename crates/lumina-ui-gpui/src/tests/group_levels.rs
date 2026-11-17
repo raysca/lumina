@@ -1,4 +1,4 @@
-//! Years / Months / Days on the zoom pill (plan 01b Task 7): the segments
+//! Years / Months / Days on the zoom pill: the segments
 //! show only in Mosaic where the timeline rail is, the cards come from the
 //! cached timeline buckets, and a card opens Days at its period.
 

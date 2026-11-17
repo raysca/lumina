@@ -1,4 +1,4 @@
-//! Playback failed (Design 10): the "Can't play this clip" card over the
+//! Playback failed: the "Can't play this clip" card over the
 //! stage, and the compact message PiP shows instead of an empty window.
 
 use gpui::prelude::FluentBuilder;

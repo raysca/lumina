@@ -1,4 +1,4 @@
-//! Undo for global keyword rename, merge and delete (plan 4, Task 12):
+//! Undo for global keyword rename, merge and delete:
 //! exact rows, aliases, smart-album rules, sidecars and the view, by ⌘Z
 //! from the grid and from inside the tag manager.
 

@@ -1,7 +1,7 @@
 //! Floating zoom pill over the grid: − and + walk the thumbnail-size ladder
 //! (`SIZE_COLUMNS`), as ⌘- / ⌘= do. In Mosaic where the timeline rail is,
 //! the Years · Months · Days segments come first (`app/render/bucket_cards.rs`);
-//! Moments was dropped (plan 01b, decision 2).
+//! There is no Moments level.
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 

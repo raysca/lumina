@@ -1,4 +1,4 @@
-//! The sidebar with no library open (frame `DiFtb` "Empty — First Run"):
+//! The sidebar with no library open (the first-run state):
 //! the live shell, dimmed, with nothing to click, focus or search.
 
 use gpui::*;

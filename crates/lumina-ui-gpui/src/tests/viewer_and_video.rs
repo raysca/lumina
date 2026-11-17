@@ -751,7 +751,7 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
         .debug_bounds("viewer-zoom-fit")
         .expect("zoomed, the Fit to window button must show");
     let top_bar = vcx.debug_bounds("viewer-top-bar").unwrap();
-    // Design 02: the centre shows only "N / M" (the date moved to the
+    // The centre shows only "N / M" (the date moved to the
     // panel's When line); it must stay readable at 1024x768.
     assert!(
         position.size.width > gpui::px(20.0),

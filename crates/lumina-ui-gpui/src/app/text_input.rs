@@ -597,7 +597,7 @@ impl LuminaApp {
             TagManagerAlias => &mut self.tag_manager.alias_buffer,
             TagMergeFilter => &mut self.tag_manager.merge.as_mut()?.filter,
             TagManagerSearch => &mut self.tag_manager.search,
-            // The query bar edits the text after its chips (Design 03);
+            // The query bar edits the text after its chips;
             // the sidebar field, the whole query.
             Search if self.search_screen_shown() => {
                 self.query_bar.typed = self.search_bar_parts().1;

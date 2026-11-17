@@ -17,7 +17,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// The viewer's "Original not available" card (Design 10).
+/// The viewer's "Original not available" card.
 #[derive(Default)]
 pub(crate) struct MissingCardState {
     /// Items whose card "Keep preview" dismissed for this session; the

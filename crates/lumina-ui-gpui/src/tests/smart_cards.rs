@@ -1,5 +1,4 @@
-//! Design 05 Task 5: smart album cards on the Albums overview (frame
-//! `a0sLrG`): the Albums tab's row of up to four, the Smart Albums tab's
+//! Smart album cards on the Albums overview: the Albums tab's row of up to four, the Smart Albums tab's
 //! wrapping grid, their mosaics, counts, rule chips, focus and menus.
 
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};

@@ -18,7 +18,7 @@ mod rows;
 mod storage;
 mod storage_card;
 
-/// Width of the settings sidebar (frame `l85pQN`).
+/// Width of the settings sidebar.
 const SIDEBAR_WIDTH: f32 = 252.0;
 
 /// How a category shows in the sidebar and its TopBar.

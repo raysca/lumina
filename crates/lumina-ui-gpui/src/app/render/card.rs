@@ -25,7 +25,7 @@ const BADGE_H: f32 = 18.0;
 /// How far the selection ring reaches outside the tile: a 1px gap plus the
 /// 2px border. Half the 6px tile gap, so adjacent selected rings never meet.
 const RING_OUTSET: f32 = 3.0;
-/// Corner radius of a captioned Videos thumb (frame `DoXZy`: 5; the theme
+/// Corner radius of a captioned Videos thumb (5 in the design; the theme
 /// has 4 and 6 only).
 const VIDEO_THUMB_RADIUS: f32 = 5.0;
 
@@ -85,7 +85,7 @@ impl LuminaApp {
         let show_edited = is_edited && !compact;
         // The open album page's cover, from its cached stats.
         let is_key_photo = !compact && self.albums.page.shown_cover == Some(item.id);
-        // An open album's tiles always fill (Design 07 `w4zpqh`); the Fit
+        // An open album's tiles always fill; the Fit
         // toggle is Library's and is not offered there.
         let album_tiles = self.album_tiles();
         let fit_mode = self.card_fit_mode && !album_tiles;
@@ -232,7 +232,7 @@ impl LuminaApp {
                     .when(flag == lumina_core::Flag::Reject, |well| {
                         well.opacity(REJECTED_OPACITY)
                     })
-                    // Tiles are r4 (design 01 Library); Videos thumbs r5.
+                    // Tiles are r4; Videos thumbs r5.
                     .rounded(well_radius)
                     .overflow_hidden()
                     .relative()
@@ -420,7 +420,7 @@ impl LuminaApp {
             })
             // Selection: a 2px amber ring with a 1px gap outside the r4 well; its r7 corners (4 +
             // RING_OUTSET) stay concentric. A captioned thumb instead takes the 2px outline on
-            // itself (design 04). It sits on the card because the well clips.
+            // itself. It sits on the card because the well clips.
             .when(is_selected, |card| {
                 card.child(
                     div()
@@ -492,7 +492,7 @@ fn missing_badge(item_id_num: usize) -> impl IntoElement {
     .debug_selector(move || format!("grid-missing-badge-{item_id_num}"))
 }
 
-/// Favourite: an outline heart on the photo with no backing (design 01).
+/// Favourite: an outline heart on the photo with no backing.
 fn fav_badge(item_id_num: usize) -> impl IntoElement {
     div()
         .id(("media-card-fav", item_id_num as u64))
@@ -549,8 +549,8 @@ fn pill_badge(id: ElementId) -> Stateful<Div> {
 }
 
 /// Video duration, bottom-left: play icon and the mono time. The clip
-/// playing in PiP (`in_pip`) shows audio lines and the time in accent
-/// (design 04); its icon carries `media-card-playing-<id>` (an element has
+/// playing in PiP (`in_pip`) shows audio lines and the time in accent;
+/// its icon carries `media-card-playing-<id>` (an element has
 /// one debug selector, and the pill keeps `media-card-duration-<id>`).
 fn duration_badge(item_id_num: usize, text: String, in_pip: bool) -> impl IntoElement {
     let (icon, color, label) = if in_pip {

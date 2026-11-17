@@ -1,4 +1,4 @@
-//! Design 05 Task 5 follow-ups: smart card arrows and ⌘⌫, a focus whose
+//! Smart card arrows and ⌘⌫, a focus whose
 //! album is deleted, and mosaics that follow a rule edit.
 
 use lumina_core::MatchMode;

@@ -145,7 +145,7 @@ pub fn kbd(label: impl Into<SharedString>) -> Div {
         .child(label.into())
 }
 
-/// Segmented control container (frame `l85pQN`): `bg_0`, 9px radius,
+/// Segmented control container: `bg_0`, 9px radius,
 /// `line_2` outline, 3px inset, 2px between segments.
 pub fn segmented(id: impl Into<ElementId>) -> Stateful<Div> {
     div()

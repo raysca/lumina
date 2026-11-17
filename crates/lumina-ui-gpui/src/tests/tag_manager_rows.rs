@@ -1,4 +1,4 @@
-//! Tags page keyword table rows (frame `L3F8Cs`): 44 px rows, the 190 px
+//! Tags page keyword table rows: 44 px rows, the 190 px
 //! usage track, alias counts, the focused row's accent edge, the capped
 //! hierarchy indent and the row `…` menu by mouse, keyboard and palette.
 

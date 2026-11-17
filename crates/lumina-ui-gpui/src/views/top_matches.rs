@@ -1,4 +1,4 @@
-//! The TOP MATCHES block (frame `XKkZe`, Results › TopMatches): under the
+//! The TOP MATCHES block: under the
 //! search header, above the grid, so the header keeps its 131.5. Cards are
 //! four to a row, two below 1100 px of content width.
 

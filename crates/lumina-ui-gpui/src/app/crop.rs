@@ -2,7 +2,7 @@
 //! keyboard and handle moves. While cropping the rectangle lives in
 //! normalized coordinates of the frame as shown (rotated); it is converted
 //! to the catalog's unrotated coordinates once, when crop mode is left or
-//! on Done (plan 4 Decision 11). Keys are in `keymap/modals.rs`, the
+//! on Done. Keys are in `keymap/modals.rs`, the
 //! overlay in `views/viewer/crop_overlay.rs`.
 
 use std::sync::Arc;

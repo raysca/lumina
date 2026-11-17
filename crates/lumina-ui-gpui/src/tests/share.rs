@@ -1,4 +1,4 @@
-//! Share sheet (plan 5 D4): palette, context menu and batch dock hand the
+//! Share sheet: palette, context menu and batch dock hand the
 //! selected originals to the system share picker. Tests record the request
 //! instead of opening the real picker; that is checked by a manual run.
 

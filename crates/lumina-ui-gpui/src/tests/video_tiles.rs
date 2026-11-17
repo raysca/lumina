@@ -1,4 +1,4 @@
-//! Design 04 Task 2: the Videos view's Grid draws 16:9 thumbs with a
+//! The Videos view's Grid draws 16:9 thumbs with a
 //! two-line caption; Mosaic keeps its true-aspect rows.
 
 use super::ui_automation::{app_with_library, leak, render_ui, seed_library};

@@ -1,5 +1,5 @@
 //! Places the catalog holds: cities with their item counts, for the search
-//! header's Place top matches (Design 03 decision 7).
+//! header's Place top matches.
 
 use anyhow::Result;
 use rusqlite::params;

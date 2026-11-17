@@ -1,5 +1,5 @@
 //! ⌘E / ⌥⌘E: Edit in External Editor and Edit a Copy from the keyboard
-//! (plan v1-04 Task 17). No test launches an app: the built command is
+//! No test launches an app: the built command is
 //! recorded by `external_edit::test_launches` instead.
 
 use gpui::*;

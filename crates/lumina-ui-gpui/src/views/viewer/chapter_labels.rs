@@ -1,4 +1,4 @@
-//! The chapter label row above the scrub strip (Design 06): "Name m:ss" at
+//! The chapter label row above the scrub strip: "Name m:ss" at
 //! each chapter's start, the current chapter in `accent`. Labels that would
 //! overlap are dropped; the current chapter's label is always kept.
 

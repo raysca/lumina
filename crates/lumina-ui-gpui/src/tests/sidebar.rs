@@ -1,5 +1,5 @@
 //! Sidebar navigation: the default collections render from one ordered list,
-//! each row with its icon (sidebar revamp, Task 2).
+//! each row with its icon.
 
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule, SystemAlbum};
 

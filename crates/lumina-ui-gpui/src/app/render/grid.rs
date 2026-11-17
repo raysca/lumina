@@ -252,7 +252,7 @@ impl LuminaApp {
     /// V3Grid section header, as a band pinned above the date-sorted grid
     /// showing the top row's month. ponytail: one sticky band, not a header
     /// per month (that needs a variable-height list).
-    /// An open album's Grid has no band (frame `w4zpqh`).
+    /// An open album's Grid has no band.
     pub(crate) fn render_month_header(&self) -> Option<AnyElement> {
         if self.sort.field != lumina_core::SortField::DateTaken || self.album_tiles() {
             return None;

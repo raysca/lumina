@@ -1,4 +1,4 @@
-//! The Albums tab (frame `a0sLrG`): a page list of the smart section
+//! The Albums tab: a page list of the smart section
 //! (`smart.rs`), a head row with "Sort ▾", then rows of album cards, a
 //! stack of two plates under the cover and a caption. Rows are virtualised;
 //! covers come from the thumbnail texture cache. State and keys live in
@@ -30,7 +30,7 @@ pub(crate) const HEAD_GAP: f32 = 14.0;
 pub(crate) const HEAD_HEIGHT: f32 = EMPTY_HEIGHT + HEAD_GAP;
 const CARD_GAP: f32 = 16.0;
 const ROW_GAP: f32 = 20.0;
-// ponytail: the plan's 200 minimum gives 6 cards of 201 at a 1600 window;
+// ponytail: a 200 minimum gives 6 cards of 201 at a 1600 window;
 // the frame shows 5 of 245 there, which needs a minimum over 202 and at
 // most 244.8 (the 1288 wide body). 230 keeps the frame's 5.
 const CARD_MIN_WIDTH: f32 = 230.0;

@@ -1,4 +1,4 @@
-//! Design 01 Task 1: the Library page header in the main column: title over a
+//! The Library page header in the main column: title over a
 //! meta line on the left, the filter, sort and Import actions on the right.
 
 use super::downloads::{install, queue_app, settle, submit};
@@ -104,8 +104,8 @@ fn import_button_and_sort_button_run_their_actions() {
         assert!(!app.sort_menu_open, "Escape closes the sort menu")
     });
 
-    // The filter button opens the Add filter menu under it (Design 01
-    // Task 4, `tests/filter_bar.rs`).
+    // The filter button opens the Add filter menu under it
+    // (`tests/filter_bar.rs`).
     click(vcx, "header-filter");
     render_ui(vcx);
     assert_under(vcx, "filter-add-menu", "header-filter");

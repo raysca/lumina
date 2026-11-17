@@ -1,4 +1,4 @@
-//! Settings › Library's storage card (frame `g52QWL`): what the library
+//! Settings › Library's storage card: what the library
 //! takes on disk, as a stacked bar of photos, videos, downloads and the
 //! thumbnail cache, a legend, and Clear cache.
 

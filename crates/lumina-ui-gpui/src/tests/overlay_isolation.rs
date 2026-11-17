@@ -1,4 +1,4 @@
-//! Overlay isolation regressions (BUGS.md 7, 10, 11, 13, 14, 15, 17).
+//! Overlay isolation regressions.
 //!
 //! These drive rendered clicks against the fullscreen viewer and the tag
 //! manager. Before the occlusion fix, one click could run both the overlay

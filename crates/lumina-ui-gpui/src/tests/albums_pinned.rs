@@ -1,4 +1,4 @@
-//! Pin, duplicate, and smart album rule files (plan 5, Task A4). The file
+//! Pin, duplicate, and smart album rule files. The file
 //! dialogs are stubbed: tests count the request and call the post-dialog
 //! step with a path in the test library's temp folder.
 

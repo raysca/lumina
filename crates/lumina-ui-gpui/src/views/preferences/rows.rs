@@ -1,6 +1,6 @@
-//! Settings row widgets (frame `l85pQN`): a labelled section around a
+//! Settings row widgets: a labelled section around a
 //! group of rows, each row a label column with an optional description
-//! and its controls on the right. Design 15 reuses these for its pages.
+//! and its controls on the right.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

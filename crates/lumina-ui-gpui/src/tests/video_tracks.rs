@@ -1,4 +1,4 @@
-//! Audio tracks and chapters of the open video (Task F2).
+//! Audio tracks and chapters of the open video.
 //!
 //! On macOS the player is AVFoundation and the sample files do not exist, so
 //! these tests fill the session's track and chapter lists (what a load reads

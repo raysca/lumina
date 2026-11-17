@@ -27,7 +27,7 @@ pub use top_bar::ViewerTopBar;
 pub use transport::ViewerTransport;
 pub use viewport::ViewerViewport;
 
-/// Docked info panel width (Design 02 "Detail").
+/// Docked info panel width.
 pub(super) const INFO_PANEL_WIDTH: f32 = 340.0;
 
 /// Whether the viewer shows the info panel. Edit mode and a slideshow hide

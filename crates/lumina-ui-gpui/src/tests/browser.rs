@@ -649,7 +649,7 @@ fn a_wide_thumbnail_never_widens_its_card() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- Query explanation and recent searches (UX-2 Task 8) ----
+// ---- Query explanation and recent searches ----
 
 #[core::prelude::v1::test]
 fn explanation_lists_not_understood_tokens() {

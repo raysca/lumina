@@ -368,7 +368,7 @@ fn progress_ring(fraction: f32) -> impl IntoElement {
 }
 
 impl LuminaApp {
-    /// Mosaic / Grid / Map segments (frame `t0zQL`). Mosaic and Grid set
+    /// Mosaic / Grid / Map segments. Mosaic and Grid set
     /// the saved browse layout and leave the map; Map runs Show Map, which
     /// moves to Places, the view the map plots. Not on Recently Deleted or
     /// Duplicates: neither is a view the map could show, and their own
@@ -414,7 +414,7 @@ impl LuminaApp {
                 .h(px(32.0))
                 .p(px(2.0))
                 .rounded(px(9.0))
-                // Design 01's header fill, not the settings segmented look.
+                // The header fill, not the settings segmented look.
                 .bg(theme::bg_2())
                 .border_color(theme::line())
                 .flex_shrink_0()

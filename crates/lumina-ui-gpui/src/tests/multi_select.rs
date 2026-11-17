@@ -456,7 +456,7 @@ fn batch_date_rewrites_sidecars() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Selection mode (design 01 Task 5, from Design 07): while two or more
+/// Selection mode: while two or more
 /// items are selected every card shows a check circle, selected ones
 /// with the check mark, and unselected cards dim to 0.62.
 #[core::prelude::v1::test]

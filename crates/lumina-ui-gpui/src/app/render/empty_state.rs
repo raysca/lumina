@@ -17,7 +17,7 @@ mod parts;
 pub(crate) use parts::{empty_body, empty_button, empty_glyph, empty_headline, hero_glyph};
 
 /// How large the shell draws: `Hero` for a library with no items at all
-/// (First Run style, Design 11), `Standard` for every other empty view.
+/// (First Run style), `Standard` for every other empty view.
 #[derive(Clone, Copy)]
 enum EmptySize {
     /// 54 px glyph, 34 px buttons.
@@ -300,7 +300,7 @@ impl LuminaApp {
             }
         } else if !search_terms.is_empty() {
             // Each chip drops one term; Clear all filters drops them all.
-            // ponytail: no per-term counts or kind icons (plan 09 decisions).
+            // ponytail: no per-term counts or kind icons.
             let (title, body) = match search_terms.len() {
                 1 => (t("search.empty_title_one"), t("search.empty_body_one")),
                 2 => (t("search.empty_title_two"), t("search.empty_body_many")),

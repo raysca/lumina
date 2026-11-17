@@ -1,4 +1,4 @@
-//! Merge into… (frame `L3F8Cs` ORGANISE): a single-tag target picker on the
+//! Merge into… (ORGANISE): a single-tag target picker on the
 //! detail panel, the row menu and the palette. The merged name stays as an
 //! alias of the target, in the same undo step.
 

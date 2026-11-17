@@ -207,8 +207,8 @@ impl LuminaApp {
     /// Re-runs the count and preview queries. Called after a rule changes,
     /// never from render.
     // ponytail: on the UI thread. Count plus the first 8 cost at most ~5.6 ms
-    // per edit on a 25k-item catalog (release build, measured for plan 16
-    // Decision 8); move it to a background task if catalogs grow much larger.
+    // per edit on a 25k-item catalog (release build,
+    // measured); move it to a background task if catalogs grow much larger.
     pub fn refresh_draft_preview(&mut self) {
         let draft = &mut self.album_draft;
         draft.match_count = None;

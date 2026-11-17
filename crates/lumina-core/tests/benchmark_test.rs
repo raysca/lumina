@@ -521,7 +521,7 @@ fn benchmark_scale_and_gates() {
             "`{text}` count must resolve in < {query_budget}ms (got {ms:.3}ms)"
         );
     }
-    // The search results head's video count (Design 03 Task 6): free text
+    // The search results head's video count: free text
     // plus `is:video`, counted once per search fetch. `photo` matches most
     // rows (a common term); `beach` rows are all videos. (`sunset` would
     // count 0: no sunset row is a video in this seed.)

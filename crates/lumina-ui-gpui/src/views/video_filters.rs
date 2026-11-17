@@ -1,6 +1,6 @@
-//! The Videos chip row (frame `DoXZy`): "All clips" and "4K", then the clip
+//! The Videos chip row: "All clips" and "4K", then the clip
 //! count and Clear all. HDR, slow motion and Live Photos chips stay out
-//! until the catalog stores that data (Design 04 decision, 2026-11-11).
+//! until the catalog stores that data.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

@@ -329,7 +329,7 @@ fn render_single_body(
                                     ),
                                 )
                                 // ponytail: "Open With ▾" needs a native app-list
-                                // bridge (docs/ui_v3_plan.md); this opens the default app.
+                                // bridge; this opens the default app.
                                 .child(
                                     header_button(
                                         "info-quick-open-with-btn",

@@ -1,4 +1,4 @@
-//! Design 07 (frame `w4zpqh`): an open album's Grid fills square tiles,
+//! An open album's Grid fills square tiles,
 //! five columns by default, 10 apart, inside 28 left / 22 top padding.
 //! Library keeps its own zoom, gaps and Fit toggle.
 

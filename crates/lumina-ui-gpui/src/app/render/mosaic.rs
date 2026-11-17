@@ -225,7 +225,7 @@ impl LuminaApp {
         }
     }
 
-    /// A day header row (frame `t0zQL`): date · pin + place · count, and
+    /// A day header row: date · pin + place · count, and
     /// "Select >" on the right, all on one line of [`DAY_HEADER_TEXT`] so
     /// the row is exactly its layout height.
     fn render_day_header(

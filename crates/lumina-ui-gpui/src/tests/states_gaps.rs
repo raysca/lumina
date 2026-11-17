@@ -1,4 +1,4 @@
-//! Empty-state and toast gaps from the design index (plans 09, 10, 11):
+//! Empty-state and toast checks:
 //! the digits headline, rule chips beside both side panels, the scanning
 //! Hero size, a long toast beside its action and the buttons' keyboard path.
 
@@ -42,7 +42,7 @@ fn empty_search_headline_uses_digits_past_ten_terms() {
     }
 }
 
-/// Review Focus (plan 09): with the sidebar and the inspector both open,
+/// Review Focus: with the sidebar and the inspector both open,
 /// many rule chips wrap inside the middle column and overflow nothing.
 #[core::prelude::v1::test]
 fn empty_smart_album_chips_wrap_between_sidebar_and_inspector() {
@@ -117,7 +117,7 @@ fn empty_smart_album_chips_wrap_between_sidebar_and_inspector() {
     }
 }
 
-/// Design 11 Task 4: an empty library mid-scan also draws at the Hero size.
+/// An empty library mid-scan also draws at the Hero size.
 #[core::prelude::v1::test]
 fn empty_library_scanning_uses_hero_size() {
     let (dir, engine) = seed_library("states_gaps_scan_hero", 0);
@@ -151,7 +151,7 @@ fn empty_library_scanning_uses_hero_size() {
     );
 }
 
-/// Plan 10 Task 2: a long title and subtitle truncate before Undo, which
+/// A long title and subtitle truncate before Undo, which
 /// keeps its full width inside the card.
 #[core::prelude::v1::test]
 fn long_toast_text_truncates_before_the_action() {

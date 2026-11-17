@@ -1,4 +1,4 @@
-//! Design 07 Task 2: the album view's inline selection bar, which replaces
+//! The album view's inline selection bar, which replaces
 //! the floating dock while an album page has a selection.
 
 use super::album_page::{library_with_album, open_album, painted};
@@ -40,7 +40,7 @@ fn width(vcx: &mut VisualTestContext, selector: &'static str) -> f32 {
     f32::from(bounds.size.width)
 }
 
-/// Design 07 Task 2: the inline selection bar replaces the dock in an
+/// The inline selection bar replaces the dock in an
 /// album and runs its actions on the selection.
 #[core::prelude::v1::test]
 fn album_selection_bar_actions() {

@@ -1,4 +1,4 @@
-//! Video player (Design 06): top bar, viewer right-click menu, and the
+//! Video player: top bar, viewer right-click menu, and the
 //! docked transport.
 
 use crate::app::types::get_sample_items;
@@ -254,7 +254,7 @@ fn prev_next_sit_26px_from_the_stage_edges_and_centred_on_the_frame() {
     let mut cx = crate::tests::TestApp::single();
     let (_dir, _view, vcx) = open_video(&mut cx);
 
-    // Design 02: 26px from the stage edges, centred on the (narrower) frame.
+    // 26px from the stage edges, centred on the (narrower) frame.
     let frame = bounds(vcx, "viewer-viewport");
     let prev = bounds(vcx, "viewer-prev");
     let next = bounds(vcx, "viewer-next");
@@ -370,7 +370,7 @@ fn video_frame_is_1120_wide_above_the_docked_transport() {
     render_ui(vcx);
     render_ui(vcx);
 
-    // Design 06: a 1120x630 frame centred above the docked transport.
+    // A 1120x630 frame centred above the docked transport.
     let media = bounds(vcx, "viewer-media");
     let transport = bounds(vcx, "video-transport");
     let (w, h) = size(media);

@@ -1,4 +1,4 @@
-//! Guards around album membership (plan 5, Task A3 review): a year filter
+//! Guards around album membership: a year filter
 //! never shows the library under an album, Remove records only what it
 //! removed, and Trash offers no Add to Album.
 

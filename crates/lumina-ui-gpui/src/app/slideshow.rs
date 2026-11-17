@@ -1,4 +1,4 @@
-//! Slideshow (plan 5 C2): plays the current view in the immersive viewer,
+//! Slideshow: plays the current view in the immersive viewer,
 //! one slide per `slideshow_interval_secs`, from the selection (or the
 //! start). The timer is a GPUI task, one per slide, so a pause, a step or
 //! the end simply drops or replaces it. Videos show their poster (the

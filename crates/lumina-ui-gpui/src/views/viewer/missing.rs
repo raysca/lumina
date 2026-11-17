@@ -1,4 +1,4 @@
-//! Original offline (Design 10): the warn bar over the stage and the
+//! Original offline: the warn bar over the stage and the
 //! "Original not available" card for an item whose file is gone.
 
 use gpui::prelude::FluentBuilder;

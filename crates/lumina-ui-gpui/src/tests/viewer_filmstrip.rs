@@ -1,4 +1,4 @@
-//! Design 02 Task 6: the viewer's filmstrip.
+//! The viewer's filmstrip.
 
 use super::ui_automation::{
     click, focus_app, keystrokes, leak, render_ui, seed_library_undecodable,

@@ -1,4 +1,4 @@
-//! Design 07 Task 1: an open album's header band (frame `w4zpqh`): cover
+//! An open album's header band: cover
 //! under a scrim, "Albums › title" breadcrumb, Slideshow and More, the
 //! title and the counts line.
 

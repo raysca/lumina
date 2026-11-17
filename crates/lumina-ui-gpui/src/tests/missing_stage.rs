@@ -1,4 +1,4 @@
-//! The "Original not available" card (Design 10) on stages other than a
+//! The "Original not available" card on stages other than a
 //! photo in the plain viewer: a slideshow hides it, and a missing video's
 //! smaller frame still holds the whole card.
 

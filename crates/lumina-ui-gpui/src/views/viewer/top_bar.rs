@@ -257,7 +257,7 @@ impl ViewerTopBar {
                         left.child(div().flex_none().w(px(64.0)))
                     })
                     .child(back.flex_none())
-                    // Design 06: 14px from Back (gap_3 is 12).
+                    // 14px from Back (gap_3 is 12).
                     .when(is_video, |left| {
                         left.child(video_title_block(item).ml(px(2.0)))
                     }),

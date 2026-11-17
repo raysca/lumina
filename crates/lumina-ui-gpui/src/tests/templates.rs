@@ -1,4 +1,4 @@
-//! Metadata templates (plan 4, Task 9): the editor, applying a template to
+//! Metadata templates: the editor, applying a template to
 //! the selection from the palette and the batch inspector, one undo, sidecars
 //! and the config round trip.
 

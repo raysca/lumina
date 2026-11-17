@@ -1,4 +1,4 @@
-//! Mosaic geometry (plan 01b Task 6): arrow keys and Page keys follow the
+//! Mosaic geometry: arrow keys and Page keys follow the
 //! uneven rows, a marquee selects the reading-order range, the rail and
 //! the saved scroll anchor read the Mosaic list, and zoom keeps its anchor
 //! item in place.

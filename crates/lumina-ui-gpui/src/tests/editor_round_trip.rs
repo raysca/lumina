@@ -1,4 +1,4 @@
-//! The external editor round trip (plan v1-04 Task 18): a file saved in
+//! The external editor round trip: a file saved in
 //! place arrives as a watcher batch, and the grid and viewer drop the old
 //! picture and decode the new file, keeping the item's id, tags and edits.
 //!

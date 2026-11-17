@@ -1,4 +1,4 @@
-//! The docked transport's controls row (Design 06): Play, ±5 s and the time
+//! The docked transport's controls row: Play, ±5 s and the time
 //! on the left; speed, mute, audio, loop and full screen on the right. The
 //! frame-step buttons are gone; `,` and `.` and the palette still step.
 

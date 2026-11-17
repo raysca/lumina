@@ -1,10 +1,10 @@
 //! Filter chips: one label and icon per filter token, shared by the
-//! Library's chip row (Design 01) and the search query bar (Design 03).
+//! Library's chip row and the search query bar.
 
 use super::is_filter_token;
 use crate::icons::Icon;
 
-/// One chip of the filter row (and of Design 03's query bar): its label, its
+/// One chip of the filter row (and of the search query bar): its label, its
 /// icon, its family, and the indexes of the `tokenize_query` tokens it
 /// stands for.
 #[derive(Debug, Clone, PartialEq)]
@@ -16,7 +16,7 @@ pub(crate) struct FilterChip {
 }
 
 /// The token family that picks a chip's connector word in the query bar
-/// (Design 03 decision 3), read from the parsed fields like the label.
+/// ("in", "during"), read from the parsed fields like the label.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ChipFamily {
     /// `city:` / `country:`: "in".
@@ -187,7 +187,7 @@ pub(crate) fn remove_query_tokens(query: &str, indexes: &[usize]) -> String {
         .join(" ")
 }
 
-/// The query bar's two halves (Design 03): the chips, then the typed text
+/// The query bar's two halves: the chips, then the typed text
 /// the search input edits (free text, plus the token being typed). While
 /// `typing` (the user is typing in the bar), a last token with no space
 /// after it, or inside an unclosed quote, is still being typed, so it stays

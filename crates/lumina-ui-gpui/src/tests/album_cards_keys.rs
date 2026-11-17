@@ -1,4 +1,4 @@
-//! Design 05 Task 4: the album cards' keyboard focus and menus on the
+//! The album cards' keyboard focus and menus on the
 //! Albums overview (tab changes, Esc, ⌘K Rename/Delete on a focused card).
 
 use super::album_cards::{open_overview_at_1600, two_album_overview};

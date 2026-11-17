@@ -23,7 +23,7 @@ pub(crate) fn empty_glyph(size: Pixels, icon: Icon, ink: Rgba) -> Div {
         .child(render_icon(icon, px(20.0), ink))
 }
 
-/// The First Run glyph (frame `DiFtb`): a 150 px box holding an 84 px
+/// The First Run glyph: a 150 px box holding an 84 px
 /// `bg_1` ring with an accent outline, a soft accent glow and a 36 px accent
 /// icon.
 pub(crate) fn hero_glyph(icon: Icon) -> Div {

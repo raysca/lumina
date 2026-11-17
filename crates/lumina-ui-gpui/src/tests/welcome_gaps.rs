@@ -1,4 +1,4 @@
-//! Welcome screen gaps from the design index (plans 11 and 18): ten recent
+//! Welcome screen: ten recent
 //! libraries, and Reset to defaults with no library open.
 
 use super::downloads::TempLibrary;
@@ -19,7 +19,7 @@ fn welcome(
     (view, vcx)
 }
 
-/// Plan 11: ten recents in a 900×600 window. Each row is one 32 px line,
+/// Ten recents in a 900×600 window. Each row is one 32 px line,
 /// and the welcome body scrolls the tenth fully into view.
 #[core::prelude::v1::test]
 fn ten_recents_are_one_line_rows_and_the_tenth_scrolls_into_view() {
@@ -133,7 +133,7 @@ fn arrow_focus_scrolls_the_recent_into_view() {
     }
 }
 
-/// Plan 18: Reset to defaults from the welcome screen asks first, then
+/// Reset to defaults from the welcome screen asks first, then
 /// resets the UI preferences only, like the library case
 /// (`tests::preferences::reset_to_defaults_asks_then_resets_ui_preferences_only`).
 #[core::prelude::v1::test]

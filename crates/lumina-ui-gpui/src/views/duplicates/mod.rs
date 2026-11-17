@@ -1,4 +1,4 @@
-//! Review Duplicates (frame `PwE8h`): the exact-copy groups in a list on
+//! Review Duplicates: the exact-copy groups in a list on
 //! the left, the selected group's copies side by side on the right.
 
 mod card;

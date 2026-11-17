@@ -1,4 +1,4 @@
-//! Tags page detail panel (frame `L3F8Cs`): the 359.5 px panel, the pencil
+//! Tags page detail panel: the 359.5 px panel, the pencil
 //! rename, PREVIEW with View all, ALIASES with "+ Add", ORGANISE and Delete
 //! tag with its real count and undo.
 

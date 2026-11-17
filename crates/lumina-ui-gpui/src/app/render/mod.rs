@@ -28,7 +28,7 @@ mod video_caption;
 pub(crate) use toolbar::FORCE_CLIENT_DECORATIONS;
 
 impl LuminaApp {
-    /// Banner for recoverable failures (Design 10): alert-circle, title and
+    /// Banner for recoverable failures: alert-circle, title and
     /// optional detail in `on_danger`, optional Retry, and a text Dismiss.
     pub(crate) fn render_error_banner(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(message) = self.error_message.clone() else {
@@ -520,7 +520,7 @@ impl Render for LuminaApp {
                 .flex_col()
                 .relative()
                 .bg(theme::bg_0())
-                // Design 11: the app shell with a dormant sidebar and the
+                // The app shell with a dormant sidebar and the
                 // All Media header, around the welcome.
                 .child(
                     div()

@@ -1,4 +1,4 @@
-//! Right column of the Tags page (frame `L3F8Cs`): the focused tag's name
+//! Right column of the Tags page: the focused tag's name
 //! with the pencil rename, PREVIEW, ALIASES, ORGANISE and Delete tag.
 //! ALIASES and ORGANISE live in `detail_sections.rs`.
 
@@ -12,7 +12,7 @@ use crate::theme;
 use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 
-/// The panel's width (frame `L3F8Cs`).
+/// The panel's width.
 pub(crate) const WIDTH: f32 = 359.5;
 
 /// PREVIEW grid: 2 rows of 4; `load_tag_manager_items` loads this many.

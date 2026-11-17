@@ -1,4 +1,4 @@
-//! Design 07 Task 3: the album settings panel, the right column of an open
+//! The album settings panel, the right column of an open
 //! album while Info is off, with Delete Album.
 
 use super::album_page::{library_with_album, open_album, painted};

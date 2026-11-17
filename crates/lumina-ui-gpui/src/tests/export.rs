@@ -1,4 +1,4 @@
-//! Export presets (plan 5 D3): File > Export as JPEG… asks for a folder and
+//! Export presets: File > Export as JPEG… asks for a folder and
 //! writes clean JPEGs there.
 
 use lumina_core::ExportPreset;

@@ -1,5 +1,4 @@
-//! Design 05 Task 4: the album card grid on the Albums overview's Albums
-//! tab (frame `a0sLrG`).
+//! The album card grid on the Albums overview's Albums tab.
 
 use super::albums_overview::height;
 use super::ui_automation::{

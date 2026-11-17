@@ -1,4 +1,4 @@
-//! The downloads popover's rows (frame `RXoOa`): Active rows with a
+//! The downloads popover's rows: Active rows with a
 //! thumbnail, meta line, state-coloured track and buttons; Earlier rows
 //! with a check badge and Show in Library. A click focuses a row and runs
 //! its main action, except on a running row (Resume starts over).

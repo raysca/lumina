@@ -582,12 +582,11 @@ fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 6 (BUGS.md item 17): rendered tag-manager interaction tests.
+// Rendered tag-manager interaction tests.
 //
 // These drive synthetic clicks at the rendered bounds of the controls the
-// modal paints. Before Phase 6 the rows carried no debug selectors and the
-// row surface had no click handler, so nothing inside the card could be
-// exercised by automation.
+// modal paints, so the rows' debug selectors and click handler stay part of
+// the automation contract.
 // ---------------------------------------------------------------------------
 
 /// Seeds a one-item library with the given tags applied to that item.

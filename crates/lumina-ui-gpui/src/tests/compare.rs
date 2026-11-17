@@ -1,4 +1,4 @@
-//! Compare / survey mode (plan 5 C1): C with 2-9 selected items, focus keys,
+//! Compare / survey mode: C with 2-9 selected items, focus keys,
 //! flags and ratings on the focused pane by id, ⌫ drops a pane (never media),
 //! shared zoom, reduced decode size for survey, texture eviction on close,
 //! ↵ to the viewer and back, and the keys compare absorbs.

@@ -1,6 +1,6 @@
 //! Viewer zoom presets: ⌘0 Fit, ⌘1 100%, ⌘2 200%, ⌘3 Fill, ⌘4 400%, the
 //! navigator preset buttons and the palette zoom commands. Plain digits no
-//! longer zoom (plan 5 gives them to ratings).
+//! longer zoom (they set ratings).
 
 use crate::tests::ui_automation::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,

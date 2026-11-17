@@ -1,4 +1,4 @@
-//! Keyboard-first culling (plan 5 B2): P/X/U flags and 0-5 ratings in the
+//! Keyboard-first culling: P/X/U flags and 0-5 ratings in the
 //! grid and the viewer, the viewer's auto-advance, the flag badge, the
 //! palette flag commands and quick filters, and the guards that keep
 //! modals, text fields and ⌥P out of it.

@@ -1,4 +1,4 @@
-//! The Downloads screen (frame `ttuOX`): the download list in the main area,
+//! The Downloads screen: the download list in the main area,
 //! under a top bar with Pause all / Resume all, Clear completed and Add URL.
 //! The body is the filter bar, the status bar and the sectioned list
 //! (rows in `downloads_rows`).

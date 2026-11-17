@@ -1,4 +1,4 @@
-//! Slideshow (plan 5 C2): ⌥⌘S / View > Slideshow / ⌘K play the current view
+//! Slideshow: ⌥⌘S / View > Slideshow / ⌘K play the current view
 //! in the immersive viewer on a GPUI timer. Space pauses, ←/→ step, one Esc
 //! leaves the slideshow and the viewer and puts the selection back, every
 //! other key except ⌘Q and ⌘, is absorbed, videos show their poster, the end

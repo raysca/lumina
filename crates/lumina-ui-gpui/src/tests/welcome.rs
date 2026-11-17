@@ -8,7 +8,7 @@ use crate::{LuminaApp, UiMessage};
 use gpui::{Entity, VisualTestContext};
 use lumina_core::EngineEvent;
 
-/// Design 11 Task 2: the first-run empty state is centred in the main
+/// The first-run empty state is centred in the main
 /// column, with Choose a Folder… beside Import into New Library….
 #[core::prelude::v1::test]
 fn first_run_empty_state_is_centred_with_folder_and_import_actions() {
@@ -114,7 +114,7 @@ fn first_run_empty_state_is_centred_with_folder_and_import_actions() {
     );
 }
 
-/// Design 11 Task 1: with no library the window keeps the app shell, a
+/// With no library the window keeps the app shell, a
 /// dormant sidebar and the "All Media" header, around the welcome body.
 #[core::prelude::v1::test]
 fn first_run_has_sidebar_and_header() {
@@ -373,7 +373,7 @@ fn a_replaced_librarys_late_scan_complete_is_ignored() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- Recent libraries and the missing-library notice (UX-1 Task 6) ----
+// ---- Recent libraries and the missing-library notice ----
 
 use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::app::downloads::DownloadsConfirm;
@@ -475,7 +475,7 @@ fn small_window_welcome_scrolls_under_the_header() {
         open.origin.y >= header_bottom,
         "the welcome buttons never overlap the header"
     );
-    // The last recent row is the lowest control (Design 11 Task 2).
+    // The last recent row is the lowest control.
     let below = vcx.debug_bounds("welcome-recent-5").expect("last recent");
     assert!(
         below.origin.y > gpui::px(600.0),
@@ -497,7 +497,7 @@ fn small_window_welcome_scrolls_under_the_header() {
     );
 }
 
-/// Design 11 Task 3: RECENT LIBRARIES is a 520 px list of 32 px rows under
+/// RECENT LIBRARIES is a 520 px list of 32 px rows under
 /// the hint cards, and keeps its keys.
 #[core::prelude::v1::test]
 fn recents_list_sits_under_the_hints_and_keeps_keys() {
@@ -907,7 +907,7 @@ fn failed_open_does_not_become_last_library() {
     });
 }
 
-// ---- Menu actions and the key gate on the welcome screen (UX-1 Task 7a) ----
+// ---- Menu actions and the key gate on the welcome screen ----
 
 #[core::prelude::v1::test]
 fn welcome_cmd_k_does_not_open_an_invisible_palette() {
@@ -1106,7 +1106,7 @@ fn welcome_cmd_o_and_escape_work_and_modified_enter_is_gated() {
     });
 }
 
-// ---- Welcome paths: open, import into a new library, Pictures (Task 7b) ----
+// ---- Welcome paths: open, import into a new library, Pictures ----
 
 fn new_library_picks() -> usize {
     crate::app::import::NEW_LIBRARY_PICKS.with(|n| n.get())
@@ -1261,7 +1261,7 @@ fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
     );
 }
 
-// ---- Explore a Sample Library (Task 8) ----
+// ---- Explore a Sample Library ----
 
 fn sample_opens() -> usize {
     crate::app::sample::SAMPLE_OPENS.with(|n| n.get())
@@ -1414,7 +1414,7 @@ fn sample_ready_after_another_library_opened_keeps_that_library() {
     });
 }
 
-// ---- Library unreachable state (Design 10 Task 3) ----
+// ---- Library unreachable state ----
 
 /// Clicks `selector` without letting background work run, so a test can see
 /// what the UI shows while that work is still pending.

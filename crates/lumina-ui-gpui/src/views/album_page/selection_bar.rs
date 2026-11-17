@@ -1,4 +1,4 @@
-//! The album view's inline selection bar (Design 07 Task 2): a band under
+//! The album view's inline selection bar: a band under
 //! the header that replaces the floating dock while an album page has a
 //! selection. Favorite is not here; F and the palette keep it.
 

@@ -1,4 +1,4 @@
-//! The Tags page (frame `L3F8Cs`): the Keywords tab with the filter field
+//! The Tags page: the Keywords tab with the filter field
 //! and sort menu, then the keyword list on the left and the focused
 //! keyword's details on the right, in the main column under the page header
 //! while `AlbumSelection::Tags` shows. State lives in `app/tags.rs`, keys in

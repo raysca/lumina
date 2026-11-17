@@ -1,4 +1,4 @@
-//! The unreachable-library state (Design 10) shown on the welcome screen
+//! The unreachable-library state shown on the welcome screen
 //! when the startup or chosen library is not where it was.
 
 use crate::app::render::empty_state::{empty_body, empty_button, empty_glyph, empty_headline};
@@ -10,7 +10,7 @@ use crate::views::page_header::text_marker;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-/// The unreachable-library state (Design 10): Retry or choose another.
+/// The unreachable-library state: Retry or choose another.
 pub struct MissingLibraryProps {
     pub path: String,
     /// Says why, in words that stay true for this path.

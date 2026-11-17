@@ -1,4 +1,4 @@
-//! The Albums overview page (frame `a0sLrG`): the tab bar and body under
+//! The Albums overview page: the tab bar and body under
 //! the page header while `AlbumSelection::AlbumsOverview` shows. State and
 //! keys live in `app/albums_overview.rs`.
 

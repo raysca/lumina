@@ -1,7 +1,7 @@
 //! Audio tracks and chapters of the open video.
 //!
 //! Both are read from the player once per load and dropped with the session.
-//! The audio choice is never saved (owner decision 7): the next load starts
+//! The audio choice is never saved: the next load starts
 //! on the track the file and system language pick.
 
 use gpui::*;

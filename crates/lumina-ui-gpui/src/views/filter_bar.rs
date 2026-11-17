@@ -1,4 +1,4 @@
-//! The Library's filter chip row (frame `t0zQL`) and the Add filter menu
+//! The Library's filter chip row and the Add filter menu
 //! that both its "Add filter" chip and the header's Filter button open.
 
 use gpui::prelude::FluentBuilder;
@@ -39,8 +39,7 @@ enum MenuRow {
     Field(&'static str, &'static str, Icon),
 }
 
-/// The quick-filter families of `docs/search.md`, then the typed fields
-/// (design 01 decision 7).
+/// The quick-filter families of `docs/search.md`, then the typed fields.
 const FIXED_ROWS: &[MenuRow] = &[
     MenuRow::Toggle("is:video"),
     MenuRow::Toggle("is:photo"),

@@ -1,6 +1,6 @@
 //! Hand-picked albums: one `albums` row per album and one `album_items` row
 //! per member. Members follow the view's [`SortSpec`]; there is no manual
-//! position (plan 5, owner answer 1). Both sides of `album_items` cascade, so
+//! position. Both sides of `album_items` cascade, so
 //! purging media or deleting an album never leaves orphan rows. Trash is a
 //! flag, so a trashed member keeps its membership and returns with it.
 

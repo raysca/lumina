@@ -1,4 +1,4 @@
-//! The search header's controls beside the query (Design 03 Task 3): the
+//! The search header's controls beside the query: the
 //! Save as Smart Album button and the Narrow by chips.
 
 use gpui::prelude::FluentBuilder;
@@ -9,7 +9,7 @@ use crate::i18n::t;
 use crate::icons::{render_icon, Icon};
 use crate::theme::{self, ChipKind};
 
-/// The Narrow by chips (Design 03 Task 3), in the frame's order: selector
+/// The Narrow by chips, in the frame's order: selector
 /// suffix, the quick-filter token each toggles, icon, label key.
 const NARROW_CHIPS: [(&str, &str, Icon, &str); 5] = [
     ("fnumber", "f:<2", Icon::Aperture, "search.narrow_fnumber"),

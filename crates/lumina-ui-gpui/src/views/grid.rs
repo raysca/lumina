@@ -42,7 +42,7 @@ pub(crate) const CARD_ROW_GAP: f32 = 6.0;
 pub(crate) const BAND_TO_ROW: f32 = 10.0;
 
 /// Opacity of an unselected card while two or more cards are selected
-/// (selection mode, Design 07 `w4zpqh`).
+/// (selection mode).
 pub(crate) const UNSELECTED_CARD_OPACITY: f32 = 0.62;
 
 /// Below this photo side the top rows (check + edited, flag + heart +
@@ -63,7 +63,7 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
-/// Gap between an open album's tiles, both ways (Design 07 `w4zpqh`: 10).
+/// Gap between an open album's tiles, both ways.
 pub(crate) const ALBUM_TILE_GAP: f32 = 10.0;
 
 /// Right padding of an open album's grid (frame: 24; the left stays 28).
@@ -97,7 +97,7 @@ pub(crate) const PHOTO_SIDE_MIN: f32 = 48.0;
 /// Largest photo well side, so a very wide window cannot produce huge rows.
 pub(crate) const PHOTO_SIDE_MAX: f32 = 640.0;
 
-/// Column gap between Videos tiles (frame `DoXZy`: 14).
+/// Column gap between Videos tiles.
 pub(crate) const VIDEO_COLUMN_GAP: f32 = 14.0;
 
 /// Row gap between Videos tiles, caption to next thumb (frame: 22).
@@ -113,10 +113,10 @@ pub(crate) const CAPTION_HEIGHT: f32 = 9.0 + 16.0 + 3.0 + 13.0;
 pub(crate) enum TileShape {
     /// A square well (every view but Videos).
     Square,
-    /// A 16:9 thumb over a two-line caption (Videos, design 04).
+    /// A 16:9 thumb over a two-line caption (Videos).
     Captioned,
-    /// A square, cover-filled tile on an open album's page (Design 07
-    /// `w4zpqh`): [`ALBUM_TILE_GAP`] both ways, [`ALBUM_PADDING_RIGHT`].
+    /// A square, cover-filled tile on an open album's page:
+    /// [`ALBUM_TILE_GAP`] both ways, [`ALBUM_PADDING_RIGHT`].
     Album,
 }
 

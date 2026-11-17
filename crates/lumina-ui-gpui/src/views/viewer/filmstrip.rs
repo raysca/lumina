@@ -1,4 +1,4 @@
-//! The viewer's filmstrip (Design 02 "Detail"): a bottom band of the items
+//! The viewer's filmstrip: a bottom band of the items
 //! around the current one. It reads only the cached view rows and the grid's
 //! texture cache, so a frame never queries SQLite, and it renders a bounded
 //! window however large the view is.

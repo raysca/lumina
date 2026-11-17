@@ -1,4 +1,4 @@
-//! Similar shots (plan 5 D2): the Duplicates destination's second tab lists
+//! Similar shots: the Duplicates destination's second tab lists
 //! RAW+JPEG pairs and bursts from `find_stacks`, and its two actions only
 //! flag (one undo entry each); nothing is deleted here.
 

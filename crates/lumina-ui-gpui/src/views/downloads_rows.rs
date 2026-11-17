@@ -1,4 +1,4 @@
-//! The Downloads screen's rows (frame `ttuOX`). Active and attention rows
+//! The Downloads screen's rows. Active and attention rows
 //! are full cards with progress; queued and completed rows are compact. A
 //! click on a row focuses it; its buttons act.
 

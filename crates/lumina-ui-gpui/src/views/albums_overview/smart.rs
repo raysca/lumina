@@ -1,4 +1,4 @@
-//! Smart album cards (frame `a0sLrG`): the Albums tab's "Smart Albums"
+//! Smart album cards: the Albums tab's "Smart Albums"
 //! section (up to four cards) and the Smart Albums tab (every card). A card
 //! is a 2×2 mosaic of the album's first matches, the title, "N items ·
 //! live" and a chip per rule. State and keys live in `app/smart_cards.rs`.

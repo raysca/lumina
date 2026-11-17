@@ -1,4 +1,4 @@
-//! Playback failed (Design 10): the failed clip's Try Again, Reveal in
+//! Playback failed: the failed clip's Try Again, Reveal in
 //! Finder and their keys, for the viewer card and the PiP message.
 
 use gpui::{Context, Keystroke};

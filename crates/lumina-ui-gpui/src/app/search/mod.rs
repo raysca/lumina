@@ -253,7 +253,7 @@ pub(crate) fn clear_query_filters(query: &str) -> String {
 }
 
 /// Whether `query` has free text (a term, phrase or `-word`), which shows
-/// the Search screen (Design 03).
+/// the Search screen.
 pub(crate) fn query_has_text(query: &str) -> bool {
     lumina_core::search::tokenize_query(query)
         .iter()

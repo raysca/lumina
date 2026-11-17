@@ -1,4 +1,4 @@
-//! The album header band (frame `w4zpqh`): the cover under `header_fade`,
+//! The album header band: the cover under `header_fade`,
 //! the "Albums › title" breadcrumb, Slideshow and More, the title and the
 //! counts line, all white over the photo.
 

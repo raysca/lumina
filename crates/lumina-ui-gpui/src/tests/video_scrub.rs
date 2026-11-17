@@ -1,4 +1,4 @@
-//! Video transport regressions (BUGS.md 8).
+//! Video transport regressions.
 //!
 //! The post-seek frame refresh stays bounded, and scrub previews come from a
 //! strip of real decoded frames built once per open video. These tests stay

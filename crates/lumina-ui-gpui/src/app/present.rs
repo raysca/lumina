@@ -1,4 +1,4 @@
-//! Compare / survey mode (plan 5 C1, Decision 6): 2-9 selected items side
+//! Compare / survey mode: 2-9 selected items side
 //! by side, 2×2 or 3×3, with one shared zoom/pan and keys that act on the
 //! focused pane by id, never on the grid selection behind it.
 //!

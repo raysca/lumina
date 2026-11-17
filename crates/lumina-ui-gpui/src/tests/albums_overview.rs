@@ -1,4 +1,4 @@
-//! Design 05: the Albums overview page in the main column, reached from the
+//! The Albums overview page in the main column, reached from the
 //! sidebar ALBUMS label, the palette and the Go menu.
 
 use super::duplicates::run_palette_command;

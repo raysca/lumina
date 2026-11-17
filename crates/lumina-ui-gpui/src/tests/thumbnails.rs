@@ -314,7 +314,7 @@ fn library_switch_starts_with_no_failures() {
     let _ = std::fs::remove_dir_all(&other);
 }
 
-/// Card badges (design 01 Task 5): RAW bottom-right, duration bottom-left,
+/// Card badges: RAW bottom-right, duration bottom-left,
 /// outline heart top-right, and the culling marks beside them, never on top.
 #[core::prelude::v1::test]
 fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {

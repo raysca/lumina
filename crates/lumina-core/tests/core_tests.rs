@@ -5296,7 +5296,7 @@ fn a_blank_sidecar_keyword_is_skipped_not_reported() {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
-// ---- Task 3: subtree rename/move/delete and aliases ----
+// ---- Subtree rename/move/delete and aliases ----
 
 /// One item per entry, each carrying the listed tags.
 fn catalog_with_tag_sets(sets: &[&[&str]]) -> (Catalog, Vec<MediaId>) {
@@ -5859,9 +5859,9 @@ fn album_query_plan_uses_membership_index() {
     }
 }
 
-// ---- Export presets (plan 5 D3) ----
+// ---- Export presets ----
 // ponytail: fixtures stay at or below 2560 px; larger JPEGs decode through
-// sips, whose orientation path is checked by plan 5 E1's export cell.
+// sips, whose orientation path is checked by the format matrix's export cell.
 
 /// A solid red baseline JPEG, `width` x `height`.
 fn red_jpeg(width: u32, height: u32) -> Vec<u8> {

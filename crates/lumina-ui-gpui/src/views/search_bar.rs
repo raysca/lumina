@@ -6,7 +6,7 @@ use gpui::*;
 pub struct SearchBarView;
 
 impl SearchBarView {
-    /// Search field in the sidebar's search slot (Design 03): idle on
+    /// Search field in the sidebar's search slot: idle on
     /// `bg_0` with a `line` outline, focused on `bg_3` with an accent one.
     pub fn render_field(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
         let active = !this.search_query.is_empty();

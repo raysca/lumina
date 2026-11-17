@@ -1,4 +1,4 @@
-//! Design 07 Task 5: Set as Cover in the album selection bar, the KEY
+//! Set as Cover in the album selection bar, the KEY
 //! PHOTO section of the album panel, its pick mode and the key photo
 //! badge on the cover's grid card.
 

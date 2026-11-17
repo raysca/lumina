@@ -1,4 +1,4 @@
-//! The Photos section head (Design 03 Task 6, decision 6): in place of the
+//! The Photos section head: in place of the
 //! month band while the search header shows, pinned above the grid like
 //! the band and the Top matches block. "Photos" (or "Videos", or "Photos &
 //! Videos" for a mix), the result count, and the current sort, which opens

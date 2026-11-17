@@ -1,4 +1,4 @@
-//! Design 04 Task 4: the Videos chip row. Only "All clips" and "4K" ship;
+//! The Videos chip row. Only "All clips" and "4K" ship;
 //! HDR, slow motion and Live Photos wait for catalog data.
 
 use super::ui_automation::{click, focus_app, keystrokes, render_ui, type_text};

@@ -71,7 +71,7 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
-// ---- Opening and stepping without a blank frame (UX-1 Task 5) ----------
+// ---- Opening and stepping without a blank frame ----------
 //
 // Decodes run on the engine's pool, which `run_until_parked` does not wait
 // for, and the seed fixtures fail to decode at an unknown moment. These
@@ -342,7 +342,7 @@ fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- Docked InfoPanel (Design 02 Task 1) --------------------------------
+// ---- Docked InfoPanel -------------------------------------------------
 
 #[core::prelude::v1::test]
 fn viewer_info_panel_is_docked_full_height() {
@@ -599,7 +599,7 @@ fn viewer_i_key_closes_and_reopens_the_docked_panel() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- Top bar (Design 02 Task 2) -------------------------------------------
+// ---- Top bar ---------------------------------------------------------------
 
 /// The catalog rating of the viewer's item.
 fn viewer_rating(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> u8 {
@@ -892,7 +892,7 @@ fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- Stage chrome (Design 02 Task 3) --------------------------------------
+// ---- Stage chrome ----------------------------------------------------------
 
 #[core::prelude::v1::test]
 fn viewer_nav_buttons_sit_26px_from_stage_edges() {

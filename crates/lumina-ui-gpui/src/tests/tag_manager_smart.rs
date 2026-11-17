@@ -1,4 +1,4 @@
-//! Save as Smart Album (frame `L3F8Cs` ORGANISE): the builder prefilled with
+//! Save as Smart Album (ORGANISE): the builder prefilled with
 //! one Tag-is-`<path>` rule, from the detail row, the row menu and ⌘K.
 
 use super::duplicates::run_palette_command;
