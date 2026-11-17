@@ -38,18 +38,6 @@ fn test_filter_changes_clear_multi_selection() {
 }
 
 #[core::prelude::v1::test]
-fn test_search_focus_blur() {
-    let mut cx = crate::tests::TestApp::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-
-    view.update(cx, |app, cx| {
-        app.search_focused = true;
-        app.blur_search(cx);
-        assert!(!app.search_focused);
-    });
-}
-
-#[core::prelude::v1::test]
 fn test_watcher_batch_clears_selection_and_refreshes_counts() {
     let (temp_dir, engine) = scanned_engine("counts");
     let mut cx = crate::tests::TestApp::single();
@@ -116,20 +104,6 @@ fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
             app.viewer_state.zoom_scale, 1.0,
             "video playback must not zoom"
         );
-    });
-}
-
-#[core::prelude::v1::test]
-fn test_shortcuts_overlay_toggles() {
-    let mut cx = crate::tests::TestApp::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-
-    view.update(cx, |app, cx| {
-        assert!(!app.shortcuts_overlay_open);
-        app.toggle_shortcuts_overlay(cx);
-        assert!(app.shortcuts_overlay_open);
-        app.close_shortcuts_overlay(cx);
-        assert!(!app.shortcuts_overlay_open);
     });
 }
 

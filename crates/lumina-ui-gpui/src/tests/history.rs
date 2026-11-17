@@ -109,7 +109,12 @@ fn forward_after_viewer_back_reopens_viewer() {
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| {
-        assert!(!app.is_fullscreen_viewer, "Back closes it")
+        assert!(!app.is_fullscreen_viewer, "Back closes it");
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.id),
+            Some(item.id),
+            "Back must keep the grid selection on the item that was open"
+        );
     });
     focus_app(vcx, &view);
     keystrokes(vcx, "secondary-]");

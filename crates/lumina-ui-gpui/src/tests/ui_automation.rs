@@ -1553,51 +1553,6 @@ fn ui_automation_navigation_search_back() {
 }
 
 #[core::prelude::v1::test]
-fn ui_automation_navigation_viewer_back_closes() {
-    let (temp_dir, engine) = seed_library("nav_viewer", 8);
-    let item = engine.get_item_slice(0..1)[0].clone();
-    let card = leak(format!("media-card-{}", item.id.0));
-
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = app_with_library(&mut cx, engine);
-
-    click(vcx, card);
-    double_click(vcx, card);
-    view.update(vcx, |app, _| {
-        assert!(
-            app.is_fullscreen_viewer,
-            "double-click must open the viewer"
-        );
-        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
-    });
-
-    focus_app(vcx, &view);
-    keystrokes(vcx, "secondary-[");
-    view.update(vcx, |app, _| {
-        assert!(
-            !app.is_fullscreen_viewer,
-            "Back from the viewer must close it and return to the grid"
-        );
-        assert_eq!(
-            app.selected_item.as_ref().map(|it| it.id),
-            Some(item.id),
-            "Back must keep the grid selection on the item that was open"
-        );
-    });
-
-    // Close again, then prove the oldest edge cannot trap the user.
-    focus_app(vcx, &view);
-    keystrokes(vcx, "secondary-[");
-    keystrokes(vcx, "secondary-[");
-    view.update(vcx, |app, _| {
-        assert!(!app.is_fullscreen_viewer);
-        assert_eq!(app.selected_item.as_ref().map(|it| it.id), Some(item.id));
-    });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
-}
-
-#[core::prelude::v1::test]
 fn ui_automation_navigation_edge_no_ops() {
     let (temp_dir, engine) = seed_library("nav_edges", 8);
     let mut cx = crate::tests::TestApp::single();

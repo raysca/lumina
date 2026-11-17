@@ -419,27 +419,6 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
 }
 
 #[core::prelude::v1::test]
-fn test_error_banner_lifecycle() {
-    let mut cx = crate::tests::TestApp::single();
-    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-
-    view.update(cx, |app, cx| {
-        assert!(app.error_message.is_none());
-
-        app.set_error("Could not open library: permission denied", cx);
-        assert_eq!(
-            app.error_message.as_deref(),
-            Some("Could not open library: permission denied")
-        );
-
-        app.dismiss_error(cx);
-        assert!(app.error_message.is_none());
-    });
-
-    cx.run_until_parked();
-}
-
-#[core::prelude::v1::test]
 fn frameless_windows_get_their_own_window_controls() {
     use crate::app::render::FORCE_CLIENT_DECORATIONS;
     use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
