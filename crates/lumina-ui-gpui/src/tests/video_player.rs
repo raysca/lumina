@@ -32,6 +32,8 @@ fn open_video(
     let (view, vcx) = app_with_library(cx, engine);
     view.update(vcx, |app, cx| {
         app.open_viewer(video, cx);
+        // The sample path doesn't exist; these tests need a playable clip.
+        app.video.load_error = None;
         app.video.duration = 60.0;
         cx.notify();
     });

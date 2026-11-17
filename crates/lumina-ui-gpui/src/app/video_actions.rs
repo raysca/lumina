@@ -221,6 +221,12 @@ impl LuminaApp {
                 state.video_resume.finish();
             }
             self.video.load_error = loaded.err().map(|err| format!("{err:#}"));
+            // ponytail: one stat on the UI thread, where the load already
+            // failed; the catalog marks it missing when the watcher sees it.
+            self.video.load_file_gone = !item.path.exists();
+            // No popover left open above the dimmed transport.
+            self.video.speed_menu_open = false;
+            self.video.tracks.audio_menu_open = false;
         }
         cx.notify();
     }
@@ -267,6 +273,7 @@ impl LuminaApp {
         self.video.tracks = Default::default();
         // And its load failure.
         self.video.load_error = None;
+        self.video.load_file_gone = false;
         self.video.failed_focus = None;
         self.clear_scrub_strip();
     }
@@ -345,6 +352,10 @@ impl LuminaApp {
     }
 
     pub fn toggle_video_play(&mut self, cx: &mut Context<Self>) {
+        // A clip that failed to load has nothing to play.
+        if self.video_unplayable() {
+            return;
+        }
         // A play/pause the user chose (Space mid-drag, PiP controls) wins
         // over the scrub's own resume on release.
         self.video.resume_after_scrub = false;

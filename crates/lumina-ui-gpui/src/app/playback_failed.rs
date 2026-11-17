@@ -12,10 +12,20 @@ thread_local! {
 }
 
 impl LuminaApp {
+    /// The open clip failed to load: its transport and playback keys do
+    /// nothing. A failed load never leaves a player; the `player` check is
+    /// for tests that open an unloadable sample and then inject a stub.
+    pub(crate) fn video_unplayable(&self) -> bool {
+        self.video.load_error.is_some() && self.video.player.is_none()
+    }
+
     /// The viewer shows the failure card: its video failed to load and it
     /// is not playing in PiP. A missing original has its own card instead.
+    /// Edit mode and a slideshow hide it, as they hide the missing card.
     pub(crate) fn playback_failed_shown(&self) -> bool {
         self.is_fullscreen_viewer
+            && self.edits.session.is_none()
+            && self.slideshow.is_none()
             && !self.video.in_pip
             && self.video.load_error.is_some()
             && self

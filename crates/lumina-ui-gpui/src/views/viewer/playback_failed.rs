@@ -9,6 +9,7 @@ use crate::app::LuminaApp;
 use crate::i18n::t;
 use crate::icons::Icon;
 use crate::theme;
+use crate::views::page_header::text_marker;
 
 /// The danger glyph: `danger_soft` fill, `danger_outline` ring, triangle.
 pub(crate) fn danger_glyph(size: Pixels) -> Div {
@@ -54,7 +55,12 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
         t("playback.reveal")
     )))
     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.reveal_failed_video(cx)));
-    let title = t("playback.failed_title");
+    // A file that vanished says so, in the missing card's words.
+    let (title, body) = if this.video.load_file_gone {
+        (t("viewer.missing_title"), t("viewer.missing_no_preview"))
+    } else {
+        (t("playback.failed_title"), t("playback.failed_body"))
+    };
     let error = this.video.load_error.clone().map(SharedString::from);
     let card = div()
         .id("viewer-playback-failed")
@@ -89,7 +95,7 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
                 .text_size(px(17.0)),
         )
         .child(
-            empty_body("playback-failed-body", t("playback.failed_body").into())
+            empty_body("playback-failed-body", body.into())
                 .mt(px(6.0))
                 .text_size(px(12.0))
                 .line_height(px(18.0)),
@@ -136,7 +142,14 @@ pub(super) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
 /// PiP's compact failure: glyph, one line and Try Again in one row, in the
 /// gap between the fades. A `narrow` window (portrait) drops the line. Only the row takes the press, and never starts a
 /// window drag; the rest of the window still drags and closes.
-pub(crate) fn pip_message(app: WeakEntity<LuminaApp>, narrow: bool) -> AnyElement {
+pub(crate) fn pip_message(app: WeakEntity<LuminaApp>, narrow: bool, gone: bool) -> AnyElement {
+    // A file that vanished says so, as the viewer card does.
+    let title: SharedString = t(if gone {
+        "viewer.missing_title"
+    } else {
+        "playback.failed_title"
+    })
+    .into();
     let retry = empty_button(
         "pip-playback-retry",
         true,
@@ -160,7 +173,7 @@ pub(crate) fn pip_message(app: WeakEntity<LuminaApp>, narrow: bool) -> AnyElemen
                 .id("pip-playback-failed")
                 .debug_selector(|| "pip-playback-failed".to_string())
                 .role(Role::Alert)
-                .aria_label(t("playback.failed_title"))
+                .aria_label(title.clone())
                 .on_mouse_down(MouseButton::Left, |_e, _w, cx| cx.stop_propagation())
                 .flex()
                 .flex_row()
@@ -173,7 +186,8 @@ pub(crate) fn pip_message(app: WeakEntity<LuminaApp>, narrow: bool) -> AnyElemen
                             .text_size(px(12.0))
                             .text_color(theme::on_media())
                             .whitespace_nowrap()
-                            .child(t("playback.failed_title")),
+                            .children(text_marker("pip-playback-failed-title", &title))
+                            .child(title),
                     )
                 })
                 .child(retry),

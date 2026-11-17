@@ -132,6 +132,9 @@ fn overlay_scrub_drag_leaves_the_selected_media_unchanged() {
         // Fullscreen viewer over the grid: the layout where the transport sits
         // above the grid's lower rows.
         app.open_viewer(video, cx);
+        // The sample path doesn't exist, so the load failed; this test is
+        // about the transport of a clip that loaded.
+        app.video.load_error = None;
         app.video.duration = 60.0;
         cx.notify();
     });
@@ -262,6 +265,9 @@ fn scrubber_without_strip_shows_time_badge_only() {
 
     view.update(vcx, |app, cx| {
         app.open_viewer(video, cx);
+        // The sample path doesn't exist, so the load failed; this test is
+        // about the transport of a clip that loaded.
+        app.video.load_error = None;
         app.video.duration = 60.0;
         cx.notify();
     });

@@ -418,5 +418,16 @@ impl ViewerTransport {
                 duration,
                 cx,
             ))
+            // A clip that failed to load: dimmed, and a cover on top takes
+            // every press so no control under it acts.
+            .when(this.video_unplayable(), |transport| {
+                transport.opacity(0.4).child(
+                    div()
+                        .debug_selector(|| "video-transport-disabled".to_string())
+                        .absolute()
+                        .inset_0()
+                        .occlude(),
+                )
+            })
     }
 }

@@ -494,6 +494,9 @@ fn test_viewer_player_ux_and_navigation_controls() {
             app.select_item_at(video_item.clone(), 1, cx);
             app.open_viewer(video_item.clone(), cx);
             assert!(app.is_fullscreen_viewer);
+            // The sample path doesn't exist, so the load failed; this part
+            // is about a clip that loaded.
+            app.video.load_error = None;
 
             // Space on video toggles play/pause
             assert!(!app.video.is_playing);

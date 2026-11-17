@@ -184,6 +184,7 @@ impl Render for FloatingPipPlayerView {
         let has_player = video.player.is_some();
         // A failed load says so instead of showing a stale or empty frame.
         let failed = video.load_error.is_some();
+        let gone = video.load_file_gone;
         // A portrait PiP is too narrow for the line beside the button.
         let narrow = window.viewport_size().width < px(260.0);
         let title = video.item.as_ref().map(display_title).unwrap_or_default();
@@ -526,7 +527,9 @@ impl Render for FloatingPipPlayerView {
                     ),
             )
             .children(
-                failed.then(|| crate::views::viewer::pip_playback_failed(self.app.clone(), narrow)),
+                failed.then(|| {
+                    crate::views::viewer::pip_playback_failed(self.app.clone(), narrow, gone)
+                }),
             )
             .into_any_element()
     }

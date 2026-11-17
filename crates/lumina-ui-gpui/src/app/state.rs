@@ -153,6 +153,9 @@ pub struct VideoPlaybackState {
     /// Why the open video failed to load, shown in the viewer card and in
     /// PiP. Set by a failed load, cleared by the next load or stop.
     pub load_error: Option<String>,
+    /// The failed video's file was gone at the failure, so the card says
+    /// it cannot be found rather than that it may be damaged.
+    pub load_file_gone: bool,
     /// Tab focus in the failure card: 0 Try Again, 1 Reveal in Finder.
     pub failed_focus: Option<usize>,
 }

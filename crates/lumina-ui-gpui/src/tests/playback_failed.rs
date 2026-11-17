@@ -201,3 +201,220 @@ fn pip_load_failure_shows_a_compact_message() {
         "Try Again must sit fully inside a 220 px PiP: {retry:?} in {window:?}"
     );
 }
+
+#[core::prelude::v1::test]
+fn failed_video_transport_is_inert() {
+    let (_fixture, engine, video) = broken_video("playback_failed_inert");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_viewer(video, cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("video-transport-disabled").is_some(),
+        "a clip that failed to load dims its transport"
+    );
+
+    click(vcx, "video-play");
+    assert!(
+        !view.update(vcx, |app, _| app.video.is_playing),
+        "the Play button must not start a clip that failed to load"
+    );
+    focus_app(vcx, &view);
+    for key in ["space", "k"] {
+        keystrokes(vcx, key);
+        view.update(vcx, |app, _| {
+            assert!(
+                !app.video.is_playing,
+                "{key} must not start a clip that failed to load"
+            );
+            assert!(app.is_fullscreen_viewer, "{key} must not close the viewer");
+        });
+    }
+}
+
+#[core::prelude::v1::test]
+fn failed_video_arrows_navigate_and_escape_closes() {
+    let (_fixture, engine, video) = broken_video("playback_failed_nav");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_item_at(video.clone(), 0, cx);
+        app.open_viewer(video.clone(), cx);
+    });
+    render_ui(vcx);
+    assert!(view.update(vcx, |app, _| app.video_unplayable()));
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(1), "→ moves to the next item");
+        assert_ne!(
+            app.selected_item.as_ref().map(|i| i.path.clone()),
+            Some(video.path.clone()),
+            "→ on a failed clip moves on instead of seeking"
+        );
+    });
+    view.update(vcx, |app, cx| {
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+    });
+    render_ui(vcx);
+    keystrokes(vcx, "left");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_index,
+            Some(0),
+            "← on a failed clip moves to the previous item"
+        );
+    });
+
+    view.update(vcx, |app, cx| app.open_viewer(video.clone(), cx));
+    render_ui(vcx);
+    keystrokes(vcx, "escape");
+    assert!(
+        !view.update(vcx, |app, _| app.is_fullscreen_viewer),
+        "Esc closes the viewer over a failed clip"
+    );
+}
+
+#[core::prelude::v1::test]
+fn failed_video_loop_keys_are_consumed_and_inert() {
+    let (_fixture, engine, video) = broken_video("playback_failed_loop_keys");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_viewer(video.clone(), cx));
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    let before = view.update(vcx, |app, _| {
+        (
+            app.inspector_open,
+            app.item_flags.get(&video.id).copied(),
+            app.selected_item.as_ref().map(|i| i.id),
+            app.is_fullscreen_viewer,
+        )
+    });
+    for source in ["alt-i->ˆ", "alt-o->ø", "alt-x->≈"] {
+        let propagated = vcx.update(|window, cx| {
+            let keystroke = gpui::Keystroke::parse(source).expect("a valid keystroke");
+            window
+                .dispatch_event(
+                    gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
+                        keystroke,
+                        is_held: false,
+                        prefer_character_input: false,
+                    }),
+                    cx,
+                )
+                .propagate
+        });
+        assert!(
+            !propagated,
+            "{source} on a failed clip must be consumed, or a dead key leaves a pending composition"
+        );
+        let after = view.update(vcx, |app, _| {
+            (
+                app.inspector_open,
+                app.item_flags.get(&video.id).copied(),
+                app.selected_item.as_ref().map(|i| i.id),
+                app.is_fullscreen_viewer,
+            )
+        });
+        assert_eq!(
+            after, before,
+            "{source} on a failed clip must not toggle the inspector, reject or move on"
+        );
+    }
+}
+
+#[core::prelude::v1::test]
+fn edit_mode_and_slideshow_hide_the_failure_card() {
+    let (_fixture, engine, video) = broken_video("playback_failed_hidden");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_viewer(video.clone(), cx));
+    assert!(view.update(vcx, |app, _| app.playback_failed_shown()));
+
+    view.update(vcx, |app, _| {
+        app.edits.session = Some(crate::app::quick_edit::QuickEditState {
+            item: video.id,
+            draft: Default::default(),
+            original: Default::default(),
+            source: None,
+            crop: None,
+            generation: 0,
+            rendering: None,
+            renders: 0,
+            shown: None,
+        });
+        assert!(
+            !app.playback_failed_shown(),
+            "edit mode hides the failure card"
+        );
+        app.edits.session = None;
+        assert!(app.playback_failed_shown());
+    });
+
+    vcx.update(|window, cx| view.update(cx, |app, cx| app.start_slideshow(window, cx)));
+    view.update(vcx, |app, cx| {
+        assert!(app.slideshow.is_some(), "the slideshow must start");
+        app.open_viewer(video.clone(), cx);
+        assert!(
+            app.slideshow.is_some() && app.video.load_error.is_some(),
+            "the failed clip is shown during the slideshow"
+        );
+        assert!(
+            !app.playback_failed_shown(),
+            "a slideshow hides the failure card"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn vanished_video_says_it_cannot_be_found() {
+    let (_fixture, engine, video) = broken_video("playback_failed_gone");
+    std::fs::remove_file(&video.path).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_viewer(video, cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("playback-failed-title-text:Original not available")
+            .is_some(),
+        "a clip whose file is gone says the original is not available"
+    );
+    assert!(
+        vcx.debug_bounds("playback-failed-title-text:Can't play this clip")
+            .is_none(),
+        "a missing file is not reported as an unplayable clip"
+    );
+    assert!(
+        vcx.debug_bounds("playback-failed-body-text:The original file is missing.")
+            .is_some(),
+        "the body says the file is missing, not that it may be damaged"
+    );
+}
+
+#[core::prelude::v1::test]
+fn pip_vanished_video_says_it_cannot_be_found() {
+    let (_fixture, engine, video) = broken_video("playback_failed_pip_gone");
+    std::fs::remove_file(&video.path).unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.play_in_pip(video, cx));
+    render_ui(vcx);
+    let handle = view
+        .update(vcx, |app, _| app.floating_pip_window)
+        .expect("the PiP window must open");
+    let mut pip = gpui::VisualTestContext::from_window(handle, &vcx.cx);
+    render_ui(&mut pip);
+    assert!(
+        pip.debug_bounds("pip-playback-failed-title-text:Original not available")
+            .is_some(),
+        "PiP says the original is not available when the file is gone"
+    );
+    assert!(
+        pip.debug_bounds("pip-playback-failed-title-text:Can't play this clip")
+            .is_none(),
+        "PiP does not call a missing file unplayable"
+    );
+}

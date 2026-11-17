@@ -135,29 +135,33 @@ impl LuminaApp {
             return true;
         }
 
-        if is_video && !self.video.in_pip && !cmd_or_ctrl {
+        // ⌥I / ⌥O / ⌥X on a video, playable or not: Option keys can be dead
+        // keys, so the input context must not start a composition from them.
+        if is_video
+            && !self.video.in_pip
+            && !cmd_or_ctrl
+            && keystroke.modifiers.alt
+            && !keystroke.modifiers.shift
+            && matches!(key.to_ascii_lowercase().as_str(), "i" | "o" | "x")
+        {
+            cx.stop_propagation();
+        }
+        // A clip that failed to load skips the playback keys: Space does
+        // nothing and ←/→ move between items, as on a still.
+        if is_video && !self.video_unplayable() && !self.video.in_pip && !cmd_or_ctrl {
             // ⌥I / ⌥O / ⌥X: loop range.
             if keystroke.modifiers.alt && !keystroke.modifiers.shift {
                 match key.to_ascii_lowercase().as_str() {
                     "i" => {
                         self.set_loop_in(cx);
-                        // Option keys can be dead keys: the input context must not
-                        // start a composition from it.
-                        cx.stop_propagation();
                         return true;
                     }
                     "o" => {
                         self.set_loop_out(cx);
-                        // Option keys can be dead keys: the input context must not
-                        // start a composition from it.
-                        cx.stop_propagation();
                         return true;
                     }
                     "x" => {
                         self.clear_loop_range(cx);
-                        // Option keys can be dead keys: the input context must not
-                        // start a composition from it.
-                        cx.stop_propagation();
                         return true;
                     }
                     _ => {}
