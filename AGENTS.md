@@ -184,8 +184,9 @@ docs/             accessibility, search, network import, Linux
 ### 6.1 Layers
 
 1. Core unit tests live beside code in `lumina-core/src/**`.
-2. Core integration tests live in `crates/lumina-core/tests/` (`core_tests.rs`
-   plus import, watcher, URL import, format and benchmark tests).
+2. Core integration tests live in `crates/lumina-core/tests/`: catalog,
+   search, keyword and library tests sharing `tests/common/`, plus import,
+   watcher, URL import, format and benchmark tests.
 3. UI automation tests live in `crates/lumina-ui-gpui/src/tests/` and drive the
    real GPUI view tree with synthetic input. They run headlessly in CI.
 4. Live smoke/e2e scripts launch the real process; see section 8.
