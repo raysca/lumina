@@ -33,8 +33,8 @@ pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
 /// example because the app was deleted.
 pub(crate) const EXTERNAL_EDITOR_FAILED_MESSAGE: &str =
     "The external editor could not open this file. Choose an external editor in Preferences.";
-/// Banner shown when Finder could not reveal the file.
-pub(crate) const REVEAL_FAILED_MESSAGE: &str = "Could not show this file in Finder.";
+/// Banner shown when the file manager could not reveal the file.
+pub(crate) const REVEAL_FAILED_MESSAGE: &str = crate::i18n::platform::REVEAL_FAILED;
 
 /// Decode size requested for the full-viewer still, matching the selection path
 /// in `select_item_internal`; the grid requests 320 and the viewer 2048.
@@ -529,8 +529,7 @@ fn default_app_command(path: &Path) -> Command {
 
 /// Banner shown when the launcher ran but reported it could not open the
 /// file (typically no app is set for its type).
-pub(crate) const DEFAULT_APP_FAILED_MESSAGE: &str =
-    "No app could open this file. Choose one with Open With in Finder.";
+pub(crate) const DEFAULT_APP_FAILED_MESSAGE: &str = crate::i18n::platform::DEFAULT_APP_FAILED;
 
 /// The banner message for a finished launch, if it failed: `failed`, plus
 /// the error when the launcher could not start. The launcher's own stderr

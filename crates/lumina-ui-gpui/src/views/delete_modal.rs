@@ -52,7 +52,7 @@ impl DeleteConfirmModal {
         let trash_description = if from_library {
             "Keeps them in Recently Deleted. You can restore them at any time."
         } else {
-            "Moves the original files to the macOS Trash. Recover them in Finder."
+            crate::i18n::platform::MOVE_TO_TRASH_DESCRIPTION
         };
         let thumbs: Vec<Arc<RenderImage>> = app
             .grid_state

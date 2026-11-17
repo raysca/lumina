@@ -48,6 +48,22 @@ fn path_of(engine: &LuminaEngine, id: MediaId) -> String {
         .to_string()
 }
 
+fn editor_launch_path(path: &std::path::Path) -> Vec<String> {
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            "open".to_string(),
+            "-b".to_string(),
+            EDITOR.to_string(),
+            path.to_string_lossy().to_string(),
+        ]
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        vec![EDITOR.to_string(), path.to_string_lossy().to_string()]
+    }
+}
+
 #[core::prelude::v1::test]
 fn edit_in_external_editor_by_shortcut_builds_command() {
     let (dir, engine, photos, _) = edit_library("ext_cmd_e");
@@ -60,12 +76,7 @@ fn edit_in_external_editor_by_shortcut_builds_command() {
     keystrokes(vcx, "secondary-e");
     vcx.run_until_parked();
 
-    let expected = vec![
-        "open".to_string(),
-        "-b".to_string(),
-        EDITOR.to_string(),
-        path_of(&engine, photos[0]),
-    ];
+    let expected = editor_launch_path(std::path::Path::new(&path_of(&engine, photos[0])));
     assert_eq!(
         test_launches::take(),
         vec![expected.clone()],
@@ -122,12 +133,7 @@ fn edit_copy_selects_new_item() {
     });
     assert_eq!(
         test_launches::take(),
-        vec![vec![
-            "open".to_string(),
-            "-b".to_string(),
-            EDITOR.to_string(),
-            selected.path.to_string_lossy().to_string(),
-        ]],
+        vec![editor_launch_path(&selected.path)],
         "the editor opens the copy, not the original"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -350,12 +356,7 @@ fn edit_copy_finishing_after_a_library_switch_leaves_the_new_library_alone() {
     let launches = test_launches::take();
     assert_eq!(
         launches,
-        vec![vec![
-            "open".to_string(),
-            "-b".to_string(),
-            EDITOR.to_string(),
-            copy.path.to_string_lossy().to_string(),
-        ]],
+        vec![editor_launch_path(&copy.path)],
         "the editor still opens the copy"
     );
     let _ = std::fs::remove_dir_all(&dir);

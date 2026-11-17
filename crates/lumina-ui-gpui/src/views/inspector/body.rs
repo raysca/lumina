@@ -290,12 +290,14 @@ fn render_single_body(
                                 .child(
                                     header_button(
                                         "info-quick-reveal-btn",
-                                        "Reveal in Finder",
+                                        crate::i18n::platform::REVEAL,
                                         None,
                                         false,
                                         None,
                                     )
-                                    .tooltip(theme::tooltip_label("Reveal in Finder (⇧⌘R)"))
+                                    .tooltip(theme::tooltip_label(
+                                        crate::i18n::platform::REVEAL_TOOLTIP,
+                                    ))
                                     .on_click(
                                         move |_e, _w, cx| {
                                             if let Some(app) = app_reveal.upgrade() {

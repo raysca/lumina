@@ -293,6 +293,58 @@ pub fn t_with(key: &str, args: &[&str]) -> String {
     out
 }
 
+/// Copy that names the platform's file manager and trash: Finder and the
+/// macOS Trash on macOS, plain wording on Linux. Every such string lives
+/// here, cfg-selected, so macOS copy stays exactly as it was.
+pub mod platform {
+    /// The reveal action in menus, the inspector and the playback card.
+    #[cfg(not(target_os = "linux"))]
+    pub const REVEAL: &str = "Reveal in Finder";
+    #[cfg(target_os = "linux")]
+    pub const REVEAL: &str = "Show in File Manager";
+    /// [`REVEAL`] with its shortcut, for the inspector tooltip.
+    #[cfg(not(target_os = "linux"))]
+    pub const REVEAL_TOOLTIP: &str = "Reveal in Finder (⇧⌘R)";
+    #[cfg(target_os = "linux")]
+    pub const REVEAL_TOOLTIP: &str = "Show in File Manager (Ctrl+Shift+R)";
+    /// The reveal action in the shortcut sheet and Settings › Downloads.
+    #[cfg(not(target_os = "linux"))]
+    pub const SHOW: &str = "Show in Finder";
+    #[cfg(target_os = "linux")]
+    pub const SHOW: &str = "Show in File Manager";
+    /// Banner shown when the file manager could not reveal the file.
+    #[cfg(not(target_os = "linux"))]
+    pub const REVEAL_FAILED: &str = "Could not show this file in Finder.";
+    #[cfg(target_os = "linux")]
+    pub const REVEAL_FAILED: &str = "Could not reveal this file in the file manager.";
+    /// Banner shown when no app is set to open a file's type.
+    #[cfg(not(target_os = "linux"))]
+    pub const DEFAULT_APP_FAILED: &str =
+        "No app could open this file. Choose one with Open With in Finder.";
+    #[cfg(target_os = "linux")]
+    pub const DEFAULT_APP_FAILED: &str =
+        "No app could open this file. Choose an app in your system's Open With menu.";
+    /// Delete modal: what Move to Trash does with files on disk.
+    #[cfg(not(target_os = "linux"))]
+    pub const MOVE_TO_TRASH_DESCRIPTION: &str =
+        "Moves the original files to the macOS Trash. Recover them in Finder.";
+    #[cfg(target_os = "linux")]
+    pub const MOVE_TO_TRASH_DESCRIPTION: &str =
+        "Moves the original files to Trash. Recover them from your system's trash.";
+    // Emptying asks per run (delete_modal.rs): the system trash, keep on
+    // disk, or delete.
+    #[cfg(not(target_os = "linux"))]
+    pub(super) const TRASH_EMPTY_BODY: &str = "Deleted items stay here until you restore them or remove them for good. Lumina leaves their original files on disk unless you choose to move them to the macOS Trash or delete them.";
+    #[cfg(target_os = "linux")]
+    pub(super) const TRASH_EMPTY_BODY: &str = "Deleted items stay here until you restore them or remove them for good. Lumina leaves their original files on disk unless you choose to move them to your system's trash or delete them.";
+    #[cfg(not(target_os = "linux"))]
+    pub(super) const PLAYBACK_FAILED_BODY: &str =
+        "Lumina couldn't open this video. The file may be damaged or use a format macOS can't play.";
+    #[cfg(target_os = "linux")]
+    pub(super) const PLAYBACK_FAILED_BODY: &str =
+        "Lumina couldn't open this video. The file may be damaged or use a format this system can't play.";
+}
+
 fn en_us(key: &str) -> Option<&'static str> {
     Some(match key {
         "command.open_library" => "Open Library…",
@@ -923,8 +975,7 @@ fn en_us(key: &str) -> Option<&'static str> {
         "album.empty_title_unknown" => "This album is empty",
         "album.empty_body" => "Items stay in your library — an album is just a view of them.",
         "trash.empty_title" => "Nothing waiting to be removed",
-        // Emptying asks per run (delete_modal.rs): macOS Trash, keep on disk, or delete.
-        "trash.empty_body" => "Deleted items stay here until you restore them or remove them for good. Lumina leaves their original files on disk unless you choose to move them to the macOS Trash or delete them.",
+        "trash.empty_body" => platform::TRASH_EMPTY_BODY,
         "album.add_from_library_toast" => "Select items, then use Add to Album (⇧⌘A).",
         "sidebar.nav_label_one" => "{label}, 1 item",
         "sidebar.nav_label_other" => "{label}, {n} items",
@@ -1109,11 +1160,9 @@ fn en_us(key: &str) -> Option<&'static str> {
         "viewer.missing_keep" => "Keep preview",
         "viewer.missing_dismiss" => "Dismiss",
         "playback.failed_title" => "Can't play this clip",
-        "playback.failed_body" => {
-            "Lumina couldn't open this video. The file may be damaged or use a format macOS can't play."
-        }
+        "playback.failed_body" => platform::PLAYBACK_FAILED_BODY,
         "playback.retry" => "Try Again",
-        "playback.reveal" => "Reveal in Finder",
+        "playback.reveal" => platform::REVEAL,
         "viewer.info_panel" => "Info",
         "view.all_media" => "All Media",
         "view.untagged" => "Untagged",
@@ -1176,6 +1225,54 @@ fn en_us(key: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: the Linux port renamed Finder and the macOS Trash in
+    /// macOS copy. macOS keeps its wording; only Linux uses plain wording.
+    #[test]
+    fn platform_copy_names_finder_only_on_macos() {
+        let copy = [
+            t("playback.reveal"),
+            t("playback.failed_body"),
+            t("trash.empty_body"),
+            platform::REVEAL.into(),
+            platform::REVEAL_TOOLTIP.into(),
+            platform::SHOW.into(),
+            platform::REVEAL_FAILED.into(),
+            platform::DEFAULT_APP_FAILED.into(),
+            platform::MOVE_TO_TRASH_DESCRIPTION.into(),
+        ];
+        if cfg!(target_os = "linux") {
+            for text in &copy {
+                assert!(
+                    !text.contains("Finder") && !text.contains("macOS") && !text.contains('⌘'),
+                    "Linux copy names neither Finder nor macOS, nor ⌘: {text}"
+                );
+            }
+        } else {
+            assert_eq!(t("playback.reveal"), "Reveal in Finder");
+            assert_eq!(platform::SHOW, "Show in Finder");
+            assert_eq!(
+                platform::REVEAL_FAILED,
+                "Could not show this file in Finder."
+            );
+            assert_eq!(
+                platform::DEFAULT_APP_FAILED,
+                "No app could open this file. Choose one with Open With in Finder."
+            );
+            assert!(
+                t("playback.failed_body").ends_with("a format macOS can't play."),
+                "macOS keeps its playback wording"
+            );
+            assert!(
+                t("trash.empty_body").contains("the macOS Trash"),
+                "macOS keeps the macOS Trash wording"
+            );
+            assert!(
+                platform::MOVE_TO_TRASH_DESCRIPTION.contains("macOS Trash"),
+                "macOS keeps the macOS Trash wording"
+            );
+        }
+    }
 
     #[test]
     fn known_and_unknown_keys() {

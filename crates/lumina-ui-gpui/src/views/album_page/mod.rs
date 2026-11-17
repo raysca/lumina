@@ -225,7 +225,11 @@ impl LuminaApp {
                 let pinned = self.open_album_pinned().unwrap_or(false);
                 self.set_open_album_pinned(!pinned, cx);
             }
+            #[cfg(target_os = "macos")]
             AlbumMenuItem::Share => self.share_selection(None, cx),
+            // No share picker off macOS; the menu hides Share there.
+            #[cfg(not(target_os = "macos"))]
+            AlbumMenuItem::Share => {}
             AlbumMenuItem::Delete => self.prompt_delete_album(id, cx),
         }
         cx.notify();

@@ -20,7 +20,9 @@ impl Drop for TempFile {
 
 /// RAII guard that removes a directory tree on drop, or at process exit
 /// when its worker never gets to drop it (killed mid-decode by the exit).
+#[cfg(any(target_os = "macos", test))]
 struct TempDir(std::path::PathBuf);
+#[cfg(any(target_os = "macos", test))]
 impl TempDir {
     /// Guards `path`; create the directory after this, so no exit between
     /// the two can leave it behind.
@@ -29,12 +31,37 @@ impl TempDir {
         Self(path)
     }
 }
+#[cfg(any(target_os = "macos", test))]
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
         live_children::remove_dir(&self.0);
     }
 }
+
+/// Whether `decode_image` tries the scaled native decoder (sips on macOS,
+/// ffmpeg on Linux) before decoding in process, given the lowercase
+/// extension and the file size.
+///
+/// TIFFs always go native: the image crate's TIFF ICC read can come back
+/// empty (it did for a sips-written Display P3 TIFF), so an in-process decode
+/// would show a wide-gamut TIFF unconverted; sips colour matches (and applies
+/// the orientation). Large files (> 8 MB) go native so their full-resolution
+/// pixels are never held in memory. On macOS a large JPEG stays in process:
+/// `decode_jpeg_simd` already hands oversized JPEGs to sips. Linux has no
+/// such cap in the JPEG path, so large JPEGs go native there too.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn uses_scaled_native_decode(ext: &str, len: u64) -> bool {
+    let is_tiff = ext == "tif" || ext == "tiff";
+    let large = len > 8 * 1024 * 1024;
+    #[cfg(target_os = "macos")]
+    let large = large && !(ext == "jpg" || ext == "jpeg");
+    is_tiff || large
+}
+
+/// Most bytes of a file read to find its EXIF orientation.
+#[cfg(any(target_os = "linux", test))]
+const EXIF_READ_LIMIT: u64 = 8 * 1024 * 1024;
 
 /// A temp path no other decode uses: `prefix`, this process and a counter.
 /// The clock alone is not enough (macOS reads it in microseconds, and one
@@ -55,8 +82,26 @@ fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<ExitStat
 
 /// Waits for `child`, killing it after `timeout`.
 pub(crate) fn wait_with_timeout(
+    child: std::process::Child,
+    timeout: Duration,
+) -> Result<ExitStatus> {
+    wait_with_timeout_inner(child, timeout, None)
+}
+
+/// Waits for a child until it exits, times out, or the preview request is cancelled.
+#[cfg(target_os = "linux")]
+pub(crate) fn wait_with_timeout_or_cancel(
+    child: std::process::Child,
+    timeout: Duration,
+    cancel: &std::sync::atomic::AtomicI32,
+) -> Result<ExitStatus> {
+    wait_with_timeout_inner(child, timeout, Some(cancel))
+}
+
+fn wait_with_timeout_inner(
     mut child: std::process::Child,
     timeout: Duration,
+    cancel: Option<&std::sync::atomic::AtomicI32>,
 ) -> Result<ExitStatus> {
     let _reaper = live_children::track(child.id());
     let deadline = Instant::now() + timeout;
@@ -72,6 +117,13 @@ pub(crate) fn wait_with_timeout(
         };
         match polled {
             Some(status) => return Ok(status),
+            None if cancel
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire) != 0) =>
+            {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(anyhow!("the preview decode was cancelled"));
+            }
             None if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -86,6 +138,7 @@ pub(crate) fn wait_with_timeout(
 /// whose catalog size is unknown (an EXIF-less HEIC or RAW). `None` when the
 /// tool is missing, fails or times out. The output is two short lines, far
 /// below a pipe buffer, so reading it after the exit cannot deadlock.
+#[cfg(target_os = "macos")]
 pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
     use std::io::Read;
     let mut child = Command::new("sips")
@@ -111,6 +164,11 @@ pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
     Some((value("pixelWidth:")?, value("pixelHeight:")?))
 }
 
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn native_pixel_size(_path: &Path) -> Option<(u32, u32)> {
+    None
+}
+
 /// Kills still-running native tools, and removes the temp dirs of unfinished
 /// decodes, when the process exits.
 ///
@@ -127,7 +185,9 @@ pub(crate) fn native_pixel_size(path: &Path) -> Option<(u32, u32)> {
 #[cfg(unix)]
 pub(crate) mod live_children {
     use std::collections::HashSet;
-    use std::path::{Path, PathBuf};
+    #[cfg(any(target_os = "macos", test))]
+    use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::{Mutex, Once};
 
     #[derive(Default)]
@@ -194,11 +254,13 @@ pub(crate) mod live_children {
     }
 
     /// Removes `dir` at exit unless [`remove_dir`] is called first.
+    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn add_dir(dir: &Path) {
         hook();
         with_state(|state| state.dirs.insert(dir.to_path_buf()));
     }
 
+    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn remove_dir(dir: &Path) {
         with_state(|state| state.dirs.remove(dir));
     }
@@ -243,7 +305,9 @@ pub(crate) mod live_children {
 #[cfg(not(unix))]
 pub(crate) mod live_children {
     pub(crate) fn track(_pid: u32) {}
+    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn add_dir(_dir: &std::path::Path) {}
+    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn remove_dir(_dir: &std::path::Path) {}
     pub(crate) fn track_group(_pid: u32) {}
     pub(crate) fn stop_group(child: &mut std::process::Child) {
@@ -260,12 +324,14 @@ const SRGB_PROFILE: &str = "/System/Library/ColorSync/Profiles/sRGB Profile.icc"
 /// be read counts as not sRGB, so it is color matched rather than shown as
 /// is. (A file whose profile the decoder cannot extract at all reports no
 /// profile and is treated as untagged, that is, as sRGB.)
+#[cfg(any(target_os = "macos", test))]
 fn is_srgb_profile(icc: &[u8]) -> bool {
     icc_description(icc).is_some_and(|desc| desc.contains("sRGB"))
 }
 
 /// The `desc` tag of an ICC profile: ASCII in a v2 `desc` type, the first
 /// UTF-16BE record of a v4 `mluc` type.
+#[cfg(any(target_os = "macos", test))]
 fn icc_description(icc: &[u8]) -> Option<String> {
     let u32_at = |at: usize| -> Option<u32> {
         Some(u32::from_be_bytes(icc.get(at..at + 4)?.try_into().ok()?))
@@ -334,6 +400,41 @@ impl DecoderPipeline {
         self.pool.spawn(task);
     }
 
+    #[cfg(target_os = "linux")]
+    fn decode_via_ffmpeg_image(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
+        let temp_out = temp_path(&format!("lumina_ffmpeg_image_{}", id.0)).with_extension("png");
+        let _guard = TempFile(temp_out.clone());
+        let status = run_with_timeout(
+            // `-noautorotate`: whether ffmpeg honours EXIF orientation varies
+            // by version, so it never rotates and the orientation read from
+            // the source is applied below, as the in-process path does. Only
+            // the file protocol: a preview never touches the network.
+            Command::new("ffmpeg")
+                .args(["-nostdin", "-v", "error", "-y", "-noautorotate"])
+                .args(["-protocol_whitelist", "file", "-i"])
+                .arg(path)
+                .args(["-frames:v", "1", "-vf"])
+                .arg(format!(
+                    "scale='min({target_size},iw)':'min({target_size},ih)':force_original_aspect_ratio=decrease"
+                ))
+                .arg(&temp_out),
+            NATIVE_TOOL_TIMEOUT,
+        )?;
+        if !status.success() {
+            return Err(anyhow!("ffmpeg could not decode the image"));
+        }
+        let decoded = image::load_from_memory(&fs::read(temp_out)?)?;
+        let orientation = Self::file_exif_orientation(path);
+        let frame = Self::orient(decoded, orientation).to_rgba8();
+        Ok(DecodedFrame {
+            id,
+            width: frame.width(),
+            height: frame.height(),
+            format: PixelFormat::Rgba8,
+            data: frame.into_raw(),
+        })
+    }
+
     pub fn decode_image(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         let ext = path
             .extension()
@@ -342,16 +443,15 @@ impl DecoderPipeline {
             .to_lowercase();
 
         let is_jpeg = ext == "jpg" || ext == "jpeg";
-        // The image crate's TIFF ICC read can come back empty (it did for a
-        // sips-written Display P3 TIFF), so an in-process decode would show
-        // a wide-gamut TIFF unconverted; sips colour matches (and applies
-        // the orientation).
-        let is_tiff = ext == "tif" || ext == "tiff";
 
-        // For large non-JPEG files (> 8 MB), decode hardware-scaled via sips first to avoid full decode OOM
-        // without reading the entire large file into a heap buffer first.
-        if is_tiff || (!is_jpeg && fs::metadata(path).is_ok_and(|m| m.len() > 8 * 1024 * 1024)) {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if uses_scaled_native_decode(&ext, fs::metadata(path).map_or(0, |m| m.len())) {
+            #[cfg(target_os = "macos")]
             if let Ok(frame) = Self::decode_via_sips(id, path, target_size) {
+                return Ok(frame);
+            }
+            #[cfg(target_os = "linux")]
+            if let Ok(frame) = Self::decode_via_ffmpeg_image(id, path, target_size) {
                 return Ok(frame);
             }
         }
@@ -382,9 +482,9 @@ impl DecoderPipeline {
         Self::resize_to_frame(id, img, target_size)
     }
 
-    fn read_exif_orientation(bytes: &[u8]) -> u32 {
-        let mut cursor = std::io::Cursor::new(bytes);
-        if let Ok(exif) = exif::Reader::new().read_from_container(&mut cursor) {
+    /// The EXIF Orientation of the JPEG or TIFF in `reader`, 1 when absent.
+    fn read_exif_orientation(reader: &mut (impl std::io::BufRead + std::io::Seek)) -> u32 {
+        if let Ok(exif) = exif::Reader::new().read_from_container(reader) {
             if let Some(field) = exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY) {
                 if let Some(v) = field.value.get_uint(0) {
                     return v;
@@ -394,8 +494,34 @@ impl DecoderPipeline {
         1
     }
 
+    /// The EXIF Orientation of the image file at `path`, read from at most
+    /// its first [`EXIF_READ_LIMIT`] bytes; 1 when absent or unreadable.
+    ///
+    /// The reader follows IFD offsets, which in a TIFF can point anywhere,
+    /// so without the cap one orientation read could pull in a whole large
+    /// TIFF. A JPEG's EXIF sits in its first 64 KB.
+    #[cfg(any(target_os = "linux", test))]
+    fn file_exif_orientation(path: &Path) -> u32 {
+        use std::io::Read;
+        let mut head = Vec::new();
+        match fs::File::open(path)
+            .and_then(|file| file.take(EXIF_READ_LIMIT).read_to_end(&mut head))
+        {
+            Ok(_) => Self::read_exif_orientation(&mut std::io::Cursor::new(head)),
+            Err(_) => 1,
+        }
+    }
+
     fn apply_exif_orientation(img: DynamicImage, bytes: &[u8]) -> DynamicImage {
-        match Self::read_exif_orientation(bytes) {
+        Self::orient(
+            img,
+            Self::read_exif_orientation(&mut std::io::Cursor::new(bytes)),
+        )
+    }
+
+    /// `img` turned for display by an EXIF Orientation value.
+    fn orient(img: DynamicImage, orientation: u32) -> DynamicImage {
+        match orientation {
             2 => img.fliph(),
             3 => img.rotate180(),
             4 => img.flipv(),
@@ -423,6 +549,7 @@ impl DecoderPipeline {
         let orig_height = info.height as u32;
 
         // Cap longest edge: if larger than 2560px, decode scaled image via sips to prevent OOM
+        #[cfg(target_os = "macos")]
         if (orig_width > 2560 || orig_height > 2560)
             && (orig_width > target_size || orig_height > target_size)
         {
@@ -466,17 +593,25 @@ impl DecoderPipeline {
         width: u32,
         height: u32,
     ) -> Option<DecodedFrame> {
-        if icc.is_none_or(|icc| is_srgb_profile(&icc)) {
-            return None;
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (id, path, target_size, icc, width, height);
+            None
         }
-        Self::decode_via_sips(id, path, target_size.min(width.max(height)))
-            .map_err(|err| {
-                log::warn!(
-                    "colour conversion failed for {}, showing it unconverted: {err:#}",
-                    path.display()
-                );
-            })
-            .ok()
+        #[cfg(target_os = "macos")]
+        {
+            if icc.is_none_or(|icc| is_srgb_profile(&icc)) {
+                return None;
+            }
+            Self::decode_via_sips(id, path, target_size.min(width.max(height)))
+                .map_err(|err| {
+                    log::warn!(
+                        "colour conversion failed for {}, showing it unconverted: {err:#}",
+                        path.display()
+                    );
+                })
+                .ok()
+        }
     }
 
     /// Decodes through macOS `sips`, scaled to fit `target_size` and color
@@ -525,6 +660,7 @@ impl DecoderPipeline {
     /// QuickLook's thumbnail of `path`, for RAW files sips cannot read.
     /// qlmanage hangs on a file it cannot read, so each failure costs the
     /// tool timeout; images and videos never come here.
+    #[cfg(target_os = "macos")]
     fn decode_via_quicklook(id: MediaId, path: &Path, target_size: u32) -> Result<DecodedFrame> {
         let temp_dir = temp_path(&format!("lumina_thumb_{}", id.0));
         let _guard = TempDir::new(temp_dir.clone());
@@ -582,20 +718,39 @@ impl DecoderPipeline {
             // what QuickLook would; and sips fails fast on a broken file,
             // where qlmanage hangs until the tool timeout.
             MediaType::Image => {
+                #[cfg(target_os = "linux")]
+                if ext == "heic" || ext == "heif" {
+                    return Err(anyhow!(
+                        "HEIC/HEIF preview decoding is not available on Linux"
+                    ));
+                }
+                #[cfg(target_os = "macos")]
                 // No pure-Rust HEIC/HEIF decoder: ImageIO through sips.
                 if ext == "heic" || ext == "heif" {
                     return Self::decode_via_sips(id, path, target_size);
                 }
-                Self::decode_image(id, path, target_size)
-                    .or_else(|_| Self::decode_via_sips(id, path, target_size))
+                #[cfg(target_os = "macos")]
+                {
+                    Self::decode_image(id, path, target_size)
+                        .or_else(|_| Self::decode_via_sips(id, path, target_size))
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    Self::decode_image(id, path, target_size)
+                }
             }
             MediaType::Video => Self::decode_video(id, path, target_size),
             MediaType::Raw => {
-                // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode.
-                // QuickLook stays as the fallback: RAW is unchecked on real
-                // files, and it may render cameras sips does not.
-                Self::decode_via_sips(id, path, target_size)
-                    .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
+                #[cfg(target_os = "linux")]
+                return Err(anyhow!("RAW preview decoding is not available on Linux"));
+                #[cfg(target_os = "macos")]
+                {
+                    // Try native sips hardware thumbnail first for RAW camera formats to avoid full RAW decode.
+                    // QuickLook stays as the fallback: RAW is unchecked on real
+                    // files, and it may render cameras sips does not.
+                    Self::decode_via_sips(id, path, target_size)
+                        .or_else(|_| Self::decode_via_quicklook(id, path, target_size))
+                }
             }
         }
     }
@@ -682,6 +837,148 @@ impl DecoderPipeline {
 pub(crate) mod tests {
     use super::*;
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn unsupported_linux_photo_formats_return_clear_preview_errors() {
+        let heic = Path::new("/unused/test.heic");
+        let error = match DecoderPipeline::decode_media(MediaId(1), MediaType::Image, heic, 128) {
+            Ok(_) => panic!("Linux HEIC preview should be unsupported"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("HEIC/HEIF preview decoding is not available on Linux"),
+            "HEIC failure should explain the unsupported format: {error:#}"
+        );
+
+        let raw = Path::new("/unused/test.dng");
+        let error = match DecoderPipeline::decode_media(MediaId(2), MediaType::Raw, raw, 128) {
+            Ok(_) => panic!("Linux RAW preview should be unsupported"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("RAW preview decoding is not available on Linux"),
+            "RAW failure should explain the unsupported format: {error:#}"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ffmpeg_scaled_image_decode_keeps_tiff_previews_small_without_upscaling() {
+        let png = temp_path("lumina_test_ffmpeg_image").with_extension("png");
+        let tiff = temp_path("lumina_test_ffmpeg_image").with_extension("tiff");
+        let _png_guard = TempFile(png.clone());
+        let _tiff_guard = TempFile(tiff.clone());
+        let source = image::RgbImage::from_fn(128, 96, |x, y| {
+            image::Rgb([(x % 251) as u8, (y % 239) as u8, ((x + y) % 233) as u8])
+        });
+        source.save(&png).expect("fixture PNG should be written");
+        let status = run_with_timeout(
+            Command::new("ffmpeg")
+                .args(["-nostdin", "-v", "error", "-y", "-i"])
+                .arg(&png)
+                .arg(&tiff),
+            NATIVE_TOOL_TIMEOUT,
+        )
+        .expect("ffmpeg should create the TIFF fixture");
+        assert!(status.success(), "ffmpeg should encode the TIFF fixture");
+
+        let small = DecoderPipeline::decode_image(MediaId(1), &tiff, 32)
+            .expect("ffmpeg should decode and scale TIFF previews");
+        assert_eq!((small.width, small.height), (32, 24));
+        let native = DecoderPipeline::decode_image(MediaId(2), &tiff, 256)
+            .expect("ffmpeg should preserve the native dimensions");
+        assert_eq!((native.width, native.height), (128, 96));
+    }
+
+    /// Regression: the Linux port routed large JPEGs to the native decoder on
+    /// macOS too; macOS keeps them in process (zune, capped through sips).
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn scaled_native_decode_routing_per_platform() {
+        let large = 9 * 1024 * 1024;
+        assert!(
+            uses_scaled_native_decode("tiff", 10),
+            "TIFFs always go native"
+        );
+        assert!(
+            uses_scaled_native_decode("tif", 10),
+            "TIFFs always go native"
+        );
+        assert!(
+            uses_scaled_native_decode("png", large),
+            "large PNGs go native"
+        );
+        assert!(
+            !uses_scaled_native_decode("png", 10),
+            "small PNGs stay in process"
+        );
+        assert!(
+            !uses_scaled_native_decode("jpg", 10),
+            "small JPEGs stay in process"
+        );
+        assert_eq!(
+            uses_scaled_native_decode("jpg", large),
+            cfg!(target_os = "linux"),
+            "large JPEGs go native only on Linux; macOS caps them in decode_jpeg_simd"
+        );
+    }
+
+    /// Regression: the orientation read followed a TIFF's IFD offset to
+    /// anywhere in the file, so one preview could read a whole large TIFF.
+    #[test]
+    fn file_orientation_read_stops_at_the_limit() {
+        // A big-endian TIFF whose IFD0 (Orientation = 6) sits past the limit.
+        let ifd_at = EXIF_READ_LIMIT as usize + 1024;
+        let mut tiff = b"MM\0\x2a".to_vec();
+        tiff.extend_from_slice(&(ifd_at as u32).to_be_bytes());
+        tiff.resize(ifd_at, 0);
+        tiff.extend_from_slice(&[0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]);
+        let far = temp_path("lumina_test_far_ifd").with_extension("tif");
+        let _far_guard = TempFile(far.clone());
+        fs::write(&far, &tiff).expect("fixture writes");
+        assert_eq!(
+            DecoderPipeline::file_exif_orientation(&far),
+            1,
+            "an orientation past the read limit is not read"
+        );
+
+        let near = temp_path("lumina_test_near_ifd").with_extension("jpg");
+        let _near_guard = TempFile(near.clone());
+        orientation_six_jpeg(&near, 40, 20);
+        assert_eq!(
+            DecoderPipeline::file_exif_orientation(&near),
+            6,
+            "a JPEG's orientation is read"
+        );
+    }
+
+    /// Regression: the Linux ffmpeg image path ignored EXIF orientation, so a
+    /// large camera JPEG showed sideways.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ffmpeg_image_decode_applies_exif_orientation() {
+        let path = temp_path("lumina_test_ffmpeg_orientation").with_extension("jpg");
+        let _guard = TempFile(path.clone());
+        orientation_six_jpeg(&path, 400, 200);
+        let frame = DecoderPipeline::decode_via_ffmpeg_image(MediaId(1), &path, 128)
+            .expect("ffmpeg decodes the orientation fixture");
+        assert!(
+            frame.height > frame.width,
+            "orientation 6 displays portrait: {}x{}",
+            frame.width,
+            frame.height
+        );
+        let top = &frame.data[(frame.width as usize / 2) * 4..][..4];
+        assert!(
+            top[0] > 150 && top[2] < 100,
+            "the left (red) half is on top: RGBA {top:?}"
+        );
+    }
+
     /// Regression: a native tool still running when the process exits must be
     /// killed, not left orphaned (thousands of hung qlmanage processes once
     /// exhausted the per-user process limit).
@@ -738,12 +1035,26 @@ pub(crate) mod tests {
         let pid = fs::read_to_string(&pidfile).expect("helper wrote the tool pid");
         let _ = fs::remove_file(&pidfile);
         let alive = || {
-            Command::new("kill")
+            let exists = Command::new("kill")
                 .args(["-0", pid.trim()])
                 .stderr(Stdio::null())
                 .status()
                 .map(|s| s.success())
-                .unwrap_or(false)
+                .unwrap_or(false);
+            #[cfg(target_os = "linux")]
+            if exists {
+                // A killed orphan can remain as a zombie until the container's
+                // init reaps it; it is no longer running and cannot leak work.
+                return fs::read_to_string(format!("/proc/{}/stat", pid.trim()))
+                    .ok()
+                    .and_then(|stat| {
+                        stat.rsplit_once(')')
+                            .map(|(_, rest)| rest.trim().to_owned())
+                    })
+                    .and_then(|rest| rest.chars().next())
+                    .is_some_and(|state| state != 'Z');
+            }
+            exists
         };
         let deadline = Instant::now() + Duration::from_secs(3);
         while alive() && Instant::now() < deadline {
@@ -932,6 +1243,33 @@ pub(crate) mod tests {
         .expect_err("slow command must time out");
         assert!(err.to_string().contains("timed out"));
         assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn cancelled_native_tool_is_killed_while_it_is_running() {
+        use std::sync::atomic::{AtomicI32, Ordering};
+
+        let cancel = Arc::new(AtomicI32::new(0));
+        let signal = Arc::clone(&cancel);
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            signal.store(1, Ordering::Release);
+        });
+        let child = Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("sleep starts for the cancellation test");
+        let started = Instant::now();
+        let error = wait_with_timeout_or_cancel(child, Duration::from_secs(10), &cancel)
+            .expect_err("cancelling a native tool should stop its wait");
+        canceller.join().expect("canceller thread completes");
+        assert!(error.to_string().contains("cancelled"));
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "cancellation should kill a running child promptly, took {:?}",
+            started.elapsed()
+        );
     }
 
     #[cfg(unix)]
@@ -1141,6 +1479,7 @@ pub(crate) mod tests {
     }
 
     /// `jpeg` with `icc` spliced in as a single APP2 ICC_PROFILE segment.
+    #[cfg(target_os = "macos")]
     fn with_icc(jpeg: &[u8], icc: &[u8]) -> Vec<u8> {
         let mut payload = b"ICC_PROFILE\0\x01\x01".to_vec();
         payload.extend_from_slice(icc);

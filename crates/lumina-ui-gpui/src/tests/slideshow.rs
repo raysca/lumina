@@ -10,6 +10,7 @@ use crate::tests::culling::{card, flags, ids};
 use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
+#[cfg(target_os = "macos")]
 use lumina_core::{LuminaEngine, MediaType};
 
 const INTERVAL: Duration = Duration::from_secs(5);

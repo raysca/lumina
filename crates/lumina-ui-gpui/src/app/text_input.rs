@@ -15,6 +15,8 @@
 //! Tab and the rest the fields never edit with are sent there by
 //! `field_input_actions`, and ⌘V keeps the one-line clean-up.
 
+#[cfg(target_os = "linux")]
+use gpui::base::input::DeleteToPreviousWordStart;
 use gpui::base::input::{
     Backspace, DeleteToBeginningOfLine, IndentInline, Input, InputAccessibility, InputBaseState,
     InputEditorStyle, InputEvent, InputModeKind, InputState, MoveLeft, MoveRight, OutdentInline,
@@ -766,6 +768,13 @@ pub(crate) fn field_input_actions(root: Div, app: &Entity<LuminaApp>) -> Div {
     fn empty_tag_filter(app: &mut LuminaApp, target: TextTarget, cx: &App) -> bool {
         tag_filter(app, target, cx) && empty(app, target, cx)
     }
+
+    // GPUI Kit binds Ctrl+Backspace to delete the previous word on Linux,
+    // whereas macOS binds Command+Backspace to DeleteToBeginningOfLine. In an
+    // empty tag filter, route that Linux action to Lumina's matching shortcut.
+    #[cfg(target_os = "linux")]
+    let root =
+        reroute::<DeleteToPreviousWordStart>(root, app, "secondary-backspace", empty_tag_filter);
 
     let root = reroute::<Undo>(root, app, "secondary-z", empty_tag_filter);
     let root = reroute::<Redo>(root, app, "secondary-shift-z", empty_tag_filter);

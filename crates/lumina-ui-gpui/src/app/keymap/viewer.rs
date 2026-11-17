@@ -51,8 +51,7 @@ impl LuminaApp {
         // Zoom presets: ⌘0 = Fit, ⌘1 = actual pixels, ⌘2 = 2x, ⌘3 = Fill,
         // ⌘4 = 4x. Exactly ⌘: ⌃1-4 is macOS "Switch to Desktop N", and ⌃⌘
         // chords belong to the window (⌃⌘F).
-        let m = &keystroke.modifiers;
-        if m.secondary(cx) && !m.control && !m.shift && !m.alt {
+        if crate::app::keymap::secondary_only(&keystroke.modifiers, cx) {
             let preset = match key {
                 "0" => Some(ViewerZoomPreset::Fit),
                 "1" => Some(ViewerZoomPreset::Actual),

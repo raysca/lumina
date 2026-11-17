@@ -101,7 +101,7 @@ fn set_as_cover_updates_panel_badge_and_undo() {
     // Two selected: the button is disabled and says why.
     click(vcx, card(ids[1]));
     let third = bounds_center(vcx, card(ids[2]));
-    vcx.simulate_click(third, gpui::Modifiers::command());
+    vcx.simulate_click(third, crate::tests::ui_automation::primary_modifier());
     render_ui(vcx);
     click(vcx, "album-bar-set-cover");
     assert_eq!(

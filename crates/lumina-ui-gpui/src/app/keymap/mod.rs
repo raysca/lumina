@@ -7,6 +7,17 @@ mod modals;
 mod tags_page;
 mod viewer;
 
+/// True when only the platform's primary shortcut modifier is held (⌘ on
+/// macOS, Ctrl on Linux). Fn is ignored, as macOS always did: fn+⌘0 zooms.
+pub(crate) fn secondary_only(modifiers: &Modifiers, cx: &App) -> bool {
+    let extra_modifier = if cx.platform_info().is_mac() {
+        modifiers.control
+    } else {
+        modifiers.platform
+    };
+    modifiers.secondary(cx) && !extra_modifier && !modifiers.shift && !modifiers.alt
+}
+
 impl LuminaApp {
     pub fn handle_key_down(
         &mut self,
@@ -23,6 +34,20 @@ impl LuminaApp {
         // Typed text for the active field goes to its input (Shift, ⌥
         // characters, dead keys, IME); see app/text_input.rs.
         if self.leaves_key_for_text_input(keystroke) {
+            return;
+        }
+
+        // Linux desktop environments do not provide macOS's application
+        // menu shortcut, so expose the standard Ctrl+Q quit path in-app.
+        // Before the dialogs: like the macOS menu's ⌘Q, a dialog must not
+        // swallow it.
+        #[cfg(target_os = "linux")]
+        if cmd_or_ctrl
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.shift
+            && key.eq_ignore_ascii_case("q")
+        {
+            self.request_quit(cx);
             return;
         }
 

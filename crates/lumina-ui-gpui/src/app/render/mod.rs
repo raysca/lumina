@@ -153,7 +153,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
             ("I", "Toggle inspector"),
             ("⌘I", "Get Info window"),
             ("F", "Favorite"),
-            ("⇧⌘R", "Show in Finder"),
+            ("⇧⌘R", crate::i18n::platform::SHOW),
             ("⌥⌘C", "Copy file path"),
             ("⌘E", "Edit in external editor"),
             ("⌥⌘E", "Edit a copy in external editor"),
@@ -318,6 +318,23 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
     ),
 ];
 
+fn shortcut_display_text(text: &str) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        text.replace("⌃⌘", "Ctrl+Super+")
+            .replace("⇧⌘", "Ctrl+Shift+")
+            .replace("⌥⌘", "Ctrl+Alt+")
+            .replace("⌘", "Ctrl+")
+            .replace("⌃", "Ctrl+")
+            .replace("⌥", "Alt+")
+            .replace("⇧", "Shift+")
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        text.to_string()
+    }
+}
+
 impl LuminaApp {
     /// Keyboard shortcut cheat sheet (Cmd+/), also serving as keyboard discoverability.
     fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -399,14 +416,17 @@ impl LuminaApp {
                                     .items_center()
                                     .py_1()
                                     .child(
-                                        div().text_xs().text_color(theme::t1()).child(description),
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme::t1())
+                                            .child(shortcut_display_text(description)),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .font_family(theme::FONT_MONO)
                                             .text_color(theme::t2())
-                                            .child(keys),
+                                            .child(shortcut_display_text(keys)),
                                     )
                             }))
                     })),

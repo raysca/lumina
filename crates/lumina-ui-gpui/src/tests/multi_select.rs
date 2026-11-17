@@ -24,7 +24,7 @@ fn select_two<'a>(
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     click(vcx, "inspector-toggle");
     render_ui(vcx);
     (dir, engine, [a, b], view, vcx)
@@ -51,7 +51,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
     // Select both through the real input path: click, then ⌘-click.
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     view.update(vcx, |app, cx| {
         assert_eq!(
             app.selected_indices.len(),
@@ -151,7 +151,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
 
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();
@@ -500,7 +500,7 @@ fn selection_mode_shows_check_circles_and_dims_unselected() {
     );
 
     let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     render_ui(vcx);
     for (n, &id) in ids.iter().enumerate() {
         let circle = vcx
@@ -538,7 +538,7 @@ fn check_circle_click_toggles_that_item() {
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", ids[0])));
     let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     render_ui(vcx);
     let count =
         |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.selected_indices.len());

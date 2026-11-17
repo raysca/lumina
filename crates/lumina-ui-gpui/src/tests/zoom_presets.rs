@@ -242,16 +242,39 @@ fn palette_zoom_commands_only_in_photo_viewer() {
 }
 
 #[core::prelude::v1::test]
-fn ctrl_digits_do_not_zoom_viewer() {
+fn platform_modifier_digits_follow_shortcut_semantics() {
     let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = large_photo_viewer(&mut cx, "ctrl_digit_presets");
-    let before = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
-    keystrokes(vcx, "ctrl-1 ctrl-2 ctrl-cmd-4");
-    view.update(vcx, |app, _| {
-        assert_eq!(
-            app.viewer_state.zoom_scale, before,
-            "⌃digits are macOS Switch to Desktop and ⌃⌘ chords belong to the window"
-        );
-    });
+    #[cfg(target_os = "macos")]
+    {
+        let before = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
+        keystrokes(vcx, "ctrl-1 ctrl-2 ctrl-cmd-4");
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                app.viewer_state.zoom_scale, before,
+                "⌃digits are macOS Switch to Desktop and ⌃⌘ chords belong to the window"
+            );
+        });
+        // Regression: the Linux port's shared check also refused Fn.
+        keystrokes(vcx, "fn-cmd-2");
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                app.viewer_state.zoom_label(),
+                "200%",
+                "fn+⌘2 still zooms on macOS (laptop keyboards)"
+            );
+        });
+    }
+    #[cfg(target_os = "linux")]
+    {
+        keystrokes(vcx, "ctrl-2");
+        view.update(vcx, |app, _| {
+            assert_eq!(
+                app.viewer_state.zoom_label(),
+                "200%",
+                "Control is the primary shortcut modifier on Linux"
+            );
+        });
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

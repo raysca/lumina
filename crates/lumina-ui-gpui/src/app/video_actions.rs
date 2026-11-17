@@ -4,11 +4,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::types::{format_duration_badge, UiMessage};
+use crate::app::types::UiMessage;
 use crate::app::LuminaApp;
 use crate::bridge::video_frame_to_gpui_image;
 use crate::config::resume_start_time;
-use crate::player::{self, VideoPlayerBackend};
+use crate::player::VideoPlayerBackend;
 
 /// Minimum interval between scrubbing seeks.
 ///
@@ -25,6 +25,33 @@ const SCRUB_SEEK_INTERVAL: Duration = Duration::from_millis(50);
 /// deterministic and free of wall-clock timers, and pause/stop/close always
 /// commit the final position.
 const RESUME_PROGRESS_INTERVAL: f64 = 5.0;
+
+/// The UI's playback preferences, applied to each newly loaded player.
+#[derive(Clone, Copy)]
+pub(super) struct VideoSettings {
+    looping: bool,
+    volume: f32,
+    muted: bool,
+    rate: f32,
+}
+
+impl VideoSettings {
+    pub(super) fn of(video: &super::state::VideoPlaybackState) -> Self {
+        Self {
+            looping: video.is_looping,
+            volume: video.volume,
+            muted: video.is_muted,
+            rate: video.playback_speed,
+        }
+    }
+
+    pub(super) fn apply(self, player: &mut impl VideoPlayerBackend) {
+        player.set_looping(self.looping);
+        player.set_volume(self.volume);
+        player.set_muted(self.muted);
+        player.set_rate(self.rate);
+    }
+}
 
 /// How long a paused player is polled for the frame at a seek destination.
 ///
@@ -163,75 +190,109 @@ impl LuminaApp {
     /// Starts a player session for `item`, replacing any current one. Frames
     /// go to the viewer or, while `video.in_pip` is set, to the PiP window.
     pub fn load_video_player(&mut self, item: &MediaItem, cx: &mut Context<Self>) {
-        // Finish the previous video before associating the player with the new
-        // media id.
-        self.stop_video_player();
-        if let Some(state) = self.grid_state.as_ref() {
-            state.video_resume.begin(item.id);
+        #[cfg(all(target_os = "linux", not(test)))]
+        {
+            self.load_video_player_async(item, cx);
         }
-        self.video.item = Some(item.clone());
-        let media_id = Some(item.id);
 
-        let mut player = player::create_native_player();
-        self.video.playback_time = 0.0;
-        #[cfg(test)]
-        crate::app::playback_failed::VIDEO_LOADS.with(|n| n.set(n.get() + 1));
-        let loaded = player.load(&item.path);
-        if let Ok(meta) = loaded {
-            player.set_looping(self.video.is_looping);
-            player.set_volume(self.video.volume);
-            player.set_muted(self.video.is_muted);
-            player.set_rate(self.video.playback_speed);
-            self.video.duration = meta.duration_secs;
-            self.video.tracks =
-                crate::app::video_tracks::VideoTracks::read(&player, meta.duration_secs);
-            // The scanner reads MP4/MOV sizes only; for other containers show
-            // what the player knows. ponytail: session only.
-            for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
-                .into_iter()
-                .flatten()
-                .filter(|shown| shown.id == item.id)
-            {
-                fill_missing_dimensions(shown, meta.width, meta.height);
-            }
-            let saved = media_id.and_then(|id| {
-                self.grid_state
-                    .as_ref()
-                    .and_then(|state| state.video_resume.saved(id))
-            });
-            let start = resume_start_time(saved, meta.duration_secs);
-            self.video.playback_time = start;
-            if start > 0.0 {
-                player.seek(start);
-                self.last_action = Some(format!("Resumed at {}", format_duration_badge(start)));
-            }
-            let first_frame = player
-                .next_frame()
-                .and_then(|frame| video_frame_to_gpui_image(frame).ok());
-            self.video.player = Some(player);
-            if let Some(img) = first_frame {
-                self.show_video_frame(img);
-            }
-            // The scrubber and the chapter rows show strip frames without a
-            // hover; closing or changing media cancels it.
-            self.request_scrub_strip(cx);
-        } else {
-            // A failed load has no resume point to finish.
+        // Tests on every platform load synchronously, so they never depend
+        // on a background load's timing.
+        #[cfg(any(not(target_os = "linux"), test))]
+        {
+            // Finish the previous video before associating the player with the new
+            // media id.
+            self.stop_video_player();
             if let Some(state) = self.grid_state.as_ref() {
-                state.video_resume.finish();
+                state.video_resume.begin(item.id);
             }
-            self.video.load_error = loaded.err().map(|err| format!("{err:#}"));
-            // ponytail: one stat on the UI thread, where the load already
-            // failed; the catalog marks it missing when the watcher sees it.
-            self.video.load_file_gone = !item.path.exists();
-            // No popover left open above the dimmed transport.
-            self.video.speed_menu_open = false;
-            self.video.tracks.audio_menu_open = false;
+            self.video.item = Some(item.clone());
+            let media_id = Some(item.id);
+
+            let mut player = crate::player::create_native_player();
+            self.video.playback_time = 0.0;
+            #[cfg(test)]
+            crate::app::playback_failed::VIDEO_LOADS.with(|n| n.set(n.get() + 1));
+            let loaded = player.load(&item.path);
+            match loaded {
+                Ok(meta) => {
+                    VideoSettings::of(&self.video).apply(&mut player);
+                    self.video.duration = meta.duration_secs;
+                    self.video.tracks =
+                        crate::app::video_tracks::VideoTracks::read(&player, meta.duration_secs);
+                    // The scanner reads MP4/MOV sizes only; for other containers show
+                    // what the player knows. ponytail: session only.
+                    for shown in [self.selected_item.as_mut(), self.video.item.as_mut()]
+                        .into_iter()
+                        .flatten()
+                        .filter(|shown| shown.id == item.id)
+                    {
+                        fill_missing_dimensions(shown, meta.width, meta.height);
+                    }
+                    let saved = media_id.and_then(|id| {
+                        self.grid_state
+                            .as_ref()
+                            .and_then(|state| state.video_resume.saved(id))
+                    });
+                    let start = resume_start_time(saved, meta.duration_secs);
+                    self.video.playback_time = start;
+                    if start > 0.0 {
+                        player.seek(start);
+                        self.last_action = Some(format!(
+                            "Resumed at {}",
+                            crate::app::types::format_duration_badge(start)
+                        ));
+                    }
+                    let first_frame = player
+                        .next_frame()
+                        .and_then(|frame| video_frame_to_gpui_image(frame).ok());
+                    self.video.player = Some(player);
+                    if let Some(img) = first_frame {
+                        self.show_video_frame(img);
+                    }
+                    // The scrubber and the chapter rows show strip frames without a
+                    // hover; closing or changing media cancels it.
+                    self.request_scrub_strip(cx);
+                }
+                Err(err) => self.record_video_failure(format!("{err:#}")),
+            }
+            cx.notify();
         }
-        cx.notify();
+    }
+
+    /// The open clip cannot play: a failed load, or a decode error mid-clip.
+    /// Drops the player and shows the playback-failed card (or the missing
+    /// card when the file is gone). Keeps `video.item` so Try Again and
+    /// Reveal work.
+    pub(crate) fn record_video_failure(&mut self, error: String) {
+        self.stop_video_ticker();
+        // A mid-clip failure keeps the position reached, as every stop does
+        // (a failed load has no player and no position to keep).
+        if self.video.player.is_some() && self.persist_video_resume_now() {
+            self.save_config();
+        }
+        if let Some(mut player) = self.video.player.take() {
+            player.pause();
+        }
+        // A failed clip has no resume point to finish.
+        if let Some(state) = self.grid_state.as_ref() {
+            state.video_resume.finish();
+        }
+        self.video.is_playing = false;
+        self.video.load_error = Some(error);
+        // ponytail: one stat on the UI thread, where the load already
+        // failed; the catalog marks it missing when the watcher sees it.
+        self.video.load_file_gone = !self
+            .video
+            .item
+            .as_ref()
+            .is_some_and(|item| item.path.exists());
+        // No popover left open above the dimmed transport.
+        self.video.speed_menu_open = false;
+        self.video.tracks.audio_menu_open = false;
     }
 
     pub fn stop_video_player(&mut self) {
+        self.video.load_generation = self.video.load_generation.wrapping_add(1);
         self.stop_video_ticker();
         if let Some(ref mut player) = self.video.player {
             player.pause();
@@ -259,6 +320,7 @@ impl LuminaApp {
         }
         self.video.player = None;
         self.video.item = None;
+        self.video.pending_load_seek = None;
         self.video.is_playing = false;
         // Closing the viewer, changing media, or otherwise stopping playback
         // must never leave a scrub drag armed against a stale destination.
@@ -306,7 +368,7 @@ impl LuminaApp {
     /// this is a no-op. Seek code calls it after every real seek (including the
     /// coalesced seeks issued during a scrub drag) so the picture can catch up
     /// without blocking the UI thread.
-    fn arm_seek_refresh(&mut self) {
+    pub(super) fn arm_seek_refresh(&mut self) {
         if self.video.is_playing || self.video.player.is_none() {
             return;
         }
@@ -386,6 +448,14 @@ impl LuminaApp {
 
     pub fn seek_video_relative(&mut self, delta_secs: f64, cx: &mut Context<Self>) {
         let Some(player) = self.video.player.as_ref() else {
+            #[cfg(target_os = "linux")]
+            if self.video.item.is_some() && self.video.load_error.is_none() {
+                let duration = self.video_scrub_duration();
+                let maximum = if duration > 0.0 { duration } else { 3600.0 };
+                let target = (self.video.playback_time + delta_secs).clamp(0.0, maximum);
+                self.seek_video_to_time(target);
+                cx.notify();
+            }
             return;
         };
         let max_d = if self.video.duration > 0.0 {
@@ -431,6 +501,8 @@ impl LuminaApp {
         if let Some(ref mut player) = self.video.player {
             player.seek(target);
             seeked = true;
+        } else if self.video.item.is_some() && self.video.load_error.is_none() {
+            self.video.pending_load_seek = Some(target);
         }
         if seeked {
             self.arm_seek_refresh();
@@ -455,6 +527,8 @@ impl LuminaApp {
             {
                 frame = Some(img);
             }
+        } else if self.video.item.is_some() && self.video.load_error.is_none() {
+            self.video.pending_load_seek = Some(target);
         }
         if let Some(img) = frame {
             self.show_video_frame(img);
@@ -634,7 +708,7 @@ impl LuminaApp {
 }
 
 /// Takes the player's frame size when the catalog has none.
-fn fill_missing_dimensions(item: &mut MediaItem, width: u32, height: u32) {
+pub(super) fn fill_missing_dimensions(item: &mut MediaItem, width: u32, height: u32) {
     if (item.width == 0 || item.height == 0) && width > 0 && height > 0 {
         item.width = width;
         item.height = height;

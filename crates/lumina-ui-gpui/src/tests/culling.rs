@@ -3,8 +3,10 @@
 //! palette flag commands and quick filters, and the guards that keep
 //! modals, text fields and ⌥P out of it.
 
+#[cfg(target_os = "macos")]
+use crate::tests::ui_automation::render_ui;
 use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
+    app_with_library, click, focus_app, keystrokes, leak, right_click, seed_library,
 };
 use crate::*;
 use lumina_core::{Flag, LuminaEngine, MediaId};

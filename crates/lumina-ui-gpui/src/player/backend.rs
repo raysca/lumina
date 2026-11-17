@@ -52,6 +52,12 @@ pub trait VideoPlayerBackend: Send {
     }
     /// Plays audio track `index` of `audio_tracks` instead of the current one.
     fn select_audio_track(&mut self, _index: usize) {}
+    /// A playback error hit after a successful load (decoding failed
+    /// mid-clip), as a sentence for the user, returned once. The UI then
+    /// shows the clip as failed, like a failed load.
+    fn take_playback_error(&mut self) -> Option<String> {
+        None
+    }
     /// Chapter starts in seconds with their titles, as the file stores them.
     fn chapters(&self) -> Vec<(f64, String)> {
         Vec::new()

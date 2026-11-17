@@ -455,7 +455,7 @@ impl LuminaApp {
                 Some(OverviewFocus::SmartCard(id)) => self.open_smart_card(id, cx),
                 _ => {}
             },
-            "backspace" if m.platform && !(m.shift || m.control || m.alt) => match focus {
+            "backspace" if crate::app::keymap::secondary_only(m, cx) => match focus {
                 Some(OverviewFocus::Card(id)) if self.album_title(id).is_some() => {
                     self.prompt_delete_album(id, cx);
                 }

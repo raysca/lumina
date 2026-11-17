@@ -555,6 +555,8 @@ fn press_viewer_key(
     window: &mut gpui::Window,
     cx: &mut gpui::Context<LuminaApp>,
 ) {
+    let key = crate::tests::ui_automation::platform_test_keys(key);
+    let key: &'static str = Box::leak(key.into_boxed_str());
     app.handle_key_down(
         &KeyDownEvent {
             keystroke: Keystroke::parse(key).expect("test keystroke must parse"),
@@ -2529,7 +2531,12 @@ fn viewer_pinch_ignored_for_video() {
 
     pinch(vcx, at, 0.3);
     crate::tests::ui_automation::wheel(vcx, at, scroll_px(40.0, 60.0), gpui::Modifiers::default());
-    crate::tests::ui_automation::wheel(vcx, at, scroll_px(0.0, 60.0), gpui::Modifiers::command());
+    crate::tests::ui_automation::wheel(
+        vcx,
+        at,
+        scroll_px(0.0, 60.0),
+        crate::tests::ui_automation::primary_modifier(),
+    );
     view.update(vcx, |app, _| {
         assert_eq!(
             app.viewer_state.zoom_scale,
@@ -2679,7 +2686,7 @@ fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
         vcx,
         at,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 1.0)),
-        gpui::Modifiers::command(),
+        crate::tests::ui_automation::primary_modifier(),
     );
     view.update(vcx, |app, _| {
         assert!(

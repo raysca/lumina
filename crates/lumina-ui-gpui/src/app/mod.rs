@@ -58,6 +58,8 @@ pub mod text_input;
 pub mod types;
 pub mod undo;
 pub mod video_actions;
+#[cfg(target_os = "linux")]
+mod video_load_linux;
 pub mod video_tracks;
 pub mod video_volume;
 pub mod viewer_actions;

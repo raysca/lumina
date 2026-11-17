@@ -65,21 +65,30 @@ fn main() {
                 }
                 None => Bounds::centered(None, size(px(1280.0), px(840.0)), cx),
             };
-            if let Err(e) = cx.open_window(
+            #[cfg(target_os = "macos")]
+            let titlebar = Some(TitlebarOptions {
+                title: Some("Lumina".into()),
+                appears_transparent: true,
+                // Left of the sidebar brand row, which starts at x=84 after them.
+                traffic_light_position: Some(point(px(18.0), px(19.0))),
+            });
+            #[cfg(not(target_os = "macos"))]
+            let titlebar = Some(TitlebarOptions {
+                title: Some("Lumina".into()),
+                appears_transparent: false,
+                traffic_light_position: None,
+            });
+            match cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(960.0), px(600.0))),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("Lumina".into()),
-                        appears_transparent: true,
-                        // Left of the sidebar brand row, which starts at x=84 after them.
-                        traffic_light_position: Some(point(px(18.0), px(19.0))),
-                    }),
+                    titlebar,
                     ..Default::default()
                 },
                 |window, cx| cx.new(|cx| LuminaApp::new_in_window(window, cx)),
             ) {
-                log::error!("failed to open main window: {e:?}");
+                Ok(_) => log::info!("main window opened"),
+                Err(e) => log::error!("failed to open main window: {e:?}"),
             }
             cx.activate(true);
         });

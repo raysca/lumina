@@ -598,7 +598,7 @@ fn closing_viewer_retires_strip_images() {
 
 /// The committed H.264 fixture, opened in the real player (what tests get
 /// on macOS).
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn fixture_video() -> MediaItem {
     let mut video = video_sample();
     video.path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clip.mp4");

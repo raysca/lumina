@@ -1561,7 +1561,11 @@ fn downloads_path_row_reveals_imports() {
     for selector in [
         "settings-row-downloads-path",
         "settings-downloads-path",
+        #[cfg(not(target_os = "linux"))]
         "settings-downloads-reveal-text:Show in Finder",
+        // Linux has no Finder; its label names the file manager.
+        #[cfg(target_os = "linux")]
+        "settings-downloads-reveal-text:Show in File Manager",
     ] {
         assert!(
             vcx.debug_bounds(selector).is_some(),

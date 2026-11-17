@@ -17,6 +17,7 @@ required-features = ["generate-icon"]
 
 [features]
 generate-icon = []
+linux-ui-smoke = []
 
 [dependencies]
 lumina-core = { path = "../lumina-core" }
@@ -43,7 +44,12 @@ smallvec = "1.14"
 [target.'cfg(target_os = "macos")'.dependencies]
 raw-window-handle = "0.6"
 
-[build-dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
+gstreamer = "0.25.4"
+gstreamer-app = "0.25.2"
+gstreamer-video = "0.25.4"
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
 cc = "1.0"
 
 [dev-dependencies]

@@ -689,6 +689,9 @@ fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
         app.caption.input_buffer = full.clone();
     });
     let icx = info_window(&mut cx, &view);
+    #[cfg(target_os = "linux")]
+    keystrokes(icx, "home");
+    #[cfg(not(target_os = "linux"))]
     keystrokes(icx, "secondary-up");
     icx.simulate_input("x");
     view.update(icx, |app, _| {

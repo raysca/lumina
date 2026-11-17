@@ -83,7 +83,7 @@ fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
 }
 
 fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
-    cx.simulate_keystrokes(keys);
+    cx.simulate_keystrokes(&crate::tests::ui_automation::platform_test_keys(keys));
     render_ui(cx);
 }
 

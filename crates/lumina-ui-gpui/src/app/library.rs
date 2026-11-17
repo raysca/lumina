@@ -274,6 +274,16 @@ impl LuminaApp {
                 if scan_completed && std::mem::take(&mut self.import.pending_import_after_open) {
                     self.pick_import_folders(cx);
                 }
+                #[cfg(all(target_os = "linux", feature = "linux-ui-smoke"))]
+                if scan_completed && std::env::var_os("LUMINA_UI_SMOKE").is_some() {
+                    let count = self.get_active_count();
+                    log::info!("LUMINA_UI_SMOKE: scan complete with {count} media items");
+                    if let Some(item) = self.get_active_slice(0..1).into_iter().next() {
+                        self.open_viewer(item, cx);
+                    } else {
+                        log::error!("LUMINA_UI_SMOKE: no media item was available to open");
+                    }
+                }
             }
             UiMessage::ThumbnailLoaded { id, frame } => {
                 let Some(state) = self.grid_state.as_ref() else {
@@ -315,6 +325,12 @@ impl LuminaApp {
                             Ok(gpui_img) => {
                                 self.viewer_failed = None;
                                 self.set_viewer_image(Some(gpui_img));
+                                #[cfg(all(target_os = "linux", feature = "linux-ui-smoke"))]
+                                if std::env::var_os("LUMINA_UI_SMOKE").is_some()
+                                    && self.is_fullscreen_viewer
+                                {
+                                    log::info!("LUMINA_UI_SMOKE: viewer frame loaded for {id:?}");
+                                }
                             }
                             Err(e) => {
                                 log::warn!("viewer frame for {id:?} could not be converted: {e:#}");
@@ -332,6 +348,10 @@ impl LuminaApp {
                     .is_some_and(|item| item.id == id)
                 {
                     self.viewer_failed = Some(id);
+                    #[cfg(all(target_os = "linux", feature = "linux-ui-smoke"))]
+                    if std::env::var_os("LUMINA_UI_SMOKE").is_some() && self.is_fullscreen_viewer {
+                        log::error!("LUMINA_UI_SMOKE: viewer frame failed for {id:?}");
+                    }
                     cx.notify();
                 }
             }
@@ -359,6 +379,7 @@ impl LuminaApp {
                 let playing = self.video.is_playing;
                 let mut frame = None;
                 let mut playback_ended = false;
+                let mut playback_error = None;
                 let mut stop_ticker = false;
 
                 if let Some(ref mut player) = self.video.player {
@@ -366,6 +387,8 @@ impl LuminaApp {
                         self.video.playback_time = player.position();
                         if player.is_playing() {
                             frame = player.next_frame();
+                        } else if let Some(error) = player.take_playback_error() {
+                            playback_error = Some(error);
                         } else {
                             playback_ended = true;
                         }
@@ -401,6 +424,13 @@ impl LuminaApp {
                 } else {
                     self.video.seek_refresh_until = None;
                     stop_ticker = true;
+                }
+
+                // Decoding failed mid-clip: show it as failed, like a load.
+                if let Some(error) = playback_error {
+                    self.record_video_failure(error);
+                    cx.notify();
+                    return;
                 }
 
                 if playing && self.enforce_loop_range(playback_ended) {

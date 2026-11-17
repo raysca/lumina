@@ -320,7 +320,7 @@ impl MediaContextMenu {
                         Self::render_menu_item(
                             &hover,
                             "reveal-menu-btn",
-                            "Reveal in Finder",
+                            crate::i18n::platform::REVEAL,
                             Some("⇧⌘R"),
                             false,
                             cx.listener(move |this, _e: &ClickEvent, _w, cx| {

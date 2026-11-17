@@ -953,6 +953,47 @@ fn welcome_menu_actions_reach_the_app() {
     });
 }
 
+#[cfg(target_os = "linux")]
+#[core::prelude::v1::test]
+fn linux_ctrl_q_quits_from_the_welcome_screen() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "ctrl-q");
+
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.quit_requested,
+            "Ctrl+Q follows the normal quit path"
+        );
+    });
+}
+
+/// Regression: Ctrl+Q was checked after the dialog key handler, so an open
+/// dialog swallowed it.
+#[cfg(target_os = "linux")]
+#[core::prelude::v1::test]
+fn linux_ctrl_q_quits_while_a_dialog_is_open() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    view.update(vcx, |app, cx| {
+        app.shortcuts_overlay_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    focus_app(vcx, &view);
+
+    keystrokes(vcx, "ctrl-q");
+
+    view.update(vcx, |app, _| {
+        assert!(
+            app.downloads.quit_requested,
+            "an open dialog does not swallow Ctrl+Q"
+        );
+    });
+}
+
 #[core::prelude::v1::test]
 fn first_scan_quit_reaches_the_app() {
     let (dir, engine) = seed_library("first_scan_quit", 1);

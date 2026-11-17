@@ -131,8 +131,57 @@ pub(crate) fn click_point(cx: &mut VisualTestContext, x: f32, y: f32) {
 }
 
 pub(crate) fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
-    cx.simulate_keystrokes(keys);
+    cx.simulate_keystrokes(&platform_test_keys(keys));
     render_ui(cx);
+}
+
+/// The test data uses Command and GPUI's secondary modifier notation. Map both
+/// to Control on Linux so the tests exercise the same app actions there.
+pub(crate) fn platform_test_keys(keys: &str) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        keys.split_whitespace()
+            .map(|chord| {
+                let parts = chord.split('-').collect::<Vec<_>>();
+                if (parts.contains(&"cmd") || parts.contains(&"secondary"))
+                    && !parts.contains(&"ctrl")
+                {
+                    parts
+                        .into_iter()
+                        .map(|part| {
+                            if part == "cmd" || part == "secondary" {
+                                "ctrl"
+                            } else {
+                                part
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("-")
+                } else {
+                    chord.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        keys.to_string()
+    }
+}
+
+pub(crate) fn primary_modifier() -> gpui::Modifiers {
+    #[cfg(target_os = "linux")]
+    {
+        gpui::Modifiers {
+            control: true,
+            ..Default::default()
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        gpui::Modifiers::command()
+    }
 }
 
 pub(crate) fn type_text(cx: &mut VisualTestContext, text: &str) {
@@ -1969,7 +2018,7 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
         assert_eq!(app.selected_indices, BTreeSet::from([0usize]));
     });
 
-    let cmd = gpui::Modifiers::command();
+    let cmd = primary_modifier();
     // Same row at the default column count, so the swept rectangle is 2..=3.
     let start = bounds_center(vcx, cards[2]);
     let end = bounds_center(vcx, cards[3]);
@@ -2123,7 +2172,7 @@ fn ui_automation_viewer_wheel_zoom_is_smooth() {
         vcx,
         center,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
-        gpui::Modifiers::command(),
+        primary_modifier(),
     );
     let one = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     assert!(
@@ -2134,7 +2183,7 @@ fn ui_automation_viewer_wheel_zoom_is_smooth() {
         vcx,
         center,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(step))),
-        gpui::Modifiers::command(),
+        primary_modifier(),
     );
     let two = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
     assert!(
@@ -2339,7 +2388,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
-        gpui::Modifiers::command(),
+        primary_modifier(),
     );
 
     let (columns_after_zoom, selection_len, dragging) = view.update(vcx, |app, _| {
@@ -2411,7 +2460,7 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(60.0))),
-        gpui::Modifiers::command(),
+        primary_modifier(),
     );
     let (columns_at_limit, offset_at_limit) = view.update(vcx, |app, _| {
         (

@@ -25,7 +25,7 @@ pub(super) fn render_downloads(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> 
                         app,
                         cx,
                         SettingsButton::RevealDownloads,
-                        "Show in Finder",
+                        crate::i18n::platform::SHOW,
                         None,
                     )),
             )

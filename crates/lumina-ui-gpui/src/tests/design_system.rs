@@ -101,7 +101,7 @@ fn chip_is_28px_pill() {
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     click(vcx, "inspector-toggle");
     render_ui(vcx);
     for selector in ["batch-tag-trip", "batch-partial-tag-street"] {

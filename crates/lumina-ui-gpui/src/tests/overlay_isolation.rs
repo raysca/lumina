@@ -63,12 +63,17 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
     });
     // At this window width the spot is the viewer's Rate button: it opens
     // its popover. Close it so the next click reaches viewer Info.
+    // Linux: the viewer bar has no Share button (no share picker there), so
+    // its buttons shift and the spot misses Rate; only close it if open.
     view.update(vcx, |app, cx| {
+        #[cfg(not(target_os = "linux"))]
         assert!(
             app.rate_popover_open,
             "the click over the hidden Sort lands on viewer Rate"
         );
-        app.close_rate_popover(cx)
+        if app.rate_popover_open {
+            app.close_rate_popover(cx)
+        }
     });
     click(vcx, "viewer-info-btn");
     view.update(vcx, |app, _| {

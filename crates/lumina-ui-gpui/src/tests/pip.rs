@@ -743,7 +743,9 @@ fn pip_window_takes_the_player_keys() {
     assert_eq!(pip_time(&view, vcx), 0.0, "⌥← jumps to the chapter start");
 
     let muted = view.update(vcx, |app, _| app.video.is_muted);
-    pip.simulate_keystrokes("cmd-m ctrl-j shift-right");
+    pip.simulate_keystrokes(&crate::tests::ui_automation::platform_test_keys(
+        "cmd-m ctrl-j shift-right",
+    ));
     pip.run_until_parked();
     view.update(vcx, |app, _| {
         assert_eq!(app.video.is_muted, muted, "⌘M is not the PiP mute key");

@@ -43,7 +43,7 @@ fn cmd_wheel_walks_size_ladder() {
         vcx,
         pointer,
         gpui::ScrollDelta::Lines(gpui::point(0.0, -1.0)),
-        gpui::Modifiers::command(),
+        crate::tests::ui_automation::primary_modifier(),
     );
     assert_eq!(
         columns(&view, vcx),
@@ -55,7 +55,7 @@ fn cmd_wheel_walks_size_ladder() {
         vcx,
         pointer,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 1.0)),
-        gpui::Modifiers::command(),
+        crate::tests::ui_automation::primary_modifier(),
     );
     assert_eq!(columns(&view, vcx), 6, "one notch back in returns to 6");
     let _ = std::fs::remove_dir_all(&dir);
@@ -74,7 +74,7 @@ fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
             vcx,
             pointer,
             gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(5.0))),
-            gpui::Modifiers::command(),
+            crate::tests::ui_automation::primary_modifier(),
         );
     }
     assert_eq!(
@@ -237,7 +237,7 @@ fn saved_off_ladder_columns_snap_and_small_scrolls_keep_them() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(5.0))),
-        gpui::Modifiers::command(),
+        crate::tests::ui_automation::primary_modifier(),
     );
     assert_eq!(
         columns(&view, vcx),

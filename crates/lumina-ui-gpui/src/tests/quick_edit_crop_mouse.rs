@@ -127,7 +127,7 @@ fn crop_overlay_occludes_the_viewer() {
         vcx,
         shade,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-200.0))),
-        gpui::Modifiers::command(),
+        crate::tests::ui_automation::primary_modifier(),
     );
     render_ui(vcx);
     view.update(vcx, |app, _| {

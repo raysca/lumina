@@ -22,7 +22,7 @@ fn select_two(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, ids: &[Medi
         vcx,
         super::ui_automation::leak(format!("media-card-{}", ids[1].0)),
     );
-    vcx.simulate_click(second, gpui::Modifiers::command());
+    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(

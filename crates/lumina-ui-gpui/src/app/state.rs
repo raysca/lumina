@@ -92,9 +92,14 @@ pub struct QueryBarState {
 #[derive(Default)]
 pub struct VideoPlaybackState {
     pub player: Option<player::NativeVideoPlayer>,
+    /// Rejects late Linux background loads after close or a subsequent open.
+    pub(crate) load_generation: u64,
     /// Media the player session belongs to. Set when a load is attempted, so
     /// it survives a backend that cannot decode the file.
     pub item: Option<lumina_core::MediaItem>,
+    /// Most recent seek requested before an asynchronous Linux player load
+    /// finishes. Applied when its native handle is installed.
+    pub(crate) pending_load_seek: Option<f64>,
     /// True while the session is presented in the floating PiP window rather
     /// than the viewer. Frames then go to `pip_frame`, and the viewer and grid
     /// leave the player alone.

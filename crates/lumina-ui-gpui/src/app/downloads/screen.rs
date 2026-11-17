@@ -229,7 +229,11 @@ impl LuminaApp {
             return false;
         }
         let m = &keystroke.modifiers;
-        if m.control || m.shift || m.function {
+        if (cx.platform_info().is_mac() && m.control)
+            || (!cx.platform_info().is_mac() && m.platform)
+            || m.shift
+            || m.function
+        {
             return false;
         }
         // Keys act only on a row the filter shows.
@@ -238,7 +242,7 @@ impl LuminaApp {
                 .iter()
                 .any(|e| e.row.id == *id)
         });
-        match (keystroke.key.as_str(), m.platform, m.alt) {
+        match (keystroke.key.as_str(), m.secondary(cx), m.alt) {
             ("up", true, true) => {
                 if let Some(id) = focused {
                     self.move_download_up(id, cx);

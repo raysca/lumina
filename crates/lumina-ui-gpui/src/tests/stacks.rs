@@ -56,7 +56,11 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
     let engine = scanned(&dir);
     let all = engine.get_item_slice(0..100);
     let id = |name: &str| all.iter().find(|i| i.file_name == name).unwrap().id;
-    let times = [T0, T0, T0 + 60_000, T0 + 60_000, T0 + 61_000];
+    // shot_1 and shot_2 must not share a time: ties break by id, which
+    // follows the scan's directory order (sorted on APFS, unordered on
+    // ext4), so equal times made the burst order filesystem-dependent.
+    // 100 ms apart stays inside the one-second burst gap.
+    let times = [T0, T0, T0 + 60_000, T0 + 60_100, T0 + 61_000];
     let edited: Vec<_> = names
         .iter()
         .zip(times)

@@ -148,32 +148,38 @@ fn viewer_says_the_original_is_missing() {
         "Keep preview keeps the bar"
     );
 
-    // A file on a drive that is not mounted names the drive.
-    let drive = "LuminaTestDriveNotMounted";
-    assert!(!std::path::Path::new("/Volumes").join(drive).exists());
-    // Worked out once on selection, so select the item with its new path.
-    on_drive(&view, vcx, &format!("/Volumes/{drive}/DCIM/photo_00.jpg"));
-    assert!(
-        has_text(vcx, "viewer-missing-drive-text:LuminaTestDriveNotMounted"),
-        "the bar names the disconnected drive"
-    );
-    assert!(
+    // A file on a macOS volume that is not mounted names the volume.
+    #[cfg(target_os = "macos")]
+    {
+        let drive = "LuminaTestDriveNotMounted";
+        assert!(!std::path::Path::new("/Volumes").join(drive).exists());
+        // Worked out once on selection, so select the item with its new path.
+        on_drive(&view, vcx, &format!("/Volumes/{drive}/DCIM/photo_00.jpg"));
+        assert!(
+            has_text(vcx, "viewer-missing-drive-text:LuminaTestDriveNotMounted"),
+            "the bar names the disconnected drive"
+        );
+        assert!(
         has_text(
             vcx,
             "viewer-missing-bar-text:“LuminaTestDriveNotMounted” is disconnected — you're looking at a cached preview."
         ),
         "the bar says the drive is disconnected"
     );
+    }
 
-    // A very long drive name truncates inside the bar instead of growing it.
-    let long = "L".repeat(400);
-    on_drive(&view, vcx, &format!("/Volumes/{long}/photo_00.jpg"));
-    let bar = vcx.debug_bounds("viewer-missing-bar").unwrap();
-    let name = vcx.debug_bounds("viewer-missing-drive").unwrap();
-    assert!(
-        name.right() <= bar.right() && (f32::from(bar.size.height) - 39.5).abs() < 0.5,
-        "a long drive name stays inside the 39.5 px bar, bar {bar:?} name {name:?}"
-    );
+    // A very long volume name truncates inside the bar instead of growing it.
+    #[cfg(target_os = "macos")]
+    {
+        let long = "L".repeat(400);
+        on_drive(&view, vcx, &format!("/Volumes/{long}/photo_00.jpg"));
+        let bar = vcx.debug_bounds("viewer-missing-bar").unwrap();
+        let name = vcx.debug_bounds("viewer-missing-drive").unwrap();
+        assert!(
+            name.right() <= bar.right() && (f32::from(bar.size.height) - 39.5).abs() < 0.5,
+            "a long volume name stays inside the 39.5 px bar, bar {bar:?} name {name:?}"
+        );
+    }
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
@@ -220,6 +226,7 @@ fn viewer_missing_card_buttons_take_tab_and_enter() {
 
 /// Reselects the viewer item as if its file lived at `path`, with a cached
 /// image on screen.
+#[cfg(target_os = "macos")]
 fn on_drive(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext, path: &str) {
     view.update(vcx, |app, cx| {
         let mut item = app.selected_item.clone().unwrap();

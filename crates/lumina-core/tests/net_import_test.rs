@@ -265,12 +265,26 @@ fn cancel_stops_the_helpers_child_processes() {
         .unwrap();
     // Allow up to 2 s for the killed child to be reaped by launchd.
     let alive_now = || {
-        std::process::Command::new("kill")
+        let exists = std::process::Command::new("kill")
             .args(["-0", &child.to_string()])
             .stderr(std::process::Stdio::null())
             .status()
             .unwrap()
-            .success()
+            .success();
+        #[cfg(target_os = "linux")]
+        if exists {
+            // A killed child can remain as a zombie until container init reaps
+            // it; it is no longer running and cannot outlive cancellation.
+            return std::fs::read_to_string(format!("/proc/{child}/stat"))
+                .ok()
+                .and_then(|stat| {
+                    stat.rsplit_once(')')
+                        .map(|(_, rest)| rest.trim().to_owned())
+                })
+                .and_then(|rest| rest.chars().next())
+                .is_some_and(|state| state != 'Z');
+        }
+        exists
     };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let mut alive = alive_now();

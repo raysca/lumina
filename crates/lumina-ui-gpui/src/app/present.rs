@@ -262,7 +262,7 @@ impl LuminaApp {
         let m = &keystroke.modifiers;
         let key = keystroke.key.as_str();
         let plain = !m.platform && !m.control && !m.alt && !m.function;
-        let exactly_cmd = m.secondary(cx) && !m.control && !m.shift && !m.alt;
+        let exactly_cmd = crate::app::keymap::secondary_only(m, cx);
         match key {
             "escape" if self.error_message.is_some() => self.dismiss_error(cx),
             "escape" => self.close_compare(cx),

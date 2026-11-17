@@ -178,7 +178,12 @@ fn reveal(path: &Path) {
     #[cfg(test)]
     REVEALED.with(|r| r.borrow_mut().push(path.to_path_buf()));
     #[cfg(not(test))]
+    #[cfg(target_os = "macos")]
     if let Err(err) = std::process::Command::new("open").arg(path).spawn() {
+        log::warn!("could not open {path:?}: {err:?}");
+    }
+    #[cfg(all(not(test), target_os = "linux"))]
+    if let Err(err) = std::process::Command::new("xdg-open").arg(path).spawn() {
         log::warn!("could not open {path:?}: {err:?}");
     }
 }
@@ -589,7 +594,7 @@ impl LuminaApp {
         cx.notify();
     }
 
-    /// Opens the native macOS application picker for the external editor.
+    /// Opens a file picker for the external editor.
     ///
     /// Test builds compile the dialog out so no test can open a real dialog;
     /// tests call `Self::set_external_editor` directly instead.
@@ -601,11 +606,18 @@ impl LuminaApp {
         #[cfg(not(test))]
         {
             cx.spawn(async move |this, async_cx| {
-                let mut dialog = rfd::AsyncFileDialog::new()
-                    .set_title("Choose External Editor")
-                    .add_filter("Applications", &["app"]);
+                let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose External Editor");
+                #[cfg(target_os = "macos")]
+                {
+                    dialog = dialog.add_filter("Applications", &["app"]);
+                }
+                #[cfg(target_os = "macos")]
                 if Path::new("/Applications").is_dir() {
                     dialog = dialog.set_directory("/Applications");
+                }
+                #[cfg(target_os = "linux")]
+                if Path::new("/usr/bin").is_dir() {
+                    dialog = dialog.set_directory("/usr/bin");
                 }
                 let Some(handle) = dialog.pick_file().await else {
                     return;

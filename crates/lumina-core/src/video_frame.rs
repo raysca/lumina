@@ -1,14 +1,20 @@
-//! Video thumbnails through AVFoundation, in process (`video_frame_macos.m`).
+//! Video thumbnails: through AVFoundation, in process, on macOS
+//! (`video_frame_macos.m`); through a system ffmpeg process, under the
+//! native tool timeout, on Linux.
 //!
-//! This replaced a `qlmanage` subprocess, which hung until its timeout on
-//! some videos and left their cards blank. macOS only for now.
+//! AVFoundation replaced a `qlmanage` subprocess, which hung until its
+//! timeout on some videos and left their cards blank.
 
-use anyhow::{anyhow, bail, Context, Result};
+#[cfg(not(target_os = "linux"))]
+use anyhow::anyhow;
+use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::atomic::AtomicI32;
 use std::time::Duration;
 
-use crate::{DecodedFrame, MediaId, PixelFormat};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use crate::PixelFormat;
+use crate::{DecodedFrame, MediaId};
 
 #[cfg(target_os = "macos")]
 mod ffi {
@@ -47,7 +53,7 @@ mod ffi {
 }
 
 /// A frame of the video at `path`, fitted inside `target_size` square, as
-/// BGRA8. Gives up after `timeout` so a stuck decode cannot hold a worker.
+/// BGRA8 (RGBA8 on Linux; see [`DecodedFrame::format`]). Gives up after `timeout` so a stuck decode cannot hold a worker.
 #[cfg(target_os = "macos")]
 pub(crate) fn decode(
     id: MediaId,
@@ -97,7 +103,7 @@ const STRIP_MAX_FRAMES: usize = 48;
 
 /// Frames spread evenly over a video of `duration_secs`, for the scrubber's
 /// hover preview: `clamp(ceil(duration), 2, 48)` of them, each fitted inside
-/// `max_size` square, as BGRA8, in ascending time order. Each frame snaps to
+/// `max_size` square, as BGRA8 (RGBA8 on Linux), in ascending time order. Each frame snaps to
 /// the nearest keyframe within half the spacing, which keeps one batch fast.
 ///
 /// Set `cancel` to a non-zero value from another thread to stop early; the
@@ -128,7 +134,8 @@ pub fn video_preview_strip(
 }
 
 /// Frames of the video at `path` near each of `times` (seconds), within
-/// `tolerance` either side, fitted inside `max_size` square, as BGRA8. The
+/// `tolerance` either side, fitted inside `max_size` square, as BGRA8
+/// (RGBA8 on Linux, where `tolerance` is unused: each seek is exact). The
 /// whole batch gives up after `timeout`; a non-zero `cancel` stops it early.
 /// Returns the frames decoded by then in ascending actual time, or an error
 /// when there are none.
@@ -202,7 +209,7 @@ pub(crate) fn decode_at(
     Ok(frames)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub(crate) fn decode_at(
     _path: &Path,
     _times: &[f64],
@@ -214,7 +221,7 @@ pub(crate) fn decode_at(
     Err(anyhow!("video preview strips are only available on macOS"))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub(crate) fn decode(
     _id: MediaId,
     _path: &Path,
@@ -222,6 +229,112 @@ pub(crate) fn decode(
     _timeout: Duration,
 ) -> Result<DecodedFrame> {
     Err(anyhow!("video thumbnails are only available on macOS"))
+}
+
+#[cfg(target_os = "linux")]
+fn ffmpeg_frame(
+    id: MediaId,
+    path: &Path,
+    time_secs: f64,
+    target_size: u32,
+    timeout: Duration,
+    cancel: Option<&AtomicI32>,
+) -> Result<DecodedFrame> {
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct TempFrame(std::path::PathBuf);
+    impl Drop for TempFrame {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let temp = TempFrame(std::env::temp_dir().join(format!(
+        "lumina-video-{}-{}.png",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )));
+    let mut command = Command::new("ffmpeg");
+    command
+        // Only the file protocol: a preview never touches the network.
+        .args(["-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file"])
+        .arg("-ss")
+        .arg(format!("{time_secs:.6}"))
+        .arg("-i")
+        .arg(path)
+        .args(["-frames:v", "1", "-vf"])
+        .arg(format!(
+            "scale='min({target_size},iw)':'min({target_size},ih)':force_original_aspect_ratio=decrease"
+        ))
+        .arg(&temp.0)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let child = command
+        .spawn()
+        .context("could not start ffmpeg video decoder")?;
+    let status = match cancel {
+        Some(cancel) => crate::decoder::wait_with_timeout_or_cancel(child, timeout, cancel)?,
+        None => crate::decoder::wait_with_timeout(child, timeout)?,
+    };
+    if !status.success() {
+        bail!("ffmpeg could not decode a video frame");
+    }
+    let bytes = std::fs::read(&temp.0).context("ffmpeg produced no video frame")?;
+    let rgba = image::load_from_memory(&bytes)
+        .context("ffmpeg produced an unreadable video frame")?
+        .to_rgba8();
+    Ok(DecodedFrame {
+        id,
+        width: rgba.width(),
+        height: rgba.height(),
+        format: PixelFormat::Rgba8,
+        data: rgba.into_raw(),
+    })
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn decode(
+    id: MediaId,
+    path: &Path,
+    target_size: u32,
+    timeout: Duration,
+) -> Result<DecodedFrame> {
+    ffmpeg_frame(id, path, 0.0, target_size, timeout, None)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn decode_at(
+    path: &Path,
+    times: &[f64],
+    max_size: u32,
+    tolerance: Duration,
+    timeout: Duration,
+    cancel: &AtomicI32,
+) -> Result<Vec<(f64, DecodedFrame)>> {
+    use std::time::Instant;
+
+    let _ = tolerance; // ffmpeg's accurate seek chooses the nearest decodable frame.
+    let started = Instant::now();
+    let mut frames = Vec::new();
+    for &time in times {
+        if cancel.load(std::sync::atomic::Ordering::Acquire) != 0 {
+            break;
+        }
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+        match ffmpeg_frame(MediaId(0), path, time, max_size, remaining, Some(cancel)) {
+            Ok(frame) => frames.push((time, frame)),
+            Err(err) => log::debug!("ffmpeg skipped preview frame at {time:.3}s: {err:#}"),
+        }
+    }
+    if frames.is_empty() {
+        bail!("ffmpeg decoded no preview frames");
+    }
+    Ok(frames)
 }
 
 #[cfg(all(test, target_os = "macos"))]
@@ -411,5 +524,31 @@ mod tests {
             result.map_or(true, |frames| frames.len() < 2),
             "a strip cancelled before it starts must not decode every frame"
         );
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lumina-ui-gpui/tests/fixtures/clip.mp4")
+    }
+
+    #[test]
+    fn ffmpeg_decodes_linux_video_frames_and_preview_strips() {
+        let frame = decode(MediaId(7), &fixture(), 32, Duration::from_secs(10))
+            .expect("ffmpeg should decode the bundled H.264 clip");
+        assert_eq!(frame.id, MediaId(7));
+        assert_eq!((frame.width, frame.height), (32, 24));
+        let native_size = decode(MediaId(8), &fixture(), 128, Duration::from_secs(10))
+            .expect("ffmpeg should not upscale video frames");
+        assert_eq!((native_size.width, native_size.height), (64, 48));
+
+        let strip = video_preview_strip(&fixture(), 2.0, 32, &AtomicI32::new(0))
+            .expect("ffmpeg should build a preview strip");
+        assert_eq!(strip.len(), 2);
+        assert!(strip.iter().all(|(_, frame)| frame.width <= 32));
     }
 }

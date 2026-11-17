@@ -198,9 +198,15 @@ fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
             .is_some(),
         "empty trash uses the design headline"
     );
+    #[cfg(not(target_os = "linux"))]
     let body = "Deleted items stay here until you restore them or remove them for good. \
                 Lumina leaves their original files on disk unless you choose to move them to \
                 the macOS Trash or delete them.";
+    // Linux has no "macOS Trash"; the body names the system's trash instead.
+    #[cfg(target_os = "linux")]
+    let body = "Deleted items stay here until you restore them or remove them for good. \
+                Lumina leaves their original files on disk unless you choose to move them to \
+                your system's trash or delete them.";
     assert!(
         vcx.debug_bounds(leak(format!("empty-state-body-text:{body}")))
             .is_some(),
