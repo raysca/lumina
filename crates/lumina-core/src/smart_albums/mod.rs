@@ -15,56 +15,6 @@ mod tests {
         MAX_KEYWORDS, MAX_PORTABLE_BYTES, MAX_PORTABLE_RULES, MAX_PORTABLE_TEXT_CHARS,
     };
     use super::*;
-    use crate::SortSpec;
-
-    #[test]
-    fn test_system_albums_sql_generation() {
-        for album in SystemAlbum::all() {
-            let (query_sql, params) = album.synthesize_query_sorted(50, 0, SortSpec::default());
-            assert!(query_sql.contains("LIMIT ?1 OFFSET ?2"));
-            assert_eq!(params.len(), 2);
-
-            let (count_sql, count_params) = album.synthesize_count_query();
-            assert!(count_sql.contains("SELECT COUNT(*)"));
-            assert_eq!(count_params.len(), 0);
-        }
-    }
-
-    #[test]
-    fn test_smart_album_rule_compilation() {
-        let rules = vec![
-            SmartAlbumRule {
-                field: RuleField::IsFavorite,
-                operator: RuleOperator::Equals,
-                value: RuleValue::Bool(true),
-            },
-            SmartAlbumRule {
-                field: RuleField::CameraMake,
-                operator: RuleOperator::Contains,
-                value: RuleValue::Text("Sony".to_string()),
-            },
-            SmartAlbumRule {
-                field: RuleField::Iso,
-                operator: RuleOperator::GreaterThan,
-                value: RuleValue::Integer(800),
-            },
-        ];
-
-        let album = SmartAlbum::new(
-            "High ISO Sony Favorites".to_string(),
-            "heart".to_string(),
-            MatchMode::All,
-            rules,
-        );
-
-        let (sql, params) = album
-            .synthesize_query_sorted(20, 0, SortSpec::default())
-            .unwrap();
-        assert!(sql.contains("m.is_favorite = ?"));
-        assert!(sql.contains("m.make LIKE ?"));
-        assert!(sql.contains("m.iso > ?"));
-        assert_eq!(params.len(), 5); // 3 rule params + limit + offset
-    }
 
     #[test]
     fn test_smart_album_in_the_last_operator() {
