@@ -39,6 +39,14 @@ pub(crate) struct WelcomeState {
     pub(crate) generating_sample: bool,
     /// The list the last availability check was started for.
     checked: Option<Vec<PathBuf>>,
+    /// The scrolling welcome body, and the recents list inside it (row `i`
+    /// is its child `i + 1`, after the heading): the rows' last-frame
+    /// bounds, to scroll the focused one into view.
+    pub(crate) body_scroll: ScrollHandle,
+    pub(crate) recents_scroll: ScrollHandle,
+    /// The focus the body was last scrolled for, so it scrolls once per
+    /// ↑/↓ and a wheel scroll is left alone.
+    scrolled_for: std::cell::Cell<Option<usize>>,
 }
 
 impl WelcomeState {
@@ -260,11 +268,13 @@ impl LuminaApp {
         remove_recent(&mut self.config.recent_libraries, index);
         if self.save_recents_or_revert(before, cx) {
             let len = self.config.recent_libraries.len();
+            // A row above the focus moves it up with its library; the
+            // focused row itself hands the focus to the next one.
             self.welcome.focused_recent = self
                 .welcome
                 .focused_recent
                 .filter(|_| len > 0)
-                .map(|i| i.min(len - 1));
+                .map(|i| if index < i { i - 1 } else { i.min(len - 1) });
         }
         cx.notify();
     }
@@ -329,6 +339,7 @@ impl LuminaApp {
     ) -> crate::views::onboarding::WelcomeProps {
         use crate::views::missing_library::MissingLibraryProps;
         use crate::views::onboarding::{RecentRow, WelcomeProps};
+        self.scroll_focused_recent_into_view();
         let recents = self
             .config
             .recent_libraries
@@ -363,6 +374,7 @@ impl LuminaApp {
             sample_busy: self.welcome.generating_sample,
             has_desktop_pics: self.has_desktop_pics,
             recents,
+            recents_scroll: self.welcome.recents_scroll.clone(),
             missing: self.welcome.missing.as_deref().map(|path| {
                 let body = if self.welcome.missing_error.is_some() {
                     t("welcome.missing_body_failed")
@@ -389,6 +401,31 @@ impl LuminaApp {
                 }
             }),
         }
+    }
+
+    /// Scrolls the welcome body the least amount that shows the focused
+    /// recent (nearest edge), once per focus change. Runs at render from
+    /// the last frame's bounds, which match the body's current offset (the
+    /// offset changes here or by the wheel, never between two ↑/↓).
+    fn scroll_focused_recent_into_view(&self) {
+        let focused = self.welcome.focused_recent;
+        if self.welcome.scrolled_for.replace(focused) == focused {
+            return;
+        }
+        let Some(row) = focused.and_then(|i| self.welcome.recents_scroll.bounds_for_item(i + 1))
+        else {
+            return;
+        };
+        let body = &self.welcome.body_scroll;
+        let viewport = body.bounds();
+        let mut offset = body.offset();
+        if row.top() < viewport.top() {
+            offset.y += viewport.top() - row.top();
+        } else if row.bottom() > viewport.bottom() {
+            offset.y -= row.bottom() - viewport.bottom();
+        }
+        // Prepaint clamps the offset to the content.
+        body.set_offset(offset);
     }
 
     /// Whether a recent is known to be missing.

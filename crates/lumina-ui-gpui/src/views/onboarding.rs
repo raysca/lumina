@@ -66,6 +66,8 @@ pub struct WelcomeProps {
     /// The sample photos are being written.
     pub sample_busy: bool,
     pub recents: Vec<RecentRow>,
+    /// Tracks the recent rows' bounds (↑/↓ scroll the focused one into view).
+    pub recents_scroll: ScrollHandle,
     /// The library that is not where it was; replaces the welcome content.
     pub missing: Option<MissingLibraryProps>,
 }
@@ -85,6 +87,7 @@ impl OnboardingView {
             on_sample,
             sample_busy,
             recents,
+            recents_scroll,
             missing: _,
         } = props;
         let choose = t("welcome.choose_folder");
@@ -200,7 +203,7 @@ impl OnboardingView {
                             )),
                     )
                     .when(!recents.is_empty(), |column| {
-                        column.child(recent_libraries(recents))
+                        column.child(recent_libraries(recents, &recents_scroll))
                     }),
             )
             .into_any_element()
@@ -295,9 +298,11 @@ fn text_link(
 /// RECENT LIBRARIES: ↑/↓ focus, ↵ or a click opens, ⌫ or × forgets. A
 /// 520 px list (the welcome body scrolls, so a long list needs no scroll of
 /// its own).
-fn recent_libraries(rows: Vec<RecentRow>) -> impl IntoElement {
+fn recent_libraries(rows: Vec<RecentRow>, scroll: &ScrollHandle) -> impl IntoElement {
     div()
+        .id("welcome-recents")
         .debug_selector(|| "welcome-recents".to_string())
+        .track_scroll(scroll)
         .mt(px(32.0))
         .w(px(520.0))
         .max_w_full()

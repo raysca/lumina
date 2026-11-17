@@ -80,6 +80,59 @@ fn ten_recents_are_one_line_rows_and_the_tenth_scrolls_into_view() {
     );
 }
 
+/// ↑/↓ keep the focused recent inside the scrolling welcome body (nearest
+/// edge), in a short window with ten recents.
+#[core::prelude::v1::test]
+fn arrow_focus_scrolls_the_recent_into_view() {
+    let folders: Vec<TempLibrary> = (0..10)
+        .map(|i| temp_folder(&format!("arrow_{i}")))
+        .collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome(
+        &mut cx,
+        crate::config::AppConfig {
+            recent_libraries: folders.iter().map(|f| f.to_path_buf()).collect(),
+            ..Default::default()
+        },
+    );
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(600.0)));
+    render_ui(vcx);
+    let inside = |vcx: &mut VisualTestContext, i: usize| {
+        let body = vcx.debug_bounds("welcome-body").expect("body renders");
+        let row = vcx
+            .debug_bounds(leak(format!("welcome-recent-{i}")))
+            .unwrap_or_else(|| panic!("recent {i} renders"));
+        (
+            row.top() >= body.top() && row.bottom() <= body.bottom(),
+            row,
+            body,
+        )
+    };
+    assert!(
+        !inside(vcx, 9).0,
+        "precondition: at 960×600 the tenth recent starts outside the body"
+    );
+    for i in 0..10 {
+        keystrokes(vcx, "down");
+        let (shown, row, body) = inside(vcx, i);
+        assert!(
+            shown,
+            "↓ to recent {i} must scroll it into the body: {row:?} in {body:?}"
+        );
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.focused_recent, Some(9))
+    });
+    for i in (0..9).rev() {
+        keystrokes(vcx, "up");
+        let (shown, row, body) = inside(vcx, i);
+        assert!(
+            shown,
+            "↑ to recent {i} must scroll it into the body: {row:?} in {body:?}"
+        );
+    }
+}
+
 /// Plan 18: Reset to defaults from the welcome screen asks first, then
 /// resets the UI preferences only, like the library case
 /// (`tests::preferences::reset_to_defaults_asks_then_resets_ui_preferences_only`).

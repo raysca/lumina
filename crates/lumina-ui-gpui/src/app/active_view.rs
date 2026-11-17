@@ -229,6 +229,8 @@ pub(crate) struct ActiveView {
     in_flight: bool,
     /// Item range the grid (or the viewer) last needed.
     wanted: Range<usize>,
+    /// Tab focus on this view's empty-state buttons.
+    pub(crate) empty_focus: Option<crate::app::render::empty_state::EmptyFocus>,
 }
 
 /// Items fetched either side of what is wanted, so scrolling and viewer

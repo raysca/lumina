@@ -167,10 +167,16 @@ Lumina is designed to be usable without a mouse:
   video back to the viewer at the same position; closing the window stops
   it. Not checked with
   VoiceOver.
+- **Empty views**: an empty album, smart album, tag, search or library
+  shows up to two buttons. `Tab` / `⇧Tab` move a focus ring between them,
+  `↵` presses the focused one and `Esc` clears the focus; another view or
+  search starts with none focused. The buttons carry a button role and a
+  label, not yet checked with VoiceOver.
 - **Welcome screen**: `↵` opens an existing library, `⇧⌘I` imports into a
   new library, `⌥↵` explores the sample library and `⇧↵` uses Pictures;
   each control shows its shortcut. With
-  recent libraries listed, `↑`/`↓` focus one, `↵` opens it, `⌫` forgets it
+  recent libraries listed, `↑`/`↓` focus one (scrolling it into view in a
+  short window), `↵` opens it, `⌫` forgets it
   (its folder and catalog stay) and `Esc` clears the focus. ⌘K offers Open
   Recent Library and Clear Recent Libraries once a library is open. The
   recent rows and their × buttons carry a button role and a label, not yet

@@ -536,6 +536,7 @@ impl Render for LuminaApp {
                                         .min_h_0()
                                         // A small window scrolls the welcome.
                                         .overflow_y_scroll()
+                                        .track_scroll(&self.welcome.body_scroll)
                                         .child(OnboardingView::render(self.welcome_props(cx))),
                                 ),
                         ),

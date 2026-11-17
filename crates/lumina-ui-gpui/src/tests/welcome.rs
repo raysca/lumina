@@ -626,6 +626,39 @@ fn welcome_backspace_removes_focused_recent() {
     }
 }
 
+/// × on a row above the focused one keeps the focus on the same library.
+#[core::prelude::v1::test]
+fn removing_an_earlier_recent_keeps_the_focused_library() {
+    let (a, b, c) = (
+        temp_folder("shift_a"),
+        temp_folder("shift_b"),
+        temp_folder("shift_c"),
+    );
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(
+        &mut cx,
+        vec![a.to_path_buf(), b.to_path_buf(), c.to_path_buf()],
+    );
+    keystrokes(vcx, "down down");
+    click(vcx, "welcome-recent-remove-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.config.recent_libraries,
+            vec![b.to_path_buf(), c.to_path_buf()],
+            "× forgets its row"
+        );
+        let focused = app
+            .welcome
+            .focused_recent
+            .and_then(|i| app.config.recent_libraries.get(i).cloned());
+        assert_eq!(
+            focused,
+            Some(b.to_path_buf()),
+            "the focus stays on the library it was on, not the next one down"
+        );
+    });
+}
+
 #[core::prelude::v1::test]
 fn failed_recents_save_reverts_and_shows_banner() {
     let (a, b) = (temp_folder("save_a"), temp_folder("save_b"));

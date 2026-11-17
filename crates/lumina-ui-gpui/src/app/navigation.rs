@@ -28,8 +28,12 @@ impl LuminaApp {
         }
     }
 
-    /// Records a destination change that the caller already applied.
+    /// Records a destination change that the caller already applied. Every
+    /// view, search and year change ends here (Back/Forward in
+    /// `apply_navigation_snapshot`), so an empty state's Tab focus is
+    /// dropped here: coming back to a view starts with no focused button.
     pub(crate) fn record_navigation_change(&mut self, departing: NavigationSnapshot) {
+        self.active_view.empty_focus = None;
         if self.navigation_history.is_restoring() {
             return;
         }
@@ -90,6 +94,8 @@ impl LuminaApp {
     }
 
     fn apply_navigation_snapshot(&mut self, snapshot: NavigationSnapshot, cx: &mut Context<Self>) {
+        // As in `record_navigation_change`.
+        self.active_view.empty_focus = None;
         self.navigation_history.begin_restore();
         self.restore_navigation_snapshot(snapshot, cx);
         self.navigation_history.end_restore();

@@ -364,6 +364,12 @@ impl LuminaApp {
             return;
         }
 
+        // An empty view's buttons: Tab, a focused ↵ and Esc (before the
+        // grid's ↵, which would otherwise open nothing or the wrong thing).
+        if self.handle_empty_state_key(keystroke, cx) {
+            return;
+        }
+
         // Enter/Return: Close viewer if open, or open selected item
         if key == "enter" || key == "return" {
             if self.is_fullscreen_viewer {

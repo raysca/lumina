@@ -5,6 +5,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{SmartAlbum, SystemAlbum};
 
+use crate::app::active_view::ViewKey;
 use crate::app::rule_label::{rule_icon, rule_label};
 use crate::app::LuminaApp;
 use crate::i18n::t;
@@ -58,9 +59,217 @@ struct EmptyCopy {
     hero: bool,
 }
 
+/// Tab focus on an empty state's buttons, kept with the state it was set
+/// in: another view, search or copy (another empty state) has no focus, so
+/// a stale index never presses a different action.
+pub(crate) struct EmptyFocus {
+    view: ViewKey,
+    title: String,
+    /// Into the shown buttons, primary first.
+    index: usize,
+}
+
 impl LuminaApp {
     /// Renders an empty view with a clear next action instead of a dead-end line.
     pub(crate) fn render_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
+        let search_terms = lumina_core::search::tokenize_query(&self.search_query);
+        let EmptyCopy {
+            icon,
+            title,
+            body,
+            path,
+            rule_chips,
+            primary,
+            secondary,
+            hero,
+        } = self.empty_copy();
+        let focus = self.empty_focus_index(&title);
+        let size = if hero {
+            EmptySize::Hero
+        } else {
+            EmptySize::Standard
+        };
+        let secondary_index = usize::from(primary.is_some());
+        let mut button = |primary: bool, (label, action): (String, EmptyAction)| {
+            let icon = match action {
+                EmptyAction::AddFromLibrary => Some(Icon::Library),
+                EmptyAction::EditSmartAlbum(_) => Some(Icon::SlidersHorizontal),
+                EmptyAction::DeleteSmartAlbum(_) => Some(Icon::Trash),
+                EmptyAction::ClearSearch => Some(Icon::X),
+                _ => None,
+            };
+            let index = if primary { 0 } else { secondary_index };
+            let id = if primary {
+                "empty-primary"
+            } else {
+                "empty-secondary"
+            };
+            self.empty_action_button(primary, label, icon, action, size, cx)
+                .when(focus == Some(index), |b| {
+                    b.border_color(theme::focus_ring())
+                        .children(cfg!(test).then(|| {
+                            div()
+                                .absolute()
+                                .size_0()
+                                .debug_selector(move || format!("{id}-focused"))
+                        }))
+                })
+        };
+        let primary_button = primary.map(|p| button(true, p));
+        let secondary_button = secondary.map(|s| button(false, s));
+        let glyph = match size {
+            EmptySize::Standard => empty_glyph(px(54.0), icon, theme::t2()),
+            EmptySize::Hero => hero_glyph(icon),
+        };
+
+        div()
+            .id("empty-state")
+            .debug_selector(|| "empty-state".to_string())
+            .flex_1()
+            // Shrink to the column between the sidebar and the inspector.
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .px(px(28.0))
+            .py(px(20.0))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(430.0))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .child(glyph.debug_selector(|| "empty-state-glyph".to_string()))
+                    .child(empty_headline("empty-state-headline", title.into()))
+                    .child(empty_body("empty-state-body", body.into()))
+                    .children(path.map(|path| {
+                        div()
+                            .mt(px(8.0))
+                            .debug_selector(|| "empty-library-path".to_string())
+                            .max_w_full()
+                            .truncate()
+                            .font_family(theme::FONT_MONO)
+                            .text_xs()
+                            .text_color(theme::t2())
+                            .child(path)
+                    }))
+                    // One chip per rule, the cards' short label and field icon.
+                    .when(!rule_chips.is_empty(), |col| {
+                        col.child(
+                            div()
+                                .mt(px(16.0))
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_center()
+                                .gap(px(7.0))
+                                .children(rule_chips.into_iter().enumerate().map(
+                                    |(i, (icon, label))| {
+                                        let label = SharedString::from(label);
+                                        div()
+                                            .debug_selector(move || format!("empty-rule-chip-{i}"))
+                                            .h(px(24.0))
+                                            .px(px(9.0))
+                                            .rounded(px(6.0))
+                                            .bg(theme::bg_1())
+                                            .border_1()
+                                            .border_color(theme::line())
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(6.0))
+                                            .font_family(theme::FONT_MONO)
+                                            .text_size(px(10.0))
+                                            .text_color(theme::t2())
+                                            .child(render_icon(icon, px(10.0), theme::accent()))
+                                            .children(cfg!(test).then(|| {
+                                                let text = label.clone();
+                                                div().absolute().size_0().debug_selector(
+                                                    move || {
+                                                        format!("empty-rule-chip-{i}-text:{text}")
+                                                    },
+                                                )
+                                            }))
+                                            .child(label)
+                                    },
+                                )),
+                        )
+                    })
+                    // Each search term is a Drop chip; clicking one removes it.
+                    .when(!search_terms.is_empty(), |col| {
+                        col.child(
+                            div()
+                                .mt(px(16.0))
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_center()
+                                .gap_1p5()
+                                .children(search_terms.iter().enumerate().map(|(i, term)| {
+                                    // Display only: the term's own quotes would nest in “…”.
+                                    let shown = term.replace('"', "");
+                                    let label = SharedString::from(
+                                        crate::i18n::t("search.empty_drop")
+                                            .replace("{term}", &shown),
+                                    );
+                                    let tooltip = crate::i18n::t("search.empty_drop_tooltip")
+                                        .replace("{term}", &shown);
+                                    div()
+                                        .id(("empty-search-term", i as u64))
+                                        .debug_selector(move || format!("empty-search-term-{i}"))
+                                        .h(px(28.0))
+                                        .px(px(11.0))
+                                        .rounded_full()
+                                        .bg(theme::accent_soft())
+                                        .border_1()
+                                        .border_color(theme::accent_outline())
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme::accent())
+                                        .cursor_pointer()
+                                        .tooltip(theme::tooltip_label(tooltip))
+                                        .role(Role::Button)
+                                        .aria_label(label.clone())
+                                        .child(render_icon(Icon::X, px(12.0), theme::accent()))
+                                        .children(cfg!(test).then(|| {
+                                            let text = label.clone();
+                                            div().absolute().size_0().debug_selector(move || {
+                                                format!("empty-search-term-{i}-text:{text}")
+                                            })
+                                        }))
+                                        .child(label)
+                                        .on_click(cx.listener(
+                                            move |this, _e: &ClickEvent, _w, cx| {
+                                                this.perform_empty_action(
+                                                    EmptyAction::RemoveSearchTerm(i),
+                                                    cx,
+                                                );
+                                            },
+                                        ))
+                                })),
+                        )
+                    })
+                    .child(
+                        div()
+                            .mt(px(16.0))
+                            .flex()
+                            .flex_row()
+                            .justify_center()
+                            .gap(px(9.0))
+                            .children(primary_button)
+                            .children(secondary_button),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn empty_copy(&self) -> EmptyCopy {
         let user_album = match &self.selection {
             AlbumSelection::User(id) => self
                 .user_smart_albums
@@ -83,16 +292,7 @@ impl LuminaApp {
             hero: false,
         };
         // Whitespace-only queries tokenize to nothing; treat them as no search.
-        let EmptyCopy {
-            icon,
-            title,
-            body,
-            path,
-            rule_chips,
-            primary,
-            secondary,
-            hero,
-        } = if let Some((title, body)) = self.videos_empty_copy() {
+        if let Some((title, body)) = self.videos_empty_copy() {
             // The chip row's Clear all (or All clips) is the way back.
             EmptyCopy {
                 primary: (!self.videos_4k_active()).then(show_all).flatten(),
@@ -255,175 +455,7 @@ impl LuminaApp {
                     }
                 }
             }
-        };
-
-        let size = if hero {
-            EmptySize::Hero
-        } else {
-            EmptySize::Standard
-        };
-        let mut button = |primary: bool, (label, action): (String, EmptyAction)| {
-            let icon = match action {
-                EmptyAction::AddFromLibrary => Some(Icon::Library),
-                EmptyAction::EditSmartAlbum(_) => Some(Icon::SlidersHorizontal),
-                EmptyAction::DeleteSmartAlbum(_) => Some(Icon::Trash),
-                EmptyAction::ClearSearch => Some(Icon::X),
-                _ => None,
-            };
-            self.empty_action_button(primary, label, icon, action, size, cx)
-        };
-        let primary_button = primary.map(|p| button(true, p));
-        let secondary_button = secondary.map(|s| button(false, s));
-        let glyph = match size {
-            EmptySize::Standard => empty_glyph(px(54.0), icon, theme::t2()),
-            EmptySize::Hero => hero_glyph(icon),
-        };
-
-        div()
-            .id("empty-state")
-            .debug_selector(|| "empty-state".to_string())
-            .flex_1()
-            // Shrink to the column between the sidebar and the inspector.
-            .min_w_0()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .px(px(28.0))
-            .py(px(20.0))
-            .child(
-                div()
-                    .w_full()
-                    .max_w(px(430.0))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .child(glyph.debug_selector(|| "empty-state-glyph".to_string()))
-                    .child(empty_headline("empty-state-headline", title.into()))
-                    .child(empty_body("empty-state-body", body.into()))
-                    .children(path.map(|path| {
-                        div()
-                            .mt(px(8.0))
-                            .debug_selector(|| "empty-library-path".to_string())
-                            .max_w_full()
-                            .truncate()
-                            .font_family(theme::FONT_MONO)
-                            .text_xs()
-                            .text_color(theme::t2())
-                            .child(path)
-                    }))
-                    // One chip per rule, the cards' short label and field icon.
-                    .when(!rule_chips.is_empty(), |col| {
-                        col.child(
-                            div()
-                                .mt(px(16.0))
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_center()
-                                .gap(px(7.0))
-                                .children(rule_chips.into_iter().enumerate().map(
-                                    |(i, (icon, label))| {
-                                        let label = SharedString::from(label);
-                                        div()
-                                            .debug_selector(move || format!("empty-rule-chip-{i}"))
-                                            .h(px(24.0))
-                                            .px(px(9.0))
-                                            .rounded(px(6.0))
-                                            .bg(theme::bg_1())
-                                            .border_1()
-                                            .border_color(theme::line())
-                                            .flex()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(6.0))
-                                            .font_family(theme::FONT_MONO)
-                                            .text_size(px(10.0))
-                                            .text_color(theme::t2())
-                                            .child(render_icon(icon, px(10.0), theme::accent()))
-                                            .children(cfg!(test).then(|| {
-                                                let text = label.clone();
-                                                div().absolute().size_0().debug_selector(
-                                                    move || {
-                                                        format!("empty-rule-chip-{i}-text:{text}")
-                                                    },
-                                                )
-                                            }))
-                                            .child(label)
-                                    },
-                                )),
-                        )
-                    })
-                    // Each search term is a Drop chip; clicking one removes it.
-                    .when(!search_terms.is_empty(), |col| {
-                        col.child(
-                            div()
-                                .mt(px(16.0))
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .justify_center()
-                                .gap_1p5()
-                                .children(search_terms.iter().enumerate().map(|(i, term)| {
-                                    // Display only: the term's own quotes would nest in “…”.
-                                    let shown = term.replace('"', "");
-                                    let label = SharedString::from(
-                                        crate::i18n::t("search.empty_drop")
-                                            .replace("{term}", &shown),
-                                    );
-                                    let tooltip = crate::i18n::t("search.empty_drop_tooltip")
-                                        .replace("{term}", &shown);
-                                    div()
-                                        .id(("empty-search-term", i as u64))
-                                        .debug_selector(move || format!("empty-search-term-{i}"))
-                                        .h(px(28.0))
-                                        .px(px(11.0))
-                                        .rounded_full()
-                                        .bg(theme::accent_soft())
-                                        .border_1()
-                                        .border_color(theme::accent_outline())
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(6.0))
-                                        .text_size(px(12.0))
-                                        .text_color(theme::accent())
-                                        .cursor_pointer()
-                                        .tooltip(theme::tooltip_label(tooltip))
-                                        .role(Role::Button)
-                                        .aria_label(label.clone())
-                                        .child(render_icon(Icon::X, px(12.0), theme::accent()))
-                                        .children(cfg!(test).then(|| {
-                                            let text = label.clone();
-                                            div().absolute().size_0().debug_selector(move || {
-                                                format!("empty-search-term-{i}-text:{text}")
-                                            })
-                                        }))
-                                        .child(label)
-                                        .on_click(cx.listener(
-                                            move |this, _e: &ClickEvent, _w, cx| {
-                                                this.perform_empty_action(
-                                                    EmptyAction::RemoveSearchTerm(i),
-                                                    cx,
-                                                );
-                                            },
-                                        ))
-                                })),
-                        )
-                    })
-                    .child(
-                        div()
-                            .mt(px(16.0))
-                            .flex()
-                            .flex_row()
-                            .justify_center()
-                            .gap(px(9.0))
-                            .children(primary_button)
-                            .children(secondary_button),
-                    ),
-            )
-            .into_any_element()
+        }
     }
 
     /// One empty-state action: `empty-primary` (accent) or `empty-secondary`,
@@ -436,7 +468,7 @@ impl LuminaApp {
         action: EmptyAction,
         size: EmptySize,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) -> Stateful<Div> {
         let id = if primary {
             "empty-primary"
         } else {
@@ -446,11 +478,84 @@ impl LuminaApp {
             EmptySize::Hero => px(40.0),
             EmptySize::Standard => px(34.0),
         };
-        empty_button(id, primary, label.into(), icon, height)
-            .on_click(cx.listener(move |this, _event, _window, cx| {
+        empty_button(id, primary, label.into(), icon, height).on_click(cx.listener(
+            move |this, _event, _window, cx| {
                 this.perform_empty_action(action.clone(), cx);
-            }))
-            .into_any_element()
+            },
+        ))
+    }
+
+    /// The Tab-focused button, if the focus was set in the empty state now
+    /// shown (titled `title`).
+    fn empty_focus_index(&self, title: &str) -> Option<usize> {
+        self.active_view
+            .empty_focus
+            .as_ref()
+            .filter(|focus| focus.title == title && focus.view == self.view_key())
+            .map(|focus| focus.index)
+    }
+
+    /// The grid column draws the empty state (`render_browser_grid`).
+    /// Duplicates' empty states have no buttons, so they are left out.
+    fn empty_state_shown(&self) -> bool {
+        self.grid_state.is_some()
+            && !self.is_fullscreen_viewer
+            && !self.non_media_page_shown()
+            && !self.map_shown()
+            && self.selection != AlbumSelection::Duplicates
+            && !self.view_loading()
+            && self.displayed_count() == 0
+    }
+
+    /// The empty state's keys: Tab / ⇧Tab move between its buttons
+    /// (wrapping), ↵ presses the focused one and Esc clears the focus. ↵
+    /// with none focused, and every other key, fall through.
+    pub(crate) fn handle_empty_state_key(
+        &mut self,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let m = &keystroke.modifiers;
+        if m.platform || m.control || m.alt || m.function || !self.empty_state_shown() {
+            return false;
+        }
+        let copy = self.empty_copy();
+        let focus = self.empty_focus_index(&copy.title);
+        let actions: Vec<EmptyAction> = [copy.primary, copy.secondary]
+            .into_iter()
+            .flatten()
+            .map(|(_, action)| action)
+            .collect();
+        let count = actions.len();
+        match (keystroke.key.as_str(), focus) {
+            ("tab", _) if count > 0 => {
+                let index = match focus {
+                    Some(i) if m.shift => (i + count - 1) % count,
+                    Some(i) => (i + 1) % count,
+                    None if m.shift => count - 1,
+                    None => 0,
+                };
+                self.active_view.empty_focus = Some(EmptyFocus {
+                    view: self.view_key(),
+                    title: copy.title,
+                    index,
+                });
+                cx.notify();
+            }
+            ("enter" | "return", Some(index)) if !m.shift => {
+                self.active_view.empty_focus = None;
+                if let Some(action) = actions.into_iter().nth(index) {
+                    self.perform_empty_action(action, cx);
+                }
+                cx.notify();
+            }
+            ("escape", Some(_)) => {
+                self.active_view.empty_focus = None;
+                cx.notify();
+            }
+            _ => return false,
+        }
+        true
     }
 
     fn perform_empty_action(&mut self, action: EmptyAction, cx: &mut Context<Self>) {
