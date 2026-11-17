@@ -282,9 +282,11 @@ pub struct AlbumDraftState {
     pub pinned_before: bool,
     /// The keyword chip ←/→ picked in the focused list, for ⌫ to remove.
     pub token: Option<usize>,
-    /// The library's cameras as stored `(make, model)`, read once when the
-    /// builder opens for the "Camera is" popup, never per frame.
-    pub cameras: Vec<(String, String)>,
+    /// The library's cameras as [`camera_groups`] names them, read once
+    /// when the builder opens for the "Camera is" popup, never per frame.
+    ///
+    /// [`camera_groups`]: crate::app::smart_draft::camera_groups
+    pub cameras: Vec<(String, Vec<String>)>,
 }
 
 impl AlbumDraftState {
@@ -462,6 +464,10 @@ pub struct LuminaApp {
     // Phase 5 Presentation Shell State
     pub sidebar_collapsed: bool,
     pub sidebar_width: f32,
+    /// The sidebar's and the collapsed rail's list scroll, which outlive
+    /// the fullscreen viewer (it drops them from the tree).
+    pub sidebar_scroll: ScrollHandle,
+    pub sidebar_rail_scroll: ScrollHandle,
     pub is_dragging_sidebar_resizer: bool,
     pub inspector_open: bool,
     pub inspector_width: f32,
@@ -708,6 +714,8 @@ impl LuminaApp {
             focus_handle,
             sidebar_collapsed: !config.sidebar_visible,
             sidebar_width: config.sidebar_width,
+            sidebar_scroll: ScrollHandle::new(),
+            sidebar_rail_scroll: ScrollHandle::new(),
             is_dragging_sidebar_resizer: false,
             inspector_open: config.inspector_visible,
             inspector_width: config.inspector_width,

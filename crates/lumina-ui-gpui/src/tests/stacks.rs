@@ -308,9 +308,15 @@ fn stacks_keyboard_keep_picks() {
         view.update(vcx, |app, _| app.stacks.focused)
     };
     assert_eq!(focused(&view, vcx), 0, "the first stack starts focused");
+    let card = vcx
+        .debug_bounds("stack-0")
+        .expect("the first stack renders");
+    let bar = vcx.debug_bounds("stack-focus-0").expect("focus is drawn");
     assert!(
-        vcx.debug_bounds("stack-focus-0").is_some(),
-        "focus is drawn"
+        f32::from(bar.size.width) >= f32::from(card.size.width) - 2.0
+            && f32::from(bar.size.height) >= f32::from(card.size.height) - 2.0,
+        "the focus bar is the left border of a card-sized quad, so it follows \
+         the card's rounded corners, got {bar:?} in {card:?}"
     );
     keystrokes(vcx, "down");
     assert_eq!(focused(&view, vcx), 1, "↓ moves to the next stack");

@@ -12,7 +12,8 @@ mod focus;
 mod labels;
 pub use focus::{focus_order, DraftFocus, DraftPopup};
 pub use labels::{
-    camera_name, field_icon, field_label, match_label, operator_label, rating_value_label,
+    camera_groups, camera_name, field_icon, field_label, match_label, operator_label,
+    rating_value_label,
 };
 
 /// Fields offered in the field popup, in Photos-like order. Older albums may
@@ -94,7 +95,6 @@ impl ValueKind {
             Self::DateRange => "YYYY-MM-DD to YYYY-MM-DD",
             Self::Number | Self::Period => "number",
             Self::Tags => "choose a tag",
-            Self::TagList => "add keyword…",
             Self::Camera => "choose a camera",
             _ => "text",
         }
@@ -233,6 +233,30 @@ impl DraftRow {
         }
     }
 
+    /// A "Camera is" row takes every spelling `groups` lists under its
+    /// camera's name: an older rule, or a spelling imported since, would
+    /// otherwise match only its stored pairs while showing the merged name.
+    pub fn expand_camera(&mut self, groups: &[(String, Vec<String>)]) {
+        if !matches!(self.kind(), ValueKind::Camera) {
+            return;
+        }
+        let stored: Vec<&[String]> = self.list.chunks(2).collect();
+        let Some((_, group)) = groups
+            .iter()
+            .find(|(_, group)| group.chunks(2).any(|pair| stored.contains(&pair)))
+        else {
+            return;
+        };
+        let mut list = group.clone();
+        // A stored spelling no longer in the library stays in the rule.
+        for pair in stored {
+            if !list.chunks(2).any(|p| p == pair) {
+                list.extend_from_slice(pair);
+            }
+        }
+        self.list = list;
+    }
+
     /// Text shown in the value control.
     pub fn display_value(&self) -> String {
         match self.kind() {
@@ -243,7 +267,7 @@ impl DraftRow {
                 .map_or_else(|| self.text.clone(), |(_, label)| label.to_string()),
             ValueKind::TagList => self.list.join(", "),
             ValueKind::Camera => match self.list.as_slice() {
-                [make, model] => camera_name(make, model).unwrap_or_default(),
+                [make, model, ..] => camera_name(make, model).unwrap_or_default(),
                 _ => String::new(),
             },
             _ => self.text.clone(),
@@ -269,7 +293,9 @@ impl DraftRow {
             }
             ValueKind::TagList if self.list.is_empty() => return None,
             ValueKind::TagList => RuleValue::List(self.list.clone()),
-            ValueKind::Camera if self.list.len() != 2 || self.list.concat().is_empty() => {
+            ValueKind::Camera
+                if !self.list.len().is_multiple_of(2) || self.list.concat().is_empty() =>
+            {
                 return None
             }
             ValueKind::Camera => RuleValue::List(self.list.clone()),

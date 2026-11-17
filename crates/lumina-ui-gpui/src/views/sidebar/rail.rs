@@ -34,6 +34,7 @@ pub(super) fn render_rail(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl
         .gap_1()
         // Scrolls rather than clips if a window is ever shorter than the list.
         .overflow_y_scroll()
+        .track_scroll(&this.sidebar_rail_scroll)
         .children(
             nav_entries(this)
                 .into_iter()

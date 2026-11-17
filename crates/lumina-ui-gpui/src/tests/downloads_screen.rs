@@ -4,7 +4,7 @@
 
 use super::downloads::{imported, install, persisted, queue_app, settle, states, submit};
 use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
-use crate::app::downloads::{DownloadEntry, DownloadFilter, JobOutcome};
+use crate::app::downloads::{DownloadEntry, DownloadFilter, JobEvent, JobOutcome};
 use crate::config::{AppConfig, LastView};
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
@@ -537,6 +537,92 @@ fn downloads_status_bar_drops_unknown_parts() {
     });
     render_ui(vcx);
     assert!(marker(vcx, "downloads-status-detail-text:60.0 MB".into()));
+}
+
+/// Sends row `index` a progress event through the job path.
+fn report(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, index: usize, speed: u64) {
+    view.update(vcx, |app, cx| {
+        let mut p = NetworkDownloadProgress::new(DownloadPhase::Downloading, "");
+        p.bytes_downloaded = 10 * MB;
+        p.total_bytes = Some(20 * MB);
+        p.speed_bytes_per_sec = speed;
+        let (generation, id) = (
+            app.downloads.generation,
+            app.downloads.entries[index].row.id,
+        );
+        app.apply_job_events(generation, id, vec![JobEvent::Progress(p)], cx);
+    });
+    render_ui(vcx);
+}
+
+#[core::prelude::v1::test]
+fn a_stalled_download_redraws_without_its_speed() {
+    let (_dir, engine, fake, mut cx) = queue_app("dls_stalled_speed");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    set_rows(&view, vcx, &[DownloadState::Running]);
+    view.update(vcx, |app, cx| app.show_downloads_screen(cx));
+    let notified = std::rc::Rc::new(std::cell::Cell::new(0));
+    let _watch = {
+        let notified = notified.clone();
+        vcx.update(|_, cx| cx.observe(&view, move |_, _| notified.set(notified.get() + 1)))
+    };
+    let wait = |vcx: &mut VisualTestContext, secs: u64| {
+        vcx.executor()
+            .advance_clock(std::time::Duration::from_secs(secs));
+        vcx.run_until_parked();
+    };
+    let speed_shown = |vcx: &mut VisualTestContext| {
+        marker(
+            vcx,
+            "downloads-row-meta-text:example.com · 10.0 MB of 20.0 MB · 4.0 MB/s".into(),
+        )
+    };
+
+    report(&view, vcx, 0, 4 * MB);
+    assert!(speed_shown(vcx), "a fresh speed shows");
+    wait(vcx, 3);
+    // Another event restarts the wait: the speed is fresh again.
+    report(&view, vcx, 0, 4 * MB);
+    wait(vcx, 3);
+    render_ui(vcx);
+    assert!(
+        speed_shown(vcx),
+        "the speed stays while events keep arriving"
+    );
+    assert_eq!(view.update(vcx, |app, _| app.download_speed()), 4 * MB);
+
+    // The only job goes silent: nothing else would redraw.
+    let before = notified.get();
+    wait(vcx, 3);
+    assert!(
+        notified.get() > before,
+        "a job silent for a few seconds redraws by itself"
+    );
+    render_ui(vcx);
+    assert!(
+        marker(
+            vcx,
+            "downloads-row-meta-text:example.com · 10.0 MB of 20.0 MB".into()
+        ),
+        "a stalled job shows no speed"
+    );
+    assert_eq!(
+        view.update(vcx, |app, _| app.download_speed()),
+        0,
+        "a stalled job adds nothing to the combined speed"
+    );
+
+    // A row removed while its wait runs: nothing fires for it.
+    report(&view, vcx, 0, 4 * MB);
+    set_rows(&view, vcx, &[]);
+    let before = notified.get();
+    wait(vcx, 10);
+    assert_eq!(
+        notified.get(),
+        before,
+        "a removed row's wait is dropped with it"
+    );
 }
 
 #[core::prelude::v1::test]

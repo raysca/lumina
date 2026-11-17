@@ -866,6 +866,12 @@ fn en_us(key: &str) -> Option<&'static str> {
         "smart_album.empty_body" => "This album fills itself. As soon as a photo matches, it appears here.",
         "smart_album.empty_edit" => "Edit rules",
         "smart_album.empty_delete" => "Delete album",
+        "smart_album.cant_run" => "These conditions can't run: {}",
+        "smart_album.fix_conditions" => "Fix the highlighted conditions",
+        "smart_album.key_save" => "⏎",
+        "smart_album.key_cancel" => "Esc",
+        "smart_album.add_keyword" => "add keyword…",
+        "smart_album.remove_keyword" => "Remove {}",
         "search.empty_title_one" => "Nothing matches this filter",
         "search.empty_title_two" => "Nothing matches both filters",
         "search.empty_title_many" => "Nothing matches all {n} filters",
@@ -1176,6 +1182,25 @@ mod tests {
         assert_eq!(t("command.preferences"), "Preferences…");
         assert_eq!(t("missing.key"), "missing.key");
         assert_eq!(current_locale(), Locale::EnUs);
+    }
+
+    #[test]
+    fn smart_album_builder_strings_are_catalogued() {
+        assert_eq!(
+            t_with("smart_album.cant_run", &["no date"]),
+            "These conditions can't run: no date"
+        );
+        assert_eq!(
+            t("smart_album.fix_conditions"),
+            "Fix the highlighted conditions"
+        );
+        assert_eq!(t("smart_album.key_save"), "⏎");
+        assert_eq!(t("smart_album.key_cancel"), "Esc");
+        assert_eq!(t("smart_album.add_keyword"), "add keyword…");
+        assert_eq!(
+            t_with("smart_album.remove_keyword", &["beach"]),
+            "Remove beach"
+        );
     }
 
     #[test]

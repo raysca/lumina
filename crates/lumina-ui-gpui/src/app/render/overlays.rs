@@ -156,10 +156,16 @@ impl LuminaApp {
             .into_any_element()
     }
 
+    /// The fullscreen viewer is drawn: the flag alone isn't enough, since
+    /// dropping the selection (`clear_selection_fields`) leaves it set.
+    pub(crate) fn viewer_shown(&self) -> bool {
+        self.is_fullscreen_viewer && self.selected_item.is_some()
+    }
+
     /// Fullscreen viewer modal overlay
     /// Fades in on every open (a fade, so under Reduce Motion too).
     pub(crate) fn render_viewer_modal(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let open = self.is_fullscreen_viewer && self.selected_item.is_some();
+        let open = self.viewer_shown();
         let viewer = if open {
             div()
                 .absolute()

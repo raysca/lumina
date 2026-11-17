@@ -52,6 +52,7 @@ impl LuminaApp {
                 entry.cancel.store(true, Ordering::Relaxed);
                 entry.row.state = DownloadState::Paused;
                 entry.progress = None;
+                entry.stale_wait = None;
                 None
             }
             DownloadState::Waiting => {

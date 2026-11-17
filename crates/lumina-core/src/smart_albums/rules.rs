@@ -134,7 +134,7 @@ impl SmartAlbum {
         }
 
         // Each keyword binds four values; SQLite allows 32,766 per statement.
-        // A camera's two-item list binds at most two and is not counted.
+        // A camera binds one value per stored spelling, a handful, uncounted.
         let keywords: usize = self
             .rules
             .iter()
@@ -627,18 +627,16 @@ fn compile_tag_any_of(value: &RuleValue) -> Result<(String, Vec<rusqlite::types:
     ))
 }
 
-/// Camera "is" / "is not": the value is the `[make, model]` pair as stored
-/// (see `Catalog::distinct_cameras`), "" for a missing part. Both parts are
-/// compared exactly, case included: the pair comes from the library's own
-/// list, and a binary `=` lets the count seek `idx_media_camera`.
+/// Camera "is" / "is not": the value is one or more `[make, model]` pairs as
+/// stored (see `Catalog::distinct_cameras`), "" for a missing part. The
+/// builder lists spellings of one camera ("Canon" / "canon") under one name
+/// and stores every pair it grouped. Each part is compared exactly, case
+/// included, so every pair's binary `=` lets the count seek `idx_media_camera`.
 fn compile_camera_is(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
-    let RuleValue::List(pair) = &rule.value else {
+    let RuleValue::List(parts) = &rule.value else {
         return Err(anyhow!("Choose a camera"));
     };
-    let [make, model] = pair.as_slice() else {
-        return Err(anyhow!("Choose a camera"));
-    };
-    if make.is_empty() && model.is_empty() {
+    if parts.is_empty() || !parts.len().is_multiple_of(2) {
         return Err(anyhow!("Choose a camera"));
     }
     let mut params = Vec::new();
@@ -650,12 +648,23 @@ fn compile_camera_is(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::typ
             format!("{col} = ?")
         }
     };
-    let both = format!("{} AND {}", part("m.make", make), part("m.model", model));
+    let mut pairs = Vec::new();
+    for [make, model] in parts.as_chunks::<2>().0 {
+        if make.is_empty() && model.is_empty() {
+            return Err(anyhow!("Choose a camera"));
+        }
+        pairs.push(format!(
+            "({} AND {})",
+            part("m.make", make),
+            part("m.model", model)
+        ));
+    }
+    let any = pairs.join(" OR ");
     // A NULL part makes the AND NULL; COALESCE keeps "is not" true for it.
     let clause = if rule.operator == RuleOperator::NotEquals {
-        format!("NOT COALESCE(({both}), 0)")
+        format!("NOT COALESCE(({any}), 0)")
     } else {
-        format!("({both})")
+        format!("({any})")
     };
     Ok((clause, params))
 }

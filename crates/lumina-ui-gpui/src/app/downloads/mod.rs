@@ -28,13 +28,23 @@ use lumina_core::net_import::{
 use lumina_core::{Catalog, DownloadRow, DownloadState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::LuminaApp;
+
+/// A job silent this long has stalled: its last speed no longer shows.
+/// Nothing samples between job events, so a stalled job would otherwise
+/// keep its last speed (and time left) on screen.
+const STALE_SPEED: Duration = Duration::from_secs(5);
 
 /// One row of the list, with what only the running app knows.
 pub(crate) struct DownloadEntry {
     pub row: DownloadRow,
     pub progress: Option<NetworkDownloadProgress>,
+    /// Clears the speed [`STALE_SPEED`] after the last progress event.
+    /// Replaced by each event and dropped with the row or its progress, so
+    /// it never fires for a removed, finished or restarted run.
+    stale_wait: Option<Task<()>>,
     /// Download Again: skip the "already in your library" check.
     pub skip_prior_check: bool,
     /// The dialog's inspection, handed to the first run of the job.
@@ -53,6 +63,7 @@ impl DownloadEntry {
         Self {
             row,
             progress: None,
+            stale_wait: None,
             skip_prior_check,
             info,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -338,6 +349,7 @@ impl LuminaApp {
         };
         entry.row.state = DownloadState::Running;
         entry.progress = None;
+        entry.stale_wait = None;
         entry.cancel = Arc::new(AtomicBool::new(false));
         let request = JobRequest {
             row_id: entry.row.id,
@@ -420,7 +432,7 @@ impl LuminaApp {
         .detach();
     }
 
-    fn apply_job_events(
+    pub(crate) fn apply_job_events(
         &mut self,
         generation: u64,
         row_id: i64,
@@ -456,15 +468,34 @@ impl LuminaApp {
                         })
                         .detach();
                 }
-                JobEvent::Progress(progress) => entry.progress = Some(progress),
+                JobEvent::Progress(progress) => {
+                    entry.progress = Some(progress);
+                    entry.stale_wait = Some(cx.spawn(async move |this, cx| {
+                        cx.background_executor().timer(STALE_SPEED).await;
+                        let _ = this.update(cx, |app, cx| app.clear_stalled_speed(row_id, cx));
+                    }));
+                }
             }
         }
         // Progress events are the clock: no timer runs while nothing does.
         let combined = self.download_speed();
-        self.downloads
-            .speed
-            .record(std::time::Instant::now(), combined);
+        self.downloads.speed.record(Instant::now(), combined);
         cx.notify();
+    }
+
+    /// The job of `row_id` reported nothing for [`STALE_SPEED`]: its speed
+    /// goes, and the screen redraws without it.
+    fn clear_stalled_speed(&mut self, row_id: i64, cx: &mut Context<Self>) {
+        let Some(index) = self.downloads.index_of(row_id) else {
+            return;
+        };
+        let entry = &mut self.downloads.entries[index];
+        if let Some(progress) = entry.progress.as_mut() {
+            if progress.speed_bytes_per_sec > 0 {
+                progress.speed_bytes_per_sec = 0;
+                cx.notify();
+            }
+        }
     }
 
     fn finish_download(&mut self, generation: u64, finished: Finished, cx: &mut Context<Self>) {
@@ -512,6 +543,7 @@ impl LuminaApp {
         row.canonical_url = row.canonical_url.or(entry.row.canonical_url.take());
         entry.row = row;
         entry.progress = None;
+        entry.stale_wait = None;
         match finished.outcome {
             JobOutcome::Imported {
                 item,

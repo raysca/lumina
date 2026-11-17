@@ -8,7 +8,7 @@ use crate::app::smart_draft::{
     field_icon, field_label, operator_label, rating_value_label, DraftFocus, DraftRow, ValueKind,
 };
 use crate::app::text_input::TextTarget;
-use crate::i18n::{stars, t};
+use crate::i18n::{stars, t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::text_marker;
@@ -249,7 +249,7 @@ fn keyword_tokens(
                     .id(ElementId::Name(remove_sel.clone().into()))
                     .debug_selector(move || remove_sel.clone())
                     .role(Role::Button)
-                    .aria_label(format!("Remove {tag}"))
+                    .aria_label(t_with("smart_album.remove_keyword", &[tag]))
                     .cursor_pointer()
                     .child(render_icon(Icon::X, px(10.0), theme::accent()))
                     .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
@@ -282,7 +282,7 @@ fn keyword_tokens(
             div()
                 .text_size(px(12.0))
                 .text_color(theme::t3())
-                .child(ValueKind::TagList.placeholder()),
+                .child(t("smart_album.add_keyword")),
         )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             this.toggle_draft_popup(DraftFocus::Value(i), cx);

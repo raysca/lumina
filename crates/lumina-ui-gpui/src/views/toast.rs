@@ -290,15 +290,14 @@ impl LuminaApp {
             .child(
                 div()
                     .debug_selector(|| "toast-accent".to_string())
+                    // The left border of a card-sized quad, inside the 10 px
+                    // card corner (1 px border): it follows the corner curve,
+                    // where a 3 px wide quad clamps its radius to 1.5 px.
                     .absolute()
-                    .left_0()
-                    .top_0()
-                    .bottom_0()
-                    .w(px(3.0))
-                    // Inside the 10 px card corner (1 px border).
-                    .rounded_tl(px(9.0))
-                    .rounded_bl(px(9.0))
-                    .bg(colour),
+                    .inset_0()
+                    .rounded(px(9.0))
+                    .border_l(px(3.0))
+                    .border_color(colour),
             )
             .child(
                 div()

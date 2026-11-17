@@ -6,7 +6,7 @@ use gpui::*;
 
 use crate::app::smart_draft::DraftFocus;
 use crate::app::state::AlbumDraftState;
-use crate::i18n::{count, t};
+use crate::i18n::{count, t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
 use crate::views::page_header::text_marker;
@@ -20,16 +20,13 @@ const TILE_MAX_W: f32 = 92.0;
 pub(crate) fn footer_status(draft: &AlbumDraftState) -> (String, Rgba) {
     match draft.match_count {
         None if draft.problem.is_some() => (
-            format!(
-                "These conditions can't run: {}",
-                draft.problem.as_deref().unwrap_or_default()
+            t_with(
+                "smart_album.cant_run",
+                &[draft.problem.as_deref().unwrap_or_default()],
             ),
             theme::danger(),
         ),
-        None => (
-            "Fix the highlighted conditions".to_string(),
-            theme::danger(),
-        ),
+        None => (t("smart_album.fix_conditions"), theme::danger()),
         Some(0) => (t("smart_album.no_matches"), theme::t1()),
         Some(1) => (t("smart_album.matches_one"), theme::t1()),
         Some(n) => (
@@ -205,7 +202,7 @@ pub(super) fn render_preview(app: &LuminaApp) -> impl IntoElement {
 }
 
 /// A footer key hint: 20 tall, r5, mono 11.
-fn key_hint(label: &'static str, bg: Rgba, color: Rgba) -> Div {
+fn key_hint(label: String, bg: Rgba, color: Rgba) -> Div {
     div()
         .h(px(20.0))
         .px(px(6.0))
@@ -257,7 +254,11 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
                     .text_color(theme::on_accent())
                     .hover(|s| s.bg(theme::accent_hover()))
                     .child(save_text.clone())
-                    .child(key_hint("⏎", theme::on_accent_kbd(), theme::on_accent()))
+                    .child(key_hint(
+                        t("smart_album.key_save"),
+                        theme::on_accent_kbd(),
+                        theme::on_accent(),
+                    ))
             } else {
                 b.bg(theme::bg_3())
                     .text_color(theme::t3())
@@ -275,7 +276,11 @@ pub(super) fn render_footer(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> imp
         .text_color(theme::t1())
         .font_weight(FontWeight::MEDIUM)
         .child(t("smart_album.cancel"))
-        .child(key_hint("Esc", theme::bg_0(), theme::t3()))
+        .child(key_hint(
+            t("smart_album.key_cancel"),
+            theme::bg_0(),
+            theme::t3(),
+        ))
         .on_click(cx.listener(|this, _e: &ClickEvent, _w, cx| {
             this.close_album_builder(cx);
         }));

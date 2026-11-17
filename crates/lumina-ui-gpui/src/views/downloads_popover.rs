@@ -17,13 +17,24 @@ pub(crate) fn popover_button(
     selector: String,
     icon: Icon,
     label: String,
+    colors: (Rgba, Rgba),
+) -> Stateful<Div> {
+    named_popover_button(selector, icon, label.clone(), label.into(), colors)
+}
+
+/// [`popover_button`] with a VoiceOver name other than its tooltip.
+pub(crate) fn named_popover_button(
+    selector: String,
+    icon: Icon,
+    label: String,
+    name: SharedString,
     (bg, fg): (Rgba, Rgba),
 ) -> Stateful<Div> {
     div()
         .id(SharedString::from(selector.clone()))
         .debug_selector(move || selector.clone())
         .role(Role::Button)
-        .aria_label(SharedString::from(label.clone()))
+        .aria_label(name)
         .tooltip(theme::tooltip_label(label))
         .size(px(25.0))
         .flex_shrink_0()

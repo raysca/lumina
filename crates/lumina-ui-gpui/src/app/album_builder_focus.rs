@@ -5,8 +5,8 @@ use gpui::*;
 use lumina_core::{MatchMode, RuleField};
 
 use crate::app::smart_draft::{
-    camera_name, field_label, focus_order, operator_label, operators, DraftFocus, DraftPopup,
-    DraftRow, ValueKind, FIELDS, UNITS,
+    field_label, focus_order, operator_label, operators, DraftFocus, DraftPopup, DraftRow,
+    ValueKind, FIELDS, UNITS,
 };
 use crate::app::LuminaApp;
 
@@ -63,8 +63,7 @@ impl LuminaApp {
                     .album_draft
                     .cameras
                     .iter()
-                    // map, not filter_map: option i is camera i when picked.
-                    .map(|(make, model)| camera_name(make, model).unwrap_or_default())
+                    .map(|(name, _)| name.clone())
                     .collect(),
                 _ => Vec::new(),
             },
@@ -76,33 +75,32 @@ impl LuminaApp {
     /// Index of the current value in `target`'s popup, for the highlight.
     fn draft_popup_current(&self, target: DraftFocus) -> usize {
         let rows = &self.album_draft.rows;
-        let position = match target {
-            DraftFocus::Match => Some((self.album_draft.match_mode == MatchMode::Any) as usize),
-            DraftFocus::Field(i) => rows
-                .get(i)
-                .and_then(|row| FIELDS.iter().position(|f| *f == row.field)),
-            DraftFocus::Operator(i) => rows.get(i).and_then(|row| {
-                operators(&row.field)
-                    .iter()
-                    .position(|o| *o == row.operator)
-            }),
-            DraftFocus::Value(i) => rows.get(i).and_then(|row| match row.kind() {
-                ValueKind::Choice(options) => options.iter().position(|(k, _)| *k == row.text),
-                ValueKind::Camera => self
-                    .album_draft
-                    .cameras
-                    .iter()
-                    .position(|(make, model)| row.list == [make.as_str(), model.as_str()]),
-                _ => self
-                    .library_tag_counts
-                    .iter()
-                    .position(|(tag, _)| *tag == row.text),
-            }),
-            DraftFocus::Unit(i) => rows
-                .get(i)
-                .and_then(|row| UNITS.iter().position(|(u, _)| *u == row.unit)),
-            _ => None,
-        };
+        let position =
+            match target {
+                DraftFocus::Match => Some((self.album_draft.match_mode == MatchMode::Any) as usize),
+                DraftFocus::Field(i) => rows
+                    .get(i)
+                    .and_then(|row| FIELDS.iter().position(|f| *f == row.field)),
+                DraftFocus::Operator(i) => rows.get(i).and_then(|row| {
+                    operators(&row.field)
+                        .iter()
+                        .position(|o| *o == row.operator)
+                }),
+                DraftFocus::Value(i) => rows.get(i).and_then(|row| match row.kind() {
+                    ValueKind::Choice(options) => options.iter().position(|(k, _)| *k == row.text),
+                    ValueKind::Camera => self.album_draft.cameras.iter().position(|(_, pairs)| {
+                        pairs.chunks(2).any(|p| row.list.get(..2) == Some(p))
+                    }),
+                    _ => self
+                        .library_tag_counts
+                        .iter()
+                        .position(|(tag, _)| *tag == row.text),
+                }),
+                DraftFocus::Unit(i) => rows
+                    .get(i)
+                    .and_then(|row| UNITS.iter().position(|(u, _)| *u == row.unit)),
+                _ => None,
+            };
         position.unwrap_or(0)
     }
 
@@ -143,7 +141,11 @@ impl LuminaApp {
             return;
         };
         let picked = self.draft_popup_options(popup.target).get(index).cloned();
-        let camera = self.album_draft.cameras.get(index).cloned();
+        let camera = self
+            .album_draft
+            .cameras
+            .get(index)
+            .map(|(_, pairs)| pairs.clone());
         let tags = &self.library_tag_counts;
         let draft = &mut self.album_draft;
         match popup.target {
@@ -176,8 +178,8 @@ impl LuminaApp {
                             None
                         }
                         ValueKind::Camera => {
-                            if let Some((make, model)) = camera {
-                                row.list = vec![make, model];
+                            if let Some(pairs) = camera {
+                                row.list = pairs;
                             }
                             None
                         }

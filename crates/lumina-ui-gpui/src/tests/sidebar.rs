@@ -638,3 +638,70 @@ fn sidebar_brand_row_present() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The fullscreen viewer covers the sidebar, so the sidebar leaves the tree
+/// (VoiceOver listed its buttons under the viewer). Its width stays, so the
+/// grid under the viewer keeps its layout.
+#[core::prelude::v1::test]
+fn fullscreen_viewer_takes_the_sidebar_out_of_the_tree() {
+    let (dir, engine) = seed_library("nav_viewer_hides", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let sidebar = vcx.debug_bounds("sidebar").expect("the sidebar shows");
+    let status = vcx
+        .debug_bounds("status-bar")
+        .expect("the status bar shows");
+    assert!(vcx.debug_bounds("switch-library").is_some());
+
+    view.update(vcx, |app, cx| {
+        let first = app.get_active_slice(0..1)[0].clone();
+        app.open_viewer(first, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("sidebar").is_none() && vcx.debug_bounds("switch-library").is_none(),
+        "the viewer covers the sidebar, so its controls must not be in the tree"
+    );
+    assert_eq!(
+        vcx.debug_bounds("status-bar").map(|b| b.left()),
+        Some(status.left()),
+        "the column under the viewer keeps its place"
+    );
+
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    render_ui(vcx);
+    assert_eq!(
+        vcx.debug_bounds("sidebar"),
+        Some(sidebar),
+        "closing the viewer brings the sidebar back where it was"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Dropping the viewed item's selection (an untag in a Tag view, a merge
+/// that trashes it) leaves the viewer flag set but draws no viewer: the
+/// sidebar must come back, not stay blank.
+#[core::prelude::v1::test]
+fn sidebar_returns_when_the_viewed_item_is_dropped() {
+    let (dir, engine) = seed_library("nav_viewer_dropped", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        let first = app.get_active_slice(0..1)[0].clone();
+        app.open_viewer(first, cx);
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("sidebar").is_none(), "precondition");
+
+    view.update(vcx, |app, cx| {
+        app.clear_selection_fields();
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("sidebar").is_some(),
+        "with no viewer drawn the sidebar must show"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

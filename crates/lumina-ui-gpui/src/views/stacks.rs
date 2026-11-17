@@ -279,12 +279,13 @@ fn render_stack(
             d.child(
                 div()
                     .debug_selector(move || format!("stack-focus-{index}"))
+                    // The left border of a card-sized quad, so it follows
+                    // the card's corners (overflow_hidden clips square).
                     .absolute()
-                    .left_0()
-                    .top_0()
-                    .bottom_0()
-                    .w(px(3.0))
-                    .bg(theme::focus_ring()),
+                    .inset_0()
+                    .rounded(theme::RADIUS_LG - px(1.0))
+                    .border_l(px(3.0))
+                    .border_color(theme::focus_ring()),
             )
         })
         .child(

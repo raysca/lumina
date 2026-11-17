@@ -540,20 +540,6 @@ fn videos_meta_updates_after_a_clip_is_trashed() {
     });
 }
 
-/// Hosts the empty-state shell with no library open, which draws at the
-/// `Hero` size.
-struct HeroHost(gpui::Entity<crate::app::LuminaApp>);
-
-impl gpui::Render for HeroHost {
-    fn render(
-        &mut self,
-        _window: &mut gpui::Window,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl gpui::IntoElement {
-        self.0.update(cx, |app, cx| app.render_empty_state(cx))
-    }
-}
-
 #[core::prelude::v1::test]
 fn empty_state_shell_matches_design() {
     let (dir, engine) = seed_library("states_empty_shell", 1);
@@ -589,26 +575,6 @@ fn empty_state_shell_matches_design() {
         "the primary button is 34 px tall"
     );
     let _ = std::fs::remove_dir_all(&dir);
-
-    // Hero (First Run): no library, so the shell offers Open Library….
-    use gpui::AppContext as _;
-    let mut cx = crate::tests::TestApp::single();
-    let (_host, vcx) =
-        cx.add_window_view(|_window, cx| HeroHost(cx.new(crate::app::LuminaApp::new)));
-    render_ui(vcx);
-    let glyph = vcx
-        .debug_bounds("empty-state-glyph")
-        .expect("the hero shell draws the glyph");
-    let side = (f32::from(glyph.size.width), f32::from(glyph.size.height));
-    assert_eq!(side, (150.0, 150.0), "the hero glyph is 150 px");
-    let primary = vcx
-        .debug_bounds("empty-primary")
-        .expect("the hero shell has a primary action");
-    assert_eq!(
-        f32::from(primary.size.height),
-        40.0,
-        "the hero primary button is 40 px tall"
-    );
 }
 
 #[core::prelude::v1::test]

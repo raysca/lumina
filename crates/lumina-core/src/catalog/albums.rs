@@ -385,7 +385,8 @@ impl Catalog {
 
     /// Every camera in the library as stored `(make, model)`, "" for a
     /// missing part, for the smart album "Camera is" list. Spellings are
-    /// kept apart ("Canon" / "canon") because the rule matches them exactly.
+    /// kept apart ("Canon" / "canon"): the builder groups them under one
+    /// name and the rule matches each stored pair exactly.
     /// Trashed and hidden items count, so the list does not shift as items
     /// move in and out of Trash.
     pub fn distinct_cameras(&self) -> Result<Vec<(String, String)>> {

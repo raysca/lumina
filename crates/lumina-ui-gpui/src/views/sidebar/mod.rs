@@ -59,6 +59,17 @@ pub struct SidebarView;
 
 impl SidebarView {
     pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> impl IntoElement {
+        // The fullscreen viewer covers the sidebar: keep its width, so the
+        // grid under the viewer keeps its layout, but leave its controls out
+        // of the tree (VoiceOver listed them under the viewer).
+        if this.viewer_shown() {
+            let width = if this.sidebar_collapsed {
+                crate::views::grid::SIDEBAR_COLLAPSED_WIDTH
+            } else {
+                this.sidebar_width
+            };
+            return div().flex_none().w(px(width)).h_full().into_any_element();
+        }
         if this.sidebar_collapsed {
             return rail::render_rail(this, cx).into_any_element();
         }
@@ -83,6 +94,9 @@ impl SidebarView {
             .child(
                 div()
                     .id("sidebar-scroll")
+                    // Kept in the app: the viewer drops the sidebar from the
+                    // tree, and with it GPUI's own scroll state.
+                    .track_scroll(&this.sidebar_scroll)
                     .flex()
                     .flex_1()
                     .min_h_0()

@@ -108,6 +108,14 @@ impl LuminaApp {
                 Vec::new()
             })
         });
+        let cameras = crate::app::smart_draft::camera_groups(&cameras);
+        let rows: Vec<DraftRow> = rows
+            .into_iter()
+            .map(|mut row| {
+                row.expand_camera(&cameras);
+                row
+            })
+            .collect();
         let draft = &mut self.album_draft;
         draft.cameras = cameras;
         draft.modal_open = true;

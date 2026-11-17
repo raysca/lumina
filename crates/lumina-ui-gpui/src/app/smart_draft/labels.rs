@@ -87,6 +87,32 @@ pub fn camera_name(make: &str, model: &str) -> Option<String> {
     }
 }
 
+/// The library's cameras grouped by [`camera_name`], ignoring case, in
+/// first-seen order: each group is its name and its stored pairs flattened
+/// (`[make, model, make, model, …]`), the "Camera is" rule's value. So
+/// "Canon" / "canon", or a missing vs an empty make, list once and the rule
+/// matches every spelling.
+pub fn camera_groups(cameras: &[(String, String)]) -> Vec<(String, Vec<String>)> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for (make, model) in cameras {
+        let Some(name) = camera_name(make, model) else {
+            continue;
+        };
+        let pair = [make.clone(), model.clone()];
+        // ponytail: linear search, the library has a handful of cameras.
+        match groups
+            .iter_mut()
+            .find(|(n, _)| n.to_lowercase() == name.to_lowercase())
+        {
+            // A NULL and an empty make both read "": one seek is enough.
+            Some((_, pairs)) if pairs.chunks(2).any(|p| p == pair) => {}
+            Some((_, pairs)) => pairs.extend(pair),
+            None => groups.push((name, pair.to_vec())),
+        }
+    }
+    groups
+}
+
 pub fn match_label(mode: MatchMode) -> &'static str {
     match mode {
         MatchMode::All => "all",
@@ -108,6 +134,37 @@ pub fn rating_value_label(op: &RuleOperator, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn camera_groups_merge_spellings_once_each() {
+        let pair = |make: &str, model: &str| (make.to_string(), model.to_string());
+        let groups = camera_groups(&[
+            // A NULL and an empty make both read "".
+            pair("", "iPhone 15"),
+            pair("", "iPhone 15"),
+            pair("Canon", "Canon EOS R5"),
+            pair("canon", "Canon EOS R5"),
+        ]);
+        assert_eq!(
+            groups,
+            vec![
+                (
+                    "iPhone 15".to_string(),
+                    vec![String::new(), "iPhone 15".into()]
+                ),
+                (
+                    "Canon EOS R5".to_string(),
+                    vec![
+                        "Canon".into(),
+                        "Canon EOS R5".into(),
+                        "canon".into(),
+                        "Canon EOS R5".into()
+                    ]
+                ),
+            ],
+            "one group per name, each stored pair once"
+        );
+    }
 
     #[test]
     fn camera_name_drops_a_make_the_model_repeats() {

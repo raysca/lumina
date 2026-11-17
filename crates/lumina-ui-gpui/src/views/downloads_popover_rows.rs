@@ -13,7 +13,7 @@ use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::downloads_popover::popover_button;
+use crate::views::downloads_popover::named_popover_button;
 use crate::views::downloads_rows::{thumb, title_of};
 use crate::views::network_import_preview::host_of;
 use crate::views::page_header::text_marker;
@@ -89,8 +89,8 @@ fn row_button(
     title: &SharedString,
     colors: (Rgba, Rgba),
 ) -> Stateful<Div> {
-    popover_button(selector, icon, label.clone(), colors)
-        .aria_label(SharedString::from(format!("{label} {title}")))
+    let name = SharedString::from(format!("{label} {title}"));
+    named_popover_button(selector, icon, label, name, colors)
 }
 
 /// The meta line of an active row, and its colour.

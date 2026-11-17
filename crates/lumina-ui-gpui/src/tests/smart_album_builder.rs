@@ -948,6 +948,102 @@ fn camera_is_offers_library_cameras() {
 }
 
 #[core::prelude::v1::test]
+fn camera_is_lists_each_name_once_and_matches_every_spelling() {
+    let (dir, engine, ids) = library("sab_camera_case");
+    set_camera(&dir, ids[0], Some("Canon"), Some("Canon EOS R5"));
+    set_camera(&dir, ids[1], Some("canon"), Some("Canon EOS R5"));
+    set_camera(&dir, ids[2], None, Some("iPhone 15"));
+    set_camera(&dir, ids[3], Some(""), Some("iPhone 15"));
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    camera_is_row(vcx, &view);
+    let offered = view.update(vcx, |app, _| app.draft_popup_options(DraftFocus::Value(0)));
+    assert_eq!(
+        offered,
+        ["iPhone 15", "Canon EOS R5"],
+        "spellings that differ only in case, or a missing vs empty make, list once"
+    );
+
+    pick_option(vcx, &view, DraftFocus::Value(0), "Canon EOS R5");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.match_count,
+            Some(2),
+            "the chosen name matches both spellings"
+        )
+    });
+    click(vcx, "album-rule-value-0");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let popup = app
+            .album_draft
+            .popup
+            .as_ref()
+            .expect("the camera popup reopens");
+        assert_eq!(popup.highlight, 1, "the chosen camera is highlighted");
+    });
+    pick_option(vcx, &view, DraftFocus::Value(0), "iPhone 15");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.match_count,
+            Some(2),
+            "a missing make and an empty make are the same camera"
+        )
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
+fn editing_an_old_camera_rule_keeps_every_spelling() {
+    let (dir, engine, ids) = library("sab_camera_old_rule");
+    set_camera(&dir, ids[0], Some("Canon"), Some("Canon EOS R5"));
+    set_camera(&dir, ids[1], Some("canon"), Some("Canon EOS R5"));
+    // Saved before spellings were grouped: one stored pair.
+    let old = SmartAlbumRule {
+        field: RuleField::Camera,
+        operator: RuleOperator::Equals,
+        value: RuleValue::List(vec!["Canon".into(), "Canon EOS R5".into()]),
+    };
+    let album = engine
+        .create_smart_album("R5", "camera", MatchMode::All, &[old])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    view.update(vcx, |app, cx| app.open_album_builder_for_edit(album, cx));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.match_count,
+            Some(2),
+            "the builder shows one name, so the rule matches both spellings"
+        )
+    });
+    view.update(vcx, |app, cx| app.save_draft_smart_album(cx));
+    render_ui(vcx);
+    let saved = engine.list_smart_albums();
+    let RuleValue::List(parts) = &saved[0].rules[0].value else {
+        panic!("a camera rule keeps a list");
+    };
+    let mut pairs: Vec<_> = parts.chunks(2).map(|p| p.to_vec()).collect();
+    pairs.sort();
+    assert_eq!(
+        pairs,
+        [
+            vec!["Canon".to_string(), "Canon EOS R5".to_string()],
+            vec!["canon".to_string(), "Canon EOS R5".to_string()],
+        ],
+        "saving keeps every spelling of the camera"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[core::prelude::v1::test]
 fn camera_is_with_no_cameras_says_so() {
     let (dir, engine, ids) = library("sab_no_camera");
     for id in ids {

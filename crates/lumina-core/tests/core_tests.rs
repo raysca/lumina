@@ -7530,6 +7530,47 @@ fn camera_equals_matches_the_stored_make_and_model_exactly() {
         "case is part of the stored value"
     );
 
+    // The builder lists "Canon" and "canon" under one name and stores every
+    // pair it grouped: the rule matches each of them, still by index.
+    let grouped = camera_rule(
+        RuleOperator::Equals,
+        RuleValue::List(vec![
+            "Canon".into(),
+            "Canon EOS R5".into(),
+            "canon".into(),
+            "Canon EOS R5".into(),
+        ]),
+    );
+    assert_eq!(
+        matching(&grouped),
+        vec![ids[1], ids[2]],
+        "is matches every stored pair of a grouped camera"
+    );
+    assert_eq!(catalog.query_smart_album_count(&grouped).unwrap(), 2);
+    let (sql, params) = grouped.synthesize_count_query().unwrap();
+    let plan = catalog
+        .explain_query_plan(&inline_sql_params(&sql, &params))
+        .unwrap()
+        .join(" | ");
+    assert!(
+        plan.contains("idx_media_camera (make=? AND model=?)"),
+        "each grouped pair still seeks the camera index: {plan}"
+    );
+    let not_grouped = camera_rule(
+        RuleOperator::NotEquals,
+        RuleValue::List(vec![
+            "Canon".into(),
+            "Canon EOS R5".into(),
+            "canon".into(),
+            "Canon EOS R5".into(),
+        ]),
+    );
+    assert_eq!(
+        matching(&not_grouped),
+        vec![ids[0], ids[3], ids[4], ids[5], ids[6], ids[7]],
+        "is not leaves out every grouped pair"
+    );
+
     let is_phone = camera_rule(RuleOperator::Equals, camera_pair("", "iPhone 15"));
     assert_eq!(
         matching(&is_phone),

@@ -431,18 +431,6 @@ impl LuminaApp {
                                     .into(),
                             )
                         }
-                    } else if self.total_library_count == 0 {
-                        EmptyCopy {
-                            primary: Some(("Open Library…".into(), EmptyAction::OpenLibrary)),
-                            hero: true,
-                            ..copy(
-                                Icon::Folder,
-                                "Your library is empty".into(),
-                                "Open a folder to start building your local photo and video \
-                                 library."
-                                    .into(),
-                            )
-                        }
                     } else {
                         EmptyCopy {
                             primary: show_all(),
