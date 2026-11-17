@@ -173,18 +173,11 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
 
-    let row = vcx.debug_bounds("tag-manager-row-beach").unwrap();
-    assert_eq!(f32::from(row.size.height), 44.0, "rows are 44px");
-    let full = vcx.debug_bounds("tag-manager-usage-fill-beach").unwrap();
-    let third = vcx.debug_bounds("tag-manager-usage-fill-coast").unwrap();
-    assert_eq!(
-        f32::from(full.size.width),
-        190.0,
-        "the most-used tag fills the bar"
-    );
+    // Bar proportions: tag_manager_rows::tag_rows_scale_usage_count_aliases_and_mark_focus.
     assert!(
-        (f32::from(third.size.width) - 190.0 / 3.0).abs() < 0.5,
-        "bars are proportional: {third:?}"
+        vcx.debug_bounds("tag-manager-usage-fill-beach").is_some()
+            && vcx.debug_bounds("tag-manager-usage-fill-coast").is_some(),
+        "every row draws a usage bar"
     );
 
     click(vcx, "tag-manager-row-beach");

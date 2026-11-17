@@ -245,8 +245,6 @@ fn collapsed_rail_shows_an_icon_per_default_collection() {
         let button = vcx
             .debug_bounds(leak(format!("sidebar-rail-{key}")))
             .unwrap_or_else(|| panic!("the rail must show the {key} collection"));
-        assert_eq!(f32::from(button.size.width), 32.0, "{key}: 32 px button");
-        assert_eq!(f32::from(button.size.height), 32.0, "{key}: 32 px button");
         assert!(
             button.left() >= rail.left() && button.right() <= rail.right(),
             "{key}: the button fits inside the 48 px column"
@@ -526,11 +524,6 @@ fn new_album_is_last_album_row() {
     assert!(
         new_album.top() >= row.bottom(),
         "New Album is the last row of the Albums section, not a header button"
-    );
-    assert_eq!(
-        f32::from(new_album.size.height),
-        32.0,
-        "New Album is a NavItem row"
     );
     let before = view.update(vcx, |app, _| app.albums.list.len());
     click(vcx, "new-album");

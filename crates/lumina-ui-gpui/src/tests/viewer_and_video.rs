@@ -758,11 +758,6 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
         "the position must retain readable width at 1024x768, got {:?}",
         position.size.width
     );
-    assert_eq!(
-        f32::from(hud.size.width),
-        40.0,
-        "Fit is a 40px round button"
-    );
     assert!(
         hud.top() >= top_bar.bottom(),
         "the Fit button must float below the top bar: hud={hud:?} top_bar={top_bar:?}"

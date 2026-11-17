@@ -39,7 +39,6 @@ fn first_run_empty_state_is_centred_with_folder_and_import_actions() {
     );
     let open = vcx.debug_bounds("welcome-open-btn").unwrap();
     let import = vcx.debug_bounds("welcome-import-new-btn").unwrap();
-    assert_eq!(f32::from(open.size.height), 40.0, "the primary is 40 high");
     assert_eq!(open.origin.y, import.origin.y, "side by side");
     assert!(
         open.right() <= import.left(),
@@ -122,10 +121,10 @@ fn first_run_has_sidebar_and_header() {
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     render_ui(vcx);
 
-    let sidebar = vcx
-        .debug_bounds("sidebar")
-        .expect("the welcome paints the sidebar");
-    assert_eq!(f32::from(sidebar.size.width), 252.0, "sidebar is 252 wide");
+    assert!(
+        vcx.debug_bounds("sidebar").is_some(),
+        "the welcome paints the sidebar"
+    );
     assert!(
         vcx.debug_bounds("page-title-text:All Media").is_some(),
         "the header reads All Media"

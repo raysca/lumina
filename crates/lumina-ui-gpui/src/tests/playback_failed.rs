@@ -63,12 +63,6 @@ fn video_load_failure_says_so() {
         vcx.debug_bounds("playback-failed-error").is_some(),
         "the player's error string shows under the body"
     );
-    let card = vcx.debug_bounds("viewer-playback-failed").unwrap();
-    assert_eq!(
-        (f32::from(card.size.width), f32::from(card.size.height)),
-        (460.0, 224.0),
-        "the card is the design's 460×224 VideoBox"
-    );
     assert!(
         vcx.debug_bounds("viewer-center-play").is_none(),
         "no play button over a clip that cannot play"

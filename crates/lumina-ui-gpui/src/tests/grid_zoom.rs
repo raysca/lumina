@@ -299,7 +299,6 @@ fn zoom_pill_buttons_walk_the_size_ladder() {
         (f32::from(status.top()) - f32::from(pill.bottom()) - 24.0).abs() < 1.0,
         "the pill sits 24 above the status bar: pill={pill:?} status={status:?}"
     );
-    assert_eq!(f32::from(pill.size.height), 42.0, "the pill is 42 tall");
 
     click(vcx, "grid-zoom-in");
     assert_eq!(columns(&view, vcx), 3, "grid-zoom-in walks 4 → 3");

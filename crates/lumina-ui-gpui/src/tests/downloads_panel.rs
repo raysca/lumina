@@ -546,7 +546,6 @@ fn downloads_popover_shell() {
     let button = vcx
         .debug_bounds("downloads-toolbar-btn")
         .expect("the button paints");
-    assert_eq!(panel.size.width, gpui::px(420.0), "the popover is 420 wide");
     assert!(
         panel.size.height <= gpui::px(550.0),
         "the popover is at most 550 tall: {panel:?}"

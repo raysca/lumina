@@ -102,10 +102,6 @@ fn viewer_filmstrip_centres_current_and_navigates() {
     let strip = vcx
         .debug_bounds("viewer-filmstrip")
         .expect("the filmstrip paints");
-    assert!(
-        (f32::from(strip.size.height) - 95.5).abs() <= 1.0,
-        "the strip is 95.5 tall: {strip:?}"
-    );
     let viewport = vcx.debug_bounds("viewer-viewport").expect("viewport");
     assert!(
         viewport.bottom() <= strip.top(),

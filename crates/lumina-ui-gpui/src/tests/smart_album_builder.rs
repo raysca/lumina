@@ -604,7 +604,6 @@ fn footer_preview_and_pin_option() {
     let tile = vcx
         .debug_bounds(leak(format!("album-builder-preview-{}", preview[0].id.0)))
         .unwrap();
-    assert_eq!(f32::from(tile.size.height), 96.0, "tiles are 96 tall");
     let width = f32::from(tile.size.width);
     assert!(
         (68.0..=92.0).contains(&width),

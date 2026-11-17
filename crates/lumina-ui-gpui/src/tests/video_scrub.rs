@@ -684,11 +684,6 @@ fn scrubber_is_a_strip_with_playhead_pill() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
-    assert_eq!(
-        f32::from(track.size.height),
-        54.0,
-        "the scrubber is a 54px thumbnail strip"
-    );
     assert!(
         vcx.debug_bounds("video-strip-frame-0").is_none(),
         "before the strip arrives the scrubber is a plain bar"

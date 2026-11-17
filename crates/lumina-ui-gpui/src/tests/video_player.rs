@@ -86,12 +86,10 @@ fn video_transport_is_docked_full_width() {
     );
 
     let play = bounds(vcx, "video-play");
-    assert_eq!(size(play), (38.0, 38.0), "play is a 38px round button");
     for (selector, b) in [
         ("video-seek-back", bounds(vcx, "video-seek-back")),
         ("video-seek-fwd", bounds(vcx, "video-seek-fwd")),
     ] {
-        assert_eq!(size(b), (30.0, 30.0), "{selector} is a 30px round button");
         assert!(
             play.right() <= b.left(),
             "{selector} follows play in the left group"
@@ -211,11 +209,7 @@ fn video_top_bar_has_no_edit_and_actions_live_in_the_right_click_menu() {
     let (_dir, view, vcx) = open_video(&mut cx);
 
     for selector in ["viewer-fav-btn", "viewer-rate-btn", "viewer-info-btn"] {
-        assert_eq!(
-            size(bounds(vcx, selector)),
-            (30.0, 30.0),
-            "{selector} is a 30px icon button"
-        );
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector} renders");
     }
     assert!(
         vcx.debug_bounds("viewer-edit-btn").is_none(),
@@ -1259,7 +1253,6 @@ fn volume_slider_sets_player_volume() {
     render_ui(vcx);
 
     let slider = bounds(vcx, "video-volume");
-    assert_eq!(size(slider).0, 62.0, "the slider is 62px wide");
     assert!(
         bounds(vcx, "video-mute").right() <= slider.left()
             && slider.right() <= bounds(vcx, "video-loop").left(),

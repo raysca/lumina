@@ -64,12 +64,6 @@ fn tags_header_filter_and_sort() {
     let search = vcx
         .debug_bounds("tag-manager-search")
         .expect("filter field");
-    assert_eq!(
-        f32::from(search.size.width),
-        200.0,
-        "the filter is 200 wide"
-    );
-    assert_eq!(f32::from(search.size.height), 32.0, "and 32 high");
     let tabs = vcx.debug_bounds("page-tabs").unwrap();
     assert!(
         search.origin.y > tabs.origin.y

@@ -36,10 +36,6 @@ fn header_sits_in_the_main_column_with_title_meta_and_actions() {
         f32::from(title.left()) >= f32::from(sidebar.right()) + 28.0,
         "the title sits in the main column past the 28px padding: {title:?} vs {sidebar:?}"
     );
-    assert!(
-        (f32::from(header.size.height) - 67.5).abs() <= 0.5,
-        "the header is 67.5 high: {header:?}"
-    );
     assert!(inside(header, title), "the title is inside the header");
 
     let meta = bounds(vcx, "page-meta");

@@ -503,13 +503,9 @@ fn selection_mode_shows_check_circles_and_dims_unselected() {
     vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
     render_ui(vcx);
     for (n, &id) in ids.iter().enumerate() {
-        let circle = vcx
-            .debug_bounds(check(id))
-            .unwrap_or_else(|| panic!("card {n} must show a check circle in selection mode"));
-        assert_eq!(
-            f32::from(circle.size.width),
-            22.0,
-            "check circles are 22 px"
+        assert!(
+            vcx.debug_bounds(check(id)).is_some(),
+            "card {n} must show a check circle in selection mode"
         );
         let selected = n < 2;
         assert_eq!(

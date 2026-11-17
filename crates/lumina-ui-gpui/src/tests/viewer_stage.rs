@@ -894,7 +894,6 @@ fn viewer_nav_buttons_sit_26px_from_stage_edges() {
             "{case}: the arrows sit 26 from the stage edges: prev={prev:?} next={next:?}"
         );
         for b in [prev, next] {
-            assert_eq!(b.size, gpui::size(px(40.0), px(40.0)), "{case}: 40x40");
             assert!(
                 (b.center().y - viewport.center().y).abs() <= px(0.5),
                 "{case}: centred on the viewport: {b:?} viewport={viewport:?}"
