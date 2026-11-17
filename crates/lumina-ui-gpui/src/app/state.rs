@@ -502,7 +502,7 @@ pub struct LuminaApp {
     /// User-visible, dismissible error banner (library open/save failures).
     pub error_message: Option<String>,
     /// What the banner's Retry runs; None hides Retry.
-    pub error_retry: Option<crate::app::library::ErrorRetry>,
+    pub error_retry: Option<crate::app::render::error_banner::ErrorRetry>,
     /// Most recent action feedback shown in the status bar.
     pub last_action: Option<String>,
     /// Transient success/info toast shown bottom-right (errors stay in the banner).

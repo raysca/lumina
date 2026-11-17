@@ -199,12 +199,12 @@ fn last_view_restores_downloads() {
     let view = config.restored_session().view;
     assert_eq!(view, LastView::Downloads);
     assert_eq!(
-        crate::app::library::resolve_restored_view(view.clone(), &[], &[], false),
+        crate::app::restore::resolve_restored_view(view.clone(), &[], &[], false),
         AlbumSelection::Downloads,
         "with downloads listed, the screen comes back"
     );
     assert_eq!(
-        crate::app::library::resolve_restored_view(view, &[], &[], true),
+        crate::app::restore::resolve_restored_view(view, &[], &[], true),
         AlbumSelection::AllLibrary,
         "with an empty queue, All comes back instead"
     );

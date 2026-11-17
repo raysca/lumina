@@ -170,7 +170,7 @@ impl LuminaApp {
                 return false;
             }
         }
-        crate::app::navigation::set_or_clear(&mut self.item_ratings, &writes);
+        crate::app::batch_edit::set_or_clear(&mut self.item_ratings, &writes);
         let shown = match held {
             Some(held) => {
                 self.reselect_held(held, cx);

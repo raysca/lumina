@@ -15,7 +15,7 @@ use gpui::{BackgroundExecutor, Task};
 use lumina_core::{MediaId, MediaItem, MediaType};
 
 use crate::app::active_view::ViewKey;
-use crate::app::navigation::{
+use crate::app::batch_edit::{
     summarize_batch_locations, summarize_batch_text, summarize_batch_timestamps,
 };
 use crate::app::state::{BatchFieldSummary, BatchMetadataSummary};

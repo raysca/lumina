@@ -73,78 +73,13 @@ impl LuminaApp {
         // 0b. Settings: every other key stays here, so library shortcuts
         // never act on the hidden library. ⌘, toggles it.
         if self.preferences_open {
-            // Reset to defaults asks first; its card takes every key.
-            if self.preferences_reset_confirm {
-                match key {
-                    "escape" => self.cancel_reset_preferences(cx),
-                    "enter" | "return" => self.confirm_reset_preferences(cx),
-                    _ => {}
-                }
-                return true;
-            }
-            match key {
-                "escape" => self.close_preferences(cx),
-                "," if cmd_or_ctrl => self.close_preferences(cx),
-                "up" => self.step_preferences_tab(-1, cx),
-                "down" => self.step_preferences_tab(1, cx),
-                // The page's buttons: Tab/⇧Tab walk them, ↵ or Space press.
-                // ⌘/⌃/⌥-Tab stay absorbed, as on the welcome screen.
-                "tab" if !cmd_or_ctrl && !keystroke.modifiers.alt => {
-                    let delta = if keystroke.modifiers.shift { -1 } else { 1 };
-                    self.step_settings_focus(delta, cx);
-                }
-                "enter" | "return" | "space" => self.press_settings_focus(cx),
-                // Each page's one segmented control: General's Default view
-                // on launch, Downloads' Simultaneous downloads.
-                "left" | "right"
-                    if self.preferences_tab == crate::app::preferences::PreferencesTab::General =>
-                {
-                    let view = if key == "left" {
-                        crate::config::LaunchView::Library
-                    } else {
-                        crate::config::LaunchView::LastViewed
-                    };
-                    self.set_launch_view(view, cx);
-                }
-                "left" | "right"
-                    if self.preferences_tab
-                        == crate::app::preferences::PreferencesTab::Downloads =>
-                {
-                    let choices = crate::config::DOWNLOAD_CONCURRENCY_CHOICES;
-                    let at = choices
-                        .iter()
-                        .position(|n| *n == self.config.download_concurrency)
-                        .unwrap_or(0);
-                    let next = if key == "left" {
-                        at.saturating_sub(1)
-                    } else {
-                        (at + 1).min(choices.len() - 1)
-                    };
-                    self.set_download_concurrency(choices[next], cx);
-                }
-                _ => {}
-            }
+            self.settings_key(key, cmd_or_ctrl, keystroke, cx);
             return true;
         }
 
         // 1. Delete confirmation modal
         if self.delete_confirm_state.is_some() {
-            if key == "escape" {
-                self.close_delete_modal(cx);
-            } else if key == "enter" || key == "return" {
-                self.execute_confirmed_deletion(cx);
-            } else if key == "up" {
-                self.step_delete_target(-1, cx);
-            } else if key == "down" {
-                self.step_delete_target(1, cx);
-            } else if key == "space"
-                && self
-                    .delete_confirm_state
-                    .as_ref()
-                    .is_some_and(|st| st.target == DeletionTarget::PermanentDisk)
-            {
-                self.toggle_delete_permanent_acknowledged(cx);
-            }
+            self.delete_confirm_key(key, cx);
             return true;
         }
 
@@ -179,49 +114,15 @@ impl LuminaApp {
         }
 
         // 1d. Network import dialog
-        if let Some(ref stage) = self.network_import.stage {
-            match key {
-                "escape" => self.close_network_import_dialog(cx),
-                "enter" | "return" => match stage {
-                    crate::app::network_import::NetworkImportStage::Input { url, .. } => {
-                        let url = url.clone();
-                        self.submit_network_url(url, cx);
-                    }
-                    crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
-                        ..
-                    } if cmd_or_ctrl => self.download_again_from_dialog(cx),
-                    crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
-                        prior,
-                        ..
-                    } => {
-                        let media_id = prior.media_id;
-                        self.show_download_in_library(media_id, cx);
-                    }
-                    crate::app::network_import::NetworkImportStage::Ready { .. } => {
-                        self.import_inspected_link(cx);
-                    }
-                    crate::app::network_import::NetworkImportStage::Checking { .. } => {}
-                },
-                _ => {}
-            }
+        if self.network_import.stage.is_some() {
+            self.network_import_key(key, cmd_or_ctrl, cx);
             return true;
         }
 
         // 1d2. Metadata template editor: Tab/⇧Tab move between fields, ↑/↓
         // between templates, ↵ saves, ⇧⌘⌫ deletes (⌘⌫ edits the field).
         if self.templates.editor.is_some() {
-            let shift = keystroke.modifiers.shift;
-            match key {
-                "escape" => self.close_template_editor(cx),
-                "enter" | "return" => self.save_template_editor(cx),
-                "tab" => self.cycle_template_field(if shift { -1 } else { 1 }, cx),
-                "up" if !cmd_or_ctrl => self.step_template_in_editor(-1, cx),
-                "down" if !cmd_or_ctrl => self.step_template_in_editor(1, cx),
-                "backspace" | "delete" if cmd_or_ctrl && shift => {
-                    self.delete_template_in_editor(cx)
-                }
-                _ => {}
-            }
+            self.template_editor_key(key, cmd_or_ctrl, keystroke, cx);
             return true;
         }
 
@@ -278,30 +179,7 @@ impl LuminaApp {
         // 1e. Downloads dropdown: every key stays in the list, so ⌫ removes
         // a download and never trashes the grid selection behind it.
         if self.downloads.open {
-            let focused = self.downloads.focused;
-            match key {
-                "escape" => self.close_downloads_panel(cx),
-                "up" => self.move_download_focus(-1, DownloadSurface::Panel, cx),
-                "down" => self.move_download_focus(1, DownloadSurface::Panel, cx),
-                // ⌘↵: Download Again on an "already in your library" row.
-                "enter" | "return" if cmd_or_ctrl => {
-                    if let Some(id) = focused {
-                        self.download_again(id, cx);
-                    }
-                }
-                "enter" | "return" => {
-                    if let Some(id) = focused {
-                        self.download_main_action(id, cx);
-                    }
-                }
-                "backspace" | "delete" if !cmd_or_ctrl => {
-                    if let Some(id) = focused {
-                        self.cancel_or_remove_download(id, cx);
-                    }
-                }
-                "l" if cmd_or_ctrl && keystroke.modifiers.alt => self.close_downloads_panel(cx),
-                _ => {}
-            }
+            self.downloads_panel_key(key, cmd_or_ctrl, keystroke, cx);
             return true;
         }
 
@@ -313,85 +191,18 @@ impl LuminaApp {
 
         // 3. Inline tag input in inspector
         if self.tag_input_active {
-            if key == "escape" {
-                self.tag_input_active = false;
-                self.tag_input_buffer.clear();
-                cx.notify();
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_tag_input(cx);
-                return true;
-            }
-            // ↑/↓ walk the suggestions; Enter then adds the highlighted one.
-            if key == "up" || key == "down" {
-                self.step_tag_suggestion(if key == "up" { -1 } else { 1 }, cx);
-                return true;
-            }
-            if key == "backspace" {
-                // Token-field behaviour: ⌫ in an empty field (the input
-                // passes it on, see app/text_input.rs) removes the single
-                // item's last tag, the keyboard path for ×.
-                if self.tag_input_buffer.is_empty() && self.selected_indices.len() <= 1 {
-                    if let Some(last) = self.selected_item_tags.last().cloned() {
-                        self.batch_remove_tag(last, cx);
-                    }
-                }
-                cx.notify();
-                return true;
-            }
+            self.tag_input_key(key, cx);
             return true;
         }
 
-        // 3a. Inline title input in inspector
-        if self.caption.title_input_active {
-            if key == "escape" {
-                self.cancel_title_input(cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_title_input(cx);
-                return true;
-            }
-            return true;
-        }
-
-        // 3b. Inline date input in inspector
-        if self.caption.date_input_active {
-            if key == "escape" {
-                self.cancel_date_input(cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_date_input(cx);
-                return true;
-            }
-            return true;
-        }
-
-        // 3c. Inline location input in inspector
-        if self.caption.location_input_active {
-            if key == "escape" {
-                self.cancel_location_input(cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_location_input(cx);
-                return true;
-            }
-            return true;
-        }
-
-        // 3d. Inline caption input in inspector
-        if self.caption.input_active {
-            if key == "escape" {
-                self.cancel_caption_input(cx);
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                self.commit_caption_input(cx);
-                return true;
-            }
+        // 3a-3d. Inline title, date, location and caption inputs in the
+        // inspector: Esc cancels, ↵ commits, every other key is absorbed.
+        if self.caption.title_input_active
+            || self.caption.date_input_active
+            || self.caption.location_input_active
+            || self.caption.input_active
+        {
+            self.inspector_field_key(key, cx);
             return true;
         }
 
@@ -438,45 +249,7 @@ impl LuminaApp {
 
         // 6. Sidebar search field input focus
         if self.search_focused {
-            // ←/→/⌫ on the query bar's chips (passed on by the input).
-            if self.search_bar_key(key, cx) || self.top_match_key(key, cx) {
-                return true;
-            }
-            if key == "escape" {
-                // Escape layers: first hide the suggestion dropdown, then blur.
-                if !self.search_suggestions.dismissed && !self.search_suggestion_items().is_empty()
-                {
-                    self.dismiss_search_suggestions();
-                    cx.notify();
-                } else {
-                    self.search_focused = false;
-                    self.search_suggestions.dismissed = false;
-                    self.search_suggestions.selected = None;
-                    cx.notify();
-                }
-                return true;
-            }
-            if key == "enter" || key == "return" {
-                if !self.search_suggestions.dismissed {
-                    if let Some(index) = self.search_suggestions.selected {
-                        let suggestion_count = self.search_suggestion_items().len();
-                        if index < suggestion_count {
-                            self.apply_search_suggestion_at(index, cx);
-                            self.record_current_search();
-                            cx.notify();
-                            return true;
-                        }
-                    }
-                }
-                // No highlighted suggestion: keep the existing commit behavior.
-                self.commit_search(cx);
-                return true;
-            }
-            if key == "up" || key == "down" {
-                // Moving the highlight must not edit the query.
-                self.move_search_suggestion(if key == "up" { -1 } else { 1 }, cx);
-                return true;
-            }
+            self.search_field_key(key, cx);
             return true;
         }
 
@@ -486,55 +259,7 @@ impl LuminaApp {
         // other key is absorbed: ⌘⌫, arrows and ⌘Z must not act on the
         // photo, or another one, under the draft.
         if self.edits.session.is_some() {
-            let m = &keystroke.modifiers;
-            let plain = !cmd_or_ctrl && !m.alt;
-            let cropping = self
-                .edits
-                .session
-                .as_ref()
-                .is_some_and(|s| s.crop.is_some());
-            let step = if m.shift { 0.1 } else { 0.01 };
-            match key {
-                // After a failed Done, Esc first dismisses the banner and
-                // keeps the draft for another try.
-                "escape" if self.error_message.is_some() => self.dismiss_error(cx),
-                // Esc in crop mode leaves crop only, dropping that crop.
-                "escape" if cropping => self.leave_crop(false, cx),
-                "escape" => self.cancel_edit(cx),
-                // C: crop, then the next aspect. ⇧C: crop on / off, keeping
-                // the crop and edit mode (apply and keep editing).
-                k if plain && k.eq_ignore_ascii_case("c") => {
-                    if m.shift {
-                        self.toggle_crop(cx)
-                    } else {
-                        self.crop_key(cx)
-                    }
-                }
-                // Arrows move the crop (⇧ 10 %), ⌥ resizes it. Outside crop
-                // they fall through to the absorbing arm below.
-                "left" | "right" | "up" | "down" if cropping && !cmd_or_ctrl => {
-                    let delta = match key {
-                        "left" => (-step, 0.0),
-                        "right" => (step, 0.0),
-                        "up" => (0.0, -step),
-                        _ => (0.0, step),
-                    };
-                    self.crop_arrow(delta, m.alt, cx);
-                }
-                "enter" | "return" => self.finish_edit(cx),
-                k if plain && k.eq_ignore_ascii_case("r") => self.rotate_edit_draft(
-                    if m.shift {
-                        crate::views::viewer_state::ViewerRotation::Left
-                    } else {
-                        crate::views::viewer_state::ViewerRotation::Right
-                    },
-                    cx,
-                ),
-                "-" | "_" if plain => self.step_edit_exposure(-1, cx),
-                "=" | "+" if plain => self.step_edit_exposure(1, cx),
-                k if plain && !m.shift && k.eq_ignore_ascii_case("a") => self.toggle_edit_auto(cx),
-                _ => {}
-            }
+            self.edit_mode_key(key, cmd_or_ctrl, keystroke, cx);
             return true;
         }
 
@@ -627,6 +352,336 @@ impl LuminaApp {
             self.activate_draft_focus(cx);
         } else if key == "down" && self.draft_focus_has_popup(self.album_draft.focus) {
             self.toggle_draft_popup(self.album_draft.focus, cx);
+        }
+    }
+
+    /// Settings: every key stays here, so library shortcuts never act on the
+    /// hidden library. ⌘, toggles it.
+    fn settings_key(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) {
+        // Reset to defaults asks first; its card takes every key.
+        if self.preferences_reset_confirm {
+            match key {
+                "escape" => self.cancel_reset_preferences(cx),
+                "enter" | "return" => self.confirm_reset_preferences(cx),
+                _ => {}
+            }
+            return;
+        }
+        match key {
+            "escape" => self.close_preferences(cx),
+            "," if cmd_or_ctrl => self.close_preferences(cx),
+            "up" => self.step_preferences_tab(-1, cx),
+            "down" => self.step_preferences_tab(1, cx),
+            // The page's buttons: Tab/⇧Tab walk them, ↵ or Space press.
+            // ⌘/⌃/⌥-Tab stay absorbed, as on the welcome screen.
+            "tab" if !cmd_or_ctrl && !keystroke.modifiers.alt => {
+                let delta = if keystroke.modifiers.shift { -1 } else { 1 };
+                self.step_settings_focus(delta, cx);
+            }
+            "enter" | "return" | "space" => self.press_settings_focus(cx),
+            // Each page's one segmented control: General's Default view
+            // on launch, Downloads' Simultaneous downloads.
+            "left" | "right"
+                if self.preferences_tab == crate::app::preferences::PreferencesTab::General =>
+            {
+                let view = if key == "left" {
+                    crate::config::LaunchView::Library
+                } else {
+                    crate::config::LaunchView::LastViewed
+                };
+                self.set_launch_view(view, cx);
+            }
+            "left" | "right"
+                if self.preferences_tab == crate::app::preferences::PreferencesTab::Downloads =>
+            {
+                let choices = crate::config::DOWNLOAD_CONCURRENCY_CHOICES;
+                let at = choices
+                    .iter()
+                    .position(|n| *n == self.config.download_concurrency)
+                    .unwrap_or(0);
+                let next = if key == "left" {
+                    at.saturating_sub(1)
+                } else {
+                    (at + 1).min(choices.len() - 1)
+                };
+                self.set_download_concurrency(choices[next], cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// The delete confirmation: Esc, ↵, ↑/↓ between targets, Space to
+    /// acknowledge a permanent delete.
+    fn delete_confirm_key(&mut self, key: &str, cx: &mut Context<Self>) {
+        if key == "escape" {
+            self.close_delete_modal(cx);
+        } else if key == "enter" || key == "return" {
+            self.execute_confirmed_deletion(cx);
+        } else if key == "up" {
+            self.step_delete_target(-1, cx);
+        } else if key == "down" {
+            self.step_delete_target(1, cx);
+        } else if key == "space"
+            && self
+                .delete_confirm_state
+                .as_ref()
+                .is_some_and(|st| st.target == DeletionTarget::PermanentDisk)
+        {
+            self.toggle_delete_permanent_acknowledged(cx);
+        }
+    }
+
+    /// The Import Video from URL dialog: ↵ runs its current step.
+    fn network_import_key(&mut self, key: &str, cmd_or_ctrl: bool, cx: &mut Context<Self>) {
+        let Some(ref stage) = self.network_import.stage else {
+            return;
+        };
+        match key {
+            "escape" => self.close_network_import_dialog(cx),
+            "enter" | "return" => match stage {
+                crate::app::network_import::NetworkImportStage::Input { url, .. } => {
+                    let url = url.clone();
+                    self.submit_network_url(url, cx);
+                }
+                crate::app::network_import::NetworkImportStage::AlreadyDownloaded { .. }
+                    if cmd_or_ctrl =>
+                {
+                    self.download_again_from_dialog(cx)
+                }
+                crate::app::network_import::NetworkImportStage::AlreadyDownloaded {
+                    prior, ..
+                } => {
+                    let media_id = prior.media_id;
+                    self.show_download_in_library(media_id, cx);
+                }
+                crate::app::network_import::NetworkImportStage::Ready { .. } => {
+                    self.import_inspected_link(cx);
+                }
+                crate::app::network_import::NetworkImportStage::Checking { .. } => {}
+            },
+            _ => {}
+        }
+    }
+
+    /// The metadata template editor.
+    fn template_editor_key(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) {
+        let shift = keystroke.modifiers.shift;
+        match key {
+            "escape" => self.close_template_editor(cx),
+            "enter" | "return" => self.save_template_editor(cx),
+            "tab" => self.cycle_template_field(if shift { -1 } else { 1 }, cx),
+            "up" if !cmd_or_ctrl => self.step_template_in_editor(-1, cx),
+            "down" if !cmd_or_ctrl => self.step_template_in_editor(1, cx),
+            "backspace" | "delete" if cmd_or_ctrl && shift => self.delete_template_in_editor(cx),
+            _ => {}
+        }
+    }
+
+    /// The Downloads dropdown list.
+    fn downloads_panel_key(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) {
+        let focused = self.downloads.focused;
+        match key {
+            "escape" => self.close_downloads_panel(cx),
+            "up" => self.move_download_focus(-1, DownloadSurface::Panel, cx),
+            "down" => self.move_download_focus(1, DownloadSurface::Panel, cx),
+            // ⌘↵: Download Again on an "already in your library" row.
+            "enter" | "return" if cmd_or_ctrl => {
+                if let Some(id) = focused {
+                    self.download_again(id, cx);
+                }
+            }
+            "enter" | "return" => {
+                if let Some(id) = focused {
+                    self.download_main_action(id, cx);
+                }
+            }
+            "backspace" | "delete" if !cmd_or_ctrl => {
+                if let Some(id) = focused {
+                    self.cancel_or_remove_download(id, cx);
+                }
+            }
+            "l" if cmd_or_ctrl && keystroke.modifiers.alt => self.close_downloads_panel(cx),
+            _ => {}
+        }
+    }
+
+    /// The inspector's inline tag field.
+    fn tag_input_key(&mut self, key: &str, cx: &mut Context<Self>) {
+        if key == "escape" {
+            self.tag_input_active = false;
+            self.tag_input_buffer.clear();
+            cx.notify();
+            return;
+        }
+        if key == "enter" || key == "return" {
+            self.commit_tag_input(cx);
+            return;
+        }
+        // ↑/↓ walk the suggestions; Enter then adds the highlighted one.
+        if key == "up" || key == "down" {
+            self.step_tag_suggestion(if key == "up" { -1 } else { 1 }, cx);
+            return;
+        }
+        if key == "backspace" {
+            // Token-field behaviour: ⌫ in an empty field (the input
+            // passes it on, see app/text_input.rs) removes the single
+            // item's last tag, the keyboard path for ×.
+            if self.tag_input_buffer.is_empty() && self.selected_indices.len() <= 1 {
+                if let Some(last) = self.selected_item_tags.last().cloned() {
+                    self.batch_remove_tag(last, cx);
+                }
+            }
+            cx.notify();
+        }
+    }
+
+    /// The focused search field: chips, suggestions, Esc layers, ↵ commits.
+    fn search_field_key(&mut self, key: &str, cx: &mut Context<Self>) {
+        // ←/→/⌫ on the query bar's chips (passed on by the input).
+        if self.search_bar_key(key, cx) || self.top_match_key(key, cx) {
+            return;
+        }
+        if key == "escape" {
+            // Escape layers: first hide the suggestion dropdown, then blur.
+            if !self.search_suggestions.dismissed && !self.search_suggestion_items().is_empty() {
+                self.dismiss_search_suggestions();
+                cx.notify();
+            } else {
+                self.search_focused = false;
+                self.search_suggestions.dismissed = false;
+                self.search_suggestions.selected = None;
+                cx.notify();
+            }
+            return;
+        }
+        if key == "enter" || key == "return" {
+            if !self.search_suggestions.dismissed {
+                if let Some(index) = self.search_suggestions.selected {
+                    let suggestion_count = self.search_suggestion_items().len();
+                    if index < suggestion_count {
+                        self.apply_search_suggestion_at(index, cx);
+                        self.record_current_search();
+                        cx.notify();
+                        return;
+                    }
+                }
+            }
+            // No highlighted suggestion: keep the existing commit behavior.
+            self.commit_search(cx);
+            return;
+        }
+        if key == "up" || key == "down" {
+            // Moving the highlight must not edit the query.
+            self.move_search_suggestion(if key == "up" { -1 } else { 1 }, cx);
+        }
+    }
+
+    /// Edit mode in the viewer: crop, rotate, exposure, auto, ↵ done.
+    fn edit_mode_key(
+        &mut self,
+        key: &str,
+        cmd_or_ctrl: bool,
+        keystroke: &Keystroke,
+        cx: &mut Context<Self>,
+    ) {
+        let m = &keystroke.modifiers;
+        let plain = !cmd_or_ctrl && !m.alt;
+        let cropping = self
+            .edits
+            .session
+            .as_ref()
+            .is_some_and(|s| s.crop.is_some());
+        let step = if m.shift { 0.1 } else { 0.01 };
+        match key {
+            // After a failed Done, Esc first dismisses the banner and
+            // keeps the draft for another try.
+            "escape" if self.error_message.is_some() => self.dismiss_error(cx),
+            // Esc in crop mode leaves crop only, dropping that crop.
+            "escape" if cropping => self.leave_crop(false, cx),
+            "escape" => self.cancel_edit(cx),
+            // C: crop, then the next aspect. ⇧C: crop on / off, keeping
+            // the crop and edit mode (apply and keep editing).
+            k if plain && k.eq_ignore_ascii_case("c") => {
+                if m.shift {
+                    self.toggle_crop(cx)
+                } else {
+                    self.crop_key(cx)
+                }
+            }
+            // Arrows move the crop (⇧ 10 %), ⌥ resizes it. Outside crop
+            // they fall through to the absorbing arm below.
+            "left" | "right" | "up" | "down" if cropping && !cmd_or_ctrl => {
+                let delta = match key {
+                    "left" => (-step, 0.0),
+                    "right" => (step, 0.0),
+                    "up" => (0.0, -step),
+                    _ => (0.0, step),
+                };
+                self.crop_arrow(delta, m.alt, cx);
+            }
+            "enter" | "return" => self.finish_edit(cx),
+            k if plain && k.eq_ignore_ascii_case("r") => self.rotate_edit_draft(
+                if m.shift {
+                    crate::views::viewer_state::ViewerRotation::Left
+                } else {
+                    crate::views::viewer_state::ViewerRotation::Right
+                },
+                cx,
+            ),
+            "-" | "_" if plain => self.step_edit_exposure(-1, cx),
+            "=" | "+" if plain => self.step_edit_exposure(1, cx),
+            k if plain && !m.shift && k.eq_ignore_ascii_case("a") => self.toggle_edit_auto(cx),
+            _ => {}
+        }
+    }
+
+    /// The inspector's inline title, date, location or caption field, in
+    /// that order when more than one is active.
+    fn inspector_field_key(&mut self, key: &str, cx: &mut Context<Self>) {
+        let enter = key == "enter" || key == "return";
+        if key != "escape" && !enter {
+            return;
+        }
+        if self.caption.title_input_active {
+            if enter {
+                self.commit_title_input(cx)
+            } else {
+                self.cancel_title_input(cx)
+            }
+        } else if self.caption.date_input_active {
+            if enter {
+                self.commit_date_input(cx)
+            } else {
+                self.cancel_date_input(cx)
+            }
+        } else if self.caption.location_input_active {
+            if enter {
+                self.commit_location_input(cx)
+            } else {
+                self.cancel_location_input(cx)
+            }
+        } else if enter {
+            self.commit_caption_input(cx)
+        } else {
+            self.cancel_caption_input(cx)
         }
     }
 }

@@ -1,5 +1,6 @@
 //! Review Duplicates actions shared by the buttons, the keyboard path and
-//! the ⌘K commands, and the review's key handler.
+//! the ⌘K commands, the review's key handler, and finding and merging
+//! duplicate groups.
 
 use gpui::*;
 use lumina_core::{DuplicateGroup, MediaId};
@@ -168,4 +169,130 @@ impl LuminaApp {
         }
         true
     }
+}
+
+impl LuminaApp {
+    pub fn refresh_duplicates(&mut self) {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+
+        // Instant, non-blocking read of already-computed duplicate groups from SQLite cache.
+        self.duplicate_groups = state.engine.get_cached_duplicate_groups();
+        self.duplicate_items_count = state.engine.query_duplicate_count();
+
+        #[cfg(test)]
+        {
+            // In unit/automation tests, run scan_duplicates synchronously so tests don't need async waits.
+            self.duplicate_groups = state.engine.query_duplicate_groups();
+            self.duplicate_items_count = state.engine.query_duplicate_count();
+        }
+
+        #[cfg(not(test))]
+        {
+            let engine = state.engine.clone();
+            let tx = self.ui_tx.clone();
+            let generation = self.library_generation;
+            if let Err(err) = std::thread::Builder::new()
+                .name("lumina-duplicates-scan".into())
+                .spawn(move || {
+                    let groups = engine.query_duplicate_groups();
+                    let items_count = engine.query_duplicate_count();
+                    let _ = tx.send_blocking(crate::app::types::UiMessage::DuplicatesLoaded {
+                        generation,
+                        groups,
+                        items_count,
+                    });
+                })
+            {
+                log::warn!("failed to spawn lumina-duplicates-scan thread: {err:#}");
+            }
+        }
+    }
+
+    pub fn merge_duplicate_group(
+        &mut self,
+        keep_id: MediaId,
+        trash_ids: &[MediaId],
+        cx: &mut Context<Self>,
+    ) {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+        if trash_ids.is_empty() {
+            return;
+        }
+        let count = trash_ids.len();
+        match state.engine.merge_duplicate_group(keep_id, trash_ids) {
+            Ok(()) => {
+                let changes: Vec<(MediaId, bool, bool)> =
+                    trash_ids.iter().map(|id| (*id, false, true)).collect();
+                self.undo
+                    .undo_stack
+                    .push(crate::app::undo::UndoAction::Trashed { changes });
+                self.undo.redo_stack.clear();
+
+                // If selected item was trashed, point selection to keeper
+                if let Some(ref sel) = self.selected_item {
+                    if trash_ids.contains(&sel.id) {
+                        self.selected_item = self
+                            .duplicate_groups
+                            .iter()
+                            .flat_map(|g| &g.items)
+                            .find(|i| i.id == keep_id)
+                            .cloned();
+                    }
+                }
+
+                self.refresh_album_counts();
+                self.refresh_duplicates();
+                self.show_toast(merged_message(count), cx);
+                cx.notify();
+            }
+            Err(err) => {
+                self.set_error(format!("Could not merge duplicates: {err:#}"), cx);
+            }
+        }
+    }
+
+    pub fn merge_all_duplicates(&mut self, cx: &mut Context<Self>) {
+        let Some(ref state) = self.grid_state else {
+            return;
+        };
+        match state
+            .engine
+            .merge_all_duplicates(&self.stacks.review.keepers, &self.stacks.review.skipped)
+        {
+            Ok(trashed_ids) => {
+                let total_merged = trashed_ids.len();
+                if !trashed_ids.is_empty() {
+                    let changes: Vec<(MediaId, bool, bool)> =
+                        trashed_ids.iter().map(|id| (*id, false, true)).collect();
+                    self.undo
+                        .undo_stack
+                        .push(crate::app::undo::UndoAction::Trashed { changes });
+                    self.undo.redo_stack.clear();
+
+                    if let Some(ref sel) = self.selected_item {
+                        if trashed_ids.contains(&sel.id) {
+                            self.clear_selection_fields();
+                        }
+                    }
+                }
+
+                self.refresh_album_counts();
+                self.refresh_duplicates();
+                self.show_toast(merged_message(total_merged), cx);
+                cx.notify();
+            }
+            Err(err) => {
+                self.set_error(format!("Could not merge duplicates: {err:#}"), cx);
+            }
+        }
+    }
+}
+
+/// The toast after a merge: "Merged 1 duplicate", "Merged 12 duplicates".
+fn merged_message(n: usize) -> String {
+    crate::i18n::t(&crate::i18n::plural_key("duplicates.merged", n)).replace("{n}", &n.to_string())
 }
