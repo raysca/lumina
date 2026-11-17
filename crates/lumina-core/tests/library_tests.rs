@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Write;
 
 #[test]
-fn test_desktop_pics_integration() {
+fn scan_decodes_thumbnails_and_rescan_keeps_favorites_and_tags() {
     let temp_dir = unique_temp_dir("test_engine");
     let media_dir = temp_dir.join("media");
     let db_path = temp_dir.join("isolated_catalog.db");
