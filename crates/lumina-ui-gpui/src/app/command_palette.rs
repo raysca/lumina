@@ -1919,3 +1919,33 @@ impl LuminaApp {
         }
     }
 }
+
+#[cfg(test)]
+mod table_tests {
+    use super::commands;
+
+    /// Pins the command table: count, order, ids, catalog keys, shortcuts
+    /// and keywords. A deliberate change updates the expected values.
+    #[core::prelude::v1::test]
+    fn command_table_is_pinned() {
+        let table = commands();
+        let rows: Vec<String> = table
+            .iter()
+            .map(|c| format!("{:?}|{}|{}|{}", c.id, c.key, c.shortcut, c.keywords))
+            .collect();
+        // FNV-1a: stable across Rust releases, unlike DefaultHasher.
+        let hash = rows
+            .join("\n")
+            .bytes()
+            .fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+                (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+            });
+        assert_eq!(table.len(), 153, "command count changed");
+        assert_eq!(
+            hash,
+            14_141_671_826_939_022_113,
+            "command table changed:\n{}",
+            rows.join("\n")
+        );
+    }
+}
