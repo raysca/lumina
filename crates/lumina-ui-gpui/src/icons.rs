@@ -68,6 +68,8 @@ pub enum Icon {
     ZoomIn,
     ZoomOut,
     WandSparkles,
+    // Only the macOS share button draws it.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Share,
     PanelRight,
     Ellipsis,
