@@ -1815,3 +1815,143 @@ fn settings_tab_on_general_reaches_editor_and_reset() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn storage_cache_size_and_clear_run_off_the_ui_thread() {
+    let (temp_dir, engine) = seed_library("settings_storage_bg", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let cache = thumbnail_cache_dir();
+    let _ = std::fs::remove_dir_all(&cache);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("1.jpg"), b"thumb").unwrap();
+
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Storage, cx);
+        assert_eq!(
+            app.preferences_cache, None,
+            "the size is read off the UI thread: unknown until it lands, never a fake zero"
+        );
+    });
+    // Draw without running background work: the reading is still pending.
+    vcx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear(cx);
+    });
+    assert!(
+        vcx.debug_bounds("preferences-cache-size-text:Calculating…")
+            .is_some(),
+        "while the size is read the row says so instead of showing zero"
+    );
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.preferences_cache,
+            Some(CacheUsage { bytes: 5, files: 1 }),
+            "the background reading fills in the size"
+        );
+    });
+
+    view.update(vcx, |app, cx| {
+        app.clear_thumbnail_cache(cx);
+        assert!(
+            cache.join("1.jpg").exists(),
+            "Clear Cache deletes off the UI thread, not inside the click"
+        );
+        assert!(!app.preferences_cache_cleared);
+    });
+    vcx.run_until_parked();
+    assert!(!cache.join("1.jpg").exists(), "the cache is emptied");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.preferences_cache.map(|u| u.files),
+            Some(0),
+            "the size is read again after clearing"
+        );
+        assert!(app.preferences_cache_cleared, "Clear Cache confirms inline");
+        assert!(app.error_message.is_none());
+    });
+
+    // A cache path that is a file cannot be cleared: the banner says so.
+    std::fs::remove_dir_all(&cache).unwrap();
+    std::fs::write(&cache, b"not a folder").unwrap();
+    view.update(vcx, |app, cx| {
+        // As if Clear was pressed before the first reading landed.
+        app.preferences_cache = None;
+        app.clear_thumbnail_cache(cx);
+    });
+    vcx.run_until_parked();
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.preferences_cache.is_some(),
+            "a failed clear reads the size again, so the row never stays on Calculating…"
+        );
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not clear thumbnail cache")),
+            "a failed clear reaches the error banner: {:?}",
+            app.error_message
+        );
+        assert!(!app.preferences_cache_cleared, "and does not confirm");
+    });
+
+    let _ = std::fs::remove_file(&cache);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn storage_reading_started_before_a_clear_never_lands_after_it() {
+    let (temp_dir, engine) = seed_library("settings_storage_stale", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let cache = thumbnail_cache_dir();
+    let _ = std::fs::remove_dir_all(&cache);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("1.jpg"), b"thumb").unwrap();
+
+    // The epoch a reading started now (before the clear) carries.
+    let stale = view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Storage, cx);
+        app.preferences_cache_job.epoch
+    });
+    vcx.run_until_parked();
+
+    view.update(vcx, |app, cx| {
+        app.clear_thumbnail_cache(cx);
+        assert!(app.preferences_cache_job.clearing, "a clear is running");
+        let epoch = app.preferences_cache_job.epoch;
+        app.clear_thumbnail_cache(cx);
+        assert_eq!(
+            app.preferences_cache_job.epoch, epoch,
+            "a second Clear while one runs is ignored"
+        );
+        assert!(
+            !app.preferences_cache_cleared,
+            "Cleared waits for the new reading"
+        );
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_cache_job.clearing, "the clear finished");
+        assert!(
+            app.preferences_cache_cleared,
+            "Cleared once the size landed"
+        );
+        assert_eq!(app.preferences_cache.map(|u| u.files), Some(0));
+    });
+
+    // The reading started before the clear reports last, on a big cache.
+    view.update(vcx, |app, cx| {
+        app.apply_cache_reading(stale, CacheUsage { bytes: 5, files: 1 }, cx);
+        assert_eq!(
+            app.preferences_cache.map(|u| u.files),
+            Some(0),
+            "a reading from before Clear never overwrites the cleared size"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&cache);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

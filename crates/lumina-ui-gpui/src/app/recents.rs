@@ -27,7 +27,8 @@ pub(crate) struct WelcomeState {
     pub(crate) missing_error: Option<String>,
     /// Tab focus in the missing-library state: 0 Retry, 1 Choose.
     pub(crate) missing_focus: Option<usize>,
-    /// Counts Retry starts; a result applies only to the newest one.
+    /// Counts Retry starts and Backs; a Retry or recent check applies only
+    /// if it has not moved since it started.
     retry_generation: u64,
     /// The recent the keyboard has focused (↑/↓), as a list index.
     pub(crate) focused_recent: Option<usize>,
@@ -117,25 +118,44 @@ impl LuminaApp {
     }
 
     /// Opens a recent library (welcome row, ⌘K), re-checking its one folder
-    /// first. A missing folder shows the notice instead of opening.
-    // ponytail: this one `is_dir` runs on the UI thread, like the
-    // synchronous `LuminaEngine::open` right after it; an unmounted network
-    // volume can stall here. Move both to the background executor together.
+    /// first on the background executor (an unmounted network volume can
+    /// stall a `stat` for seconds). A missing folder shows the notice
+    /// instead of opening.
+    // ponytail: the engine open after the check still runs on the UI thread,
+    // as it does for every open path (folder picker, ⌘O); move them together.
     pub(crate) fn open_recent_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        if !path.is_dir() {
-            if let Some(unavailable) = self.welcome.unavailable.as_mut() {
-                unavailable.insert(path.clone());
-            }
-            if self.grid_state.is_some() {
-                // The welcome notice is not on screen; say it in the banner.
-                self.set_error(missing_library_message(&path), cx);
-            }
-            self.welcome.set_missing(Some(path));
-            cx.notify();
-            return;
-        }
-        // Through open_library, so a running download asks first.
-        self.open_library(path, cx);
+        // Back, a Retry or another library supersedes this check.
+        let ticket = (self.library_generation, self.welcome.retry_generation);
+        let task = cx.background_executor().spawn({
+            let path = path.clone();
+            async move { path.is_dir() }
+        });
+        cx.spawn(async move |this, cx| {
+            let present = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| {
+                // Another library opened meanwhile (a double click, ⌘O), or
+                // Back or Retry was pressed: this late answer must not apply.
+                if (app.library_generation, app.welcome.retry_generation) != ticket {
+                    return;
+                }
+                if present {
+                    // Through open_library, so a running download asks first.
+                    app.open_library(path, cx);
+                    return;
+                }
+                if let Some(unavailable) = app.welcome.unavailable.as_mut() {
+                    unavailable.insert(path.clone());
+                }
+                if app.grid_state.is_some() {
+                    // The welcome notice is not on screen; say it in the banner.
+                    app.set_error(missing_library_message(&path), cx);
+                }
+                app.welcome.set_missing(Some(path));
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Retry in the unreachable-library state. The folder check and the
@@ -205,6 +225,8 @@ impl LuminaApp {
     /// and its recent libraries. A Retry still in flight is dropped.
     pub(crate) fn leave_missing_library(&mut self, cx: &mut Context<Self>) {
         self.welcome.set_missing(None);
+        // A recent's folder check still in flight is dropped too.
+        self.welcome.retry_generation += 1;
         cx.notify();
     }
 

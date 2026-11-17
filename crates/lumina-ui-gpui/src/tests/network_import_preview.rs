@@ -472,3 +472,35 @@ fn already_downloaded_uses_dialog_shell() {
     assert!(jobs.requests()[0].skip_prior_check, "⌘↵ is Download Again");
     assert_eq!(inspector.calls(), 0, "nothing was inspected");
 }
+
+#[core::prelude::v1::test]
+fn net_import_check_is_dropped_when_another_library_opens() {
+    let (_dir, jobs, inspector, mut cx, engine) =
+        dialog_app("net_preview_switch", Answer::Info { uploader: None });
+    let (other, _) = super::ui_automation::seed_library("net_preview_switch_other", 1);
+    let other = super::downloads::TempLibrary(other);
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &jobs);
+    use_inspector(&view, vcx, &inspector);
+
+    // The library changes while the link is still being checked.
+    view.update(vcx, |app, cx| {
+        app.open_network_import_dialog(cx);
+        app.submit_network_url(URL.to_string(), cx);
+        assert!(
+            matches!(
+                app.network_import.stage,
+                Some(NetworkImportStage::Checking { .. })
+            ),
+            "control: the check is in flight"
+        );
+        app.open_library(other.to_path_buf(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.network_import.stage.is_none(),
+            "opening another library closes the dialog, so a late result never shows"
+        );
+    });
+}

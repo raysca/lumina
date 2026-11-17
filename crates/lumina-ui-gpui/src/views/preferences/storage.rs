@@ -11,13 +11,19 @@ use crate::theme;
 use crate::views::inspector::format_bytes;
 
 pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let usage = app.preferences_cache.unwrap_or_default();
-    let size = format!(
-        "{} · {} thumbnail{}",
-        format_bytes(usage.bytes),
-        usage.files,
-        if usage.files == 1 { "" } else { "s" }
+    // Read in the background; until the first reading lands, say so.
+    let size = app.preferences_cache.map_or_else(
+        || "Calculating…".to_string(),
+        |usage| {
+            format!(
+                "{} · {} thumbnail{}",
+                format_bytes(usage.bytes),
+                usage.files,
+                if usage.files == 1 { "" } else { "s" }
+            )
+        },
     );
+    let size_marker = size.clone();
     div()
         .flex()
         .flex_col()
@@ -48,8 +54,16 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                     Some("Clearing is safe; thumbnails rebuild on their own."),
                     controls()
                         .child(
-                            value(&size, true)
-                                .debug_selector(|| "preferences-cache-size".to_string()),
+                            // Tests read the size as `preferences-cache-size-text:<size>`.
+                            div()
+                                .min_w_0()
+                                .debug_selector(move || {
+                                    format!("preferences-cache-size-text:{size_marker}")
+                                })
+                                .child(
+                                    value(&size, true)
+                                        .debug_selector(|| "preferences-cache-size".to_string()),
+                                ),
                         )
                         .children(app.preferences_cache_cleared.then(|| {
                             div()

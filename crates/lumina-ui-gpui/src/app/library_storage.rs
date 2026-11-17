@@ -54,6 +54,8 @@ impl LuminaApp {
         let root = engine.library_root().to_path_buf();
         // Read on this thread: the test cache directory is per test thread.
         let cache_dir = thumbnail_cache_dir();
+        // A reading started before a clear must not land after it.
+        let epoch = self.preferences_cache_job.epoch;
         #[cfg(test)]
         let probe_capacity = !CAPACITY_UNKNOWN.with(std::cell::Cell::get);
         #[cfg(not(test))]
@@ -72,10 +74,11 @@ impl LuminaApp {
             let storage = task.await;
             // The app may be gone; then nothing is left to update.
             let _ = this.update(cx, |app, cx| {
-                let current = app
-                    .grid_state
-                    .as_ref()
-                    .is_some_and(|s| s.engine.library_root() == storage.root);
+                let current = app.preferences_cache_job.epoch == epoch
+                    && app
+                        .grid_state
+                        .as_ref()
+                        .is_some_and(|s| s.engine.library_root() == storage.root);
                 if current {
                     app.preferences_storage = Some(storage);
                     cx.notify();

@@ -109,6 +109,16 @@ pub struct CacheUsage {
     pub files: usize,
 }
 
+/// Keeps thumbnail-cache readings in order with Clear Cache.
+#[derive(Debug, Default)]
+pub struct CacheJob {
+    /// Bumped when a clear starts and ends; a reading started under an
+    /// older epoch is dropped (it may count files the clear removed).
+    pub epoch: u64,
+    /// A clear is running, or waiting for its new reading; Clear is ignored.
+    pub clearing: bool,
+}
+
 pub(crate) fn directory_usage(path: &Path) -> CacheUsage {
     let mut usage = CacheUsage::default();
     let Ok(entries) = std::fs::read_dir(path) else {
@@ -296,7 +306,7 @@ impl LuminaApp {
         // Help > About over the reset question: Reset is General's alone.
         self.preferences_reset_confirm = false;
         self.preferences_cache_cleared = false;
-        self.refresh_cache_usage();
+        self.refresh_cache_usage(cx);
         if tab == PreferencesTab::Library {
             self.refresh_library_storage(cx);
         }
@@ -313,7 +323,7 @@ impl LuminaApp {
         self.preferences_tab = tab;
         self.settings_focus = None;
         match tab {
-            PreferencesTab::Storage => self.refresh_cache_usage(),
+            PreferencesTab::Storage => self.refresh_cache_usage(cx),
             PreferencesTab::Library => self.refresh_library_storage(cx),
             _ => {}
         }
@@ -381,39 +391,92 @@ impl LuminaApp {
         self.set_preferences_tab(all[next], cx);
     }
 
-    pub fn refresh_cache_usage(&mut self) {
-        self.preferences_cache = Some(directory_usage(&thumbnail_cache_dir()));
+    /// Reads the thumbnail cache's size in the background (a large cache is
+    /// a long walk). The previous reading, or none, shows until it lands.
+    pub fn refresh_cache_usage(&mut self, cx: &mut Context<Self>) {
+        // Read on this thread: the test cache directory is per test thread.
+        let dir = thumbnail_cache_dir();
+        let epoch = self.preferences_cache_job.epoch;
+        let task = cx
+            .background_executor()
+            .spawn(async move { directory_usage(&dir) });
+        cx.spawn(async move |this, cx| {
+            let usage = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| app.apply_cache_reading(epoch, usage, cx));
+        })
+        .detach();
     }
 
-    pub fn clear_thumbnail_cache(&mut self, cx: &mut Context<Self>) {
-        let dir = thumbnail_cache_dir();
-        let result = std::fs::remove_dir_all(&dir)
-            .or_else(|err| {
-                if err.kind() == std::io::ErrorKind::NotFound {
-                    Ok(())
-                } else {
-                    Err(err)
-                }
-            })
-            .and_then(|()| std::fs::create_dir_all(&dir));
-        match result {
-            Ok(()) => {
-                self.refresh_cache_usage();
-                // The Library page's card shows the cache too.
-                self.refresh_library_storage(cx);
-                self.preferences_cache_cleared = true;
-                self.set_last_action("Thumbnail cache cleared");
-            }
-            Err(err) => {
-                self.preferences_cache_cleared = false;
-                self.set_error_with_retry(
-                    format!("Could not clear thumbnail cache: {err:#}"),
-                    Self::clear_thumbnail_cache,
-                    cx,
-                )
-            }
+    /// Shows a cache reading started under `epoch`.
+    pub(crate) fn apply_cache_reading(
+        &mut self,
+        epoch: u64,
+        usage: CacheUsage,
+        cx: &mut Context<Self>,
+    ) {
+        // Started before (or during) a clear: it may count removed files.
+        if epoch != self.preferences_cache_job.epoch {
+            return;
+        }
+        self.preferences_cache = Some(usage);
+        // The first reading after a clear confirms it.
+        if self.preferences_cache_job.clearing {
+            self.preferences_cache_job.clearing = false;
+            self.preferences_cache_cleared = true;
+            self.set_last_action("Thumbnail cache cleared");
         }
         cx.notify();
+    }
+
+    /// Clear Cache (Storage page and the Library page's card): deletes and
+    /// recreates the cache folder in the background, then reads both sizes
+    /// again.
+    pub fn clear_thumbnail_cache(&mut self, cx: &mut Context<Self>) {
+        if self.preferences_cache_job.clearing {
+            return;
+        }
+        self.preferences_cache_job.clearing = true;
+        self.preferences_cache_job.epoch += 1;
+        let dir = thumbnail_cache_dir();
+        let task = cx.background_executor().spawn(async move {
+            std::fs::remove_dir_all(&dir)
+                .or_else(|err| {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        Ok(())
+                    } else {
+                        Err(err)
+                    }
+                })
+                .and_then(|()| std::fs::create_dir_all(&dir))
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| {
+                // Readings started while the folder was being deleted are
+                // dropped too.
+                app.preferences_cache_job.epoch += 1;
+                if let Err(err) = result {
+                    log::warn!("clearing the thumbnail cache: {err:#}");
+                    app.preferences_cache_job.clearing = false;
+                    app.preferences_cache_cleared = false;
+                    app.set_error_with_retry(
+                        format!("Could not clear thumbnail cache: {err:#}"),
+                        Self::clear_thumbnail_cache,
+                        cx,
+                    );
+                }
+                // Read both sizes again either way: the bump above dropped
+                // any reading in flight. After a success, its reading
+                // landing shows "Cleared".
+                app.refresh_cache_usage(cx);
+                // The Library page's card shows the cache too.
+                app.refresh_library_storage(cx);
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub fn reveal_cache_directory(&mut self, cx: &mut Context<Self>) {

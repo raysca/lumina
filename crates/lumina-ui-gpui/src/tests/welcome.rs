@@ -805,6 +805,10 @@ fn palette_recent_while_downloading_asks_first() {
     view.update(vcx, |app, cx| {
         app.config.recent_libraries = vec![dir.canonicalize().unwrap(), other.to_path_buf()];
         app.run_palette_target(PaletteTarget::Library(other.to_path_buf()), cx);
+    });
+    // The folder is checked off the UI thread before the question.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert_eq!(
             app.downloads.confirm,
             Some(DownloadsConfirm::OpenLibrary(other.to_path_buf())),
@@ -1689,5 +1693,78 @@ fn missing_library_retry_dropped_by_back_stays_dropped_on_return() {
             "a Retry the user left with Back must not open the library later"
         );
         assert!(!app.welcome.retrying, "and shows no checking state");
+    });
+}
+
+#[core::prelude::v1::test]
+fn recent_row_checks_its_folder_off_the_ui_thread() {
+    let gone = temp_folder("recent_bg_gone").to_path_buf();
+    let here = temp_folder("recent_bg_here");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![gone.clone(), here.to_path_buf()]);
+
+    click_unparked(vcx, "welcome-recent-0");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.welcome.missing.is_none(),
+            "the folder check runs off the UI thread, not inside the click"
+        );
+    });
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "a gone folder is not opened");
+        assert_eq!(
+            app.welcome.missing.as_deref(),
+            Some(gone.as_path()),
+            "a gone folder still shows the missing-library notice"
+        );
+    });
+    assert!(vcx.debug_bounds("welcome-missing-library").is_some());
+
+    keystrokes(vcx, "escape");
+    click_unparked(vcx, "welcome-recent-1");
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "control: not opened in the click");
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(here.as_path()),
+            "a folder that is there opens once the check answers"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn late_recent_folder_check_is_dropped() {
+    let here = temp_folder("recent_late_here");
+    let other = temp_folder("recent_late_other");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, vec![here.to_path_buf()]);
+
+    // Back before the answer: the late answer opens nothing.
+    click_unparked(vcx, "welcome-recent-0");
+    view.update(vcx, |app, cx| app.leave_missing_library(cx));
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.grid_state.is_none(),
+            "a folder check answered after Back must not open the library"
+        );
+    });
+
+    // Another library opened before the answer: it stays open.
+    render_ui(vcx);
+    click_unparked(vcx, "welcome-recent-0");
+    view.update(vcx, |app, cx| app.open_library(other.to_path_buf(), cx));
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            open_root(app).as_deref(),
+            Some(other.as_path()),
+            "a late folder check must not replace the library the user opened"
+        );
     });
 }

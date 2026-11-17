@@ -528,6 +528,8 @@ pub struct LuminaApp {
     pub preferences_cache: Option<crate::app::preferences::CacheUsage>,
     /// Inline "Cleared" after Clear Cache; reset when Preferences reopens.
     pub preferences_cache_cleared: bool,
+    /// Orders cache readings against Clear Cache.
+    pub preferences_cache_job: crate::app::preferences::CacheJob,
     /// Settings › Library's storage card, once read (stale while refreshing).
     pub preferences_storage: Option<crate::app::library_storage::LibraryStorage>,
     /// Settings › Reset to defaults is asking for confirmation.
@@ -747,6 +749,7 @@ impl LuminaApp {
             preferences_tab: crate::app::preferences::PreferencesTab::General,
             preferences_cache: None,
             preferences_cache_cleared: false,
+            preferences_cache_job: Default::default(),
             preferences_storage: None,
             preferences_reset_confirm: false,
             settings_focus: None,

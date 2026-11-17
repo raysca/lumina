@@ -626,6 +626,9 @@ impl LuminaApp {
         self.undo = Default::default();
         // An import belongs to the library it was started in.
         self.abandon_import(cx);
+        // So does a link being checked or previewed: a late result would
+        // queue it into this library.
+        self.close_network_import_dialog(cx);
         self.search_query.clear();
         self.search_focused = false;
         self.active_year = None;
