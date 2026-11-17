@@ -64,7 +64,6 @@ pub struct StacksState {
 /// Which exact-copy group the review compares, which copy each keeps, and
 /// which groups the user skipped. Session only: [`StacksState::reset`]
 /// (leaving or re-entering Duplicates) clears it all.
-#[derive(Default)]
 pub struct DuplicatesReview {
     /// The selected group's content hash. Read through [`Self::selected`].
     selected: Option<String>,
@@ -78,6 +77,25 @@ pub struct DuplicatesReview {
     /// Content hashes of the groups skipped this session: hidden from the
     /// list, the counts and Merge all.
     pub skipped: HashSet<String>,
+    /// The compare footer's height at the last layout (it wraps taller in
+    /// a narrow window), so the toast can sit above it. Starts at the
+    /// one-row height, right for the first frame at the default width.
+    pub footer_height: std::rc::Rc<std::cell::Cell<f32>>,
+}
+
+impl Default for DuplicatesReview {
+    fn default() -> Self {
+        Self {
+            selected: None,
+            index: 0,
+            scroll: UniformListScrollHandle::default(),
+            keepers: HashMap::new(),
+            skipped: HashSet::new(),
+            footer_height: std::rc::Rc::new(std::cell::Cell::new(
+                crate::views::duplicates::FOOTER_MIN_HEIGHT,
+            )),
+        }
+    }
 }
 
 impl DuplicatesReview {

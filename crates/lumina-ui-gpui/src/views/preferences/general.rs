@@ -1,5 +1,5 @@
-//! Settings › General: the launch view, the external editor and the
-//! version.
+//! Settings › General: the launch view and the external editor. The
+//! version is on the About page.
 
 use gpui::*;
 
@@ -45,11 +45,6 @@ pub(super) fn render_general(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                     )),
             )
             .debug_selector(|| "settings-row-editor".to_string())],
-        ))
-        .child(section(
-            "UPDATES",
-            Some(format!("Lumina {}", env!("CARGO_PKG_VERSION")).into()),
-            [],
         ))
         .into_any_element()
 }

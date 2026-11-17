@@ -354,13 +354,18 @@ impl LuminaApp {
                     })),
             );
         // The toast is the top layer: above the zoom pill when it shows,
-        // else above the dock, else at the dock's own offset.
+        // else above the dock, else above the Review Duplicates footer (its
+        // height from the last layout: it wraps taller when narrow), else
+        // at the dock's own offset.
         use crate::app::render::overlays::{ABOVE_DOCK, DOCK_BOTTOM, STACK_GAP};
         // Over settings the grid's pill, dock and rail are hidden.
         let over_grid = !self.preferences_open;
         let bottom = match self.zoom_pill_bottom().filter(|_| over_grid) {
             Some(pill) => pill + crate::views::zoom_pill::PILL_HEIGHT + STACK_GAP,
             None if over_grid && self.selection_dock_shown() => ABOVE_DOCK,
+            None if over_grid && self.duplicates_review_shown() && self.duplicates_to_review() => {
+                (self.stacks.review.footer_height.get() + STACK_GAP).max(DOCK_BOTTOM)
+            }
             None => DOCK_BOTTOM,
         };
         div()

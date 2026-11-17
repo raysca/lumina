@@ -21,10 +21,14 @@ pub(crate) const STACK_GAP: f32 = 8.0;
 pub(crate) const ABOVE_DOCK: f32 = DOCK_BOTTOM + DOCK_HEIGHT + STACK_GAP;
 
 impl LuminaApp {
-    /// The selection dock shows: any selection, outside the fullscreen viewer
-    /// and the album page, whose selection bar replaces it.
+    /// The selection dock shows: any selection, outside the fullscreen viewer,
+    /// the album page, whose selection bar replaces it, and Review
+    /// Duplicates, whose footer has its own actions.
     pub(crate) fn selection_dock_shown(&self) -> bool {
-        self.has_selection() && !self.is_fullscreen_viewer && !self.album_selection_bar_shown()
+        self.has_selection()
+            && !self.is_fullscreen_viewer
+            && !self.album_selection_bar_shown()
+            && self.selection != AlbumSelection::Duplicates
     }
 
     /// Selection dock: centred over the grid column, `DOCK_BOTTOM` above its

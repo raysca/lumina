@@ -65,11 +65,19 @@ impl TextTarget {
         self == TextTarget::Caption
     }
 
-    /// What the empty field shows, and what VoiceOver calls it.
-    fn placeholder_and_label(self) -> (SharedString, &'static str) {
+    /// What the empty field shows, and what VoiceOver calls it. `draft` is
+    /// the smart-album control `AlbumDraft` edits: only its name field has
+    /// a placeholder.
+    fn placeholder_and_label(self, draft: DraftFocus) -> (SharedString, &'static str) {
         use TextTarget::*;
         let (placeholder, label) = match self {
             Palette => ("Type a command, album, tag or year…", "Command"),
+            AlbumDraft if draft == DraftFocus::Title => {
+                return (
+                    crate::i18n::t("smart_album.untitled").into(),
+                    "Smart album field",
+                )
+            }
             AlbumDraft => ("", "Smart album field"),
             Tag => ("Type a tag, Enter to add", "Tag"),
             Title => ("Type a title... (Enter to save, Esc to cancel)", "Title"),
@@ -173,6 +181,7 @@ impl FieldInput {
 fn load_field<M: InputModeKind>(
     state: &mut InputBaseState<M>,
     target: TextTarget,
+    draft: DraftFocus,
     text: String,
     window: &mut Window,
     cx: &mut Context<InputBaseState<M>>,
@@ -185,7 +194,7 @@ fn load_field<M: InputModeKind>(
         selection,
         ..Default::default()
     });
-    let (placeholder, label) = target.placeholder_and_label();
+    let (placeholder, label) = target.placeholder_and_label(draft);
     state.set_placeholder(placeholder, window, cx);
     state.set_accessibility(
         InputAccessibility::new(Some(Role::TextInput)).with_label(Some(label.into())),
@@ -332,7 +341,7 @@ impl LuminaApp {
                 if reload {
                     // The last field's validator would refuse the new text.
                     state.set_validator(|_, _| true, cx);
-                    load_field(state, target, text, window, cx);
+                    load_field(state, target, draft, text, window, cx);
                     // Typing and paste stop at the field's limit and never
                     // insert what the catalog drops (see `clean_text`).
                     state.set_validator(
@@ -348,7 +357,7 @@ impl LuminaApp {
             }),
             FieldEditor::Lines(state) => state.update(cx, |state, cx| {
                 if reload {
-                    load_field(state, target, text, window, cx);
+                    load_field(state, target, draft, text, window, cx);
                 }
                 if focusing {
                     state.focus(window, cx);

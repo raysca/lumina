@@ -8,7 +8,7 @@ use crate::app::preferences::{PreferencesTab, SettingsButton};
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::page_header::{header_icon_button, page_header};
+use crate::views::page_header::{header_icon_button, page_header_with_meta_font};
 
 mod about;
 mod downloads;
@@ -129,7 +129,14 @@ pub fn render_preferences_modal(app: &LuminaApp, cx: &mut Context<LuminaApp>) ->
                 .flex_col()
                 // The library's banner is hidden under this page.
                 .child(app.render_error_banner(cx))
-                .child(page_header(Empty, label, Some(meta.into()), actions, false))
+                .child(page_header_with_meta_font(
+                    Empty,
+                    label,
+                    Some(meta.into()),
+                    theme::FONT_SANS,
+                    actions,
+                    false,
+                ))
                 .child(
                     div()
                         .id("preferences-body")

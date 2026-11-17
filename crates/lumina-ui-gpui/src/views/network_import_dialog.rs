@@ -7,7 +7,7 @@ use gpui::*;
 use crate::app::network_import::NetworkImportStage;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::import_dialog::dialog_footer_button;
+use crate::views::import_dialog::{dialog_footer_button, dialog_footer_button_with};
 use crate::views::network_import_preview::{self as preview, host_of};
 use crate::views::page_header::{header_icon_button, text_marker};
 use crate::LuminaApp;
@@ -154,11 +154,13 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                         .text_color(theme::danger())
                         .child(err.clone())
                 }));
-            let import = dialog_footer_button("net-import-inspect", "Import", "↵", true).on_click(
-                cx.listener(move |this, _e: &ClickEvent, _w, cx| {
-                    this.submit_network_url(inspect_url.clone(), cx);
-                }),
-            );
+            // Disabled while empty; pressing it still says why (`submit_network_url`).
+            let enabled = !url.trim().is_empty();
+            let import =
+                dialog_footer_button_with("net-import-inspect", "Import", "↵", true, enabled)
+                    .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
+                        this.submit_network_url(inspect_url.clone(), cx);
+                    }));
             StageParts {
                 title: "Import Video from URL",
                 body,

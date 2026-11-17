@@ -6,6 +6,7 @@ use gpui::*;
 use crate::app::import::ImportDialog;
 use crate::app::types::format_bytes;
 use crate::theme;
+use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 
 fn plural(n: usize, one: &str, many: &str) -> String {
@@ -171,6 +172,19 @@ pub fn dialog_footer_button(
     kbd: &'static str,
     primary: bool,
 ) -> Stateful<Div> {
+    dialog_footer_button_with(id, label, kbd, primary, true)
+}
+
+/// [`dialog_footer_button`], drawn disabled when `enabled` is false: dimmed,
+/// with no hover or pointer (tests see an `{id}-text:disabled` marker). It
+/// keeps whatever click handler the caller adds.
+pub fn dialog_footer_button_with(
+    id: &'static str,
+    label: &'static str,
+    kbd: &'static str,
+    primary: bool,
+    enabled: bool,
+) -> Stateful<Div> {
     let (hint_bg, hint_fg) = if primary {
         (theme::on_accent_kbd(), theme::on_accent())
     } else {
@@ -190,22 +204,32 @@ pub fn dialog_footer_button(
         .flex_row()
         .items_center()
         .gap(px(9.0))
-        .text_size(px(13.0))
-        .cursor_pointer();
-    let button = if primary {
-        button
-            .bg(theme::accent())
-            .border_color(theme::accent())
-            .hover(|s| s.bg(theme::accent_hover()))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme::on_accent())
+        .text_size(px(13.0));
+    let (hover_bg, button) = if primary {
+        (
+            theme::accent_hover(),
+            button
+                .bg(theme::accent())
+                .border_color(theme::accent())
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme::on_accent()),
+        )
+    } else {
+        (
+            theme::plate(),
+            button
+                .bg(theme::bg_3())
+                .border_color(theme::line_2())
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme::t1()),
+        )
+    };
+    let button = if enabled {
+        button.hover(move |s| s.bg(hover_bg)).cursor_pointer()
     } else {
         button
-            .bg(theme::bg_3())
-            .border_color(theme::line_2())
-            .hover(|s| s.bg(theme::plate()))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(theme::t1())
+            .opacity(0.45)
+            .children(text_marker(id, &"disabled".into()))
     };
     button.child(label).child(
         div()

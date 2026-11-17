@@ -63,8 +63,14 @@ pub(super) fn render_storage_card(
         ),
         None => format_bytes(storage.library_bytes()),
     };
-    // The bar is a breakdown of these four, not of the volume.
+    // With the volume known, the segments are the library's share of it,
+    // matching "X of Y used", and the rest of the bar is the bg-3 track.
+    // Without it the bar is a breakdown of these four parts.
     let sum: u64 = parts.iter().map(|p| p.bytes).sum();
+    let whole = match storage.capacity {
+        Some((total, _)) => total.max(sum),
+        None => sum,
+    };
     let bar = div()
         .debug_selector(|| "settings-storage-bar".to_string())
         .w_full()
@@ -80,7 +86,7 @@ pub(super) fn render_storage_card(
                 .debug_selector(move || format!("settings-storage-seg-{name}"))
                 .h_full()
                 .flex_shrink_0()
-                .w(relative(p.bytes as f32 / sum as f32))
+                .w(relative(p.bytes as f32 / whole as f32))
                 .bg(p.color)
         }));
     let legend = div()

@@ -20,6 +20,19 @@ pub(crate) fn page_header(
     actions: impl IntoElement,
     draggable: bool,
 ) -> Div {
+    page_header_with_meta_font(leading, title, meta, theme::FONT_MONO, actions, draggable)
+}
+
+/// [`page_header`] with the meta line in `meta_font`: Settings' subtitle is
+/// sans, the other pages' mono.
+pub(crate) fn page_header_with_meta_font(
+    leading: impl IntoElement,
+    title: impl Into<SharedString>,
+    meta: Option<SharedString>,
+    meta_font: &'static str,
+    actions: impl IntoElement,
+    draggable: bool,
+) -> Div {
     let title: SharedString = title.into();
     div()
         .debug_selector(|| "page-header".to_string())
@@ -62,10 +75,11 @@ pub(crate) fn page_header(
                         .debug_selector(|| "page-meta".to_string())
                         .min_w_0()
                         .truncate()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(meta_font)
                         .text_size(px(10.5))
                         .text_color(theme::t3())
                         .children(marker)
+                        .children(text_marker("page-meta-font", &meta_font.into()))
                         .child(meta)
                 })),
         )

@@ -1417,3 +1417,57 @@ fn saved_search_counts_follow_caption_and_location_edits() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The placeholder the smart-album input shows while it is empty.
+fn draft_placeholder(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) -> String {
+    view.update(vcx, |app, cx| {
+        match app.field_input_for(crate::app::text_input::TextTarget::AlbumDraft) {
+            Some(crate::app::text_input::FieldEditor::Line(state)) => {
+                state.read(cx).presentation().placeholder().to_string()
+            }
+            _ => panic!("a smart-album field takes typing"),
+        }
+    })
+}
+
+#[core::prelude::v1::test]
+fn focused_empty_name_field_shows_the_untitled_placeholder() {
+    let (dir, engine, _ids) = library("sab_placeholder");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.album_title.is_empty(),
+            "a new album has no name"
+        )
+    });
+    assert_eq!(
+        draft_placeholder(vcx, &view),
+        "Untitled Smart Album",
+        "the name field is focused on open and must still show its placeholder"
+    );
+
+    // A condition's value is the same input target: it gets no name hint.
+    view.update(vcx, |app, cx| {
+        app.album_draft.rows[0] = crate::app::smart_draft::DraftRow::new(RuleField::Date);
+        app.set_draft_focus(DraftFocus::Value(0), cx);
+    });
+    render_ui(vcx);
+    assert_eq!(
+        draft_placeholder(vcx, &view),
+        "",
+        "a condition value field does not show the album-name placeholder"
+    );
+
+    view.update(vcx, |app, cx| app.set_draft_focus(DraftFocus::Title, cx));
+    render_ui(vcx);
+    assert_eq!(
+        draft_placeholder(vcx, &view),
+        "Untitled Smart Album",
+        "back on the name field the placeholder returns"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

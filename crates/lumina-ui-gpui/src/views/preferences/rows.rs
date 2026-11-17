@@ -9,15 +9,15 @@ use crate::app::preferences::SettingsButton;
 use crate::app::LuminaApp;
 use crate::icons::{render_icon, Icon};
 use crate::theme;
+use crate::views::page_header::text_marker;
 
 /// A section: its 10/600 label (with an optional 11.5 note on the right),
-/// 9 px above a group of rows. With no rows it is the label line alone.
+/// 9 px above a group of rows.
 pub(super) fn section(
     label: &'static str,
     note: Option<SharedString>,
     rows: impl IntoIterator<Item = Div>,
 ) -> Div {
-    let rows: Vec<Div> = rows.into_iter().collect();
     div()
         .flex()
         .flex_col()
@@ -29,6 +29,7 @@ pub(super) fn section(
                 .items_center()
                 .justify_between()
                 .child(theme::section_label(label))
+                .children(text_marker("settings-section", &label.into()))
                 .children(note.map(|note| {
                     let marker = note.clone();
                     div()
@@ -39,7 +40,7 @@ pub(super) fn section(
                         .child(note)
                 })),
         )
-        .when(!rows.is_empty(), |s| s.child(group(rows)))
+        .child(group(rows))
 }
 
 /// A `bg_1` card, 12 px radius, with a bottom line between its rows.

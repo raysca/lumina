@@ -571,14 +571,20 @@ fn general_shows_general_rows_and_launch_view() {
             "{moved} moved to the Library category"
         );
     }
-    // The rendered note itself: a missing, hard-coded or misspelt version fails.
+    // No empty UPDATES section: update controls are not built, and the
+    // version is on the About page.
     let note = leak(format!(
         "settings-section-note:Lumina {}",
         env!("CARGO_PKG_VERSION")
     ));
     assert!(
-        vcx.debug_bounds(note).is_some(),
-        "the UPDATES note names the real build version: {note}"
+        vcx.debug_bounds(note).is_none(),
+        "General has no UPDATES section with only the version: {note}"
+    );
+    assert!(
+        vcx.debug_bounds("settings-section-text:GENERAL").is_some()
+            && vcx.debug_bounds("settings-section-text:UPDATES").is_none(),
+        "General lists its GENERAL section but no UPDATES section label"
     );
     let launch =
         |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.config.launch_view);
@@ -1330,17 +1336,47 @@ fn storage_card_shows_segments() {
         ("cache", 1024),
     ];
     let sum: u64 = parts.iter().map(|(_, b)| b).sum();
-    for (name, bytes) in parts {
-        let seg = vcx
-            .debug_bounds(leak(format!("settings-storage-seg-{name}")))
-            .unwrap_or_else(|| panic!("the {name} segment renders"));
-        let want = f32::from(bar.size.width) * bytes as f32 / sum as f32;
-        assert!(
-            (f32::from(seg.size.width) - want).abs() <= 1.0,
-            "the {name} segment is its share of the bar: {:?} vs {want}",
-            seg.size.width
-        );
+    // With the volume known the segments are the library's share of it (the
+    // rest is the empty track); without it, a breakdown of the four parts.
+    for (capacity, whole, why) in [
+        (None, sum, "with no volume reading"),
+        (
+            Some((4 * sum, sum)),
+            4 * sum,
+            "on a volume four times the library",
+        ),
+        // A volume reading smaller than the library's files (stale or odd)
+        // clamps to the files: the bar is full, never past it.
+        (
+            Some((sum / 2, 0)),
+            sum,
+            "on a volume reading smaller than the library",
+        ),
+    ] {
+        view.update(vcx, |app, _| {
+            if let Some(storage) = app.preferences_storage.as_mut() {
+                storage.capacity = capacity;
+            }
+        });
+        render_ui(vcx);
+        for (name, bytes) in parts {
+            let seg = vcx
+                .debug_bounds(leak(format!("settings-storage-seg-{name}")))
+                .unwrap_or_else(|| panic!("the {name} segment renders"));
+            let want = f32::from(bar.size.width) * bytes as f32 / whole as f32;
+            assert!(
+                (f32::from(seg.size.width) - want).abs() <= 1.0,
+                "{why}, the {name} segment is {bytes} of {whole} bytes of the bar: {:?} vs {want}",
+                seg.size.width
+            );
+        }
     }
+    view.update(vcx, |app, _| {
+        if let Some(storage) = app.preferences_storage.as_mut() {
+            storage.capacity = report.capacity;
+        }
+    });
+    render_ui(vcx);
     for (label, bytes) in [
         ("Photos", 2 * photo),
         ("Videos", 4096),
@@ -1983,6 +2019,40 @@ fn settings_brand_shows_the_logo_where_the_library_does() {
     assert_eq!(
         icon.origin, library_icon.origin,
         "switching to settings must not move the brand row"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[core::prelude::v1::test]
+fn settings_subtitle_is_sans_and_library_meta_mono() {
+    let (temp_dir, engine) = seed_library("settings_meta_font", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("page-meta-font-text:JetBrains Mono")
+            .is_some(),
+        "the library page's meta line stays mono"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::General, cx)
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("page-meta-font-text:Inter").is_some(),
+        "the settings subtitle uses the sans UI font"
+    );
+
+    view.update(vcx, |app, cx| app.close_preferences(cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("page-meta-font-text:JetBrains Mono")
+            .is_some(),
+        "back in the library, its meta line is mono again"
     );
 
     drop(view);

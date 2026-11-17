@@ -22,6 +22,9 @@ use crate::LuminaApp;
 /// Width of the group list pane.
 const GROUP_LIST_WIDTH: f32 = 372.0;
 
+/// The compare footer's height on one row; it wraps taller when narrow.
+pub(crate) const FOOTER_MIN_HEIGHT: f32 = 63.5;
+
 /// The Exact copies body: the empty state, or the list and compare panes.
 pub fn render(this: &LuminaApp, total_count: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
     let visible = this.stacks.review.visible(&this.duplicate_groups);

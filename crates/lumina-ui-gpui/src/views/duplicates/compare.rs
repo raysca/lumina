@@ -14,6 +14,10 @@ use crate::theme;
 use crate::views::page_header::text_marker;
 use crate::LuminaApp;
 
+/// The footer text's narrowest beside the buttons: "frees …" and a summary
+/// of at most three lines. At 1280 wide it gets about 313 (two lines).
+const TEXT_MIN_WIDTH: f32 = 280.0;
+
 pub(super) fn render(
     this: &LuminaApp,
     visible: &[&DuplicateGroup],
@@ -45,6 +49,7 @@ pub(super) fn render(
     )
     .into();
     let frees: SharedString = t_with("duplicates.frees", &[&format_bytes(freed)]).into();
+    let footer_height = this.stacks.review.footer_height.clone();
     div()
         .debug_selector(|| "duplicates-compare".to_string())
         .flex_1()
@@ -67,6 +72,7 @@ pub(super) fn render(
                 .child(
                     div()
                         .id("duplicates-candidates-row")
+                        .debug_selector(|| "duplicates-candidates-row".to_string())
                         // Grows from the cards' height at the photos'
                         // minimum up to the cards' cap (plus the 20 px
                         // padding), and never shrinks below the minimum.
@@ -88,25 +94,46 @@ pub(super) fn render(
         .child(
             div()
                 .debug_selector(|| "duplicates-footer".to_string())
-                .h(px(63.5))
+                .relative()
+                .min_h(px(super::FOOTER_MIN_HEIGHT))
                 .flex_shrink_0()
                 .px(px(24.0))
+                .py(px(12.0))
                 .bg(theme::bg_2())
                 .border_t_1()
                 .border_color(theme::line())
                 .flex()
                 .flex_row()
+                .flex_wrap()
+                .justify_end()
                 .items_center()
                 .gap(px(8.0))
-                // The text takes what the buttons leave: the summary
-                // truncates first; "frees …" stays whole until there is
-                // no room for it either, then it is clipped.
+                // Records the laid-out height for the toast. This runs in
+                // prepaint, where `refresh` is ignored, so a change asks for
+                // the next frame instead. The canvas sits inside the 1 px
+                // top border: add it back.
+                .child(
+                    canvas(
+                        move |bounds, window, _| {
+                            let height = f32::from(bounds.size.height) + 1.0;
+                            if footer_height.replace(height) != height {
+                                window.request_animation_frame();
+                            }
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+                // The summary wraps rather than truncating, so it never
+                // shows a fragment, and "frees …" and the buttons stay
+                // whole: the text sits beside the buttons while it gets
+                // `TEXT_MIN_WIDTH`, else it takes its own line above them.
                 .child(
                     div()
                         .debug_selector(|| "duplicates-footer-text".to_string())
                         .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
+                        .min_w(px(TEXT_MIN_WIDTH))
                         .flex()
                         .flex_row()
                         .items_center()
@@ -115,7 +142,6 @@ pub(super) fn render(
                             div()
                                 .debug_selector(|| "duplicates-footer-summary".to_string())
                                 .min_w_0()
-                                .truncate()
                                 .text_size(px(13.0))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme::t1())

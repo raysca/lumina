@@ -410,3 +410,57 @@ fn download_job_reports_a_missing_helper_without_inspecting() {
         );
     }
 }
+
+#[core::prelude::v1::test]
+fn net_import_button_is_disabled_until_a_link_is_typed() {
+    let (_library, engine) = seed_library("net_import_disabled", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| app.open_network_import_dialog(cx));
+    view.update(vcx, |app, _| {
+        app.network_import.stage = Some(NetworkImportStage::Input {
+            url: String::new(),
+            error: None,
+        });
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("net-import-inspect").is_some(),
+        "the Import button renders"
+    );
+    assert!(
+        vcx.debug_bounds("net-import-inspect-text:disabled")
+            .is_some(),
+        "with an empty link field Import is drawn disabled"
+    );
+
+    // Pressing it anyway still refuses and says why.
+    click(vcx, "net-import-inspect");
+    view.update(vcx, |app, _| match &app.network_import.stage {
+        Some(NetworkImportStage::Input { error, .. }) => {
+            assert!(error.is_some(), "an empty link is refused with a message")
+        }
+        _ => panic!("an empty link keeps the dialog on its input stage"),
+    });
+
+    vcx.simulate_input("https://example.com/clip.mp4");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("net-import-inspect-text:disabled")
+            .is_none(),
+        "once a link is typed Import is enabled"
+    );
+
+    keystrokes(vcx, "secondary-a backspace");
+    render_ui(vcx);
+    view.update(vcx, |app, _| match &app.network_import.stage {
+        Some(NetworkImportStage::Input { url, .. }) => assert!(url.is_empty()),
+        _ => panic!("expected the input stage"),
+    });
+    assert!(
+        vcx.debug_bounds("net-import-inspect-text:disabled")
+            .is_some(),
+        "clearing the field disables Import again"
+    );
+}

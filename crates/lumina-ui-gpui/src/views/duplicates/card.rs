@@ -120,9 +120,10 @@ pub(super) fn card(
                 .justify_center()
                 .overflow_hidden()
                 .child(match texture(this, item) {
+                    // The whole photo, letterboxed: this is a comparison.
                     Some(tex) => img(tex)
                         .size_full()
-                        .object_fit(ObjectFit::Cover)
+                        .object_fit(ObjectFit::Contain)
                         .into_any_element(),
                     None => render_icon(Icon::Image, px(24.0), theme::t3()).into_any_element(),
                 })
