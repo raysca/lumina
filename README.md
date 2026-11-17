@@ -5,11 +5,12 @@ A native, local-first photo & video manager for macOS, built in Rust with
 framework). The interface targets 120 FPS ProMotion rendering while a headless
 core handles cataloguing, decoding, and search.
 
-> **Platform status:** macOS 12+ is the only supported and released platform
-> today. Windows and Linux are planned future targets; the current UI, player,
-> decoder fallbacks and release scripts still contain macOS-specific paths. See
-> [RELEASING.md](RELEASING.md#windows-and-linux-planned). Do not treat current
-> packages or scripts as Windows/Linux support.
+> **Platform status:** macOS 12+ is the only supported and released platform.
+> Linux development is underway, but its build, media and package paths have
+> not completed the release acceptance checks. Windows remains planned. See
+> [Linux development notes](docs/linux.md) and
+> [RELEASING.md](RELEASING.md#windows-planned-linux-in-development). Do not
+> treat Linux CI artifacts as supported releases.
 
 ## Features
 
@@ -249,8 +250,15 @@ check on macOS, using files generated at test time.
 | TIFF | tiff, tif | Tested at 8 MB or less, with EXIF rotation | Tested at 8 MB or less (Display P3); larger files take the same conversion, not tested | Tested, with EXIF rotation |
 | RAW | arw, cr2, cr3, nef, dng, raf, rw2, orf | Not yet checked on real files | Not yet checked on real files | Not yet checked on real files |
 
-Video files (mp4, mov, m4v, avi, mkv) are catalogued, and play only if macOS can
-decode them. These tests do not cover video.
+Linux development builds preview JPEG, PNG, WebP and TIFF through the in-process
+decoders or ffmpeg. HEIC/HEIF and RAW previews are unavailable. Wide-gamut ICC
+profiles are not color-matched on Linux, so colors may differ from macOS. This
+path has not completed the Linux release acceptance checks.
+
+Video files (mp4, mov, m4v, avi, mkv) are catalogued. macOS uses AVFoundation;
+Linux development builds use GStreamer for playback and ffmpeg for poster and
+scrub previews. Linux behavior is not yet covered by the release acceptance
+suite.
 
 Limits:
 
@@ -259,12 +267,14 @@ Limits:
 - RAW photos use the system's rendering. Lumina is not a RAW developer.
 - A HEIC rotated only by its container, with no EXIF orientation, has not been
   tested.
-- Colour conversion needs macOS tools. Windows and Linux are not supported yet.
+- Colour conversion needs macOS tools. Linux does not currently preview HEIC,
+  HEIF or RAW photos; other unsupported formats show a decode error.
 
 ## Requirements
 
-- macOS 12 or newer for the current release (Windows and Linux are planned but
-  not yet supported; their video/player/packaging backends are not implemented)
+- macOS 12 or newer for the supported release. Linux remains in development;
+  its internal amd64 package targets Ubuntu 24.04 (glibc 2.39), and other
+  distributions are not yet validated. See `docs/linux.md` and `RELEASING.md`.
 - Xcode Command Line Tools (cc, AVFoundation, AppKit) on macOS
 - Rust stable, 1.95 or newer — see rust-toolchain.toml
 

@@ -6,13 +6,13 @@
 | --- | --- | --- |
 | macOS 12+ (arm64 + x86_64) | **Supported and released** | Universal `Lumina.app`, `.zip`, `.dmg` |
 | Windows (x86_64; arm64 later) | **Planned, not supported yet** | None today |
-| Linux (x86_64; arm64 later) | **Planned, not supported yet** | None today |
+| Linux (x86_64; arm64 later) | **In development, not supported yet** | Internal Ubuntu 24.04 amd64 `.deb` (glibc 2.39+); not released |
 
-Only macOS is buildable and released from this tree today. Windows and Linux
-have macOS-specific UI, player, decoder, packaging and CI paths to port first;
-see [Windows and Linux (planned)](#windows-and-linux-planned). Do not publish,
-document or support Windows/Linux artifacts until the acceptance criteria there
-are met.
+Only macOS is supported and released from this tree. Linux now has a native
+GStreamer player, ffmpeg video previews, a Debian packaging path and Linux CI
+work in progress, but its window, install lifecycle and end-to-end library/viewer
+flow have not completed the acceptance checks below. Windows remains planned.
+Do not publish or support Linux artifacts until those checks pass.
 
 ## Version bump
 
@@ -99,55 +99,73 @@ checksums. Publish the draft after verifying the artifacts.
 Without signing secrets the workflow still builds ad-hoc artifacts and a draft
 release, clearly unsigned — do not distribute those as a final release.
 
-## Windows and Linux (planned)
+## Windows planned; Linux in development
 
-These are future targets, not current capabilities. The macOS release path must
-remain the primary, tested path while portability work lands incrementally.
+Linux development builds are not a supported release. Keep the macOS release
+path as the only public release until Linux completes every acceptance check.
+### CI build artifacts
+
+CI builds Lumina for macOS and Linux on pushes to main and on pull requests,
+and keeps two internal build artifacts for 14 days:
+
+- `package-linux`: an unsigned amd64 `.deb`, built, installed, launched and
+  removed by `scripts/check_linux_package.sh`, then uploaded as
+  `lumina-linux-amd64-unsigned`.
+- `bundle-macos`: an ad-hoc signed arm64 `Lumina.app` zip, uploaded as
+  `lumina-macos-arm64-adhoc`.
+
+The release workflow also builds and checks the unsigned `.deb` and keeps it
+as a 30-day workflow artifact. None of these is attached to a GitHub release
+or is a distributable release: the `.deb` is unsigned and Linux is not
+supported yet, and the ad-hoc app is not Developer ID signed or notarized.
 
 ### What blocks a Windows/Linux release today
 
-- **UI platform integration** — the GPUI shell uses macOS titlebar/traffic-light
-  options, AppKit/AVFoundation player bridging and macOS menu conventions.
-  Non-macOS builds currently use a dummy player backend; the window, menu and
-  input layers need platform-specific validation and, where GPUI lacks a
-  portable API, small platform adapters.
-- **Media decoding** — the JPEG/PNG/WebP path is portable, but HEIC/RAW
-  thumbnails currently fall back to macOS `sips`/`qlmanage` and video
-  thumbnails come from AVFoundation in process. Windows needs
-  Windows Imaging Component (or libheif/ffmpeg) and Linux needs libheif/ffmpeg
-  or GStreamer, with a capability matrix for unsupported formats.
-- **Video playback** — the real player today is AVFoundation. Windows needs a
-  Media Foundation backend; Linux needs GStreamer or ffmpeg. Frame timing,
-  audio, scrubbing and PiP parity must be tested per platform.
+- **UI platform integration** — Linux now uses its native GPUI titlebar, but its
+  menus, keyboard modifiers, file dialogs, drag/drop and window behavior still
+  need real-session validation.
+- **Media decoding** — Linux currently decodes JPEG/PNG/WebP in process and
+  uses ffmpeg for video posters and scrub previews. HEIC/HEIF and RAW previews
+  are unavailable there. Those errors and the supported media matrix need
+  user-facing docs and real-library validation.
+- **Video playback** — Linux now has a GStreamer player. Playback, audio output,
+  frame timing, scrubbing, resume, looping, PiP and track-selection behavior
+  still need parity testing. Windows needs a Media Foundation backend.
 - **Packaging and signing** — the release scripts use `codesign`,
   `notarytool`, `hdiutil`, `lipo` and `ditto`. Each platform needs its own
   build/package/sign pipeline and CI runner.
-- **Live UI tests** — the OS-level harness is macOS/CoreGraphics/Swift based.
-  In-process GPUI tests may be reusable, but each platform needs a compile/test
-  job and a window smoke check.
-- **Metadata and paths** — `Info.plist`, macOS config/cache conventions and
-  `~/Library` paths need Windows/Linux equivalents (APPDATA/XDG) with migration
-  and test coverage.
+- **Live UI tests** — Linux now has Xvfb smokes for X11 and nested Weston
+  Wayland. The X11 check launches the app, scans an isolated H.264 video,
+  displays its viewer frame and loads the GStreamer player; the Wayland check
+  verifies the app creates a Wayland window. The workflow runs both on Ubuntu,
+  and local Ubuntu container runs pass; the hosted native x86_64 CI job still
+  needs to pass. Dialogs,
+  drag/drop, audio output and other real-session interactions still need desktop
+  validation. The separate CoreGraphics/Swift window probe remains macOS-only.
+- **Metadata and paths** — Linux uses XDG paths. Startup migration and broader
+  package upgrade/uninstall testing still need coverage.
 
 ### Porting workstreams
 
-1. **Compile/test matrix first**: `cargo check --workspace` and headless
-   `lumina-core` tests on Windows and Linux CI. Gate the port on a green matrix
-   before UI parity work.
+1. **Compile/test matrix**: Linux now has native Ubuntu build/test/clippy CI;
+   run it successfully and keep the macOS job green. Windows still needs its
+   own matrix.
 2. **Core portability**: isolate OS backends behind traits; add portable decode
    fallbacks and document which formats are unsupported per platform.
-3. **UI portability**: replace macOS-only window/menu/titlebar assumptions with
-   platform adapters; make shortcut modifiers use the platform primary modifier
-   (Cmd vs Ctrl); verify file dialogs, drag/drop and keyboard focus.
-4. **Player backends**: implement Media Foundation (Windows) and
-   GStreamer/ffmpeg (Linux), then run the existing viewer/video tests.
+3. **UI portability**: Linux now has a native titlebar, platform shortcut
+   labels, an executable picker and a fixture-library/viewer smoke path. Verify
+   file dialogs, drag/drop, keyboard focus and window behavior in real desktop
+   sessions; keep macOS behavior green.
+4. **Player backends**: run the viewer/video suite against Linux GStreamer and
+   implement Media Foundation (Windows).
 5. **Packaging and signing**:
    - Windows: build x86_64 (arm64 later), add icon/version resources, install as
      MSIX (or signed NSIS/MSI), sign with Authenticode and timestamping; plan
      SmartScreen reputation.
-   - Linux: build x86_64 (arm64 later), ship AppImage plus deb/rpm (or Flatpak),
-     add a desktop entry and icons, document glibc/distribution requirements,
-     sign repository metadata/packages with GPG.
+   - Linux: verify the current x86_64 `.deb` install/uninstall and desktop
+     entry, document required GStreamer plugins and glibc support, then add
+     signing before public distribution. arm64 and other package formats remain
+     future work.
 6. **CI/release matrix**: one job per platform, native tests, platform archive
    verification, per-platform checksums, and a single draft release containing
    macOS + Windows + Linux artifacts.
@@ -159,20 +177,21 @@ remain the primary, tested path while portability work lands incrementally.
 | Platform | Target formats | Signing |
 | --- | --- | --- |
 | Windows x86_64 | `Lumina-vX.Y.Z-windows-x64.msix` (or NSIS/MSI fallback), zip | Authenticode |
-| Linux x86_64 | `Lumina-vX.Y.Z-linux-x64.AppImage`, `.deb`, `.rpm` | GPG repository/package signature |
+| Linux x86_64 | `.deb` (internal verification only) | Not signed; not for public distribution |
 | macOS universal | `Lumina-vX.Y.Z-macos-universal.zip`, `.dmg` | Developer ID + notarization |
 
 ### Acceptance criteria before calling Windows/Linux supported
 
-- [ ] Native CI job builds, tests and produces a launchable artifact.
-- [ ] Window smoke test opens, scans a library, opens the viewer and quits cleanly.
+- [ ] Native CI job passes formatting, clippy, core/UI tests and produces a launchable artifact.
+- [ ] Window smoke test opens, scans a fixture library, opens media in the viewer and quits cleanly.
 - [ ] Core catalog, search, smart albums, metadata editing, undo and XMP sidecars
       pass the existing test suite on that platform.
 - [ ] Unsupported media formats fail gracefully and are documented.
-- [ ] Installer/package installs and uninstalls without leftovers.
+- [ ] Installer/package installs and uninstalls without leftovers, including user data handling.
 - [ ] Artifacts are signed and verified with the platform tooling; checksums are
       published; the release is not marked stable until all platforms pass.
 - [ ] README, support policy and `RELEASING.md` no longer say macOS-only.
 
-Until then, keep the release workflow macOS-only and do not upload partial
-Windows/Linux builds to a public release.
+Until then, keep public releases macOS-only. CI keeps the unsigned Linux
+package (and the ad-hoc macOS app) as short-lived internal workflow artifacts
+for testing; do not attach them to a public release.
