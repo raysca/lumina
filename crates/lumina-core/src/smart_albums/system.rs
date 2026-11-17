@@ -1,3 +1,4 @@
+use crate::search::SqlParts;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -123,7 +124,7 @@ impl SystemAlbum {
         limit: usize,
         offset: usize,
         sort: crate::SortSpec,
-    ) -> (String, Vec<rusqlite::types::Value>) {
+    ) -> SqlParts {
         let where_clause = self.build_where_clause();
         let sql = format!(
             r#"
@@ -149,7 +150,7 @@ impl SystemAlbum {
         (sql, params)
     }
 
-    pub fn synthesize_count_query(&self) -> (String, Vec<rusqlite::types::Value>) {
+    pub fn synthesize_count_query(&self) -> SqlParts {
         let where_clause = self.build_where_clause();
         let sql = format!(
             r#"

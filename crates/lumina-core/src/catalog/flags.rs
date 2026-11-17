@@ -5,9 +5,9 @@
 
 use super::view_scope::{view_where, ViewScope};
 use super::Catalog;
+use crate::search::SqlParts;
 use crate::{Flag, MediaId};
 use anyhow::{Context, Result};
-use rusqlite::types::Value;
 use std::collections::HashMap;
 
 /// The rejected items of one view, with the Delete dialog's header summary.
@@ -22,7 +22,7 @@ pub struct RejectedItems {
 /// One query: the reject flag ANDed with the view's own WHERE. Trashed and
 /// hidden items are left out (a trashed reject is already deleted), and
 /// those two terms also let SQLite seek the partial `idx_media_flag`.
-pub(crate) fn rejected_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+pub(crate) fn rejected_sql(scope: &ViewScope) -> Result<SqlParts> {
     let (view, mut params) = view_where(scope)?;
     params.insert(0, (Flag::Reject as i64).into());
     Ok((

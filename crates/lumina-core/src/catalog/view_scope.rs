@@ -3,9 +3,9 @@
 //! Mosaic layout and day places.
 
 use super::Catalog;
+use crate::search::SqlParts;
 use crate::{MediaId, SmartAlbum, SortSpec, StructuredQuery, SystemAlbum};
 use anyhow::{Context, Result};
-use rusqlite::types::Value;
 use std::collections::HashMap;
 
 /// One grid view whose rows are a WHERE over `media_items m`. A search, a
@@ -33,7 +33,7 @@ pub struct DateSpan {
 
 /// The view's WHERE, with the same rows as its count: active items only,
 /// except where the view itself says otherwise (`is:trashed`, the Trash).
-pub(crate) fn view_where(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+pub(crate) fn view_where(scope: &ViewScope) -> Result<SqlParts> {
     const ACTIVE: &str = "m.is_trashed = 0 AND m.is_hidden = 0";
     Ok(match scope {
         ViewScope::Library => (ACTIVE.into(), Vec::new()),
@@ -63,7 +63,7 @@ pub(crate) fn view_where(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
 /// faster where the plan sorts (album 1.1 vs 2.5 ms, Videos 4.0 vs 10.4 ms)
 /// but 300-8000x slower where the walk stops early (Untagged, a common
 /// city: µs vs 6-8 ms), and no better for a rare filter (5.8 vs 4.7 ms).
-fn date_span_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+fn date_span_sql(scope: &ViewScope) -> Result<SqlParts> {
     let (view, params) = view_where(scope)?;
     let end = |dir: &str| {
         format!(
@@ -97,7 +97,7 @@ pub struct ViewTotals {
 /// idx_media_type (media_type=?)` then `USE TEMP B-TREE FOR GROUP BY`
 /// (an album seeks `album_items`). Accepted: one background pass per
 /// revision, not a frame query.
-fn totals_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+fn totals_sql(scope: &ViewScope) -> Result<SqlParts> {
     let (view, params) = view_where(scope)?;
     Ok((
         format!(
@@ -135,7 +135,7 @@ const DAY_KEY: &str = "CASE WHEN m.timestamp_epoch_ms <> 0 AND m.year > 0 \
 /// ORDER BY as the slice, so a cell index is a grid index. Date sort walks
 /// `idx_media_timestamp` with no sort for the library (timestamp DESC, id
 /// DESC matches the index); an album is driven by `album_items`.
-fn layout_sql(scope: &ViewScope, sort: SortSpec) -> Result<(String, Vec<Value>)> {
+fn layout_sql(scope: &ViewScope, sort: SortSpec) -> Result<SqlParts> {
     let (view, params) = view_where(scope)?;
     Ok((
         format!(
@@ -153,7 +153,7 @@ fn layout_sql(scope: &ViewScope, sort: SortSpec) -> Result<(String, Vec<Value>)>
 /// GROUP BY`. Accepted: it is one background pass per
 /// catalog revision, not a frame query, so no `(year, month, day, city)`
 /// index is added while the bench meets its gate.
-fn day_places_sql(scope: &ViewScope) -> Result<(String, Vec<Value>)> {
+fn day_places_sql(scope: &ViewScope) -> Result<SqlParts> {
     let (view, params) = view_where(scope)?;
     Ok((
         format!(
@@ -285,7 +285,7 @@ mod tests {
         explain(catalog, date_span_sql(scope).unwrap())
     }
 
-    fn explain(catalog: &Catalog, (sql, params): (String, Vec<Value>)) -> String {
+    fn explain(catalog: &Catalog, (sql, params): SqlParts) -> String {
         let conn = catalog.conn.lock();
         let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt

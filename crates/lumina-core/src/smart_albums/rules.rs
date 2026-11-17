@@ -1,5 +1,5 @@
+use crate::search::SqlParts;
 use anyhow::{anyhow, Result};
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::keywords::{filter_value, subtree_clause, subtree_params};
@@ -113,19 +113,19 @@ impl SmartAlbum {
             icon_name,
             match_mode,
             rules,
-            created_at_epoch_ms: Utc::now().timestamp_millis(),
+            created_at_epoch_ms: crate::now_ms(),
             pinned: false,
         }
     }
 
     /// Compiles the rules into a parameterized SQL WHERE clause and bindings,
     /// for SQL with an ORDER BY (see [`Self::synthesize_count_query`]).
-    pub fn build_sql(&self) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    pub fn build_sql(&self) -> Result<SqlParts> {
         self.where_sql(true)
     }
 
     /// `sorted` only changes how a `Query` rule's FTS match is written.
-    pub(crate) fn where_sql(&self, sorted: bool) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    pub(crate) fn where_sql(&self, sorted: bool) -> Result<SqlParts> {
         if self.rules.is_empty() {
             return Ok((
                 "m.is_trashed = 0 AND m.is_hidden = 0".to_string(),
@@ -173,7 +173,7 @@ impl SmartAlbum {
         limit: usize,
         offset: usize,
         sort: crate::SortSpec,
-    ) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    ) -> Result<SqlParts> {
         let (where_clause, mut params) = self.build_sql()?;
 
         let sql = format!(
@@ -201,7 +201,7 @@ impl SmartAlbum {
         Ok((sql, params))
     }
 
-    pub fn synthesize_count_query(&self) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    pub fn synthesize_count_query(&self) -> Result<SqlParts> {
         let (where_clause, params) = self.where_sql(false)?;
 
         let sql = format!(
@@ -383,10 +383,7 @@ fn column_for_field(field: &RuleField) -> &'static str {
     }
 }
 
-fn compile_rule(
-    rule: &SmartAlbumRule,
-    sorted: bool,
-) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_rule(rule: &SmartAlbumRule, sorted: bool) -> Result<SqlParts> {
     if rule.field == RuleField::Query {
         return compile_query_rule(rule, sorted);
     }
@@ -584,7 +581,7 @@ fn compile_rule(
         RuleOperator::InTheLast => {
             // E.g. "30d", "7d", "1y", or integer days
             let ms_delta = parse_duration_ms(&rule.value)?;
-            let cutoff = Utc::now().timestamp_millis() - ms_delta;
+            let cutoff = crate::now_ms() - ms_delta;
             Ok((format!("{} >= ?", col), vec![cutoff.into()]))
         }
         RuleOperator::IsEmpty => Ok((format!("({} IS NULL OR {} = '')", col, col), Vec::new())),
@@ -597,7 +594,7 @@ fn compile_rule(
 
 /// Tag "include any of": one `IN` over media_tags with a subtree test per
 /// keyword, so each OR arm still seeks the tag index (see `subtree_clause`).
-fn compile_tag_any_of(value: &RuleValue) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_tag_any_of(value: &RuleValue) -> Result<SqlParts> {
     let RuleValue::List(tags) = value else {
         return Err(anyhow!("\"include any of\" needs a list of keywords"));
     };
@@ -624,7 +621,7 @@ fn compile_tag_any_of(value: &RuleValue) -> Result<(String, Vec<rusqlite::types:
 /// builder lists spellings of one camera ("Canon" / "canon") under one name
 /// and stores every pair it grouped. Each part is compared exactly, case
 /// included, so every pair's binary `=` lets the count seek `idx_media_camera`.
-fn compile_camera_is(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_camera_is(rule: &SmartAlbumRule) -> Result<SqlParts> {
     let RuleValue::List(parts) = &rule.value else {
         return Err(anyhow!("Choose a camera"));
     };
@@ -664,10 +661,7 @@ fn compile_camera_is(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::typ
 /// A saved search: the raw text parsed exactly as the search field parses it.
 /// Refuses what a smart album cannot show or what the parser did not
 /// understand, so a saved search never silently shows more than was typed.
-fn compile_query_rule(
-    rule: &SmartAlbumRule,
-    sorted: bool,
-) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_query_rule(rule: &SmartAlbumRule, sorted: bool) -> Result<SqlParts> {
     let (RuleOperator::Equals, RuleValue::Text(text)) = (&rule.operator, &rule.value) else {
         return Err(anyhow!(
             "A saved search supports only \"matches\" with search text"
@@ -690,7 +684,7 @@ fn compile_query_rule(
 
 /// `m.flag = ?` (never wrapped in a function or `IS NULL`), so the
 /// partial `idx_media_flag` can serve an "is" rule.
-fn compile_flag_rule(rule: &SmartAlbumRule) -> Result<(String, Vec<rusqlite::types::Value>)> {
+fn compile_flag_rule(rule: &SmartAlbumRule) -> Result<SqlParts> {
     // Stored rules_json reads a whole number back as `Number`.
     let flag = match rule.value {
         RuleValue::Integer(v @ -1..=1) => v,
@@ -725,9 +719,7 @@ pub fn split_date_range(s: &str) -> Option<(i64, i64)> {
 /// Date rules with calendar-day text values: "is", "before", "after" and
 /// "in the range" cover whole days. Returns `None` for numeric epoch values
 /// and "in the last", which compile generically; other operators are errors.
-fn compile_calendar_date(
-    rule: &SmartAlbumRule,
-) -> Result<Option<(String, Vec<rusqlite::types::Value>)>> {
+fn compile_calendar_date(rule: &SmartAlbumRule) -> Result<Option<SqlParts>> {
     let RuleValue::Text(text) = &rule.value else {
         return Ok(None);
     };

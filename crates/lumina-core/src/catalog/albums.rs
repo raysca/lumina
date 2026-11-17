@@ -1,8 +1,9 @@
+use crate::search::SqlParts;
 use anyhow::{Context, Result};
-use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 
 use super::Catalog;
+use crate::now_ms;
 use crate::search::{GeoIndex, StructuredQuery};
 use crate::smart_albums::{MatchMode, SmartAlbum, SmartAlbumRule, SystemAlbum};
 use crate::text::{clean_text, MAX_NAME_CHARS};
@@ -52,7 +53,7 @@ impl Catalog {
         limit: usize,
         offset: usize,
         sort: SortSpec,
-    ) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    ) -> Result<SqlParts> {
         let geo = if query.within.is_some() {
             self.geo_index_choice(query, limit, offset, sort)?
         } else {
@@ -196,7 +197,7 @@ impl Catalog {
             MatchMode::All => "all",
             MatchMode::Any => "any",
         };
-        let now_ms = Utc::now().timestamp_millis();
+        let now_ms = now_ms();
 
         let id: i64 = conn.query_row(
             r#"
@@ -298,11 +299,7 @@ impl Catalog {
             })
         })?;
 
-        let mut albums = Vec::new();
-        for r in rows {
-            albums.push(r?);
-        }
-        Ok(albums)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     pub fn update_smart_album(

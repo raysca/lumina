@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use rusqlite::params;
 
 use super::Catalog;
+use crate::now_ms;
 use crate::MediaId;
 
 /// Where a queued URL download stands.
@@ -64,13 +65,6 @@ pub struct DownloadRow {
     pub finished_epoch_ms: Option<i64>,
     /// Computed on read: `media_id` is a non-trashed item.
     pub in_library: bool,
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 const SELECT_ROWS: &str = "SELECT q.id, q.url, q.canonical_url, q.title, q.state, q.error,

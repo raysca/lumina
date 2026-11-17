@@ -2,10 +2,10 @@ use anyhow::Result;
 use rusqlite::params;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::Catalog;
 use crate::duplicates::DuplicateGroup;
+use crate::now_ms;
 use crate::{MediaId, MediaItem};
 
 // Every query here counts only items whose file is present: a missing file
@@ -39,11 +39,7 @@ impl Catalog {
             Ok((MediaId(id as u64), PathBuf::from(path_str), size))
         })?;
 
-        let mut candidates = Vec::new();
-        for r in rows {
-            candidates.push(r?);
-        }
-        Ok(candidates)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     /// Stores precomputed content hashes in a single transaction.
@@ -53,10 +49,7 @@ impl Catalog {
         if entries.is_empty() {
             return Ok(());
         }
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+        let now = now_ms();
 
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -113,11 +106,7 @@ impl Catalog {
             let path_str: String = row.get(1)?;
             Ok((MediaId(id as u64), PathBuf::from(path_str)))
         })?;
-        let mut items = Vec::new();
-        for r in rows {
-            items.push(r?);
-        }
-        Ok(items)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     /// Total number of duplicate items (across all groups with >= 2 items).
@@ -200,10 +189,7 @@ impl Catalog {
             Ok((hash, file_size, count as usize))
         })?;
 
-        let mut hash_meta = Vec::new();
-        for r in hash_rows {
-            hash_meta.push(r?);
-        }
+        let hash_meta = hash_rows.collect::<rusqlite::Result<Vec<_>>>()?;
         drop(group_stmt);
 
         if hash_meta.is_empty() {

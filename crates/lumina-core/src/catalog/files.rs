@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::Catalog;
+use crate::now_ms;
 use crate::MediaId;
 
 /// SQL condition, for a `media_items` row aliased `m`, that its file is not
@@ -45,10 +46,6 @@ pub(crate) fn file_inode(path: &Path) -> Option<u64> {
         let _ = path;
         None
     }
-}
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
 }
 
 impl Catalog {

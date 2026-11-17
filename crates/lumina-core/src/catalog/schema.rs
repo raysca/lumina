@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
 use super::{Catalog, SCHEMA_VERSION};
 use crate::{MediaId, TimelineBucket};
@@ -18,6 +18,27 @@ const REBUILD_SEARCH_INDEX_SQL: &str = r#"
     FROM media_items m
     LEFT JOIN media_captions c ON c.media_id = m.id;
 "#;
+
+/// Whether `table` has a column named `column`.
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    Ok(conn
+        .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")?
+        .exists([table, column])?)
+}
+
+/// Adds `column` with the definition `ddl` (type and constraints) to
+/// `table` unless it is already there, so a migration can run on every open.
+/// A failed ALTER is returned, never ignored: queries name every column.
+fn add_column_if_missing(conn: &Connection, table: &str, column: &str, ddl: &str) -> Result<()> {
+    if !has_column(conn, table, column)? {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {ddl};"),
+            [],
+        )
+        .with_context(|| format!("adding {table}.{column}"))?;
+    }
+    Ok(())
+}
 
 impl Catalog {
     pub(crate) fn init_schema(&self) -> Result<()> {
@@ -303,90 +324,39 @@ impl Catalog {
             "#,
         )?;
 
-        // Ensure existing databases have the rating and color_label columns on media_items
-        let has_rating: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'rating'")?
-            .exists([])?;
-        if !has_rating {
-            let _ = conn.execute(
-                "ALTER TABLE media_items ADD COLUMN rating INTEGER NOT NULL DEFAULT 0;",
-                [],
-            );
-        }
-
-        let has_color_label: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'color_label'")?
-            .exists([])?;
-        if !has_color_label {
-            let _ = conn.execute(
-                "ALTER TABLE media_items ADD COLUMN color_label INTEGER NOT NULL DEFAULT 0;",
-                [],
-            );
-        }
-
-        let has_title: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'title'")?
-            .exists([])?;
-        if !has_title {
-            let _ = conn.execute("ALTER TABLE media_items ADD COLUMN title TEXT;", []);
-        }
-
+        // Columns added after a table's first release. Every add goes
+        // through `add_column_if_missing`, so a failed ALTER stops the open
+        // instead of leaving a catalog the queries cannot read.
+        add_column_if_missing(&conn, "media_items", "rating", "INTEGER NOT NULL DEFAULT 0")?;
+        add_column_if_missing(
+            &conn,
+            "media_items",
+            "color_label",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        add_column_if_missing(&conn, "media_items", "title", "TEXT")?;
         // Display-only viewer rotation, stored as clockwise quarter turns (0..=3).
         // Existing libraries default to 0, which preserves their current framing.
-        let has_rotation: bool = conn
-            .prepare(
-                "SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'rotation_quarters'",
-            )?
-            .exists([])?;
-        if !has_rotation {
-            conn.execute(
-                "ALTER TABLE media_items ADD COLUMN rotation_quarters INTEGER NOT NULL DEFAULT 0;",
-                [],
-            )?;
-        }
-
+        add_column_if_missing(
+            &conn,
+            "media_items",
+            "rotation_quarters",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         // When the file first entered the catalog (Get Info "Added to Lumina").
         // Rows from before v9 stay NULL: the real date is unknown.
-        let has_added: bool = conn
-            .prepare(
-                "SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'added_epoch_ms'",
-            )?
-            .exists([])?;
-        if !has_added {
-            conn.execute(
-                "ALTER TABLE media_items ADD COLUMN added_epoch_ms INTEGER;",
-                [],
-            )
-            .context("adding media_items.added_epoch_ms")?;
-        }
-
+        add_column_if_missing(&conn, "media_items", "added_epoch_ms", "INTEGER")?;
         // v10: user-edited date/place flags, so a re-read of a changed file
         // keeps the edit. Edits made before v10 are unflagged: unknowable.
         for column in ["date_edited", "place_edited"] {
-            let exists: bool = conn
-                .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = ?1")?
-                .exists([column])?;
-            if !exists {
-                conn.execute(
-                    &format!(
-                        "ALTER TABLE media_items ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0;"
-                    ),
-                    [],
-                )
-                .with_context(|| format!("adding media_items.{column}"))?;
-            }
+            add_column_if_missing(&conn, "media_items", column, "INTEGER NOT NULL DEFAULT 0")?;
         }
 
         // Catalogs from the first smart-album engine named the rules column
         // `rule_definition_json`; `CREATE TABLE IF NOT EXISTS` never fixed it,
         // so saving or listing smart albums failed. The JSON format is
         // unchanged, so a rename keeps every saved album.
-        let has_legacy_rules: bool = conn
-            .prepare(
-                "SELECT 1 FROM pragma_table_info('smart_albums') WHERE name = 'rule_definition_json'",
-            )?
-            .exists([])?;
-        if has_legacy_rules {
+        if has_column(&conn, "smart_albums", "rule_definition_json")? {
             conn.execute(
                 "ALTER TABLE smart_albums RENAME COLUMN rule_definition_json TO rules_json;",
                 [],
@@ -405,11 +375,7 @@ impl Catalog {
             .exists([])?;
 
         // Check if existing media_search_fts table has the 'tags' column (for migration from older schemas)
-        let has_tags_col: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_search_fts') WHERE name = 'tags'")?
-            .exists([])?;
-
-        if !has_tags_col {
+        if !has_column(&conn, "media_search_fts", "tags")? {
             conn.execute_batch(
                 r#"
                 DROP TRIGGER IF EXISTS media_fts_ai;
@@ -484,11 +450,7 @@ impl Catalog {
         }
 
         // Check if existing media_search_fts table has the 'caption' column (for migration from older schemas)
-        let has_caption_col: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_search_fts') WHERE name = 'caption'")?
-            .exists([])?;
-
-        if !has_caption_col {
+        if !has_column(&conn, "media_search_fts", "caption")? {
             conn.execute_batch(
                 r#"
                 DROP TRIGGER IF EXISTS media_fts_ai;
@@ -580,40 +542,18 @@ impl Catalog {
         }
 
         // v14: v13 rows keep NULL until `backfill_downloaded_sources`.
-        let has_downloaded: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_sources') WHERE name = 'downloaded'")?
-            .exists([])?;
-        if !has_downloaded {
-            conn.execute(
-                "ALTER TABLE media_sources ADD COLUMN downloaded INTEGER;",
-                [],
-            )
-            .context("adding the downloaded flag to media sources")?;
-        }
+        add_column_if_missing(&conn, "media_sources", "downloaded", "INTEGER")?;
 
         // v19: smart albums can be pinned.
-        let has_smart_pinned: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('smart_albums') WHERE name = 'pinned'")?
-            .exists([])?;
-        if !has_smart_pinned {
-            conn.execute(
-                "ALTER TABLE smart_albums ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;",
-                [],
-            )
-            .context("adding the pin to smart albums")?;
-        }
+        add_column_if_missing(
+            &conn,
+            "smart_albums",
+            "pinned",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
 
         // v20: culling flags (-1 reject, 0 unflagged, 1 pick).
-        let has_flag: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('media_items') WHERE name = 'flag'")?
-            .exists([])?;
-        if !has_flag {
-            conn.execute(
-                "ALTER TABLE media_items ADD COLUMN flag INTEGER NOT NULL DEFAULT 0;",
-                [],
-            )
-            .context("adding culling flags to media items")?;
-        }
+        add_column_if_missing(&conn, "media_items", "flag", "INTEGER NOT NULL DEFAULT 0")?;
 
         // v15: `color:<label>` under the default date sort seeks the label and
         // walks it in timeline order (tie-breaker follows the primary
@@ -650,16 +590,12 @@ impl Catalog {
         // column in ADD COLUMN when its default is NULL). A cover removed
         // from the album or trashed stays stored but the cover query skips
         // it. The index keeps the purge's SET NULL lookup off a table scan.
-        let has_album_cover: bool = conn
-            .prepare("SELECT 1 FROM pragma_table_info('albums') WHERE name = 'cover_media_id'")?
-            .exists([])?;
-        if !has_album_cover {
-            conn.execute(
-                "ALTER TABLE albums ADD COLUMN cover_media_id INTEGER REFERENCES media_items(id) ON DELETE SET NULL;",
-                [],
-            )
-            .context("adding the key photo to albums")?;
-        }
+        add_column_if_missing(
+            &conn,
+            "albums",
+            "cover_media_id",
+            "INTEGER REFERENCES media_items(id) ON DELETE SET NULL",
+        )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_albums_cover ON albums(cover_media_id) WHERE cover_media_id IS NOT NULL;",
             [],
@@ -793,10 +729,36 @@ impl Catalog {
             })
         })?;
 
-        let mut result = Vec::new();
-        for r in rows {
-            result.push(r?);
-        }
-        Ok(result)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_column_if_missing_adds_once() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE t (a INTEGER);", []).unwrap();
+        add_column_if_missing(&conn, "t", "b", "INTEGER NOT NULL DEFAULT 0").unwrap();
+        assert!(
+            has_column(&conn, "t", "b").unwrap(),
+            "the column must be added"
+        );
+        add_column_if_missing(&conn, "t", "b", "INTEGER NOT NULL DEFAULT 0")
+            .expect("a second run must be a no-op, so migrations stay idempotent");
+    }
+
+    #[test]
+    fn add_column_if_missing_returns_a_failed_alter() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE VIEW v AS SELECT 1 AS a;", []).unwrap();
+        let err = add_column_if_missing(&conn, "v", "rating", "INTEGER")
+            .expect_err("an ALTER that SQLite refuses must surface, not be swallowed");
+        assert!(
+            format!("{err:#}").contains("adding v.rating"),
+            "the error must name the column: {err:#}"
+        );
     }
 }

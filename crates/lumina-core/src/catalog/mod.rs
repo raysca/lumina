@@ -267,11 +267,7 @@ impl Catalog {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(3))?;
-        let mut plan = Vec::new();
-        for r in rows {
-            plan.push(r?);
-        }
-        Ok(plan)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     pub(crate) fn map_media_item_row(row: &rusqlite::Row) -> rusqlite::Result<MediaItem> {
@@ -353,11 +349,7 @@ impl Catalog {
     {
         let rows = stmt.query_map(params, Self::map_media_item_row)?;
 
-        let mut items = Vec::new();
-        for r in rows {
-            items.push(r?);
-        }
-        Ok(items)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 }
 

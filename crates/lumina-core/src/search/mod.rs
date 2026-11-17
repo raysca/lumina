@@ -1,6 +1,9 @@
 use crate::catalog::keywords::{subtree_clause, subtree_params};
 use serde::{Deserialize, Serialize};
 
+/// A SQL statement or fragment and its bound parameters, in order.
+pub type SqlParts = (String, Vec<rusqlite::types::Value>);
+
 mod explain;
 mod parse;
 
@@ -96,7 +99,7 @@ impl StructuredQuery {
     /// Builds a parameterized SQL WHERE clause and parameters. The FTS match
     /// needs `media_search_fts` joined, as [`Self::synthesize_query_sorted`] does;
     /// CROSS JOIN it first so an equality index never drives the MATCH per row.
-    pub fn build_sql(&self) -> (String, Vec<rusqlite::types::Value>) {
+    pub fn build_sql(&self) -> SqlParts {
         self.where_clause(FtsMatch::Joined, GeoIndex::Use)
     }
 
@@ -108,17 +111,14 @@ impl StructuredQuery {
     /// A `within:` box here always may seek `idx_media_geo` (no probe): a
     /// dense box then sorts all its matches in a temp B-tree, which is
     /// bounded by the box's row count, not the library's.
-    pub fn build_where_subquery(&self, sorted: bool) -> (String, Vec<rusqlite::types::Value>) {
+    pub fn build_where_subquery(&self, sorted: bool) -> SqlParts {
         self.where_clause(FtsMatch::Subquery { sorted }, GeoIndex::Use)
     }
 
     /// `SELECT count(*)` of the active rows in the `within:` box, stopping at
     /// `cap`. Index-only on `idx_media_geo`. Callers check
     /// [`Self::walk_probe_sql`] first for when a probe applies.
-    pub(crate) fn box_count_sql(
-        &self,
-        cap: usize,
-    ) -> Option<(String, Vec<rusqlite::types::Value>)> {
+    pub(crate) fn box_count_sql(&self, cap: usize) -> Option<SqlParts> {
         let mut clauses = Vec::new();
         let mut params = Vec::new();
         push_within(&mut clauses, &mut params, self.within?, GeoIndex::Use);
@@ -138,11 +138,7 @@ impl StructuredQuery {
     /// `cap` rows. `None` when there is no box, the query searches the trash
     /// (`idx_media_geo` covers active rows only), or free text drives the
     /// plan through the FTS join.
-    pub(crate) fn walk_probe_sql(
-        &self,
-        cap: usize,
-        sort: crate::SortSpec,
-    ) -> Option<(String, Vec<rusqlite::types::Value>)> {
+    pub(crate) fn walk_probe_sql(&self, cap: usize, sort: crate::SortSpec) -> Option<SqlParts> {
         if self.is_trashed.is_some() || !self.fts_terms.is_empty() {
             return None;
         }
@@ -162,11 +158,7 @@ impl StructuredQuery {
 
     /// The one clause builder behind `build_sql` and `build_where_subquery`,
     /// so a search and a saved search cannot drift apart.
-    fn where_clause(
-        &self,
-        fts_match: FtsMatch,
-        geo: GeoIndex,
-    ) -> (String, Vec<rusqlite::types::Value>) {
+    fn where_clause(&self, fts_match: FtsMatch, geo: GeoIndex) -> SqlParts {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -395,7 +387,7 @@ impl StructuredQuery {
         limit: usize,
         offset: usize,
         sort: crate::SortSpec,
-    ) -> (String, Vec<rusqlite::types::Value>) {
+    ) -> SqlParts {
         self.synthesize_query_geo(limit, offset, sort, GeoIndex::Use)
     }
 
@@ -406,7 +398,7 @@ impl StructuredQuery {
         offset: usize,
         sort: crate::SortSpec,
         geo: GeoIndex,
-    ) -> (String, Vec<rusqlite::types::Value>) {
+    ) -> SqlParts {
         let (where_clause, mut params) = self.where_clause(FtsMatch::Joined, geo);
         let fts_query = build_fts5_expression(&self.fts_terms);
 
@@ -457,7 +449,7 @@ impl StructuredQuery {
         (sql, params)
     }
 
-    pub fn synthesize_count_query(&self) -> (String, Vec<rusqlite::types::Value>) {
+    pub fn synthesize_count_query(&self) -> SqlParts {
         let (where_clause, params) = self.build_sql();
         let fts_query = build_fts5_expression(&self.fts_terms);
 

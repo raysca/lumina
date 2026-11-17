@@ -5,10 +5,10 @@
 //! flag, so a trashed member keeps its membership and returns with it.
 
 use anyhow::{bail, Context, Result};
-use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 
 use super::Catalog;
+use crate::now_ms;
 use crate::text::{clean_text, MAX_NAME_CHARS};
 use crate::{MediaId, MediaItem, SortSpec};
 
@@ -148,7 +148,7 @@ impl Catalog {
     /// are skipped.
     pub fn create_album_with(&self, title: &str, members: &[MediaId]) -> Result<Album> {
         let title = album_title(title)?;
-        let now_ms = Utc::now().timestamp_millis();
+        let now_ms = now_ms();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let id = tx

@@ -119,7 +119,7 @@ impl Catalog {
                 bail!("invalid exposure for item {}", id.0);
             }
         }
-        let now = chrono::Utc::now().timestamp_millis();
+        let now = crate::now_ms();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         {

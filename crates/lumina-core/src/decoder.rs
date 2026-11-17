@@ -479,7 +479,7 @@ impl DecoderPipeline {
         // allocation failure aborts the process).
         image::Limits::default().reserve(decoder.total_bytes())?;
         let img = Self::apply_exif_orientation(DynamicImage::from_decoder(decoder)?, &bytes);
-        Self::resize_to_frame(id, img, target_size)
+        Ok(Self::resize_to_frame(id, img, target_size))
     }
 
     /// The EXIF Orientation of the JPEG or TIFF in `reader`, 1 when absent.
@@ -571,7 +571,7 @@ impl DecoderPipeline {
             .ok_or_else(|| anyhow!("Failed to create RgbImage from decoded JPEG bytes"))?;
 
         let dynamic = Self::apply_exif_orientation(DynamicImage::ImageRgb8(img), bytes);
-        Self::resize_to_frame(id, dynamic, target_size)
+        Ok(Self::resize_to_frame(id, dynamic, target_size))
     }
 
     /// The in-process decoders (zune-jpeg, the image crate) ignore color
@@ -644,7 +644,7 @@ impl DecoderPipeline {
                         // orientation into the PNG's eXIf chunk; apply it, as
                         // the in-process decoders do.
                         let img = Self::apply_exif_orientation(img, &bytes);
-                        return Self::resize_to_frame(id, img, target_size);
+                        return Ok(Self::resize_to_frame(id, img, target_size));
                     }
                 }
             }
@@ -688,7 +688,7 @@ impl DecoderPipeline {
                             if ext == "png" || ext == "jpg" {
                                 if let Ok(bytes) = fs::read(&p) {
                                     if let Ok(img) = image::load_from_memory(&bytes) {
-                                        return Self::resize_to_frame(id, img, target_size);
+                                        return Ok(Self::resize_to_frame(id, img, target_size));
                                     }
                                 }
                             }
@@ -805,7 +805,7 @@ impl DecoderPipeline {
         }
     }
 
-    fn resize_to_frame(id: MediaId, img: DynamicImage, target_size: u32) -> Result<DecodedFrame> {
+    fn resize_to_frame(id: MediaId, img: DynamicImage, target_size: u32) -> DecodedFrame {
         let (w, h) = img.dimensions();
         let resized = if w > target_size || h > target_size {
             img.resize(target_size, target_size, FilterType::Triangle)
@@ -823,13 +823,13 @@ impl DecoderPipeline {
             chunk.swap(0, 2);
         }
 
-        Ok(DecodedFrame {
+        DecodedFrame {
             id,
             width,
             height,
             format: PixelFormat::Bgra8,
             data,
-        })
+        }
     }
 }
 

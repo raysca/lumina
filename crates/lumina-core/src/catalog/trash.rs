@@ -116,11 +116,7 @@ impl Catalog {
             let rows = stmt.query_map([], |row| {
                 Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
             })?;
-            let mut list = Vec::new();
-            for r in rows {
-                list.push(r?);
-            }
-            list
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
 
         if trashed_items.is_empty() {

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use super::files::{file_inode, PRESENT};
 use super::Catalog;
+use crate::now_ms;
 use crate::text::{clean_caption, clean_text, MAX_TEXT_CHARS};
 use crate::{normalize_quarter_turns, MediaId, MediaItem, MediaType, SortSpec};
 
@@ -242,12 +243,7 @@ impl Catalog {
             Ok((PathBuf::from(path_str), (file_size, mtime_epoch_ms)))
         })?;
 
-        let mut map = HashMap::new();
-        for r in rows {
-            let (p, sig) = r?;
-            map.insert(p, sig);
-        }
-        Ok(map)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     /// Fills `width`/`height` of videos stored without a size, touching no
@@ -903,10 +899,7 @@ impl Catalog {
         uploader: Option<&str>,
         downloaded: bool,
     ) -> Result<()> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+        let now_ms = now_ms();
         conn.execute(
             r#"
             INSERT INTO media_sources (media_id, source_url, uploader, imported_epoch_ms, downloaded)

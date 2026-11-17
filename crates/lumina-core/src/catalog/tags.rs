@@ -164,11 +164,7 @@ impl Catalog {
         let mut stmt = conn
             .prepare_cached("SELECT tag FROM media_tags WHERE media_id = ?1 ORDER BY tag ASC;")?;
         let rows = stmt.query_map(params![id.0 as i64], |row| row.get::<_, String>(0))?;
-        let mut tags = Vec::new();
-        for r in rows {
-            tags.push(r?);
-        }
-        Ok(tags)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     /// For each tag on any of `ids`, how many of those items carry it, ordered
@@ -246,11 +242,7 @@ impl Catalog {
             let count: i64 = row.get(1)?;
             Ok((tag, count as usize))
         })?;
-        let mut counts = Vec::new();
-        for r in rows {
-            counts.push(r?);
-        }
-        Ok(counts)
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     /// Counts active media items that have no `media_tags` rows at all.

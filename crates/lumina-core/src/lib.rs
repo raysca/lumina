@@ -90,6 +90,11 @@ pub type Coordinates = (Option<f64>, Option<f64>);
 /// Viewer rotation is stored as clockwise quarter turns in 0..=3.
 pub const QUARTER_TURNS: u8 = 4;
 
+/// Wall-clock milliseconds since the Unix epoch, as the catalog stores times.
+pub(crate) fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
 /// Normalizes any signed quarter-turn count into the stored 0..=3 range.
 ///
 /// Rotate Left subtracts a turn from 0, which must wrap to 3 instead of
