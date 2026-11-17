@@ -678,8 +678,20 @@ fn test_user_defined_smart_albums_json_engine() {
     item3.is_favorite = true;
     item3.iso = Some(1600);
 
+    // Matches make and favourite, so only the ISO rule keeps it out.
+    let mut item4 = sample_media_item(
+        "/photos/sony_fav_low_iso.jpg",
+        MediaType::Image,
+        4000,
+        Some("Osaka"),
+        Some("ILCE-7M4"),
+    );
+    item4.make = Some("Sony".to_string());
+    item4.is_favorite = true;
+    item4.iso = Some(400);
+
     catalog
-        .insert_or_update_batch(&[item1, item2, item3])
+        .insert_or_update_batch(&[item1, item2, item3, item4])
         .unwrap();
 
     let rules = vec![

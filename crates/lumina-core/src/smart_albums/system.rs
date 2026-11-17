@@ -83,7 +83,7 @@ impl SystemAlbum {
             }
             SystemAlbum::RecentlyAdded => {
                 // ponytail: no index on added_epoch_ms, so this scans like Places and
-                // Screenshots do. The core_tests gate runs on a tiny catalog and won't
+                // Screenshots do. The search_tests gate runs on a tiny catalog and won't
                 // see it; add an index if large libraries feel it.
                 "m.added_epoch_ms >= (CAST(strftime('%s', 'now') AS INTEGER) - 30 * 86400) * 1000 AND m.is_trashed = 0 AND m.is_hidden = 0"
             }
