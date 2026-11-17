@@ -13,6 +13,120 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linux:
+    name: native Linux build and tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build and media dependencies
+        run: ./scripts/install_linux_deps.sh
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Build
+        run: cargo build --workspace
+
+      - name: Live UI smoke (X11)
+        run: xvfb-run -a ./scripts/live_ui_smoke.sh
+
+      - name: Live UI smoke (Wayland)
+        run: xvfb-run -a ./scripts/wayland_smoke.sh
+
+  package-linux:
+    name: build Linux package (amd64 .deb)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build and media dependencies
+        run: ./scripts/install_linux_deps.sh
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-package
+
+      - name: Build package
+        run: ./scripts/package_linux.sh
+
+      - name: Install, launch and remove package
+        run: ./scripts/check_linux_package.sh
+
+      # Internal verification build: unsigned, not a release.
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-linux-amd64-unsigned
+          path: target/release/bundle/linux/*
+          retention-days: 14
+
+  bundle-macos:
+    name: build Lumina.app (macOS arm64, ad-hoc signed)
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-bundle
+
+      # The pinned yt-dlp download and the ffmpeg built from source only
+      # change when their fetch scripts do.
+      - name: Cache bundled import tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/deps/yt-dlp*
+            target/deps/ffmpeg
+            target/deps/ffmpeg.stamp
+            target/deps/ffmpeg-LICENSE.txt
+            target/deps/src
+          key: bundle-deps-${{ runner.os }}-${{ hashFiles('scripts/fetch_yt_dlp.sh', 'scripts/fetch_ffmpeg.sh') }}
+
+      - name: Build and ad-hoc sign Lumina.app
+        env:
+          LUMINA_UNIVERSAL: "0"
+          LUMINA_SIGN_IDENTITY: "-"
+        run: ./scripts/build_release.sh
+
+      - name: Verify and zip the bundle
+        run: |
+          codesign --verify --deep --strict --verbose=2 target/release/bundle/osx/Lumina.app
+          ditto -c -k --keepParent target/release/bundle/osx/Lumina.app \
+            target/release/bundle/osx/Lumina-macos-arm64-adhoc.zip
+
+      # Ad-hoc signed and not notarized: for testing, not distribution.
+      - name: Upload Lumina.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-macos-arm64-adhoc
+          path: target/release/bundle/osx/Lumina-macos-arm64-adhoc.zip
+          retention-days: 14
+
   test:
     name: fmt, clippy, tests (macOS)
     runs-on: macos-latest

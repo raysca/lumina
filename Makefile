@@ -1,4 +1,4 @@
-.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle dmg release notarize ui-smoke ui-e2e
+.PHONY: all help dev run run-release build build-release test test-verbose bench check lint fmt fmt-fix clean install icon bundle bundle-linux dmg release release-linux notarize ui-smoke ui-e2e
 
 # Keep in sync with crates/*/Cargo.toml and resources/Info.plist
 VERSION := 0.2.0
@@ -113,6 +113,10 @@ bundle:
 dmg: release
 release:
 	./scripts/package_release.sh
+
+# Build a native Debian package (requires Linux and dpkg-deb).
+bundle-linux release-linux:
+	./scripts/package_linux.sh
 
 ## Bundle, sign (Developer ID), notarize + staple, then package
 notarize:
