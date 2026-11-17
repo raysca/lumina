@@ -283,6 +283,8 @@ impl LuminaApp {
             .id("empty-state")
             .debug_selector(|| "empty-state".to_string())
             .flex_1()
+            // Shrink to the column between the sidebar and the inspector.
+            .min_w_0()
             .h_full()
             .flex()
             .flex_col()

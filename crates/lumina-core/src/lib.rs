@@ -2568,4 +2568,36 @@ mod tests {
         drop(engine);
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn cancel_scan_after_rescan_sets_the_new_scans_flag() {
+        let dir = temp_library("cancel_scan");
+        let (engine, rx) = LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), None)
+            .expect("engine opens");
+        loop {
+            match rx.recv_timeout(TEST_WAIT) {
+                Ok(EngineEvent::ScanComplete { .. }) => break,
+                Ok(_) => {}
+                Err(err) => panic!("the startup scan must complete: {err}"),
+            }
+        }
+        let first = engine.active_scan_cancel.lock().clone();
+        engine.rescan();
+        let second = engine.active_scan_cancel.lock().clone();
+        assert!(
+            !Arc::ptr_eq(&first, &second),
+            "rescan must give the new scan its own flag"
+        );
+        assert!(
+            !second.load(Ordering::SeqCst),
+            "the new scan must not start cancelled"
+        );
+        engine.cancel_scan();
+        assert!(
+            second.load(Ordering::SeqCst),
+            "cancel_scan must set the flag the newest scan polls, or Retry cannot stop it"
+        );
+        drop(engine);
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

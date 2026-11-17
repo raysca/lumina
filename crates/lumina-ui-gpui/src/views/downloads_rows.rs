@@ -60,7 +60,9 @@ pub(crate) fn thumb(app: &LuminaApp, entry: &DownloadEntry, w: f32, h: f32) -> D
         .media_id
         .filter(|_| row.in_library)
         .and_then(|id| crate::views::albums_overview::albums::thumbnail(app, id));
+    let (id, shown) = (row.id, if texture.is_some() { "image" } else { "film" });
     div()
+        .debug_selector(move || format!("downloads-thumb-{shown}-{id}"))
         .w(px(w))
         .h(px(h))
         .flex_shrink_0()

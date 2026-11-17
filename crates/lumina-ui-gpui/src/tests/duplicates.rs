@@ -321,3 +321,80 @@ fn review_hides_the_inspector_and_ignores_its_toggle() {
     drop(view);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn failed_merge_all_keeps_every_copy_and_uses_the_error_banner() {
+    let (temp_dir, engine) = seed_two_groups("dup_merge_all_fail");
+    // Removed when the test ends, pass or fail.
+    let temp_dir = super::downloads::TempLibrary(temp_dir);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let (groups_before, selected_before) = view.update(vcx, |app, _| {
+        let groups: Vec<Vec<u64>> = app
+            .duplicate_groups
+            .iter()
+            .map(|g| g.items.iter().map(|i| i.id.0).collect())
+            .collect();
+        (groups, app.selected_item.as_ref().map(|i| i.id.0))
+    });
+    assert_eq!(groups_before.len(), 2, "two groups to merge");
+    // Fail only on the last group's copies, so the first group's trash
+    // writes have already run inside the transaction when it aborts.
+    let last = groups_before.last().unwrap();
+    let ids = last
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    rusqlite::Connection::open(temp_dir.join("catalog.db"))
+        .unwrap()
+        .execute_batch(&format!(
+            "CREATE TRIGGER fail_merge_all BEFORE UPDATE OF is_trashed ON media_items
+             WHEN NEW.is_trashed = 1 AND OLD.id IN ({ids})
+             BEGIN SELECT RAISE(ABORT, 'injected'); END;"
+        ))
+        .unwrap();
+
+    click(vcx, "merge-all-duplicates");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not merge duplicates")),
+            "a failed Merge all reaches the banner: {:?}",
+            app.error_message
+        );
+        assert!(
+            app.toast.current().is_none(),
+            "no success-style toast for a failure"
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a failed Merge all is not undoable"
+        );
+        let groups: Vec<Vec<u64>> = app
+            .duplicate_groups
+            .iter()
+            .map(|g| g.items.iter().map(|i| i.id.0).collect())
+            .collect();
+        assert_eq!(groups, groups_before, "every group is still listed");
+        assert_eq!(
+            app.selected_item.as_ref().map(|i| i.id.0),
+            selected_before,
+            "the selection is not cleared by a merge that did not happen"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("error-banner").is_some(),
+        "the error banner is drawn"
+    );
+    assert_eq!(
+        engine.get_item_slice(0..10).len(),
+        5,
+        "the merge is atomic: no copy of either group was trashed"
+    );
+}

@@ -383,7 +383,7 @@ use crate::tests::downloads::{install, queue_app, settle, submit, TempLibrary};
 use std::path::PathBuf;
 
 /// An empty temporary folder, deleted when the test ends.
-fn temp_folder(name: &str) -> TempLibrary {
+pub(super) fn temp_folder(name: &str) -> TempLibrary {
     let dir = std::env::temp_dir().join(format!(
         "lumina_uitest_recent_{name}_{}",
         std::time::SystemTime::now()
