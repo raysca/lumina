@@ -72,7 +72,7 @@ fn query_tokens_render_as_chips_with_connectors() {
                 ("Lisbon".to_string(), Some("in".to_string())),
                 ("Jun 2025".to_string(), Some("during".to_string())),
             ],
-            "place chips read \"in\", date chips \"during\" (Design 01's labels)"
+            "place chips read \"in\", date chips \"during\""
         );
         assert_eq!(typed, "tram", "free text stays plain text");
     });

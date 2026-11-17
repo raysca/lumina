@@ -1,4 +1,4 @@
-//! v3 Get Info window (FIXES §5): title bar, header, General, Camera,
+//! Get Info window: title bar, header, General, Camera,
 //! Location and Tags tabs, driven in a real floating-inspector window.
 
 use crate::tests::ui_automation::{click, keystrokes, leak, render_ui, seed_library_undecodable};

@@ -1,4 +1,4 @@
-//! v3 multi-select: selection dock and partial tags in the batch inspector.
+//! Multi-select: selection dock and partial tags in the batch inspector.
 
 use super::ui_automation::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, seed_library,
@@ -202,7 +202,7 @@ fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
     }
     assert!(
         vcx.debug_bounds("close-batch-inspector-btn").is_none(),
-        "v3 batch panel has no header strip"
+        "the batch panel has no header strip"
     );
     let panel = vcx.debug_bounds("inspector-batch").expect("batch panel");
     let hint = vcx.debug_bounds("inspector-batch-hint").unwrap();

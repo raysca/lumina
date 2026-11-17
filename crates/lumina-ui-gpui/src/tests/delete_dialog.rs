@@ -1,4 +1,4 @@
-//! v3 Delete dialog (FIXES §6): every delete from the library asks first,
+//! Delete dialog: every delete from the library asks first,
 //! with Move to Trash (undoable) preselected.
 
 use crate::tests::ui_automation::{

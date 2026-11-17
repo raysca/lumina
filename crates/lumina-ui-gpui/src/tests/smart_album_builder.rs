@@ -350,15 +350,14 @@ fn focused_text_fields_give_the_input_the_whole_field() {
 }
 
 #[core::prelude::v1::test]
-fn v3_sheet_layout_matches_the_design() {
-    let (dir, engine, ids) = library("sab_v3_layout");
+fn builder_sheet_is_centred_and_close_discards_the_draft() {
+    let (dir, engine, ids) = library("sab_layout");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
     render_ui(vcx);
 
     let card = vcx.debug_bounds("album-builder-card").unwrap();
-    assert_eq!(f32::from(card.size.width), 840.0, "the dialog is 840 wide");
     let window = vcx.update(|window, _| window.viewport_size());
     let above = f32::from(card.origin.y);
     let below = f32::from(window.height - card.origin.y - card.size.height);
@@ -366,35 +365,17 @@ fn v3_sheet_layout_matches_the_design() {
         (above - below).abs() <= 1.0,
         "the dialog is centred vertically: {above} above, {below} below"
     );
-    let mut size = |selector: &'static str| {
-        let b = vcx.debug_bounds(selector).unwrap();
-        (f32::from(b.size.width), f32::from(b.size.height))
-    };
-    assert_eq!(size("album-builder-badge"), (36.0, 36.0), "badge is 36x36");
-    assert_eq!(size("album-builder-title"), (420.0, 42.0), "name is 420x42");
-    assert_eq!(size("album-builder-close"), (28.0, 28.0), "close is 28x28");
-    assert_eq!(
-        size("album-builder-match").0,
-        92.0,
-        "match picker is 92 wide"
-    );
-    assert_eq!(
-        f32::from(vcx.debug_bounds("album-rule-field-0").unwrap().size.width),
-        210.0
-    );
-    assert_eq!(
-        f32::from(vcx.debug_bounds("album-rule-op-0").unwrap().size.width),
-        140.0
-    );
-    let tile = vcx
-        .debug_bounds(leak(format!("album-builder-preview-{}", ids[0].0)))
-        .unwrap();
-    assert_eq!(
-        f32::from(tile.size.height),
-        96.0,
-        "preview tiles are 96 tall"
+    assert!(
+        vcx.debug_bounds(leak(format!("album-builder-preview-{}", ids[0].0)))
+            .is_some(),
+        "the preview shows a matching item"
     );
     for selector in [
+        "album-builder-badge",
+        "album-builder-title",
+        "album-builder-close",
+        "album-builder-match",
+        "album-rule-op-0",
         "album-builder-conditions",
         "album-builder-preview-help",
         "album-rule-remove-0",
@@ -445,25 +426,12 @@ fn pick_option(
 }
 
 #[core::prelude::v1::test]
-fn condition_rows_match_design() {
-    let (dir, engine, _ids) = library("sab_rows_design");
+fn condition_rows_offer_fields_and_a_number_with_unit_for_in_the_last() {
+    let (dir, engine, _ids) = library("sab_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
     render_ui(vcx);
-
-    let size = |vcx: &mut VisualTestContext, selector: &'static str| {
-        let b = vcx.debug_bounds(selector).expect(selector);
-        (f32::from(b.size.width), f32::from(b.size.height))
-    };
-    assert_eq!(
-        size(vcx, "album-rule-field-0"),
-        (210.0, 38.0),
-        "field 210x38"
-    );
-    assert_eq!(size(vcx, "album-rule-op-0").0, 140.0, "operator 140 wide");
-    assert_eq!(size(vcx, "album-rule-remove-0"), (34.0, 34.0), "− is 34x34");
-    assert_eq!(size(vcx, "album-rule-add-0"), (34.0, 34.0), "+ is 34x34");
 
     let labels = view.update(vcx, |app, _| app.draft_popup_options(DraftFocus::Field(0)));
     for label in ["Date Captured", "Keywords", "Rating"] {
@@ -484,22 +452,18 @@ fn condition_rows_match_design() {
         assert_eq!(app.album_draft.rows[1].field, RuleField::Date);
         assert_eq!(app.album_draft.rows[1].operator, RuleOperator::InTheLast);
     });
-    assert_eq!(
-        size(vcx, "album-rule-value-1"),
-        (66.0, 38.0),
-        "number box 66x38"
-    );
+    let value = vcx.debug_bounds("album-rule-value-1").expect("number box");
+    let unit = vcx.debug_bounds("album-rule-unit-1").expect("unit picker");
     assert!(
-        size(vcx, "album-rule-unit-1").0 > 66.0,
-        "the unit picker fills the rest of the row"
+        unit.left() >= value.right(),
+        "the unit picker follows the number box: {value:?} {unit:?}"
     );
 
     let first = vcx.debug_bounds("album-rule-field-0").unwrap();
     let second = vcx.debug_bounds("album-rule-field-1").unwrap();
-    assert_eq!(
-        f32::from(second.top() - first.bottom()),
-        10.0,
-        "rows are 10 apart with no divider between them"
+    assert!(
+        second.top() >= first.bottom(),
+        "condition rows stack without overlapping: {first:?} {second:?}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

@@ -1,4 +1,4 @@
-//! v3 command palette rating commands and empty-state actions.
+//! Command palette rating commands and empty-state actions.
 
 use super::ui_automation::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,

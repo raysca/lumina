@@ -1,4 +1,4 @@
-//! Cross-cutting v3 design rules (FIXES.md §1): sheets hang from under the
+//! Cross-cutting layout rules: sheets hang from under the
 //! toolbar, modals dim the library lightly, and shared rows use the tokens.
 
 use crate::tests::ui_automation::{

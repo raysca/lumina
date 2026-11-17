@@ -1,5 +1,4 @@
-//! Browser screen (FIXES.md §2): top bar, layout, filter bar, sidebar and
-//! context menu against the v3 grid design.
+//! Browser screen: top bar, layout, filter bar, sidebar and context menu.
 
 use crate::tests::ui_automation::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,

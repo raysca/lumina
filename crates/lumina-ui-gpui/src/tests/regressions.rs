@@ -1,4 +1,4 @@
-//! Regressions from the v3 design audit (FIXES.md §0): shortcuts the menus
+//! Regressions: shortcuts the menus
 //! advertise, chords that were swallowed, and state that vanished.
 
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};

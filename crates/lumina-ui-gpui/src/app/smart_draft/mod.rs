@@ -495,7 +495,7 @@ mod tests {
         let one = [DraftRow::new(RuleField::Tag)];
         assert!(
             focus_order(&one).contains(&DraftFocus::Remove(0)),
-            "the last row can be removed (v3)"
+            "the last row can be removed"
         );
         assert!(focus_order(&[]).contains(&DraftFocus::Add(0)));
         let rows = [

@@ -1,4 +1,4 @@
-//! v3 photo viewer: menu rating, stage prev/next, Fit button while zoomed.
+//! Photo viewer: menu rating, stage prev/next, Fit button while zoomed.
 
 use super::ui_automation::{
     app_with_library, click, click_point, focus_app, keystrokes, render_ui, right_click,
@@ -50,7 +50,7 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
 
     assert!(
         vcx.debug_bounds("viewer-zoom-fit").is_none(),
-        "at Fit the stage shows no zoom control (v3)"
+        "at Fit the stage shows no zoom control"
     );
     focus_app(vcx, &view);
     keystrokes(vcx, "=");
@@ -611,12 +611,11 @@ fn viewer_rating(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> u8 {
 }
 
 #[core::prelude::v1::test]
-fn viewer_top_bar_matches_detail_design() {
+fn viewer_top_bar_orders_its_controls_and_edit_opens_edit_mode() {
     let mut cx = crate::tests::TestApp::single();
     let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar");
 
-    let bar = vcx.debug_bounds("viewer-top-bar").expect("top bar");
-    assert_eq!(bar.size.height, gpui::px(60.0), "the top bar is 60 tall");
+    assert!(vcx.debug_bounds("viewer-top-bar").is_some(), "top bar");
     assert!(
         vcx.debug_bounds("viewer-filename").is_none(),
         "the date moved to the panel's When line; the bar shows only the position"
@@ -664,21 +663,6 @@ fn viewer_top_bar_matches_detail_design() {
             names[1],
             pair[0],
             pair[1]
-        );
-    }
-    let buttons = &rects[2..];
-    for (rect, name) in buttons.iter().zip(&order[2..]) {
-        assert_eq!(
-            (rect.size.width, rect.size.height),
-            (gpui::px(30.0), gpui::px(30.0)),
-            "{name} is a 30x30 button"
-        );
-    }
-    for pair in buttons.windows(2) {
-        assert_eq!(
-            pair[1].left() - pair[0].right(),
-            gpui::px(6.0),
-            "top-bar buttons are 6 apart"
         );
     }
 

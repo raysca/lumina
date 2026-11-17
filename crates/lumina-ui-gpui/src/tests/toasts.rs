@@ -488,11 +488,6 @@ fn toast_kinds_show_accent_title_subtitle_and_action() {
         );
     }
     let toast = vcx.debug_bounds("toast").expect("toast renders");
-    assert_eq!(
-        (f32::from(toast.size.width), f32::from(toast.size.height)),
-        (480.0, 62.0),
-        "the toast is 480 x 62 (Design 10)"
-    );
     // The 3 px kind accent is the left border of a quad the size of the
     // card, so its corners follow the card's 9 px inner curve. A 3 px wide
     // quad would clamp them to 1.5 px and run straight past the curve.

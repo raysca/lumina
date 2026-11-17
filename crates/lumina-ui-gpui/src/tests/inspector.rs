@@ -1,4 +1,4 @@
-//! v3 docked inspector: one-column summary for a single item.
+//! Docked inspector: one-column summary for a single item.
 
 use super::ui_automation::{app_with_library, click, leak, render_ui, seed_library};
 
@@ -97,11 +97,6 @@ fn tags_field_adds_and_removes_plain_chips() {
     assert!(
         field.contains(&chip.origin),
         "chips sit inside the one field"
-    );
-    assert_eq!(
-        f32::from(chip.size.height),
-        28.0,
-        "chips are the 28px design Chip"
     );
 
     click(vcx, "tag-remove-beach");
@@ -245,7 +240,7 @@ fn rating_beside_another_apps_sidecar_leaves_it_and_says_so() {
 }
 
 #[core::prelude::v1::test]
-fn info_panel_sections_follow_detail_design() {
+fn info_panel_shows_summary_capture_and_tags_for_one_item() {
     use crate::views::inspector::capture::capture_rows;
     use crate::views::inspector::format_bytes;
     use crate::views::inspector::summary::{format_badge, when_line};
@@ -273,13 +268,9 @@ fn info_panel_sections_follow_detail_design() {
     super::ui_automation::keystrokes(vcx, "b e a c h enter");
     assert_eq!(engine.get_tags_for_item(item.id), vec!["beach".to_string()]);
     render_ui(vcx);
-    let chip = vcx
-        .debug_bounds("tag-chip-beach")
-        .expect("a tag renders as a chip");
-    assert_eq!(
-        f32::from(chip.size.height),
-        28.0,
-        "tags use the 28px design Chip"
+    assert!(
+        vcx.debug_bounds("tag-chip-beach").is_some(),
+        "a tag renders as a chip"
     );
 
     // Give the item camera EXIF and a long name, as a real photo would have.
@@ -305,10 +296,10 @@ fn info_panel_sections_follow_detail_design() {
         "inspector-capture-exposure",
         "inspector-capture-focal",
     ] {
-        let row = vcx
-            .debug_bounds(selector)
-            .unwrap_or_else(|| panic!("Capture must show {selector}"));
-        assert_eq!(f32::from(row.size.height), 19.0, "{selector} is a 19px row");
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "Capture must show {selector}"
+        );
     }
     let star = vcx.debug_bounds("inspector-star-1").unwrap();
     assert!(

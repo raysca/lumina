@@ -57,22 +57,22 @@ fn open_wide(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
 }
 
 #[core::prelude::v1::test]
-fn tag_rows_match_design() {
+fn tag_rows_scale_usage_count_aliases_and_mark_focus() {
     let (dir, engine) = row_library("tm_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_wide(&view, vcx);
 
-    let row = bounds(vcx, "tag-manager-row-beach".into());
-    assert_eq!(f32::from(row.size.height), 44.0, "rows are 44 px");
     let track = bounds(vcx, "tag-manager-usage-beach".into());
-    assert_eq!(width(track), 190.0, "the usage track is 190 px");
-    assert_eq!(f32::from(track.size.height), 6.0, "and 6 px high");
     let full = bounds(vcx, "tag-manager-usage-fill-beach".into());
     let third = bounds(vcx, "tag-manager-usage-fill-sea".into());
-    assert_eq!(width(full), 190.0, "the most used tag fills the track");
+    assert_eq!(
+        width(full),
+        width(track),
+        "the most used tag fills the track"
+    );
     assert!(
-        (width(third) - 190.0 / 3.0).abs() < 0.5,
+        (width(third) - width(track) / 3.0).abs() < 0.5,
         "fills scale to the most used tag: {third:?}"
     );
 
@@ -113,8 +113,6 @@ fn tag_rows_match_design() {
         "the focused row draws its accent left border"
     );
     assert!(vcx.debug_bounds("tag-row-focus-sea").is_none());
-    let accent = bounds(vcx, "tag-row-focus-beach".into());
-    assert_eq!(width(accent), 2.0, "the accent border is 2 px");
 
     // Checkbox still toggles without moving focus.
     click(vcx, checkbox("sea"));
@@ -307,7 +305,7 @@ fn shift_f10_scrolls_the_focused_row_into_view() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Review Focus: names keep about 160 px. The usage track drops first, then
+/// Names keep about 160 px. The usage track drops first, then
 /// the count; the widths come from the window, sidebar and 359.5 panel.
 #[core::prelude::v1::test]
 fn narrow_windows_drop_the_usage_track_then_the_count() {

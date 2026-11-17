@@ -310,7 +310,7 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     assert!(vcx.debug_bounds("preferences-indexed").is_some());
     assert!(
         vcx.debug_bounds("preferences-reveal-library").is_none(),
-        "v3 drops Reveal from the Library folder row"
+        "the Library folder row has no Reveal button"
     );
 
     // Storage: "size · N thumbnails", then Clear Cache confirms inline.

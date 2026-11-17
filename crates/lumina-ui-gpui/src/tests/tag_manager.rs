@@ -1,4 +1,4 @@
-//! v3 Tag Manager (FIXES §7): selection bar with Merge, usage bars,
+//! Tag Manager: selection bar with Merge, usage bars,
 //! select-all over shown rows, and the detail panel.
 
 use super::tag_manager_sidecars::sidecar_library;

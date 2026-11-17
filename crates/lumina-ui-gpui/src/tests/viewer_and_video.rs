@@ -739,7 +739,7 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
     }
     assert!(
         vcx.debug_bounds("viewer-zoom-fit").is_none(),
-        "at Fit there is no zoom chrome (v3)"
+        "at Fit there is no zoom chrome"
     );
     view.update(vcx, |app, cx| {
         app.apply_viewer_zoom_preset(crate::views::viewer_state::ViewerZoomPreset::TwoX, cx)
@@ -1352,7 +1352,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
         "a scanned photo must start unrotated"
     );
 
-    // Rotation lives in the viewer's right-click menu (v3 top bar is slim).
+    // Rotation lives in the viewer's right-click menu (the top bar is slim).
     let rotate = |vcx: &mut gpui::VisualTestContext, selector: &'static str| {
         let viewport = vcx.debug_bounds("viewer-viewport").expect("viewport");
         vcx.simulate_event(gpui::MouseDownEvent {
@@ -1371,7 +1371,7 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     };
     assert!(
         vcx.debug_bounds("quick-edit-rotate-left").is_none(),
-        "the v3 viewer top bar has no rotate buttons"
+        "the viewer top bar has no rotate buttons"
     );
 
     rotate(vcx, "quick-edit-rotate-right");

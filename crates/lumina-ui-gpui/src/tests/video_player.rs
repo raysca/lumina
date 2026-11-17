@@ -175,7 +175,7 @@ fn l_toggles_loop_and_speed_menu_opens_above_its_button() {
     let looping = |vcx: &mut VisualTestContext| view.update(vcx, |app, _| app.video.is_looping);
     let before = looping(vcx);
     keystrokes(vcx, "l");
-    assert_ne!(looping(vcx), before, "L must toggle loop (v3), not seek");
+    assert_ne!(looping(vcx), before, "L must toggle loop, not seek");
     keystrokes(vcx, "l");
     assert_eq!(looping(vcx), before, "a second L restores loop");
 
