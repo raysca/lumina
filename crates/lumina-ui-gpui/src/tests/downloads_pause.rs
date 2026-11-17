@@ -156,34 +156,49 @@ fn late_finish_of_paused_run_leaves_resumed_run_alone() {
     let id = view.update(vcx, |app, _| row_id(app, &url(1)));
     view.update(vcx, |app, cx| app.pause_download(id, cx));
     view.update(vcx, |app, cx| app.resume_download(id, cx));
-    settle(vcx, &view, "run B starts", |app| {
+    let state_of = |app: &LuminaApp| {
         app.downloads
             .entries
             .iter()
-            .any(|e| e.row.id == id && e.row.state == DownloadState::Running)
+            .find(|e| e.row.id == id)
+            .unwrap()
+            .row
+            .state
+    };
+    settle(vcx, &view, "url 1 waits again", |app| {
+        state_of(app) == DownloadState::Waiting
     });
     submit(&view, vcx, &url(4));
     settle(vcx, &view, "url 4 waits", |app| {
-        app.downloads.entries.len() == 4 && count(app, DownloadState::Waiting) == 1
+        app.downloads.entries.len() == 4 && count(app, DownloadState::Waiting) == 2
     });
+    assert_eq!(
+        live.load(Ordering::SeqCst),
+        DEFAULT_DOWNLOAD_CONCURRENCY,
+        "run B waits while run A still holds its slot"
+    );
 
     // Run A ends with a result after all.
     stale_tx.send(imported(&engine)).unwrap();
-    // Its thread stores Done before it reports back.
-    settle(vcx, &view, "run A has ended and stored its result", |_| {
-        stale_ended.load(Ordering::SeqCst)
-            && persisted_state(&engine, &url(1)) == DownloadState::Done
+    // Its thread stores Done before it reports back. Run B can't start
+    // until the app handles that report, which waits for the test to park.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !(stale_ended.load(Ordering::SeqCst)
+        && persisted_state(&engine, &url(1)) == DownloadState::Done)
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "run A has ended and stored its result"
+        );
+        std::thread::yield_now();
+    }
+    settle(vcx, &view, "run B starts", |app| {
+        state_of(app) == DownloadState::Running
     });
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
-        let row = app
-            .downloads
-            .entries
-            .iter()
-            .find(|e| e.row.id == id)
-            .unwrap();
         assert_eq!(
-            row.row.state,
+            state_of(app),
             DownloadState::Running,
             "a late result of the paused run never overwrites the resumed run"
         );

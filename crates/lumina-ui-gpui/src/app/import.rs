@@ -37,6 +37,9 @@ pub(crate) struct ImportState {
     /// "Import into New Library…" opened this library: ask for the photos to
     /// copy in when its first scan completes. Cleared when another opens.
     pub pending_import_after_open: bool,
+    /// The last import's failure line, kept until the banner is dismissed:
+    /// a later error takes the banner's title, and this stays under it.
+    pub failure: Option<String>,
 }
 
 impl ImportState {
@@ -348,14 +351,13 @@ impl LuminaApp {
             } else {
                 String::new()
             };
-            self.set_error(
-                format!(
-                    "{}: {}{more}",
-                    i18n::import_failed(report.copied, total, report.failed.len()),
-                    details.join("; ")
-                ),
-                cx,
+            let failure = format!(
+                "{}: {}{more}",
+                i18n::import_failed(report.copied, total, report.failed.len()),
+                details.join("; ")
             );
+            self.import.failure = Some(failure.clone());
+            self.set_error(failure, cx);
         }
         cx.notify();
     }

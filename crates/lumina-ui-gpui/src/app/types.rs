@@ -251,8 +251,13 @@ pub fn format_bytes(bytes: u64) -> String {
         format!("{:.1} KB", bytes as f64 / 1024.0)
     } else if bytes < 1024 * 1024 * 1024 {
         format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else {
+    } else if bytes < 1024 * 1024 * 1024 * 1024 {
         format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    } else {
+        format!(
+            "{:.1} TB",
+            bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0)
+        )
     }
 }
 
@@ -354,4 +359,25 @@ pub fn get_sample_items() -> Vec<MediaItem> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod format_bytes_tests {
+    use super::format_bytes;
+
+    #[core::prelude::v1::test]
+    fn format_bytes_steps_up_to_terabytes() {
+        const GB: u64 = 1024 * 1024 * 1024;
+        assert_eq!(
+            format_bytes(1023 * GB),
+            "1023.0 GB",
+            "below 1 TB stays in GB"
+        );
+        assert_eq!(format_bytes(1024 * GB), "1.0 TB", "1024 GB is 1.0 TB");
+        assert_eq!(
+            format_bytes(2_000_000_000_000),
+            "1.8 TB",
+            "a 2 TB drive reads in TB, not 1862.6 GB"
+        );
+    }
 }

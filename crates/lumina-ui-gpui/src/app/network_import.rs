@@ -162,9 +162,7 @@ impl LuminaApp {
         };
         if let Some(id) = self.downloads.active_for(&url) {
             self.network_import.stage = None;
-            self.downloads.open = true;
-            self.downloads.highlight = Some(id);
-            cx.notify();
+            self.reveal_download(id, cx);
             return;
         }
         let (Some(catalog), Some(inspect)) =

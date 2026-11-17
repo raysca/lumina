@@ -117,7 +117,12 @@ pub(super) fn render_storage_card(
                         .child(format_bytes(p.bytes)),
                 )
         }));
-    let clear_label = format!("Clear cache · {}", format_bytes(cache));
+    // A second press while clearing does nothing; say why.
+    let clear_label = if app.preferences_cache_job.clearing {
+        "Clearing…".to_string()
+    } else {
+        format!("Clear cache · {}", format_bytes(cache))
+    };
     let clear_marker = clear_label.clone();
     let button = SettingsButton::StorageCardClear;
     let clear = div()

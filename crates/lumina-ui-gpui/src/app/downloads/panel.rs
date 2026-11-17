@@ -256,19 +256,7 @@ impl LuminaApp {
             None => 0,
         };
         let id = order[next];
-        // Both lists show each non-empty section's header (one child; the
-        // dropdown's divider is part of the Earlier head), then its rows.
-        // The dropdown's Active group has no header.
-        let mut child = 0;
-        let mut target = None;
-        for (label, rows) in self.download_sections(surface) {
-            let head = usize::from(!(surface == DownloadSurface::Panel && label == "Active"));
-            if let Some(at) = rows.iter().position(|entry| entry.row.id == id) {
-                target = Some(child + head + at);
-                break;
-            }
-            child += head + rows.len();
-        }
+        let target = self.download_child_index(surface, id);
         let scroll = match surface {
             DownloadSurface::Panel => {
                 self.downloads.focused = Some(id);
@@ -281,6 +269,49 @@ impl LuminaApp {
         };
         if let Some(target) = target {
             scroll.scroll_to_item(target);
+        }
+        cx.notify();
+    }
+
+    /// `id`'s child index in `surface`'s scroll list, for `scroll_to_item`;
+    /// `None` when the list doesn't show it. Both lists show each non-empty
+    /// section's header (one child; the dropdown's divider is part of the
+    /// Earlier head), then its rows. The dropdown's Active group has no
+    /// header.
+    fn download_child_index(&self, surface: DownloadSurface, id: i64) -> Option<usize> {
+        let mut child = 0;
+        for (label, rows) in self.download_sections(surface) {
+            let head = usize::from(!(surface == DownloadSurface::Panel && label == "Active"));
+            if let Some(at) = rows.iter().position(|entry| entry.row.id == id) {
+                return Some(child + head + at);
+            }
+            child += head + rows.len();
+        }
+        None
+    }
+
+    /// A link already in the list was added again: open the dropdown on
+    /// its row ("Already in your downloads"), scroll that row into view in
+    /// the dropdown and on the Downloads screen, and move keyboard focus to
+    /// it in a list that has some.
+    pub(crate) fn reveal_download(&mut self, id: i64, cx: &mut Context<Self>) {
+        self.downloads.open = true;
+        self.downloads.highlight = Some(id);
+        for surface in [DownloadSurface::Panel, DownloadSurface::Screen] {
+            let target = self.download_child_index(surface, id);
+            let (focused, scroll) = match surface {
+                DownloadSurface::Panel => (&mut self.downloads.focused, &self.downloads.scroll),
+                DownloadSurface::Screen => (
+                    &mut self.downloads.screen_focused,
+                    &self.downloads.screen_scroll,
+                ),
+            };
+            if let Some(target) = target {
+                if focused.is_some() {
+                    *focused = Some(id);
+                }
+                scroll.scroll_to_item(target);
+            }
         }
         cx.notify();
     }

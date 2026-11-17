@@ -82,7 +82,12 @@ pub(super) fn render_storage(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> An
                             app,
                             cx,
                             SettingsButton::ClearCache,
-                            "Clear Cache",
+                            // A second press while clearing does nothing; say why.
+                            if app.preferences_cache_job.clearing {
+                                "Clearing…"
+                            } else {
+                                "Clear Cache"
+                            },
                             None,
                         )),
                 )

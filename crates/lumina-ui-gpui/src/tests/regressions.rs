@@ -508,3 +508,101 @@ fn opening_another_library_drops_a_pending_smart_album_delete() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&other);
 }
+
+/// Lumina › Preferences… while settings is open closes it, as ⌘, does,
+/// instead of jumping back to General.
+#[core::prelude::v1::test]
+fn preferences_menu_item_toggles_settings_like_cmd_comma() {
+    let (dir, engine) = seed_library("reg_prefs_toggle", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    focus_app(vcx, &view);
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(crate::app::preferences::PreferencesTab::Storage, cx)
+    });
+    render_ui(vcx);
+    vcx.dispatch_action(crate::actions::OpenPreferences);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.preferences_open,
+            "Preferences… while settings is open closes it (tab was {:?})",
+            app.preferences_tab
+        );
+    });
+    vcx.dispatch_action(crate::actions::OpenPreferences);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "and opens it again");
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::General,
+            "reopened on General, as ⌘, does"
+        );
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A second Clear Cache while one runs is ignored; both Clear buttons say
+/// so by reading "Clearing…" until the clear's new reading lands.
+#[core::prelude::v1::test]
+fn clear_cache_buttons_read_clearing_while_a_clear_runs() {
+    use crate::app::preferences::{thumbnail_cache_dir, PreferencesTab};
+    let (dir, engine) = seed_library("reg_clearing", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let cache = thumbnail_cache_dir();
+    let _ = std::fs::remove_dir_all(&cache);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("1.jpg"), b"thumb").unwrap();
+    // Draws without running background work, so the clear stays pending.
+    let draw = |vcx: &mut gpui::VisualTestContext| {
+        vcx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx);
+        })
+    };
+
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Library, cx)
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-storage-clear-cache-text:Clearing…")
+            .is_none(),
+        "idle, the card offers to clear"
+    );
+    // Pressed inside an update: a simulated click runs the clear to the end.
+    view.update(vcx, |app, cx| {
+        crate::app::preferences::SettingsButton::StorageCardClear.press(app, cx)
+    });
+    draw(vcx);
+    assert!(
+        vcx.debug_bounds("settings-storage-clear-cache-text:Clearing…")
+            .is_some(),
+        "while a clear runs the card says so, so a second press is not silently ignored"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.set_preferences_tab(PreferencesTab::Storage, cx)
+    });
+    draw(vcx);
+    assert!(
+        vcx.debug_bounds("preferences-clear-cache-text:Clearing…")
+            .is_some(),
+        "the Storage page's button says so too"
+    );
+
+    vcx.run_until_parked();
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_cache_job.clearing, "the clear finished")
+    });
+    assert!(
+        vcx.debug_bounds("preferences-clear-cache-text:Clear Cache")
+            .is_some(),
+        "the button reads Clear Cache again once done"
+    );
+    let _ = std::fs::remove_dir_all(&cache);
+    let _ = std::fs::remove_dir_all(&dir);
+}

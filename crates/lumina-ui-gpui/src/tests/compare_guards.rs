@@ -255,3 +255,41 @@ fn opening_another_library_closes_compare() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&other);
 }
+
+/// Settings over compare draws the one toast and banner above itself:
+/// compare must not draw a second, hidden copy with the same element ids.
+#[core::prelude::v1::test]
+fn settings_over_compare_draws_one_toast_and_banner() {
+    let (dir, engine) = seed_library("compare_settings_toast", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let ids = ids(&view, vcx);
+    open_compare_on_first(vcx, &ids, 2);
+    view.update(vcx, |app, cx| {
+        assert!(app.compare.is_some(), "C opens compare");
+        app.show_toast("Settings saved", cx);
+        app.set_error("Could not save settings: disk full", cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("compare-toast").is_some() && vcx.debug_bounds("compare-banner").is_some(),
+        "compare draws the toast and banner while it covers the grid (the probe is not vacuous)"
+    );
+
+    view.update(vcx, |app, cx| app.open_preferences(cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("compare-toast").is_none(),
+        "with settings open only the app-level toast above settings is drawn"
+    );
+    assert!(
+        vcx.debug_bounds("compare-banner").is_none(),
+        "with settings open only settings' own banner is drawn"
+    );
+    assert!(vcx.debug_bounds("toast").is_some(), "the toast still shows");
+    assert!(
+        vcx.debug_bounds("error-banner").is_some(),
+        "the banner still shows"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

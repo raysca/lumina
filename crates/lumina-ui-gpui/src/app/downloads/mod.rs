@@ -40,6 +40,10 @@ pub(crate) struct DownloadEntry {
     /// The dialog's inspection, handed to the first run of the job.
     info: Option<NetworkMediaInfo>,
     cancel: Arc<AtomicBool>,
+    /// The cancel flag of this row's job thread while one is alive. A
+    /// paused (or resumed) row keeps it until that job really ends: it
+    /// still holds a slot, and the row's next run waits for it.
+    live_job: Option<Arc<AtomicBool>>,
     /// A Retry/Resume write is on its way; repeat presses wait for it.
     requeueing: bool,
 }
@@ -52,6 +56,7 @@ impl DownloadEntry {
             skip_prior_check,
             info,
             cancel: Arc::new(AtomicBool::new(false)),
+            live_job: None,
             requeueing: false,
         }
     }
@@ -204,9 +209,7 @@ impl LuminaApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(id) = self.downloads.active_for(&url) {
-            self.downloads.open = true;
-            self.downloads.highlight = Some(id);
-            cx.notify();
+            self.reveal_download(id, cx);
             return;
         }
         let Some(catalog) = self.download_catalog() else {
@@ -290,18 +293,22 @@ impl LuminaApp {
         else {
             return;
         };
+        // Running rows, and paused or resumed rows whose job hasn't ended.
         let mut running = self
             .downloads
             .entries
             .iter()
-            .filter(|entry| entry.row.state == DownloadState::Running)
+            .filter(|entry| entry.live_job.is_some())
             .count();
         for index in 0..self.downloads.entries.len() {
             if running >= self.config.download_concurrency {
                 break;
             }
             let entry = &self.downloads.entries[index];
-            if entry.row.state != DownloadState::Waiting || entry.row.id < 0 {
+            if entry.row.state != DownloadState::Waiting
+                || entry.row.id < 0
+                || entry.live_job.is_some()
+            {
                 continue;
             }
             self.start_download(index, job.clone(), catalog.clone(), cx);
@@ -379,7 +386,10 @@ impl LuminaApp {
             return;
         }
 
-        let row_id = self.downloads.entries[index].row.id;
+        let entry = &mut self.downloads.entries[index];
+        entry.live_job = Some(entry.cancel.clone());
+        let run = entry.cancel.clone();
+        let row_id = entry.row.id;
         cx.spawn(async move |this, cx| {
             while let Ok(first) = events_rx.recv().await {
                 // Coalesce: one notify for everything queued so far.
@@ -395,6 +405,14 @@ impl LuminaApp {
         .detach();
         cx.spawn(async move |this, cx| {
             let Ok(finished) = done_rx.recv().await else {
+                // The thread died without reporting (a panic): it holds no
+                // slot any more.
+                let _ = this.update(cx, |app, cx| {
+                    if app.downloads.generation == generation {
+                        app.end_live_job(row_id, &run);
+                        app.pump_downloads(cx);
+                    }
+                });
                 return;
             };
             let _ = this.update(cx, |app, cx| app.finish_download(generation, finished, cx));
@@ -453,21 +471,26 @@ impl LuminaApp {
         if self.downloads.generation != generation {
             return;
         }
+        self.end_live_job(finished.row.id, &finished.cancel);
         // Removed (✕) while it ran, or paused and resumed so a later run
         // owns the row (a step that ignores the cancel flag can end this
         // run late): the row is left alone, but a file that made it into
         // the catalog still shows in the library. This run's stored result
         // is overwritten by the later run's own writes when it ends; until
         // then it says Done for a file that really was catalogued.
-        let current = self
-            .downloads
-            .index_of(finished.row.id)
-            .filter(|&at| Arc::ptr_eq(&self.downloads.entries[at].cancel, &finished.cancel));
+        // A file saved but not catalogued is kept on the row with its
+        // explanation: a later run can't have started (it waits for this
+        // one), and starting over would download it a second time.
+        let current = self.downloads.index_of(finished.row.id).filter(|&at| {
+            Arc::ptr_eq(&self.downloads.entries[at].cancel, &finished.cancel)
+                || matches!(finished.outcome, JobOutcome::NotCatalogued { .. })
+        });
         let Some(index) = current else {
             if matches!(finished.outcome, JobOutcome::Imported { .. }) {
                 self.refresh_album_counts();
                 self.refresh_active_view(cx);
             }
+            self.pump_downloads(cx);
             return;
         };
         let entry = &mut self.downloads.entries[index];
@@ -480,6 +503,7 @@ impl LuminaApp {
                 let row = entry.row.clone();
                 self.store_paused(vec![row], false, cx);
             }
+            self.pump_downloads(cx);
             return;
         }
         // The job's copy of the row predates its inspection.
@@ -525,12 +549,29 @@ impl LuminaApp {
         self.pump_downloads(cx);
     }
 
+    /// The run with cancel flag `run` of row `row_id` has ended: its slot
+    /// frees, unless a later run already holds the row.
+    fn end_live_job(&mut self, row_id: i64, run: &Arc<AtomicBool>) {
+        if let Some(at) = self.downloads.index_of(row_id) {
+            let entry = &mut self.downloads.entries[at];
+            if entry
+                .live_job
+                .as_ref()
+                .is_some_and(|live| Arc::ptr_eq(live, run))
+            {
+                entry.live_job = None;
+            }
+        }
+    }
+
     /// ✕ and ⌫: cancels a running download, or removes any row. The next
     /// waiting download moves up.
     pub fn cancel_or_remove_download(&mut self, row_id: i64, cx: &mut Context<Self>) {
         let Some(index) = self.downloads.index_of(row_id) else {
             return;
         };
+        // The row leaves the list, so its slot frees at once, even while a
+        // paused row's job is still finishing.
         let entry = self.downloads.entries.remove(index);
         entry.cancel.store(true, Ordering::Relaxed);
         if self.downloads.highlight == Some(row_id) {
@@ -560,6 +601,9 @@ impl LuminaApp {
                             if entry.row.state == DownloadState::Running {
                                 entry.row.state = DownloadState::Paused;
                             }
+                            // Its job may have ended while the row was out
+                            // of the list, unseen: it holds no slot.
+                            entry.live_job = None;
                             let at = index.min(app.downloads.entries.len());
                             app.downloads.entries.insert(at, entry);
                         }

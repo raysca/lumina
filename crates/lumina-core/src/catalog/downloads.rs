@@ -162,13 +162,16 @@ impl Catalog {
         Ok(())
     }
 
-    /// Retry and Resume: back to Waiting, at the end of the queue.
+    /// Retry and Resume: back to Waiting, at the end of the queue. A
+    /// failure Retry can't fix (a file saved but not catalogued) is left
+    /// as it is, so a Resume racing that run's late result never wipes it;
+    /// the row comes back unchanged.
     pub fn requeue_download(&self, id: i64) -> Result<DownloadRow> {
         let conn = self.conn.lock();
         conn.execute(
             "UPDATE download_queue SET state = 'waiting', error = NULL, can_retry = 1,
                  finished_epoch_ms = NULL, added_epoch_ms = ?2
-             WHERE id = ?1",
+             WHERE id = ?1 AND (state != 'failed' OR can_retry = 1)",
             params![id, Self::next_added_ms(&conn)?],
         )?;
         Self::download_by_id(&conn, id)
@@ -275,7 +278,6 @@ mod tests {
         catalog.add_download("https://a/2").unwrap();
         first.state = DownloadState::Failed;
         first.error = Some("The connection dropped".into());
-        first.can_retry = false;
         catalog.update_download(&first).unwrap();
 
         let requeued = catalog.requeue_download(first.id).unwrap();
@@ -288,6 +290,26 @@ mod tests {
             ["https://a/2", "https://a/1"],
             "Retry puts the download at the end of the queue"
         );
+    }
+
+    #[test]
+    fn requeue_leaves_a_failure_that_cannot_be_retried() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let mut row = catalog.add_download("https://a/1").unwrap();
+        catalog.add_download("https://a/2").unwrap();
+        row.state = DownloadState::Failed;
+        row.error = Some("Saved but not added. Rescan the library.".into());
+        row.can_retry = false;
+        catalog.update_download(&row).unwrap();
+
+        let after = catalog.requeue_download(row.id).unwrap();
+        assert_eq!(
+            (after.state, after.error, after.can_retry),
+            (row.state, row.error, false),
+            "a late Resume never wipes a failure Retry can't fix"
+        );
+        let urls: Vec<String> = states(&catalog).into_iter().map(|(u, _)| u).collect();
+        assert_eq!(urls, ["https://a/1", "https://a/2"], "and never moves it");
     }
 
     #[test]

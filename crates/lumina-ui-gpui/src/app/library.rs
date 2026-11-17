@@ -264,6 +264,8 @@ impl LuminaApp {
                 }
                 if should_refresh_counts {
                     self.refresh_album_counts();
+                    // The item on screen may have just gone offline.
+                    self.watch_missing_drive(cx);
                     cx.notify();
                 }
                 if should_restore_session {
@@ -507,6 +509,7 @@ impl LuminaApp {
         }
         self.error_message = None;
         self.error_retry = None;
+        self.import.failure = None;
         cx.notify();
     }
 

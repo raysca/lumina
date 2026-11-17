@@ -29,6 +29,30 @@ pub(crate) struct MissingCardState {
     /// The selected missing item and its disconnected drive, worked out
     /// once when it is selected, never per frame.
     pub drive: Option<(MediaId, Option<String>)>,
+    /// A disconnected drive is on screen and `/Volumes` is being checked
+    /// for it (see `watch_missing_drive`).
+    pub watching: bool,
+}
+
+/// How often `/Volumes` is listed while a disconnected drive is named.
+// ponytail: a poll, only while the bar names a drive; a mount notification
+// (NSWorkspace) if the delay or the listing ever matters.
+pub(crate) const VOLUME_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+
+#[cfg(test)]
+thread_local! {
+    /// Stands in for `/Volumes` on this test thread, so a test can "mount"
+    /// a drive by making a folder.
+    pub(crate) static VOLUMES_DIR: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn volumes_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(dir) = VOLUMES_DIR.with(|d| d.borrow().clone()) {
+        return dir;
+    }
+    PathBuf::from("/Volumes")
 }
 
 /// The drive name of a path under `/Volumes/<name>` when `<name>` is not
@@ -36,6 +60,11 @@ pub(crate) struct MissingCardState {
 /// local `/Volumes` folder by name only and never enters a mounted volume,
 /// so a stalled network share cannot block it.
 pub(crate) fn disconnected_drive(path: &Path) -> Option<String> {
+    disconnected_drive_in(path, &volumes_dir())
+}
+
+/// `disconnected_drive` against the volumes folder `volumes`.
+fn disconnected_drive_in(path: &Path, volumes_root: &Path) -> Option<String> {
     let mut parts = path.components();
     let (Some(Component::RootDir), Some(Component::Normal(volumes)), Some(Component::Normal(name))) =
         (parts.next(), parts.next(), parts.next())
@@ -46,7 +75,7 @@ pub(crate) fn disconnected_drive(path: &Path) -> Option<String> {
         return None;
     }
     // Unreadable /Volumes: say nothing rather than guess.
-    let mounted = std::fs::read_dir("/Volumes")
+    let mounted = std::fs::read_dir(volumes_root)
         .ok()?
         .flatten()
         .any(|entry| entry.file_name() == name);
@@ -69,6 +98,49 @@ impl LuminaApp {
             self.missing_card.focus = None;
         }
         self.missing_card.drive = drive;
+    }
+
+    /// While the selected missing item's drive is disconnected, lists
+    /// `/Volumes` every `VOLUME_POLL` and refreshes the bar and card once it
+    /// mounts. Stops once no disconnected drive is named.
+    pub(crate) fn watch_missing_drive(&mut self, cx: &mut Context<Self>) {
+        if self.missing_card.watching || !matches!(self.missing_card.drive, Some((_, Some(_)))) {
+            return;
+        }
+        self.missing_card.watching = true;
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor().timer(VOLUME_POLL).await;
+            // The item whose drive is named, if one still is.
+            let offline = this.update(cx, |app, _| {
+                let item = match (&app.missing_card.drive, &app.selected_item) {
+                    (Some((id, Some(_))), Some(item)) if item.id == *id => {
+                        Some((item.id, item.path.clone(), volumes_dir()))
+                    }
+                    _ => None,
+                };
+                app.missing_card.watching = item.is_some();
+                item
+            });
+            let Ok(Some((id, path, volumes_root))) = offline else {
+                return;
+            };
+            // Listing `/Volumes` is IO: off the UI thread.
+            let drive = cx
+                .background_executor()
+                .spawn(async move { disconnected_drive_in(&path, &volumes_root) })
+                .await;
+            let _ = this.update(cx, |app, cx| {
+                // Only for the item it was worked out for; the next tick
+                // then finds nothing named and stops.
+                if drive.is_none()
+                    && matches!(&app.missing_card.drive, Some((cached, Some(_))) if *cached == id)
+                {
+                    app.missing_card.drive = Some((id, None));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// The disconnected drive of the missing item `id`, if any.
@@ -132,18 +204,18 @@ impl LuminaApp {
         true
     }
 
-    /// Opens a file picker for the one selected missing item, starting in
+    /// Opens a file picker for the one selected missing item (in the
+    /// viewer, the item on screen, whatever else is selected), starting in
     /// the folder it was last seen in.
     pub fn locate_missing_selected(&mut self, cx: &mut Context<Self>) {
         let Some(state) = self.grid_state.as_ref() else {
             return;
         };
         let selected = self.get_selected_ids();
-        let Some(item) = self
-            .selected_item
-            .clone()
-            .filter(|item| selected == [item.id] && self.missing_items.contains(&item.id))
-        else {
+        let Some(item) = self.selected_item.clone().filter(|item| {
+            (self.is_fullscreen_viewer || selected == [item.id])
+                && self.missing_items.contains(&item.id)
+        }) else {
             self.show_warning_toast("Select one missing item to locate it", cx);
             return;
         };

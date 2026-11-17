@@ -194,3 +194,80 @@ fn popover_keyboard_scrolls_focused_row() {
     });
     check(vcx, rows[0]);
 }
+
+/// Whether `row` paints inside the scroll body `body`.
+fn shown_in(vcx: &mut gpui::VisualTestContext, body: &'static str, row: String) -> bool {
+    render_ui(vcx);
+    render_ui(vcx);
+    let body = vcx.debug_bounds(body).expect("the scroll body paints");
+    vcx.debug_bounds(leak(row))
+        .is_some_and(|row| row.top() >= body.top() && row.bottom() <= body.bottom())
+}
+
+/// Adding a link that is already listed scrolls its row into view and moves
+/// the keyboard focus to it, in the dropdown and on the Downloads screen.
+#[core::prelude::v1::test]
+fn re_adding_a_listed_link_reveals_its_row() {
+    let (_dir, engine, fake, mut cx) = queue_app("dlp_reveal");
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    install(&view, vcx, &fake);
+    queue(&view, vcx, &[A]);
+    let a = view.update(vcx, |app, cx| {
+        let a = row_id(app, A);
+        app.pause_download(a, cx);
+        a
+    });
+    // Running rows list before paused ones, so A sits below the fold.
+    view.update(vcx, |app, cx| {
+        for n in 0..25 {
+            add(app, 8_000 + n, DownloadState::Running, None);
+        }
+        app.toggle_downloads_panel(cx);
+    });
+    focus_app(vcx, &view);
+    let row = format!("download-row-{a}");
+    assert!(
+        !shown_in(vcx, "downloads-panel-body", row.clone()),
+        "precondition: A starts below the fold"
+    );
+    view.update(vcx, |app, cx| {
+        app.enqueue_download(A.to_string(), false, None, cx)
+    });
+    assert!(
+        shown_in(vcx, "downloads-panel-body", row),
+        "the dropdown scrolls the existing row into view"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(app.downloads.highlight, Some(a));
+        assert_eq!(
+            app.downloads.focused,
+            Some(a),
+            "the keyboard focus moves to it"
+        );
+    });
+
+    // The Downloads screen, its keyboard focus on the top row.
+    view.update(vcx, |app, cx| {
+        app.show_downloads_screen(cx);
+        app.downloads.screen_focused = Some(8_000);
+    });
+    let row = format!("downloads-screen-row-{a}");
+    assert!(
+        !shown_in(vcx, "downloads-list", row.clone()),
+        "precondition: A starts below the screen's fold"
+    );
+    view.update(vcx, |app, cx| {
+        app.enqueue_download(A.to_string(), false, None, cx)
+    });
+    assert!(
+        shown_in(vcx, "downloads-list", row),
+        "the screen scrolls the existing row into view"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.downloads.screen_focused,
+            Some(a),
+            "the screen's focus moves to it"
+        )
+    });
+}

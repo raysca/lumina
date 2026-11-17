@@ -54,14 +54,18 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             }),
         )
         // The banner and toast belong to compare while it covers the grid:
-        // Esc dismisses a banner the user can see.
-        .when(app.error_message.is_some(), |view| {
-            view.child(
-                div()
-                    .debug_selector(|| "compare-banner".to_string())
-                    .child(app.render_error_banner(cx)),
-            )
-        })
+        // Esc dismisses a banner the user can see. Settings over compare
+        // draws its own banner.
+        .when(
+            app.error_message.is_some() && !app.preferences_open,
+            |view| {
+                view.child(
+                    div()
+                        .debug_selector(|| "compare-banner".to_string())
+                        .child(app.render_error_banner(cx)),
+                )
+            },
+        )
         .child(header(state, cx))
         .child(
             div()
@@ -73,7 +77,8 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .flex_col()
                 .children(rows),
         )
-        .when(app.toast.is_visible(), |view| {
+        // Settings over compare draws the one toast itself, above it.
+        .when(app.toast.is_visible() && !app.preferences_open, |view| {
             view.child(
                 div()
                     .debug_selector(|| "compare-toast".to_string())

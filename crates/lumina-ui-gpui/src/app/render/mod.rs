@@ -38,6 +38,13 @@ impl LuminaApp {
             Some((title, detail)) => (title.to_string(), Some(detail.to_string())),
             None => (message, None),
         };
+        // A later error took the banner: the import's failure line stays
+        // under it, so which files were not copied is not lost.
+        let import_failure = self
+            .import
+            .failure
+            .clone()
+            .filter(|failure| self.error_message.as_ref() != Some(failure));
         let dismiss: SharedString = t("error_banner.dismiss").into();
         div()
             .id("app-error-banner")
@@ -45,7 +52,7 @@ impl LuminaApp {
             .w_full()
             .min_h(px(43.5))
             .px_4()
-            .when(detail.is_some(), |d| d.py_2())
+            .when(detail.is_some() || import_failure.is_some(), |d| d.py_2())
             .flex()
             .flex_row()
             .items_center()
@@ -73,6 +80,12 @@ impl LuminaApp {
                             .debug_selector(|| "error-banner-detail".to_string())
                             .text_xs()
                             .child(detail)
+                    }))
+                    .children(import_failure.map(|failure| {
+                        div()
+                            .debug_selector(|| "error-banner-import".to_string())
+                            .text_xs()
+                            .child(failure)
                     })),
             )
             .children(self.error_retry.is_some().then(|| {
@@ -463,8 +476,13 @@ impl Render for LuminaApp {
             // Preferences and About paint here (Review Focus 7: never
             // register an action whose overlay this root does not paint).
             return app_actions(div(), cx)
+                // Like ⌘,: Settings… while settings is open closes it.
                 .on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
-                    this.open_preferences(cx);
+                    if this.preferences_open {
+                        this.close_preferences(cx);
+                    } else {
+                        this.open_preferences(cx);
+                    }
                 }))
                 .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
                     this.open_about(cx);
@@ -628,8 +646,13 @@ impl Render for LuminaApp {
             // under the draft. Rotate and Revert go to the draft; Quit and
             // Open Library stay (they discard the draft and say so).
             .when(!editing && !presenting, |root| {
+                // Like ⌘,: Settings… while settings is open closes it.
                 root.on_action(cx.listener(|this, _: &OpenPreferences, _w, cx| {
-                    this.open_preferences(cx);
+                    if this.preferences_open {
+                        this.close_preferences(cx);
+                    } else {
+                        this.open_preferences(cx);
+                    }
                 }))
                 .on_action(cx.listener(|this, _: &ShowAbout, _w, cx| {
                     this.open_about(cx);

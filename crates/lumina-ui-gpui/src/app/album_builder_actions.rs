@@ -255,15 +255,17 @@ impl LuminaApp {
                 let pin_changed = pin != self.album_draft.pinned_before;
                 self.close_album_builder(cx);
                 // Pinned after the save: a failed pin is in the error banner
-                // and the album stays.
-                if pin_changed {
+                // and the album stays, saved but with its old pin (the
+                // sidebar reloads it from the catalog below).
+                let pin_ok = !pin_changed || {
                     let action = if pin {
                         "album.pin_failed"
                     } else {
                         "album.unpin_failed"
                     };
-                    self.album_write(action, |e| e.set_smart_album_pinned(album_id, pin), cx);
-                }
+                    self.album_write(action, |e| e.set_smart_album_pinned(album_id, pin), cx)
+                        .is_some()
+                };
                 self.refresh_album_counts();
                 self.select_album(AlbumSelection::User(album_id), cx);
                 let message = if editing_id.is_some() {
@@ -272,7 +274,10 @@ impl LuminaApp {
                     format!("Created smart album \"{}\"", title)
                 };
                 self.set_last_action(message.clone());
-                self.show_toast(message, cx);
+                // A failed pin shows only its error, not a success beside it.
+                if pin_ok {
+                    self.show_toast(message, cx);
+                }
             }
             Err(err) => self.set_error(format!("Could not save smart album: {err:#}"), cx),
         }

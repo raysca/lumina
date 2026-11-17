@@ -4,6 +4,8 @@
 use gpui::*;
 use lumina_core::DownloadState;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use super::DownloadEntry;
 use crate::LuminaApp;
@@ -16,8 +18,8 @@ pub(crate) enum DownloadsConfirm {
 }
 
 impl LuminaApp {
-    /// Downloading and waiting rows: what quitting or switching library
-    /// would cut short. Paused rows wait for the user.
+    /// Downloading and waiting rows: what Pause all would stop. Paused
+    /// rows wait for the user.
     pub(crate) fn running_or_waiting_count(&self) -> usize {
         self.downloads
             .entries
@@ -31,13 +33,29 @@ impl LuminaApp {
             .count()
     }
 
+    /// What quitting or switching library would cut short: downloading and
+    /// waiting rows, and paused rows whose job hasn't ended yet.
+    pub(crate) fn downloads_cut_by_leaving(&self) -> usize {
+        self.downloads
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry.live_job.is_some()
+                    || matches!(
+                        entry.row.state,
+                        DownloadState::Waiting | DownloadState::Running
+                    )
+            })
+            .count()
+    }
+
     /// True (and the prompt shows) when downloads would be cut short.
     pub(crate) fn ask_before_leaving(
         &mut self,
         then: DownloadsConfirm,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.running_or_waiting_count() == 0 {
+        if self.downloads_cut_by_leaving() == 0 {
             return false;
         }
         self.downloads.open = false;
@@ -201,10 +219,22 @@ impl LuminaApp {
                     };
                     app.downloads.entries[index].requeueing = false;
                     match result {
+                        // The old run saved a file it couldn't catalogue
+                        // while this write was on its way: the row stays as
+                        // it ended (the catalog keeps it too, see
+                        // `Catalog::requeue_download`). Starting over would
+                        // download it a second time.
+                        Ok(row)
+                            if [&row, &app.downloads.entries[index].row]
+                                .iter()
+                                .any(|r| r.state == DownloadState::Failed && !r.can_retry) => {}
                         Ok(row) => {
                             let mut entry = app.downloads.entries.remove(index);
                             entry.row = row;
                             entry.skip_prior_check = skip_prior_check;
+                            // A new run's flag: the old run's ending (or a
+                            // stop meant for it) never touches this one.
+                            entry.cancel = Arc::new(AtomicBool::new(false));
                             // Placeholders (not stored yet) stay last.
                             let at = app
                                 .downloads

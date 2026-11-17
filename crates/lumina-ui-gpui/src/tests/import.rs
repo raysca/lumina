@@ -474,3 +474,69 @@ fn import_stopped_by_a_full_disk_counts_the_files_not_copied() {
     drop(view);
     let _ = std::fs::remove_dir_all(&library);
 }
+
+/// A later error takes the banner's title, but the import's failure line
+/// (which files were not copied) stays under it until the banner is
+/// dismissed.
+#[core::prelude::v1::test]
+fn a_later_error_keeps_the_import_failure_line() {
+    let (library, engine) = seed_library("import_then_error", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let report = lumina_core::import::CopyImportReport {
+        copied: 1,
+        failed: vec![(PathBuf::from("/src/b.jpg"), "Permission denied".into())],
+        cancelled: false,
+    };
+    view.update(vcx, |app, cx| {
+        app.import.progress = Some((2, 2));
+        app.finish_import(report, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("error-banner-import").is_none(),
+        "the import failure alone is the banner's title and detail, not repeated"
+    );
+
+    view.update(vcx, |app, cx| {
+        app.set_error("Could not save settings: disk full", cx)
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("error-banner-title").is_some(),
+        "the newer error shows"
+    );
+    let line = vcx
+        .debug_bounds("error-banner-import")
+        .expect("a later error must not drop the import failure line");
+    let detail = vcx
+        .debug_bounds("error-banner-detail")
+        .expect("the newer error's detail line renders");
+    assert!(
+        line.top() >= detail.bottom(),
+        "the import line sits under the newer error's detail"
+    );
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.import.failure.as_deref(),
+            Some("Imported 1 of 2. 1 file failed.: b.jpg: Permission denied"),
+            "the kept line is the import's own message"
+        );
+    });
+
+    click(vcx, "error-banner-dismiss");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("error-banner").is_none(),
+        "Dismiss clears the banner"
+    );
+    view.update(vcx, |app, cx| app.set_error("Export failed: gone", cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("error-banner-import").is_none(),
+        "a dismissed import failure does not come back with the next error"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&library);
+}

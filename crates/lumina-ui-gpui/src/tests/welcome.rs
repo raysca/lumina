@@ -1768,3 +1768,19 @@ fn late_recent_folder_check_is_dropped() {
         );
     });
 }
+
+/// Lumina › Preferences… toggles like ⌘, on the welcome screen too.
+#[core::prelude::v1::test]
+fn welcome_preferences_menu_item_toggles_settings() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
+    vcx.dispatch_action(crate::actions::OpenPreferences);
+    render_ui(vcx);
+    assert!(view.update(vcx, |app, _| app.preferences_open), "it opens");
+    vcx.dispatch_action(crate::actions::OpenPreferences);
+    render_ui(vcx);
+    assert!(
+        !view.update(vcx, |app, _| app.preferences_open),
+        "Preferences… while settings is open closes it, as ⌘, does"
+    );
+}

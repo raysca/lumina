@@ -54,10 +54,12 @@ impl LoopRange {
 }
 
 impl LuminaApp {
-    /// Whether the viewer shows a video the loop commands can act on.
+    /// Whether the viewer shows a video the loop commands can act on. A
+    /// clip that failed to load has none, as its transport keys do nothing.
     pub(crate) fn loop_range_applies(&self) -> bool {
         self.is_fullscreen_viewer
             && !self.video.in_pip
+            && !self.video_unplayable()
             && self
                 .selected_item
                 .as_ref()

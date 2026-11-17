@@ -772,6 +772,19 @@ fn pin_failure_shows_the_error_and_keeps_the_album() {
             "the banner names the cause: {error:?}"
         );
         assert!(!app.album_draft.modal_open, "the album was created");
+        assert!(
+            app.toast.current().is_none(),
+            "a failed pin shows only the error, no Created toast beside it: {:?}",
+            app.toast.current().map(|toast| toast.message.clone())
+        );
+        assert_eq!(
+            app.user_smart_albums
+                .iter()
+                .find(|a| a.id == saved[0].id)
+                .map(|a| a.pinned),
+            Some(false),
+            "the sidebar lists the saved album unpinned, as the catalog has it"
+        );
     });
 
     let _ = std::fs::remove_dir_all(&dir);

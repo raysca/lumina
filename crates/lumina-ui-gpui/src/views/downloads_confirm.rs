@@ -12,7 +12,7 @@ pub fn render(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let Some(confirm) = app.downloads.confirm.as_ref() else {
         return Empty.into_any_element();
     };
-    let count = app.running_or_waiting_count();
+    let count = app.downloads_cut_by_leaving();
     let running = if count == 1 {
         "1 download is still running.".to_string()
     } else {

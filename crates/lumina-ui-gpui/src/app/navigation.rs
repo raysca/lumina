@@ -483,6 +483,7 @@ impl LuminaApp {
         }
         self.selected_item = Some(item.clone());
         self.sync_missing_card();
+        self.watch_missing_drive(cx);
         self.set_viewer_image(None);
         self.tag_input_active = false;
         self.tag_input_buffer.clear();
