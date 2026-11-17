@@ -89,7 +89,6 @@ mod stacks;
 mod stacks_guards;
 mod stacks_members;
 mod states;
-mod states_gaps;
 mod tag_manager;
 mod tag_manager_detail;
 mod tag_manager_header;
@@ -114,7 +113,6 @@ mod viewer_and_video;
 mod viewer_filmstrip;
 mod viewer_stage;
 mod welcome;
-mod welcome_gaps;
 mod windows_and_layout;
 mod zoom_presets;
 

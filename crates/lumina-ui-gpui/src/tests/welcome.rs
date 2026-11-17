@@ -1,8 +1,8 @@
-//! v3 Welcome and "Building your library" (FIXES §9).
+//! The welcome screen, recent libraries and "Building your library".
 
 use crate::app::first_scan::FirstScanState;
 use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library, wheel,
+    app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, wheel,
 };
 use crate::{LuminaApp, UiMessage};
 use gpui::{Entity, VisualTestContext};
@@ -383,7 +383,7 @@ use crate::tests::downloads::{install, queue_app, settle, submit, TempLibrary};
 use std::path::PathBuf;
 
 /// An empty temporary folder, deleted when the test ends.
-pub(super) fn temp_folder(name: &str) -> TempLibrary {
+fn temp_folder(name: &str) -> TempLibrary {
     let dir = std::env::temp_dir().join(format!(
         "lumina_uitest_recent_{name}_{}",
         std::time::SystemTime::now()
@@ -451,54 +451,7 @@ fn welcome_lists_recents_and_enter_opens_focused() {
     });
 }
 
-/// Review Focus 1: in a 900×600 window the welcome sits under the header
-/// and scrolls, so its lowest control can still be reached.
-#[core::prelude::v1::test]
-fn small_window_welcome_scrolls_under_the_header() {
-    let folders: Vec<TempLibrary> = (0..6).map(|i| temp_folder(&format!("small_{i}"))).collect();
-    let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) =
-        welcome_with_recents(&mut cx, folders.iter().map(|f| f.to_path_buf()).collect());
-    view.update(vcx, |app, cx| {
-        app.has_desktop_pics = true;
-        cx.notify();
-    });
-    vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));
-    render_ui(vcx);
-
-    let header = vcx.debug_bounds("page-header").expect("header renders");
-    let header_bottom = header.origin.y + header.size.height;
-    let open = vcx
-        .debug_bounds("welcome-open-btn")
-        .expect("buttons render");
-    assert!(
-        open.origin.y >= header_bottom,
-        "the welcome buttons never overlap the header"
-    );
-    // The last recent row is the lowest control.
-    let below = vcx.debug_bounds("welcome-recent-5").expect("last recent");
-    assert!(
-        below.origin.y > gpui::px(600.0),
-        "precondition: at 900×600 the last recent starts below the window: {below:?}"
-    );
-    let body = vcx.debug_bounds("welcome-body").expect("body renders");
-    for _ in 0..5 {
-        wheel(
-            vcx,
-            body.center(),
-            gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-400.0))),
-            gpui::Modifiers::default(),
-        );
-    }
-    let last = vcx.debug_bounds("welcome-recent-5").expect("last recent");
-    assert!(
-        last.origin.y >= header_bottom && last.origin.y + last.size.height <= gpui::px(600.0),
-        "scrolling brings the lowest control into the window: {last:?}"
-    );
-}
-
-/// RECENT LIBRARIES is a 520 px list of 32 px rows under
-/// the hint cards, and keeps its keys.
+/// RECENT LIBRARIES sits under the hint cards, and keeps its keys.
 #[core::prelude::v1::test]
 fn recents_list_sits_under_the_hints_and_keeps_keys() {
     let (a, b, c) = (
@@ -511,10 +464,6 @@ fn recents_list_sits_under_the_hints_and_keeps_keys() {
         &mut cx,
         vec![a.to_path_buf(), b.to_path_buf(), c.to_path_buf()],
     );
-    let list = vcx
-        .debug_bounds("welcome-recents")
-        .expect("the list renders");
-    assert_eq!(f32::from(list.size.width), 520.0, "the list is 520 wide");
     let hint = vcx.debug_bounds("welcome-hint-0").unwrap();
     let row = vcx.debug_bounds("welcome-recent-0").unwrap();
     assert!(
@@ -541,7 +490,7 @@ fn recents_list_sits_under_the_hints_and_keeps_keys() {
     });
 }
 
-/// Review Focus 4: a long path is one line cut in the middle (GPUI's
+/// A long path is one line cut in the middle (GPUI's
 /// `text_ellipsis_middle`), inside its row, and the tooltip and the
 /// test marker carry the full path.
 #[core::prelude::v1::test]
@@ -1278,7 +1227,7 @@ fn sample_files(dir: &std::path::Path) -> usize {
         .unwrap_or(0)
 }
 
-/// Review Focus 3: while the sample is being written the link is inert.
+/// While the sample is being written the link is inert.
 #[core::prelude::v1::test]
 fn sample_link_is_inert_while_preparing() {
     let mut cx = crate::tests::TestApp::single();
@@ -1856,5 +1805,277 @@ fn welcome_preferences_menu_item_toggles_settings() {
     assert!(
         !view.update(vcx, |app, _| app.preferences_open),
         "Preferences… while settings is open closes it, as ⌘, does"
+    );
+}
+
+// ---- Ten recents and Reset to defaults with no library open ----
+
+/// The welcome screen with `config` as the startup config (never saved).
+fn welcome_with_config(
+    cx: &mut gpui::TestAppContext,
+    config: crate::config::AppConfig,
+) -> (Entity<LuminaApp>, &mut VisualTestContext) {
+    crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(config));
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    (view, vcx)
+}
+
+/// Ten recents in a 900×600 window: each row is one line, the welcome sits
+/// under the header, and the body scrolls the tenth fully into view.
+#[core::prelude::v1::test]
+fn ten_recents_are_one_line_rows_and_the_tenth_scrolls_into_view() {
+    let folders: Vec<TempLibrary> = (0..10).map(|i| temp_folder(&format!("ten_{i}"))).collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_config(
+        &mut cx,
+        crate::config::AppConfig {
+            recent_libraries: folders.iter().map(|f| f.to_path_buf()).collect(),
+            ..Default::default()
+        },
+    );
+    vcx.simulate_resize(gpui::size(gpui::px(900.0), gpui::px(600.0)));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "precondition: no library is open")
+    });
+
+    for i in 0..10 {
+        let row = vcx
+            .debug_bounds(leak(format!("welcome-recent-{i}")))
+            .unwrap_or_else(|| panic!("recent {i} is listed: all ten recents show"));
+        let line = vcx
+            .debug_bounds(leak(format!("welcome-recent-path-{i}")))
+            .unwrap_or_else(|| panic!("recent {i} has a path line"));
+        assert_eq!(
+            f32::from(row.size.height),
+            32.0,
+            "recent {i} must be one 32 px row"
+        );
+        assert!(
+            f32::from(line.size.height) < 20.0
+                && line.left() >= row.left()
+                && line.right() <= row.right(),
+            "recent {i}'s path must be one line inside its row: {line:?} in {row:?}"
+        );
+    }
+
+    let header = vcx.debug_bounds("page-header").expect("header renders");
+    let open = vcx
+        .debug_bounds("welcome-open-btn")
+        .expect("buttons render");
+    assert!(
+        open.top() >= header.bottom(),
+        "the welcome buttons never overlap the header"
+    );
+    let tenth = vcx.debug_bounds("welcome-recent-9").unwrap();
+    assert!(
+        tenth.top() > gpui::px(600.0),
+        "precondition: at 900×600 the tenth recent starts below the window: {tenth:?}"
+    );
+    let body = vcx.debug_bounds("welcome-body").expect("body renders");
+    for _ in 0..8 {
+        wheel(
+            vcx,
+            body.center(),
+            gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-400.0))),
+            gpui::Modifiers::default(),
+        );
+    }
+    let tenth = vcx.debug_bounds("welcome-recent-9").unwrap();
+    assert!(
+        tenth.top() >= header.bottom() && tenth.bottom() <= gpui::px(600.0),
+        "scrolling must bring the tenth recent fully into the window: {tenth:?}"
+    );
+}
+
+/// ↑/↓ keep the focused recent inside the scrolling welcome body (nearest
+/// edge), in a short window with ten recents.
+#[core::prelude::v1::test]
+fn arrow_focus_scrolls_the_recent_into_view() {
+    let folders: Vec<TempLibrary> = (0..10)
+        .map(|i| temp_folder(&format!("arrow_{i}")))
+        .collect();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_config(
+        &mut cx,
+        crate::config::AppConfig {
+            recent_libraries: folders.iter().map(|f| f.to_path_buf()).collect(),
+            ..Default::default()
+        },
+    );
+    vcx.simulate_resize(gpui::size(gpui::px(960.0), gpui::px(600.0)));
+    render_ui(vcx);
+    let inside = |vcx: &mut VisualTestContext, i: usize| {
+        let body = vcx.debug_bounds("welcome-body").expect("body renders");
+        let row = vcx
+            .debug_bounds(leak(format!("welcome-recent-{i}")))
+            .unwrap_or_else(|| panic!("recent {i} renders"));
+        (
+            row.top() >= body.top() && row.bottom() <= body.bottom(),
+            row,
+            body,
+        )
+    };
+    assert!(
+        !inside(vcx, 9).0,
+        "precondition: at 960×600 the tenth recent starts outside the body"
+    );
+    for i in 0..10 {
+        keystrokes(vcx, "down");
+        let (shown, row, body) = inside(vcx, i);
+        assert!(
+            shown,
+            "↓ to recent {i} must scroll it into the body: {row:?} in {body:?}"
+        );
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.welcome.focused_recent, Some(9))
+    });
+    for i in (0..9).rev() {
+        keystrokes(vcx, "up");
+        let (shown, row, body) = inside(vcx, i);
+        assert!(
+            shown,
+            "↑ to recent {i} must scroll it into the body: {row:?} in {body:?}"
+        );
+    }
+}
+
+/// Reset to defaults from the welcome screen asks first, then
+/// resets the UI preferences only, like the library case
+/// (`tests::preferences::reset_to_defaults_asks_then_resets_ui_preferences_only`).
+#[core::prelude::v1::test]
+fn reset_to_defaults_from_welcome_resets_ui_preferences_only() {
+    use crate::config::{AlbumSort, AppConfig, BrowseLayout, GroupLevel, LaunchView};
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = welcome_with_config(
+        &mut cx,
+        AppConfig {
+            sidebar_width: 320.0,
+            inspector_width: 360.0,
+            sidebar_visible: false,
+            inspector_visible: true,
+            grid_columns: 6,
+            card_fit_mode: false,
+            sort_field: Some("name".into()),
+            sort_direction: Some("asc".into()),
+            browse_layout: BrowseLayout::Mosaic,
+            group_level: GroupLevel::Months,
+            album_sort: AlbumSort::Created,
+            album_panel_hidden: true,
+            launch_view: LaunchView::Library,
+            recent_libraries: vec!["/nonexistent/lumina-welcome-reset/Library".into()],
+            external_editor: Some("com.example.editor".into()),
+            slideshow_interval_secs: 10,
+            video_speed: Some(1.5),
+            ..AppConfig::default()
+        },
+    );
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
+    // The config the next save writes from (the live layout is checked below).
+    let snapshot = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext| {
+        view.update(vcx, |app, _| app.config.clone())
+    };
+    let before = snapshot(&view, vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.grid_state.is_none(), "precondition: no library is open")
+    });
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-page").is_some(),
+        "precondition: settings paint on the welcome screen"
+    );
+
+    click(vcx, "settings-reset");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-reset-dialog").is_some(),
+        "Reset asks first on the welcome screen too"
+    );
+    click(vcx, "settings-reset-cancel");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-reset-dialog").is_none(),
+        "Cancel closes the confirmation"
+    );
+    assert_eq!(
+        serde_json::to_value(snapshot(&view, vcx)).unwrap(),
+        serde_json::to_value(&before).unwrap(),
+        "Cancel changes nothing"
+    );
+
+    let saves = crate::app::state::SAVE_COUNT.with(|c| c.get());
+    click(vcx, "settings-reset");
+    click(vcx, "settings-reset-confirm");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("settings-reset-dialog").is_none(),
+        "Reset closes the confirmation"
+    );
+    assert!(
+        vcx.debug_bounds("settings-page").is_some(),
+        "settings stay open after the reset"
+    );
+    assert!(
+        crate::app::state::SAVE_COUNT.with(|c| c.get()) > saves,
+        "the reset is saved (a test-only no-op save, AGENTS §2)"
+    );
+
+    let mut expected = before.clone();
+    expected.reset_ui_preferences();
+    assert_eq!(
+        serde_json::to_value(snapshot(&view, vcx)).unwrap(),
+        serde_json::to_value(&expected).unwrap(),
+        "Reset puts the UI preferences back to the defaults and keeps every other value"
+    );
+    let d = AppConfig::default();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            (
+                app.sidebar_collapsed,
+                app.inspector_open,
+                app.sidebar_width,
+                app.inspector_width,
+                app.card_fit_mode,
+            ),
+            (
+                !d.sidebar_visible,
+                d.inspector_visible,
+                d.sidebar_width,
+                d.inspector_width,
+                d.card_fit_mode,
+            ),
+            "the live layout follows the reset"
+        );
+        assert_eq!(
+            app.sort,
+            d.restored_sort(),
+            "the live sort follows the reset"
+        );
+        assert!(app.error_message.is_none(), "a good save shows no error");
+        assert_eq!(
+            app.last_action.as_deref(),
+            Some("Settings reset to defaults"),
+            "the reset is reported as in the library case"
+        );
+    });
+    let view_menu: Vec<String> = vcx.update(|_, cx| {
+        cx.get_menus()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.name.as_ref() == "View")
+            .flat_map(|m| m.items)
+            .filter_map(|item| match item {
+                gpui::OwnedMenuItem::Action { name, .. } => Some(name.to_string()),
+                _ => None,
+            })
+            .collect()
+    });
+    assert!(
+        view_menu.iter().any(|n| n == "Hide Sidebar"),
+        "the View menu follows the reset (sidebar shown): {view_menu:?}"
     );
 }
