@@ -1955,3 +1955,36 @@ fn storage_reading_started_before_a_clear_never_lands_after_it() {
     let _ = std::fs::remove_dir_all(&cache);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[core::prelude::v1::test]
+fn settings_brand_shows_the_logo_where_the_library_does() {
+    let (temp_dir, engine) = seed_library("settings_brand", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+    let library_icon = vcx
+        .debug_bounds("sidebar-brand-icon")
+        .expect("the library sidebar shows the logo");
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-,");
+    render_ui(vcx);
+
+    let sidebar = vcx
+        .debug_bounds("settings-sidebar")
+        .expect("the settings sidebar renders");
+    let icon = vcx
+        .debug_bounds("settings-brand-icon")
+        .expect("the settings sidebar's brand row shows the logo");
+    assert!(
+        sidebar.contains(&icon.center()),
+        "the logo sits in the settings sidebar: {icon:?} not in {sidebar:?}"
+    );
+    assert_eq!(
+        icon.origin, library_icon.origin,
+        "switching to settings must not move the brand row"
+    );
+
+    drop(view);
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

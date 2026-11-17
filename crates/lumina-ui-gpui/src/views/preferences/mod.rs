@@ -183,8 +183,6 @@ fn reset_button(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
 /// The 252 px category sidebar: wordmark, "SETTINGS" and one nav item per
 /// category.
 fn render_sidebar(selected: PreferencesTab, cx: &mut Context<LuminaApp>) -> impl IntoElement {
-    // Clear the traffic lights, as the library sidebar's brand row does.
-    let inset = if cfg!(target_os = "macos") { 72.0 } else { 2.0 };
     let mut categories = div()
         .flex()
         .flex_col()
@@ -218,15 +216,7 @@ fn render_sidebar(selected: PreferencesTab, cx: &mut Context<LuminaApp>) -> impl
         .flex()
         .flex_col()
         .gap(px(18.0))
-        .child(
-            div()
-                .pl(px(inset))
-                .font_family(theme::FONT_DISPLAY)
-                .text_size(px(18.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme::t1())
-                .child("Lumina"),
-        )
+        .child(crate::views::sidebar::render_brand("settings-brand"))
         .child(categories)
 }
 

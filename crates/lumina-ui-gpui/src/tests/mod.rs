@@ -28,6 +28,7 @@ mod downloads_screen;
 mod downloads_sections;
 mod duplicates;
 mod duplicates_keyboard;
+mod duplicates_layout;
 mod duplicates_review;
 mod editor_copy;
 mod editor_handoff;

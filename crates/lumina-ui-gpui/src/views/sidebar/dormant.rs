@@ -26,7 +26,7 @@ pub(crate) fn render_dormant(app: &LuminaApp) -> Div {
         .gap(px(18.0))
         .py(px(16.0))
         .px(px(12.0))
-        .child(super::render_brand())
+        .child(super::render_brand("sidebar-brand"))
         .child(
             div()
                 .debug_selector(|| "sidebar-dormant-search".to_string())

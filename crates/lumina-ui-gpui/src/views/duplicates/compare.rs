@@ -5,7 +5,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use lumina_core::{DuplicateGroup, MediaId};
 
-use super::card::card;
+use super::card::{card, CARD_MAX_HEIGHT};
 use super::{group_summary, group_title};
 use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
@@ -58,10 +58,21 @@ pub(super) fn render(
                 .id("duplicates-candidates")
                 .flex_1()
                 .min_h_0()
+                // The cards take what the differences line leaves and
+                // their photos shrink to fit; past the photos' minimum
+                // the pane scrolls.
                 .overflow_y_scroll()
+                .flex()
+                .flex_col()
                 .child(
                     div()
                         .id("duplicates-candidates-row")
+                        // Grows from the cards' height at the photos'
+                        // minimum up to the cards' cap (plus the 20 px
+                        // padding), and never shrinks below the minimum.
+                        .flex_grow(1.0)
+                        .flex_shrink_0()
+                        .max_h(px(CARD_MAX_HEIGHT + 40.0))
                         .overflow_x_scroll()
                         .px(px(24.0))
                         .py(px(20.0))
@@ -72,10 +83,11 @@ pub(super) fn render(
                             card(this, &group.hash, i, item, item.id == keeper, cx)
                         })),
                 )
-                .child(super::differences::render(this, group)),
+                .child(super::differences::render(this, group).flex_shrink_0()),
         )
         .child(
             div()
+                .debug_selector(|| "duplicates-footer".to_string())
                 .h(px(63.5))
                 .flex_shrink_0()
                 .px(px(24.0))
@@ -86,23 +98,42 @@ pub(super) fn render(
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
+                // The text takes what the buttons leave: the summary
+                // truncates first; "frees …" stays whole until there is
+                // no room for it either, then it is clipped.
                 .child(
                     div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme::t1())
-                        .children(text_marker("duplicates-summary", &summary))
-                        .child(summary),
+                        .debug_selector(|| "duplicates-footer-text".to_string())
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .debug_selector(|| "duplicates-footer-summary".to_string())
+                                .min_w_0()
+                                .truncate()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(theme::t1())
+                                .children(text_marker("duplicates-summary", &summary))
+                                .child(summary),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "duplicates-footer-frees".to_string())
+                                .flex_shrink_0()
+                                .whitespace_nowrap()
+                                .font_family(theme::FONT_MONO)
+                                .text_size(px(11.5))
+                                .text_color(theme::t3())
+                                .children(text_marker("duplicates-frees", &frees))
+                                .child(frees),
+                        ),
                 )
-                .child(
-                    div()
-                        .font_family(theme::FONT_MONO)
-                        .text_size(px(11.5))
-                        .text_color(theme::t3())
-                        .children(text_marker("duplicates-frees", &frees))
-                        .child(frees),
-                )
-                .child(div().flex_1())
                 .child(
                     div()
                         .id("duplicates-skip-group")
@@ -114,6 +145,7 @@ pub(super) fn render(
                             "duplicates.with_key",
                             &[&t("duplicates.skip_group_hint"), "S"],
                         )))
+                        .flex_shrink_0()
                         .h(px(36.0))
                         .px(px(14.0))
                         .flex()
@@ -146,6 +178,7 @@ pub(super) fn render(
                             "duplicates.with_key",
                             &[&t("duplicates.merge_group_hint"), "⏎"],
                         )))
+                        .flex_shrink_0()
                         .h(px(36.0))
                         .px(px(14.0))
                         .flex()

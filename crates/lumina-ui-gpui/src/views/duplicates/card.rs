@@ -17,6 +17,17 @@ use crate::LuminaApp;
 /// row scrolls sideways.
 const CARD_MIN_WIDTH: f32 = 180.0;
 
+/// The photo takes the card's spare height but never less than this; below
+/// it the compare pane scrolls.
+const PHOTO_MIN_HEIGHT: f32 = 140.0;
+
+/// The tallest a card gets: the design's 345 px photo over its facts
+/// (radio and seven one-line rows, about 238 px with padding) and border.
+/// Past it the spare height falls below the differences line.
+// ponytail: the facts' height is a measured constant, not laid out; the
+// tall-window test catches drift if rows are added.
+pub(super) const CARD_MAX_HEIGHT: f32 = 345.0 + 238.0 + 3.0;
+
 /// One copy: the image with its tag, BEST badge and resolution, the keep
 /// radio, then its facts. The keeper has the accent outline; the selected
 /// card is lifted to bg-3 with the focus ring instead.
@@ -97,9 +108,12 @@ pub(super) fn card(
         }))
         .child(
             div()
+                .debug_selector(move || format!("duplicate-photo-{id}"))
                 .relative()
                 .w_full()
-                .h(px(400.0))
+                .flex_1()
+                .flex_basis(px(PHOTO_MIN_HEIGHT))
+                .min_h(px(PHOTO_MIN_HEIGHT))
                 .bg(theme::bg_media())
                 .flex()
                 .items_center()
@@ -108,7 +122,7 @@ pub(super) fn card(
                 .child(match texture(this, item) {
                     Some(tex) => img(tex)
                         .size_full()
-                        .object_fit(ObjectFit::Contain)
+                        .object_fit(ObjectFit::Cover)
                         .into_any_element(),
                     None => render_icon(Icon::Image, px(24.0), theme::t3()).into_any_element(),
                 })
@@ -118,6 +132,8 @@ pub(super) fn card(
         )
         .child(
             div()
+                .debug_selector(move || format!("duplicate-facts-{id}"))
+                .flex_shrink_0()
                 .p(px(14.0))
                 .flex()
                 .flex_col()

@@ -122,6 +122,9 @@ fn row(
         .aria_selected(selected)
         .tooltip(theme::tooltip_label(title.clone()))
         .relative()
+        // uniform_list sizes an item to its content unless it asks for
+        // the full width.
+        .w_full()
         .h(px(ROW_HEIGHT))
         .px(px(18.0))
         .flex()

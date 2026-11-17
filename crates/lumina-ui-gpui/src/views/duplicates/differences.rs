@@ -77,6 +77,7 @@ pub(super) fn render(this: &LuminaApp, group: &DuplicateGroup) -> Div {
     }
     .into();
     div()
+        .debug_selector(|| "duplicates-differences".to_string())
         .mx(px(24.0))
         .mb(px(20.0))
         .px(px(14.0))

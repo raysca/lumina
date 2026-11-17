@@ -76,7 +76,7 @@ impl SidebarView {
             .py(px(16.0))
             .px(px(12.0))
             .text_color(theme::t1())
-            .child(render_brand())
+            .child(render_brand("sidebar-brand"))
             .child(crate::views::search_bar::SearchBarView::render_field(
                 this, cx,
             ))
@@ -101,11 +101,13 @@ impl SidebarView {
 
 /// Brand row: the aperture mark and "Lumina". On macOS it starts after the
 /// traffic lights, which the window draws over the sidebar's top-left.
-fn render_brand() -> impl IntoElement {
+/// Settings draws it too; `selector` (and `{selector}-icon` for the mark)
+/// tells the two apart, since settings is an overlay above the library.
+pub(crate) fn render_brand(selector: &'static str) -> impl IntoElement {
     // 84px from the window edge, less the sidebar's 12px padding.
     let inset = if cfg!(target_os = "macos") { 72.0 } else { 2.0 };
     div()
-        .debug_selector(|| "sidebar-brand".to_string())
+        .debug_selector(move || selector.to_string())
         .flex_none()
         // At the 180px minimum the wordmark clips rather than spilling out.
         .min_w_0()
@@ -116,11 +118,16 @@ fn render_brand() -> impl IntoElement {
         .flex_row()
         .items_center()
         .gap(px(9.0))
-        .child(div().flex_none().child(crate::icons::render_icon(
-            crate::icons::Icon::Aperture,
-            px(19.0),
-            theme::accent(),
-        )))
+        .child(
+            div()
+                .debug_selector(move || format!("{selector}-icon"))
+                .flex_none()
+                .child(crate::icons::render_icon(
+                    crate::icons::Icon::Aperture,
+                    px(19.0),
+                    theme::accent(),
+                )),
+        )
         .child(
             div()
                 .min_w_0()
