@@ -32,11 +32,7 @@ fn rotation_test_library(
         Some(temp_dir.join("cache")),
     )
     .expect("temp engine must open");
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let lumina_core::EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    crate::tests::helpers::wait_for_scan(|timeout| rx.recv_timeout(timeout).ok());
     (crate::tests::helpers::TempLibrary(temp_dir), engine)
 }
 

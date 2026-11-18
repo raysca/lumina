@@ -5,7 +5,7 @@
 use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click,
 };
-use lumina_core::{EngineEvent, LuminaEngine, MediaItem, MediaType};
+use lumina_core::{LuminaEngine, MediaItem, MediaType};
 
 struct PipLibrary {
     dir: crate::tests::helpers::TempLibrary,
@@ -31,11 +31,7 @@ fn pip_library(prefix: &str) -> PipLibrary {
     let (engine, rx) =
         LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), Some(dir.join("cache")))
             .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
+    crate::tests::helpers::wait_for_scan(|timeout| rx.recv_timeout(timeout).ok());
     let items = engine.get_item_slice(0..10);
     let named = |name: &str| {
         items
@@ -526,6 +522,9 @@ fn pip_with_stub_player(
         app.video.is_playing = false;
         app.video.duration = 60.0;
         app.video.playback_time = 0.0;
+        // No real frame ticks: the 16 ms ticker thread would find the stub
+        // not playing and end playback at a moment the test can't control.
+        super::viewer_stage::detach_decoder_answers(app);
         cx.notify();
     });
     let handle = view

@@ -67,8 +67,10 @@ fn pause_download_stops_job_and_keeps_row() {
             "Pause shows at once"
         );
     });
+    // Running is set before the job thread runs; its request lands later.
     settle(vcx, &view, "the waiting row starts", |app| {
         count(app, DownloadState::Running) == DEFAULT_DOWNLOAD_CONCURRENCY
+            && started(&fake, &url(4)) > 0
     });
     assert_eq!(started(&fake, &url(4)), 1, "the freed slot starts the next");
     // Paused is stored only once the cancelled job has ended.

@@ -66,12 +66,26 @@ fn seed_with(
         Some(temp_dir.join("cache")),
     )
     .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
+    wait_for_scan(|timeout| rx.recv_timeout(timeout).ok());
+    (TempLibrary(temp_dir), engine)
+}
+
+/// Waits for the first scan's ScanComplete; `next` is the engine
+/// receiver's `recv_timeout`. A scan can be silent longer than one native
+/// tool timeout (10 s: a fake `.mp4` asks Spotlight for its duration), so a
+/// fixed per-event wait under load used to end early and leave the library
+/// half catalogued. This waits for the event itself, bounded only so a
+/// broken scan fails here with a clear message.
+pub(crate) fn wait_for_scan(mut next: impl FnMut(std::time::Duration) -> Option<EngineEvent>) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match next(left) {
+            Some(EngineEvent::ScanComplete { .. }) => return,
+            Some(_) => {}
+            None => panic!("the test library's scan never completed"),
         }
     }
-    (TempLibrary(temp_dir), engine)
 }
 
 pub(crate) fn leak(selector: String) -> &'static str {
