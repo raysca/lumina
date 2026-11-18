@@ -59,9 +59,55 @@ fn uses_scaled_native_decode(ext: &str, len: u64) -> bool {
     is_tiff || large
 }
 
-/// Most bytes of a file read to find its EXIF orientation.
+/// Most bytes of a non-TIFF file read to find its EXIF orientation.
 #[cfg(any(target_os = "linux", test))]
 const EXIF_READ_LIMIT: u64 = 8 * 1024 * 1024;
+
+/// The Orientation tag (0x0112) of a classic TIFF's IFD0, reading only the
+/// 8-byte header and IFD0's entries: 1 when IFD0 has none or cannot be
+/// read. `None` when `file` is not a classic TIFF (BigTIFF included).
+#[cfg(any(target_os = "linux", test))]
+fn tiff_ifd0_orientation(file: &mut (impl std::io::Read + std::io::Seek)) -> Option<u32> {
+    use std::io::SeekFrom;
+    let mut header = [0u8; 8];
+    file.read_exact(&mut header).ok()?;
+    let big_endian = match &header[..4] {
+        b"MM\0\x2a" => true,
+        b"II\x2a\0" => false,
+        _ => return None,
+    };
+    let u16_at = |b: &[u8]| {
+        let pair = [b[0], b[1]];
+        if big_endian {
+            u16::from_be_bytes(pair)
+        } else {
+            u16::from_le_bytes(pair)
+        }
+    };
+    let quad = [header[4], header[5], header[6], header[7]];
+    let ifd0 = if big_endian {
+        u32::from_be_bytes(quad)
+    } else {
+        u32::from_le_bytes(quad)
+    };
+    let mut read_entries = || {
+        file.seek(SeekFrom::Start(ifd0.into())).ok()?;
+        let mut count = [0u8; 2];
+        file.read_exact(&mut count).ok()?;
+        // At most 65535 entries of 12 bytes: under 800 KB.
+        let mut entries = vec![0u8; usize::from(u16_at(&count)) * 12];
+        file.read_exact(&mut entries).ok()?;
+        Some(entries)
+    };
+    // Orientation is a SHORT (type 3) held in the entry's value field.
+    let orientation = read_entries().and_then(|entries| {
+        entries
+            .chunks_exact(12)
+            .find(|entry| u16_at(&entry[0..2]) == 0x0112 && u16_at(&entry[2..4]) == 3)
+            .map(|entry| u32::from(u16_at(&entry[8..10])))
+    });
+    Some(orientation.unwrap_or(1))
+}
 
 /// A temp path no other decode uses: `prefix`, this process and a counter.
 /// The clock alone is not enough (macOS reads it in microseconds, and one
@@ -494,18 +540,27 @@ impl DecoderPipeline {
         1
     }
 
-    /// The EXIF Orientation of the image file at `path`, read from at most
-    /// its first [`EXIF_READ_LIMIT`] bytes; 1 when absent or unreadable.
+    /// The EXIF Orientation of the image file at `path`; 1 when absent or
+    /// unreadable.
     ///
-    /// The reader follows IFD offsets, which in a TIFF can point anywhere,
-    /// so without the cap one orientation read could pull in a whole large
-    /// TIFF. A JPEG's EXIF sits in its first 64 KB.
+    /// A TIFF's IFD0 can sit anywhere in the file, so its orientation is
+    /// read by seeking to IFD0 ([`tiff_ifd0_orientation`]), never by
+    /// reading the file up to it. Other files are read from at most their
+    /// first [`EXIF_READ_LIMIT`] bytes (a JPEG's EXIF sits in its first
+    /// 64 KB), since the EXIF reader follows offsets anywhere.
     #[cfg(any(target_os = "linux", test))]
     fn file_exif_orientation(path: &Path) -> u32 {
-        use std::io::Read;
+        use std::io::{Read, Seek};
+        let Ok(mut file) = fs::File::open(path) else {
+            return 1;
+        };
+        if let Some(orientation) = tiff_ifd0_orientation(&mut file) {
+            return orientation;
+        }
         let mut head = Vec::new();
-        match fs::File::open(path)
-            .and_then(|file| file.take(EXIF_READ_LIMIT).read_to_end(&mut head))
+        match file
+            .rewind()
+            .and_then(|()| file.take(EXIF_READ_LIMIT).read_to_end(&mut head))
         {
             Ok(_) => Self::read_exif_orientation(&mut std::io::Cursor::new(head)),
             Err(_) => 1,
@@ -927,11 +982,12 @@ pub(crate) mod tests {
         );
     }
 
-    /// Regression: the orientation read followed a TIFF's IFD offset to
-    /// anywhere in the file, so one preview could read a whole large TIFF.
+    /// Regression: the orientation read stopped at the first 8 MB, so a
+    /// large TIFF whose IFD0 sits further in showed unrotated on Linux. It
+    /// now seeks to IFD0 instead of reading the file up to it.
     #[test]
-    fn file_orientation_read_stops_at_the_limit() {
-        // A big-endian TIFF whose IFD0 (Orientation = 6) sits past the limit.
+    fn file_orientation_follows_the_tiff_ifd0_offset() {
+        // A big-endian TIFF whose IFD0 (Orientation = 6) sits past 8 MB.
         let ifd_at = EXIF_READ_LIMIT as usize + 1024;
         let mut tiff = b"MM\0\x2a".to_vec();
         tiff.extend_from_slice(&(ifd_at as u32).to_be_bytes());
@@ -942,8 +998,35 @@ pub(crate) mod tests {
         fs::write(&far, &tiff).expect("fixture writes");
         assert_eq!(
             DecoderPipeline::file_exif_orientation(&far),
+            6,
+            "an orientation in an IFD0 past 8 MB is read"
+        );
+
+        // Little-endian, Orientation = 8 after another entry.
+        let mut tiff = b"II\x2a\0".to_vec();
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&[2, 0]);
+        tiff.extend_from_slice(&[0x00, 0x01, 3, 0, 1, 0, 0, 0, 64, 0, 0, 0]);
+        tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0, 8, 0, 0, 0]);
+        let little = temp_path("lumina_test_le_ifd").with_extension("tif");
+        let _little_guard = TempFile(little.clone());
+        fs::write(&little, &tiff).expect("fixture writes");
+        assert_eq!(
+            DecoderPipeline::file_exif_orientation(&little),
+            8,
+            "a little-endian TIFF's orientation is read"
+        );
+
+        // IFD0 offset past the end of the file: unreadable, upright.
+        let mut broken = b"MM\0\x2a".to_vec();
+        broken.extend_from_slice(&u32::MAX.to_be_bytes());
+        let truncated = temp_path("lumina_test_bad_ifd").with_extension("tif");
+        let _truncated_guard = TempFile(truncated.clone());
+        fs::write(&truncated, &broken).expect("fixture writes");
+        assert_eq!(
+            DecoderPipeline::file_exif_orientation(&truncated),
             1,
-            "an orientation past the read limit is not read"
+            "an IFD0 offset past the end reads as upright"
         );
 
         let near = temp_path("lumina_test_near_ifd").with_extension("jpg");

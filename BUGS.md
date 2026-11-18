@@ -54,11 +54,6 @@ you find something you are not fixing now. Planned features live in
 - The Videos header understates the total running time: clips whose duration
   has not been read add their size but not their length, with no hint.
 
-### Photos on Linux
-
-- Large TIFFs whose orientation tag sits past the first 8 MB show unrotated: the
-  orientation read stops there (`crates/lumina-core/src/decoder.rs`).
-
 ### Accessibility
 
 - Text set through the macOS Accessibility API (`AXSelectedText`) does not reach
