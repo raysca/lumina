@@ -53,8 +53,9 @@ fn show_map(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
     render_ui(vcx);
 }
 
-/// The map's centre is clamped, and the world's edge is at or beyond the
-/// map's edge (or the world is centred along an axis where it is smaller).
+/// The map's centre is clamped, and the world (its copies across the date
+/// line, east-west) reaches at or beyond the map's edge, or is centred
+/// along an axis where it is smaller.
 fn assert_world_covers(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, when: &str) {
     view.update(vcx, |app, _| {
         let size = app.map.viewport.get();
@@ -65,7 +66,21 @@ fn assert_world_covers(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, wh
             "{when}: the centre is kept on the world"
         );
         let p = Projection::new(Bounds::new(Point::default(), size), zoom, center);
-        let (nw, se) = (p.to_screen(-180.0, 90.0), p.to_screen(180.0, -90.0));
+        let world = px(360.0 * p.scale);
+        let copies: Vec<Pixels> = p.basemap_offsets(size.width).map(|o| o.x).collect();
+        let west = copies
+            .iter()
+            .copied()
+            .fold(px(f32::MAX), |a, b| if b < a { b } else { a });
+        let east = copies
+            .iter()
+            .copied()
+            .fold(px(f32::MIN), |a, b| if b > a { b } else { a });
+        let east = east + world;
+        let (nw, se) = (
+            point(west, p.to_screen(0.0, 90.0).y),
+            point(east, p.to_screen(0.0, -90.0).y),
+        );
         let axis = |lo: Pixels, hi: Pixels, extent: Pixels, name: &str| {
             let eps = px(0.5);
             if hi - lo >= extent {
@@ -1029,4 +1044,42 @@ fn location_card_open_map_focuses_places() {
     run_palette_command(vcx, &view, "Show on Map");
     render_ui(vcx);
     assert_centred(&view, vcx, "⌘K Show on Map");
+}
+
+/// Regression: the map stopped at the date line. Zoomed in at 180°, a place
+/// at 179.5°W is drawn just east of one at 179.5°E, not a world away.
+#[core::prelude::v1::test]
+fn pins_across_the_date_line_are_drawn_side_by_side() {
+    let (_dir, engine) = seed_library("map_date_line", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    let all = ids(&view, vcx);
+    engine.set_location(all[0], Some(0.0), Some(179.5)).unwrap();
+    engine
+        .set_location(all[1], Some(0.0), Some(-179.5))
+        .unwrap();
+    show_map(&view, vcx);
+    assert_eq!(counts(&view, vcx).len(), 2, "one pin per side");
+    view.update(vcx, |app, cx| {
+        app.map.zoom = 4;
+        app.map.center = (-180.0, 0.0);
+        cx.notify();
+    });
+    render_ui(vcx);
+    let map = vcx.debug_bounds("map-view").unwrap();
+    // Clusters are west to east by longitude: 0 is 179.5°W, 1 is 179.5°E.
+    let west_of_line = vcx.debug_bounds(cluster_selector(1)).map(|b| b.center());
+    let east_of_line = vcx.debug_bounds(cluster_selector(0)).map(|b| b.center());
+    let (Some(w), Some(e)) = (west_of_line, east_of_line) else {
+        panic!("both pins beside the date line are drawn: {west_of_line:?} {east_of_line:?}");
+    };
+    assert!(
+        map.contains(&w) && map.contains(&e),
+        "both pins are on the map"
+    );
+    assert!(
+        e.x > w.x && e.x - w.x < map.size.width / 4.0,
+        "179.5°W is drawn just east of 179.5°E: {w:?} {e:?}"
+    );
+    assert_world_covers(&view, vcx, "zoomed in on the date line");
 }

@@ -75,8 +75,8 @@ fn render_card(center: (f32, f32), label: String) -> Stateful<Div> {
                     window.paint_path(place(holes, projection.scale, offset), theme::bg_stage());
                 }
             }
-            // Near a pole or the date line the centre is clamped, so the
-            // pin is drawn where the item is, not at the middle.
+            // Near a pole the centre is clamped, so the pin is drawn where
+            // the item is, not at the middle.
             let at = projection.to_screen(center.0, center.1);
             let circle = |d: f32, bg: Rgba, border: f32| {
                 let r = px(d / 2.0);
@@ -141,7 +141,7 @@ fn render_card(center: (f32, f32), label: String) -> Stateful<Div> {
 
 /// Half the land crop around a location, in degrees (lon, lat). Wide
 /// enough for the inspector's card at [`CARD_ZOOM`] in a panel up to about
-/// 1400 px wide, with the centre clamped near a pole or the date line.
+/// 1400 px wide, with the centre clamped near a pole.
 const CROP_HALF: (f32, f32) = (60.0, 25.0);
 
 /// The basemap's triangles that touch `CROP_HALF` around a location, still
@@ -152,6 +152,9 @@ struct LandCrop {
     holes: Option<Path<Pixels>>,
 }
 
+/// The triangles of `path` within `CROP_HALF` of (lon, lat). Near the date
+/// line the crop runs past the world's edge: the land from the other side
+/// is taken shifted a world east or west, so it is drawn beside the item.
 fn crop(path: &Path<Pixels>, (lon, lat): (f32, f32)) -> Path<Pixels> {
     let (x, y) = (lon + 180.0, 90.0 - lat);
     let mut out = Path::new(point(px(x), px(y)));
@@ -160,15 +163,20 @@ fn crop(path: &Path<Pixels>, (lon, lat): (f32, f32)) -> Path<Pixels> {
         let ys = tri.iter().map(|v| f32::from(v.xy_position.y));
         let (x0, x1) = xs.fold((f32::MAX, f32::MIN), |(a, b), v| (a.min(v), b.max(v)));
         let (y0, y1) = ys.fold((f32::MAX, f32::MIN), |(a, b), v| (a.min(v), b.max(v)));
-        if x1 >= x - CROP_HALF.0
-            && x0 <= x + CROP_HALF.0
-            && y1 >= y - CROP_HALF.1
-            && y0 <= y + CROP_HALF.1
-        {
-            out.push_triangle(
-                (tri[0].xy_position, tri[1].xy_position, tri[2].xy_position),
-                (tri[0].st_position, tri[1].st_position, tri[2].st_position),
-            );
+        if y1 < y - CROP_HALF.1 || y0 > y + CROP_HALF.1 {
+            continue;
+        }
+        for shift in [-360.0, 0.0, 360.0] {
+            if x1 + shift >= x - CROP_HALF.0 && x0 + shift <= x + CROP_HALF.0 {
+                let at = |i: usize| {
+                    let p = tri[i].xy_position;
+                    point(p.x + px(shift), p.y)
+                };
+                out.push_triangle(
+                    (at(0), at(1), at(2)),
+                    (tri[0].st_position, tri[1].st_position, tri[2].st_position),
+                );
+            }
         }
     }
     out
@@ -230,6 +238,42 @@ mod tests {
         assert!(
             !Rc::ptr_eq(&lisbon, &land_crop(135.76, 35.01).unwrap()),
             "a new location cuts a new crop"
+        );
+    }
+
+    /// Regression: the card's land stopped at the date line, so a photo in
+    /// far-east Russia showed open sea where Alaska is.
+    #[core::prelude::v1::test]
+    fn land_crop_wraps_across_the_date_line() {
+        let bering = land_crop(179.0, 65.0).expect("a crop of the basemap");
+        let xs: Vec<f32> = bering
+            .land
+            .vertices
+            .iter()
+            .map(|v| f32::from(v.xy_position.x))
+            .collect();
+        assert!(
+            xs.iter().any(|&x| x > 300.0 && x <= 360.0),
+            "Chukotka, west of the date line, is in the crop"
+        );
+        assert!(
+            xs.iter().any(|&x| x > 360.0),
+            "Alaska, east of the date line, is in the crop, a world east"
+        );
+        let projection = Projection::new(
+            Bounds::new(point(px(0.0), px(0.0)), size(px(280.0), px(132.0))),
+            CARD_ZOOM,
+            (179.0, 65.0),
+        );
+        let alaska = projection.to_screen(-168.0, 65.0);
+        let card_x = |x: f32| projection.basemap_offset().x + px(x * projection.scale);
+        assert!(
+            alaska.x > projection.to_screen(179.0, 65.0).x,
+            "a place across the date line is drawn east of the item"
+        );
+        assert!(
+            f32::from(card_x(-168.0 + 180.0 + 360.0) - alaska.x).abs() < 0.01,
+            "shifted land and pins line up"
         );
     }
 }

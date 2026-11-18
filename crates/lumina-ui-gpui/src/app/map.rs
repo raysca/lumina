@@ -165,24 +165,33 @@ fn scale_for(size: Size<Pixels>, zoom: u8) -> f32 {
     fit.max(f32::EPSILON) * f32::from(1u16 << (zoom.max(MIN_ZOOM) - 1))
 }
 
-/// `center` moved as little as needed for the world's edge to stay at or
-/// beyond the map's edge. Along an axis where the world is smaller than the
-/// map (always at zoom 1), it is centred.
+/// `lon` in [-180, 180): the same meridian, once around the world.
+pub(crate) fn wrap_lon(lon: f32) -> f32 {
+    // In range it is returned as is: the round trip through +180 would
+    // round it (135° would come back as 135.00002°).
+    if (-180.0..180.0).contains(&lon) {
+        lon
+    } else {
+        (lon + 180.0).rem_euclid(360.0) - 180.0
+    }
+}
+
+/// `center` kept on the map. Along an axis where the world is smaller than
+/// the map (always at zoom 1), it is centred. Otherwise the latitude moves
+/// as little as needed for the poles to stay at or beyond the map's edge,
+/// and the longitude wraps across the date line, the world repeating east
+/// and west ([`Projection::basemap_offsets`]).
 pub(crate) fn clamp_center(center: (f32, f32), size: Size<Pixels>, zoom: u8) -> (f32, f32) {
     let scale = scale_for(size, zoom);
-    let axis = |value: f32, half_world: f32, extent: Pixels| {
+    let room = |half_world: f32, extent: Pixels| {
         let room = half_world - f32::from(extent) / (2.0 * scale);
         // Under half a pixel of room is none: along the axis that fits the
         // world exactly, rounding leaves a tiny positive room otherwise.
-        if room * scale < 0.5 {
-            0.0
-        } else {
-            value.clamp(-room, room)
-        }
+        (room * scale >= 0.5).then_some(room)
     };
     (
-        axis(center.0, 180.0, size.width),
-        axis(center.1, 90.0, size.height),
+        room(180.0, size.width).map_or(0.0, |_| wrap_lon(center.0)),
+        room(90.0, size.height).map_or(0.0, |room| center.1.clamp(-room, room)),
     )
 }
 
@@ -197,19 +206,53 @@ impl Projection {
         }
     }
 
+    /// Where (lon, lat) lands: on the copy of the world nearest the
+    /// centre, so a place just across the date line is drawn beside it.
     pub fn to_screen(self, lon: f32, lat: f32) -> Point<Pixels> {
+        // Both are within ±180, so one turn at most brings them together;
+        // exactly 180° apart stays put (180°E on a centred world's east edge).
+        let d = lon - self.center.0;
+        let d = if d > 180.0 {
+            d - 360.0
+        } else if d < -180.0 {
+            d + 360.0
+        } else {
+            d
+        };
         point(
-            self.mid.x + px((lon - self.center.0) * self.scale),
+            self.mid.x + px(d * self.scale),
             self.mid.y - px((lat - self.center.1) * self.scale),
         )
     }
 
-    /// Where the basemap's degree-space origin (180°W, 90°N) lands.
+    /// Where the basemap's degree-space origin (180°W, 90°N) lands for the
+    /// copy of the world around the centre.
     pub fn basemap_offset(self) -> Point<Pixels> {
-        self.to_screen(-180.0, 90.0)
+        point(
+            self.mid.x + px((-180.0 - self.center.0) * self.scale),
+            self.mid.y - px((90.0 - self.center.1) * self.scale),
+        )
     }
 
-    /// The (lon, lat) under a screen point.
+    /// The basemap offsets of every copy of the world that reaches into a
+    /// map `width` wide: one, or two when the date line is on the map. A
+    /// world no wider than the map is centred and drawn once, since each
+    /// place has one pin.
+    pub fn basemap_offsets(self, width: Pixels) -> impl Iterator<Item = Point<Pixels>> {
+        let origin = self.basemap_offset();
+        let world = px(360.0 * self.scale);
+        let left = self.mid.x - width / 2.0;
+        let right = self.mid.x + width / 2.0;
+        let repeats = world > width + px(1.0);
+        [-1.0f32, 0.0, 1.0]
+            .into_iter()
+            .filter(move |&k| repeats || k == 0.0)
+            .map(move |k| point(origin.x + world * k, origin.y))
+            .filter(move |o| o.x < right && o.x + world > left)
+    }
+
+    /// The (lon, lat) under a screen point; the longitude may lie past
+    /// ±180 when that point is on a neighbouring copy of the world.
     pub fn to_degrees(self, at: Point<Pixels>) -> (f32, f32) {
         (
             self.center.0 + f32::from(at.x - self.mid.x) / self.scale,
@@ -599,7 +642,8 @@ impl LuminaApp {
     }
 
     /// Pans by the pointer's move since the last event while the button is
-    /// held; the world's edge never comes inside the map.
+    /// held; the poles never come inside the map, and east-west it wraps
+    /// across the date line.
     pub(crate) fn drag_map(&mut self, at: Point<Pixels>, held: bool, cx: &mut Context<Self>) {
         let Some((last, travel)) = self.map.drag else {
             return;
@@ -667,7 +711,11 @@ mod tests {
             bounds.center(),
             "the centre is the middle"
         );
-        assert_eq!(z3.basemap_offset(), z3.to_screen(-180.0, 90.0));
+        assert_eq!(
+            z3.basemap_offset(),
+            bounds.center() - point(px(315.0 * 8.0), px(55.0 * 8.0)),
+            "the world's 180°W, 90°N corner, 315° west and 55° north of the centre"
+        );
         assert_eq!(z3.to_degrees(bounds.center()), (135.0, 35.0));
     }
 
@@ -701,9 +749,52 @@ mod tests {
         // Zoom 2: 4 px/°, the world is 1440 × 720 px.
         assert_eq!(
             clamp_center((170.0, 80.0), map, 2),
-            (90.0, 27.5),
-            "the east and north edges stop at the map's edges"
+            (170.0, 27.5),
+            "the north edge stops at the map's edge; east-west is free"
         );
         assert_eq!(clamp_center((-30.0, -10.0), map, 2), (-30.0, -10.0));
+        assert_eq!(
+            clamp_center((190.0, 0.0), map, 2),
+            (-170.0, 0.0),
+            "past 180°E the centre wraps to the west"
+        );
+    }
+
+    /// Regression: the map and the location card stopped at the date line,
+    /// so a place at 179°E next to one at 179°W was drawn a world apart.
+    #[core::prelude::v1::test]
+    fn projection_wraps_across_the_date_line() {
+        let bounds = Bounds::new(point(px(0.0), px(0.0)), size(px(720.0), px(500.0)));
+        // Zoom 3: 8 px/°, the world is 2880 px wide.
+        let p = Projection::new(bounds, 3, (179.0, 0.0));
+        let mid = bounds.center();
+        assert_eq!(
+            p.to_screen(-179.0, 0.0),
+            point(mid.x + px(16.0), mid.y),
+            "179°W is drawn 2° east of 179°E, not a world away"
+        );
+        assert_eq!(p.to_screen(179.0, 0.0), mid);
+        let copies: Vec<_> = p.basemap_offsets(bounds.size.width).collect();
+        assert_eq!(
+            copies,
+            vec![
+                p.basemap_offset(),
+                point(p.basemap_offset().x + px(2880.0), p.basemap_offset().y)
+            ],
+            "both sides of the date line have land drawn"
+        );
+
+        let inland = Projection::new(bounds, 3, (0.0, 0.0));
+        assert_eq!(
+            inland.basemap_offsets(bounds.size.width).count(),
+            1,
+            "away from the date line the world is drawn once"
+        );
+        let world = Projection::new(bounds, 1, (0.0, 0.0));
+        assert_eq!(
+            world.basemap_offsets(bounds.size.width).count(),
+            1,
+            "a world that fits the map is drawn once"
+        );
     }
 }

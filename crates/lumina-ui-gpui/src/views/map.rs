@@ -126,6 +126,28 @@ fn zoom_button(
         }))
 }
 
+/// Indices of `clusters` (sorted west to east) between `west` and `east`
+/// degrees, found by binary search. A band past ±180 wraps to the other end
+/// of the list, so the clusters just across the date line are found too;
+/// each index comes once.
+fn visible_band(clusters: &[Cluster], west: f32, east: f32) -> impl Iterator<Item = usize> + use<> {
+    let range = |w: f32, e: f32| {
+        let first = clusters.partition_point(|c| c.lon < w);
+        first..clusters.partition_point(|c| c.lon <= e).max(first)
+    };
+    // Under a full turn the two ranges never overlap.
+    let (main, wrapped) = if east - west >= 360.0 {
+        (0..clusters.len(), 0..0)
+    } else if west < -180.0 {
+        (range(west, east), range(west + 360.0, 180.0))
+    } else if east > 180.0 {
+        (range(west, east), range(-180.0, east - 360.0))
+    } else {
+        (range(west, east), 0..0)
+    };
+    main.chain(wrapped)
+}
+
 /// The map, filling the grid's place.
 pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
     let (zoom, center, focus) = (this.map.zoom, this.map.center, this.map.focus);
@@ -148,10 +170,9 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
             let pad = MAX_DIAMETER / 2.0 / projection.scale;
             let west = projection.to_degrees(bounds.origin).0 - pad;
             let east = projection.to_degrees(bounds.bottom_right()).0 + pad;
-            let first = clusters.partition_point(|c| c.lon < west);
-            let last = clusters.partition_point(|c| c.lon <= east).max(first);
             let mut pins = Vec::new();
-            for (index, c) in clusters.iter().enumerate().take(last).skip(first) {
+            for index in visible_band(&clusters, west, east) {
+                let c = &clusters[index];
                 let at = projection.to_screen(c.lon, c.lat);
                 let r = px(diameter(c.count) / 2.0);
                 let visible = at.x + r >= bounds.left()
@@ -175,13 +196,17 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
         move |bounds, (projection, mut pins), window, cx| {
             window.paint_quad(fill(bounds, theme::bg_stage()));
             if let Some(basemap) = BASEMAP.as_ref() {
-                let offset = projection.basemap_offset();
-                window.paint_path(
-                    place(&basemap.land, projection.scale, offset),
-                    theme::bg_3(),
-                );
-                if let Some(holes) = &basemap.holes {
-                    window.paint_path(place(holes, projection.scale, offset), theme::bg_stage());
+                // Across the date line the world repeats: each copy on the
+                // map is drawn.
+                for offset in projection.basemap_offsets(bounds.size.width) {
+                    window.paint_path(
+                        place(&basemap.land, projection.scale, offset),
+                        theme::bg_3(),
+                    );
+                    if let Some(holes) = &basemap.holes {
+                        window
+                            .paint_path(place(holes, projection.scale, offset), theme::bg_stage());
+                    }
                 }
             }
             for pin in &mut pins {
@@ -271,4 +296,43 @@ pub fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> AnyElement {
                 .child(t("map.hint")),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(lon: f32) -> Cluster {
+        Cluster {
+            lat: 0.0,
+            lon,
+            count: 1,
+            bounds: [0.0, lon, 0.0, lon],
+            sample: lumina_core::MediaId(1),
+        }
+    }
+
+    /// Regression: the visible band stopped at ±180, so pins just across
+    /// the date line were never laid out.
+    #[core::prelude::v1::test]
+    fn visible_band_wraps_across_the_date_line() {
+        let clusters = [at(-179.5), at(-120.0), at(0.0), at(120.0), at(179.5)];
+        let band = |w, e| visible_band(&clusters, w, e).collect::<Vec<_>>();
+        assert_eq!(band(-10.0, 10.0), vec![2], "an inner band is unchanged");
+        assert_eq!(
+            band(170.0, 190.0),
+            vec![4, 0],
+            "a band past 180°E reaches -179.5°"
+        );
+        assert_eq!(
+            band(-190.0, -170.0),
+            vec![0, 4],
+            "a band past 180°W reaches 179.5°"
+        );
+        assert_eq!(
+            band(-200.0, 200.0),
+            vec![0, 1, 2, 3, 4],
+            "a band of a full turn has every cluster once"
+        );
+    }
 }
