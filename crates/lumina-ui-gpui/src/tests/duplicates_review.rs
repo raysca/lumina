@@ -195,6 +195,79 @@ fn choosing_a_keeper_merges_the_others() {
     drop(view);
 }
 
+/// Regression: undoing a merge put the trashed copy back but left the
+/// copy's tags and rating on the keeper. Covers a single group (↵ path)
+/// and Merge all.
+#[core::prelude::v1::test]
+fn undoing_a_merge_puts_the_keeper_back_as_it_was() {
+    for merge_all in [false, true] {
+        let (_temp_dir, engine) = seed_library("dup_merge_undo", 2);
+        let mut cx = crate::tests::TestApp::single();
+        let ids: Vec<_> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
+        let (copy, keep) = (ids[0], ids[1]);
+        // Before the review reads the groups, so they are current.
+        engine.set_ratings(&[(copy, 5)]).unwrap();
+        engine.add_tags_batch(&[copy], &["beach".into()]).unwrap();
+        let rating = |id| engine.get_ratings_map().get(&id).copied().unwrap_or(0);
+        let (view, vcx) = app_with_library(&mut cx, engine.clone());
+        render_ui(vcx);
+        click(vcx, "sidebar-nav-duplicates");
+        render_ui(vcx);
+        // The rated copy is the heuristic pick; keep the plain one instead.
+        click(
+            vcx,
+            super::helpers::leak(format!("duplicate-keep-{}", keep.0)),
+        );
+
+        click(
+            vcx,
+            if merge_all {
+                "merge-all-duplicates"
+            } else {
+                "duplicates-merge-group"
+            },
+        );
+        assert_eq!(
+            rating(keep),
+            5,
+            "control: the merge gave the keeper the rating"
+        );
+        assert!(
+            engine
+                .get_tags_for_item(keep)
+                .contains(&"beach".to_string()),
+            "control: the merge gave the keeper the tag"
+        );
+
+        focus_app(vcx, &view);
+        keystrokes(vcx, "secondary-z");
+        render_ui(vcx);
+        view.update(vcx, |app, _| {
+            assert!(
+                app.error_message.is_none(),
+                "the undo succeeded: {:?}",
+                app.error_message
+            );
+        });
+        assert_eq!(
+            engine.get_item_slice(0..10).len(),
+            2,
+            "undo restores the trashed copy (merge all: {merge_all})"
+        );
+        assert_eq!(
+            rating(keep),
+            0,
+            "undo puts the keeper's rating back (merge all: {merge_all})"
+        );
+        assert!(
+            engine.get_tags_for_item(keep).is_empty(),
+            "undo takes the merged tag off the keeper (merge all: {merge_all})"
+        );
+        assert_eq!(rating(copy), 5, "the copy keeps its own rating");
+        drop(view);
+    }
+}
+
 /// Regression: the KEEP tag (once "ORIGINAL") and the group title followed
 /// the heuristic pick, not the copy the user chose to keep.
 #[core::prelude::v1::test]

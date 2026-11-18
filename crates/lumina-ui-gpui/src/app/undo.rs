@@ -78,6 +78,12 @@ pub enum UndoAction {
     },
     /// (id, before, after)
     Trashed { changes: Vec<(MediaId, bool, bool)> },
+    /// A duplicate merge (one group, or Merge all): the copies it trashed
+    /// and each keeper's metadata from before. Undo puts the keepers back
+    /// as they were and takes the copies out of Recently Deleted. Redo
+    /// moves the copies back to Recently Deleted; their metadata stays on
+    /// them and is not copied onto the keeper again.
+    DuplicateMerge { merge: lumina_core::DuplicateMerge },
     /// One grouped undo entry for a batch title/caption edit: a single undo
     /// restores every touched item.
     BatchMetadata {
@@ -166,6 +172,12 @@ impl UndoAction {
             UndoAction::Favorite { changes } | UndoAction::Trashed { changes } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
+            UndoAction::DuplicateMerge { merge } => merge
+                .trashed
+                .iter()
+                .copied()
+                .chain(merge.keepers.iter().map(|k| k.keep_id()))
+                .collect(),
             UndoAction::BatchMetadata { changes, .. } => {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
@@ -201,6 +213,7 @@ impl UndoAction {
             UndoAction::Location { .. } => "location",
             UndoAction::Tags { .. } => "tag edit",
             UndoAction::Trashed { .. } => "trash",
+            UndoAction::DuplicateMerge { .. } => "merge",
             UndoAction::BatchMetadata { field, .. } => match field {
                 BatchField::Title => "batch title",
                 BatchField::Caption => "batch caption",
@@ -273,6 +286,11 @@ impl UndoAction {
             UndoAction::Trashed { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_trashed(ids, value)
             }),
+            UndoAction::DuplicateMerge { merge } if before => engine
+                .catalog()
+                .restore_merged_keepers(&merge.keepers)
+                .and_then(|()| engine.batch_set_trashed(&merge.trashed, false)),
+            UndoAction::DuplicateMerge { merge } => engine.batch_set_trashed(&merge.trashed, true),
             UndoAction::BatchMetadata { field, changes } => {
                 let values: Vec<(MediaId, Option<&str>)> = changes
                     .iter()

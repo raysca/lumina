@@ -3,8 +3,9 @@
 //! duplicate groups.
 
 use gpui::*;
-use lumina_core::{DuplicateGroup, MediaId};
+use lumina_core::{DuplicateGroup, DuplicateMerge, MediaId};
 
+use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 
 impl LuminaApp {
@@ -228,14 +229,20 @@ impl LuminaApp {
             return;
         }
         let count = trash_ids.len();
-        match state.engine.merge_duplicate_group(keep_id, trash_ids) {
-            Ok(()) => {
-                let changes: Vec<(MediaId, bool, bool)> =
-                    trash_ids.iter().map(|id| (*id, false, true)).collect();
-                self.undo
-                    .undo_stack
-                    .push(crate::app::undo::UndoAction::Trashed { changes });
-                self.undo.redo_stack.clear();
+        // Through the catalog, which hands back the keeper's metadata from
+        // before the merge, so undo can put it back.
+        match state
+            .engine
+            .catalog()
+            .merge_duplicate_group(keep_id, trash_ids)
+        {
+            Ok(keeper) => {
+                self.push_undo(UndoAction::DuplicateMerge {
+                    merge: DuplicateMerge {
+                        trashed: trash_ids.to_vec(),
+                        keepers: keeper.into_iter().collect(),
+                    },
+                });
 
                 // If selected item was trashed, point selection to keeper
                 if let Some(ref sel) = self.selected_item {
@@ -277,7 +284,7 @@ impl LuminaApp {
         self.jobs.merge_all = true;
         let task = cx
             .background_executor()
-            .spawn(async move { engine.merge_all_duplicates(&keepers, &skipped) });
+            .spawn(async move { engine.catalog().merge_all_duplicates(&keepers, &skipped) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             // The app may be gone; then there is nothing left to update.
@@ -295,23 +302,17 @@ impl LuminaApp {
         .detach();
     }
 
-    fn finish_merge_all(&mut self, result: anyhow::Result<Vec<MediaId>>, cx: &mut Context<Self>) {
+    fn finish_merge_all(&mut self, result: anyhow::Result<DuplicateMerge>, cx: &mut Context<Self>) {
         match result {
-            Ok(trashed_ids) => {
-                let total_merged = trashed_ids.len();
-                if !trashed_ids.is_empty() {
-                    let changes: Vec<(MediaId, bool, bool)> =
-                        trashed_ids.iter().map(|id| (*id, false, true)).collect();
-                    self.undo
-                        .undo_stack
-                        .push(crate::app::undo::UndoAction::Trashed { changes });
-                    self.undo.redo_stack.clear();
-
+            Ok(merge) => {
+                let total_merged = merge.trashed.len();
+                if !merge.trashed.is_empty() {
                     if let Some(ref sel) = self.selected_item {
-                        if trashed_ids.contains(&sel.id) {
+                        if merge.trashed.contains(&sel.id) {
                             self.clear_selection_fields();
                         }
                     }
+                    self.push_undo(UndoAction::DuplicateMerge { merge });
                 }
 
                 self.refresh_album_counts();
