@@ -1452,3 +1452,108 @@ fn tag_any_of_plan_seeks_the_tag_index() {
         "media_tags is never scanned: {plan}"
     );
 }
+
+/// Regression: deleting a keyword left it in smart-album "include any of"
+/// lists, where it then matched nothing.
+#[test]
+fn delete_drops_keywords_from_any_of_lists_and_undo_restores_them() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["beach"], &["sunset"], &["trip/x", "beachy"]]);
+    let rule = |operator: RuleOperator, value: RuleValue| SmartAlbumRule {
+        field: RuleField::Tag,
+        operator,
+        value,
+    };
+    let list = |tags: &[&str]| RuleValue::List(tags.iter().map(|t| t.to_string()).collect());
+    let album = |name: &str, rules: &[SmartAlbumRule]| {
+        catalog
+            .create_smart_album(name, "tag", MatchMode::All, rules)
+            .unwrap()
+            .id
+    };
+    let mixed = album(
+        "Mixed",
+        &[rule(
+            RuleOperator::AnyOf,
+            list(&["beach", "sunset", "Trip/X"]),
+        )],
+    );
+    let sibling = album("Sibling", &[rule(RuleOperator::AnyOf, list(&["beachy"]))]);
+    let only = album("Only", &[rule(RuleOperator::AnyOf, list(&["beach"]))]);
+    let is = album(
+        "Is",
+        &[rule(RuleOperator::Equals, RuleValue::Text("beach".into()))],
+    );
+    let rules = |id| catalog.get_smart_album(id).unwrap().unwrap().rules;
+
+    let change = catalog
+        .delete_tags_globally(&["beach".to_string(), "trip".to_string()])
+        .unwrap();
+
+    assert_eq!(
+        rules(mixed),
+        vec![rule(RuleOperator::AnyOf, list(&["sunset"]))],
+        "deleted keywords and their subtrees leave the list; the rest stay"
+    );
+    let album = catalog.get_smart_album(mixed).unwrap().unwrap();
+    assert_eq!(
+        album_ids(&catalog, &album),
+        vec![ids[1]],
+        "the album still matches its remaining keywords"
+    );
+    assert_eq!(
+        rules(sibling),
+        vec![rule(RuleOperator::AnyOf, list(&["beachy"]))],
+        "a sibling with the same prefix is not in the deleted subtree"
+    );
+    assert_eq!(
+        rules(only),
+        vec![rule(RuleOperator::AnyOf, list(&["beach"]))],
+        "a list that would be left empty stays as it was"
+    );
+    assert_eq!(
+        rules(is),
+        vec![rule(RuleOperator::Equals, RuleValue::Text("beach".into()))],
+        "an is rule is left alone"
+    );
+    assert_eq!(
+        change
+            .albums_before
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>(),
+        vec![mixed],
+        "only the rewritten album is recorded"
+    );
+
+    catalog.replace_tag_rows(&change, true).unwrap();
+    assert_eq!(
+        rules(mixed),
+        vec![rule(
+            RuleOperator::AnyOf,
+            list(&["beach", "sunset", "Trip/X"])
+        )],
+        "undo puts the list back as it was"
+    );
+}
+
+#[test]
+fn delete_of_an_unused_keyword_still_cleans_any_of_lists() {
+    let (catalog, ids) = catalog_with_tag_sets(&[&["sunset"]]);
+    let rule = SmartAlbumRule {
+        field: RuleField::Tag,
+        operator: RuleOperator::AnyOf,
+        value: RuleValue::List(vec!["gone".into(), "sunset".into()]),
+    };
+    let album = catalog
+        .create_smart_album("A", "tag", MatchMode::All, &[rule])
+        .unwrap();
+    let change = catalog.delete_tag_globally("gone").unwrap();
+    assert!(change.removed.is_empty(), "no item had the keyword");
+    let album = catalog.get_smart_album(album.id).unwrap().unwrap();
+    assert_eq!(
+        album.rules[0].value,
+        RuleValue::List(vec!["sunset".into()]),
+        "the list drops a keyword no item has any more"
+    );
+    assert_eq!(album_ids(&catalog, &album), vec![ids[0]]);
+}

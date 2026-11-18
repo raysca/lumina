@@ -34,8 +34,6 @@ you find something you are not fixing now. Planned features live in
 - In Duplicates, the ORIGINAL label and the group title follow the automatic
   pick, not the copy chosen as keeper; "ORIGINAL" is not always the earliest
   copy.
-- Deleting a keyword leaves it in smart-album "include any of" lists, where it
-  then matches nothing.
 - An empty album shows an "Add from Library" button even when its title lookup
   fails, but ⌘K offers the command only when it succeeds.
 - The error banner's detail can repeat the title in other words, for example

@@ -141,10 +141,15 @@ fn distinct_raw_ids(rows: &[(MediaId, String)]) -> Vec<i64> {
 type AlbumRows = Vec<(i64, String)>;
 
 /// Rewrites every smart-album `Tag` rule (any operator) whose value, or a
-/// member of whose "any of" list, is `old` or below it. Saved-search
-/// (`Query`) rules are the user's own text and are left alone. Returns the
-/// touched albums' rules before and after.
-fn rewrite_tag_rules(tx: &Transaction, old: &str, new: &str) -> Result<(AlbumRows, AlbumRows)> {
+/// member of whose "any of" list, is one of `roots` or below it: moved
+/// under `new`, or with `new` `None` (a delete) dropped from "any of"
+/// lists. Saved-search (`Query`) rules are the user's own text and are left
+/// alone. Returns the touched albums' rules before and after.
+fn rewrite_tag_rules(
+    tx: &Transaction,
+    roots: &[String],
+    new: Option<&str>,
+) -> Result<(AlbumRows, AlbumRows)> {
     let albums: AlbumRows = {
         let mut stmt = tx.prepare("SELECT id, rules_json FROM smart_albums;")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
@@ -158,28 +163,40 @@ fn rewrite_tag_rules(tx: &Transaction, old: &str, new: &str) -> Result<(AlbumRow
             continue;
         };
         let mut changed = false;
+        // `None`: not in a root's subtree. `Some(None)`: deleted.
         let moved = |value: &str| {
             let value = filter_value(value);
-            subtree_suffix(&value, old).map(|rest| format!("{new}{rest}"))
+            roots
+                .iter()
+                .find_map(|root| subtree_suffix(&value, root))
+                .map(|rest| new.map(|new| format!("{new}{rest}")))
         };
         for rule in rules.iter_mut().filter(|r| r.field == RuleField::Tag) {
             match &mut rule.value {
+                // A deleted keyword stays in an "is" rule: dropping the rule
+                // would widen the album to every item.
                 RuleValue::Text(value) => {
-                    if let Some(path) = moved(value) {
+                    if let Some(Some(path)) = moved(value) {
                         *value = path;
                         changed = true;
                     }
                 }
-                // "include any of": each member follows; a merge can make two
-                // members equal, and the second goes.
+                // "include any of": each member follows or, deleted, goes; a
+                // merge can make two members equal, and the second goes.
                 RuleValue::List(items) if items.iter().any(|item| moved(item).is_some()) => {
                     let mut seen = HashSet::new();
-                    *items = items
+                    let kept: Vec<String> = items
                         .iter()
-                        .map(|item| moved(item).unwrap_or_else(|| item.clone()))
+                        .filter_map(|item| moved(item).unwrap_or_else(|| Some(item.clone())))
                         .filter(|item| seen.insert(item.clone()))
                         .collect();
-                    changed = true;
+                    // ponytail: a list whose every member was deleted stays as
+                    // stored: it matches nothing either way, and an empty list
+                    // would not compile.
+                    if !kept.is_empty() {
+                        *items = kept;
+                        changed = true;
+                    }
                 }
                 _ => {}
             }
@@ -300,7 +317,8 @@ impl Catalog {
         removed.retain(|row| !now.contains(row));
         added.retain(|row| !was.contains(row));
         Self::insert_fts_for_items(&tx, &ids)?;
-        let (albums_before, albums_after) = rewrite_tag_rules(&tx, &old, &new)?;
+        let (albums_before, albums_after) =
+            rewrite_tag_rules(&tx, std::slice::from_ref(&old), Some(&new))?;
         let (aliases_before, aliases_after) = retarget_aliases(&tx, &old, &new)?;
         // `was` holds every subtree row: any not on `old` itself is a child.
         // The old name is free now (its rows moved, its aliases retargeted).
@@ -355,8 +373,10 @@ impl Catalog {
 
     /// Deletes each tag and its subtree from all media in one transaction.
     /// Aliases pointing into a deleted subtree are kept (typing one
-    /// re-creates the keyword, which is what an alias is for) and smart-album
-    /// rules are left as they are.
+    /// re-creates the keyword, which is what an alias is for). Smart-album
+    /// "include any of" lists drop the deleted keywords in the same
+    /// transaction (a list left empty is kept as it was); "is" rules are
+    /// left as they are.
     pub fn delete_tags_globally(&self, tags: &[String]) -> Result<TagChange> {
         let roots: Vec<String> = tags
             .iter()
@@ -375,9 +395,6 @@ impl Catalog {
                 }
             }
         }
-        if removed.is_empty() {
-            return Ok(TagChange::default());
-        }
         let ids = distinct_raw_ids(&removed);
         Self::delete_fts_for_items(&tx, &ids)?;
         for root in &roots {
@@ -387,9 +404,13 @@ impl Catalog {
             )?;
         }
         Self::insert_fts_for_items(&tx, &ids)?;
+        // Also when no item had the keyword: a list may still name it.
+        let (albums_before, albums_after) = rewrite_tag_rules(&tx, &roots, None)?;
         tx.commit()?;
         Ok(TagChange {
             removed,
+            albums_before,
+            albums_after,
             ..TagChange::default()
         })
     }
