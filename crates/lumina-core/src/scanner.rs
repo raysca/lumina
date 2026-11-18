@@ -517,7 +517,7 @@ fn parse_dms(value: &exif::Value) -> Option<f64> {
 /// `(year, month, day)` of a capture time, or `(0, 0, 0)` for an undated
 /// one (capture time 0, as in `view_scope`), so the month band and the
 /// timeline buckets file it under "Undated", not January 1970.
-fn epoch_to_date_components(epoch_ms: i64) -> (i32, u32, u32) {
+pub(crate) fn epoch_to_date_components(epoch_ms: i64) -> (i32, u32, u32) {
     match DateTime::from_timestamp_millis(epoch_ms) {
         Some(dt) if epoch_ms != 0 => (dt.year(), dt.month(), dt.day()),
         _ => (0, 0, 0),

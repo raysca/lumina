@@ -1267,6 +1267,26 @@ fn a_v9_catalog_migrates_and_protects_later_edits() {
 }
 
 #[test]
+fn a_date_set_to_capture_time_zero_is_undated() {
+    let catalog = Catalog::open_in_memory().unwrap();
+    let item = sample_media_item(
+        "/photos/a.jpg",
+        MediaType::Image,
+        1_600_000_000_000,
+        None,
+        None,
+    );
+    let id = catalog.insert_or_update_batch(&[item]).unwrap()[0].id;
+    catalog.set_timestamp(id, 0).unwrap();
+    let item = catalog.get_item_by_id(id).unwrap().unwrap();
+    assert_eq!(
+        (item.year, item.month, item.day),
+        (0, 0, 0),
+        "a capture time of 0 files the item as undated, not January 1970"
+    );
+}
+
+#[test]
 fn a_batch_edit_is_all_or_nothing() {
     let catalog = Catalog::open_in_memory().unwrap();
     let items = [

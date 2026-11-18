@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::Datelike;
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -620,16 +619,12 @@ impl Catalog {
                  WHERE id = ?5;",
             )?;
             for &(id, epoch_ms) in changes {
-                let Some(datetime) = chrono::DateTime::from_timestamp_millis(epoch_ms) else {
+                if chrono::DateTime::from_timestamp_millis(epoch_ms).is_none() {
                     anyhow::bail!("invalid timestamp: {epoch_ms}");
-                };
-                stmt.execute(params![
-                    epoch_ms,
-                    datetime.year(),
-                    datetime.month(),
-                    datetime.day(),
-                    id.0 as i64
-                ])?;
+                }
+                // Capture time 0 is undated (year 0), as the scanner stores it.
+                let (year, month, day) = crate::scanner::epoch_to_date_components(epoch_ms);
+                stmt.execute(params![epoch_ms, year, month, day, id.0 as i64])?;
             }
         }
         Self::rebuild_timeline_buckets(&tx)?;
