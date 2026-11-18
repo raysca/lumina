@@ -1,6 +1,6 @@
 //! Back/Forward browsing history: ⌘[ / ⌘], the Go menu actions and ⌘K rows.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, double_click, focus_app, keystrokes, leak, render_ui, seed_library,
     type_text,
 };
@@ -51,7 +51,7 @@ fn palette_offers(
 
 #[core::prelude::v1::test]
 fn navigation_forward_redoes_back() {
-    let (dir, engine) = seed_library("hist_fwd", 4);
+    let (_dir, engine) = seed_library("hist_fwd", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -68,13 +68,11 @@ fn navigation_forward_redoes_back() {
     // Nothing ahead now: Forward is a no-op.
     keystrokes(vcx, "secondary-]");
     view.update(vcx, |app, _| assert_eq!(app.selection, FAVORITES));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn go_menu_actions_go_back_and_forward() {
-    let (dir, engine) = seed_library("hist_menu", 4);
+    let (_dir, engine) = seed_library("hist_menu", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -91,13 +89,11 @@ fn go_menu_actions_go_back_and_forward() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, FAVORITES, "Go > Forward")
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn forward_after_viewer_back_reopens_viewer() {
-    let (dir, engine) = seed_library("hist_viewer", 4);
+    let (_dir, engine) = seed_library("hist_viewer", 4);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
     let mut cx = crate::tests::TestApp::single();
@@ -126,13 +122,11 @@ fn forward_after_viewer_back_reopens_viewer() {
             "Forward reopens the same item"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn forward_to_deleted_item_opens_no_viewer() {
-    let (dir, engine) = seed_library("hist_gone", 4);
+    let (_dir, engine) = seed_library("hist_gone", 4);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
     let mut cx = crate::tests::TestApp::single();
@@ -159,13 +153,11 @@ fn forward_to_deleted_item_opens_no_viewer() {
             "a gone item cannot stay selected"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn forward_to_deleted_album_falls_back_to_all() {
-    let (dir, engine) = seed_library("hist_tag", 4);
+    let (_dir, engine) = seed_library("hist_tag", 4);
     let id = engine.get_item_slice(0..1)[0].id;
     engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -203,13 +195,11 @@ fn forward_to_deleted_album_falls_back_to_all() {
     // The trail stays consistent: Back reaches the entry before the fallback.
     keystrokes(vcx, "secondary-[");
     view.update(vcx, |app, _| assert_eq!(app.selection, FAVORITES));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typed_search_then_back_then_forward() {
-    let (dir, engine) = seed_library("hist_typed", 4);
+    let (_dir, engine) = seed_library("hist_typed", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -222,13 +212,11 @@ fn typed_search_then_back_then_forward() {
     view.update(vcx, |app, _| {
         assert_eq!(app.search_query, "cat", "Forward brings it back");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_bracket_in_viewer_navigates_history_not_items() {
-    let (dir, engine) = seed_library("hist_bracket", 4);
+    let (_dir, engine) = seed_library("hist_bracket", 4);
     let items = engine.get_item_slice(0..3);
     let card = leak(format!("media-card-{}", items[1].id.0));
     let mut cx = crate::tests::TestApp::single();
@@ -261,13 +249,11 @@ fn cmd_bracket_in_viewer_navigates_history_not_items() {
             "plain ] still steps to the next item"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_shows_back_forward_only_when_available() {
-    let (dir, engine) = seed_library("hist_palette", 4);
+    let (_dir, engine) = seed_library("hist_palette", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -304,13 +290,11 @@ fn palette_shows_back_forward_only_when_available() {
         !palette_offers(&view, vcx, CommandId::Forward, "forward"),
         "an unsynced new destination truncates Forward"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn library_switch_clears_forward() {
-    let (dir, engine) = seed_library("hist_switch", 2);
+    let (_dir, engine) = seed_library("hist_switch", 2);
     let (other, _) = seed_library("hist_switch_other", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -326,7 +310,4 @@ fn library_switch_clears_forward() {
             "no Back or Forward across libraries"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }

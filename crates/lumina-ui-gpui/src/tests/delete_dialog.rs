@@ -1,7 +1,7 @@
 //! Delete dialog: every delete from the library asks first,
 //! with Move to Trash (undoable) preselected.
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
 };
 use crate::{DeleteIntent, LuminaApp};
@@ -21,7 +21,7 @@ fn target(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Option<Delet
 
 #[core::prelude::v1::test]
 fn backspace_asks_first_then_enter_moves_to_recently_deleted() {
-    let (dir, engine) = seed_library("del_backspace", 3);
+    let (_dir, engine) = seed_library("del_backspace", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -78,13 +78,11 @@ fn backspace_asks_first_then_enter_moves_to_recently_deleted() {
         "Move to Trash from the library is Lumina's soft trash"
     );
     assert!(item.path.exists(), "the file stays on disk");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn escape_and_cancel_close_without_changes() {
-    let (dir, engine) = seed_library("del_cancel", 2);
+    let (_dir, engine) = seed_library("del_cancel", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -96,13 +94,11 @@ fn escape_and_cancel_close_without_changes() {
     click(vcx, "cancel-delete-btn");
     assert!(target(&view, vcx).is_none(), "Cancel closes");
     assert!(!engine.get_item_by_id(item.id).unwrap().is_trashed);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn context_menu_opens_dialog_and_remove_from_library_keeps_the_file() {
-    let (dir, engine) = seed_library("del_menu", 2);
+    let (_dir, engine) = seed_library("del_menu", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -134,13 +130,11 @@ fn context_menu_opens_dialog_and_remove_from_library_keeps_the_file() {
         "Remove from Library drops the catalog row"
     );
     assert!(item.path.exists(), "…and keeps the file on disk");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn permanent_delete_needs_the_acknowledgement() {
-    let (dir, engine) = seed_library("del_permanent", 2);
+    let (_dir, engine) = seed_library("del_permanent", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -161,13 +155,11 @@ fn permanent_delete_needs_the_acknowledgement() {
     assert!(target(&view, vcx).is_none());
     assert!(engine.get_item_by_id(item.id).is_none());
     assert!(!item.path.exists(), "Delete permanently removes the file");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn dock_delete_asks_for_the_whole_selection() {
-    let (dir, engine) = seed_library("del_dock", 3);
+    let (_dir, engine) = seed_library("del_dock", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home secondary-a");
@@ -184,13 +176,11 @@ fn dock_delete_asks_for_the_whole_selection() {
     });
     keystrokes(vcx, "enter");
     view.update(vcx, |app, _| assert_eq!(app.get_active_count(), 0));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn single_delete_moves_to_the_next_item_and_undoes() {
-    let (dir, engine) = seed_library("del_next", 3);
+    let (_dir, engine) = seed_library("del_next", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -209,13 +199,11 @@ fn single_delete_moves_to_the_next_item_and_undoes() {
         !engine.get_item_by_id(item.id).unwrap().is_trashed,
         "⌘Z restores a library delete"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn trash_view_keeps_the_macos_trash_meaning() {
-    let (dir, engine) = seed_library("del_trash_view", 2);
+    let (_dir, engine) = seed_library("del_trash_view", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let item = first(&view, vcx);
@@ -238,6 +226,4 @@ fn trash_view_keeps_the_macos_trash_meaning() {
     );
     // ponytail: not confirmed here, it would move a file to the real ~/.Trash.
     keystrokes(vcx, "escape");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

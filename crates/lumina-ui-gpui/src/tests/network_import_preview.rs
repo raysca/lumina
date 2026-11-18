@@ -3,8 +3,8 @@
 //! real one, so nothing here touches the network.
 
 use super::downloads::{install, queue_app, seed_prior_download, settle, FakeJobs};
+use super::helpers::{app_with_library, focus_app, keystrokes, leak, render_ui};
 use super::network_import::without_yt_dlp;
-use super::ui_automation::{app_with_library, focus_app, keystrokes, leak, render_ui};
 use crate::app::network_import::{InspectFn, NetworkImportStage};
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -66,7 +66,7 @@ fn dialog_app(
     name: &str,
     answer: Answer,
 ) -> (
-    super::downloads::TempLibrary,
+    super::helpers::TempLibrary,
     FakeJobs,
     FakeInspector,
     crate::tests::TestApp,
@@ -477,8 +477,7 @@ fn already_downloaded_uses_dialog_shell() {
 fn net_import_check_is_dropped_when_another_library_opens() {
     let (_dir, jobs, inspector, mut cx, engine) =
         dialog_app("net_preview_switch", Answer::Info { uploader: None });
-    let (other, _) = super::ui_automation::seed_library("net_preview_switch_other", 1);
-    let other = super::downloads::TempLibrary(other);
+    let (other, _) = super::helpers::seed_library("net_preview_switch_other", 1);
     let (view, vcx) = app_with_library(&mut cx, engine);
     install(&view, vcx, &jobs);
     use_inspector(&view, vcx, &inspector);

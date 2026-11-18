@@ -1,14 +1,14 @@
 //! Entrance motion: the touched mark pops, fresh thumbnails fade, and
 //! fading overlays stay fully usable while they animate.
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, seed_library, seed_library_undecodable,
 };
 
 #[core::prelude::v1::test]
 fn clicking_an_inspector_star_pops_that_star_only() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
-    let (dir, engine) = seed_library("motion_star", 2);
+    let (_dir, engine) = seed_library("motion_star", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
@@ -26,12 +26,11 @@ fn clicking_an_inspector_star_pops_that_star_only() {
         let (star, _) = app.mark_pop.star(id).expect("the clicked star pops");
         assert_eq!(star, 4, "only the star that was clicked");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn only_a_just_decoded_thumbnail_fades_in() {
-    let (dir, engine) = seed_library_undecodable("motion_thumb", 2);
+    let (_dir, engine) = seed_library_undecodable("motion_thumb", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let (fresh, cached) = (lumina_core::MediaId(1), lumina_core::MediaId(2));
@@ -61,13 +60,12 @@ fn only_a_just_decoded_thumbnail_fades_in() {
             "once its fade is over the thumbnail is no longer fresh"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_fading_palette_and_toast_work_mid_animation() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
-    let (dir, engine) = seed_library("motion_overlays", 2);
+    let (_dir, engine) = seed_library("motion_overlays", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-k");
@@ -82,14 +80,13 @@ fn a_fading_palette_and_toast_work_mid_animation() {
     view.update(vcx, |app, _| {
         assert!(app.toast.current().is_none(), "a rising toast takes clicks")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_fades_in_under_reduce_motion_too() {
     for reduce in [true, false] {
         crate::motion::REDUCE_MOTION.with(|on| on.set(reduce));
-        let (dir, engine) = seed_library("motion_viewer", 2);
+        let (_dir, engine) = seed_library("motion_viewer", 2);
         let mut cx = crate::tests::TestApp::single();
         let (view, vcx) = app_with_library(&mut cx, engine);
         keystrokes(vcx, "home enter");
@@ -109,7 +106,6 @@ fn viewer_fades_in_under_reduce_motion_too() {
             vcx.debug_bounds("viewer-viewport").is_some(),
             "the viewer paints again on reopen (reduce motion {reduce})"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
     crate::motion::REDUCE_MOTION.with(|on| on.set(true));
 }

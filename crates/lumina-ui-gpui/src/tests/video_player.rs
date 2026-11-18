@@ -2,7 +2,7 @@
 //! docked transport.
 
 use crate::app::types::get_sample_items;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, right_click, seed_library,
 };
 use gpui::{Bounds, Pixels, VisualTestContext};
@@ -10,17 +10,11 @@ use lumina_core::MediaType;
 
 /// Library-backed window (the viewer needs a grid to render) showing the
 /// sample video. The temp dir is removed on drop.
-struct Fixture(std::path::PathBuf);
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
 
 fn open_video(
     cx: &mut gpui::TestAppContext,
 ) -> (
-    Fixture,
+    super::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &mut VisualTestContext,
 ) {
@@ -38,7 +32,7 @@ fn open_video(
         cx.notify();
     });
     render_ui(vcx);
-    (Fixture(temp_dir), view, vcx)
+    (temp_dir, view, vcx)
 }
 
 fn bounds(vcx: &mut VisualTestContext, selector: &'static str) -> Bounds<Pixels> {
@@ -403,7 +397,7 @@ fn framed_video(
     cx: &mut gpui::TestAppContext,
     (w, h): (u32, u32),
     (win_w, win_h): (f32, f32),
-) -> (Fixture, &mut VisualTestContext) {
+) -> (super::helpers::TempLibrary, &mut VisualTestContext) {
     let (fixture, view, vcx) = open_video(cx);
     view.update(vcx, |app, cx| {
         app.viewer_image = Some(crate::app::types::generate_gradient_image(
@@ -1447,7 +1441,7 @@ fn palette_steps_frames_for_an_open_video() {
 fn open_clickable_video(
     cx: &mut gpui::TestAppContext,
 ) -> (
-    Fixture,
+    super::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &mut VisualTestContext,
 ) {
@@ -1476,13 +1470,13 @@ fn clicking_the_video_picture_toggles_playback() {
     let x = f32::from(media.left()) + f32::from(media.size.width) * 0.25;
     let y = f32::from(media.top()) + f32::from(media.size.height) * 0.25;
 
-    crate::tests::ui_automation::click_point(vcx, x, y);
+    crate::tests::helpers::click_point(vcx, x, y);
     assert!(
         view.update(vcx, |app, _| app.video.is_playing),
         "a click on a paused video's picture must start playback"
     );
     render_ui(vcx);
-    crate::tests::ui_automation::click_point(vcx, x, y);
+    crate::tests::helpers::click_point(vcx, x, y);
     assert!(
         !view.update(vcx, |app, _| app.video.is_playing),
         "a click on a playing video's picture must pause it"

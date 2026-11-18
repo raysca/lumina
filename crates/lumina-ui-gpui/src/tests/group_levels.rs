@@ -6,8 +6,8 @@ use gpui::{Entity, VisualTestContext};
 
 use crate::app::command_palette::CommandId;
 use crate::config::{BrowseLayout, GroupLevel};
+use crate::tests::helpers::{click, focus_app, keystrokes, render_ui};
 use crate::tests::mosaic_geometry::{layout, rail_library, tall_mosaic, top_ix};
-use crate::tests::ui_automation::{click, focus_app, keystrokes, render_ui};
 use crate::views::mosaic::RowKind;
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
@@ -32,7 +32,7 @@ fn assert_header_on_top(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, f
 
 #[core::prelude::v1::test]
 fn zoom_pill_levels_show_year_and_month_cards() {
-    let (dir, engine) = rail_library("levels_cards");
+    let (_dir, engine) = rail_library("levels_cards");
     let cover = engine
         .get_timeline_buckets("year")
         .into_iter()
@@ -121,12 +121,11 @@ fn zoom_pill_levels_show_year_and_month_cards() {
     render_ui(vcx);
     assert!(!shown(vcx, "zoom-level-days"), "no segments in Grid");
     assert!(shown(vcx, "grid-zoom-in"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn levels_are_absent_off_the_rail_and_the_body_is_days() {
-    let (dir, engine) = rail_library("levels_album");
+    let (_dir, engine) = rail_library("levels_album");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     click(vcx, "zoom-level-years");
@@ -149,12 +148,11 @@ fn levels_are_absent_off_the_rail_and_the_body_is_days() {
     view.update(vcx, |app, _| {
         assert_ne!(app.grid_columns, columns, "± still works")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_shows_levels_only_where_the_segments_render() {
-    let (dir, engine) = rail_library("levels_palette");
+    let (_dir, engine) = rail_library("levels_palette");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -168,12 +166,11 @@ fn palette_shows_levels_only_where_the_segments_render() {
         app.set_browse_layout(BrowseLayout::Grid, cx);
         assert!(!app.command_applies(CommandId::ShowYears), "not in Grid");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_failed_save_keeps_the_level() {
-    let (dir, engine) = rail_library("levels_save_fails");
+    let (_dir, engine) = rail_library("levels_save_fails");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     crate::app::state::SAVE_FAILS.with(|f| f.set(true));
@@ -185,12 +182,11 @@ fn a_failed_save_keeps_the_level() {
         assert!(app.error_message.is_some(), "the failure is in the banner");
     });
     assert!(shown(vcx, "mosaic-list"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_card_opened_before_the_first_day_layout_lands_on_its_period() {
-    let (dir, engine) = rail_library("levels_card_early");
+    let (_dir, engine) = rail_library("levels_card_early");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     click(vcx, "zoom-level-years");
@@ -213,12 +209,11 @@ fn a_card_opened_before_the_first_day_layout_lands_on_its_period() {
     render_ui(vcx);
     assert_eq!(level(&view, vcx), GroupLevel::Days);
     assert_header_on_top(&view, vcx, offset);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn grid_keys_change_nothing_under_years() {
-    let (dir, engine) = rail_library("levels_keys");
+    let (_dir, engine) = rail_library("levels_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_index(5, cx));
@@ -250,5 +245,4 @@ fn grid_keys_change_nothing_under_years() {
         assert!(!item.is_favorite, "F does not favourite");
         assert_eq!(app.get_item_rating(&item), 0, "3 does not rate");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -3,7 +3,7 @@
 //! sheet. Data-changing tests read the catalog rows back.
 
 use super::albums::{album_with_members, catalog_albums, member_ids, only_album};
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -11,7 +11,7 @@ use lumina_core::SortSpec;
 
 #[core::prelude::v1::test]
 fn album_write_failure_shows_banner() {
-    let (dir, engine) = seed_library("album_write_fail", 1);
+    let (_dir, engine) = seed_library("album_write_fail", 1);
     let album = engine.create_album_with("Kept", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -94,12 +94,11 @@ fn album_write_failure_shows_banner() {
             .is_some_and(|m| m.starts_with("Could not delete album")));
         assert_eq!(app.albums.list.len(), 1, "the sidebar still lists it");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn delete_album_confirms_and_undo_restores_members() {
-    let (dir, engine) = seed_library("album_delete_undo", 3);
+    let (_dir, engine) = seed_library("album_delete_undo", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let items = engine.total_count();
     let mut cx = crate::tests::TestApp::single();
@@ -183,12 +182,11 @@ fn delete_album_confirms_and_undo_restores_members() {
             "Delete Album… asks first"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn deleted_album_selection_falls_back_on_back_navigation() {
-    let (dir, engine) = seed_library("album_back", 2);
+    let (_dir, engine) = seed_library("album_back", 2);
     let (album, _) = album_with_members(&engine, "Trip", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -206,12 +204,11 @@ fn deleted_album_selection_falls_back_on_back_navigation() {
             "Back to a deleted album lands on the library"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn failed_new_album_with_selection_leaves_no_album() {
-    let (dir, engine) = seed_library("album_with_selection_fail", 2);
+    let (_dir, engine) = seed_library("album_with_selection_fail", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "right");
@@ -237,13 +234,12 @@ fn failed_new_album_with_selection_leaves_no_album() {
         );
         assert!(app.albums.list.is_empty() && app.albums.renaming.is_none());
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn new_album_waits_for_photo_edits_and_sheets() {
     use crate::tests::quick_edit::{edit_library, open_viewer_on};
-    let (dir, engine, photos, _) = edit_library("album_in_edit_mode");
+    let (_dir, engine, photos, _) = edit_library("album_in_edit_mode");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -292,12 +288,11 @@ fn new_album_waits_for_photo_edits_and_sheets() {
         assert!(app.albums.renaming.is_none(), "no hidden name field");
     });
     assert!(vcx.debug_bounds("album-rename-field").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn opening_another_library_resets_album_state() {
-    let (dir, engine) = seed_library("album_switch", 1);
+    let (_dir, engine) = seed_library("album_switch", 1);
     let (other, _other_engine) = seed_library("album_switch_other", 1);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -327,14 +322,12 @@ fn opening_another_library_resets_album_state() {
         );
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
 fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
     use crate::tests::quick_edit::{edit_library, open_viewer_on};
-    let (dir, engine, photos, _) = edit_library("album_rename_in_edit_mode");
+    let (_dir, engine, photos, _) = edit_library("album_rename_in_edit_mode");
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -392,12 +385,11 @@ fn album_rename_and_delete_wait_for_photo_edits_and_sheets() {
         );
     });
     assert_eq!(only_album(&engine).title, "Trip", "the album is untouched");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn opening_another_library_clears_undo_history() {
-    let (dir, engine) = seed_library("album_switch_undo", 1);
+    let (_dir, engine) = seed_library("album_switch_undo", 1);
     let (other, other_engine) = seed_library("album_switch_undo_other", 1);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -417,13 +409,11 @@ fn opening_another_library_clears_undo_history() {
         other_engine.list_albums_with_counts().is_empty(),
         "⌘Z after a switch must not restore the old library's album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
 fn opening_another_library_closes_dialogs_holding_old_ids() {
-    let (dir, engine) = seed_library("switch_dialogs", 2);
+    let (_dir, engine) = seed_library("switch_dialogs", 2);
     let (other, other_engine) = seed_library("switch_dialogs_other", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -452,6 +442,4 @@ fn opening_another_library_closes_dialogs_holding_old_ids() {
     });
     let trashed = other_engine.query_system_album_count(lumina_core::SystemAlbum::RecentlyDeleted);
     assert_eq!(trashed, 0, "nothing in the other library was deleted");
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }

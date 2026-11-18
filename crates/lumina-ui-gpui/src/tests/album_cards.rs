@@ -1,7 +1,7 @@
 //! The album card grid on the Albums overview's Albums tab.
 
 use super::albums_overview::height;
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, right_click,
     seed_library,
 };
@@ -34,7 +34,7 @@ fn width(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
 
 #[core::prelude::v1::test]
 fn album_cards_render_and_open() {
-    let (dir, engine) = seed_library("album_cards_render", 3);
+    let (_dir, engine) = seed_library("album_cards_render", 3);
     let items = engine.get_item_slice(0..3);
     engine
         .set_timestamp(items[0].id, utc_ms(2025, 6, 14))
@@ -144,13 +144,12 @@ fn album_cards_render_and_open() {
             "↵ opens the focused album"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_sort_is_saved_and_reverts_on_a_failed_save() {
     use crate::config::AlbumSort;
-    let (dir, engine) = seed_library("album_cards_sort", 3);
+    let (_dir, engine) = seed_library("album_cards_sort", 3);
     let items = engine.get_item_slice(0..3);
     let small = engine.create_album_with("Alpha", &[]).unwrap();
     engine.add_to_album(small.id, &[items[0].id]).unwrap();
@@ -224,12 +223,11 @@ fn album_sort_is_saved_and_reverts_on_a_failed_save() {
         );
         assert!(app.error_message.is_some(), "and says so in the banner");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn albums_tab_without_albums_offers_new_album() {
-    let (dir, engine) = seed_library("album_cards_empty", 1);
+    let (_dir, engine) = seed_library("album_cards_empty", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_overview_at_1600(vcx);
@@ -249,12 +247,11 @@ fn albums_tab_without_albums_offers_new_album() {
     });
     render_ui(vcx);
     assert!(vcx.debug_bounds("albums-empty").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_album_card_shows_a_folder_placeholder() {
-    let (dir, engine) = seed_library("album_cards_placeholder", 1);
+    let (_dir, engine) = seed_library("album_cards_placeholder", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let empty = engine.create_album_with("Empty", &[]).unwrap();
     let full = engine.create_album_with("Full", &[]).unwrap();
@@ -276,12 +273,11 @@ fn empty_album_card_shows_a_folder_placeholder() {
         vcx.debug_bounds("album-card-meta-text:0 items").is_some(),
         "an empty album's meta has no date"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_grid_is_virtualised_and_keeps_the_focus_in_view() {
-    let (dir, engine) = seed_library("album_cards_many", 1);
+    let (_dir, engine) = seed_library("album_cards_many", 1);
     // 103 = 20 rows of 5 and a short last row of 3.
     let ids: Vec<i64> = (0..103)
         .map(|i| {
@@ -336,7 +332,6 @@ fn album_grid_is_virtualised_and_keeps_the_focus_in_view() {
         Some(OverviewFocus::Card(ids[99])),
         "↓ from a column the short row lacks stays put"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Two albums (Alpha with an item, Beta empty) on the overview at 1600.
@@ -344,7 +339,7 @@ pub(super) fn two_album_overview<'a>(
     prefix: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     [i64; 2],
     gpui::Entity<crate::LuminaApp>,
@@ -363,7 +358,7 @@ pub(super) fn two_album_overview<'a>(
 #[core::prelude::v1::test]
 fn a_membership_change_updates_the_card() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, [_, beta], view, vcx) = two_album_overview("album_cards_live", &mut cx);
+    let (_dir, engine, [_, beta], view, vcx) = two_album_overview("album_cards_live", &mut cx);
     let placeholder = leak(format!("album-card-placeholder-{beta}"));
     assert!(vcx.debug_bounds(placeholder).is_some());
     let item = engine.get_item_slice(1..2)[0].clone();
@@ -381,5 +376,4 @@ fn a_membership_change_updates_the_card() {
             .is_some(),
         "the meta follows the new member"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

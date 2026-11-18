@@ -9,7 +9,7 @@ use std::time::Duration;
 use gpui::VisualTestContext;
 use lumina_core::LuminaEngine;
 
-use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, render_ui, seed_library};
 
 /// How long the "scan" keeps the catalog locked at most. Far longer than any
 /// frame or key press takes even on a loaded debug build, so outlasting it
@@ -56,7 +56,7 @@ fn draw(vcx: &mut VisualTestContext) {
 
 #[core::prelude::v1::test]
 fn a_frame_never_waits_on_the_catalog_lock() {
-    let (dir, engine) = seed_library("ui_thread_frame", 24);
+    let (_dir, engine) = seed_library("ui_thread_frame", 24);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -89,12 +89,11 @@ fn a_frame_never_waits_on_the_catalog_lock() {
             "the new search's results arrive once the lock is free"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_arrows_never_wait_on_the_catalog_lock() {
-    let (dir, engine) = seed_library("ui_thread_viewer", 24);
+    let (_dir, engine) = seed_library("ui_thread_viewer", 24);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -117,12 +116,11 @@ fn viewer_arrows_never_wait_on_the_catalog_lock() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selected_index, Some(1), "the step still lands");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_follow_the_latest_selection_even_when_loads_land_late() {
-    let (dir, engine) = seed_library("ui_thread_tags", 4);
+    let (_dir, engine) = seed_library("ui_thread_tags", 4);
     let items = engine.get_item_slice(0..2);
     engine
         .add_tags_batch(&[items[0].id], &["first".to_string()])
@@ -149,14 +147,13 @@ fn tags_follow_the_latest_selection_even_when_loads_land_late() {
             "a late load for an earlier selection must not overwrite the current tags"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 /// The redraw a scan or watcher event triggers then shows the change; the
 /// test draws those frames itself.
 fn after_a_catalog_change_the_next_frames_show_it() {
-    let (dir, engine) = seed_library("ui_thread_revision", 4);
+    let (_dir, engine) = seed_library("ui_thread_revision", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -184,12 +181,11 @@ fn after_a_catalog_change_the_next_frames_show_it() {
             Some(id)
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn opening_another_library_never_shows_the_last_ones_rows() {
-    let (dir_a, engine_a) = seed_library("ui_thread_lib_a", 3);
+    let (_dir_a, engine_a) = seed_library("ui_thread_lib_a", 3);
     let (dir_b, _engine_b) = seed_library("ui_thread_lib_b", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine_a);
@@ -202,13 +198,15 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
         // catalog, so an old row would act on the wrong photo.
         let shown = app.displayed_rows(0..5);
         assert!(
-            shown.iter().all(|item| item.path.starts_with(&dir_b)),
+            shown
+                .iter()
+                .all(|item| item.path.starts_with(dir_b.as_path())),
             "the grid must not show the previous library's items: {:?}",
             shown.iter().map(|item| &item.path).collect::<Vec<_>>()
         );
         if let Some(item) = app.navigation_item(0) {
             assert!(
-                item.path.starts_with(&dir_b),
+                item.path.starts_with(dir_b.as_path()),
                 "arrows pick from the new library"
             );
         }
@@ -218,13 +216,11 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
     view.update(vcx, |app, _| {
         assert_eq!(app.displayed_count(), 5, "the new library's rows arrive");
     });
-    let _ = std::fs::remove_dir_all(&dir_a);
-    let _ = std::fs::remove_dir_all(&dir_b);
 }
 
 #[core::prelude::v1::test]
 fn viewer_arrows_during_a_scan_never_wait_on_the_catalog_lock() {
-    let (dir, engine) = seed_library("ui_thread_scan", 24);
+    let (_dir, engine) = seed_library("ui_thread_scan", 24);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -256,12 +252,11 @@ fn viewer_arrows_during_a_scan_never_wait_on_the_catalog_lock() {
     );
     render_ui(vcx);
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(1)));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn trashing_in_the_viewer_moves_on_to_the_next_photo() {
-    let (dir, engine) = seed_library("ui_thread_trash", 6);
+    let (_dir, engine) = seed_library("ui_thread_trash", 6);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let next = view.update(vcx, |app, cx| {
@@ -284,7 +279,6 @@ fn trashing_in_the_viewer_moves_on_to_the_next_photo() {
         assert_eq!(shown.id, next, "the viewer moves on to the next photo");
         assert!(!shown.is_trashed, "the photo now shown is not in the Trash");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Selects every item of the view, as ⌘A does.
@@ -375,7 +369,6 @@ fn export_runs_in_background_and_refuses_a_second() {
         !dir.join("second").exists(),
         "the refused export wrote nothing"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -405,12 +398,11 @@ fn export_failure_still_reaches_the_banner() {
             app.error_message
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn xmp_import_runs_in_background() {
-    let (dir, engine) = seed_library("ui_thread_xmp", 2);
+    let (_dir, engine) = seed_library("ui_thread_xmp", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     lumina_core::write_sidecar(
         &item.path,
@@ -462,12 +454,11 @@ fn xmp_import_runs_in_background() {
             "the same library refreshes after the import"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn xmp_result_after_library_switch_does_not_refresh_the_new_library() {
-    let (dir_a, engine_a) = seed_library("ui_thread_xmp_a", 2);
+    let (_dir_a, engine_a) = seed_library("ui_thread_xmp_a", 2);
     let (dir_b, _engine_b) = seed_library("ui_thread_xmp_b", 2);
     let item = engine_a.get_item_slice(0..1)[0].clone();
     lumina_core::write_sidecar(
@@ -510,6 +501,4 @@ fn xmp_result_after_library_switch_does_not_refresh_the_new_library() {
         Some(5),
         "the import still lands in the library it was started in"
     );
-    let _ = std::fs::remove_dir_all(&dir_a);
-    let _ = std::fs::remove_dir_all(&dir_b);
 }

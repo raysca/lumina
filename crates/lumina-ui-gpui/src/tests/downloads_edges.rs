@@ -5,7 +5,7 @@
 
 use super::downloads::{install, persisted, queue_app, settle, states};
 use super::downloads_screen::{marker, set_rows};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui};
 use crate::app::types::UiMessage;
 use crate::config::{LastView, RestoredSession};
 use crate::views::sidebar::AlbumSelection;

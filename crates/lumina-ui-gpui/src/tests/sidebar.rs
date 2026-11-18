@@ -4,7 +4,7 @@
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule, SystemAlbum};
 
 use crate::i18n::nav_aria_label as aria_label;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, bounds_center, click, leak, render_ui, seed_library,
 };
 use crate::views::grid::SIDEBAR_COLLAPSED_WIDTH;
@@ -13,7 +13,7 @@ use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]
 fn every_default_collection_row_has_an_icon() {
-    let (dir, engine) = seed_library("nav_icons", 2);
+    let (_dir, engine) = seed_library("nav_icons", 2);
     let album = engine
         .create_smart_album(
             "Best",
@@ -60,12 +60,11 @@ fn every_default_collection_row_has_an_icon() {
             .is_some(),
         "a smart-album row shows the sparkles icon"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn nav_entries_keep_order_and_conditional_rows() {
-    let (dir, engine) = seed_library("nav_order", 2);
+    let (_dir, engine) = seed_library("nav_order", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -119,12 +118,11 @@ fn nav_entries_keep_order_and_conditional_rows() {
             AlbumSelection::System(SystemAlbum::Missing)
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn nav_rows_keep_their_click_rules() {
-    let (dir, engine) = seed_library("nav_clicks", 2);
+    let (_dir, engine) = seed_library("nav_clicks", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -154,12 +152,11 @@ fn nav_rows_keep_their_click_rules() {
             "clicking Untagged again goes back to the whole library"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn one_back_after_all_photos_returns_to_the_year_view() {
-    let (dir, engine) = seed_library("nav_back", 2);
+    let (_dir, engine) = seed_library("nav_back", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -191,7 +188,6 @@ fn one_back_after_all_photos_returns_to_the_year_view() {
             "the step before the year is the album it was chosen from"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The rail's entries: the Library collections, without Untagged.
@@ -209,7 +205,7 @@ const RAIL_KEYS: [&str; 9] = [
 
 #[core::prelude::v1::test]
 fn collapsed_rail_shows_an_icon_per_default_collection() {
-    let (dir, engine) = seed_library("rail_icons", 2);
+    let (_dir, engine) = seed_library("rail_icons", 2);
     let album = engine
         .create_smart_album(
             "Best",
@@ -269,12 +265,11 @@ fn collapsed_rail_shows_an_icon_per_default_collection() {
             .is_none(),
         "smart albums are not in the rail"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_icon_selects_collection_and_marks_it_active() {
-    let (dir, engine) = seed_library("rail_select", 4);
+    let (_dir, engine) = seed_library("rail_select", 4);
     let first = engine.get_item_slice(0..1)[0].id;
     engine.toggle_favorite(first, true).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -310,12 +305,11 @@ fn rail_icon_selects_collection_and_marks_it_active() {
         vcx.debug_bounds("sidebar-rail-favorites"),
         "the pill moves to the clicked entry"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_tooltip_and_label_carry_the_count() {
-    let (dir, engine) = seed_library("rail_tooltip", 3);
+    let (_dir, engine) = seed_library("rail_tooltip", 3);
     let first = engine.get_item_slice(0..1)[0].id;
     engine.toggle_favorite(first, true).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -339,17 +333,16 @@ fn rail_tooltip_and_label_carry_the_count() {
     // The rail and the rows share one label format.
     assert_eq!(aria_label("Favorites", 1), "Favorites, 1 item");
     assert_eq!(aria_label("Favorites", 22), "Favorites, 22 items");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn press_ctrl_cmd_s(vcx: &mut gpui::VisualTestContext, view: &gpui::Entity<crate::LuminaApp>) {
-    crate::tests::ui_automation::focus_app(vcx, view);
-    crate::tests::ui_automation::keystrokes(vcx, "ctrl-cmd-s");
+    crate::tests::helpers::focus_app(vcx, view);
+    crate::tests::helpers::keystrokes(vcx, "ctrl-cmd-s");
 }
 
 #[core::prelude::v1::test]
 fn ctrl_cmd_s_toggles_the_sidebar_and_persists() {
-    let (dir, engine) = seed_library("sidebar_shortcut", 2);
+    let (_dir, engine) = seed_library("sidebar_shortcut", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -360,7 +353,7 @@ fn ctrl_cmd_s_toggles_the_sidebar_and_persists() {
 
     // ⌘S and ⌃S alone are not the sidebar shortcut.
     for key in ["cmd-s", "ctrl-s"] {
-        crate::tests::ui_automation::keystrokes(vcx, key);
+        crate::tests::helpers::keystrokes(vcx, key);
         view.update(vcx, |app, _| {
             assert!(!app.sidebar_collapsed, "{key} must not toggle the sidebar")
         });
@@ -397,12 +390,11 @@ fn ctrl_cmd_s_toggles_the_sidebar_and_persists() {
         view_items.iter().any(|n| n == "Hide Sidebar"),
         "the View menu matches the reverted state: {view_items:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn sidebar_shortcut_is_absorbed_by_modals() {
-    let (dir, engine) = seed_library("sidebar_shortcut_modal", 2);
+    let (_dir, engine) = seed_library("sidebar_shortcut_modal", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -412,21 +404,20 @@ fn sidebar_shortcut_is_absorbed_by_modals() {
         // The first Esc hides the search suggestions, the second blurs.
         ("secondary-f", "the search field", "escape escape"),
     ] {
-        crate::tests::ui_automation::focus_app(vcx, &view);
-        crate::tests::ui_automation::keystrokes(vcx, open);
-        crate::tests::ui_automation::keystrokes(vcx, "ctrl-cmd-s");
+        crate::tests::helpers::focus_app(vcx, &view);
+        crate::tests::helpers::keystrokes(vcx, open);
+        crate::tests::helpers::keystrokes(vcx, "ctrl-cmd-s");
         view.update(vcx, |app, _| {
             assert!(
                 !app.sidebar_collapsed,
                 "⌃⌘S must not reach the window while {what} has the keys"
             )
         });
-        crate::tests::ui_automation::keystrokes(vcx, close);
+        crate::tests::helpers::keystrokes(vcx, close);
     }
     view.update(vcx, |app, _| {
         assert!(!app.command_palette_open && !app.shortcuts_overlay_open && !app.search_focused)
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -434,7 +425,7 @@ fn toggle_label_follows_state() {
     use crate::app::command_palette::{CommandId, PaletteTarget};
     use crate::icons::Icon;
 
-    let (dir, engine) = seed_library("sidebar_toggle_label", 2);
+    let (_dir, engine) = seed_library("sidebar_toggle_label", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -507,12 +498,11 @@ fn toggle_label_follows_state() {
         view_menu_names(vcx).iter().any(|n| n == "Hide Sidebar"),
         "View offers Hide Sidebar while the sidebar is shown"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn new_album_is_last_album_row() {
-    let (dir, engine) = seed_library("sb_new_album", 2);
+    let (_dir, engine) = seed_library("sb_new_album", 2);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -532,12 +522,11 @@ fn new_album_is_last_album_row() {
         before + 1,
         "clicking New Album still creates an album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn places_row_is_under_tags() {
-    let (dir, engine) = seed_library("sb_places", 2);
+    let (_dir, engine) = seed_library("sb_places", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -549,12 +538,11 @@ fn places_row_is_under_tags() {
         places.top() > tags.bottom(),
         "Places lists under TAGS, as in the design"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn recently_added_row_opens_its_album() {
-    let (dir, engine) = seed_library("sb_recent", 2);
+    let (_dir, engine) = seed_library("sb_recent", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -574,12 +562,11 @@ fn recently_added_row_opens_its_album() {
             "the row opens the Recently Added album"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn sidebar_brand_row_present() {
-    let (dir, engine) = seed_library("sb_brand", 2);
+    let (_dir, engine) = seed_library("sb_brand", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -597,7 +584,6 @@ fn sidebar_brand_row_present() {
         34.0,
         "the search slot keeps the field's height"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The fullscreen viewer covers the sidebar, so the sidebar leaves the tree
@@ -605,7 +591,7 @@ fn sidebar_brand_row_present() {
 /// grid under the viewer keeps its layout.
 #[core::prelude::v1::test]
 fn fullscreen_viewer_takes_the_sidebar_out_of_the_tree() {
-    let (dir, engine) = seed_library("nav_viewer_hides", 2);
+    let (_dir, engine) = seed_library("nav_viewer_hides", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -637,7 +623,6 @@ fn fullscreen_viewer_takes_the_sidebar_out_of_the_tree() {
         Some(sidebar),
         "closing the viewer brings the sidebar back where it was"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Dropping the viewed item's selection (an untag in a Tag view, a merge
@@ -645,7 +630,7 @@ fn fullscreen_viewer_takes_the_sidebar_out_of_the_tree() {
 /// sidebar must come back, not stay blank.
 #[core::prelude::v1::test]
 fn sidebar_returns_when_the_viewed_item_is_dropped() {
-    let (dir, engine) = seed_library("nav_viewer_dropped", 2);
+    let (_dir, engine) = seed_library("nav_viewer_dropped", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -664,5 +649,4 @@ fn sidebar_returns_when_the_viewed_item_is_dropped() {
         vcx.debug_bounds("sidebar").is_some(),
         "with no viewer drawn the sidebar must show"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

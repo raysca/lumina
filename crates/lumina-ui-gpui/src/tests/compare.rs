@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::app::present::COMPARE_DECODE_SIZES;
 use crate::tests::culling::{card, flags, ids, rating};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, seed_library, seed_library_undecodable,
 };
 use crate::*;
@@ -59,7 +59,7 @@ fn focused(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Option<Medi
 
 #[core::prelude::v1::test]
 fn c_opens_compare_with_selection_and_esc_closes() {
-    let (dir, engine) = seed_library("compare_open", 4);
+    let (_dir, engine) = seed_library("compare_open", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -99,12 +99,11 @@ fn c_opens_compare_with_selection_and_esc_closes() {
     render_ui(vcx);
     assert!(vcx.debug_bounds("compare-view").is_some(), "View > Compare");
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_flag_acts_on_focused_pane() {
-    let (dir, engine) = seed_library("compare_flag", 4);
+    let (_dir, engine) = seed_library("compare_flag", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -149,12 +148,11 @@ fn compare_flag_acts_on_focused_pane() {
         );
         assert!(app.compare.is_some(), "still comparing");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_backspace_removes_pane_not_media() {
-    let (dir, engine) = seed_library("compare_drop", 4);
+    let (_dir, engine) = seed_library("compare_drop", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -194,12 +192,11 @@ fn compare_backspace_removes_pane_not_media() {
         );
         assert_eq!(app.get_active_count(), 4);
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn two_up_zoom_is_synchronized() {
-    let (dir, engine) = seed_library("compare_zoom", 3);
+    let (_dir, engine) = seed_library("compare_zoom", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -226,12 +223,11 @@ fn two_up_zoom_is_synchronized() {
     keystrokes(vcx, "z");
     assert_eq!(size(vcx, ids[0]), size(vcx, ids[1]), "Z zooms both");
     assert!(size(vcx, ids[0]).width > fit.0.width);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn survey_uses_reduced_decode_size() {
-    let (dir, engine) = seed_library("compare_survey", 5);
+    let (_dir, engine) = seed_library("compare_survey", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -258,12 +254,11 @@ fn survey_uses_reduced_decode_size() {
         vec![2048; 2],
         "two-up decodes at the viewer size"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_needs_two_items() {
-    let (dir, engine) = seed_library("compare_count", 10);
+    let (_dir, engine) = seed_library("compare_count", 10);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -291,12 +286,11 @@ fn compare_needs_two_items() {
         COMPARE_DECODE_SIZES.with(|s| s.borrow().is_empty()),
         "nothing is decoded when compare does not open"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_close_drops_textures() {
-    let (dir, engine) = seed_library_undecodable("compare_textures", 4);
+    let (_dir, engine) = seed_library_undecodable("compare_textures", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -350,12 +344,11 @@ fn compare_close_drops_textures() {
             "and never shown in the new compare"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_enter_then_esc_returns_to_compare() {
-    let (dir, engine) = seed_library("compare_enter", 3);
+    let (_dir, engine) = seed_library("compare_enter", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -379,12 +372,11 @@ fn compare_enter_then_esc_returns_to_compare() {
     assert_eq!(focused(&view, vcx), Some(ids[1]), "focus is kept");
     keystrokes(vcx, "escape");
     assert!(vcx.debug_bounds("compare-view").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_absorbs_cmd_a_and_delete_dialog() {
-    let (dir, engine) = seed_library("compare_absorb", 4);
+    let (_dir, engine) = seed_library("compare_absorb", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -446,12 +438,11 @@ fn compare_absorbs_cmd_a_and_delete_dialog() {
             .is_favorite,
         "F did not favorite through compare"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_enter_makes_viewer_act_on_focused_item_only() {
-    let (dir, engine) = seed_library("compare_enter_keys", 5);
+    let (_dir, engine) = seed_library("compare_enter_keys", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -493,13 +484,12 @@ fn compare_enter_makes_viewer_act_on_focused_item_only() {
         vcx.debug_bounds("compare-view").is_some(),
         "back in compare"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_write_in_show_rejected_keeps_grid_selection_by_id() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, view, vcx, r) =
+    let (_dir, engine, view, vcx, r) =
         crate::tests::culling_filtered::rejects_view(&mut cx, "compare_rejected", 5);
     click(vcx, card(r[1]));
     keystrokes(vcx, "shift-right");
@@ -534,12 +524,11 @@ fn compare_write_in_show_rejected_keeps_grid_selection_by_id() {
             "no unchosen row is selected after compare: {left:?}"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_failed_flag_shows_banner_in_compare() {
-    let (dir, engine) = seed_library("compare_banner", 3);
+    let (_dir, engine) = seed_library("compare_banner", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -568,12 +557,11 @@ fn compare_failed_flag_shows_banner_in_compare() {
         vcx.debug_bounds("compare-toast").is_some(),
         "the undo toast shows inside compare"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_undo_passes_only_flag_and_rating() {
-    let (dir, engine) = seed_library("compare_undo", 3);
+    let (_dir, engine) = seed_library("compare_undo", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -608,12 +596,11 @@ fn compare_undo_passes_only_flag_and_rating() {
         "older history is not replayed from compare"
     );
     assert!(favorite(ids[1]));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_drops_pane_whose_item_was_trashed() {
-    let (dir, engine) = seed_library("compare_stale", 4);
+    let (_dir, engine) = seed_library("compare_stale", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -630,12 +617,11 @@ fn compare_drops_pane_whose_item_was_trashed() {
     assert_eq!(focused(&view, vcx), Some(ids[1]));
     keystrokes(vcx, "p");
     assert_eq!(flags(&engine).get(&ids[1]), Some(&Flag::Pick));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_enter_after_viewer_round_trip_selects_real_position() {
-    let (dir, engine) = seed_library("compare_round_trip", 8);
+    let (_dir, engine) = seed_library("compare_round_trip", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -671,7 +657,6 @@ fn compare_enter_after_viewer_round_trip_selects_real_position() {
             "P still auto-advances to the real next item"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `n` picked items shown through Show Picks (plus one hidden unflagged
@@ -681,7 +666,7 @@ fn picks_view<'a>(
     prefix: &str,
     n: usize,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     Arc<lumina_core::LuminaEngine>,
     Entity<LuminaApp>,
     &'a mut VisualTestContext,
@@ -712,7 +697,7 @@ fn position_of(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: MediaI
 #[core::prelude::v1::test]
 fn compare_enter_after_viewer_undo_then_write_selects_real_position() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, _engine, view, vcx, p) = picks_view(&mut cx, "compare_undo_write", 6);
+    let (_dir, _engine, view, vcx, p) = picks_view(&mut cx, "compare_undo_write", 6);
     // An earlier step the viewer will undo: p0 leaves Show Picks.
     click(vcx, card(p[0]));
     keystrokes(vcx, "x");
@@ -741,13 +726,12 @@ fn compare_enter_after_viewer_undo_then_write_selects_real_position() {
             "↵ after an undo and a write in the viewer selects the pane's real position"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn compare_enter_after_viewer_writes_on_full_undo_stack_selects_real_position() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, _engine, view, vcx, p) = picks_view(&mut cx, "compare_full_stack", 6);
+    let (_dir, _engine, view, vcx, p) = picks_view(&mut cx, "compare_full_stack", 6);
     view.update(vcx, |app, _| {
         for _ in 0..crate::app::undo::MAX_UNDO {
             app.push_undo(crate::app::undo::UndoAction::Favorite { changes: vec![] });
@@ -779,5 +763,4 @@ fn compare_enter_after_viewer_writes_on_full_undo_stack_selects_real_position() 
             "↵ after writes on a full undo stack selects the pane's real position"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

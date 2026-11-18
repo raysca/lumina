@@ -3,9 +3,9 @@
 //! going outside the canvas, the edit bar fits the smallest window, and
 //! Done from crop mode never blanks the photo.
 
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui};
 use crate::tests::quick_edit::edits_of;
 use crate::tests::quick_edit_crop::{crop_rect, edit_with_source, near, photo_library};
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui};
 use crate::*;
 
 /// The frame's contain-fit in the viewer canvas, for a 60×40 photo.
@@ -43,7 +43,7 @@ fn close_bounds(a: gpui::Bounds<gpui::Pixels>, b: gpui::Bounds<gpui::Pixels>) ->
 
 #[core::prelude::v1::test]
 fn crop_overlay_follows_a_window_resize_in_one_frame() {
-    let (dir, engine, ids) = photo_library("crop_resize");
+    let (_dir, engine, ids) = photo_library("crop_resize");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -82,12 +82,11 @@ fn crop_overlay_follows_a_window_resize_in_one_frame() {
         close_bounds(stale, fitted(vcx)),
         "the overlay is laid out in the frame it is drawn, got {stale:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_overlay_occludes_the_viewer() {
-    let (dir, engine, ids) = photo_library("crop_occlude");
+    let (_dir, engine, ids) = photo_library("crop_occlude");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -123,11 +122,11 @@ fn crop_overlay_occludes_the_viewer() {
     });
     vcx.simulate_mouse_down(shade, gpui::MouseButton::Right, none);
     vcx.simulate_mouse_up(shade, gpui::MouseButton::Right, none);
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(
         vcx,
         shade,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-200.0))),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     render_ui(vcx);
     view.update(vcx, |app, _| {
@@ -144,12 +143,11 @@ fn crop_overlay_occludes_the_viewer() {
         crop_rect(&view, vcx),
         "the shade does not move the crop"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_drag_continues_outside_the_canvas() {
-    let (dir, engine, ids) = photo_library("crop_capture");
+    let (_dir, engine, ids) = photo_library("crop_capture");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -182,12 +180,11 @@ fn crop_drag_continues_outside_the_canvas() {
         let crop = app.edits.session.as_ref().unwrap().crop.unwrap();
         assert!(crop.dragging.is_none(), "mouse up outside ends the drag");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn edit_bar_fits_the_smallest_window_while_cropping() {
-    let (dir, engine, ids) = photo_library("crop_narrow");
+    let (_dir, engine, ids) = photo_library("crop_narrow");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, _| app.inspector_open = true);
@@ -208,7 +205,7 @@ fn edit_bar_fits_the_smallest_window_while_cropping() {
         .iter()
         .map(|selector| {
             let b = vcx
-                .debug_bounds(crate::tests::ui_automation::leak(selector.clone()))
+                .debug_bounds(crate::tests::helpers::leak(selector.clone()))
                 .unwrap_or_else(|| panic!("{selector} must be rendered"));
             let (left, right) = (f32::from(b.origin.x), f32::from(b.origin.x + b.size.width));
             assert!(
@@ -223,12 +220,11 @@ fn edit_bar_fits_the_smallest_window_while_cropping() {
             assert!(!a.intersects(b), "edit bar buttons overlap: {a:?} {b:?}");
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn done_from_crop_keeps_a_frame_on_screen() {
-    let (dir, engine, ids) = photo_library("crop_done_frame");
+    let (_dir, engine, ids) = photo_library("crop_done_frame");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -253,5 +249,4 @@ fn done_from_crop_keeps_a_frame_on_screen() {
         edits_of(&engine, ids[0]).crop.is_some(),
         "the crop is saved"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

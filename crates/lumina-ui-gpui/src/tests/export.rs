@@ -5,7 +5,7 @@ use lumina_core::ExportPreset;
 
 use crate::app::library::EXPORT_PICKS;
 use crate::app::types::UiMessage;
-use crate::tests::ui_automation::{app_with_library, render_ui, seed_library_undecodable};
+use crate::tests::helpers::{app_with_library, render_ui, seed_library_undecodable};
 
 #[core::prelude::v1::test]
 fn export_as_jpeg_uses_picked_folder() {
@@ -80,7 +80,6 @@ fn export_as_jpeg_uses_picked_folder() {
         (12, 24),
         "the picked preset is the one that runs: a rotated JPEG, not the original"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -93,6 +92,7 @@ fn jpeg_export_says_when_a_video_loses_its_rotation() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::tests::helpers::TempLibrary(dir);
     std::fs::write(dir.join("clip.mp4"), b"not really a movie").unwrap();
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         dir.clone(),
@@ -133,5 +133,4 @@ fn jpeg_export_says_when_a_video_loses_its_rotation() {
         turned.contains("1 video exported as the original (1 without Lumina's rotation)"),
         "a rotated video copied as the original says its rotation stays behind: {turned:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

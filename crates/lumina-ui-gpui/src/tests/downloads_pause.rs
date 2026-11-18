@@ -4,7 +4,7 @@
 use super::downloads::{
     imported, install, persisted, queue_app, row_id, settle, states, submit, FakeJobs,
 };
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui};
 use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::app::downloads::{JobFn, JobOutcome};
 use crate::config::DEFAULT_DOWNLOAD_CONCURRENCY;

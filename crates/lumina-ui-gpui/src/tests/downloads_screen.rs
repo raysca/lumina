@@ -3,7 +3,7 @@
 //! network.
 
 use super::downloads::{imported, install, persisted, queue_app, settle, states, submit};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui};
 use crate::app::downloads::{DownloadEntry, DownloadFilter, JobEvent, JobOutcome};
 use crate::config::{AppConfig, LastView};
 use crate::views::sidebar::AlbumSelection;

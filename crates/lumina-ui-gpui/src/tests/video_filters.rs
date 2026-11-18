@@ -1,7 +1,7 @@
 //! The Videos chip row. Only "All clips" and "4K" ship;
 //! HDR, slow motion and Live Photos wait for catalog data.
 
-use super::ui_automation::{click, focus_app, keystrokes, render_ui, type_text};
+use super::helpers::{click, focus_app, keystrokes, render_ui, type_text};
 use super::video_tiles::{library_with_clips, open_videos};
 use crate::app::command_palette::CommandId;
 use crate::app::LuminaApp;
@@ -69,7 +69,7 @@ fn videos_4k_chip_filters_by_width() {
         ],
     );
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
+    let (view, vcx) = super::helpers::app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
     open_videos(&view, vcx);
 
@@ -186,7 +186,7 @@ fn palette_4k(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
 fn filter_4k_videos_is_offered_only_in_videos() {
     let (_dir, engine, _clips) = library_with_clips("vf_4k_scope", 2);
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
+    let (view, vcx) = super::helpers::app_with_library(&mut cx, engine);
     let offered = |app: &LuminaApp| app.command_applies(CommandId::Videos4k);
     view.update(vcx, |app, cx| {
         assert!(
@@ -213,7 +213,7 @@ fn videos_4k_with_no_match_shows_clips_empty_state_and_clear_all() {
     let (_dir, engine, clips) = library_with_clips("vf_4k_none", 2);
     resize(&engine, &[(clips[0], 1920, 1080), (clips[1], 1280, 720)]);
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
+    let (view, vcx) = super::helpers::app_with_library(&mut cx, engine);
     open_videos(&view, vcx);
 
     click(vcx, "filter-chip-4k");

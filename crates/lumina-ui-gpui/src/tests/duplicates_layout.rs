@@ -3,7 +3,7 @@
 //! window, and the copy cards fit above the footer.
 
 use super::duplicates_review::{seed_files, seed_two_groups};
-use super::ui_automation::{app_with_library, click, leak, render_ui};
+use super::helpers::{app_with_library, click, leak, render_ui};
 
 /// Opens Review Duplicates in a `width`×`height` window (sidebar shown,
 /// inspector hidden) and returns the footer's bounds.
@@ -18,7 +18,7 @@ fn open(vcx: &mut gpui::VisualTestContext, width: f32, height: f32) -> gpui::Bou
 
 #[core::prelude::v1::test]
 fn group_rows_span_the_list_column() {
-    let (temp_dir, engine) = seed_two_groups("dup_layout_rows");
+    let (_temp_dir, engine) = seed_two_groups("dup_layout_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(vcx, 1280.0, 840.0);
@@ -44,13 +44,12 @@ fn group_rows_span_the_list_column() {
     }
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn footer_buttons_stay_inside_the_window() {
     for width in [1280.0, 960.0] {
-        let (temp_dir, engine) = seed_two_groups("dup_layout_footer");
+        let (_temp_dir, engine) = seed_two_groups("dup_layout_footer");
         let mut cx = crate::tests::TestApp::single();
         let (view, vcx) = app_with_library(&mut cx, engine);
         let footer = open(vcx, width, 840.0);
@@ -104,13 +103,12 @@ fn footer_buttons_stay_inside_the_window() {
         }
 
         drop(view);
-        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
 
 #[core::prelude::v1::test]
 fn copy_cards_and_differences_fit_above_the_footer() {
-    let (temp_dir, engine) = seed_two_groups("dup_layout_cards");
+    let (_temp_dir, engine) = seed_two_groups("dup_layout_cards");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let footer = open(vcx, 1280.0, 840.0);
@@ -181,12 +179,11 @@ fn copy_cards_and_differences_fit_above_the_footer() {
     }
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn tall_window_caps_the_photo_and_leaves_spare_space_below() {
-    let (temp_dir, engine) = seed_two_groups("dup_layout_tall");
+    let (_temp_dir, engine) = seed_two_groups("dup_layout_tall");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(vcx, 1280.0, 1440.0);
@@ -232,12 +229,11 @@ fn tall_window_caps_the_photo_and_leaves_spare_space_below() {
     }
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn narrow_footer_shows_the_summary_whole_never_a_fragment() {
-    let (temp_dir, engine) = seed_two_groups("dup_layout_summary");
+    let (_temp_dir, engine) = seed_two_groups("dup_layout_summary");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // The summary's one-line width, where there is room for it.
@@ -302,15 +298,14 @@ fn narrow_footer_shows_the_summary_whole_never_a_fragment() {
     }
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn six_copies_scroll_sideways_with_the_footer_fixed() {
-    let photo = super::ui_automation::shaded_jpeg(60);
+    let photo = super::helpers::shaded_jpeg(60);
     let names: Vec<String> = (1..=6).map(|i| format!("copy{i}.jpg")).collect();
     let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &photo[..])).collect();
-    let (temp_dir, engine) = seed_files("dup_layout_six", &files);
+    let (_temp_dir, engine) = seed_files("dup_layout_six", &files);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let footer = open(vcx, 1280.0, 840.0);
@@ -365,12 +360,11 @@ fn six_copies_scroll_sideways_with_the_footer_fixed() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn selection_dock_hides_on_duplicates_and_the_toast_clears_the_footer() {
-    let (temp_dir, engine) = seed_two_groups("dup_layout_dock");
+    let (_temp_dir, engine) = seed_two_groups("dup_layout_dock");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let footer = open(vcx, 1280.0, 840.0);
@@ -465,7 +459,6 @@ fn selection_dock_hides_on_duplicates_and_the_toast_clears_the_footer() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Bounds of the compare head's parts, measured at the current window size.
@@ -484,12 +477,12 @@ fn compare_head(vcx: &mut gpui::VisualTestContext) -> [gpui::Bounds<gpui::Pixels
 #[core::prelude::v1::test]
 fn compare_head_keeps_the_title_and_step_buttons_at_960() {
     // A name long enough to need truncating at 960 px but not at 1280.
-    let photo = super::ui_automation::shaded_jpeg(10);
+    let photo = super::helpers::shaded_jpeg(10);
     let names: Vec<String> = (1..=3)
         .map(|i| format!("harbour-at-sunset-{i}.jpg"))
         .collect();
     let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &photo[..])).collect();
-    let (temp_dir, engine) = seed_files("dup_layout_head", &files);
+    let (_temp_dir, engine) = seed_files("dup_layout_head", &files);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // Natural widths, where the row has room for everything.
@@ -534,5 +527,4 @@ fn compare_head_keeps_the_title_and_step_buttons_at_960() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

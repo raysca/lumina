@@ -7,7 +7,7 @@
 
 use crate::app::scrub_preview::{test_seam, ScrubStrip};
 use crate::app::types::{get_sample_items, UiMessage};
-use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, render_ui, seed_library};
 use lumina_core::{MediaItem, MediaType};
 use std::time::{Duration, Instant};
 
@@ -122,7 +122,7 @@ fn expired_seek_refresh_clears_the_deadline_and_stops_the_ticker() {
 
 #[core::prelude::v1::test]
 fn overlay_scrub_drag_leaves_the_selected_media_unchanged() {
-    let (temp_dir, engine) = seed_library("video_scrub_overlay", 8);
+    let (_temp_dir, engine) = seed_library("video_scrub_overlay", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let video = video_sample();
@@ -192,8 +192,6 @@ fn overlay_scrub_drag_leaves_the_selected_media_unchanged() {
         );
         app.stop_video_ticker();
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// The deterministic sample set's two videos.
@@ -222,7 +220,7 @@ fn strip_frames(times: &[f64]) -> Vec<(f64, std::sync::Arc<gpui::RenderImage>)> 
 const STRIP_TIMES: [f64; 4] = [7.5, 22.5, 37.5, 52.5];
 
 fn preview_selector(time: f64) -> &'static str {
-    crate::tests::ui_automation::leak(format!("video-scrub-preview-{}", (time * 1000.0).round()))
+    crate::tests::helpers::leak(format!("video-scrub-preview-{}", (time * 1000.0).round()))
 }
 
 /// A video open in the viewer over a seeded library, with a player handle
@@ -258,7 +256,7 @@ fn track_point(track: gpui::Bounds<gpui::Pixels>, pct: f32) -> gpui::Point<gpui:
 
 #[core::prelude::v1::test]
 fn scrubber_without_strip_shows_time_badge_only() {
-    let (temp_dir, engine) = seed_library("video_scrub_badge", 4);
+    let (_temp_dir, engine) = seed_library("video_scrub_badge", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let video = video_sample();
@@ -321,13 +319,11 @@ fn scrubber_without_strip_shows_time_badge_only() {
         vcx.debug_bounds("video-time-badge").is_none(),
         "leaving the track hides the time badge"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn hover_shows_nearest_strip_frame() {
-    let (temp_dir, engine) = seed_library("video_scrub_hover_preview", 4);
+    let (_temp_dir, engine) = seed_library("video_scrub_hover_preview", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
@@ -354,13 +350,11 @@ fn hover_shows_nearest_strip_frame() {
         vcx.debug_bounds("video-scrubber").expect("scrubber"),
         "the preview card must not move the track"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn drag_scrub_shows_preview_for_destination() {
-    let (temp_dir, engine) = seed_library("video_scrub_drag_preview", 4);
+    let (_temp_dir, engine) = seed_library("video_scrub_drag_preview", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
@@ -395,8 +389,6 @@ fn drag_scrub_shows_preview_for_destination() {
         assert!(!app.video.is_scrubbing, "release must end the scrub drag");
         app.stop_video_ticker();
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -527,7 +519,7 @@ fn scrub_strip_requested_once_per_video_on_load() {
 
 #[core::prelude::v1::test]
 fn undecodable_video_stays_time_only_and_is_not_retried() {
-    let (temp_dir, engine) = seed_library("video_scrub_undecodable", 4);
+    let (_temp_dir, engine) = seed_library("video_scrub_undecodable", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
@@ -564,8 +556,6 @@ fn undecodable_video_stays_time_only_and_is_not_retried() {
         1,
         "a failed strip must not be retried while the video stays open"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -680,7 +670,7 @@ fn pausing_during_a_scrub_is_not_undone_on_release() {
 
 #[core::prelude::v1::test]
 fn scrubber_is_a_strip_with_playhead_pill() {
-    let (temp_dir, engine) = seed_library("video_scrub_strip", 4);
+    let (_temp_dir, engine) = seed_library("video_scrub_strip", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let track = open_video_with_player(&view, vcx, video_sample());
@@ -718,5 +708,4 @@ fn scrubber_is_a_strip_with_playhead_pill() {
         vcx.debug_bounds("video-playhead-time-text:0:34").is_some(),
         "the pill shows the current time"
     );
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -12,7 +12,7 @@ use crate::app::active_view::ROWS_READ;
 use crate::app::mosaic_layout::LAYOUT_FETCHES;
 use crate::config::BrowseLayout;
 use crate::tests::duplicates::run_palette_command;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, leak, render_ui, seed_library, seed_library_undecodable,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -29,7 +29,7 @@ pub(crate) fn card(vcx: &mut VisualTestContext, id: MediaId) -> Bounds<Pixels> {
 
 #[core::prelude::v1::test]
 fn mosaic_segment_switches_layout_and_persists_in_config() {
-    let (dir, engine) = seed_library("mosaic_segment", 4);
+    let (_dir, engine) = seed_library("mosaic_segment", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -137,7 +137,6 @@ fn mosaic_segment_switches_layout_and_persists_in_config() {
         vcx.debug_bounds("mosaic-list").is_none(),
         "Duplicates keeps its own screen in Mosaic"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -218,7 +217,6 @@ fn mosaic_tiles_keep_aspect_and_fill_rows() {
             "row {r} is 158-224 high: {h:?}"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A Mosaic app on `count` texture-less items (aspect 1.0), layout landed.
@@ -240,7 +238,7 @@ pub(crate) fn mosaic_app(
 
 #[core::prelude::v1::test]
 fn mosaic_scroll_reads_no_sql() {
-    let (dir, engine) = seed_library_undecodable("mosaic_scroll", 300);
+    let (_dir, engine) = seed_library_undecodable("mosaic_scroll", 300);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = mosaic_app(&mut cx, engine);
     let rows = view.update(vcx, |app, _| {
@@ -284,12 +282,11 @@ fn mosaic_scroll_reads_no_sql() {
     });
     let id = view.update(vcx, |app, _| app.displayed_rows(first..first + 1)[0].id);
     card(vcx, id);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn mosaic_layout_refetch_coalesces_scan_writes() {
-    let (dir, engine) = seed_library_undecodable("mosaic_coalesce", 12);
+    let (_dir, engine) = seed_library_undecodable("mosaic_coalesce", 12);
     let writer = engine.clone();
     let ids: Vec<MediaId> = engine.get_item_slice(0..12).iter().map(|i| i.id).collect();
     let mut cx = crate::tests::TestApp::single();
@@ -332,12 +329,17 @@ fn mosaic_layout_refetch_coalesces_scan_writes() {
         headers(&view, vcx) == 3 && before != 3,
         "the refetched layout has the three new days"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 120 texture-less items over two days, 60 each (newest day first), so
 /// either day's header can scroll to the top.
-fn two_day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>, Vec<MediaId>) {
+fn two_day_library(
+    prefix: &str,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    Arc<LuminaEngine>,
+    Vec<MediaId>,
+) {
     let (dir, engine) = seed_library_undecodable(prefix, 120);
     let ids: Vec<MediaId> = engine.get_item_slice(0..120).iter().map(|i| i.id).collect();
     let changes: Vec<(MediaId, i64)> = ids
@@ -371,7 +373,7 @@ fn is_header(row: &crate::views::mosaic::MosaicRow) -> bool {
 
 #[core::prelude::v1::test]
 fn relayout_keeps_a_header_on_top() {
-    let (dir, engine, _) = two_day_library("mosaic_relayout");
+    let (_dir, engine, _) = two_day_library("mosaic_relayout");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = mosaic_app(&mut cx, engine);
     let relayout = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
@@ -416,12 +418,11 @@ fn relayout_keeps_a_header_on_top() {
         is_header(&row) && row.first == first_item,
         "a mid-list header on top stays the top row: {row:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn header_rows_are_their_layout_height_and_absent_without_date_sort() {
-    let (dir, engine, _) = two_day_library("mosaic_headers");
+    let (_dir, engine, _) = two_day_library("mosaic_headers");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = mosaic_app(&mut cx, engine);
     let headers: Vec<(u32, f32)> = view.update(vcx, |app, _| {
@@ -486,12 +487,11 @@ fn header_rows_are_their_layout_height_and_absent_without_date_sort() {
             "no day header drawn under a non-date sort"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn own_write_refetches_the_layout_without_the_cool_down() {
-    let (dir, engine) = seed_library_undecodable("mosaic_own_write", 12);
+    let (_dir, engine) = seed_library_undecodable("mosaic_own_write", 12);
     let writer = engine.clone();
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
@@ -511,13 +511,12 @@ fn own_write_refetches_the_layout_without_the_cool_down() {
         "the app's own write refetches at once"
     );
     assert_eq!(tiles(&view, vcx), 11, "the trashed item left the layout");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Seven items: three on 2025-06-14 (two in Lisbon, PT, one in Porto,
 /// PT), two on 2025-06-13 with no city, two undated. In view order (date,
 /// newest first): 0-2 the 14th, 3-4 the 13th, 5-6 undated.
-pub(crate) fn day_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+pub(crate) fn day_library(prefix: &str) -> (crate::tests::helpers::TempLibrary, Arc<LuminaEngine>) {
     let (dir, engine) = seed_library_undecodable(prefix, 7);
     let ids: Vec<MediaId> = engine.get_item_slice(0..7).iter().map(|i| i.id).collect();
     let noon = |d: &str| {
@@ -562,7 +561,7 @@ pub(crate) fn day_app(
 
 #[core::prelude::v1::test]
 fn day_header_shows_date_place_and_count() {
-    let (dir, engine) = day_library("mosaic_day_header");
+    let (_dir, engine) = day_library("mosaic_day_header");
     let ids: Vec<MediaId> = engine.get_item_slice(0..7).iter().map(|i| i.id).collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = day_app(&mut cx, engine);
@@ -628,13 +627,12 @@ fn day_header_shows_date_place_and_count() {
         (f32::from(second.origin.y) - tiles_bottom - 26.0).abs() <= 1.0,
         "the second header sits 26 below the tiles above it: {second:?} vs {tiles_bottom}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn select_day_selects_exactly_that_days_items() {
     use crate::app::command_palette::CommandId;
-    let (dir, engine) = day_library("mosaic_select_day");
+    let (_dir, engine) = day_library("mosaic_select_day");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = day_app(&mut cx, engine);
     let selected = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut VisualTestContext| {
@@ -666,7 +664,7 @@ fn select_day_selects_exactly_that_days_items() {
     );
     view.update(vcx, |app, _| assert_eq!(app.batch_summary.count, 3));
 
-    crate::tests::ui_automation::keystrokes(vcx, "escape");
+    crate::tests::helpers::keystrokes(vcx, "escape");
     render_ui(vcx);
     assert!(
         selected(&view, vcx).is_empty(),
@@ -697,7 +695,6 @@ fn select_day_selects_exactly_that_days_items() {
         app.set_browse_layout(BrowseLayout::Grid, cx);
         assert!(!app.command_applies(CommandId::SelectDay), "not in Grid");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -713,7 +710,7 @@ fn place_label_joins_city_and_country_code() {
 #[core::prelude::v1::test]
 fn select_day_does_nothing_in_the_full_screen_viewer() {
     use crate::app::command_palette::CommandId;
-    let (dir, engine) = day_library("mosaic_select_viewer");
+    let (_dir, engine) = day_library("mosaic_select_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = day_app(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -741,13 +738,12 @@ fn select_day_does_nothing_in_the_full_screen_viewer() {
             "the selection is unchanged"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn select_waits_for_a_layout_behind_the_catalog() {
     use crate::app::command_palette::CommandId;
-    let (dir, engine) = day_library("mosaic_select_stale");
+    let (_dir, engine) = day_library("mosaic_select_stale");
     let writer = engine.clone();
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
@@ -788,12 +784,11 @@ fn select_waits_for_a_layout_behind_the_catalog() {
             "once the layout catches up, Select works"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn select_day_closes_open_inputs() {
-    let (dir, engine) = day_library("mosaic_select_inputs");
+    let (_dir, engine) = day_library("mosaic_select_inputs");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = day_app(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -815,5 +810,4 @@ fn select_day_closes_open_inputs() {
             "so does the caption input"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

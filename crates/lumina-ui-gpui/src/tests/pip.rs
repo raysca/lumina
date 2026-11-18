@@ -2,23 +2,17 @@
 //! from the viewer and grid. These drive the real AVFoundation player against
 //! a small committed H.264 clip (`tests/fixtures/clip.mp4`).
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click,
 };
 use lumina_core::{EngineEvent, LuminaEngine, MediaItem, MediaType};
 
 struct PipLibrary {
-    dir: std::path::PathBuf,
+    dir: crate::tests::helpers::TempLibrary,
     engine: std::sync::Arc<LuminaEngine>,
     video_a: MediaItem,
     video_b: MediaItem,
     photo: MediaItem,
-}
-
-impl Drop for PipLibrary {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
 }
 
 fn pip_library(prefix: &str) -> PipLibrary {
@@ -33,11 +27,7 @@ fn pip_library(prefix: &str) -> PipLibrary {
     let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clip.mp4");
     std::fs::copy(&clip, dir.join("video_a.mp4")).unwrap();
     std::fs::copy(&clip, dir.join("video_b.mp4")).unwrap();
-    std::fs::write(
-        dir.join("photo_a.jpg"),
-        crate::tests::ui_automation::tiny_jpeg(),
-    )
-    .unwrap();
+    std::fs::write(dir.join("photo_a.jpg"), crate::tests::helpers::tiny_jpeg()).unwrap();
     let (engine, rx) =
         LuminaEngine::open_with_paths(dir.clone(), dir.join("catalog.db"), Some(dir.join("cache")))
             .unwrap();
@@ -61,7 +51,7 @@ fn pip_library(prefix: &str) -> PipLibrary {
     );
     assert_eq!(video_a.media_type, MediaType::Video);
     PipLibrary {
-        dir,
+        dir: crate::tests::helpers::TempLibrary(dir),
         engine,
         video_a,
         video_b,
@@ -743,7 +733,7 @@ fn pip_window_takes_the_player_keys() {
     assert_eq!(pip_time(&view, vcx), 0.0, "⌥← jumps to the chapter start");
 
     let muted = view.update(vcx, |app, _| app.video.is_muted);
-    pip.simulate_keystrokes(&crate::tests::ui_automation::platform_test_keys(
+    pip.simulate_keystrokes(&crate::tests::helpers::platform_test_keys(
         "cmd-m ctrl-j shift-right",
     ));
     pip.run_until_parked();

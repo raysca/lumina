@@ -1,6 +1,6 @@
 //! Command palette rating commands and empty-state actions.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 
@@ -24,7 +24,7 @@ fn run_palette_command(
 
 #[core::prelude::v1::test]
 fn palette_rates_clears_and_favorites_the_selection() {
-    let (temp_dir, engine) = seed_library("palette_rating", 2);
+    let (_temp_dir, engine) = seed_library("palette_rating", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
@@ -63,13 +63,11 @@ fn palette_rates_clears_and_favorites_the_selection() {
             "\"Toggle Favorite\" must favorite the selected item"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_search_offers_chips_that_remove_one_term() {
-    let (temp_dir, engine) = seed_library("empty_terms", 3);
+    let (_temp_dir, engine) = seed_library("empty_terms", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -87,13 +85,11 @@ fn empty_search_offers_chips_that_remove_one_term() {
             "clicking a term chip must drop only that term"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_library_offers_rescan() {
-    let (temp_dir, engine) = seed_library("empty_library", 0);
+    let (_temp_dir, engine) = seed_library("empty_library", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -115,13 +111,11 @@ fn empty_library_offers_rescan() {
             "the empty library's Rescan action must start a scan"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_rating_a_mixed_selection_sets_every_item() {
-    let (temp_dir, engine) = seed_library("palette_mixed", 2);
+    let (_temp_dir, engine) = seed_library("palette_mixed", 2);
     let items = engine.get_item_slice(0..2);
     let (a, b) = (items[0].clone(), items[1].clone());
 
@@ -142,13 +136,11 @@ fn palette_rating_a_mixed_selection_sets_every_item() {
             "rating a mixed selection must set it on every item, never toggle one off"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_search_chips_keep_quoted_terms_whole() {
-    let (temp_dir, engine) = seed_library("empty_quoted", 2);
+    let (_temp_dir, engine) = seed_library("empty_quoted", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -173,13 +165,11 @@ fn empty_search_chips_keep_quoted_terms_whole() {
             "removing a term must leave the quoted phrase intact"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_library_while_scanning_says_so_without_rescan() {
-    let (temp_dir, engine) = seed_library("empty_scanning", 0);
+    let (_temp_dir, engine) = seed_library("empty_scanning", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -194,14 +184,12 @@ fn empty_library_while_scanning_says_so_without_rescan() {
         vcx.debug_bounds("empty-secondary").is_none(),
         "an empty library mid-scan must not offer Rescan or claim it is empty"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_matches_each_word_caps_commands_and_clamps() {
     use crate::app::command_palette::MAX_COMMANDS;
-    let (dir, engine) = seed_library("palette_v3_words", 2);
+    let (_dir, engine) = seed_library("palette_v3_words", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -244,14 +232,12 @@ fn palette_matches_each_word_caps_commands_and_clamps() {
             "each word must match"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_go_to_opens_views_tags_and_years() {
     use crate::views::sidebar::AlbumSelection;
-    let (dir, engine) = seed_library("palette_v3_goto", 2);
+    let (_dir, engine) = seed_library("palette_v3_goto", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
         .catalog()
@@ -310,13 +296,11 @@ fn palette_go_to_opens_views_tags_and_years() {
             "one Back undoes the whole year jump"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_hides_trash_and_retry_commands_that_cannot_act() {
-    let (dir, engine) = seed_library("palette_applies", 2);
+    let (_dir, engine) = seed_library("palette_applies", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -354,15 +338,13 @@ fn palette_hides_trash_and_retry_commands_that_cannot_act() {
         1,
         "a retryable failure is showing"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_go_to_opens_screenshots_places_and_missing() {
     use crate::views::sidebar::AlbumSelection;
     use lumina_core::SystemAlbum;
-    let (dir, engine) = seed_library("palette_goto_sidebar", 2);
+    let (_dir, engine) = seed_library("palette_goto_sidebar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -405,12 +387,11 @@ fn palette_go_to_opens_screenshots_places_and_missing() {
             );
         });
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_search_drop_chips_and_clear_all() {
-    let (temp_dir, engine) = seed_library("empty_search_clear_all", 2);
+    let (_temp_dir, engine) = seed_library("empty_search_clear_all", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let palette_titles = |vcx: &mut gpui::VisualTestContext| {
@@ -486,8 +467,6 @@ fn empty_search_drop_chips_and_clear_all() {
             "Esc from the search field must still clear the query"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// An empty library after its scan uses the First Run
@@ -496,7 +475,7 @@ fn empty_search_drop_chips_and_clear_all() {
 fn empty_library_state_uses_first_run_glyph_and_buttons() {
     use crate::views::sidebar::AlbumSelection;
 
-    let (temp_dir, engine) = seed_library("empty_hero", 0);
+    let (_temp_dir, engine) = seed_library("empty_hero", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -521,9 +500,8 @@ fn empty_library_state_uses_first_run_glyph_and_buttons() {
         let bounds = vcx.debug_bounds(button).expect("both actions stay");
         assert_eq!(f32::from(bounds.size.height), 40.0, "{button} is 40 high");
     }
-    let _ = std::fs::remove_dir_all(&temp_dir);
 
-    let (temp_dir, engine) = seed_library("empty_tag_standard", 1);
+    let (_temp_dir, engine) = seed_library("empty_tag_standard", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -538,5 +516,4 @@ fn empty_library_state_uses_first_run_glyph_and_buttons() {
         54.0,
         "an empty tag view keeps the default glyph"
     );
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

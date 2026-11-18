@@ -1,7 +1,7 @@
 //! The welcome screen, recent libraries and "Building your library".
 
 use crate::app::first_scan::FirstScanState;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, wheel,
 };
 use crate::{LuminaApp, UiMessage};
@@ -197,7 +197,7 @@ fn progress(found: usize, total: usize, skipped: usize, file: &str, done: bool) 
 
 #[core::prelude::v1::test]
 fn first_scan_shows_progress_counts_and_opens_the_library_when_done() {
-    let (dir, engine) = seed_library("welcome_progress", 3);
+    let (_dir, engine) = seed_library("welcome_progress", 3);
     let items = engine.get_item_slice(0..3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -256,13 +256,11 @@ fn first_scan_shows_progress_counts_and_opens_the_library_when_done() {
             "the library opens when the scan is done"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn enter_opens_the_library_and_cmd_period_stops_the_scan() {
-    let (dir, engine) = seed_library("welcome_keys", 1);
+    let (_dir, engine) = seed_library("welcome_keys", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let start = |view: &Entity<LuminaApp>, vcx: &mut VisualTestContext| {
@@ -304,8 +302,6 @@ fn enter_opens_the_library_and_cmd_period_stops_the_scan() {
     start(&view, vcx);
     click(vcx, "first-scan-open");
     view.update(vcx, |app, _| assert!(app.first_scan.is_none()));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -316,6 +312,7 @@ fn only_an_empty_catalog_gets_the_scan_screen() {
         std::process::id()
     ));
     std::fs::create_dir_all(&empty).unwrap();
+    let empty = crate::tests::helpers::TempLibrary(empty);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -331,14 +328,11 @@ fn only_an_empty_catalog_gets_the_scan_screen() {
             "a scanned library opens straight away"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&populated);
-    let _ = std::fs::remove_dir_all(&empty);
 }
 
 #[core::prelude::v1::test]
 fn a_replaced_librarys_late_scan_complete_is_ignored() {
-    let (dir, engine) = seed_library("welcome_stale", 1);
+    let (_dir, engine) = seed_library("welcome_stale", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -368,8 +362,6 @@ fn a_replaced_librarys_late_scan_complete_is_ignored() {
             "the current library's event applies"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---- Recent libraries and the missing-library notice ----
@@ -378,7 +370,8 @@ use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::app::downloads::DownloadsConfirm;
 use crate::app::library::FOLDER_PICKS;
 use crate::app::recents::startup_library;
-use crate::tests::downloads::{install, queue_app, settle, submit, TempLibrary};
+use crate::tests::downloads::{install, queue_app, settle, submit};
+use crate::tests::helpers::TempLibrary;
 use std::path::PathBuf;
 
 /// An empty temporary folder, deleted when the test ends.
@@ -729,7 +722,7 @@ fn library_rows(app: &LuminaApp) -> Vec<PathBuf> {
 #[core::prelude::v1::test]
 fn palette_opens_a_recent_library() {
     let (dir, engine) = seed_library("recent_palette", 1);
-    let current = TempLibrary(dir);
+    let current = dir;
     let other = temp_folder("palette_other");
     let gone = temp_folder("palette_gone").to_path_buf();
     let mut cx = crate::tests::TestApp::single();
@@ -806,7 +799,7 @@ fn palette_recent_while_downloading_asks_first() {
 #[core::prelude::v1::test]
 fn clear_recents_empties_the_list_only() {
     let (dir, engine) = seed_library("recent_clear", 1);
-    let current = TempLibrary(dir);
+    let current = dir;
     let other = temp_folder("clear_other");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -944,7 +937,7 @@ fn linux_ctrl_q_quits_while_a_dialog_is_open() {
 
 #[core::prelude::v1::test]
 fn first_scan_quit_reaches_the_app() {
-    let (dir, engine) = seed_library("first_scan_quit", 1);
+    let (_dir, engine) = seed_library("first_scan_quit", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -967,7 +960,6 @@ fn first_scan_quit_reaches_the_app() {
             "Quit works while the first scan runs"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -1367,7 +1359,7 @@ fn sample_ready_after_another_library_opened_keeps_that_library() {
 /// Clicks `selector` without letting background work run, so a test can see
 /// what the UI shows while that work is still pending.
 fn click_unparked(vcx: &mut VisualTestContext, selector: &'static str) {
-    let position = crate::tests::ui_automation::bounds_center(vcx, selector);
+    let position = crate::tests::helpers::bounds_center(vcx, selector);
     vcx.update(|window, cx| {
         let (modifiers, button) = (gpui::Modifiers::default(), gpui::MouseButton::Left);
         window.dispatch_event(
@@ -1410,7 +1402,7 @@ fn missing_at_startup<'a>(
 }
 
 fn painted_text(vcx: &mut VisualTestContext, selector: String) -> bool {
-    vcx.debug_bounds(crate::tests::ui_automation::leak(selector))
+    vcx.debug_bounds(crate::tests::helpers::leak(selector))
         .is_some()
 }
 

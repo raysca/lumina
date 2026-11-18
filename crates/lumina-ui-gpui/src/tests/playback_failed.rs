@@ -4,25 +4,19 @@
 use crate::app::playback_failed::VIDEO_LOADS;
 use crate::app::types::get_sample_items;
 use crate::app::viewer_actions::REVEALED_PATHS;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, right_click, seed_library,
 };
 use lumina_core::{MediaItem, MediaType};
 
 /// Removes the temp library on success and failure.
-struct Fixture(std::path::PathBuf);
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
 
 /// A library plus a video item whose file exists but is not a video, so
 /// every load fails (for real on macOS, and with the dummy player elsewhere).
 fn broken_video(
     prefix: &str,
 ) -> (
-    Fixture,
+    super::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     MediaItem,
 ) {
@@ -34,7 +28,7 @@ fn broken_video(
         .find(|item| item.media_type == MediaType::Video)
         .expect("the deterministic sample set must contain a video");
     video.path = path;
-    (Fixture(dir), engine, video)
+    (dir, engine, video)
 }
 
 fn loads() -> usize {

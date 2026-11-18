@@ -1,8 +1,6 @@
 //! UI automation for the Review Duplicates compare pane and kind chips.
 
-use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
-};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui, seed_library};
 use crate::app::stacks::DuplicatesTab;
 
 /// A scanned library of `files` (paths relative to a fresh temp dir).
@@ -10,7 +8,7 @@ pub(crate) fn seed_files(
     prefix: &str,
     files: &[(&str, &[u8])],
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let temp_dir = std::env::temp_dir().join(format!(
@@ -47,7 +45,7 @@ pub(crate) fn seed_files(
             break;
         }
     }
-    (temp_dir, engine)
+    (crate::tests::helpers::TempLibrary(temp_dir), engine)
 }
 
 /// A scanned library with two exact-copy groups: three copies of one photo
@@ -55,11 +53,11 @@ pub(crate) fn seed_files(
 pub(crate) fn seed_two_groups(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
-    let a = super::ui_automation::shaded_jpeg(10);
-    let b = super::ui_automation::shaded_jpeg(200);
+    let a = super::helpers::shaded_jpeg(10);
+    let b = super::helpers::shaded_jpeg(200);
     seed_files(
         prefix,
         &[
@@ -74,8 +72,8 @@ pub(crate) fn seed_two_groups(
 
 #[core::prelude::v1::test]
 fn differences_list_only_fields_that_differ() {
-    let photo = super::ui_automation::shaded_jpeg(40);
-    let (temp_dir, engine) = seed_files(
+    let photo = super::helpers::shaded_jpeg(40);
+    let (_temp_dir, engine) = seed_files(
         "dup_diff",
         &[("a/photo.jpg", &photo), ("b/photo.jpg", &photo)],
     );
@@ -96,7 +94,7 @@ fn differences_list_only_fields_that_differ() {
     );
     for field in ["dimensions", "size", "format", "edits", "source"] {
         assert!(
-            vcx.debug_bounds(super::ui_automation::leak(format!(
+            vcx.debug_bounds(super::helpers::leak(format!(
                 "duplicates-difference-{field}"
             )))
             .is_none(),
@@ -120,12 +118,11 @@ fn differences_list_only_fields_that_differ() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn choosing_a_keeper_merges_the_others() {
-    let (temp_dir, engine) = seed_library("dup_keeper", 2);
+    let (_temp_dir, engine) = seed_library("dup_keeper", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -146,11 +143,8 @@ fn choosing_a_keeper_merges_the_others() {
         "the heuristic pick keeps by default"
     );
     assert!(
-        vcx.debug_bounds(super::ui_automation::leak(format!(
-            "duplicate-best-{}",
-            first.0
-        )))
-        .is_some(),
+        vcx.debug_bounds(super::helpers::leak(format!("duplicate-best-{}", first.0)))
+            .is_some(),
         "BEST marks the heuristic pick"
     );
     assert!(
@@ -163,7 +157,7 @@ fn choosing_a_keeper_merges_the_others() {
 
     click(
         vcx,
-        super::ui_automation::leak(format!("duplicate-keep-{}", second.0)),
+        super::helpers::leak(format!("duplicate-keep-{}", second.0)),
     );
     assert_eq!(keeper(&view, vcx), second, "the radio chooses the keeper");
     view.update(vcx, |app, _| {
@@ -199,12 +193,11 @@ fn choosing_a_keeper_merges_the_others() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn merge_all_keeps_the_chosen_copy() {
-    let (temp_dir, engine) = seed_library("dup_keeper_all", 2);
+    let (_temp_dir, engine) = seed_library("dup_keeper_all", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -214,7 +207,7 @@ fn merge_all_keeps_the_chosen_copy() {
 
     click(
         vcx,
-        super::ui_automation::leak(format!("duplicate-keep-{}", second.0)),
+        super::helpers::leak(format!("duplicate-keep-{}", second.0)),
     );
     click(vcx, "merge-all-duplicates");
     let active: Vec<_> = engine.get_item_slice(0..10).iter().map(|i| i.id).collect();
@@ -225,12 +218,11 @@ fn merge_all_keeps_the_chosen_copy() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn footer_counts_copies_and_freed_bytes() {
-    let (temp_dir, engine) = seed_two_groups("dup_footer");
+    let (_temp_dir, engine) = seed_two_groups("dup_footer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -250,7 +242,7 @@ fn footer_counts_copies_and_freed_bytes() {
         "two copies read in the plural"
     );
     assert!(
-        vcx.debug_bounds(super::ui_automation::leak(format!(
+        vcx.debug_bounds(super::helpers::leak(format!(
             "duplicates-frees-text:· frees {freed}"
         )))
         .is_some(),
@@ -258,12 +250,11 @@ fn footer_counts_copies_and_freed_bytes() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn skip_group_moves_on_and_skip_all_empties_the_review() {
-    let (temp_dir, engine) = seed_two_groups("dup_skip");
+    let (_temp_dir, engine) = seed_two_groups("dup_skip");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -285,10 +276,8 @@ fn skip_group_moves_on_and_skip_all_empties_the_review() {
     click(vcx, "duplicates-skip-group");
     for id in &second_ids {
         assert!(
-            vcx.debug_bounds(super::ui_automation::leak(format!(
-                "duplicate-candidate-{id}"
-            )))
-            .is_some(),
+            vcx.debug_bounds(super::helpers::leak(format!("duplicate-candidate-{id}")))
+                .is_some(),
             "skipping moves on to the next group"
         );
     }
@@ -298,7 +287,7 @@ fn skip_group_moves_on_and_skip_all_empties_the_review() {
         "the skipped group leaves the count"
     );
     assert!(
-        vcx.debug_bounds(super::ui_automation::leak(second_meta.clone()))
+        vcx.debug_bounds(super::helpers::leak(second_meta.clone()))
             .is_some(),
         "the header counts only the groups left: {second_meta}"
     );
@@ -327,12 +316,11 @@ fn skip_group_moves_on_and_skip_all_empties_the_review() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn merge_all_leaves_skipped_groups() {
-    let (temp_dir, engine) = seed_two_groups("dup_skip_merge");
+    let (_temp_dir, engine) = seed_two_groups("dup_skip_merge");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -352,12 +340,11 @@ fn merge_all_leaves_skipped_groups() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn merging_a_group_moves_on_to_the_next() {
-    let (temp_dir, engine) = seed_two_groups("dup_merge_next");
+    let (_temp_dir, engine) = seed_two_groups("dup_merge_next");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -374,10 +361,8 @@ fn merging_a_group_moves_on_to_the_next() {
     click(vcx, "duplicates-merge-group");
     for id in &second_ids {
         assert!(
-            vcx.debug_bounds(super::ui_automation::leak(format!(
-                "duplicate-candidate-{id}"
-            )))
-            .is_some(),
+            vcx.debug_bounds(super::helpers::leak(format!("duplicate-candidate-{id}")))
+                .is_some(),
             "after a merge the next group is compared"
         );
     }
@@ -388,13 +373,12 @@ fn merging_a_group_moves_on_to_the_next() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn differences_name_renamed_copies_and_edits() {
-    let photo = super::ui_automation::shaded_jpeg(60);
-    let (temp_dir, engine) = seed_files(
+    let photo = super::helpers::shaded_jpeg(60);
+    let (_temp_dir, engine) = seed_files(
         "dup_diff_name",
         &[("IMG_1.jpg", &photo), ("IMG_1 copy.jpg", &photo)],
     );
@@ -417,7 +401,7 @@ fn differences_name_renamed_copies_and_edits() {
             "title",
         ] {
             let shown = vcx
-                .debug_bounds(super::ui_automation::leak(format!(
+                .debug_bounds(super::helpers::leak(format!(
                     "duplicates-difference-{field}"
                 )))
                 .is_some();
@@ -436,11 +420,8 @@ fn differences_name_renamed_copies_and_edits() {
     only(vcx, &["name"]);
     let first = view.update(vcx, |app, _| app.duplicate_groups[0].items[0].id);
     assert!(
-        vcx.debug_bounds(super::ui_automation::leak(format!(
-            "duplicate-name-{}",
-            first.0
-        )))
-        .is_some(),
+        vcx.debug_bounds(super::helpers::leak(format!("duplicate-name-{}", first.0)))
+            .is_some(),
         "each card shows its file name"
     );
 
@@ -457,5 +438,4 @@ fn differences_name_renamed_copies_and_edits() {
     only(vcx, &["name", "edits"]);
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

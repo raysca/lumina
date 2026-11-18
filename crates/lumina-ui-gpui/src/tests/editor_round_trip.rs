@@ -6,7 +6,7 @@
 //! for, so cached textures are placeholders put in before the first draw and
 //! the tests assert what is re-requested, not decoded pixels.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,8 +15,8 @@ use lumina_core::{CropRect, Edits, EngineEvent, LuminaEngine, MediaId, MediaItem
 
 use crate::app::state::{THUMB_REQUESTS, THUMB_REQUEST_ITEMS};
 use crate::app::types::UiMessage;
+use crate::tests::helpers::{focus_app, render_ui};
 use crate::tests::quick_edit::temp_library;
-use crate::tests::ui_automation::{focus_app, render_ui};
 use crate::views::grid::GridState;
 use crate::LuminaApp;
 
@@ -31,7 +31,7 @@ fn photo(path: &Path, size: u32, rgb: [u8; 3]) {
 fn edited_photo(
     prefix: &str,
 ) -> (
-    PathBuf,
+    crate::tests::helpers::TempLibrary,
     Arc<LuminaEngine>,
     impl Fn(Duration) -> Option<EngineEvent>,
     MediaItem,
@@ -160,7 +160,7 @@ fn batch_with(next: &impl Fn(Duration) -> Option<EngineEvent>, id: MediaId) -> V
 
 #[core::prelude::v1::test]
 fn external_save_refreshes_texture_and_keeps_metadata() {
-    let (dir, engine, next, item) = edited_photo("round_trip");
+    let (_dir, engine, next, item) = edited_photo("round_trip");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx, old) = app_with_texture(&mut cx, engine.clone(), item.id);
     reset_requests();
@@ -205,12 +205,11 @@ fn external_save_refreshes_texture_and_keeps_metadata() {
         "Lumina's edits stay on top of the saved file"
     );
     drop(engine);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn external_save_reloads_the_open_viewer_photo() {
-    let (dir, engine, next, item) = edited_photo("round_trip_viewer");
+    let (_dir, engine, next, item) = edited_photo("round_trip_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx, _) = app_with_texture(&mut cx, engine.clone(), item.id);
     view.update(vcx, |app, cx| {
@@ -249,12 +248,11 @@ fn external_save_reloads_the_open_viewer_photo() {
         );
     });
     drop(engine);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn scan_batches_do_not_evict_textures() {
-    let (dir, engine, _next, item) = edited_photo("round_trip_scan");
+    let (_dir, engine, _next, item) = edited_photo("round_trip_scan");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx, old) = app_with_texture(&mut cx, engine.clone(), item.id);
     view.update(vcx, |app, _| {
@@ -274,7 +272,6 @@ fn scan_batches_do_not_evict_textures() {
         "and decodes nothing again"
     );
     drop(engine);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -319,5 +316,4 @@ fn rename_in_library_keeps_texture_and_never_fails() {
         );
     });
     drop(engine);
-    let _ = std::fs::remove_dir_all(&dir);
 }

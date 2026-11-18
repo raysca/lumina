@@ -2,15 +2,15 @@
 //! thread, newest result only, coalesced while a key is held, and a note
 //! when no preview can be made.
 
+use crate::tests::helpers::{app_with_library, keystrokes};
 use crate::tests::quick_edit::{edit_library, open_viewer_on, scanned, temp_library};
-use crate::tests::ui_automation::{app_with_library, keystrokes};
 use crate::*;
 use lumina_core::{LuminaEngine, MediaId};
 use std::sync::Arc;
 
 #[core::prelude::v1::test]
 fn stale_preview_is_dropped() {
-    let (dir, engine, photos, _) = edit_library("stale_preview");
+    let (_dir, engine, photos, _) = edit_library("stale_preview");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -64,7 +64,6 @@ fn stale_preview_is_dropped() {
             "a late viewer frame must not replace the edit preview"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -120,11 +119,16 @@ fn preview_renders_the_draft_from_the_unedited_frame() {
             "each draft change renders a new preview"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// One real 8×4 photo; returns the library, its engine and the photo id.
-fn wide_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>, MediaId) {
+fn wide_library(
+    prefix: &str,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    Arc<LuminaEngine>,
+    MediaId,
+) {
     let dir = temp_library(prefix);
     image::RgbImage::from_fn(8, 4, |x, _| image::Rgb([x as u8 * 30, 90, 160]))
         .save(dir.join("wide.jpg"))
@@ -136,7 +140,7 @@ fn wide_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>, MediaId
 
 #[core::prelude::v1::test]
 fn held_exposure_key_renders_at_most_twice() {
-    let (dir, engine, id) = wide_library("coalesce");
+    let (_dir, engine, id) = wide_library("coalesce");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, id);
@@ -183,12 +187,12 @@ fn held_exposure_key_renders_at_most_twice() {
             "Done keeps the preview on screen until the saved frame arrives"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn missing_preview_says_done_still_saves() {
-    let (dir, engine, photos, _) = crate::tests::quick_edit::edit_library_undecodable("no_preview");
+    let (_dir, engine, photos, _) =
+        crate::tests::quick_edit::edit_library_undecodable("no_preview");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -204,5 +208,4 @@ fn missing_preview_says_done_still_saves() {
         );
         assert!(app.edits.session.is_some(), "edit mode stays usable");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

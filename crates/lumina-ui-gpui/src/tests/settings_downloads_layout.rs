@@ -2,14 +2,12 @@
 //! inside the window and keeps its controls visible, like the Library,
 //! General and Storage rows (`tests::preferences::long_library_path_truncates_inside_its_row`).
 
-use super::downloads::TempLibrary;
-use super::ui_automation::{app_with_library, render_ui, seed_library};
+use super::helpers::{app_with_library, render_ui, seed_library};
 use crate::app::preferences::PreferencesTab;
 
 #[core::prelude::v1::test]
 fn downloads_path_row_fits_the_minimum_window() {
-    let (dir, engine) = seed_library("settings_downloads_960", 1);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("settings_downloads_960", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // The window's minimum size (main.rs).

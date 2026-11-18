@@ -4,7 +4,7 @@
 
 use super::tag_manager::{checkbox, count, open};
 use crate::tests::duplicates::run_palette_command;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, leak, seed_library,
 };
 use crate::LuminaApp;
@@ -15,7 +15,7 @@ use gpui::{Entity, VisualTestContext};
 fn row_library(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let (dir, engine) = seed_library(prefix, 3);
@@ -58,7 +58,7 @@ fn open_wide(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
 
 #[core::prelude::v1::test]
 fn tag_rows_scale_usage_count_aliases_and_mark_focus() {
-    let (dir, engine) = row_library("tm_rows");
+    let (_dir, engine) = row_library("tm_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_wide(&view, vcx);
@@ -124,13 +124,11 @@ fn tag_rows_scale_usage_count_aliases_and_mark_focus() {
     view.update(vcx, |app, _| {
         assert!(app.tag_manager.selected.is_empty(), "and unchecks")
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tag_row_menu_by_mouse() {
-    let (dir, engine) = row_library("tm_row_menu");
+    let (_dir, engine) = row_library("tm_row_menu");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_wide(&view, vcx);
@@ -176,13 +174,11 @@ fn tag_row_menu_by_mouse() {
     focus_app(vcx, &view);
     keystrokes(vcx, "cmd-z");
     assert_eq!(count(&view, vcx, "sea"), Some(1), "and ⌘Z restores it");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tag_row_menu_by_keyboard_and_palette() {
-    let (dir, engine) = row_library("tm_row_menu_keys");
+    let (_dir, engine) = row_library("tm_row_menu_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_wide(&view, vcx);
@@ -226,13 +222,11 @@ fn tag_row_menu_by_keyboard_and_palette() {
     view.update(vcx, |app, _| app.cancel_tag_manager_prompts());
     run_palette_command(vcx, &view, "Delete Keyword");
     assert_eq!(count(&view, vcx, "sea"), None, "palette Delete Keyword");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tag_row_menu_takes_typing_and_closes_with_the_page() {
-    let (dir, engine) = row_library("tm_row_menu_guard");
+    let (_dir, engine) = row_library("tm_row_menu_guard");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_wide(&view, vcx);
@@ -270,13 +264,11 @@ fn tag_row_menu_takes_typing_and_closes_with_the_page() {
         None,
         "⌘F gives the keys to the search"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn shift_f10_scrolls_the_focused_row_into_view() {
-    let (dir, engine) = seed_library("tm_row_menu_scroll", 1);
+    let (_dir, engine) = seed_library("tm_row_menu_scroll", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let tags: Vec<String> = (0..40).map(|i| format!("tag{i:02}")).collect();
     engine.add_tags_batch(&[id], &tags).unwrap();
@@ -289,7 +281,7 @@ fn shift_f10_scrolls_the_focused_row_into_view() {
         app.focus_tag_manager_tag("tag39".into(), cx);
     });
     focus_app(vcx, &view);
-    crate::tests::ui_automation::render_ui(vcx);
+    crate::tests::helpers::render_ui(vcx);
     assert!(
         vcx.debug_bounds("tag-manager-row-tag39").is_none(),
         "the focused row starts off screen (rows are virtualised)"
@@ -301,15 +293,13 @@ fn shift_f10_scrolls_the_focused_row_into_view() {
         "⇧F10 scrolls the focused row into view"
     );
     assert!(menu_open(vcx), "and draws its menu");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Names keep about 160 px. The usage track drops first, then
 /// the count; the widths come from the window, sidebar and 359.5 panel.
 #[core::prelude::v1::test]
 fn narrow_windows_drop_the_usage_track_then_the_count() {
-    let (dir, engine) = seed_library("tm_rows_narrow", 2);
+    let (_dir, engine) = seed_library("tm_rows_narrow", 2);
     let ids: Vec<_> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
     engine.add_tags_batch(&ids, &["beach".into()]).unwrap();
     engine.add_tags_batch(&ids[..1], &["sea".into()]).unwrap();
@@ -319,7 +309,7 @@ fn narrow_windows_drop_the_usage_track_then_the_count() {
 
     let check = |vcx: &mut VisualTestContext, window: f32, track: bool, count: bool| {
         vcx.simulate_resize(gpui::size(gpui::px(window), gpui::px(700.0)));
-        crate::tests::ui_automation::render_ui(vcx);
+        crate::tests::helpers::render_ui(vcx);
         let list = bounds(vcx, "tag-manager-list".into());
         let row = bounds(vcx, "tag-manager-row-beach".into());
         let name = bounds(vcx, "tag-manager-name-beach".into());
@@ -346,6 +336,4 @@ fn narrow_windows_drop_the_usage_track_then_the_count() {
     check(vcx, 1440.0, true, true);
     check(vcx, 1100.0, false, true);
     check(vcx, 960.0, false, false);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -8,7 +8,7 @@ use std::path::Path;
 use gpui::*;
 use lumina_core::LuminaEngine;
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, double_click, leak, render_ui, right_click, seed_library,
 };
 
@@ -18,7 +18,7 @@ use crate::app::viewer_actions::{
 };
 use crate::config::{validate_external_editor, AppConfig};
 
-fn temp_config_path(name: &str) -> std::path::PathBuf {
+fn temp_config_dir(name: &str) -> crate::tests::helpers::TempLibrary {
     let dir = std::env::temp_dir().join(format!(
         "lumina_editor_handoff_test_{}_{}",
         name,
@@ -28,7 +28,7 @@ fn temp_config_path(name: &str) -> std::path::PathBuf {
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
-    dir.join("config.json")
+    crate::tests::helpers::TempLibrary(dir)
 }
 
 fn media_card(engine: &LuminaEngine) -> &'static str {
@@ -107,7 +107,8 @@ fn editor_handoff_config_defaults_and_validation() {
 
 #[core::prelude::v1::test]
 fn editor_handoff_config_roundtrip_and_missing_key() {
-    let path = temp_config_path("roundtrip");
+    let dir = temp_config_dir("roundtrip");
+    let path = dir.join("config.json");
     let config = AppConfig {
         external_editor: Some("com.apple.TextEdit".to_string()),
         ..AppConfig::default()
@@ -132,8 +133,6 @@ fn editor_handoff_config_roundtrip_and_missing_key() {
         AppConfig::load_from(&path).external_editor.is_none(),
         "a missing external_editor key must default to unset"
     );
-
-    let _ = std::fs::remove_file(&path);
 }
 
 #[core::prelude::v1::test]
@@ -238,7 +237,7 @@ fn editor_handoff_command_construction_never_uses_a_shell() {
 
 #[core::prelude::v1::test]
 fn editor_handoff_context_menu_without_editor_shows_error() {
-    let (temp_dir, engine) = seed_library("menu", 3);
+    let (_temp_dir, engine) = seed_library("menu", 3);
     let card = media_card(&engine);
 
     let mut cx = crate::tests::TestApp::single();
@@ -271,8 +270,6 @@ fn editor_handoff_context_menu_without_editor_shows_error() {
             "the unset error must tell the user where to configure the editor; got {message:?}"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -328,13 +325,11 @@ fn editor_handoff_viewer_button_reports_unset_and_invalid_editor() {
             "a missing file must surface an error instead of launching the editor"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn editor_handoff_preferences_shows_current_editor_and_choice() {
-    let (temp_dir, engine) = seed_library("prefs", 1);
+    let (_temp_dir, engine) = seed_library("prefs", 1);
 
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -391,8 +386,6 @@ fn editor_handoff_preferences_shows_current_editor_and_choice() {
         vcx.debug_bounds("preferences-external-editor").is_some(),
         "the editor row must still render after choosing an app"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// A launch that fails after spawning (no app for the file, a deleted
@@ -461,7 +454,7 @@ fn launch_failures_reach_the_banner() {
 
 #[core::prelude::v1::test]
 fn context_menu_get_info_opens_the_get_info_window() {
-    let (temp_dir, engine) = seed_library("menu_get_info", 3);
+    let (_temp_dir, engine) = seed_library("menu_get_info", 3);
     let card = media_card(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -484,16 +477,15 @@ fn context_menu_get_info_opens_the_get_info_window() {
             "Get Info opens on its Info tab"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_i_opens_get_info_and_i_toggles_the_inspector() {
-    let (temp_dir, engine) = seed_library("cmd_i", 3);
+    let (_temp_dir, engine) = seed_library("cmd_i", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let docked = view.update(vcx, |app, _| app.inspector_open);
-    crate::tests::ui_automation::keystrokes(vcx, "secondary-i");
+    crate::tests::helpers::keystrokes(vcx, "secondary-i");
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert!(
@@ -502,12 +494,12 @@ fn cmd_i_opens_get_info_and_i_toggles_the_inspector() {
         )
     });
 
-    crate::tests::ui_automation::keystrokes(vcx, "i");
+    crate::tests::helpers::keystrokes(vcx, "i");
     view.update(vcx, |app, _| {
         assert_ne!(app.inspector_open, docked, "I toggles the docked inspector")
     });
-    crate::tests::ui_automation::keystrokes(vcx, "home");
-    crate::tests::ui_automation::keystrokes(vcx, "secondary-i");
+    crate::tests::helpers::keystrokes(vcx, "home");
+    crate::tests::helpers::keystrokes(vcx, "secondary-i");
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert!(!app.inspector_open, "⌘I undocks the inspector");
@@ -516,5 +508,4 @@ fn cmd_i_opens_get_info_and_i_toggles_the_inspector() {
             "⌘I opens the Get Info window"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

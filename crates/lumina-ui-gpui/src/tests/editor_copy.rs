@@ -7,10 +7,10 @@ use lumina_core::{LuminaEngine, MediaId};
 
 use crate::app::external_edit::test_launches;
 use crate::app::viewer_actions::EXTERNAL_EDITOR_UNSET_MESSAGE;
-use crate::tests::quick_edit::{edit_library, open_viewer_on};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, right_click, type_text,
 };
+use crate::tests::quick_edit::{edit_library, open_viewer_on};
 use crate::LuminaApp;
 
 const EDITOR: &str = "com.apple.TextEdit";
@@ -88,12 +88,11 @@ fn edit_in_external_editor_by_shortcut_builds_command() {
     vcx.dispatch_action(crate::actions::EditInExternalEditor);
     vcx.run_until_parked();
     assert_eq!(test_launches::take(), vec![expected], "the menu action");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn edit_copy_selects_new_item() {
-    let (dir, engine, photos, _) = edit_library("ext_copy");
+    let (_dir, engine, photos, _) = edit_library("ext_copy");
     engine
         .add_tags_batch(&[photos[0]], &["beach".into()])
         .expect("seed tag");
@@ -136,7 +135,6 @@ fn edit_copy_selects_new_item() {
         vec![editor_launch_path(&selected.path)],
         "the editor opens the copy, not the original"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -180,7 +178,6 @@ fn unset_editor_shortcut_opens_preferences() {
         assert!(app.preferences_open, "⌘E opens Preferences too");
     });
     assert!(test_launches::take().is_empty(), "nothing is launched");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -209,7 +206,6 @@ fn cmd_e_in_text_field_is_ignored() {
         "⌘E and ⌥⌘E in a text field launch nothing"
     );
     assert_eq!(file_count(&dir), 3, "⌥⌘E in a text field makes no copy");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -240,7 +236,6 @@ fn external_editor_keys_are_absorbed_in_edit_mode() {
     view.update(vcx, |app, _| {
         assert!(app.edits.session.is_some(), "edit mode stays open");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -272,19 +267,18 @@ fn palette_and_context_menu_edit_a_copy() {
         "the context menu copies the right-clicked item"
     );
     assert_eq!(test_launches::take().len(), 1);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn edit_copy_finishing_after_a_library_switch_leaves_the_new_library_alone() {
-    let (dir, engine, photos, _) = edit_library("ext_switch_old");
+    let (_dir, engine, photos, _) = edit_library("ext_switch_old");
     // More items than the old library, so the copy's id (the old library's
     // next id) names an unrelated photo here.
     let other_dir = crate::tests::quick_edit::temp_library("ext_switch_new");
     for i in 0..8 {
         std::fs::write(
             other_dir.join(format!("n{i}.jpg")),
-            crate::tests::ui_automation::tiny_jpeg(),
+            crate::tests::helpers::tiny_jpeg(),
         )
         .unwrap();
     }
@@ -359,8 +353,6 @@ fn edit_copy_finishing_after_a_library_switch_leaves_the_new_library_alone() {
         vec![editor_launch_path(&copy.path)],
         "the editor still opens the copy"
     );
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other_dir);
 }
 
 #[core::prelude::v1::test]
@@ -390,7 +382,6 @@ fn cmd_e_with_several_selected_does_nothing() {
             "the status bar says why"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A copy finishing while a page with no media shows (the Albums overview,
@@ -404,7 +395,7 @@ fn edit_copy_finishing_on_a_page_without_media_shows_all_media() {
         ("ext_copy_tags", |app, cx| app.open_tag_manager(cx)),
     ];
     for (prefix, show_page) in pages {
-        let (dir, engine, photos, _) = edit_library(prefix);
+        let (_dir, engine, photos, _) = edit_library(prefix);
         let mut cx = crate::tests::TestApp::single();
         let (view, vcx) = app_with_library(&mut cx, engine.clone());
         set_editor(&view, vcx);
@@ -429,6 +420,5 @@ fn edit_copy_finishing_on_a_page_without_media_shows_all_media() {
             assert_eq!(app.selected_index, app.find_active_index(copy.id));
         });
         assert_eq!(test_launches::take().len(), 1, "the editor opens the copy");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

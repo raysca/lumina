@@ -6,7 +6,7 @@ use lumina_core::{
 };
 
 use crate::app::smart_draft::DraftFocus;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -16,7 +16,7 @@ use crate::LuminaApp;
 fn library(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<LuminaEngine>,
     Vec<MediaId>,
 ) {
@@ -43,7 +43,7 @@ fn open_sheet(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
 
 #[core::prelude::v1::test]
 fn builder_creates_album_from_clicks_and_shows_a_live_preview() {
-    let (dir, engine, ids) = library("sab_clicks");
+    let (_dir, engine, ids) = library("sab_clicks");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -115,13 +115,11 @@ fn builder_creates_album_from_clicks_and_shows_a_live_preview() {
             value: RuleValue::Text("beach".into()),
         }
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn builder_is_fully_keyboard_driven() {
-    let (dir, engine, _ids) = library("sab_keys");
+    let (_dir, engine, _ids) = library("sab_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -192,13 +190,11 @@ fn builder_is_fully_keyboard_driven() {
         assert!(!app.album_draft.modal_open);
         assert_eq!(engine.list_smart_albums().len(), 1);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn invalid_typed_value_blocks_enter_and_says_why() {
-    let (dir, engine, _ids) = library("sab_invalid");
+    let (_dir, engine, _ids) = library("sab_invalid");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -225,13 +221,11 @@ fn invalid_typed_value_blocks_enter_and_says_why() {
         assert!(app.album_draft.modal_open, "Enter must not save a bad date");
         assert!(engine.list_smart_albums().is_empty());
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn editing_restores_rows_and_updates_the_album() {
-    let (dir, engine, ids) = library("sab_edit");
+    let (_dir, engine, ids) = library("sab_edit");
     engine.set_ratings(&[(ids[2], 5)]).unwrap();
     let album = engine
         .create_smart_album(
@@ -274,13 +268,11 @@ fn editing_restores_rows_and_updates_the_album() {
         assert_eq!(app.selection, AlbumSelection::User(album.id));
         assert_eq!(app.get_active_count(), 1, "the grid reloads the new rules");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
-    let (dir, engine, _ids) = library("sab_rejected");
+    let (_dir, engine, _ids) = library("sab_rejected");
     // Valid as a row (a well-formed date) but not as a query: the old
     // builder could save "Date is not <text>", which no longer compiles.
     let album = engine
@@ -317,13 +309,11 @@ fn a_saved_rule_the_engine_rejects_is_reported_not_counted_as_zero() {
             "OK must not save a rule that cannot run"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn focused_text_fields_give_the_input_the_whole_field() {
-    let (dir, engine, _ids) = library("sab_caret");
+    let (_dir, engine, _ids) = library("sab_caret");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
@@ -345,13 +335,11 @@ fn focused_text_fields_give_the_input_the_whole_field() {
         text.size.width,
         field.size.width
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn builder_sheet_is_centred_and_close_discards_the_draft() {
-    let (dir, engine, ids) = library("sab_layout");
+    let (_dir, engine, ids) = library("sab_layout");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -406,8 +394,6 @@ fn builder_sheet_is_centred_and_close_discards_the_draft() {
         assert!(app.user_smart_albums.is_empty(), "× must not save");
     });
     assert!(engine.list_smart_albums().is_empty(), "× must not save");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Clicks the open popup's option labelled `label`.
@@ -427,7 +413,7 @@ fn pick_option(
 
 #[core::prelude::v1::test]
 fn condition_rows_offer_fields_and_a_number_with_unit_for_in_the_last() {
-    let (dir, engine, _ids) = library("sab_rows");
+    let (_dir, engine, _ids) = library("sab_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
@@ -465,13 +451,11 @@ fn condition_rows_offer_fields_and_a_number_with_unit_for_in_the_last() {
         second.top() >= first.bottom(),
         "condition rows stack without overlapping: {first:?} {second:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rating_stars_click_and_arrow_keys() {
-    let (dir, engine, _ids) = library("sab_rating_stars");
+    let (_dir, engine, _ids) = library("sab_rating_stars");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -550,14 +534,12 @@ fn rating_stars_click_and_arrow_keys() {
         },
         "the catalog holds Rating at least 3"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn footer_preview_and_pin_option() {
     use crate::views::album_builder::footer::{footer_status, more_label};
-    let (dir, engine) = seed_library("sab_footer", 10);
+    let (_dir, engine) = seed_library("sab_footer", 10);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -647,8 +629,6 @@ fn footer_preview_and_pin_option() {
     let saved = engine.list_smart_albums();
     assert_eq!(saved.len(), 1);
     assert!(saved[0].pinned, "Pin to sidebar creates the album pinned");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -704,8 +684,6 @@ fn editing_a_pinned_album_keeps_or_clears_the_pin() {
     click(vcx, "album-builder-pin");
     click(vcx, "album-builder-save");
     assert!(!saved().pinned, "unchecking Pin unpins the album");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -749,13 +727,11 @@ fn pin_failure_shows_the_error_and_keeps_the_album() {
             "the sidebar lists the saved album unpinned, as the catalog has it"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn keywords_tokens_add_and_remove() {
-    let (dir, engine, ids) = library("sab_tokens");
+    let (_dir, engine, ids) = library("sab_tokens");
     engine
         .add_tags_batch(&[ids[2]], &["sunset".to_string()])
         .unwrap();
@@ -830,8 +806,6 @@ fn keywords_tokens_add_and_remove() {
             value: RuleValue::List(vec!["sunset".into(), "beach".into()]),
         }
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Sets photo `i`'s camera straight in the catalog file, as a scan would.
@@ -906,8 +880,6 @@ fn camera_is_offers_library_cameras() {
         },
         "the rule keeps the stored make and model"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -957,8 +929,6 @@ fn camera_is_lists_each_name_once_and_matches_every_spelling() {
             "a missing make and an empty make are the same camera"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -1002,8 +972,6 @@ fn editing_an_old_camera_rule_keeps_every_spelling() {
         ],
         "saving keeps every spelling of the camera"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -1041,13 +1009,11 @@ fn camera_is_with_no_cameras_says_so() {
             "{key} opens the same empty popup a click does"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn keyword_chips_remove_from_the_keyboard() {
-    let (dir, engine, ids) = library("sab_token_keys");
+    let (_dir, engine, ids) = library("sab_token_keys");
     engine
         .add_tags_batch(&[ids[2]], &["sunset".to_string()])
         .unwrap();
@@ -1095,13 +1061,11 @@ fn keyword_chips_remove_from_the_keyboard() {
     view.update(vcx, |app, _| assert_eq!(app.album_draft.token, None));
     keystrokes(vcx, "left left left backspace");
     assert_eq!(list(vcx), vec!["city"], "← stops at the first chip");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn chip_highlight_does_not_follow_focus_to_another_row() {
-    let (dir, engine, _ids) = library("sab_token_stale");
+    let (_dir, engine, _ids) = library("sab_token_stale");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
@@ -1152,13 +1116,11 @@ fn chip_highlight_does_not_follow_focus_to_another_row() {
             "a new session has no highlight"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn too_many_keywords_block_save() {
-    let (dir, engine, _ids) = library("sab_too_many_keywords");
+    let (_dir, engine, _ids) = library("sab_too_many_keywords");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -1177,8 +1139,6 @@ fn too_many_keywords_block_save() {
         assert!(app.album_draft.modal_open, "OK refuses to save it");
     });
     assert!(engine.list_smart_albums().is_empty());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Opens the builder at 1200x900 with `rows` conditions.
@@ -1198,7 +1158,7 @@ fn sheet_with_rows(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>, rows: 
 
 #[core::prelude::v1::test]
 fn many_conditions_scroll_inside_a_dialog_that_fits_the_window() {
-    let (dir, engine, _ids) = library("sab_many_rows");
+    let (_dir, engine, _ids) = library("sab_many_rows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     sheet_with_rows(vcx, &view, 15);
@@ -1221,13 +1181,11 @@ fn many_conditions_scroll_inside_a_dialog_that_fits_the_window() {
         overflow > gpui::px(0.0),
         "15 conditions overflow the conditions box, which scrolls"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tab_to_a_row_below_the_fold_scrolls_it_into_view() {
-    let (dir, engine, _ids) = library("sab_tab_scroll");
+    let (_dir, engine, _ids) = library("sab_tab_scroll");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     sheet_with_rows(vcx, &view, 15);
@@ -1251,13 +1209,11 @@ fn tab_to_a_row_below_the_fold_scrolls_it_into_view() {
         add.top() >= rows.top() && add.bottom() <= rows.bottom(),
         "the focused control is scrolled into the conditions box: {add:?} in {rows:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_popup_on_the_bottom_row_scrolls_into_view() {
-    let (dir, engine, _ids) = library("sab_popup_scroll");
+    let (_dir, engine, _ids) = library("sab_popup_scroll");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     sheet_with_rows(vcx, &view, 15);
@@ -1274,13 +1230,11 @@ fn a_popup_on_the_bottom_row_scrolls_into_view() {
         popup.top() >= rows.top() && popup.bottom() <= rows.bottom(),
         "the bottom row's popup is scrolled into the conditions box: {popup:?} in {rows:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn removing_the_last_condition_matches_everything() {
-    let (dir, engine, _ids) = library("sab_v3_empty");
+    let (_dir, engine, _ids) = library("sab_v3_empty");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_sheet(vcx, &view);
@@ -1316,13 +1270,11 @@ fn removing_the_last_condition_matches_everything() {
     keystrokes(vcx, "x secondary-enter");
     let saved = engine.list_smart_albums();
     assert!(saved[0].rules.is_empty(), "the edit kept every item");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn save_search_opens_prefilled_builder_and_creates_album() {
-    let (dir, engine, _ids) = library("sab_save_search");
+    let (_dir, engine, _ids) = library("sab_save_search");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let query = "photo is:favorite";
@@ -1398,8 +1350,6 @@ fn save_search_opens_prefilled_builder_and_creates_album() {
         RuleValue::Text(query.into()),
         "the raw query text is stored"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -1417,7 +1367,7 @@ fn save_search_title_is_cut_on_a_char_boundary() {
 
 #[core::prelude::v1::test]
 fn saved_search_counts_follow_caption_and_location_edits() {
-    let (dir, engine, ids) = library("sab_saved_counts");
+    let (_dir, engine, ids) = library("sab_saved_counts");
     let saved = |text: &str| {
         engine
             .create_smart_album(
@@ -1486,8 +1436,6 @@ fn saved_search_counts_follow_caption_and_location_edits() {
         (Some(4), Some(4)),
         "a batch location edit refreshes saved-search counts"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The placeholder the smart-album input shows while it is empty.
@@ -1504,7 +1452,7 @@ fn draft_placeholder(vcx: &mut VisualTestContext, view: &Entity<LuminaApp>) -> S
 
 #[core::prelude::v1::test]
 fn focused_empty_name_field_shows_the_untitled_placeholder() {
-    let (dir, engine, _ids) = library("sab_placeholder");
+    let (_dir, engine, _ids) = library("sab_placeholder");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_sheet(vcx, &view);
@@ -1540,6 +1488,4 @@ fn focused_empty_name_field_shows_the_untitled_placeholder() {
         "Untitled Smart Album",
         "back on the name field the placeholder returns"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

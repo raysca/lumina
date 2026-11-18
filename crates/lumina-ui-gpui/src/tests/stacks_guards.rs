@@ -5,11 +5,9 @@
 use crate::actions::{AddToAlbum, EditPhoto, RotateLeft};
 use crate::app::command_palette::CommandId;
 use crate::app::stacks::{DuplicatesTab, StacksList};
+use crate::tests::helpers::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::tests::stacks::{
     flags, loaded_ids, open_similar_shots, stacked_library, toast, undo_len,
-};
-use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, leak, render_ui,
 };
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
@@ -88,7 +86,6 @@ fn similar_shots_holds_no_selection_and_selection_actions_do_nothing() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -127,7 +124,6 @@ fn back_and_forward_onto_duplicates_start_on_exact_copies() {
     keystrokes(vcx, "secondary-[");
     check(&view, vcx, "Back");
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -166,7 +162,6 @@ fn stale_list_never_flags_trashed_members_and_rereads() {
     assert!(flags(&f.engine).is_empty());
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -195,7 +190,6 @@ fn stacks_load_failure_shows_error_state_and_enter_retries() {
     assert!(vcx.debug_bounds("stacks-error").is_none());
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -260,5 +254,4 @@ fn many_stacks_render_only_visible_rows_and_focus_scrolls() {
     assert!(rendered(vcx) <= 20, "scrolling keeps the rows bounded");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }

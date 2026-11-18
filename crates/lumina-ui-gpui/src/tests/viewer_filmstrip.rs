@@ -1,8 +1,6 @@
 //! The viewer's filmstrip.
 
-use super::ui_automation::{
-    click, focus_app, keystrokes, leak, render_ui, seed_library_undecodable,
-};
+use super::helpers::{click, focus_app, keystrokes, leak, render_ui, seed_library_undecodable};
 use super::viewer_stage::{app_without_decodes, detach_decoder_answers, open_at};
 use crate::app::state::THUMB_REQUEST_ITEMS;
 use crate::views::viewer::filmstrip::{filmstrip_slots, filmstrip_window, FILMSTRIP_MAX};
@@ -60,7 +58,7 @@ fn filmstrip_window_is_bounded_and_never_wraps() {
 
 #[core::prelude::v1::test]
 fn viewer_filmstrip_centres_current_and_navigates() {
-    let (dir, engine) = seed_library_undecodable("viewer_filmstrip", 30);
+    let (_dir, engine) = seed_library_undecodable("viewer_filmstrip", 30);
     let mut cx = crate::tests::TestApp::single();
     // #9 failed to decode; #11 has a cached grid thumbnail.
     let seeded: Vec<MediaId> = engine.get_item_slice(0..30).iter().map(|i| i.id).collect();
@@ -177,12 +175,11 @@ fn viewer_filmstrip_centres_current_and_navigates() {
         viewport.bottom() <= strip.top() && viewport.size.height >= gpui::px(300.0),
         "at 960x600 the photo stage keeps room above the strip: {viewport:?} {strip:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_filmstrip_hides_in_immersive_slideshow_and_edit_mode() {
-    let (dir, engine) = seed_library_undecodable("viewer_filmstrip_modes", 3);
+    let (_dir, engine) = seed_library_undecodable("viewer_filmstrip_modes", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     view.update(vcx, |app, cx| {
@@ -224,12 +221,11 @@ fn viewer_filmstrip_hides_in_immersive_slideshow_and_edit_mode() {
         vcx.debug_bounds("viewer-filmstrip").is_none(),
         "a slideshow hides it"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_filmstrip_queues_each_thumb_once_while_stepping() {
-    let (dir, engine) = seed_library_undecodable("viewer_filmstrip_queue", 30);
+    let (_dir, engine) = seed_library_undecodable("viewer_filmstrip_queue", 30);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
@@ -281,12 +277,11 @@ fn viewer_filmstrip_queues_each_thumb_once_while_stepping() {
         )
     });
     assert!(vcx.debug_bounds("viewer-filmstrip-current").is_some());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_filmstrip_click_opens_the_clicked_item_while_rows_are_stale() {
-    let (dir, engine) = seed_library_undecodable("viewer_filmstrip_stale", 20);
+    let (_dir, engine) = seed_library_undecodable("viewer_filmstrip_stale", 20);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine.clone(), &[]);
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
@@ -327,5 +322,4 @@ fn viewer_filmstrip_click_opens_the_clicked_item_while_rows_are_stale() {
         );
         assert_eq!(app.selected_index, Some(11), "at its fresh position");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

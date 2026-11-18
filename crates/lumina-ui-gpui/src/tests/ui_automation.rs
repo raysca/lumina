@@ -6,215 +6,14 @@
 //! all exercised.
 #![allow(dead_code)]
 
+use crate::tests::helpers::*;
 use crate::*;
-use lumina_core::{EngineEvent, LuminaEngine};
-
-/// A real 8×8 JPEG, so seeded photos decode in process.
-pub(crate) fn tiny_jpeg() -> &'static [u8] {
-    static BYTES: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
-    BYTES.get_or_init(|| shaded_jpeg(90))
-}
-
-/// A real 8×8 JPEG whose bytes differ per `shade` (not an exact copy).
-pub(crate) fn shaded_jpeg(shade: u8) -> Vec<u8> {
-    let image = image::RgbImage::from_pixel(8, 8, image::Rgb([shade, 120, 160]));
-    let mut bytes = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
-        .encode_image(&image)
-        .expect("an 8×8 JPEG encodes");
-    bytes
-}
-
-/// A library of `count` real JPEGs in a fresh temp dir, scanned.
-pub(crate) fn seed_library(
-    prefix: &str,
-    count: usize,
-) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    seed_with(prefix, count, tiny_jpeg())
-}
-
-/// A library of files named `.jpg` that are not images: no size in the
-/// catalog, and every decode of them fails (fast: sips rejects them), so no
-/// texture ever lands. Only for tests about failed or texture-less cards
-/// and stages; for a card still decoding, see [`app_with_pending`].
-pub(crate) fn seed_library_undecodable(
-    prefix: &str,
-    count: usize,
-) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    seed_with(prefix, count, b"test-jpeg-content")
-}
-
-fn seed_with(
-    prefix: &str,
-    count: usize,
-    bytes: &[u8],
-) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    // The clock alone is not unique: tests start together and macOS reports
-    // microseconds, so two could share a catalog ("database is locked").
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let temp_dir = std::env::temp_dir().join(format!(
-        "lumina_uitest_{}_{}_{}",
-        prefix,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    for i in 0..count {
-        std::fs::write(temp_dir.join(format!("photo_{:02}.jpg", i)), bytes).unwrap();
-    }
-    let (engine, rx) = LuminaEngine::open_with_paths(
-        temp_dir.clone(),
-        temp_dir.join("catalog.db"),
-        Some(temp_dir.join("cache")),
-    )
-    .unwrap();
-    while let Ok(event) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
-        if let EngineEvent::ScanComplete { .. } = event {
-            break;
-        }
-    }
-    (temp_dir, engine)
-}
-
-pub(crate) fn leak(selector: String) -> &'static str {
-    Box::leak(selector.into_boxed_str())
-}
 
 fn test_epoch_ms(value: &str) -> i64 {
     chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
         .expect("test fixture timestamps use the editor syntax")
         .and_utc()
         .timestamp_millis()
-}
-
-/// Draws the registered root view so layout, hit-testing and debug_bounds are
-/// populated for the current app state.
-pub(crate) fn render_ui(cx: &mut VisualTestContext) {
-    cx.update(|window, cx| {
-        window.refresh();
-        window.draw(cx).clear(cx);
-    });
-    cx.run_until_parked();
-}
-
-pub(crate) fn focus_app(cx: &mut VisualTestContext, view: &Entity<LuminaApp>) {
-    cx.update(|window, cx| {
-        let handle = view.read(cx).focus_handle.clone();
-        window.focus(&handle, cx);
-    });
-}
-
-pub(crate) fn bounds_center(
-    cx: &mut VisualTestContext,
-    selector: &'static str,
-) -> gpui::Point<gpui::Pixels> {
-    cx.debug_bounds(selector)
-        .unwrap_or_else(|| panic!("no rendered bounds for selector {selector:?}"))
-        .center()
-}
-
-pub(crate) fn click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_click(position, gpui::Modifiers::default());
-    render_ui(cx);
-}
-
-pub(crate) fn click_point(cx: &mut VisualTestContext, x: f32, y: f32) {
-    cx.simulate_click(
-        gpui::point(gpui::px(x), gpui::px(y)),
-        gpui::Modifiers::default(),
-    );
-    render_ui(cx);
-}
-
-pub(crate) fn keystrokes(cx: &mut VisualTestContext, keys: &str) {
-    cx.simulate_keystrokes(&platform_test_keys(keys));
-    render_ui(cx);
-}
-
-/// The test data uses Command and GPUI's secondary modifier notation. Map both
-/// to Control on Linux so the tests exercise the same app actions there.
-pub(crate) fn platform_test_keys(keys: &str) -> String {
-    #[cfg(target_os = "linux")]
-    {
-        keys.split_whitespace()
-            .map(|chord| {
-                let parts = chord.split('-').collect::<Vec<_>>();
-                if (parts.contains(&"cmd") || parts.contains(&"secondary"))
-                    && !parts.contains(&"ctrl")
-                {
-                    parts
-                        .into_iter()
-                        .map(|part| {
-                            if part == "cmd" || part == "secondary" {
-                                "ctrl"
-                            } else {
-                                part
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("-")
-                } else {
-                    chord.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        keys.to_string()
-    }
-}
-
-pub(crate) fn primary_modifier() -> gpui::Modifiers {
-    #[cfg(target_os = "linux")]
-    {
-        gpui::Modifiers {
-            control: true,
-            ..Default::default()
-        }
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        gpui::Modifiers::command()
-    }
-}
-
-pub(crate) fn type_text(cx: &mut VisualTestContext, text: &str) {
-    cx.simulate_input(text);
-    render_ui(cx);
-}
-
-pub(crate) fn double_click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_event(gpui::MouseDownEvent {
-        position,
-        modifiers: gpui::Modifiers::default(),
-        button: gpui::MouseButton::Left,
-        click_count: 2,
-        first_mouse: false,
-    });
-    cx.simulate_event(gpui::MouseUpEvent {
-        position,
-        modifiers: gpui::Modifiers::default(),
-        button: gpui::MouseButton::Left,
-        click_count: 2,
-    });
-    render_ui(cx);
-}
-
-pub(crate) fn right_click(cx: &mut VisualTestContext, selector: &'static str) {
-    let position = bounds_center(cx, selector);
-    cx.simulate_mouse_down(
-        position,
-        gpui::MouseButton::Right,
-        gpui::Modifiers::default(),
-    );
-    render_ui(cx);
 }
 
 /// Selects items by identity so a rank-changing edit (for example a date
@@ -237,44 +36,9 @@ fn select_media_ids(app: &mut LuminaApp, ids: &[lumina_core::MediaId]) {
     app.update_batch_summary();
 }
 
-pub(crate) fn app_with_library(
-    cx: &mut TestAppContext,
-    engine: std::sync::Arc<LuminaEngine>,
-) -> (Entity<LuminaApp>, &mut VisualTestContext) {
-    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-    view.update(vcx, |app, cx| {
-        app.grid_state = Some(crate::views::grid::GridState::new(engine));
-        app.refresh_album_counts();
-        cx.notify();
-    });
-    render_ui(vcx);
-    focus_app(vcx, &view);
-    (view, vcx)
-}
-
-/// [`app_with_library`] with the decodes of `pending` claimed before the
-/// first draw, so none is queued: their cards stay "still decoding".
-pub(crate) fn app_with_pending<'a>(
-    cx: &'a mut TestAppContext,
-    engine: std::sync::Arc<LuminaEngine>,
-    pending: &[lumina_core::MediaId],
-) -> (Entity<LuminaApp>, &'a mut VisualTestContext) {
-    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
-    view.update(vcx, |app, cx| {
-        let state = crate::views::grid::GridState::new(engine);
-        state.in_flight.lock().extend(pending.iter().copied());
-        app.grid_state = Some(state);
-        app.refresh_album_counts();
-        cx.notify();
-    });
-    render_ui(vcx);
-    focus_app(vcx, &view);
-    (view, vcx)
-}
-
 #[core::prelude::v1::test]
 fn ui_automation_renders_all_core_controls() {
-    let (temp_dir, engine) = seed_library("render", 8);
+    let (_temp_dir, engine) = seed_library("render", 8);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
 
@@ -293,13 +57,11 @@ fn ui_automation_renders_all_core_controls() {
         .filter(|selector| vcx.debug_bounds(selector).is_none())
         .collect();
     assert!(missing.is_empty(), "controls not painted: {missing:?}");
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_toolbar_buttons_by_mouse() {
-    let (temp_dir, engine) = seed_library("toolbar", 8);
+    let (_temp_dir, engine) = seed_library("toolbar", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -314,13 +76,11 @@ fn ui_automation_toolbar_buttons_by_mouse() {
     view.update(vcx, |app, _| assert!(app.inspector_open));
     click(vcx, "inspector-toggle");
     view.update(vcx, |app, _| assert!(!app.inspector_open));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_search_click_type_clear() {
-    let (temp_dir, engine) = seed_library("search", 8);
+    let (_temp_dir, engine) = seed_library("search", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -355,13 +115,11 @@ fn ui_automation_search_click_type_clear() {
         assert!(app.search_query.is_empty());
         assert!(!app.search_focused);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_and_viewer_journey() {
-    let (temp_dir, engine) = seed_library("journey", 8);
+    let (_temp_dir, engine) = seed_library("journey", 8);
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
@@ -391,13 +149,11 @@ fn ui_automation_grid_and_viewer_journey() {
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(0)));
     keystrokes(vcx, "pagedown");
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(7)));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_viewer_back_button_returns_to_grid() {
-    let (temp_dir, engine) = seed_library("viewer_back", 8);
+    let (_temp_dir, engine) = seed_library("viewer_back", 8);
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
@@ -445,13 +201,11 @@ fn ui_automation_viewer_back_button_returns_to_grid() {
     view.update(vcx, |app, _| assert!(app.is_fullscreen_viewer));
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| assert!(!app.is_fullscreen_viewer));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_selection_contract_and_empty_space_click() {
-    let (temp_dir, engine) = seed_library("selection_contract", 8);
+    let (_temp_dir, engine) = seed_library("selection_contract", 8);
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
 
@@ -503,13 +257,11 @@ fn ui_automation_selection_contract_and_empty_space_click() {
             "Shift+Right grows from the anchor"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_keywords_row_opens_the_page_and_enter_renames() {
-    let (temp_dir, engine) = seed_library("tag_rename", 3);
+    let (_temp_dir, engine) = seed_library("tag_rename", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
         .add_tags_batch(&[item.id], &["travel".to_string()])
@@ -539,13 +291,11 @@ fn ui_automation_keywords_row_opens_the_page_and_enter_renames() {
             "↵ on a focused keyword begins its rename"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_card_skeleton_selection_and_open() {
-    let (temp_dir, engine) = seed_library("card_states", 8);
+    let (_temp_dir, engine) = seed_library("card_states", 8);
     let first = engine.get_item_slice(0..1)[0].id;
     let first_id = first.0;
     let card = leak(format!("media-card-{}", first_id));
@@ -596,13 +346,11 @@ fn ui_automation_card_skeleton_selection_and_open() {
             "double-click must still open the viewer"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_thumbnail_chrome_is_minimal() {
-    let (temp_dir, engine) = seed_library("card_chrome", 8);
+    let (_temp_dir, engine) = seed_library("card_chrome", 8);
     let first_id = engine.get_item_slice(0..1)[0].id.0;
     let card = leak(format!("media-card-{}", first_id));
     let selected = leak(format!("media-card-selected-{}", first_id));
@@ -662,13 +410,11 @@ fn ui_automation_thumbnail_chrome_is_minimal() {
             "removing the hover hint must not remove the open action"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_card_texture_replaces_skeleton() {
-    let (temp_dir, engine) = seed_library("card_reveal", 1);
+    let (_temp_dir, engine) = seed_library("card_reveal", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card_id = item.id.0;
     let photo = leak(format!("media-card-photo-{}", card_id));
@@ -709,13 +455,11 @@ fn ui_automation_card_texture_replaces_skeleton() {
         photo_bounds.size, thumb_bounds.size,
         "the revealed thumbnail must keep the same layout as the skeleton"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_card_photo_well_is_square_at_all_densities() {
-    let (temp_dir, engine) = seed_library("square_well", 8);
+    let (_temp_dir, engine) = seed_library("square_well", 8);
     let first = engine.get_item_slice(0..1)[0].clone();
     let first_id = first.id.0;
     engine.catalog().set_rating(first.id, 3).unwrap();
@@ -813,13 +557,11 @@ fn ui_automation_card_photo_well_is_square_at_all_densities() {
         (width - height).abs() <= 2.0 && (height - expected).abs() <= 2.0,
         "the inspector chrome must be budgeted: well {width}x{height}, expected {expected}"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_card_tooltip_carries_the_filename() {
-    let (temp_dir, engine) = seed_library("card_tooltip", 1);
+    let (_temp_dir, engine) = seed_library("card_tooltip", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
@@ -838,13 +580,11 @@ fn ui_automation_card_tooltip_carries_the_filename() {
         vcx.debug_bounds("media-card-name-tooltip").is_some(),
         "hovering a card must show the filename tooltip that replaced the label"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_empty_search_state_offers_a_clear_action() {
-    let (temp_dir, engine) = seed_library("empty_search", 8);
+    let (_temp_dir, engine) = seed_library("empty_search", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -866,13 +606,11 @@ fn ui_automation_empty_search_state_offers_a_clear_action() {
         );
         assert!(app.selected_item.is_none());
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_modals_dismiss_on_backdrop() {
-    let (temp_dir, engine) = seed_library("modals", 8);
+    let (_temp_dir, engine) = seed_library("modals", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -889,13 +627,11 @@ fn ui_automation_modals_dismiss_on_backdrop() {
     assert!(vcx.debug_bounds("album-builder-card").is_some());
     click_point(vcx, 4.0, 4.0);
     view.update(vcx, |app, _| assert!(!app.album_draft.modal_open));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_shortcut_cheat_sheet() {
-    let (temp_dir, engine) = seed_library("shortcuts", 8);
+    let (_temp_dir, engine) = seed_library("shortcuts", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -913,15 +649,13 @@ fn ui_automation_shortcut_cheat_sheet() {
     keystrokes(vcx, "secondary-/");
     click_point(vcx, 4.0, 4.0);
     view.update(vcx, |app, _| assert!(!app.shortcuts_overlay_open));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// The sheet is taller than its card, so its lower rows must be reachable
 /// without a mouse (AGENTS.md section 11).
 #[core::prelude::v1::test]
 fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
-    let (temp_dir, engine) = seed_library("shortcuts_scroll", 2);
+    let (_temp_dir, engine) = seed_library("shortcuts_scroll", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-/");
@@ -957,14 +691,13 @@ fn ui_automation_shortcut_sheet_scrolls_from_the_keyboard() {
     keystrokes(vcx, "escape");
     keystrokes(vcx, "secondary-/");
     assert_eq!(offset(vcx).0, px(0.0), "reopening starts at the top again");
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Regression: O / Open in Default App on a file that has gone away did
 /// nothing at all; it now says so in the error banner.
 #[core::prelude::v1::test]
 fn ui_automation_open_in_default_app_reports_a_missing_file() {
-    let (temp_dir, engine) = seed_library("open_default_missing", 2);
+    let (_temp_dir, engine) = seed_library("open_default_missing", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home enter");
@@ -985,7 +718,6 @@ fn ui_automation_open_in_default_app_reports_a_missing_file() {
             "a vanished file must be reported, not silently ignored"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -1034,13 +766,11 @@ fn ui_automation_export_writes_originals_and_sidecars() {
             app.last_action
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_undo_redo_rating_and_sidecar() {
-    let (temp_dir, engine) = seed_library("undo", 3);
+    let (_temp_dir, engine) = seed_library("undo", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let sidecar = lumina_core::sidecar_path(&item.path);
     let mut cx = crate::tests::TestApp::single();
@@ -1078,13 +808,11 @@ fn ui_automation_undo_redo_rating_and_sidecar() {
         );
     });
     assert!(sidecar.exists(), "redo should rewrite the sidecar");
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_undo_tag_and_caption() {
-    let (temp_dir, engine) = seed_library("undo_meta", 3);
+    let (_temp_dir, engine) = seed_library("undo_meta", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -1126,13 +854,11 @@ fn ui_automation_undo_tag_and_caption() {
     view.update(vcx, |app, _| {
         assert!(!app.item_captions.contains_key(&item.id));
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_title_edit_undo_and_xmp_import() {
-    let (temp_dir, engine) = seed_library("title_import", 3);
+    let (_temp_dir, engine) = seed_library("title_import", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let sidecar = lumina_core::sidecar_path(&item.path);
     let mut cx = crate::tests::TestApp::single();
@@ -1200,13 +926,11 @@ fn ui_automation_title_edit_undo_and_xmp_import() {
         );
         assert!(app.selected_item_tags.contains(&"imported".to_string()));
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_date_and_location_edit_undo() {
-    let (temp_dir, engine) = seed_library("edit_time_place", 3);
+    let (_temp_dir, engine) = seed_library("edit_time_place", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let original_timestamp = item.timestamp_epoch_ms;
     let mut cx = crate::tests::TestApp::single();
@@ -1273,13 +997,11 @@ fn ui_automation_date_and_location_edit_undo() {
             "undo should clear the location"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_command_palette() {
-    let (temp_dir, engine) = seed_library("command_palette", 3);
+    let (_temp_dir, engine) = seed_library("command_palette", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1327,13 +1049,11 @@ fn ui_automation_command_palette() {
     keystrokes(vcx, "secondary-k");
     keystrokes(vcx, "escape");
     view.update(vcx, |app, _| assert!(!app.command_palette_open));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_preferences_modal() {
-    let (temp_dir, engine) = seed_library("preferences", 3);
+    let (_temp_dir, engine) = seed_library("preferences", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1369,13 +1089,11 @@ fn ui_automation_preferences_modal() {
     view.update(vcx, |app, _| {
         assert!(!app.preferences_open, "Escape should close preferences");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_sort_menu_orders_grid() {
-    let (temp_dir, engine) = seed_library("sorting", 5);
+    let (_temp_dir, engine) = seed_library("sorting", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1404,13 +1122,11 @@ fn ui_automation_sort_menu_orders_grid() {
         assert_eq!(names, expected, "grid must follow the selected sort");
         assert_eq!(names.first().map(String::as_str), Some("photo_00.jpg"));
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_smart_album_edit_and_delete() {
-    let (temp_dir, engine) = seed_library("smart_album_mgmt", 3);
+    let (_temp_dir, engine) = seed_library("smart_album_mgmt", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1464,13 +1180,11 @@ fn ui_automation_smart_album_edit_and_delete() {
             crate::views::sidebar::AlbumSelection::AllLibrary
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_resize_updates_persisted_bounds() {
-    let (temp_dir, engine) = seed_library("resize", 8);
+    let (_temp_dir, engine) = seed_library("resize", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1481,13 +1195,11 @@ fn ui_automation_resize_updates_persisted_bounds() {
         assert!((width - 1100.0).abs() < 2.0, "width was {width}");
         assert!((height - 720.0).abs() < 2.0, "height was {height}");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_navigation_album_back() {
-    let (temp_dir, engine) = seed_library("nav_album", 8);
+    let (_temp_dir, engine) = seed_library("nav_album", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1524,13 +1236,11 @@ fn ui_automation_navigation_album_back() {
             "Back at the oldest entry must stay put"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_navigation_search_back() {
-    let (temp_dir, engine) = seed_library("nav_search", 8);
+    let (_temp_dir, engine) = seed_library("nav_search", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1548,13 +1258,11 @@ fn ui_automation_navigation_search_back() {
         );
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_navigation_edge_no_ops() {
-    let (temp_dir, engine) = seed_library("nav_edges", 8);
+    let (_temp_dir, engine) = seed_library("nav_edges", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1606,13 +1314,11 @@ fn ui_automation_navigation_edge_no_ops() {
             "Cmd+] at the newest entry must stay put"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
-    let (temp_dir, engine) = seed_library("search_suggestions", 3);
+    let (_temp_dir, engine) = seed_library("search_suggestions", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -1723,13 +1429,11 @@ fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
             "recent searches dedupe case-insensitively"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_search_suggestion_click_applies_without_blurring() {
-    let (temp_dir, engine) = seed_library("search_suggestion_click", 3);
+    let (_temp_dir, engine) = seed_library("search_suggestion_click", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -1761,15 +1465,13 @@ fn ui_automation_search_suggestion_click_applies_without_blurring() {
         );
         assert!(app.search_suggestions.dismissed);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
     use std::collections::BTreeSet;
 
-    let (temp_dir, engine) = seed_library("grid_drag_range", 8);
+    let (_temp_dir, engine) = seed_library("grid_drag_range", 8);
     let items = engine.get_item_slice(0..8);
     let cards: Vec<&'static str> = items
         .iter()
@@ -1841,15 +1543,13 @@ fn ui_automation_grid_drag_selects_range_and_suppresses_click() {
             "a plain click after a drag selects exactly one card"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_drag_across_rows_selects_a_rectangle() {
     use std::collections::BTreeSet;
 
-    let (temp_dir, engine) = seed_library("grid_drag_rect", 12);
+    let (_temp_dir, engine) = seed_library("grid_drag_rect", 12);
     let items = engine.get_item_slice(0..12);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -1880,15 +1580,13 @@ fn ui_automation_grid_drag_across_rows_selects_a_rectangle() {
             "a marquee across rows selects the swept rectangle, not the index run between corners"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_drag_from_selected_card_preserves_multi_selection() {
     use std::collections::BTreeSet;
 
-    let (temp_dir, engine) = seed_library("grid_drag_preserve", 8);
+    let (_temp_dir, engine) = seed_library("grid_drag_preserve", 8);
     let items = engine.get_item_slice(0..8);
     let cards: Vec<&'static str> = items
         .iter()
@@ -1950,15 +1648,13 @@ fn ui_automation_grid_drag_from_selected_card_preserves_multi_selection() {
         );
         assert!(!app.grid_drag.active);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_drag_with_cmd_is_additive() {
     use std::collections::BTreeSet;
 
-    let (temp_dir, engine) = seed_library("grid_drag_cmd", 8);
+    let (_temp_dir, engine) = seed_library("grid_drag_cmd", 8);
     let items = engine.get_item_slice(0..8);
     let cards: Vec<&'static str> = items
         .iter()
@@ -2000,15 +1696,13 @@ fn ui_automation_grid_drag_with_cmd_is_additive() {
         );
         assert!(!app.grid_drag.active);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
     use std::collections::BTreeSet;
 
-    let (temp_dir, engine) = seed_library("grid_drag_bg", 8);
+    let (_temp_dir, engine) = seed_library("grid_drag_bg", 8);
     let items = engine.get_item_slice(0..8);
     let cards: Vec<&'static str> = items
         .iter()
@@ -2081,32 +1775,11 @@ fn ui_automation_grid_drag_from_empty_background_sweeps_and_escape_resets() {
         assert!(!app.grid_drag.active);
         assert!(app.selected_indices.is_empty());
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
-}
-
-/// Sends a wheel event at `position` after moving the pointer there, because
-/// GPUI hit-tests scroll events against the last mouse position.
-pub(crate) fn wheel(
-    cx: &mut VisualTestContext,
-    position: gpui::Point<gpui::Pixels>,
-    delta: gpui::ScrollDelta,
-    modifiers: gpui::Modifiers,
-) {
-    cx.simulate_mouse_move(position, None, gpui::Modifiers::default());
-    cx.simulate_event(gpui::ScrollEvent {
-        position,
-        delta,
-        modifiers,
-        touch_phase: gpui::TouchPhase::Moved,
-        source: gpui::ScrollSource::Pointer,
-    });
-    render_ui(cx);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_viewer_wheel_zoom_is_smooth() {
-    let (temp_dir, engine) = seed_library("wheel_smooth", 2);
+    let (_temp_dir, engine) = seed_library("wheel_smooth", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let item = view.update(vcx, |app, _| {
@@ -2149,8 +1822,6 @@ fn ui_automation_viewer_wheel_zoom_is_smooth() {
         (two - 1.25).abs() > 0.02,
         "wheel zoom must not snap to the old 0.25 keyboard step"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -2264,7 +1935,7 @@ fn ui_automation_grid_zoom_anchor_clamps_partial_rows_and_invalid_geometry() {
 fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
     use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
 
-    let (temp_dir, engine) = seed_library("grid_wheel_zoom", 40);
+    let (_temp_dir, engine) = seed_library("grid_wheel_zoom", 40);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -2439,13 +2110,11 @@ fn ui_automation_plain_wheel_scrolls_and_cmd_wheel_zooms_around_pointer() {
         (f32::from(offset_at_limit) - f32::from(offset_before_limit)).abs() < 0.5,
         "a Cmd+wheel that cannot zoom must leave the scroll offset alone: before={offset_before_limit:?} after={offset_at_limit:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
-    let (temp_dir, engine) = seed_library("batch_meta", 4);
+    let (_temp_dir, engine) = seed_library("batch_meta", 4);
     let items = engine.get_item_slice(0..4);
     let first = items[0].clone();
     let ids: Vec<_> = items[0..3].iter().map(|item| item.id).collect();
@@ -2570,13 +2239,11 @@ fn ui_automation_batch_title_and_caption_mixed_apply_and_grouped_undo() {
         assert!(!app.item_captions.contains_key(&ids[1]));
         assert!(!app.item_captions.contains_key(&ids[2]));
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_batch_date_mixed_apply_validation_and_grouped_undo() {
-    let (temp_dir, engine) = seed_library("batch_date", 4);
+    let (_temp_dir, engine) = seed_library("batch_date", 4);
     let dates = [
         test_epoch_ms("2020-01-02 03:04:05"),
         test_epoch_ms("2021-02-03 04:05:06"),
@@ -2719,13 +2386,11 @@ fn ui_automation_batch_date_mixed_apply_validation_and_grouped_undo() {
             "undo refreshes the mixed-value summary"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_batch_location_mixed_apply_validation_and_grouped_undo() {
-    let (temp_dir, engine) = seed_library("batch_location", 4);
+    let (_temp_dir, engine) = seed_library("batch_location", 4);
     let locations = [
         (Some(48.8566), Some(2.3522)),
         (Some(35.6762), Some(139.6503)),
@@ -2869,13 +2534,11 @@ fn ui_automation_batch_location_mixed_apply_validation_and_grouped_undo() {
             "undo refreshes the mixed-value summary"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_batch_inspector_metadata_edit_ui_path() {
-    let (temp_dir, engine) = seed_library("batch_meta_ui", 3);
+    let (_temp_dir, engine) = seed_library("batch_meta_ui", 3);
     let annotated = engine.get_item_slice(0..1)[0].clone();
     engine.set_title(annotated.id, Some("First")).unwrap();
     engine
@@ -3035,13 +2698,11 @@ fn ui_automation_batch_inspector_metadata_edit_ui_path() {
         }
         assert_eq!(app.undo.undo_stack.len(), 3);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
-    let (temp_dir, engine) = seed_library("untagged_view", 3);
+    let (_temp_dir, engine) = seed_library("untagged_view", 3);
     let items = engine.get_item_slice(0..3);
     assert_eq!(items.len(), 3, "the fixture must create three media items");
     let tagged: Vec<_> = items.iter().take(2).map(|item| item.id).collect();
@@ -3135,6 +2796,4 @@ fn ui_automation_untagged_sidebar_row_selection_and_empty_state() {
         );
         assert_eq!(app.get_active_count(), 3);
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

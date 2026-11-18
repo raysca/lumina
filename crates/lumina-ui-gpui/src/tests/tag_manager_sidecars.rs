@@ -1,11 +1,11 @@
 //! Tags page edits rewrite the XMP sidecars of the items they change.
 
 use super::tag_manager::{checkbox, count, open};
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui, seed_library};
 
 #[core::prelude::v1::test]
 fn rename_keyword_rewrites_sidecars() {
-    let (dir, engine) = seed_library("tm_rename_sidecar", 1);
+    let (_dir, engine) = seed_library("tm_rename_sidecar", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
         .add_tags_batch(
@@ -49,8 +49,6 @@ fn rename_keyword_rewrites_sidecars() {
         sidecar_tags().is_empty(),
         "a delete rewrites the sidecar too, so Import XMP cannot bring the keyword back"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// One item tagged `tags`, with a Lumina sidecar listing them.
@@ -58,7 +56,7 @@ pub(super) fn sidecar_library(
     prefix: &str,
     tags: &[&str],
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     lumina_core::MediaItem,
 ) {
@@ -85,7 +83,7 @@ pub(super) fn sidecar_tags(item: &lumina_core::MediaItem) -> Vec<String> {
 
 #[core::prelude::v1::test]
 fn merge_and_bulk_delete_rewrite_sidecars() {
-    let (dir, engine, item) =
+    let (_dir, engine, item) =
         sidecar_library("tm_merge_sidecar", &["beach", "coast", "sea", "unique"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -113,6 +111,4 @@ fn merge_and_bulk_delete_rewrite_sidecars() {
         ["beach"],
         "a bulk delete rewrites the sidecars of the items it changed"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

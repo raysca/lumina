@@ -1,6 +1,6 @@
 //! UI automation for files gone from disk: badge, Missing view, viewer note.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -55,12 +55,11 @@ fn missing_item_shows_badge_and_view() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn missing_row_hidden_when_nothing_is_missing() {
-    let (temp_dir, engine) = seed_library("missing_none", 2);
+    let (_temp_dir, engine) = seed_library("missing_none", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -69,7 +68,6 @@ fn missing_row_hidden_when_nothing_is_missing() {
         "the Missing row only shows while something is missing"
     );
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -181,7 +179,6 @@ fn viewer_says_the_original_is_missing() {
         );
     }
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -221,7 +218,6 @@ fn viewer_missing_card_buttons_take_tab_and_enter() {
         assert!(!app.is_fullscreen_viewer, "Esc still closes the viewer")
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Reselects the viewer item as if its file lived at `path`, with a cached
@@ -247,7 +243,7 @@ fn two_missing<'a>(
     name: &str,
     cx: &'a mut crate::tests::TestApp,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &'a mut gpui::VisualTestContext,
 ) {
@@ -276,7 +272,7 @@ fn locate_count() -> usize {
 #[core::prelude::v1::test]
 fn missing_card_focus_does_not_outlive_the_viewer() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = two_missing("missing_focus_close", &mut cx);
+    let (_temp_dir, view, vcx) = two_missing("missing_focus_close", &mut cx);
     crate::app::missing::LOCATE_REQUESTS.with(|r| r.borrow_mut().clear());
     keystrokes(vcx, "tab escape");
     view.update(vcx, |app, cx| {
@@ -294,13 +290,12 @@ fn missing_card_focus_does_not_outlive_the_viewer() {
     });
     assert_eq!(locate_count(), 0, "↵ in a reopened viewer must not Locate");
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn missing_card_focus_does_not_follow_to_the_next_item() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = two_missing("missing_focus_next", &mut cx);
+    let (_temp_dir, view, vcx) = two_missing("missing_focus_next", &mut cx);
     let first = view.update(vcx, |app, _| app.selected_item.as_ref().unwrap().id);
     crate::app::missing::LOCATE_REQUESTS.with(|r| r.borrow_mut().clear());
     keystrokes(vcx, "tab right");
@@ -315,13 +310,12 @@ fn missing_card_focus_does_not_follow_to_the_next_item() {
     keystrokes(vcx, "enter");
     assert_eq!(locate_count(), 0, "focus stays with the item it was set on");
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn keep_preview_is_per_item() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = two_missing("missing_keep_each", &mut cx);
+    let (_temp_dir, view, vcx) = two_missing("missing_keep_each", &mut cx);
     click(vcx, "viewer-missing-keep");
     render_ui(vcx);
     assert!(vcx.debug_bounds("viewer-missing-card").is_none());
@@ -337,13 +331,12 @@ fn keep_preview_is_per_item() {
     );
     assert!(vcx.debug_bounds("viewer-missing-bar").is_some());
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn missing_card_hides_in_edit_mode_but_the_bar_stays() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = two_missing("missing_edit", &mut cx);
+    let (_temp_dir, view, vcx) = two_missing("missing_edit", &mut cx);
     assert!(vcx.debug_bounds("viewer-missing-card").is_some());
     keystrokes(vcx, "e");
     view.update(vcx, |app, _| {
@@ -355,7 +348,6 @@ fn missing_card_hides_in_edit_mode_but_the_bar_stays() {
     );
     assert!(vcx.debug_bounds("viewer-missing-bar").is_some());
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[cfg(target_os = "macos")] // /Volumes is macOS-only
@@ -425,7 +417,6 @@ fn locate_outside_library_shows_banner() {
     });
     drop(view);
     let _ = std::fs::remove_file(&outside);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -450,12 +441,11 @@ fn locate_vanished_file_names_the_cause() {
         );
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn locate_needs_one_missing_item_selected() {
-    let (temp_dir, engine) = seed_library("missing_locate_none", 2);
+    let (_temp_dir, engine) = seed_library("missing_locate_none", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -467,7 +457,6 @@ fn locate_needs_one_missing_item_selected() {
         );
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -504,7 +493,6 @@ fn context_menu_offers_locate_only_for_missing_items() {
         "a present item's menu has no Locate"
     );
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -537,5 +525,4 @@ fn locate_reconnects_a_moved_file() {
         );
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

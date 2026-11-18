@@ -4,23 +4,17 @@
 
 use crate::app::command_palette::CommandId;
 use crate::app::types::get_sample_items;
-use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, render_ui, seed_library};
 use lumina_core::{MediaItem, MediaType};
 
 /// Removes the temp library on success and failure.
-struct Fixture(std::path::PathBuf);
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
 
 /// A library plus a video item whose file is not a video, so every load
 /// fails.
 fn broken_video(
     prefix: &str,
 ) -> (
-    Fixture,
+    super::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     MediaItem,
 ) {
@@ -32,7 +26,7 @@ fn broken_video(
         .find(|item| item.media_type == MediaType::Video)
         .expect("the deterministic sample set must contain a video");
     video.path = path;
-    (Fixture(dir), engine, video)
+    (dir, engine, video)
 }
 
 const VIDEO_COMMANDS: [CommandId; 7] = [

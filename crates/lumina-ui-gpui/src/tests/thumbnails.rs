@@ -6,7 +6,7 @@
 //! failure through `on_thumbnail_result` (the decode callback's body) and
 //! count requests with `THUMB_REQUESTS`.
 
-use super::ui_automation::{
+use super::helpers::{
     focus_app, keystrokes, leak, render_ui, seed_library, seed_library_undecodable,
 };
 use crate::app::command_palette::CommandId;
@@ -61,7 +61,7 @@ fn is_failed(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: MediaId)
 
 #[core::prelude::v1::test]
 fn failed_decode_is_marked_once_and_not_rerequested() {
-    let (dir, engine) = seed_library_undecodable("thumb_failed", 1);
+    let (_dir, engine) = seed_library_undecodable("thumb_failed", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     reset_requests();
@@ -84,7 +84,7 @@ fn failed_decode_is_marked_once_and_not_rerequested() {
     assert_eq!(crate::i18n::t("grid.no_preview"), "No preview");
 
     // The failed well has its own tooltip; a click must still reach the card.
-    super::ui_automation::click(vcx, leak(format!("media-card-failed-{}", id.0)));
+    super::helpers::click(vcx, leak(format!("media-card-failed-{}", id.0)));
     view.update(vcx, |app, _| {
         assert_eq!(
             app.selected_item.as_ref().map(|item| item.id),
@@ -100,13 +100,11 @@ fn failed_decode_is_marked_once_and_not_rerequested() {
         0,
         "a failed id must not be decoded again on any frame"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn failure_callback_notifies() {
-    let (dir, engine) = seed_library_undecodable("thumb_notify", 1);
+    let (_dir, engine) = seed_library_undecodable("thumb_notify", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
@@ -127,8 +125,6 @@ fn failure_callback_notifies() {
         notified.get() > 0,
         "ThumbnailFailed must repaint: nothing else redraws after a decode-pool failure"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -165,7 +161,7 @@ fn thumbnail_callback_marks_and_messages_on_none() {
 
 #[core::prelude::v1::test]
 fn conversion_failure_is_marked() {
-    let (dir, engine) = seed_library_undecodable("thumb_convert", 1);
+    let (_dir, engine) = seed_library_undecodable("thumb_convert", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[]);
@@ -189,13 +185,11 @@ fn conversion_failure_is_marked() {
     assert!(vcx
         .debug_bounds(leak(format!("media-card-failed-{}", id.0)))
         .is_some());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rescan_clears_failures() {
-    let (dir, engine) = seed_library("thumb_rescan", 1);
+    let (_dir, engine) = seed_library("thumb_rescan", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_failed(&mut cx, engine, &[id]);
@@ -216,13 +210,11 @@ fn rescan_clears_failures() {
         !is_failed(&view, vcx, id),
         "the palette's Rescan retries failed thumbnails"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn reupserted_item_is_retried() {
-    let (dir, engine) = seed_library_undecodable("thumb_reupsert", 1);
+    let (_dir, engine) = seed_library_undecodable("thumb_reupsert", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let id = item.id;
     let mut cx = crate::tests::TestApp::single();
@@ -243,20 +235,18 @@ fn reupserted_item_is_retried() {
     assert!(!is_failed(&view, vcx, id), "a re-upserted file is retried");
     render_ui(vcx);
     assert_eq!(requests(), 1, "the retried card is decoded once");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn failed_card_keeps_card_size() {
-    let (dir, engine) = seed_library_undecodable("thumb_size", 2);
+    let (_dir, engine) = seed_library_undecodable("thumb_size", 2);
     let items = engine.get_item_slice(0..2);
     let (failed, pending) = (items[0].id, items[1].id);
     let mut cx = crate::tests::TestApp::single();
     // The second card is still decoding (its decode claimed before the first
     // draw); the first has failed. Either way the first ends failed: its own
     // decode of the fake file fails too.
-    let (view, vcx) = super::ui_automation::app_with_pending(&mut cx, engine, &[pending]);
+    let (view, vcx) = super::helpers::app_with_pending(&mut cx, engine, &[pending]);
     view.update(vcx, |app, _| {
         let tx = app.ui_tx.clone();
         fail(app.grid_state.as_ref().unwrap(), &tx, failed);
@@ -273,13 +263,11 @@ fn failed_card_keeps_card_size() {
         failed_bounds.size, skeleton_bounds.size,
         "a failed card must fill the same photo well as a skeleton"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn library_switch_starts_with_no_failures() {
-    let (dir, engine) = seed_library_undecodable("thumb_switch", 1);
+    let (_dir, engine) = seed_library_undecodable("thumb_switch", 1);
     let (other, _) = seed_library_undecodable("thumb_switch_other", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
@@ -309,9 +297,6 @@ fn library_switch_starts_with_no_failures() {
             "the late failure lands in the library that asked"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 /// Card badges: RAW bottom-right, duration bottom-left,
@@ -319,7 +304,7 @@ fn library_switch_starts_with_no_failures() {
 #[core::prelude::v1::test]
 fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {
     use lumina_core::{Flag, MediaType};
-    let (dir, engine) = super::ui_automation::seed_library("tile_badges", 1);
+    let (dir, engine) = super::helpers::seed_library("tile_badges", 1);
     let tpl = engine.get_item_slice(0..1)[0].clone();
     let rows = [
         ("a.arw", MediaType::Raw, None),
@@ -347,7 +332,7 @@ fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {
     engine.set_ratings(&[(clip, 3)]).unwrap();
 
     let mut cx = crate::tests::TestApp::single();
-    let (view, vcx) = super::ui_automation::app_with_library(&mut cx, engine);
+    let (view, vcx) = super::helpers::app_with_library(&mut cx, engine);
     // The favourite's file is also missing: three top-right marks at once.
     view.update(vcx, |app, cx| {
         app.missing_items.insert(fav);
@@ -422,7 +407,6 @@ fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {
     apart(flag, missing, "flag and missing badge");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Small tiles drop the heart, edited badge and meta pill so the state
@@ -430,7 +414,7 @@ fn raw_badge_duration_and_heart_sit_where_the_design_puts_them() {
 #[core::prelude::v1::test]
 fn small_tiles_keep_state_badges_apart() {
     use lumina_core::{Flag, MediaType};
-    let (dir, engine) = super::ui_automation::seed_library("tile_small", 1);
+    let (dir, engine) = super::helpers::seed_library("tile_small", 1);
     let mut clip = engine.get_item_slice(0..1)[0].clone();
     // No file on disk, so no watcher rescan can reset the duration.
     clip.file_name = "clip.mov".into();
@@ -502,5 +486,4 @@ fn small_tiles_keep_state_badges_apart() {
         }
     }
     drop(view);
-    let _ = std::fs::remove_dir_all(&dir);
 }

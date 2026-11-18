@@ -1,7 +1,7 @@
 //! The Videos view's Grid draws 16:9 thumbs with a
 //! two-line caption; Mosaic keeps its true-aspect rows.
 
-use super::ui_automation::{app_with_library, leak, render_ui, seed_library};
+use super::helpers::{app_with_library, leak, render_ui, seed_library};
 use crate::app::LuminaApp;
 use crate::config::BrowseLayout;
 use crate::views::sidebar::AlbumSelection;
@@ -14,11 +14,7 @@ use std::sync::Arc;
 pub(super) fn library_with_clips(
     prefix: &str,
     n: usize,
-) -> (
-    super::downloads::TempLibrary,
-    Arc<LuminaEngine>,
-    Vec<MediaId>,
-) {
+) -> (super::helpers::TempLibrary, Arc<LuminaEngine>, Vec<MediaId>) {
     let (dir, engine) = seed_library(prefix, 1);
     let tpl = engine.get_item_slice(0..1)[0].clone();
     let clips: Vec<_> = (0..n)
@@ -37,7 +33,7 @@ pub(super) fn library_with_clips(
         .collect();
     let stored = engine.catalog().insert_or_update_batch(&clips).unwrap();
     let ids = stored.iter().map(|clip| clip.id).collect();
-    (super::downloads::TempLibrary(dir), engine, ids)
+    (dir, engine, ids)
 }
 
 fn bounds(vcx: &mut VisualTestContext, selector: String) -> Bounds<Pixels> {
@@ -212,9 +208,9 @@ fn arrow_keys_reveal_captioned_rows() {
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(800.0)));
     open_videos(&view, vcx);
     view.update(vcx, |app, cx| app.select_index(0, cx));
-    super::ui_automation::focus_app(vcx, &view);
+    super::helpers::focus_app(vcx, &view);
     for _ in 0..9 {
-        super::ui_automation::keystrokes(vcx, "down");
+        super::helpers::keystrokes(vcx, "down");
         render_ui(vcx);
     }
     render_ui(vcx);

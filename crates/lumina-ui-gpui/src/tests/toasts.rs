@@ -1,15 +1,13 @@
 //! UI automation for the bottom-right toast: rendering, undo, dismissal, and
 //! stale-timer handling.
 
-use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
-};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui, seed_library};
 use crate::*;
 use std::time::Duration;
 
 #[core::prelude::v1::test]
 fn toast_renders_with_message_and_dismiss_control() {
-    let (temp_dir, engine) = seed_library("render", 4);
+    let (_temp_dir, engine) = seed_library("render", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -60,13 +58,11 @@ fn toast_renders_with_message_and_dismiss_control() {
         );
     });
     assert!(vcx.debug_bounds("toast").is_some());
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn toast_undo_invokes_undo_last() {
-    let (temp_dir, engine) = seed_library("undo", 3);
+    let (_temp_dir, engine) = seed_library("undo", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -111,13 +107,11 @@ fn toast_undo_invokes_undo_last() {
             "an undo does not push another undo entry"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn toast_rating_and_tag_hooks_offer_undo() {
-    let (temp_dir, engine) = seed_library("hooks", 3);
+    let (_temp_dir, engine) = seed_library("hooks", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -167,13 +161,11 @@ fn toast_rating_and_tag_hooks_offer_undo() {
             "undo must confirm with a fresh toast"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn escape_dismisses_toast_without_stealing_modal_or_viewer_escape() {
-    let (temp_dir, engine) = seed_library("escape_toast", 2);
+    let (_temp_dir, engine) = seed_library("escape_toast", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -250,13 +242,11 @@ fn escape_dismisses_toast_without_stealing_modal_or_viewer_escape() {
             "the grid Escape after the viewer must dismiss the toast"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn toast_auto_dismisses_and_a_replaced_timer_is_stale() {
-    let (temp_dir, engine) = seed_library("timer", 2);
+    let (_temp_dir, engine) = seed_library("timer", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -292,8 +282,6 @@ fn toast_auto_dismisses_and_a_replaced_timer_is_stale() {
             "toast must auto-dismiss after its timeout"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -365,15 +353,13 @@ fn toast_export_and_import_success_are_hooked() {
             "import is informational, not undoable"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn toast_kinds_show_accent_title_subtitle_and_action() {
     use crate::views::toast::{ToastAction, ToastKind};
 
-    let (temp_dir, engine) = seed_library("kinds", 3);
+    let (_temp_dir, engine) = seed_library("kinds", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -481,15 +467,13 @@ fn toast_kinds_show_accent_title_subtitle_and_action() {
             "a replaced toast under the pointer must stay held"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn refusals_show_warning_toast_not_success() {
     use crate::views::toast::ToastKind;
 
-    let (temp_dir, engine) = seed_library("refusals", 2);
+    let (_temp_dir, engine) = seed_library("refusals", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -534,6 +518,4 @@ fn refusals_show_warning_toast_not_success() {
             "{name}: a refusal shows the warning icon"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

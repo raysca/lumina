@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::tests::culling::{card, ids};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -59,7 +59,7 @@ fn listed(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Vec<CommandI
 /// them out and the menu bar disables them: the same rule for each.
 #[core::prelude::v1::test]
 fn viewer_from_compare_refuses_what_would_change_the_view_behind_it() {
-    let (dir, engine) = seed_library("compare_view_guards", 4);
+    let (_dir, engine) = seed_library("compare_view_guards", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -154,7 +154,6 @@ fn viewer_from_compare_refuses_what_would_change_the_view_behind_it() {
         vcx.debug_bounds("compare-view").is_some(),
         "Esc returns to compare over the same view"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The menu bar stays reachable while the ⌘K palette is open. View >
@@ -162,7 +161,7 @@ fn viewer_from_compare_refuses_what_would_change_the_view_behind_it() {
 /// palette's keys would act on what they show.
 #[core::prelude::v1::test]
 fn menu_compare_slideshow_and_map_wait_for_the_palette() {
-    let (dir, engine) = seed_library("compare_under_palette", 4);
+    let (_dir, engine) = seed_library("compare_under_palette", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -213,14 +212,13 @@ fn menu_compare_slideshow_and_map_wait_for_the_palette() {
     vcx.dispatch_action(crate::actions::Compare);
     render_ui(vcx);
     assert!(view.update(vcx, |app, _| app.compare.is_some()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Compare holds the old library's items and textures: opening another
 /// library closes it and evicts them.
 #[core::prelude::v1::test]
 fn opening_another_library_closes_compare() {
-    let (dir, engine) = seed_library("compare_switch", 3);
+    let (_dir, engine) = seed_library("compare_switch", 3);
     let (other, _other_engine) = seed_library("compare_switch_other", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -252,15 +250,13 @@ fn opening_another_library_closes_compare() {
         1,
         "the old library's texture is evicted"
     );
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 /// Settings over compare draws the one toast and banner above itself:
 /// compare must not draw a second, hidden copy with the same element ids.
 #[core::prelude::v1::test]
 fn settings_over_compare_draws_one_toast_and_banner() {
-    let (dir, engine) = seed_library("compare_settings_toast", 3);
+    let (_dir, engine) = seed_library("compare_settings_toast", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -291,5 +287,4 @@ fn settings_over_compare_draws_one_toast_and_banner() {
         vcx.debug_bounds("error-banner").is_some(),
         "the banner still shows"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

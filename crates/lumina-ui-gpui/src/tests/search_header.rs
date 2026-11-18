@@ -1,7 +1,7 @@
 //! The search header with its token query bar, and the
 //! rule that decides between the Search screen and the Library.
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
 };
 use gpui::{point, px, Bounds, Entity, Modifiers, MouseButton, Pixels, VisualTestContext};
@@ -24,7 +24,7 @@ fn set_query(view: &Entity<crate::LuminaApp>, vcx: &mut VisualTestContext, q: &s
 
 #[core::prelude::v1::test]
 fn query_tokens_render_as_chips_with_connectors() {
-    let (dir, engine) = seed_library("search_header_chips", 1);
+    let (_dir, engine) = seed_library("search_header_chips", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, QUERY);
@@ -90,12 +90,11 @@ fn query_tokens_render_as_chips_with_connectors() {
         "singular"
     );
     assert_eq!(crate::i18n::plural("search.results", 1284), "1,284 results");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn removing_a_token_chip_edits_the_query() {
-    let (dir, engine) = seed_library("search_header_remove", 1);
+    let (_dir, engine) = seed_library("search_header_remove", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, QUERY);
@@ -153,12 +152,11 @@ fn removing_a_token_chip_edits_the_query() {
     keystrokes(vcx, "left");
     keystrokes(vcx, "backspace");
     assert_eq!(query(&view, vcx), "tra", "⌫ removes the selected chip");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn search_screen_rule_free_text_or_focus() {
-    let (dir, engine) = seed_library("search_header_rule", 1);
+    let (_dir, engine) = seed_library("search_header_rule", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -206,12 +204,11 @@ fn search_screen_rule_free_text_or_focus() {
         vcx.debug_bounds("page-header").is_some() && vcx.debug_bounds("search-header").is_none(),
         "blurring with no query restores the page header"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn entering_the_field_keeps_the_last_token_a_chip() {
-    let (dir, engine) = seed_library("search_header_enter", 1);
+    let (_dir, engine) = seed_library("search_header_enter", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -251,12 +248,11 @@ fn entering_the_field_keeps_the_last_token_a_chip() {
         "a paste fills the query up to the cap and no further: {} chars",
         q.chars().count()
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_click_that_blurs_search_keeps_the_header_until_mouse_up() {
-    let (dir, engine) = seed_library("search_header_hold", 1);
+    let (_dir, engine) = seed_library("search_header_hold", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
@@ -295,12 +291,11 @@ fn a_click_that_blurs_search_keeps_the_header_until_mouse_up() {
         assert!(app.search_focused, "clicking the field focuses search");
         assert!(!app.query_bar.held_for_click, "no hold left behind");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn emptying_the_typed_text_keeps_the_chips() {
-    let (dir, engine) = seed_library("search_header_empty_typed", 1);
+    let (_dir, engine) = seed_library("search_header_empty_typed", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -329,7 +324,6 @@ fn emptying_the_typed_text_keeps_the_chips() {
     );
     keystrokes(vcx, "backspace");
     assert_eq!(query(&view, vcx), "", "the next ⌫ removes the chip whole");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // Save as Smart Album and the Narrow by chips.
@@ -337,7 +331,7 @@ fn emptying_the_typed_text_keeps_the_chips() {
 #[core::prelude::v1::test]
 fn save_button_opens_the_prefilled_builder() {
     use lumina_core::{RuleField, RuleOperator, RuleValue, SmartAlbumRule};
-    let (dir, engine) = seed_library("search_header_save", 2);
+    let (_dir, engine) = seed_library("search_header_save", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // No item matches: an empty smart album is still a valid one to save.
@@ -370,7 +364,6 @@ fn save_button_opens_the_prefilled_builder() {
             "one Query rule holding the raw search text"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn save_search_listed(app: &crate::LuminaApp) -> bool {
@@ -382,7 +375,7 @@ fn save_search_listed(app: &crate::LuminaApp) -> bool {
 
 #[core::prelude::v1::test]
 fn save_is_disabled_while_compare_holds_the_view() {
-    let (dir, engine) = seed_library("search_header_save_compare", 2);
+    let (_dir, engine) = seed_library("search_header_save_compare", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "photo");
@@ -412,13 +405,12 @@ fn save_is_disabled_while_compare_holds_the_view() {
         );
         app.compare = None;
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn save_is_disabled_in_edit_mode() {
     use crate::tests::quick_edit::{edit_library, editing, open_viewer_on};
-    let (dir, engine, photos, _) = edit_library("search_header_save_edit");
+    let (_dir, engine, photos, _) = edit_library("search_header_save_edit");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     set_query(&view, vcx, "tram");
@@ -442,12 +434,11 @@ fn save_is_disabled_in_edit_mode() {
             "a click on the disabled Save opens nothing"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn save_leaves_the_search_field() {
-    let (dir, engine) = seed_library("search_header_save_blur", 1);
+    let (_dir, engine) = seed_library("search_header_save_blur", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "tram");
@@ -466,12 +457,11 @@ fn save_leaves_the_search_field() {
         vcx.debug_bounds("search-suggestions").is_none(),
         "no dropdown paints over the builder"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn narrow_chips_toggle_query_tokens() {
-    let (dir, engine) = seed_library("search_header_narrow", 1);
+    let (_dir, engine) = seed_library("search_header_narrow", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "tram");
@@ -512,20 +502,19 @@ fn narrow_chips_toggle_query_tokens() {
             "{selector} appends {token}"
         );
         assert!(
-            vcx.debug_bounds(crate::tests::ui_automation::leak(format!("{selector}-on")))
+            vcx.debug_bounds(crate::tests::helpers::leak(format!("{selector}-on")))
                 .is_some(),
             "{selector} shows on"
         );
         click(vcx, selector);
         assert_eq!(query(&view, vcx), "tram", "{selector} again removes it");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
     use crate::app::command_palette::CommandId;
-    let (dir, engine) = seed_library("search_header_narrow_keys", 1);
+    let (_dir, engine) = seed_library("search_header_narrow_keys", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "tram");
@@ -585,7 +574,6 @@ fn narrow_and_save_have_palette_paths_and_fit_a_narrow_window() {
         28.0,
         "the chips keep their size, in one line"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // Top matches.
@@ -604,7 +592,7 @@ fn top_match_app<'a>(
     name: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     Entity<crate::LuminaApp>,
     &'a mut VisualTestContext,
     i64,
@@ -651,7 +639,7 @@ fn top_match_app<'a>(
 #[core::prelude::v1::test]
 fn top_matches_show_place_album_month_and_navigate() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, album) = top_match_app("search_top_matches", &mut cx);
+    let (_dir, view, vcx, album) = top_match_app("search_top_matches", &mut cx);
 
     set_query(&view, vcx, "lisbon june");
     settle(vcx);
@@ -723,13 +711,12 @@ fn top_matches_show_place_album_month_and_navigate() {
         vcx.debug_bounds("top-matches").is_none(),
         "no match, no row"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn top_matches_take_two_columns_when_narrow_and_arrows_from_the_bar() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, _) = top_match_app("search_top_matches_keys", &mut cx);
+    let (_dir, view, vcx, _) = top_match_app("search_top_matches_keys", &mut cx);
     vcx.simulate_resize(gpui::size(px(1100.0), px(800.0)));
     set_query(&view, vcx, "lisbon june");
     settle(vcx);
@@ -764,13 +751,12 @@ fn top_matches_take_two_columns_when_narrow_and_arrows_from_the_bar() {
         "lisbon month:jun year:2025",
         "↵ opens the highlighted card"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn top_matches_stay_up_while_typing_and_stale_cards_do_nothing() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, _) = top_match_app("search_top_matches_typing", &mut cx);
+    let (_dir, view, vcx, _) = top_match_app("search_top_matches_typing", &mut cx);
     set_query(&view, vcx, "lisbon june");
     settle(vcx);
     assert!(vcx.debug_bounds("top-match-place-0").is_some());
@@ -795,13 +781,12 @@ fn top_matches_stay_up_while_typing_and_stale_cards_do_nothing() {
         "porto",
         "a stale card does not put its tokens into a query that no longer names it"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn arrow_to_a_card_deselects_the_chip() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, _) = top_match_app("search_top_matches_chip", &mut cx);
+    let (_dir, view, vcx, _) = top_match_app("search_top_matches_chip", &mut cx);
     set_query(&view, vcx, "is:raw lisbon");
     settle(vcx);
     focus_app(vcx, &view);
@@ -820,7 +805,6 @@ fn arrow_to_a_card_deselects_the_chip() {
             "one thing selected at a time: highlighting a card drops the chip"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // The Photos section head.
@@ -906,7 +890,6 @@ fn results_head_shows_count_and_opens_sort() {
     set_query(&view, vcx, "photo is:video");
     render_ui(vcx);
     view.update(vcx, |app, _| assert_eq!(app.results_head().0, "Videos"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A library of `count` items, the first `videos` of them videos.
@@ -916,7 +899,7 @@ fn kinds_app<'a>(
     videos: usize,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     Entity<crate::LuminaApp>,
     &'a mut VisualTestContext,
 ) {
@@ -937,7 +920,7 @@ fn kinds_app<'a>(
 #[core::prelude::v1::test]
 fn results_head_counts_kinds_through_an_open_quote_and_all_videos() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = kinds_app("search_results_quote", 3, 1, &mut cx);
+    let (_dir, view, vcx) = kinds_app("search_results_quote", 3, 1, &mut cx);
     set_query(&view, vcx, "\"photo");
     render_ui(vcx);
     view.update(vcx, |app, _| {
@@ -948,10 +931,9 @@ fn results_head_counts_kinds_through_an_open_quote_and_all_videos() {
             "is:video is counted outside the unclosed quote"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = kinds_app("search_results_videos", 2, 2, &mut cx);
+    let (_dir, view, vcx) = kinds_app("search_results_videos", 2, 2, &mut cx);
     set_query(&view, vcx, "photo");
     render_ui(vcx);
     view.update(vcx, |app, _| {
@@ -961,13 +943,12 @@ fn results_head_counts_kinds_through_an_open_quote_and_all_videos() {
             "every counted result a video, with no is: in the query"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn results_head_gives_way_to_the_page_header_and_the_month_band() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = kinds_app("search_results_fallback", 2, 0, &mut cx);
+    let (_dir, view, vcx) = kinds_app("search_results_fallback", 2, 0, &mut cx);
 
     // No results: no head to hang from, so the sort menu brings back the
     // page header and hangs from its Sort button.
@@ -1009,5 +990,4 @@ fn results_head_gives_way_to_the_page_header_and_the_month_band() {
         vcx.debug_bounds("grid-month-header").is_some(),
         "the month band returns once the search clears"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

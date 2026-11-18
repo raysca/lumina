@@ -7,7 +7,7 @@ use gpui::{ClipboardItem, EntityInputHandler};
 use crate::app::text_input::{FieldEditor, TextTarget};
 
 use crate::app::LuminaApp;
-use crate::tests::ui_automation::{app_with_library, keystrokes, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, keystrokes, render_ui, seed_library};
 use crate::views::floating_inspector::FloatingInspectorView;
 
 /// Opens the floating inspector the way app/windows.rs does: its Info tab
@@ -27,7 +27,7 @@ fn info_window<'a>(
 
 #[core::prelude::v1::test]
 fn a_title_keeps_capitals_and_punctuation() {
-    let (dir, engine) = seed_library("text_caps", 2);
+    let (_dir, engine) = seed_library("text_caps", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -43,12 +43,11 @@ fn a_title_keeps_capitals_and_punctuation() {
         Some("Lisbon, Portugal!"),
         "Shift must reach the saved title (capitals and punctuation)"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_composed_accent_lands_once_in_the_title() {
-    let (dir, engine) = seed_library("text_ime", 2);
+    let (_dir, engine) = seed_library("text_ime", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -71,7 +70,6 @@ fn a_composed_accent_lands_once_in_the_title() {
             "the composed character replaces the marked one"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The one-line input drawn for `target`, which must be taking typing.
@@ -101,7 +99,7 @@ fn field_bounds(
 
 #[core::prelude::v1::test]
 fn cmd_v_pastes_into_the_search_field_as_one_line() {
-    let (dir, engine) = seed_library("text_paste", 2);
+    let (_dir, engine) = seed_library("text_paste", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -118,7 +116,6 @@ fn cmd_v_pastes_into_the_search_field_as_one_line() {
             "⌘V pastes the clipboard; newlines become spaces in a one-line field"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Search focused and drawn so its input (in the query bar) takes keys.
@@ -126,7 +123,7 @@ fn focused_search<'a>(
     name: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<LuminaApp>,
     &'a mut gpui::VisualTestContext,
 ) {
@@ -143,7 +140,7 @@ fn focused_search<'a>(
 #[core::prelude::v1::test]
 fn search_inserts_typed_text_at_the_caret() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_mid_insert", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_mid_insert", &mut cx);
     vcx.simulate_input("Lisbn");
     keystrokes(vcx, "left");
     vcx.simulate_input("o");
@@ -167,13 +164,12 @@ fn search_inserts_typed_text_at_the_caret() {
             && field.contains(&text.bottom_right()),
         "the input draws inside the query bar: {text:?} in {field:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn search_typing_replaces_the_selection_and_cut_copies_it() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_select", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_select", &mut cx);
     vcx.simulate_input("Lisbon");
     keystrokes(vcx, "shift-left shift-left shift-left");
     vcx.simulate_input("ka");
@@ -198,13 +194,12 @@ fn search_typing_replaces_the_selection_and_cut_copies_it() {
     view.update(vcx, |app, _| {
         assert_eq!(app.search_query, "Liska", "⌘V puts it back");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn search_paste_replaces_the_selection_and_stops_at_the_cap() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_paste_cap", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_paste_cap", &mut cx);
     vcx.simulate_input("ab");
     let cap = lumina_core::text::MAX_TEXT_CHARS;
     vcx.write_to_clipboard(ClipboardItem::new_string("x\ty".repeat(cap)));
@@ -221,13 +216,12 @@ fn search_paste_replaces_the_selection_and_stops_at_the_cap() {
             "a paste is cut to the room the field has left"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_dialog_over_search_takes_its_keys() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_modal_focus", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_modal_focus", &mut cx);
     vcx.simulate_input("Rio");
     view.update(vcx, |app, cx| {
         app.preferences_open = true;
@@ -242,12 +236,11 @@ fn a_dialog_over_search_takes_its_keys() {
             "keys under an open dialog must not edit the search behind it"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn the_main_window_takes_typed_text_without_a_test_focus() {
-    let (dir, engine) = seed_library("text_focus", 2);
+    let (_dir, engine) = seed_library("text_focus", 2);
     let mut cx = crate::tests::TestApp::single();
     // Built the way main.rs builds it, with no focus_app() helper.
     let (view, vcx) = cx.add_window_view(LuminaApp::new_in_window);
@@ -264,12 +257,11 @@ fn the_main_window_takes_typed_text_without_a_test_focus() {
             "the window focuses its root so the input handler registers"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_composition_left_in_one_field_never_edits_the_next() {
-    let (dir, engine) = seed_library("text_stale_mark", 2);
+    let (_dir, engine) = seed_library("text_stale_mark", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -307,12 +299,11 @@ fn a_composition_left_in_one_field_never_edits_the_next() {
             "a stale composition range must not replace title text"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn the_floating_inspector_takes_typed_text_without_a_click() {
-    let (dir, engine) = seed_library("text_floating", 2);
+    let (_dir, engine) = seed_library("text_floating", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
@@ -333,12 +324,11 @@ fn the_floating_inspector_takes_typed_text_without_a_click() {
             "keys reaching the floating window must land in the active field"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
-    let (dir, engine) = seed_library("text_stale_same", 2);
+    let (_dir, engine) = seed_library("text_stale_same", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -376,12 +366,11 @@ fn a_composition_left_in_a_field_never_edits_it_after_reopening() {
             "a stale composition range must not replace title text"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_tag_field_drops_disguising_characters_and_stops_at_the_name_cap() {
-    let (dir, engine) = seed_library("text_clean", 2);
+    let (_dir, engine) = seed_library("text_clean", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -417,7 +406,6 @@ fn a_tag_field_drops_disguising_characters_and_stops_at_the_name_cap() {
         vec!["x".repeat(lumina_core::text::MAX_NAME_CHARS)],
         "the saved tag matches what the field showed"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -460,7 +448,6 @@ fn confirming_an_untouched_legacy_tag_rename_keeps_it() {
         vec![(legacy, 1)],
         "confirming a rename without editing must not shorten an existing tag"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Types "ac", steps back one character and types "b" into `target`, which
@@ -491,7 +478,7 @@ fn edits_mid_text(
             "{target:?}: the input is drawn with room to type, got {bounds:?}"
         );
     }
-    let (dir, engine) = seed_library(name, 2);
+    let (_dir, engine) = seed_library(name, 2);
     let first = engine.get_item_slice(0..1)[0].id;
     engine
         .add_tags_batch(&[first], &["beach".to_string()])
@@ -512,7 +499,6 @@ fn edits_mid_text(
         render_ui(vcx);
         type_mid(&view, vcx, target);
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -555,7 +541,7 @@ fn every_field_edits_at_its_caret() {
 
 #[core::prelude::v1::test]
 fn a_caption_keeps_its_line_breaks_and_shift_enter_adds_one() {
-    let (dir, engine) = seed_library("text_caption_lines", 2);
+    let (_dir, engine) = seed_library("text_caption_lines", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
@@ -581,13 +567,12 @@ fn a_caption_keeps_its_line_breaks_and_shift_enter_adds_one() {
         Some("Day one\nDay two!\nx"),
         "Enter saves the caption with its lines"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_stored_value_past_the_cap_still_loads_into_its_field() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_legacy_load", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_legacy_load", &mut cx);
     vcx.simulate_input("beach");
     // Text the app sets can be longer than typing allows (a legacy value).
     let long = "y".repeat(lumina_core::text::MAX_TEXT_CHARS + 5);
@@ -610,13 +595,12 @@ fn a_stored_value_past_the_cap_still_loads_into_its_field() {
             "editing the long value changes that value"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn the_link_dialog_takes_keys_while_it_checks() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = focused_search("text_checking_focus", &mut cx);
+    let (_dir, view, vcx) = focused_search("text_checking_focus", &mut cx);
     vcx.simulate_input("Rio");
     view.update(vcx, |app, cx| {
         app.network_import.stage = Some(crate::app::network_import::NetworkImportStage::Checking {
@@ -634,12 +618,11 @@ fn the_link_dialog_takes_keys_while_it_checks() {
             "keys under the link dialog must not edit the search behind it"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tagging_from_the_floating_inspector_shows_the_tag_field() {
-    let (dir, engine) = seed_library("text_float_tag", 2);
+    let (_dir, engine) = seed_library("text_float_tag", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
@@ -653,12 +636,11 @@ fn tagging_from_the_floating_inspector_shows_the_tag_field() {
             "T with the inspector floating must open a tag field that takes typing"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn shift_arrows_still_move_the_palette_selection() {
-    let (dir, engine) = seed_library("text_shift_arrows", 2);
+    let (_dir, engine) = seed_library("text_shift_arrows", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "secondary-k");
@@ -674,12 +656,11 @@ fn shift_arrows_still_move_the_palette_selection() {
     view.update(vcx, |app, _| {
         assert_eq!(app.command_selected, 1, "Shift-↑ must move it back")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
-    let (dir, engine) = seed_library("text_caption_full", 2);
+    let (_dir, engine) = seed_library("text_caption_full", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
@@ -709,12 +690,11 @@ fn a_full_caption_refuses_typing_without_losing_its_end_or_caret() {
             "the refused keystroke must leave the caret where it was"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_caption_stored_past_the_cap_keeps_its_end_when_edited() {
-    let (dir, engine) = seed_library("text_caption_long", 2);
+    let (_dir, engine) = seed_library("text_caption_long", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "home");
@@ -731,12 +711,11 @@ fn a_caption_stored_past_the_cap_keeps_its_end_when_edited() {
             "one ⌫ removes one character, not the text past the cap"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tagging_from_the_viewer_shows_the_tag_field() {
-    let (dir, engine) = seed_library("text_viewer_tag", 2);
+    let (_dir, engine) = seed_library("text_viewer_tag", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
@@ -756,12 +735,11 @@ fn tagging_from_the_viewer_shows_the_tag_field() {
         vec!["sun".to_string()],
         "Tags… in the viewer types into its inspector drawer and saves"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn leaving_a_fields_tab_ends_its_edit_unsaved() {
-    let (dir, engine) = seed_library("text_tab_away", 2);
+    let (_dir, engine) = seed_library("text_tab_away", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
@@ -785,5 +763,4 @@ fn leaving_a_fields_tab_ends_its_edit_unsaved() {
         None,
         "leaving the tab is Esc: nothing typed is saved unconfirmed"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

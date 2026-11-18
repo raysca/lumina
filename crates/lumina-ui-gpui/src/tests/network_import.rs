@@ -1,6 +1,6 @@
 //! UI automation and state tests for Network Video Import (Direct, YouTube, HLS).
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::app::downloads::{real_job, JobOutcome, JobRequest};

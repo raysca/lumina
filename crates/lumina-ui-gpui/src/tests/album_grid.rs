@@ -3,9 +3,7 @@
 //! Library keeps its own zoom, gaps and Fit toggle.
 
 use super::album_page::open_album;
-use super::ui_automation::{
-    app_with_library, focus_app, keystrokes, leak, render_ui, seed_library,
-};
+use super::helpers::{app_with_library, focus_app, keystrokes, leak, render_ui, seed_library};
 use crate::app::command_palette::CommandId;
 use crate::app::LuminaApp;
 use crate::config::BrowseLayout;
@@ -20,14 +18,14 @@ fn library_with_album(
     prefix: &str,
     n: usize,
 ) -> (
-    super::downloads::TempLibrary,
+    super::helpers::TempLibrary,
     Arc<lumina_core::LuminaEngine>,
     i64,
 ) {
     let (dir, engine) = seed_library(prefix, n);
     let ids: Vec<MediaId> = engine.get_item_slice(0..n).iter().map(|i| i.id).collect();
     let album = engine.create_album_with("Trip", &ids).unwrap();
-    (super::downloads::TempLibrary(dir), engine, album.id)
+    (dir, engine, album.id)
 }
 
 fn bounds(vcx: &mut VisualTestContext, selector: String) -> Bounds<Pixels> {

@@ -2,7 +2,7 @@
 //! album while Info is off, with Delete Album.
 
 use super::album_page::{library_with_album, open_album, painted};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui, type_text};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui, type_text};
 use gpui::VisualTestContext;
 
 fn width(vcx: &mut VisualTestContext, selector: &'static str) -> f32 {
@@ -75,8 +75,7 @@ fn album_panel_delete_opens_confirm() {
 
 #[core::prelude::v1::test]
 fn album_panel_hint_counts_one_item() {
-    let (dir, engine) = super::ui_automation::seed_library("album_panel_one", 1);
-    let _dir = super::downloads::TempLibrary(dir);
+    let (_dir, engine) = super::helpers::seed_library("album_panel_one", 1);
     let one = engine.get_item_slice(0..1)[0].id;
     let album = engine.create_album_with("Solo", &[one]).unwrap();
     let mut cx = crate::tests::TestApp::single();

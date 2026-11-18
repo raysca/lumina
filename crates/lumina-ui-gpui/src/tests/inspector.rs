@@ -1,10 +1,10 @@
 //! Docked inspector: one-column summary for a single item.
 
-use super::ui_automation::{app_with_library, click, leak, render_ui, seed_library};
+use super::helpers::{app_with_library, click, leak, render_ui, seed_library};
 
 #[core::prelude::v1::test]
 fn docked_inspector_summary_rates_labels_and_opens_get_info() {
-    let (temp_dir, engine) = seed_library("inspector_summary", 2);
+    let (_temp_dir, engine) = seed_library("inspector_summary", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     let card = leak(format!("media-card-{}", item.id.0));
 
@@ -55,8 +55,6 @@ fn docked_inspector_summary_rates_labels_and_opens_get_info() {
             "Get Info must hand off to the floating inspector and close the dock"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Seeded library, window 1440×900, first card selected and Info on.
@@ -64,7 +62,7 @@ fn docked<'a>(
     prefix: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     lumina_core::MediaItem,
     gpui::Entity<crate::LuminaApp>,
@@ -84,10 +82,10 @@ fn docked<'a>(
 #[core::prelude::v1::test]
 fn tags_field_adds_and_removes_plain_chips() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, item, view, vcx) = docked("inspector_tags", &mut cx);
+    let (_dir, engine, item, view, vcx) = docked("inspector_tags", &mut cx);
 
     click(vcx, "tag-add");
-    super::ui_automation::keystrokes(vcx, "b e a c h enter");
+    super::helpers::keystrokes(vcx, "b e a c h enter");
     assert_eq!(engine.get_tags_for_item(item.id), vec!["beach".to_string()]);
     render_ui(vcx);
     let chip = vcx
@@ -109,7 +107,7 @@ fn tags_field_adds_and_removes_plain_chips() {
     // Keyboard: ⌫ in the empty field removes the last tag.
     for word in ["s u n enter", "s e a enter", "backspace"] {
         click(vcx, "tag-add");
-        super::ui_automation::keystrokes(vcx, word);
+        super::helpers::keystrokes(vcx, word);
     }
     let left = engine.get_tags_for_item(item.id);
     assert_eq!(left.len(), 1, "⌫ removes exactly one tag: {left:?}");
@@ -127,14 +125,12 @@ fn tags_field_adds_and_removes_plain_chips() {
             "a chip's text filters by its tag"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn footer_is_pinned_and_label_targets_set_the_color() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, item, view, vcx) = docked("inspector_footer", &mut cx);
+    let (_dir, engine, item, view, vcx) = docked("inspector_footer", &mut cx);
 
     let summary = vcx.debug_bounds("inspector-summary").unwrap();
     let footer = vcx.debug_bounds("inspector-footer").unwrap();
@@ -157,14 +153,12 @@ fn footer_is_pinned_and_label_targets_set_the_color() {
         "No label clears the color"
     );
     view.update(vcx, |app, _| assert!(app.error_message.is_none()));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn info_with_nothing_selected_keeps_the_panel() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, _engine, _item, view, vcx) = docked("inspector_empty", &mut cx);
+    let (_dir, _engine, _item, view, vcx) = docked("inspector_empty", &mut cx);
     view.update(vcx, |app, cx| app.clear_selection(cx));
     render_ui(vcx);
     view.update(vcx, |app, _| assert!(app.inspector_open, "Info stays on"));
@@ -172,8 +166,6 @@ fn info_with_nothing_selected_keeps_the_panel() {
         vcx.debug_bounds("inspector-empty").is_some(),
         "an empty state shows"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -204,7 +196,7 @@ fn summary_formats_capture_time_place_and_video_strip() {
 #[core::prelude::v1::test]
 fn rating_beside_another_apps_sidecar_leaves_it_and_says_so() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, item, view, vcx) = docked("inspector_foreign_sidecar", &mut cx);
+    let (_dir, engine, item, view, vcx) = docked("inspector_foreign_sidecar", &mut cx);
     let sidecar = lumina_core::sidecar_path(&item.path);
     let foreign = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description xmlns:darktable=\"http://darktable.sf.net/\" darktable:history_end=\"3\"/></rdf:RDF></x:xmpmeta>\n";
     std::fs::write(&sidecar, foreign).unwrap();
@@ -229,8 +221,6 @@ fn rating_beside_another_apps_sidecar_leaves_it_and_says_so() {
             "the skipped sidecar must be reported in plain words"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -240,7 +230,7 @@ fn info_panel_shows_summary_capture_and_tags_for_one_item() {
     use crate::views::inspector::summary::{format_badge, when_line};
 
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, item, view, vcx) = docked("inspector_design", &mut cx);
+    let (_dir, engine, item, view, vcx) = docked("inspector_design", &mut cx);
 
     for selector in [
         "inspector-filename",
@@ -259,7 +249,7 @@ fn info_panel_shows_summary_capture_and_tags_for_one_item() {
     );
 
     click(vcx, "tag-add");
-    super::ui_automation::keystrokes(vcx, "b e a c h enter");
+    super::helpers::keystrokes(vcx, "b e a c h enter");
     assert_eq!(engine.get_tags_for_item(item.id), vec!["beach".to_string()]);
     render_ui(vcx);
     assert!(
@@ -359,7 +349,6 @@ fn info_panel_shows_summary_capture_and_tags_for_one_item() {
     );
 
     view.update(vcx, |app, _| assert!(app.error_message.is_none()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The selectors of `capture_rows` with their values.
@@ -448,7 +437,7 @@ fn video_facts_move_from_capture_to_playback() {
 
 #[core::prelude::v1::test]
 fn video_panel_lists_chapters_and_playback() {
-    let (temp_dir, engine) = seed_library("inspector_video_panel", 4);
+    let (_temp_dir, engine) = seed_library("inspector_video_panel", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
@@ -505,7 +494,6 @@ fn video_panel_lists_chapters_and_playback() {
         15.0,
         "clicking a chapter seeks to its start"
     );
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// A JPEG container whose EXIF says FocalLengthIn35mmFilm = 35 (in the Exif
@@ -532,7 +520,7 @@ fn docked_capture_reads_the_35mm_equivalent_once_the_selection_rests() {
     use crate::app::info_details::INFO_DETAILS_SETTLE;
     use std::time::Duration;
 
-    let (dir, engine) = seed_library("inspector_settle", 2);
+    let (_dir, engine) = seed_library("inspector_settle", 2);
     let items = engine.get_item_slice(0..2);
     std::fs::write(&items[0].path, jpeg_with_35mm_equivalent()).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -597,6 +585,4 @@ fn docked_capture_reads_the_35mm_equivalent_once_the_selection_rests() {
         "the panel's focal row shows the 35 mm equivalent: {shown:?}"
     );
     assert!(vcx.debug_bounds("inspector-capture-focal").is_some());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

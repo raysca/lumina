@@ -3,7 +3,7 @@
 //! badge on the cover's grid card.
 
 use super::album_page::{library_with_album, open_album, painted};
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, bounds_center, click, double_click, focus_app, keystrokes, leak, render_ui,
     type_text,
 };
@@ -101,7 +101,7 @@ fn set_as_cover_updates_panel_badge_and_undo() {
     // Two selected: the button is disabled and says why.
     click(vcx, card(ids[1]));
     let third = bounds_center(vcx, card(ids[2]));
-    vcx.simulate_click(third, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(third, crate::tests::helpers::primary_modifier());
     render_ui(vcx);
     click(vcx, "album-bar-set-cover");
     assert_eq!(

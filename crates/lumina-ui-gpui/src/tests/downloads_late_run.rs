@@ -3,7 +3,7 @@
 //! its ending never lands on the row's next run. Driven through a fake job.
 
 use super::downloads::{install, queue_app, row_id, settle, submit};
-use super::ui_automation::app_with_library;
+use super::helpers::app_with_library;
 use crate::app::downloads::{DownloadsConfirm, JobFn, JobOutcome};
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};

@@ -1,13 +1,14 @@
 //! Edit mode in the viewer (E): keyboard and mouse paths, Done/Cancel,
 //! undo, write failures, the grid's edited badge and the menu guards.
 
-use crate::tests::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use crate::tests::helpers::{
+    app_with_library, click, focus_app, keystrokes, render_ui, TempLibrary,
+};
 use crate::*;
 use lumina_core::{Edits, LuminaEngine, MediaId, MediaType};
-use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) fn temp_library(prefix: &str) -> PathBuf {
+pub(crate) fn temp_library(prefix: &str) -> TempLibrary {
     let dir = std::env::temp_dir().join(format!(
         "lumina_quick_edit_{prefix}_{}",
         std::time::SystemTime::now()
@@ -16,7 +17,7 @@ pub(crate) fn temp_library(prefix: &str) -> PathBuf {
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).expect("temp library dir must be creatable");
-    dir
+    TempLibrary(dir)
 }
 
 /// Opens `dir` as a library and waits for its first scan.
@@ -37,22 +38,24 @@ pub(crate) fn scanned(dir: &std::path::Path) -> Arc<LuminaEngine> {
 
 /// Three real photos and a placeholder clip in a real catalog; returns the photo
 /// ids in catalog order and the clip's id.
-pub(crate) fn edit_library(prefix: &str) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
-    edit_library_with(prefix, crate::tests::ui_automation::tiny_jpeg())
+pub(crate) fn edit_library(
+    prefix: &str,
+) -> (TempLibrary, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
+    edit_library_with(prefix, crate::tests::helpers::tiny_jpeg())
 }
 
 /// [`edit_library`] with photos whose every decode fails (see
 /// `seed_library_undecodable`).
 pub(crate) fn edit_library_undecodable(
     prefix: &str,
-) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
+) -> (TempLibrary, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
     edit_library_with(prefix, b"test-jpeg-content")
 }
 
 fn edit_library_with(
     prefix: &str,
     photo: &[u8],
-) -> (PathBuf, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
+) -> (TempLibrary, Arc<LuminaEngine>, Vec<MediaId>, MediaId) {
     let dir = temp_library(prefix);
     for file in ["a.jpg", "b.jpg", "c.jpg", "clip.mp4"] {
         // The clip is a placeholder either way.
@@ -120,7 +123,7 @@ pub(crate) fn editing(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTest
 
 #[core::prelude::v1::test]
 fn keyboard_only_exposure_persists() {
-    let (dir, engine, photos, _) = edit_library("exposure_keys");
+    let (_dir, engine, photos, _) = edit_library("exposure_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -146,7 +149,6 @@ fn keyboard_only_exposure_persists() {
         assert_eq!(app.undo.undo_stack.len(), 1, "Done is one undo step");
         assert!(app.error_message.is_none(), "{:?}", app.error_message);
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -173,7 +175,6 @@ fn escape_cancels_without_writing() {
         );
         assert!(app.undo.undo_stack.is_empty(), "Cancel records no undo");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -201,7 +202,6 @@ fn edit_mode_enter_does_not_close_viewer() {
         0,
         "an unchanged Done writes nothing"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Caches a placeholder thumbnail for `id`, as if painted with old edits.
@@ -308,12 +308,11 @@ fn done_then_undo_restores_original_once() {
         is_marked_edited(&view, vcx, photos[0]),
         "redo marks the photo edited again"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn revert_selection_is_one_undo_step() {
-    let (dir, engine, photos, _) = edit_library("revert_batch");
+    let (_dir, engine, photos, _) = edit_library("revert_batch");
     let exposed = Edits {
         exposure_ev: 1.0,
         ..Edits::default()
@@ -330,7 +329,7 @@ fn revert_selection_is_one_undo_step() {
 
     keystrokes(vcx, "cmd-a");
     keystrokes(vcx, "cmd-k");
-    crate::tests::ui_automation::type_text(vcx, "revert to original");
+    crate::tests::helpers::type_text(vcx, "revert to original");
     keystrokes(vcx, "enter");
     for id in &photos {
         assert_eq!(
@@ -352,7 +351,6 @@ fn revert_selection_is_one_undo_step() {
     );
     assert_eq!(edits_of(&engine, photos[1]), turned, "one ⌘Z restores each");
     assert_eq!(edits_of(&engine, photos[2]), Edits::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -410,12 +408,11 @@ fn edit_write_failure_keeps_draft_and_banners() {
             "and keeps the draft for another try"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn edited_badge_shows_only_for_edited() {
-    let (dir, engine, photos, _) = edit_library("badge");
+    let (_dir, engine, photos, _) = edit_library("badge");
     engine
         .set_edits(&[(
             photos[0],
@@ -434,8 +431,7 @@ fn edited_badge_shows_only_for_edited() {
     view.update(vcx, |app, cx| app.reload_edited_ids(cx));
     render_ui(vcx);
 
-    let badge =
-        |id: MediaId| crate::tests::ui_automation::leak(format!("grid-edited-badge-{}", id.0));
+    let badge = |id: MediaId| crate::tests::helpers::leak(format!("grid-edited-badge-{}", id.0));
     assert!(
         vcx.debug_bounds(badge(photos[0])).is_some(),
         "an edited photo shows the badge"
@@ -457,12 +453,11 @@ fn edited_badge_shows_only_for_edited() {
         vcx.debug_bounds(badge(photos[2])).is_some(),
         "rotating a photo shows its badge"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn edit_bar_buttons_by_mouse() {
-    let (dir, engine, photos, _) = edit_library("mouse");
+    let (_dir, engine, photos, _) = edit_library("mouse");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -490,5 +485,4 @@ fn edit_bar_buttons_by_mouse() {
     assert!(saved.auto_enhance, "the Auto button toggles auto-enhance");
     assert!((saved.exposure_ev - 1.0 / 3.0).abs() < 1e-3);
     assert!(!editing(&view, vcx), "Done closes edit mode");
-    let _ = std::fs::remove_dir_all(&dir);
 }

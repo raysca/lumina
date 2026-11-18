@@ -4,17 +4,15 @@
 use lumina_core::MatchMode;
 
 use super::album_cards::{open_overview_at_1600, two_album_overview};
+use super::helpers::{app_with_library, focus_app, keystrokes, leak, render_ui, seed_library};
 use super::smart_cards::{iso_over_1600, photos};
-use super::ui_automation::{
-    app_with_library, focus_app, keystrokes, leak, render_ui, seed_library,
-};
 use crate::app::albums_overview::OverviewFocus;
 
 fn smart_library(
     prefix: &str,
     n: usize,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     Vec<i64>,
 ) {
@@ -39,7 +37,7 @@ fn focus(
 
 #[core::prelude::v1::test]
 fn arrows_move_between_smart_cards() {
-    let (dir, engine, s) = smart_library("smart_keys_arrows", 4);
+    let (_dir, engine, s) = smart_library("smart_keys_arrows", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_overview_at_1600(vcx);
@@ -73,12 +71,11 @@ fn arrows_move_between_smart_cards() {
     keystrokes(vcx, "right");
     keystrokes(vcx, "up");
     assert_eq!(focus(&view, vcx), at(1), "↑ moves up a row of two");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn deleting_the_focused_smart_card_focuses_a_neighbour() {
-    let (dir, engine, s) = smart_library("smart_keys_delete", 2);
+    let (_dir, engine, s) = smart_library("smart_keys_delete", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_overview_at_1600(vcx);
@@ -104,13 +101,12 @@ fn deleting_the_focused_smart_card_focuses_a_neighbour() {
         );
         focus_app(vcx, &view);
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn an_album_deleted_elsewhere_moves_its_card_focus() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, [alpha, beta], view, vcx) =
+    let (_dir, engine, [alpha, beta], view, vcx) =
         two_album_overview("smart_keys_album_gone", &mut cx);
     view.update(vcx, |app, _| {
         app.albums.overview.focus = Some(OverviewFocus::Card(beta));
@@ -126,12 +122,11 @@ fn an_album_deleted_elsewhere_moves_its_card_focus() {
         Some(OverviewFocus::Card(alpha)),
         "a focused card whose album is gone hands the focus to its neighbour"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_rule_edit_refreshes_the_mosaic_and_count() {
-    let (dir, engine, s) = smart_library("smart_keys_rule_edit", 1);
+    let (_dir, engine, s) = smart_library("smart_keys_rule_edit", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_overview_at_1600(vcx);
@@ -165,5 +160,4 @@ fn a_rule_edit_refreshes_the_mosaic_and_count() {
         vcx.debug_bounds("smart-chip-text:ISO > 1600").is_some(),
         "and the chips"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

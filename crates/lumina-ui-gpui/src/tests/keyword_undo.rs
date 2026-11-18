@@ -2,10 +2,10 @@
 //! exact rows, aliases, smart-album rules, sidecars and the view, by ⌘Z
 //! from the grid and from inside the tag manager.
 
-use crate::tests::keywords::{open_manager, sorted_tags, tag};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, seed_library, type_text,
 };
+use crate::tests::keywords::{open_manager, sorted_tags, tag};
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -65,7 +65,7 @@ fn sidecar_tags(engine: &LuminaEngine, id: MediaId) -> Vec<String> {
 
 #[core::prelude::v1::test]
 fn undo_merge_restores_rows_and_rules() {
-    let (dir, engine) = seed_library("kw_undo_merge", 4);
+    let (_dir, engine) = seed_library("kw_undo_merge", 4);
     let items = engine.get_item_slice(0..4);
     let (a, b, c) = (items[0].id, items[1].id, items[2].id);
     tag(&engine, a, &["cat"]);
@@ -156,13 +156,11 @@ fn undo_merge_restores_rows_and_rules() {
     keystrokes(vcx, "secondary-shift-z");
     assert_eq!(sorted_tags(&engine, a), ["cats"]);
     assert_eq!(sorted_tags(&engine, b), ["cats"]);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_rename_restores_alias_targets() {
-    let (dir, engine) = seed_library("kw_undo_alias", 1);
+    let (_dir, engine) = seed_library("kw_undo_alias", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["places/nyc"]);
     engine.set_alias("big apple", "places/nyc").unwrap();
@@ -202,13 +200,11 @@ fn undo_rename_restores_alias_targets() {
             "the detail panel points back"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_rename_skips_album_edited_since() {
-    let (dir, engine) = seed_library("kw_undo_album_edit", 1);
+    let (_dir, engine) = seed_library("kw_undo_album_edit", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["cat"]);
     let album = engine
@@ -245,13 +241,11 @@ fn undo_rename_skips_album_edited_since() {
         message.contains("1 smart album edited since was kept"),
         "the toast says an album was skipped: {message:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_subtree_delete_restores_children() {
-    let (dir, engine) = seed_library("kw_undo_subtree", 2);
+    let (_dir, engine) = seed_library("kw_undo_subtree", 2);
     let items = engine.get_item_slice(0..2);
     tag(&engine, items[0].id, &["a", "a/x", "a/x/y", "b"]);
     tag(&engine, items[1].id, &["a/z"]);
@@ -278,13 +272,11 @@ fn undo_subtree_delete_restores_children() {
     view.update(vcx, |app, _| {
         assert!(app.library_tag_counts.iter().any(|(t, _)| t == "a/x/y"));
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn bulk_delete_is_one_undo_step() {
-    let (dir, engine) = seed_library("kw_undo_bulk", 2);
+    let (_dir, engine) = seed_library("kw_undo_bulk", 2);
     let items = engine.get_item_slice(0..2);
     tag(&engine, items[0].id, &["red", "green"]);
     tag(&engine, items[1].id, &["blue", "red"]);
@@ -318,13 +310,11 @@ fn bulk_delete_is_one_undo_step() {
         assert!(app.undo.undo_stack.is_empty(), "one ⌘Z undid all three");
         assert_eq!(app.undo.redo_stack.len(), 1);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_after_item_purged_skips_missing_ids() {
-    let (dir, engine) = seed_library("kw_undo_purged", 2);
+    let (_dir, engine) = seed_library("kw_undo_purged", 2);
     let items = engine.get_item_slice(0..2);
     let (a, b) = (items[0].id, items[1].id);
     tag(&engine, a, &["cat"]);
@@ -355,13 +345,11 @@ fn undo_after_item_purged_skips_missing_ids() {
         engine.get_item_by_id(b).is_none(),
         "the purged item stays purged"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_rename_restores_the_tag_view() {
-    let (dir, engine) = seed_library("kw_undo_sidebar", 3);
+    let (_dir, engine) = seed_library("kw_undo_sidebar", 3);
     let items = engine.get_item_slice(0..3);
     tag(&engine, items[0].id, &["cat"]);
     tag(&engine, items[1].id, &["cat"]);
@@ -396,13 +384,11 @@ fn undo_rename_restores_the_tag_view() {
         assert_eq!(app.selection, AlbumSelection::Tag("kitty".into()), "redo");
         assert_eq!(app.get_active_count(), 2);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_is_refused_while_the_old_keyword_is_an_alias() {
-    let (dir, engine) = seed_library("kw_undo_alias_refused", 1);
+    let (_dir, engine) = seed_library("kw_undo_alias_refused", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["cat"]);
     let mut cx = crate::tests::TestApp::single();
@@ -436,13 +422,11 @@ fn undo_is_refused_while_the_old_keyword_is_an_alias() {
     keystrokes(vcx, "secondary-z");
     assert_eq!(sorted_tags(&engine, id), ["cat"], "the retry succeeds");
     view.update(vcx, |app, _| assert!(app.undo.undo_stack.is_empty()));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_z_with_filter_text_edits_the_filter_not_the_catalog() {
-    let (dir, engine) = seed_library("kw_undo_filter_text", 1);
+    let (_dir, engine) = seed_library("kw_undo_filter_text", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["cat"]);
     let mut cx = crate::tests::TestApp::single();
@@ -464,13 +448,11 @@ fn cmd_z_with_filter_text_edits_the_filter_not_the_catalog() {
         );
     });
     assert_eq!(sorted_tags(&engine, id), ["kitty"]);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn merge_clears_grid_positions_but_rename_keeps_them() {
-    let (dir, engine) = seed_library("kw_undo_positions", 3);
+    let (_dir, engine) = seed_library("kw_undo_positions", 3);
     let items = engine.get_item_slice(0..3);
     tag(&engine, items[0].id, &["cat"]);
     tag(&engine, items[1].id, &["cats"]);
@@ -545,13 +527,11 @@ fn merge_clears_grid_positions_but_rename_keeps_them() {
             "a merge (here its redo) clears positions even when the view did not move"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn redoing_a_merge_moves_a_source_view_and_a_dead_view_falls_back() {
-    let (dir, engine) = seed_library("kw_undo_merge_views", 3);
+    let (_dir, engine) = seed_library("kw_undo_merge_views", 3);
     let items = engine.get_item_slice(0..3);
     tag(&engine, items[0].id, &["cat"]);
     // The most used is the merge target.
@@ -588,5 +568,4 @@ fn redoing_a_merge_moves_a_source_view_and_a_dead_view_falls_back() {
             "no empty view on a keyword that is gone"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

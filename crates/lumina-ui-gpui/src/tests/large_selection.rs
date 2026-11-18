@@ -3,9 +3,7 @@
 //! the background read lands, and a newer selection drops a stale result.
 
 use super::culling::{card, ids};
-use super::ui_automation::{
-    app_with_library, click, keystrokes, render_ui, right_click, seed_library,
-};
+use super::helpers::{app_with_library, click, keystrokes, render_ui, right_click, seed_library};
 use crate::app::batch_summary::BATCH_SYNC_LIMIT;
 use lumina_core::MediaType;
 
@@ -19,7 +17,7 @@ fn rows_read() -> usize {
 /// ⌘A on a large view reads a bounded number of rows on the UI thread.
 #[core::prelude::v1::test]
 fn select_all_on_a_large_view_reads_bounded_rows() {
-    let (dir, engine) = seed_library("large_sel_reads", LARGE);
+    let (_dir, engine) = seed_library("large_sel_reads", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -36,7 +34,6 @@ fn select_all_on_a_large_view_reads_bounded_rows() {
         "⌘A must not read every selected row on the UI thread: {read} rows \
          read for {LARGE} selected"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Once the background read lands, the summary, the shared or mixed fields
@@ -44,7 +41,7 @@ fn select_all_on_a_large_view_reads_bounded_rows() {
 /// stale (a shared title of the last selection) shows.
 #[core::prelude::v1::test]
 fn large_selection_summary_lands_and_is_right() {
-    let (dir, engine) = seed_library("large_sel_summary", LARGE);
+    let (_dir, engine) = seed_library("large_sel_summary", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -117,14 +114,13 @@ fn large_selection_summary_lands_and_is_right() {
             "tag counts over the whole selection"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A selection change before the background read lands wins: the stale
 /// result is dropped.
 #[core::prelude::v1::test]
 fn stale_large_selection_summary_is_dropped() {
-    let (dir, engine) = seed_library("large_sel_stale", LARGE);
+    let (_dir, engine) = seed_library("large_sel_stale", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -140,7 +136,6 @@ fn stale_large_selection_summary_is_dropped() {
         assert_eq!(app.batch_summary.ids, vec![ids[3]]);
         assert_eq!(app.selected_tag_counts, Vec::new(), "no batch tag counts");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A selection change that skips the batch summary (the viewer's right-click
@@ -148,7 +143,7 @@ fn stale_large_selection_summary_is_dropped() {
 /// it: its totals and tags must not land on the single item.
 #[core::prelude::v1::test]
 fn large_summary_does_not_land_after_viewer_right_click() {
-    let (dir, engine) = seed_library("large_sel_rclick", LARGE);
+    let (_dir, engine) = seed_library("large_sel_rclick", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -194,5 +189,4 @@ fn large_summary_does_not_land_after_viewer_right_click() {
         );
     });
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }

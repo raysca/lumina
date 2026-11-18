@@ -3,7 +3,7 @@
 //! removed, and Trash offers no Add to Album.
 
 use super::albums::album_with_members;
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
     type_text,
 };
@@ -18,7 +18,7 @@ fn members(engine: &lumina_core::LuminaEngine, album: i64) -> Vec<MediaId> {
 
 #[core::prelude::v1::test]
 fn palette_year_in_album_scopes_to_library_and_back_returns() {
-    let (dir, engine) = seed_library("album_year_scope", 3);
+    let (_dir, engine) = seed_library("album_year_scope", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -55,12 +55,11 @@ fn palette_year_in_album_scopes_to_library_and_back_returns() {
             "Back returns to the album"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn remove_records_only_ids_it_removed() {
-    let (dir, engine) = seed_library("album_remove_non_member", 3);
+    let (_dir, engine) = seed_library("album_remove_non_member", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -104,12 +103,11 @@ fn remove_records_only_ids_it_removed() {
         assert!(!kept.contains(&selected));
     }
     assert!(ids.iter().all(|id| engine.get_item_by_id(*id).is_some()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn add_to_album_hidden_in_trash() {
-    let (dir, engine) = seed_library("album_trash_hidden", 2);
+    let (_dir, engine) = seed_library("album_trash_hidden", 2);
     engine.create_album_with("Trip", &[]).unwrap();
     let first = engine.get_item_slice(0..1)[0].id;
     engine.batch_set_trashed(&[first], true).unwrap();
@@ -134,7 +132,6 @@ fn add_to_album_hidden_in_trash() {
             .any(|row| row.title == crate::i18n::t("command.add_to_album"));
         assert!(!offered, "nor does the palette");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -142,7 +139,7 @@ fn restored_album_with_year_opens_on_library() {
     use crate::app::types::UiMessage;
     use crate::config::{LastView, RestoredSession};
     use lumina_core::EngineEvent;
-    let (dir, engine) = seed_library("album_year_restore", 2);
+    let (_dir, engine) = seed_library("album_year_restore", 2);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -170,5 +167,4 @@ fn restored_album_with_year_opens_on_library() {
             "an album never shows the library's year view"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

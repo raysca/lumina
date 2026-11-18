@@ -1,7 +1,7 @@
 //! Startup session restore: the late restore yields to the user, the grid
 //! comes back at the saved scroll anchor, and Quit saves first.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, double_click, focus_app, keystrokes, leak, render_ui, seed_library,
     type_text,
 };
@@ -50,7 +50,7 @@ fn start_with_pending(
 
 #[core::prelude::v1::test]
 fn user_navigation_before_scan_complete_cancels_restore() {
-    let (dir, engine) = seed_library("restore_nav", 4);
+    let (_dir, engine) = seed_library("restore_nav", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
@@ -74,13 +74,11 @@ fn user_navigation_before_scan_complete_cancels_restore() {
             "the user's Back trail must survive the scan"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typing_a_search_before_scan_complete_cancels_restore() {
-    let (dir, engine) = seed_library("restore_type", 4);
+    let (_dir, engine) = seed_library("restore_type", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
@@ -96,13 +94,11 @@ fn typing_a_search_before_scan_complete_cancels_restore() {
         );
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn selecting_a_card_before_scan_complete_cancels_restore() {
-    let (dir, engine) = seed_library("restore_card", 4);
+    let (_dir, engine) = seed_library("restore_card", 4);
     let items = engine.get_item_slice(0..2);
     let card = leak(format!("media-card-{}", items[1].id.0));
     let mut cx = crate::tests::TestApp::single();
@@ -137,13 +133,11 @@ fn selecting_a_card_before_scan_complete_cancels_restore() {
             "the saved item must not be selected over the user's pick"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn untouched_startup_still_restores() {
-    let (dir, engine) = seed_library("restore_idle", 4);
+    let (_dir, engine) = seed_library("restore_idle", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     start_with_pending(&view, vcx, session(LastView::Favorites, None, None));
@@ -153,8 +147,6 @@ fn untouched_startup_still_restores() {
         assert!(app.pending_restore.is_none());
         assert_eq!(app.selection, FAVORITES, "no input: the session restores");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Rows of the grid viewport: (top row, fully visible rows).
@@ -177,7 +169,7 @@ fn big_library<'a>(
     prefix: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &'a mut gpui::VisualTestContext,
     Vec<MediaId>,
@@ -202,7 +194,7 @@ fn big_library<'a>(
 #[core::prelude::v1::test]
 fn restore_scrolls_to_saved_anchor_item() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, ids) = big_library("restore_anchor", &mut cx);
+    let (_dir, view, vcx, ids) = big_library("restore_anchor", &mut cx);
     start_with_pending(
         &view,
         vcx,
@@ -217,15 +209,13 @@ fn restore_scrolls_to_saved_anchor_item() {
         6,
         "the anchor row must be at the top; the reveal must not overwrite it"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn restore_reveals_selection_outside_the_anchored_view_or_without_an_anchor() {
     for (case, anchor) in [("restore_far", None), ("restore_noanchor", Some(u64::MAX))] {
         let mut cx = crate::tests::TestApp::single();
-        let (dir, view, vcx, ids) = big_library(case, &mut cx);
+        let (_dir, view, vcx, ids) = big_library(case, &mut cx);
         let anchor = anchor.unwrap_or(ids[24].0);
         start_with_pending(
             &view,
@@ -239,15 +229,13 @@ fn restore_reveals_selection_outside_the_anchored_view_or_without_an_anchor() {
             "{case}: the selected row (45) must be visible, viewport rows {top}..{}",
             top + rows
         );
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
 #[core::prelude::v1::test]
 fn grid_top_item_id_reads_the_first_visible_row() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, ids) = big_library("restore_top", &mut cx);
+    let (_dir, view, vcx, ids) = big_library("restore_top", &mut cx);
     view.update(vcx, |app, _| {
         assert_eq!(
             app.grid_top_item_id(),
@@ -268,14 +256,12 @@ fn grid_top_item_id_reads_the_first_visible_row() {
             "the anchor is the first item of the top visible row"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_escape_keeps_grid_scroll() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx, ids) = big_library("restore_viewer", &mut cx);
+    let (_dir, view, vcx, ids) = big_library("restore_viewer", &mut cx);
     view.update(vcx, |app, _| {
         app.grid_state
             .as_ref()
@@ -299,13 +285,11 @@ fn viewer_escape_keeps_grid_scroll() {
         6,
         "closing the viewer must leave the grid where it was"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn request_quit_still_quits_after_saving() {
-    let (dir, engine) = seed_library("restore_quit", 2);
+    let (_dir, engine) = seed_library("restore_quit", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.request_quit(cx));
@@ -315,13 +299,11 @@ fn request_quit_still_quits_after_saving() {
             "saving first must not stop Quit"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_restored_album_with_a_query_comes_back_as_library() {
-    let (dir, engine) = seed_library("restore_scope", 2);
+    let (_dir, engine) = seed_library("restore_scope", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let mut saved = session(LastView::Favorites, None, None);
@@ -336,12 +318,11 @@ fn a_restored_album_with_a_query_comes_back_as_library() {
             "a restored query searches the whole library, so the sidebar says Library"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Starts the app from a config whose last view is Favorites.
 fn launch_with(view_on_launch: crate::config::LaunchView, name: &str) -> AlbumSelection {
-    let (dir, engine) = seed_library(name, 4);
+    let (_dir, engine) = seed_library(name, 4);
     crate::app::state::TEST_CONFIG.with(|c| {
         *c.borrow_mut() = Some(crate::config::AppConfig {
             last_view: Some(LastView::Favorites.token()),
@@ -356,7 +337,6 @@ fn launch_with(view_on_launch: crate::config::LaunchView, name: &str) -> AlbumSe
         assert!(app.pending_restore.is_none(), "the restore ran");
         app.selection.clone()
     });
-    let _ = std::fs::remove_dir_all(&dir);
     selection
 }
 

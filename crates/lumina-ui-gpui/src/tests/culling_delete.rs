@@ -3,7 +3,7 @@
 //! recounts after a flag key.
 
 use super::culling::{card, ids};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -45,7 +45,7 @@ fn dialog_ids(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Option<V
 
 #[core::prelude::v1::test]
 fn delete_rejected_opens_dialog_with_only_rejects() {
-    let (dir, engine) = seed_library("cull_delete_rejected", 5);
+    let (_dir, engine) = seed_library("cull_delete_rejected", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let all = ids(&view, vcx);
@@ -114,13 +114,11 @@ fn delete_rejected_opens_dialog_with_only_rejects() {
         trashed(&engine, &all).is_empty(),
         "one undo brings both rejects back"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn delete_rejected_with_none_shows_toast() {
-    let (dir, engine) = seed_library("cull_delete_none", 3);
+    let (_dir, engine) = seed_library("cull_delete_none", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let all = ids(&view, vcx);
@@ -135,13 +133,11 @@ fn delete_rejected_with_none_shows_toast() {
     );
     assert_eq!(dialog_ids(&view, vcx), None, "and no dialog opens");
     assert!(trashed(&engine, &all).is_empty());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn smart_album_with_flag_rule_recounts_after_flag_key() {
-    let (dir, engine) = seed_library("cull_flag_rule_count", 3);
+    let (_dir, engine) = seed_library("cull_flag_rule_count", 3);
     let picks = engine
         .create_smart_album(
             "Picks",
@@ -172,13 +168,16 @@ fn smart_album_with_flag_rule_recounts_after_flag_key() {
     );
     keystrokes(vcx, "u");
     assert_eq!(count(vcx), Some(0), "unflagging recounts it too");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// One reject in the library, so a lookup that is allowed to land opens
 /// the dialog.
-fn one_reject(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+fn one_reject(
+    prefix: &str,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    std::sync::Arc<LuminaEngine>,
+) {
     let (dir, engine) = seed_library(prefix, 3);
     let first = engine.get_item_slice(0..1)[0].id;
     engine.set_flags(&[(first, Flag::Reject)]).unwrap();
@@ -187,7 +186,7 @@ fn one_reject(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>
 
 #[core::prelude::v1::test]
 fn delete_rejected_late_result_is_dropped() {
-    let (dir, engine) = one_reject("cull_delete_late");
+    let (_dir, engine) = one_reject("cull_delete_late");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -232,13 +231,11 @@ fn delete_rejected_late_result_is_dropped() {
     });
     vcx.run_until_parked();
     assert_eq!(dialog_ids(&view, vcx).map(|ids| ids.len()), Some(1));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn delete_rejected_is_refused_in_trash_duplicates_and_albums() {
-    let (dir, engine) = one_reject("cull_delete_refused");
+    let (_dir, engine) = one_reject("cull_delete_refused");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -275,6 +272,4 @@ fn delete_rejected_is_refused_in_trash_duplicates_and_albums() {
         crate::i18n::t("culling.delete_rejected_unavailable").ends_with("or the Albums page"),
         "the toast names the Albums page, not albums in general"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1,10 +1,10 @@
 //! Batch inspector edits driven from the keyboard.
 
-use super::ui_automation::{app_with_library, keystrokes, render_ui, seed_library, type_text};
+use super::helpers::{app_with_library, keystrokes, render_ui, seed_library, type_text};
 
 #[core::prelude::v1::test]
 fn batch_date_shift_moves_each_item_by_delta() {
-    let (dir, engine) = seed_library("batch_date_shift", 3);
+    let (_dir, engine) = seed_library("batch_date_shift", 3);
     let ids: Vec<_> = engine
         .get_item_slice(0..3)
         .iter()
@@ -60,13 +60,11 @@ fn batch_date_shift_moves_each_item_by_delta() {
     keystrokes(vcx, "cmd-z");
     vcx.run_until_parked();
     assert_eq!(times(), before.to_vec(), "one ⌘Z restores every item");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn single_item_date_shift_replaces_the_prefilled_date() {
-    let (dir, engine) = seed_library("single_date_shift", 2);
+    let (_dir, engine) = seed_library("single_date_shift", 2);
     let id = engine.get_item_slice(0..1)[0].id;
     let before = 1_700_000_000_000_i64;
     engine.set_timestamps(&[(id, before)]).unwrap();
@@ -110,6 +108,4 @@ fn single_item_date_shift_replaces_the_prefilled_date() {
     keystrokes(vcx, "cmd-z");
     vcx.run_until_parked();
     assert_eq!(time(), before, "⌘Z restores the date");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

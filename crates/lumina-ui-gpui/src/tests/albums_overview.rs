@@ -2,9 +2,7 @@
 //! sidebar ALBUMS label, the palette and the Go menu.
 
 use super::duplicates::run_palette_command;
-use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
-};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui, seed_library};
 use crate::app::albums_overview::{AlbumsTab, OverviewFocus};
 use crate::views::sidebar::AlbumSelection;
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
@@ -28,7 +26,7 @@ fn assert_on_overview(vcx: &mut gpui::VisualTestContext, how: &str) {
 
 #[core::prelude::v1::test]
 fn albums_overview_opens_from_sidebar_and_palette() {
-    let (dir, engine) = seed_library("albums_overview_nav", 2);
+    let (_dir, engine) = seed_library("albums_overview_nav", 2);
     let album = engine.create_album_with("Lisbon", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -73,7 +71,6 @@ fn albums_overview_opens_from_sidebar_and_palette() {
     vcx.dispatch_action(crate::actions::ShowAlbums);
     render_ui(vcx);
     assert_on_overview(vcx, "Go > Albums");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 pub(super) fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
@@ -85,7 +82,7 @@ pub(super) fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) 
 
 #[core::prelude::v1::test]
 fn albums_overview_counts_albums_and_its_tabs_take_clicks_keys_and_palette() {
-    let (dir, engine) = seed_library("albums_overview_header", 2);
+    let (_dir, engine) = seed_library("albums_overview_header", 2);
     engine.create_album_with("Lisbon", &[]).unwrap();
     engine.create_album_with("Family", &[]).unwrap();
     let rule = SmartAlbumRule {
@@ -197,14 +194,13 @@ fn albums_overview_counts_albums_and_its_tabs_take_clicks_keys_and_palette() {
             "the meta line follows the catalog"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The page shows no media: keys that act on a selection must find none,
 /// even when an item was selected before the page opened.
 #[core::prelude::v1::test]
 fn albums_overview_absorbs_media_keys() {
-    let (dir, engine) = seed_library("albums_overview_keys", 3);
+    let (_dir, engine) = seed_library("albums_overview_keys", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "right");
@@ -251,12 +247,11 @@ fn albums_overview_absorbs_media_keys() {
             "{key} changes no catalog row on the overview"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn albums_overview_new_album_from_the_keyboard() {
-    let (dir, engine) = seed_library("albums_overview_kbd_new", 1);
+    let (_dir, engine) = seed_library("albums_overview_kbd_new", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-albums-header");
@@ -297,12 +292,11 @@ fn albums_overview_new_album_from_the_keyboard() {
         2,
         "⇧Tab then ↵ adds another"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn forward_returns_to_the_overview_without_its_old_focus() {
-    let (dir, engine) = seed_library("albums_overview_forward", 1);
+    let (_dir, engine) = seed_library("albums_overview_forward", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-albums-header");
@@ -324,7 +318,6 @@ fn forward_returns_to_the_overview_without_its_old_focus() {
         engine.list_albums_with_counts().is_empty(),
         "↵ after Forward runs no stale New Album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]

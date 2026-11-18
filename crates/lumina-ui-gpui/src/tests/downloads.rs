@@ -1,7 +1,7 @@
 //! The URL download queue: scheduling, removal, retry, duplicates and
 //! persistence, driven through a fake job so nothing touches the network.
 
-use super::ui_automation::{app_with_library, render_ui, seed_library};
+use super::helpers::{app_with_library, render_ui, seed_library, TempLibrary};
 use crate::app::downloads::{DownloadsConfirm, JobFn, JobOutcome, JobRequest};
 use crate::app::network_import::NetworkImportStage;
 use crate::config::DEFAULT_DOWNLOAD_CONCURRENCY;
@@ -98,22 +98,6 @@ pub(crate) fn settle(
     }
 }
 
-/// A seeded test library, deleted when the test ends (pass or fail).
-pub(crate) struct TempLibrary(pub(crate) std::path::PathBuf);
-
-impl std::ops::Deref for TempLibrary {
-    type Target = std::path::PathBuf;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Drop for TempLibrary {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 pub(crate) fn queue_app(
     name: &str,
 ) -> (
@@ -124,7 +108,7 @@ pub(crate) fn queue_app(
 ) {
     let (dir, engine) = seed_library(name, 1);
     (
-        TempLibrary(dir),
+        dir,
         engine,
         FakeJobs::default(),
         crate::tests::TestApp::single(),
@@ -448,7 +432,7 @@ fn prior_download_prompts_and_download_again_skips_check() {
     render_ui(vcx);
     assert!(vcx.debug_bounds("net-import-download-again").is_some());
 
-    super::ui_automation::click(vcx, "net-import-download-again");
+    super::helpers::click(vcx, "net-import-download-again");
     settle(vcx, &view, "the job runs", |app| {
         count(app, DownloadState::Running) == 1
     });
@@ -612,7 +596,7 @@ fn dialog_opens_while_downloads_run() {
 }
 
 fn quit_via_menu(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) {
-    super::ui_automation::focus_app(vcx, view);
+    super::helpers::focus_app(vcx, view);
     vcx.dispatch_action(crate::actions::QuitApp);
     vcx.run_until_parked();
 }
@@ -635,7 +619,7 @@ fn quit_with_running_downloads_asks_first() {
         assert!(!app.downloads.quit_requested, "the app has not quit yet");
     });
     render_ui(vcx);
-    super::ui_automation::click(vcx, "downloads-confirm-ok");
+    super::helpers::click(vcx, "downloads-confirm-ok");
     view.update(vcx, |app, _| {
         assert!(app.downloads.quit_requested, "Quit confirms");
         assert!(app.downloads.entries.is_empty());
@@ -663,14 +647,14 @@ fn confirm_escape_and_backdrop_cancel() {
         count(app, DownloadState::Running) == 1
     });
     quit_via_menu(&view, vcx);
-    super::ui_automation::keystrokes(vcx, "escape");
+    super::helpers::keystrokes(vcx, "escape");
     view.update(vcx, |app, _| {
         assert!(app.downloads.confirm.is_none(), "Esc cancels the prompt");
         assert!(!app.downloads.quit_requested);
     });
     quit_via_menu(&view, vcx);
     render_ui(vcx);
-    super::ui_automation::click_point(vcx, 20.0, 20.0);
+    super::helpers::click_point(vcx, 20.0, 20.0);
     view.update(vcx, |app, _| {
         assert!(app.downloads.confirm.is_none(), "the backdrop cancels");
         assert!(!app.downloads.quit_requested);
@@ -770,7 +754,6 @@ fn resume_all_starts_up_to_three() {
 fn switching_library_drops_old_jobs() {
     let (_dir, engine, fake, mut cx) = queue_app("dl_switch");
     let (dir_b, engine_b) = seed_library("dl_switch_b", 1);
-    let dir_b = TempLibrary(dir_b);
     drop(engine_b);
     let (view, vcx) = app_with_library(&mut cx, engine);
     install(&view, vcx, &fake);
@@ -897,7 +880,7 @@ fn done_row_click_selects_item_in_downloaded_album() {
     view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
     render_ui(vcx);
     let id = view.update(vcx, |app, _| row_id(app, URL));
-    super::ui_automation::click(
+    super::helpers::click(
         vcx,
         Box::leak(format!("download-row-{id}").into_boxed_str()),
     );
@@ -960,8 +943,8 @@ fn already_downloaded_enter_shows_in_library() {
             Some(NetworkImportStage::AlreadyDownloaded { .. })
         )
     });
-    super::ui_automation::focus_app(vcx, &view);
-    super::ui_automation::keystrokes(vcx, "enter");
+    super::helpers::focus_app(vcx, &view);
+    super::helpers::keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {
         assert!(app.network_import.stage.is_none(), "the dialog closes");
         assert_shows_in_downloaded(app, item.id);
@@ -1052,8 +1035,8 @@ fn quit_prompt_over_delete_confirm_takes_enter() {
         // Quit from the menu while the delete prompt is up.
         app.request_quit(cx);
     });
-    super::ui_automation::focus_app(vcx, &view);
-    super::ui_automation::keystrokes(vcx, "enter");
+    super::helpers::focus_app(vcx, &view);
+    super::helpers::keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {
         assert!(app.downloads.quit_requested, "↵ answers the prompt on top");
     });
@@ -1096,8 +1079,8 @@ fn command_enter_downloads_again_from_dialog_and_list() {
             Some(NetworkImportStage::AlreadyDownloaded { .. })
         )
     });
-    super::ui_automation::focus_app(vcx, &view);
-    super::ui_automation::keystrokes(vcx, "secondary-enter");
+    super::helpers::focus_app(vcx, &view);
+    super::helpers::keystrokes(vcx, "secondary-enter");
     settle(vcx, &view, "⌘↵ downloads it again", |app| {
         count(app, DownloadState::Running) == 1
     });
@@ -1117,7 +1100,7 @@ fn command_enter_downloads_again_from_dialog_and_list() {
         count(app, DownloadState::Duplicate) == 1
     });
     view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
-    super::ui_automation::keystrokes(vcx, "secondary-enter");
+    super::helpers::keystrokes(vcx, "secondary-enter");
     settle(vcx, &view, "⌘↵ on the row downloads it again", |app| {
         count(app, DownloadState::Running) == 1
     });

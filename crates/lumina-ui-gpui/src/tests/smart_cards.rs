@@ -5,7 +5,7 @@ use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule}
 
 use super::album_cards::open_overview_at_1600;
 use super::albums_overview::height;
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, right_click,
     seed_library,
 };
@@ -34,7 +34,7 @@ fn painted(vcx: &mut gpui::VisualTestContext, selector: String) -> bool {
 
 #[core::prelude::v1::test]
 fn smart_album_cards_show_mosaic_count_and_chips() {
-    let (dir, engine) = seed_library("smart_cards_card", 5);
+    let (_dir, engine) = seed_library("smart_cards_card", 5);
     // ISO > 1600 or a photo: every seeded JPEG matches.
     let night = engine
         .create_smart_album(
@@ -185,12 +185,11 @@ fn smart_album_cards_show_mosaic_count_and_chips() {
             "Manage rules switches to the Smart Albums tab"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn smart_tab_without_smart_albums_offers_new_smart_album() {
-    let (dir, engine) = seed_library("smart_cards_empty", 1);
+    let (_dir, engine) = seed_library("smart_cards_empty", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_overview_at_1600(vcx);
@@ -210,12 +209,11 @@ fn smart_tab_without_smart_albums_offers_new_smart_album() {
             "its New Smart Album opens the builder (as ⌥⌘N)"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn albums_tab_shows_four_smart_cards_and_the_smart_tab_all() {
-    let (dir, engine) = seed_library("smart_cards_many", 1);
+    let (_dir, engine) = seed_library("smart_cards_many", 1);
     let ids: Vec<i64> = (0..6)
         .map(|i| {
             engine
@@ -255,12 +253,11 @@ fn albums_tab_shows_four_smart_cards_and_the_smart_tab_all() {
         "no card runs off the window: {right:?}"
     );
     view.update(vcx, |app, _| assert!(app.albums_overview_shown()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn switching_tabs_drops_the_smart_focus_and_menu() {
-    let (dir, engine) = seed_library("smart_cards_tabs", 1);
+    let (_dir, engine) = seed_library("smart_cards_tabs", 1);
     let a = engine
         .create_smart_album("A", "sparkles", MatchMode::All, &[photos()])
         .unwrap();
@@ -308,12 +305,11 @@ fn switching_tabs_drops_the_smart_focus_and_menu() {
     view.update(vcx, |app, _| {
         assert!(app.albums.overview.card_menu.is_none(), "the menu closed");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn smart_row_and_album_grid_scroll_as_one_page() {
-    let (dir, engine) = seed_library("smart_cards_scroll", 1);
+    let (_dir, engine) = seed_library("smart_cards_scroll", 1);
     let smart = engine
         .create_smart_album("A", "sparkles", MatchMode::All, &[photos()])
         .unwrap();
@@ -359,5 +355,4 @@ fn smart_row_and_album_grid_scroll_as_one_page() {
         painted(vcx, smart_card),
         "the focused smart card scrolls in"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

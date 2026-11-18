@@ -1,13 +1,13 @@
 //! Photo viewer: menu rating, stage prev/next, Fit button while zoomed.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, render_ui, right_click,
     seed_library, seed_library_undecodable,
 };
 
 #[core::prelude::v1::test]
 fn viewer_stage_rates_navigates_and_steps_zoom() {
-    let (temp_dir, engine) = seed_library("viewer_stage", 3);
+    let (_temp_dir, engine) = seed_library("viewer_stage", 3);
 
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -67,8 +67,6 @@ fn viewer_stage_rates_navigates_and_steps_zoom() {
         vcx.debug_bounds("viewer-zoom-fit").is_none(),
         "back at Fit the zoom control hides again"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 // ---- Opening and stepping without a blank frame ----------
@@ -143,7 +141,7 @@ pub(super) fn open_at(
 
 #[core::prelude::v1::test]
 fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
-    let (dir, engine) = seed_library("viewer_cached", 2);
+    let (_dir, engine) = seed_library("viewer_cached", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     view.update(vcx, |app, cx| {
@@ -167,12 +165,11 @@ fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
         vcx.debug_bounds("viewer-stage-placeholder").is_none(),
         "no placeholder when the grid thumbnail is cached"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_step_without_cache_keeps_stage_size() {
-    let (dir, engine) = seed_library("viewer_step_stage", 2);
+    let (_dir, engine) = seed_library("viewer_step_stage", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     view.update(vcx, |app, cx| {
@@ -208,12 +205,11 @@ fn viewer_step_without_cache_keeps_stage_size() {
         stage_size(vcx),
         "the placeholder fills the image stage, not a 400x400 box"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_neighbour_ids_are_the_adjacent_items() {
-    let (dir, engine) = seed_library_undecodable("viewer_neighbours", 6);
+    let (_dir, engine) = seed_library_undecodable("viewer_neighbours", 6);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -256,12 +252,11 @@ fn viewer_neighbour_ids_are_the_adjacent_items() {
             "the last item has only a previous neighbour"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_on_failed_item_shows_failed_stage() {
-    let (dir, engine) = seed_library("viewer_failed", 2);
+    let (_dir, engine) = seed_library("viewer_failed", 2);
     let first = engine.get_item_slice(0..2);
     let failed: Vec<MediaId> = first.iter().map(|i| i.id).collect();
     let mut cx = crate::tests::TestApp::single();
@@ -304,12 +299,11 @@ fn viewer_on_failed_item_shows_failed_stage() {
             "O on the failed stage must reach open_selected_in_default_app"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
-    let (dir, engine) = seed_library_undecodable("viewer_decode_failed", 2);
+    let (_dir, engine) = seed_library_undecodable("viewer_decode_failed", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     let id = view.update(vcx, |app, cx| {
@@ -339,14 +333,13 @@ fn viewer_decode_failure_shows_failed_stage_but_keeps_the_grid_card() {
             "a stale viewer failure must not mark the newly selected item's stage"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---- Docked InfoPanel -------------------------------------------------
 
 #[core::prelude::v1::test]
 fn viewer_info_panel_is_docked_full_height() {
-    let (dir, engine) = seed_library_undecodable("viewer_docked_panel", 1);
+    let (_dir, engine) = seed_library_undecodable("viewer_docked_panel", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_without_decodes(&mut cx, engine, &[]);
     vcx.simulate_resize(gpui::size(gpui::px(1600.0), gpui::px(1000.0)));
@@ -458,7 +451,6 @@ fn viewer_info_panel_is_docked_full_height() {
         info.right() <= bar.right(),
         "the top bar's buttons stay left of the panel: {info:?} bar={bar:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Opens item 0 of a one-item undecodable library at 1600x1000 with the
@@ -467,7 +459,7 @@ fn viewer_with_panel<'a>(
     cx: &'a mut TestAppContext,
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     Entity<LuminaApp>,
     &'a mut VisualTestContext,
 ) {
@@ -487,7 +479,7 @@ fn viewer_with_panel<'a>(
 #[core::prelude::v1::test]
 fn viewer_immersive_panel_leaves_the_top_bar_buttons_clickable() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_immersive_panel_bar");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_immersive_panel_bar");
     view.update(vcx, |app, cx| {
         app.is_immersive_fullscreen = true;
         app.immersive_hud_visible = true;
@@ -515,13 +507,12 @@ fn viewer_immersive_panel_leaves_the_top_bar_buttons_clickable() {
         );
     });
     assert!(vcx.debug_bounds("viewer-info-drawer").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_immersive_panel_clears_the_zoom_navigator() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = super::viewer_and_video::viewer_with_gradient(
+    let (_dir, view, vcx) = super::viewer_and_video::viewer_with_gradient(
         &mut cx,
         "viewer_immersive_nav",
         1600.0,
@@ -559,13 +550,12 @@ fn viewer_immersive_panel_clears_the_zoom_navigator() {
         !nav.intersects(&panel),
         "the zoom navigator must not sit under the floating panel: nav={nav:?} panel={panel:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_i_key_closes_and_reopens_the_docked_panel() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_panel_key");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_panel_key");
     focus_app(vcx, &view);
     let docked = vcx.debug_bounds("viewer-viewport").expect("viewport");
 
@@ -596,7 +586,6 @@ fn viewer_i_key_closes_and_reopens_the_docked_panel() {
     view.update(vcx, |app, _| {
         assert!(app.is_fullscreen_viewer, "I must not close the viewer")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---- Top bar ---------------------------------------------------------------
@@ -613,7 +602,7 @@ fn viewer_rating(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> u8 {
 #[core::prelude::v1::test]
 fn viewer_top_bar_orders_its_controls_and_edit_opens_edit_mode() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar");
 
     assert!(vcx.debug_bounds("viewer-top-bar").is_some(), "top bar");
     assert!(
@@ -670,13 +659,12 @@ fn viewer_top_bar_orders_its_controls_and_edit_opens_edit_mode() {
     view.update(vcx, |app, _| {
         assert!(app.edits.session.is_some(), "Edit opens edit mode")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_rate_popover_rates_by_key_and_closes_before_the_viewer() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover");
     focus_app(vcx, &view);
 
     click(vcx, "viewer-rate-btn");
@@ -686,7 +674,7 @@ fn viewer_rate_popover_rates_by_key_and_closes_before_the_viewer() {
     );
     for n in 1..=5 {
         assert!(
-            vcx.debug_bounds(super::ui_automation::leak(format!("viewer-rate-star-{n}")))
+            vcx.debug_bounds(super::helpers::leak(format!("viewer-rate-star-{n}")))
                 .is_some(),
             "the popover shows star {n}"
         );
@@ -765,13 +753,12 @@ fn viewer_rate_popover_rates_by_key_and_closes_before_the_viewer() {
     view.update(vcx, |app, _| {
         assert!(app.is_fullscreen_viewer, "…and leaves the viewer open")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_top_bar_compacts_by_stage_width() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar_compact");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_top_bar_compact");
     // 1300 wide: 960 of stage beside the panel, room for the label.
     view.update(vcx, |app, cx| {
         app.window_bounds = Some((0.0, 0.0, 1300.0, 800.0));
@@ -813,13 +800,12 @@ fn viewer_top_bar_compacts_by_stage_width() {
         vcx.debug_bounds("viewer-back-label").is_some(),
         "compact follows the stage width, not the window width"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover_modes");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_rate_popover_modes");
     focus_app(vcx, &view);
 
     // Like the header menus, the open popover holds off edit mode (from the
@@ -873,7 +859,6 @@ fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
         assert!(app.slideshow.is_none(), "a slideshow waits for the popover");
         assert!(app.rate_popover_open);
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---- Stage chrome ----------------------------------------------------------
@@ -881,7 +866,7 @@ fn viewer_rate_popover_holds_off_edit_mode_and_slideshows() {
 #[core::prelude::v1::test]
 fn viewer_nav_buttons_sit_26px_from_stage_edges() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_nav_edges");
+    let (_dir, view, vcx) = viewer_with_panel(&mut cx, "viewer_nav_edges");
     let px = gpui::px;
 
     let check = |vcx: &mut VisualTestContext, stage_right: f32, case: &str| {
@@ -926,5 +911,4 @@ fn viewer_nav_buttons_sit_26px_from_stage_edges() {
         px(26.0),
         "immersive: Next keeps 26 from the floating panel: next={next:?} panel={panel:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

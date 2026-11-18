@@ -4,8 +4,8 @@
 
 use crate::app::stacks::{DuplicatesTab, StacksList};
 use crate::tests::duplicates::run_palette_command;
+use crate::tests::helpers::{app_with_library, click, focus_app, keystrokes, leak};
 use crate::tests::stacks::{flags, open_similar_shots, stacked_library, undo_len, Fixture};
-use crate::tests::ui_automation::{app_with_library, click, focus_app, keystrokes, leak};
 use crate::*;
 use lumina_core::{Flag, MediaId, MediaType, StackKind};
 
@@ -72,7 +72,6 @@ fn burst_of_raw_jpeg_pairs_lists_pairs_and_burst() {
         "the burst of the pairs' images is listed too, not dropped"
     );
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -134,7 +133,6 @@ fn wide_stack_shows_how_many_members_are_not_drawn() {
     assert_eq!(rejected(&f), 11, "Reject all but the first rejects 11");
     assert_eq!(after.get(&ids[0]), None, "the first is kept");
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -167,7 +165,6 @@ fn show_similar_shots_from_the_viewer_leaves_no_selection() {
         );
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -203,7 +200,6 @@ fn slideshow_does_not_start_on_similar_shots() {
     vcx.run_until_parked();
     check(&view, vcx, "⌘K Slideshow");
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -244,7 +240,6 @@ fn narrowest_window_shows_only_the_count_when_one_member_does_not_fit() {
         }
     }
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 // Needs a real player backend; other platforms use the dummy player.
@@ -274,7 +269,7 @@ fn expanding_pip_on_similar_shots_shows_the_video_on_exact_copies() {
 
     open_similar_shots(vcx);
     view.update(vcx, |app, cx| app.expand_pip_to_viewer(cx));
-    crate::tests::ui_automation::render_ui(vcx);
+    crate::tests::helpers::render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(app.is_fullscreen_viewer, "expand opens the viewer");
         assert_eq!(
@@ -289,5 +284,4 @@ fn expanding_pip_on_similar_shots_shows_the_video_on_exact_copies() {
         );
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&dir);
 }

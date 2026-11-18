@@ -1,7 +1,7 @@
 //! Get Info window: title bar, header, General, Camera,
 //! Location and Tags tabs, driven in a real floating-inspector window.
 
-use crate::tests::ui_automation::{click, keystrokes, leak, render_ui, seed_library_undecodable};
+use crate::tests::helpers::{click, keystrokes, leak, render_ui, seed_library_undecodable};
 use crate::views::floating_inspector::FloatingInspectorView;
 use crate::LuminaApp;
 use gpui::{Entity, TestAppContext, VisualTestContext};
@@ -12,7 +12,7 @@ fn get_info<'a>(
     cx: &'a mut TestAppContext,
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     Entity<LuminaApp>,
     &'a mut VisualTestContext,
 ) {
@@ -44,7 +44,7 @@ fn bounds(icx: &mut VisualTestContext, selector: &'static str) -> gpui::Bounds<g
 #[core::prelude::v1::test]
 fn title_bar_and_header_follow_v3() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_header");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_header");
 
     let bar = bounds(icx, "floating-inspector-titlebar");
     let title = bounds(icx, "floating-inspector-title");
@@ -96,14 +96,12 @@ fn title_bar_and_header_follow_v3() {
     for selector in ["info-quick-copy-path-btn", "info-quick-open-with-btn"] {
         assert_eq!(f32::from(bounds(icx, selector).size.height), 26.0);
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn general_tab_shows_dates_and_adjusts_date_taken() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_general");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_general");
 
     view.update(icx, |app, _| {
         let details = app
@@ -141,14 +139,12 @@ fn general_tab_shows_dates_and_adjusts_date_taken() {
         );
     });
     assert!(icx.debug_bounds("inspector-date-box").is_some());
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn general_tab_shows_set_rights_read_only() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_rights");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_rights");
     assert!(
         icx.debug_bounds("info-rights-creator").is_none(),
         "no rights rows for an item without rights"
@@ -194,14 +190,12 @@ fn general_tab_shows_set_rights_read_only() {
             "{selector}: only rights that are set get a row"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn camera_tab_has_summary_strip_and_only_known_rows() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_camera");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_camera");
     view.update(icx, |app, cx| {
         if let Some(item) = app.selected_item.as_mut() {
             item.make = Some("FUJIFILM".into());
@@ -240,14 +234,12 @@ fn camera_tab_has_summary_strip_and_only_known_rows() {
             "{absent} is hidden when the file does not record it"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn location_tab_formats_and_removes_the_location() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_location");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_location");
     let id = view.update(icx, |app, cx| {
         let id = app.selected_item.as_ref().unwrap().id;
         let engine = app.grid_state.as_ref().unwrap().engine.clone();
@@ -299,14 +291,12 @@ fn location_tab_formats_and_removes_the_location() {
         );
         assert!(app.error_message.is_none(), "removal must not error");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_tab_adds_with_enter_and_suggests_library_tags() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_tags");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_tags");
     view.update(icx, |app, cx| {
         app.library_tag_counts = vec![("travel".into(), 3), ("trees".into(), 1)];
         app.selected_item_tags = vec!["travel".into()];
@@ -344,8 +334,6 @@ fn tags_tab_adds_with_enter_and_suggests_library_tags() {
     view.update(icx, |app, _| {
         assert!(app.tags_page_shown(), "the link opens the Tag Manager");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -354,7 +342,7 @@ fn get_info_actions_have_a_keyboard_path() {
     use crate::views::inspector::InspectorTab;
 
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_palette");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_palette");
     let id = view.update(icx, |app, cx| {
         app.execute_command(CommandId::AdjustDate, cx);
         assert!(
@@ -391,8 +379,6 @@ fn get_info_actions_have_a_keyboard_path() {
             .unwrap();
         assert_eq!(stored.latitude, None, "⌘K Remove Location clears it");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -420,7 +406,7 @@ fn cached_details_never_cross_libraries() {
 fn get_info_stars_match_the_inspector_and_pop() {
     crate::motion::REDUCE_MOTION.with(|on| on.set(false));
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, icx) = get_info(&mut cx, "get_info_stars");
+    let (_temp_dir, view, icx) = get_info(&mut cx, "get_info_stars");
 
     for star in 1..=5u8 {
         let b = bounds(icx, leak(format!("inspector-star-{star}")));
@@ -451,6 +437,4 @@ fn get_info_stars_match_the_inspector_and_pop() {
     click(icx, "info-quick-fav-btn");
     render_ui(icx);
     assert!(icx.debug_bounds("info-quick-fav-btn").is_some());
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

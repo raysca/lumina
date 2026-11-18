@@ -1,4 +1,4 @@
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -19,8 +19,9 @@ fn test_e2e_tag_workflow() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = crate::tests::helpers::TempLibrary(temp_dir);
     let photo_path = temp_dir.join("photo1.jpg");
-    std::fs::write(&photo_path, crate::tests::ui_automation::tiny_jpeg()).unwrap();
+    std::fs::write(&photo_path, crate::tests::helpers::tiny_jpeg()).unwrap();
 
     let (engine, rx) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
@@ -105,8 +106,6 @@ fn test_e2e_tag_workflow() {
         assert!(app.search_query.is_empty());
     });
     cx.run_until_parked();
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -122,6 +121,7 @@ fn test_tag_manager_modal_lifecycle() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = crate::tests::helpers::TempLibrary(temp_dir);
     let photo_path = temp_dir.join("tm_photo.jpg");
     std::fs::write(&photo_path, b"dummy-content").unwrap();
 
@@ -249,8 +249,6 @@ fn test_tag_manager_modal_lifecycle() {
         });
     });
     cx.run_until_parked();
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -266,6 +264,7 @@ fn test_smart_album_and_tag_sidebar_selection_are_exclusive() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = crate::tests::helpers::TempLibrary(temp_dir);
     let (engine, _) = lumina_core::LuminaEngine::open_with_paths(
         temp_dir.clone(),
         temp_dir.join("catalog.db"),
@@ -297,8 +296,6 @@ fn test_smart_album_and_tag_sidebar_selection_are_exclusive() {
         assert_eq!(app.selection, AlbumSelection::AllLibrary);
     });
     cx.run_until_parked();
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -348,7 +345,7 @@ fn test_tag_manager_modular_flow() {
 
 #[core::prelude::v1::test]
 fn adding_a_keyword_path_stores_it_normalized_and_refuses_over_long_ones() {
-    let (temp_dir, engine) = seed_library("keyword_path_add", 1);
+    let (_temp_dir, engine) = seed_library("keyword_path_add", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -388,12 +385,11 @@ fn adding_a_keyword_path_stores_it_normalized_and_refuses_over_long_ones() {
             "a refused path writes nothing"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn renaming_a_tag_stores_the_normalized_path_and_refuses_over_long_ones() {
-    let (temp_dir, engine) = seed_library("keyword_path_rename", 1);
+    let (_temp_dir, engine) = seed_library("keyword_path_rename", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
         .add_tags_batch(&[item.id], &["trip".to_string()])
@@ -438,12 +434,11 @@ fn renaming_a_tag_stores_the_normalized_path_and_refuses_over_long_ones() {
             "a refused rename changes nothing"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
-    let (temp_dir, engine) = seed_library("untagged_count", 2);
+    let (_temp_dir, engine) = seed_library("untagged_count", 2);
     let items = engine.get_item_slice(0..2);
     assert_eq!(items.len(), 2, "the fixture must create two media items");
     let first_item = items[0].clone();
@@ -526,13 +521,11 @@ fn untagged_count_refreshes_after_tag_add_remove_rename_merge_and_delete() {
             "the sidebar tag list must be refreshed after the delete"
         );
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
-    let (temp_dir, engine) = seed_library("tag_error", 1);
+    let (_temp_dir, engine) = seed_library("tag_error", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine
         .add_tags_batch(&[item.id], &["travel".to_string()])
@@ -577,8 +570,6 @@ fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
         app.dismiss_error(cx);
         assert!(app.error_message.is_none());
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,7 +584,10 @@ fn failed_tag_mutation_surfaces_in_the_error_banner_and_keeps_the_tag() {
 fn tagged_library(
     prefix: &str,
     tags: &[&str],
-) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+) -> (
+    crate::tests::helpers::TempLibrary,
+    std::sync::Arc<LuminaEngine>,
+) {
     let (temp_dir, engine) = seed_library(prefix, 1);
     let item = engine
         .get_item_slice(0..1)
@@ -623,7 +617,7 @@ fn tag_selector(control: &str, tag: &str) -> &'static str {
 
 #[core::prelude::v1::test]
 fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
-    let (temp_dir, engine) = tagged_library("tag_row_click", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_row_click", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
@@ -645,13 +639,11 @@ fn rendered_row_click_opens_the_tag_in_the_detail_panel() {
         vcx.debug_bounds("tag-detail-edit").is_some(),
         "the detail panel must offer Rename for the focused tag"
     );
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn rendered_checkbox_click_toggles_selection_exactly_once() {
-    let (temp_dir, engine) = tagged_library("tag_checkbox_click", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_checkbox_click", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
@@ -676,13 +668,11 @@ fn rendered_checkbox_click_toggles_selection_exactly_once() {
             "a second checkbox click must deselect the tag"
         );
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn rendered_rename_click_starts_editing_without_toggling_the_row() {
-    let (temp_dir, engine) = tagged_library("tag_rename_click", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_rename_click", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
@@ -700,13 +690,11 @@ fn rendered_rename_click_starts_editing_without_toggling_the_row() {
             "the Rename click must not also toggle the row selection"
         );
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn rendered_show_in_library_filters_and_closes_the_manager() {
-    let (temp_dir, engine) = tagged_library("tag_name_click", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_name_click", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
@@ -727,13 +715,11 @@ fn rendered_show_in_library_filters_and_closes_the_manager() {
             "Show in Library must not check the row"
         );
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn rendered_search_box_click_focuses_and_typing_filters() {
-    let (temp_dir, engine) = tagged_library("tag_search_click", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_search_click", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_tag_manager(&view, vcx);
@@ -765,13 +751,11 @@ fn rendered_search_box_click_focuses_and_typing_filters() {
             "typing must not drop the filter field focus state"
         );
     });
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn keyboard_browses_tags_and_renames_the_focused_one() {
-    let (temp_dir, engine) = tagged_library("tag_keyboard", &["alpha", "beta"]);
+    let (_temp_dir, engine) = tagged_library("tag_keyboard", &["alpha", "beta"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_tag_manager(&view, vcx);
@@ -813,15 +797,13 @@ fn keyboard_browses_tags_and_renames_the_focused_one() {
             .any(|(tag, _)| tag == "gamma"),
         "the rename must reach the catalog"
     );
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
     let names: Vec<String> = (0..40).map(|i| format!("tag{i:02}")).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let (temp_dir, engine) = tagged_library("tag_scroll", &refs);
+    let (_temp_dir, engine) = tagged_library("tag_scroll", &refs);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(640.0)));
@@ -852,13 +834,11 @@ fn tag_manager_keyboard_focus_scrolls_into_view_and_select_all_checks_rows() {
             "a second select-all click must clear the checks"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn a_long_name_keeps_the_rename_field_in_the_detail_panel() {
-    let (dir, engine) = seed_library("rename_overflow", 2);
+    let (_dir, engine) = seed_library("rename_overflow", 2);
     let id = engine.get_item_slice(0..1)[0].id;
     engine.add_tags_batch(&[id], &["trip".to_string()]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -882,12 +862,11 @@ fn a_long_name_keeps_the_rename_field_in_the_detail_panel() {
         field.right() <= panel.right() && field.left() >= panel.left(),
         "a long name scrolls inside the field instead of widening it: panel {panel:?}, field {field:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn long_tag_and_smart_album_names_stay_inside_their_columns() {
-    let (dir, engine) = seed_library("sidebar_long_names", 2);
+    let (_dir, engine) = seed_library("sidebar_long_names", 2);
     let long = "w".repeat(lumina_core::text::MAX_NAME_CHARS);
     let id = engine.get_item_slice(0..1)[0].id;
     engine
@@ -924,12 +903,11 @@ fn long_tag_and_smart_album_names_stay_inside_their_columns() {
         tag_row.right() <= detail.left(),
         "a long tag name truncates in the list instead of pushing into the detail: detail {detail:?}, tag {tag_row:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typing_an_alias_tags_and_undoes_its_keyword() {
-    let (temp_dir, engine) = seed_library("alias_add", 1);
+    let (_temp_dir, engine) = seed_library("alias_add", 1);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine.set_alias("nyc", "places/usa/new york").unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -957,6 +935,4 @@ fn typing_an_alias_tags_and_undoes_its_keyword() {
             "undo records and removes the keyword row, not the alias"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

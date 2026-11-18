@@ -74,6 +74,7 @@ fn test_card_context_menu_lifecycle() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = crate::tests::helpers::TempLibrary(temp_dir);
     let photo_path = temp_dir.join("context_test.jpg");
     std::fs::write(&photo_path, b"test-ctx-content").unwrap();
 
@@ -148,8 +149,6 @@ fn test_card_context_menu_lifecycle() {
         app.copy_to_clipboard(&path_str, cx);
     });
     cx.run_until_parked();
-
-    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -421,7 +420,7 @@ fn test_grid_row_height_tracks_window_and_panel_chrome() {
 #[core::prelude::v1::test]
 fn frameless_windows_get_their_own_window_controls() {
     use crate::app::render::FORCE_CLIENT_DECORATIONS;
-    use crate::tests::ui_automation::{app_with_library, render_ui, seed_library};
+    use crate::tests::helpers::{app_with_library, render_ui, seed_library};
 
     struct Reset;
     impl Drop for Reset {
@@ -431,7 +430,7 @@ fn frameless_windows_get_their_own_window_controls() {
     }
     let _reset = Reset;
 
-    let (temp_dir, engine) = seed_library("window_controls", 1);
+    let (_temp_dir, engine) = seed_library("window_controls", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     assert!(
@@ -454,5 +453,4 @@ fn frameless_windows_get_their_own_window_controls() {
             "a client-decorated window must show {control}, or it cannot be managed"
         );
     }
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

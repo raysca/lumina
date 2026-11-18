@@ -2,7 +2,7 @@
 //! field and the Most used / A–Z sort menu.
 
 use super::tag_manager::open;
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui, seed_library};
 use crate::{LuminaApp, TagSortOrder};
 use gpui::{Entity, VisualTestContext};
 
@@ -11,7 +11,7 @@ use gpui::{Entity, VisualTestContext};
 fn two_keywords(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let (dir, engine) = seed_library(prefix, 3);
@@ -24,7 +24,7 @@ fn two_keywords(
 /// True when `first`'s row is drawn above `second`'s.
 fn above(vcx: &mut VisualTestContext, first: &str, second: &str) -> bool {
     let y = |vcx: &mut VisualTestContext, tag: &str| {
-        vcx.debug_bounds(crate::tests::ui_automation::leak(format!(
+        vcx.debug_bounds(crate::tests::helpers::leak(format!(
             "tag-manager-row-{tag}"
         )))
         .unwrap_or_else(|| panic!("row {tag} must render"))
@@ -40,7 +40,7 @@ fn sort(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> TagSortOrder {
 
 #[core::prelude::v1::test]
 fn tags_header_filter_and_sort() {
-    let (dir, engine) = two_keywords("tm_header");
+    let (_dir, engine) = two_keywords("tm_header");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -101,7 +101,7 @@ fn tags_header_filter_and_sort() {
     // Clicking off the menu closes it without changing the order.
     click(vcx, "tag-sort-menu");
     render_ui(vcx);
-    crate::tests::ui_automation::click_point(vcx, 600.0, 600.0);
+    crate::tests::helpers::click_point(vcx, 600.0, 600.0);
     render_ui(vcx);
     assert!(
         vcx.debug_bounds("tag-sort-menu-card").is_none(),
@@ -139,13 +139,11 @@ fn tags_header_filter_and_sort() {
         "Esc closes it"
     );
     assert_eq!(sort(&view, vcx), TagSortOrder::Alphabetical);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_header_meta_without_keywords() {
-    let (dir, engine) = seed_library("tm_header_empty", 2);
+    let (_dir, engine) = seed_library("tm_header_empty", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -155,12 +153,11 @@ fn tags_header_meta_without_keywords() {
         "an untagged library reads 0 keywords · 0%"
     );
     assert!(vcx.debug_bounds("page-tab-count-text:keywords 0").is_some());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_page_esc_clears_checks_then_the_filter() {
-    let (dir, engine) = two_keywords("tm_header_esc");
+    let (_dir, engine) = two_keywords("tm_header_esc");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -183,12 +180,11 @@ fn tags_page_esc_clears_checks_then_the_filter() {
         );
         assert!(app.tags_page_shown(), "and the page stays");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_header_meta_before_totals_load() {
-    let (dir, engine) = two_keywords("tm_header_loading");
+    let (_dir, engine) = two_keywords("tm_header_loading");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -201,7 +197,6 @@ fn tags_header_meta_before_totals_load() {
         vcx.debug_bounds("page-meta-text:2 keywords").is_some(),
         "without the library total the meta shows the keyword count alone"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn menu_open(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> bool {
@@ -210,7 +205,7 @@ fn menu_open(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> bool {
 
 #[core::prelude::v1::test]
 fn tag_sort_menu_closes_when_the_page_or_keys_move_elsewhere() {
-    let (dir, engine) = two_keywords("tm_header_leave");
+    let (_dir, engine) = two_keywords("tm_header_leave");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -239,13 +234,11 @@ fn tag_sort_menu_closes_when_the_page_or_keys_move_elsewhere() {
         !menu_open(&view, vcx),
         "⌘F gives the keys to the sidebar search"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tag_sort_menu_swallows_page_keys() {
-    let (dir, engine) = two_keywords("tm_header_swallow");
+    let (_dir, engine) = two_keywords("tm_header_swallow");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -264,6 +257,4 @@ fn tag_sort_menu_swallows_page_keys() {
         );
         assert_eq!(app.library_tag_counts.len(), 2, "⌘⌫ deletes nothing");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1,12 +1,12 @@
 //! The search field lives in the sidebar.
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, focus_app, keystrokes, render_ui, seed_library, type_text,
 };
 
 #[core::prelude::v1::test]
 fn search_field_lives_in_the_sidebar() {
-    let (dir, engine) = seed_library("search_field_sidebar", 2);
+    let (_dir, engine) = seed_library("search_field_sidebar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -60,12 +60,11 @@ fn search_field_lives_in_the_sidebar() {
     );
     assert_eq!(crate::i18n::t("search.placeholder"), "Search library");
     assert_eq!(crate::i18n::t("search.shortcut"), "⌘F");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_f_focuses_the_sidebar_field_and_typing_searches() {
-    let (dir, engine) = seed_library("search_field_cmd_f", 2);
+    let (_dir, engine) = seed_library("search_field_cmd_f", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     assert!(
@@ -108,12 +107,11 @@ fn cmd_f_focuses_the_sidebar_field_and_typing_searches() {
         vcx.debug_bounds("sidebar-nav-all-active").is_none(),
         "no sidebar row is highlighted while a query shows"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_f_with_the_sidebar_collapsed_expands_it_to_the_field() {
-    let (dir, engine) = seed_library("search_field_rail", 2);
+    let (_dir, engine) = seed_library("search_field_rail", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.toggle_sidebar(cx));
@@ -136,12 +134,11 @@ fn cmd_f_with_the_sidebar_collapsed_expands_it_to_the_field() {
         vcx.debug_bounds("search-input").is_some(),
         "the focused field is on screen"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_f_leaves_search_alone_when_showing_the_sidebar_fails() {
-    let (dir, engine) = seed_library("search_field_rail_save_fails", 2);
+    let (_dir, engine) = seed_library("search_field_rail_save_fails", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.toggle_sidebar(cx));
@@ -158,5 +155,4 @@ fn cmd_f_leaves_search_alone_when_showing_the_sidebar_fails() {
             "⌘F must not focus a search field that is off screen"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

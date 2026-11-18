@@ -9,7 +9,7 @@ use std::time::Instant;
 use crate::app::map::{clamp_center, parse_basemap, Projection, MAX_ZOOM};
 use crate::tests::culling::ids;
 use crate::tests::duplicates::run_palette_command;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -154,7 +154,7 @@ fn basemap_asset_parses() {
 
 #[core::prelude::v1::test]
 fn map_empty_state() {
-    let (dir, engine) = seed_library("map_empty", 3);
+    let (_dir, engine) = seed_library("map_empty", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     show_map(&view, vcx);
@@ -178,12 +178,11 @@ fn map_empty_state() {
         assert!(app.search_query.is_empty());
         assert!(app.selected_indices.is_empty() && app.selected_item.is_none());
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_shows_cluster_counts_for_seeded_gps() {
-    let (dir, engine) = seed_library("map_counts", 6);
+    let (_dir, engine) = seed_library("map_counts", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -238,12 +237,11 @@ fn map_shows_cluster_counts_for_seeded_gps() {
             "cluster {i} stays inside the resized map: {c:?} not in {map:?}"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn enter_on_focused_cluster_filters_grid() {
-    let (dir, engine) = seed_library("map_enter", 6);
+    let (_dir, engine) = seed_library("map_enter", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -303,12 +301,11 @@ fn enter_on_focused_cluster_filters_grid() {
         assert!(app.search_query.starts_with("within:"));
         assert_eq!(app.get_active_count(), 2, "the Paris pair");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_plus_zooms_map_not_grid() {
-    let (dir, engine) = seed_library("map_zoom", 6);
+    let (_dir, engine) = seed_library("map_zoom", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -380,12 +377,11 @@ fn cmd_plus_zooms_map_not_grid() {
             "on the grid ⌘= changes the density"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn view_mode_reachable_from_palette_menu_and_header() {
-    let (dir, engine) = seed_library("view_mode_paths", 4);
+    let (_dir, engine) = seed_library("view_mode_paths", 4);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -429,12 +425,11 @@ fn view_mode_reachable_from_palette_menu_and_header() {
     render_ui(vcx);
     assert!(shown(&view, vcx), "Places comes back on the map");
     assert!(vcx.debug_bounds("map-view").is_some());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_keys_stay_in_palette_and_search_field() {
-    let (dir, engine) = seed_library("map_modal_keys", 6);
+    let (_dir, engine) = seed_library("map_modal_keys", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -472,12 +467,11 @@ fn map_keys_stay_in_palette_and_search_field() {
     view.update(vcx, |app, _| {
         assert_eq!(app.map.zoom, before.0, "⌘= in the field is not a map zoom")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_follows_locations_and_library_switch() {
-    let (dir, engine) = seed_library("map_live", 3);
+    let (_dir, engine) = seed_library("map_live", 3);
     let (other, other_engine) = seed_library("map_live_other", 2);
     other_engine
         .set_location(
@@ -547,13 +541,11 @@ fn map_follows_locations_and_library_switch() {
     focus_app(vcx, &view);
     show_map(&view, vcx);
     assert_eq!(counts(&view, vcx), vec![1], "the new library's point");
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
 fn map_frame_with_many_points() {
-    let (dir, engine) = seed_library("map_perf", 1);
+    let (_dir, engine) = seed_library("map_perf", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let frame = |vcx: &mut VisualTestContext| {
@@ -617,12 +609,11 @@ fn map_frame_with_many_points() {
     );
     assert!(clusters6 > 10_000, "zoom 6 splits the points finely");
     assert!(frame6_ms < 1000.0, "a zoom 6 frame took {frame6_ms:.1} ms");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_from_map_plays_places() {
-    let (dir, engine) = seed_library("map_slideshow", 6);
+    let (_dir, engine) = seed_library("map_slideshow", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -635,13 +626,12 @@ fn slideshow_from_map_plays_places() {
         assert_eq!(app.selection, PLACES);
     });
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_read_failure_offers_retry_and_reads_again() {
     use crate::app::map::MAP_LOAD_FAILS;
-    let (dir, engine) = seed_library("map_read_fail", 6);
+    let (_dir, engine) = seed_library("map_read_fail", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -691,13 +681,12 @@ fn map_read_failure_offers_retry_and_reads_again() {
         assert!(!app.map.failed, "showing the map again reads again")
     });
     assert_eq!(counts(&view, vcx), vec![2, 3]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_drag_pans_and_clicks_need_no_drag() {
     use gpui::{Modifiers, MouseButton};
-    let (dir, engine) = seed_library("map_drag", 6);
+    let (_dir, engine) = seed_library("map_drag", 6);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -783,12 +772,11 @@ fn map_drag_pans_and_clicks_need_no_drag() {
         query(&view, vcx).starts_with("within:"),
         "a press under the slop on a cluster searches it"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn map_zoom_buttons_zoom() {
-    let (dir, engine) = seed_library("map_zoom_buttons", 2);
+    let (_dir, engine) = seed_library("map_zoom_buttons", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     show_map(&view, vcx);
@@ -807,12 +795,11 @@ fn map_zoom_buttons_zoom() {
             "a button click is not a drag or a search"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn show_map_waits_for_compare() {
-    let (dir, engine) = seed_library("map_compare", 3);
+    let (_dir, engine) = seed_library("map_compare", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     keystrokes(vcx, "cmd-a c");
@@ -825,13 +812,12 @@ fn show_map_waits_for_compare() {
         assert!(!app.map.shown, "View > Show Map does nothing under compare");
         assert_ne!(app.selection, PLACES, "nor moves the view behind it");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn late_points_from_previous_library_are_dropped() {
     use crate::app::map::MAP_LOAD_FAILS;
-    let (dir, engine) = seed_library("map_late", 6);
+    let (_dir, engine) = seed_library("map_late", 6);
     seed_gps(&engine);
     let (other, _other_engine) = seed_library("map_late_other", 1);
     let mut cx = crate::tests::TestApp::single();
@@ -858,13 +844,11 @@ fn late_points_from_previous_library_are_dropped() {
         );
         assert!(app.map.failed, "the new library's own read reported");
     });
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
 fn zoom_during_first_read_clusters_at_the_new_zoom() {
-    let (dir, engine) = seed_library("map_zoom_race", 2);
+    let (_dir, engine) = seed_library("map_zoom_race", 2);
     let mut ids: Vec<MediaId> = engine
         .catalog()
         .get_item_slice(0, 10)
@@ -892,12 +876,11 @@ fn zoom_during_first_read_clusters_at_the_new_zoom() {
         vec![1, 1],
         "the clusters are zoom 2's, not the zoom 1 cell the read started at"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn view_mode_segments_switch_grid_and_map() {
-    let (dir, engine) = seed_library("view_mode", 4);
+    let (_dir, engine) = seed_library("view_mode", 4);
     seed_gps(&engine);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -964,12 +947,11 @@ fn view_mode_segments_switch_grid_and_map() {
         vcx.debug_bounds("view-mode-grid").is_none(),
         "Duplicates is a review screen, neither grid nor map"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn location_card_open_map_focuses_places() {
-    let (dir, engine) = seed_library("location_card", 2);
+    let (_dir, engine) = seed_library("location_card", 2);
     let items = engine.get_item_slice(0..2);
     let (lat, lon) = (35.01, 135.76);
     engine
@@ -1046,5 +1028,4 @@ fn location_card_open_map_focuses_places() {
     run_palette_command(vcx, &view, "Show on Map");
     render_ui(vcx);
     assert_centred(&view, vcx, "⌘K Show on Map");
-    let _ = std::fs::remove_dir_all(&dir);
 }

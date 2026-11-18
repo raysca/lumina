@@ -5,7 +5,7 @@
 use super::duplicates::run_palette_command;
 use super::tag_manager::{checkbox, count, open};
 use super::tag_manager_sidecars::{sidecar_library, sidecar_tags};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library, type_text,
 };
 
@@ -16,7 +16,8 @@ fn picker_open(view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTest
 #[core::prelude::v1::test]
 fn merge_into_row_picks_target_by_keyboard() {
     // Item 0: sand, sea, shore, unique (with a sidecar); item 1: beach.
-    let (dir, engine, item) = sidecar_library("tm_merge_into", &["sand", "sea", "shore", "unique"]);
+    let (_dir, engine, item) =
+        sidecar_library("tm_merge_into", &["sand", "sea", "shore", "unique"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
@@ -32,7 +33,7 @@ fn merge_into_row_picks_target_by_keyboard() {
     );
     for tag in ["beach", "sea", "shore", "unique"] {
         assert!(
-            vcx.debug_bounds(crate::tests::ui_automation::leak(format!(
+            vcx.debug_bounds(crate::tests::helpers::leak(format!(
                 "tag-detail-merge-option-{tag}"
             )))
             .is_some(),
@@ -116,13 +117,11 @@ fn merge_into_row_picks_target_by_keyboard() {
             "Space did not check the row"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn merge_into_from_row_menu_and_palette() {
-    let (dir, engine) = seed_library("tm_merge_menu", 2);
+    let (_dir, engine) = seed_library("tm_merge_menu", 2);
     let ids: Vec<_> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
     engine.add_tags_batch(&ids[..1], &["trip".into()]).unwrap();
     engine
@@ -174,14 +173,12 @@ fn merge_into_from_row_menu_and_palette() {
         );
     });
     assert_eq!(count(&view, vcx, "places"), Some(2), "nothing merged");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn bulk_merge_aliases_every_source_and_undoes_in_one_step() {
     // beach is on both items, so the checked tags fold into it.
-    let (dir, engine, _item) = sidecar_library("tm_merge_bulk", &["beach", "coast", "sea"]);
+    let (_dir, engine, _item) = sidecar_library("tm_merge_bulk", &["beach", "coast", "sea"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open(&view, vcx);
@@ -213,6 +210,4 @@ fn bulk_merge_aliases_every_source_and_undoes_in_one_step() {
     );
     assert_eq!(count(&view, vcx, "coast"), Some(1));
     assert_eq!(count(&view, vcx, "sea"), Some(1));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

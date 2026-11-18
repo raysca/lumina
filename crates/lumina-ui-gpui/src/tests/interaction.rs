@@ -2,8 +2,13 @@ use crate::*;
 use lumina_core::{EngineEvent, LuminaEngine};
 
 /// An isolated 12-image library, scanned.
-fn scanned_engine(prefix: &str) -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
-    super::ui_automation::seed_library(prefix, 12)
+fn scanned_engine(
+    prefix: &str,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    std::sync::Arc<LuminaEngine>,
+) {
+    super::helpers::seed_library(prefix, 12)
 }
 
 #[core::prelude::v1::test]
@@ -39,7 +44,7 @@ fn test_filter_changes_clear_multi_selection() {
 
 #[core::prelude::v1::test]
 fn test_watcher_batch_clears_selection_and_refreshes_counts() {
-    let (temp_dir, engine) = scanned_engine("counts");
+    let (_temp_dir, engine) = scanned_engine("counts");
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -74,8 +79,6 @@ fn test_watcher_batch_clears_selection_and_refreshes_counts() {
             "sidebar counts must refresh after watcher additions"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -109,7 +112,7 @@ fn test_viewer_wheel_zoom_clamps_and_ignores_video() {
 
 #[core::prelude::v1::test]
 fn test_keyboard_selection_reveals_grid_row() {
-    let (temp_dir, engine) = scanned_engine("reveal");
+    let (_temp_dir, engine) = scanned_engine("reveal");
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -127,13 +130,11 @@ fn test_keyboard_selection_reveals_grid_row() {
             "selecting item 11 in a 4-column grid must reveal row 2"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn engine_errors_show_in_the_error_banner() {
-    let (temp_dir, engine) = scanned_engine("engine_error");
+    let (_temp_dir, engine) = scanned_engine("engine_error");
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
@@ -151,6 +152,4 @@ fn engine_errors_show_in_the_error_banner() {
             "a catalog failure must reach the banner, not leave a silent empty grid"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

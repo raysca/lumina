@@ -4,7 +4,7 @@
 use crate::app::command_palette::CommandId;
 use crate::app::search::filter_chips;
 use crate::icons::Icon;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use gpui::{Bounds, Entity, Pixels, VisualTestContext};
@@ -43,7 +43,7 @@ fn assert_menu_under(vcx: &mut VisualTestContext, opener: &'static str, left: bo
 
 #[core::prelude::v1::test]
 fn filter_tokens_render_as_chips_with_count_and_clear_all() {
-    let (dir, engine) = seed_library("filter_bar_chips", 1);
+    let (_dir, engine) = seed_library("filter_bar_chips", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, QUERY);
@@ -115,12 +115,11 @@ fn filter_tokens_render_as_chips_with_count_and_clear_all() {
         vcx.debug_bounds("filter-bar").is_none(),
         "a free-text-only query renders no chip row"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn chip_remove_and_add_filter_are_keyboard_reachable() {
-    let (dir, engine) = seed_library("filter_bar_keys", 2);
+    let (_dir, engine) = seed_library("filter_bar_keys", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "month:jun year:2025 city:Lisbon is:favorite");
@@ -175,12 +174,11 @@ fn chip_remove_and_add_filter_are_keyboard_reachable() {
         );
     });
     assert!(vcx.debug_bounds("filter-add-menu").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn menu_lists_typed_chips_checked_so_the_keyboard_removes_them() {
-    let (dir, engine) = seed_library("filter_bar_remove_keys", 2);
+    let (_dir, engine) = seed_library("filter_bar_remove_keys", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, r#"city:Lisbon camera:"X-T5" is:video"#);
@@ -207,12 +205,11 @@ fn menu_lists_typed_chips_checked_so_the_keyboard_removes_them() {
     focus_app(vcx, &view);
     keystrokes(vcx, "down enter");
     assert_eq!(query(&view, vcx), "is:video", "the place chip goes too");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn menu_rows_take_clicks_above_the_backdrop() {
-    let (dir, engine) = seed_library("filter_bar_click_row", 2);
+    let (_dir, engine) = seed_library("filter_bar_click_row", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     set_query(&view, vcx, "city:Lisbon");
@@ -243,12 +240,11 @@ fn menu_rows_take_clicks_above_the_backdrop() {
         assert!(app.search_focused, "the search field takes the value");
         assert!(app.filter_menu.is_none());
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_and_vanishing_row_put_the_menu_under_the_header_button() {
-    let (dir, engine) = seed_library("filter_bar_palette", 2);
+    let (_dir, engine) = seed_library("filter_bar_palette", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -268,12 +264,11 @@ fn palette_and_vanishing_row_put_the_menu_under_the_header_button() {
     set_query(&view, vcx, "");
     assert!(vcx.debug_bounds("filter-bar").is_none());
     assert_menu_under(vcx, "header-filter", false);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn chip_row_scrolls_in_a_narrow_window_with_the_inspector_open() {
-    let (dir, engine) = seed_library("filter_bar_narrow", 2);
+    let (_dir, engine) = seed_library("filter_bar_narrow", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(720.0)));
@@ -306,5 +301,4 @@ fn chip_row_scrolls_in_a_narrow_window_with_the_inspector_open() {
         "the chips overflow their scroller instead of pushing Clear all: \
          {add:?} vs {scroller:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

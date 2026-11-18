@@ -5,7 +5,7 @@
 use super::downloads::{install, persisted, queue_app, row_id, settle, states, submit};
 use super::downloads_pause::{offers, run_palette};
 use super::downloads_screen::{marker, set_rows};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::app::command_palette::CommandId;
 use crate::app::downloads::{DownloadFilter, DownloadSurface, JobOutcome};
 use crate::views::sidebar::AlbumSelection;

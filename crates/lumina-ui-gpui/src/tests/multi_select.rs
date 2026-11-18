@@ -1,6 +1,6 @@
 //! Multi-select: selection dock and partial tags in the batch inspector.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::inspector::batch::common_rating;
@@ -10,7 +10,7 @@ fn select_two<'a>(
     prefix: &str,
     cx: &'a mut gpui::TestAppContext,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     [lumina_core::MediaItem; 2],
     gpui::Entity<crate::LuminaApp>,
@@ -24,7 +24,7 @@ fn select_two<'a>(
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     click(vcx, "inspector-toggle");
     render_ui(vcx);
     (dir, engine, [a, b], view, vcx)
@@ -32,7 +32,7 @@ fn select_two<'a>(
 
 #[core::prelude::v1::test]
 fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
-    let (temp_dir, engine) = seed_library("multi_partial", 3);
+    let (_temp_dir, engine) = seed_library("multi_partial", 3);
     let items = engine.get_item_slice(0..3);
     let (a, b) = (items[0].clone(), items[1].clone());
     let catalog = engine.catalog();
@@ -51,7 +51,7 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
     // Select both through the real input path: click, then ⌘-click.
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     view.update(vcx, |app, cx| {
         assert_eq!(
             app.selected_indices.len(),
@@ -130,13 +130,11 @@ fn batch_inspector_marks_partial_tags_and_applies_them_to_all() {
             .contains(&"street".to_string()),
         "undo must remove the tag from the item it was added to"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
-    let (temp_dir, engine) = seed_library("multi_partial_remove", 3);
+    let (_temp_dir, engine) = seed_library("multi_partial_remove", 3);
     let items = engine.get_item_slice(0..3);
     let (a, b) = (items[0].clone(), items[1].clone());
     let catalog = engine.catalog();
@@ -151,7 +149,7 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
 
     click(vcx, leak(format!("media-card-{}", a.id.0)));
     let second = bounds_center(vcx, leak(format!("media-card-{}", b.id.0)));
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();
@@ -180,14 +178,12 @@ fn partial_tag_remove_clears_all_and_undo_restores_only_its_owner() {
         !has(b.id),
         "undo must not add the tag to an item that never had it"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, [a, b], view, vcx) = select_two("batch_v3_panel", &mut cx);
+    let (_dir, engine, [a, b], view, vcx) = select_two("batch_v3_panel", &mut cx);
 
     for selector in [
         "batch-stack",
@@ -247,13 +243,11 @@ fn batch_panel_shows_header_shared_rating_and_one_tag_list() {
         );
     }
     view.update(vcx, |app, _| assert!(app.error_message.is_none()));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
-    let (dir, engine) = seed_library("batch_v3_dock", 3);
+    let (_dir, engine) = seed_library("batch_v3_dock", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -301,14 +295,12 @@ fn dock_shows_for_one_item_over_the_grid_column_above_the_status_bar() {
     view.update(vcx, |app, _| {
         assert!(app.tag_input_active, "T starts tagging the selection")
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_batch_rating_or_label_is_one_undo_step() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, engine, [a, b], view, vcx) = select_two("multi_undo_step", &mut cx);
+    let (_temp_dir, engine, [a, b], view, vcx) = select_two("multi_undo_step", &mut cx);
     let catalog = engine.catalog();
 
     click(vcx, "inspector-star-4");
@@ -341,8 +333,6 @@ fn a_batch_rating_or_label_is_one_undo_step() {
             "one ⌘Z restores the rating on every item"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -381,13 +371,11 @@ fn a_failed_batch_rating_changes_nothing_and_says_so() {
             app.error_message
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn batch_date_rewrites_sidecars() {
-    let (dir, engine) = seed_library("batch_date_sidecar", 2);
+    let (_dir, engine) = seed_library("batch_date_sidecar", 2);
     let items = engine.get_item_slice(0..2);
     let ids: Vec<_> = items.iter().map(|item| item.id).collect();
     let mut cx = crate::tests::TestApp::single();
@@ -452,8 +440,6 @@ fn batch_date_rewrites_sidecars() {
             .is_some_and(|(lat, _)| (lat + 33.8688).abs() < 1e-6),
         "a single-item location edit rewrites the sidecar"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Selection mode: while two or more
@@ -462,7 +448,7 @@ fn batch_date_rewrites_sidecars() {
 #[core::prelude::v1::test]
 fn selection_mode_shows_check_circles_and_dims_unselected() {
     use crate::views::grid::CARD_OPACITY;
-    let (temp_dir, engine) = seed_library("multi_checks", 4);
+    let (_temp_dir, engine) = seed_library("multi_checks", 4);
     let items = engine.get_item_slice(0..4);
     let ids: Vec<usize> = items.iter().map(|i| i.id.0 as usize).collect();
     let mut cx = crate::tests::TestApp::single();
@@ -500,7 +486,7 @@ fn selection_mode_shows_check_circles_and_dims_unselected() {
     );
 
     let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     render_ui(vcx);
     for (n, &id) in ids.iter().enumerate() {
         assert!(
@@ -519,14 +505,13 @@ fn selection_mode_shows_check_circles_and_dims_unselected() {
             "unselected cards dim to 0.62, selected stay opaque (card {n})"
         );
     }
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// A check circle toggles its own item, like ⌘-click, without collapsing
 /// the selection to that card.
 #[core::prelude::v1::test]
 fn check_circle_click_toggles_that_item() {
-    let (temp_dir, engine) = seed_library("multi_check_click", 4);
+    let (_temp_dir, engine) = seed_library("multi_check_click", 4);
     let ids: Vec<u64> = engine.get_item_slice(0..4).iter().map(|i| i.id.0).collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -534,7 +519,7 @@ fn check_circle_click_toggles_that_item() {
     render_ui(vcx);
     click(vcx, leak(format!("media-card-{}", ids[0])));
     let second = bounds_center(vcx, leak(format!("media-card-{}", ids[1])));
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     render_ui(vcx);
     let count =
         |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.selected_indices.len());
@@ -558,5 +543,4 @@ fn check_circle_click_toggles_that_item() {
             "the first card is the one removed"
         );
     });
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

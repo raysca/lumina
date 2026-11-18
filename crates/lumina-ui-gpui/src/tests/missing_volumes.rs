@@ -1,7 +1,7 @@
 //! Missing originals in the viewer: a drive that mounts while its item is
 //! on screen, and Locate from a viewer opened on a multi-selection.
 
-use super::ui_automation::{app_with_library, leak, render_ui, seed_library};
+use super::helpers::{app_with_library, leak, render_ui, seed_library};
 use crate::app::missing::{LOCATE_REQUESTS, VOLUMES_DIR, VOLUME_POLL};
 
 /// A library of two photos, both gone, both selected, with the viewer open
@@ -10,7 +10,7 @@ fn two_missing_selected<'a>(
     name: &str,
     cx: &'a mut crate::tests::TestApp,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &'a mut gpui::VisualTestContext,
 ) {
@@ -41,7 +41,7 @@ fn two_missing_selected<'a>(
 #[core::prelude::v1::test]
 fn viewer_locate_acts_on_the_item_on_screen() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = two_missing_selected("missing_locate_viewer_multi", &mut cx);
+    let (_temp_dir, view, vcx) = two_missing_selected("missing_locate_viewer_multi", &mut cx);
     let before = LOCATE_REQUESTS.with(|r| r.borrow().len());
     let shown = view.update(vcx, |app, cx| {
         assert!(app.is_fullscreen_viewer);
@@ -56,7 +56,6 @@ fn viewer_locate_acts_on_the_item_on_screen() {
     let requests = LOCATE_REQUESTS.with(|r| r.borrow()[before..].to_vec());
     assert_eq!(requests, [shown], "Locate opens for the item being viewed");
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 const DRIVE_TEXT: &str = "viewer-missing-drive-text:LuminaTestDrive";
@@ -140,7 +139,6 @@ fn mounting_the_drive_refreshes_the_offline_bar() {
 
     VOLUMES_DIR.with(|d| *d.borrow_mut() = None);
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -184,5 +182,4 @@ fn drive_unplugged_on_screen_then_mounted_refreshes_the_bar() {
 
     VOLUMES_DIR.with(|d| *d.borrow_mut() = None);
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -2,7 +2,7 @@
 //! dialogs are stubbed: tests count the request and call the post-dialog
 //! step with a path in the test library's temp folder.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -57,7 +57,7 @@ fn top(vcx: &mut gpui::VisualTestContext, selector: String) -> f32 {
 
 #[core::prelude::v1::test]
 fn pinned_albums_render_first() {
-    let (dir, engine) = seed_library("album_pinned_first", 1);
+    let (_dir, engine) = seed_library("album_pinned_first", 1);
     let loose = engine.create_album_with("Loose", &[]).unwrap();
     let kept = engine.create_album_with("Kept", &[]).unwrap();
     assert!(engine.set_album_pinned(kept.id, true).unwrap());
@@ -138,12 +138,11 @@ fn pinned_albums_render_first() {
             .any(|a| a.id == smart_loose.id && a.pinned),
         "Pin Album pins the open smart album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn pin_write_failure_shows_banner_and_keeps_order() {
-    let (dir, engine) = seed_library("album_pin_fail", 1);
+    let (_dir, engine) = seed_library("album_pin_fail", 1);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -172,12 +171,11 @@ fn pin_write_failure_shows_banner_and_keeps_order() {
         vcx.debug_bounds("sidebar-pinned-header").is_none(),
         "no Pinned group without a pinned album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn duplicate_smart_album_copies_rules() {
-    let (dir, engine) = seed_library("smart_duplicate", 1);
+    let (_dir, engine) = seed_library("smart_duplicate", 1);
     let original = two_rule_album(&engine, "Faves");
     assert!(engine.set_smart_album_pinned(original.id, true).unwrap());
     let mut cx = crate::tests::TestApp::single();
@@ -204,7 +202,6 @@ fn duplicate_smart_album_copies_rules() {
             "the copy opens, ready to edit"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -272,7 +269,6 @@ fn import_rejected_rule_shows_banner() {
         engine.list_smart_albums().is_empty(),
         "a rejected file saves no smart album"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -332,12 +328,11 @@ fn export_then_import_round_trips_rules() {
             "the sidebar lists it"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn file_menu_imports_smart_album_rules() {
-    let (dir, engine) = seed_library("smart_import_menu", 1);
+    let (_dir, engine) = seed_library("smart_import_menu", 1);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     let before = dialogs();
@@ -347,5 +342,4 @@ fn file_menu_imports_smart_album_rules() {
         before + 1,
         "File > Import Smart Album Rules… asks for a file"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

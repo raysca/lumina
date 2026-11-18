@@ -7,24 +7,17 @@
 
 use crate::app::command_palette::PaletteTarget;
 use crate::app::types::get_sample_items;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
 };
 use gpui::VisualTestContext;
 use lumina_core::MediaType;
 
-struct Fixture(std::path::PathBuf);
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 /// The sample video open in the viewer (60 s), on an unloaded native player.
 fn open_video(
     cx: &mut gpui::TestAppContext,
 ) -> (
-    Fixture,
+    super::helpers::TempLibrary,
     gpui::Entity<crate::LuminaApp>,
     &mut VisualTestContext,
 ) {
@@ -41,7 +34,7 @@ fn open_video(
         cx.notify();
     });
     render_ui(vcx);
-    (Fixture(temp_dir), view, vcx)
+    (temp_dir, view, vcx)
 }
 
 fn set_tracks(
@@ -219,7 +212,7 @@ fn palette_audio_track_runs_from_the_keyboard() {
     focus_app(vcx, &view);
     set_tracks(&view, vcx, &["English", "Commentary"], Some(0));
     keystrokes(vcx, "cmd-k");
-    crate::tests::ui_automation::type_text(vcx, "commentary");
+    crate::tests::helpers::type_text(vcx, "commentary");
     keystrokes(vcx, "enter");
     assert_eq!(
         backend_selection(&view, vcx),
@@ -502,7 +495,7 @@ fn chapter_labels_mark_the_current_chapter() {
         &[(0.0, "Intro"), (15.0, "Departure"), (45.0, "")],
     );
     for n in 1..=3 {
-        let selector = crate::tests::ui_automation::leak(format!("video-chapter-label-{n}"));
+        let selector = crate::tests::helpers::leak(format!("video-chapter-label-{n}"));
         assert!(
             vcx.debug_bounds(selector).is_some(),
             "chapter {n} gets a label"

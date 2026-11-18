@@ -2,7 +2,7 @@
 //! navigator preset buttons and the palette zoom commands. Plain digits no
 //! longer zoom (they set ratings).
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::tests::viewer_and_video::{render_viewer_ui, viewer_with_gradient};
@@ -15,7 +15,7 @@ fn large_photo_viewer<'a>(
     cx: &'a mut gpui::TestAppContext,
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<LuminaApp>,
     &'a mut gpui::VisualTestContext,
 ) {
@@ -38,7 +38,7 @@ fn expected(app: &LuminaApp, preset: ViewerZoomPreset) -> f32 {
 #[core::prelude::v1::test]
 fn cmd_digit_zoom_presets_in_viewer() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = large_photo_viewer(&mut cx, "cmd_digit_presets");
+    let (_dir, view, vcx) = large_photo_viewer(&mut cx, "cmd_digit_presets");
     let actual = view.update(vcx, |app, _| expected(app, ViewerZoomPreset::Actual));
     assert!(
         actual > 1.05,
@@ -69,13 +69,12 @@ fn cmd_digit_zoom_presets_in_viewer() {
             assert_eq!(app.viewer_state.zoom_label(), want_label, "{keys} label");
         });
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn plain_digits_do_not_zoom_viewer() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = large_photo_viewer(&mut cx, "plain_digits");
+    let (_dir, view, vcx) = large_photo_viewer(&mut cx, "plain_digits");
     for key in ["1", "2", "3", "4", "0"] {
         keystrokes(vcx, key);
         view.update(vcx, |app, _| {
@@ -97,12 +96,11 @@ fn plain_digits_do_not_zoom_viewer() {
     view.update(vcx, |app, _| {
         assert_eq!(app.viewer_state.zoom_scale, zoomed, "plain 0 must not fit");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_digits_do_nothing_in_the_grid() {
-    let (dir, engine) = seed_library("cmd_digits_grid", 4);
+    let (_dir, engine) = seed_library("cmd_digits_grid", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let card = leak(format!(
@@ -140,13 +138,12 @@ fn cmd_digits_do_nothing_in_the_grid() {
             "⌘digits are viewer-only and do nothing in the grid"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn navigator_preset_buttons_apply_presets() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = large_photo_viewer(&mut cx, "navigator_presets");
+    let (_dir, view, vcx) = large_photo_viewer(&mut cx, "navigator_presets");
     // The navigator renders only while zoomed.
     keystrokes(vcx, "secondary-2");
     for (selector, preset) in [
@@ -169,7 +166,6 @@ fn navigator_preset_buttons_apply_presets() {
         vcx.debug_bounds("viewer-navigator").is_none(),
         "at Fit the navigator and its presets hide"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn zoom_rows(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTestContext) -> Vec<String> {
@@ -190,7 +186,7 @@ fn zoom_rows(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTestContext) 
 #[core::prelude::v1::test]
 fn palette_zoom_commands_only_in_photo_viewer() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = large_photo_viewer(&mut cx, "palette_zoom");
+    let (_dir, view, vcx) = large_photo_viewer(&mut cx, "palette_zoom");
 
     let shown = zoom_rows(&view, vcx);
     for key in [
@@ -238,13 +234,12 @@ fn palette_zoom_commands_only_in_photo_viewer() {
         zoom_rows(&view, vcx).is_empty(),
         "viewer zoom commands are not offered in the grid"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn platform_modifier_digits_follow_shortcut_semantics() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, view, vcx) = large_photo_viewer(&mut cx, "ctrl_digit_presets");
+    let (_dir, view, vcx) = large_photo_viewer(&mut cx, "ctrl_digit_presets");
     #[cfg(target_os = "macos")]
     {
         let before = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
@@ -276,5 +271,4 @@ fn platform_modifier_digits_follow_shortcut_semantics() {
             );
         });
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

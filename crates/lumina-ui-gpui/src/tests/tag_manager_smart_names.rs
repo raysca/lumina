@@ -1,17 +1,13 @@
 //! Save Tag as Smart Album with tag names that hold spaces and quotes: the
 //! saved rule must match exactly the items under that tag.
 
-use super::downloads::TempLibrary;
 use super::tag_manager::open;
-use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, seed_library,
-};
+use crate::tests::helpers::{app_with_library, click, keystrokes, leak, render_ui, seed_library};
 use lumina_core::{MediaId, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 
 #[core::prelude::v1::test]
 fn save_tag_as_smart_album_with_spaces_and_quotes_matches_exactly() {
-    let (dir, engine) = seed_library("tm_save_smart_names", 6);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("tm_save_smart_names", 6);
     let mut ids: Vec<u64> = engine.get_item_slice(0..6).iter().map(|i| i.id.0).collect();
     ids.sort();
     let ids: Vec<MediaId> = ids.into_iter().map(MediaId).collect();

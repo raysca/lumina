@@ -2,7 +2,7 @@
 //! meta line on the left, the filter, sort and Import actions on the right.
 
 use super::downloads::{install, queue_app, settle, submit};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui};
 use gpui::{Bounds, Pixels};
 
 fn bounds(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> Bounds<Pixels> {
@@ -270,10 +270,9 @@ fn headerless_screens_drop_the_header_popovers() {
 
 #[core::prelude::v1::test]
 fn header_meta_shows_count_and_date_range() {
-    use super::ui_automation::seed_library;
+    use super::helpers::seed_library;
     use crate::views::sidebar::AlbumSelection;
-    let (dir, engine) = seed_library("lh_range", 3);
-    let _cleanup = super::downloads::TempLibrary(dir);
+    let (_dir, engine) = seed_library("lh_range", 3);
     let ids: Vec<_> = engine
         .get_item_slice(0..3)
         .iter()
@@ -331,9 +330,8 @@ fn header_meta_shows_count_and_date_range() {
 
 #[core::prelude::v1::test]
 fn date_span_rereads_after_a_write_before_a_scroll_fetch() {
-    use super::ui_automation::seed_library;
-    let (dir, engine) = seed_library("lh_span_race", 80);
-    let _cleanup = super::downloads::TempLibrary(dir);
+    use super::helpers::seed_library;
+    let (_dir, engine) = seed_library("lh_span_race", 80);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let span = |vcx: &mut gpui::VisualTestContext| view.update(vcx, |app, _| app.displayed_span());

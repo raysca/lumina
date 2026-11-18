@@ -1,14 +1,14 @@
 //! Edit mode's guards: absorbed keys, menu actions behind sheets and in
 //! edit mode, undo under a draft, videos, and the export note.
 
+use crate::tests::helpers::{app_with_library, keystrokes, render_ui};
 use crate::tests::quick_edit::{edit_library, edit_rows, editing, edits_of, open_viewer_on};
-use crate::tests::ui_automation::{app_with_library, keystrokes, render_ui};
 use crate::*;
 use lumina_core::{Edits, MediaId};
 
 #[core::prelude::v1::test]
 fn edit_mode_absorbs_delete_shortcut() {
-    let (dir, engine, photos, _) = edit_library("absorbs_delete");
+    let (_dir, engine, photos, _) = edit_library("absorbs_delete");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -17,7 +17,7 @@ fn edit_mode_absorbs_delete_shortcut() {
     keystrokes(vcx, "secondary-backspace");
     keystrokes(vcx, "backspace");
     keystrokes(vcx, "right");
-    crate::tests::ui_automation::right_click(vcx, "viewer-viewport");
+    crate::tests::helpers::right_click(vcx, "viewer-viewport");
 
     let item = engine
         .get_item_by_id(photos[0])
@@ -39,7 +39,6 @@ fn edit_mode_absorbs_delete_shortcut() {
             "→ in edit mode must not step to the next photo"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -53,12 +52,11 @@ fn e_on_video_does_nothing() {
     assert!(!editing(&view, vcx), "E on a video does not open edit mode");
     assert!(vcx.debug_bounds("edit-bar").is_none());
     assert_eq!(edit_rows(&dir, clip), 0);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn image_menu_edit_actions_are_guarded() {
-    let (dir, engine, photos, _) = edit_library("menu_guard");
+    let (_dir, engine, photos, _) = edit_library("menu_guard");
     let exposed = Edits {
         exposure_ev: 1.0,
         ..Edits::default()
@@ -108,7 +106,6 @@ fn image_menu_edit_actions_are_guarded() {
         );
         assert!(app.undo.undo_stack.is_empty());
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -143,12 +140,11 @@ fn export_report_notes_edits_are_not_included() {
         plain.starts_with("Exported 1") && !plain.contains("without Lumina's edits"),
         "an unedited export has no note: {plain:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_waits_while_edit_mode_is_open() {
-    let (dir, engine, photos, _) = edit_library("undo_waits");
+    let (_dir, engine, photos, _) = edit_library("undo_waits");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -165,7 +161,6 @@ fn undo_waits_while_edit_mode_is_open() {
     view.update(vcx, |app, _| {
         assert_eq!(app.undo.undo_stack.len(), 1, "the step stays undoable");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The draft after E and one `=`; asserts edit mode is still open.
@@ -189,7 +184,7 @@ fn assert_draft_intact(
 
 #[core::prelude::v1::test]
 fn menu_actions_do_not_open_or_act_in_edit_mode() {
-    let (dir, engine, photos, _) = edit_library("menu_in_edit_mode");
+    let (_dir, engine, photos, _) = edit_library("menu_in_edit_mode");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -224,7 +219,6 @@ fn menu_actions_do_not_open_or_act_in_edit_mode() {
         );
     });
     assert_draft_intact(&view, vcx, "menu actions in edit mode");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -254,7 +248,6 @@ fn changing_the_viewer_item_drops_the_draft() {
         assert_eq!(edit_rows(&dir, *id), 0, "nothing is written to any photo");
         assert_eq!(edits_of(&engine, *id), Edits::default());
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -273,7 +266,6 @@ fn clearing_the_selection_drops_the_draft() {
     );
     keystrokes(vcx, "enter");
     assert_eq!(edit_rows(&dir, photos[0]), 0, "nothing is written");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -292,5 +284,4 @@ fn closing_the_viewer_discards_and_says_so() {
         assert_eq!(app.last_action.as_deref(), Some("Edits discarded"));
     });
     assert_eq!(edit_rows(&dir, photos[0]), 0, "nothing is saved");
-    let _ = std::fs::remove_dir_all(&dir);
 }

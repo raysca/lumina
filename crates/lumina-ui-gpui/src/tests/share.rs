@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::app::command_palette::CommandId;
 use crate::share::{ShareRequest as Request, SHARE_REQUESTS};
 use crate::tests::culling::{card, ids};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, bounds_center, click, keystrokes, render_ui, right_click, seed_library,
     type_text,
 };
@@ -42,7 +42,7 @@ fn palette_offers_share(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -
 
 #[core::prelude::v1::test]
 fn share_from_palette_requests_selected_paths() {
-    let (dir, engine) = seed_library("share_palette", 3);
+    let (_dir, engine) = seed_library("share_palette", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -62,12 +62,11 @@ fn share_from_palette_requests_selected_paths() {
     view.update(vcx, |app, _| {
         assert!(!app.command_palette_open, "the palette closes")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_hidden_for_missing_files() {
-    let (dir, engine) = seed_library("share_missing", 3);
+    let (_dir, engine) = seed_library("share_missing", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -98,12 +97,11 @@ fn share_hidden_for_missing_files() {
             "an all-missing selection says why nothing opened"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_from_context_menu_anchors_at_the_card() {
-    let (dir, engine) = seed_library("share_context", 3);
+    let (_dir, engine) = seed_library("share_context", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let order = ids(&view, vcx);
@@ -122,12 +120,11 @@ fn share_from_context_menu_anchors_at_the_card() {
     view.update(vcx, |app, _| {
         assert!(app.context_menu_state.is_none(), "the menu closes")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_from_batch_dock_shares_the_selection() {
-    let (dir, engine) = seed_library("share_dock", 3);
+    let (_dir, engine) = seed_library("share_dock", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -142,12 +139,11 @@ fn share_from_batch_dock_shares_the_selection() {
         vec![(expected, Some(at))],
         "the dock's Share… sends the selection, anchored at the button"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_unavailable_during_a_modal_or_presentation() {
-    let (dir, engine) = seed_library("share_guard", 3);
+    let (_dir, engine) = seed_library("share_guard", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -209,12 +205,11 @@ fn share_unavailable_during_a_modal_or_presentation() {
         take_requests(vcx).is_empty(),
         "share never runs under a dialog, compare or on Similar shots"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_refused_while_the_slideshow_plays() {
-    let (dir, engine) = seed_library("share_slideshow", 3);
+    let (_dir, engine) = seed_library("share_slideshow", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let order = ids(&view, vcx);
@@ -229,13 +224,12 @@ fn share_refused_while_the_slideshow_plays() {
         take_requests(vcx).is_empty(),
         "share never runs during a slideshow"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_refused_in_edit_mode() {
     use crate::tests::quick_edit::{edit_library, open_viewer_on};
-    let (dir, engine, photos, _) = edit_library("share_edit");
+    let (_dir, engine, photos, _) = edit_library("share_edit");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_viewer_on(&view, vcx, &engine, photos[0]);
@@ -249,13 +243,12 @@ fn share_refused_in_edit_mode() {
         take_requests(vcx).is_empty(),
         "share never sends the original from under an edit draft"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn share_over_the_cap_says_so_and_opens_nothing() {
     let max = crate::share::SHARE_MAX;
-    let (dir, engine) = seed_library("share_cap", max + 1);
+    let (_dir, engine) = seed_library("share_cap", max + 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -272,12 +265,11 @@ fn share_over_the_cap_says_so_and_opens_nothing() {
             "the toast names the limit"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_dialog_opened_during_the_check_cancels_the_share() {
-    let (dir, engine) = seed_library("share_race", 2);
+    let (_dir, engine) = seed_library("share_race", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -292,12 +284,11 @@ fn a_dialog_opened_during_the_check_cancels_the_share() {
         take_requests(vcx).is_empty(),
         "a picker never opens over a dialog that appeared while files were checked"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn file_menu_share_shares_the_selection() {
-    let (dir, engine) = seed_library("share_menu", 2);
+    let (_dir, engine) = seed_library("share_menu", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -309,12 +300,11 @@ fn file_menu_share_shares_the_selection() {
         vec![(expected, None)],
         "File > Share… shares the selection at the window centre"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn missing_toast_counts_the_files() {
-    let (dir, engine) = seed_library("share_missing_many", 2);
+    let (_dir, engine) = seed_library("share_missing_many", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_all(cx));
@@ -330,12 +320,11 @@ fn missing_toast_counts_the_files() {
             "two missing files are counted, in the plural"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_stale_check_after_a_library_or_selection_change_is_dropped() {
-    let (dir, engine) = seed_library("share_stale", 3);
+    let (_dir, engine) = seed_library("share_stale", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let order = ids(&view, vcx);
@@ -362,5 +351,4 @@ fn a_stale_check_after_a_library_or_selection_change_is_dropped() {
         take_requests(vcx).is_empty(),
         "a check for the old selection never shares the new one"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

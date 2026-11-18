@@ -1,7 +1,7 @@
 //! Grid density zoom: ⌘-wheel, trackpad ⌘-scroll, pinch and ⌘= / ⌘- all walk
 //! the same `SIZE_COLUMNS` ladder and keep the anchored item on screen.
 
-use super::ui_automation::{app_with_library, leak, render_ui, seed_library, wheel};
+use super::helpers::{app_with_library, leak, render_ui, seed_library, wheel};
 use crate::app::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 
@@ -33,7 +33,7 @@ fn grid_pointer(vcx: &mut VisualTestContext) -> gpui::Point<gpui::Pixels> {
 
 #[core::prelude::v1::test]
 fn cmd_wheel_walks_size_ladder() {
-    let (dir, engine) = seed_library("gz_ladder", 40);
+    let (_dir, engine) = seed_library("gz_ladder", 40);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 6);
@@ -43,7 +43,7 @@ fn cmd_wheel_walks_size_ladder() {
         vcx,
         pointer,
         gpui::ScrollDelta::Lines(gpui::point(0.0, -1.0)),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     assert_eq!(
         columns(&view, vcx),
@@ -55,15 +55,14 @@ fn cmd_wheel_walks_size_ladder() {
         vcx,
         pointer,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 1.0)),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     assert_eq!(columns(&view, vcx), 6, "one notch back in returns to 6");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
-    let (dir, engine) = seed_library("gz_burst", 40);
+    let (_dir, engine) = seed_library("gz_burst", 40);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 4);
@@ -74,7 +73,7 @@ fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
             vcx,
             pointer,
             gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(5.0))),
-            crate::tests::ui_automation::primary_modifier(),
+            crate::tests::helpers::primary_modifier(),
         );
     }
     assert_eq!(
@@ -82,12 +81,11 @@ fn trackpad_cmd_scroll_burst_steps_once_per_threshold() {
         3,
         "50px of trackpad ⌘-scroll is one 40px step, not one step per event"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn keyboard_grid_zoom_keeps_selection_visible() {
-    let (dir, engine) = seed_library("gz_keyboard", 120);
+    let (_dir, engine) = seed_library("gz_keyboard", 120);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 8);
@@ -103,7 +101,7 @@ fn keyboard_grid_zoom_keeps_selection_visible() {
         "the selected card is on screen before zooming"
     );
 
-    super::ui_automation::keystrokes(vcx, "secondary-= secondary-=");
+    super::helpers::keystrokes(vcx, "secondary-= secondary-=");
     render_ui(vcx);
     assert_eq!(columns(&view, vcx), 4, "two ⌘= steps go 8 → 6 → 4");
     let viewport = view.update(vcx, |app, _| {
@@ -118,7 +116,6 @@ fn keyboard_grid_zoom_keeps_selection_visible() {
         bounds.intersects(&viewport),
         "the selected card must stay inside the grid viewport: card={bounds:?} viewport={viewport:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn grid_pinch(vcx: &mut VisualTestContext, position: gpui::Point<gpui::Pixels>, delta: f32) {
@@ -136,7 +133,7 @@ fn grid_pinch(vcx: &mut VisualTestContext, position: gpui::Point<gpui::Pixels>, 
 fn grid_pinch_steps_one_level_per_threshold_and_anchors() {
     use crate::views::grid::{GridZoomAnchor, GridZoomGeometry};
 
-    let (dir, engine) = seed_library("gz_pinch", 40);
+    let (_dir, engine) = seed_library("gz_pinch", 40);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 4);
@@ -210,7 +207,6 @@ fn grid_pinch_steps_one_level_per_threshold_and_anchors() {
         3,
         "the remainder carries, one step only"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -228,7 +224,7 @@ fn saved_off_ladder_columns_snap_and_small_scrolls_keep_them() {
     );
     assert_eq!(ladder_columns(3), 3, "a ladder value is kept");
 
-    let (dir, engine) = seed_library("gz_off_ladder", 40);
+    let (_dir, engine) = seed_library("gz_off_ladder", 40);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 7);
@@ -237,22 +233,21 @@ fn saved_off_ladder_columns_snap_and_small_scrolls_keep_them() {
         vcx,
         pointer,
         gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(5.0))),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     assert_eq!(
         columns(&view, vcx),
         7,
         "a ⌘-scroll below the step threshold must not change the density"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn zoom_pill_buttons_walk_the_size_ladder() {
-    use super::ui_automation::click;
+    use super::helpers::click;
     use crate::views::sidebar::AlbumSelection;
 
-    let (dir, engine) = seed_library("gz_pill", 6);
+    let (_dir, engine) = seed_library("gz_pill", 6);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     grid_at(&view, vcx, 4);
@@ -394,5 +389,4 @@ fn zoom_pill_buttons_walk_the_size_ladder() {
         vcx.debug_bounds("grid-zoom-pill").is_none(),
         "no pill on the map"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

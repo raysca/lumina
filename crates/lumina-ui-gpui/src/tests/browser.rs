@@ -1,6 +1,6 @@
 //! Browser screen: top bar, layout, filter bar, sidebar and context menu.
 
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
     seed_library_undecodable, type_text,
 };
@@ -8,7 +8,7 @@ use crate::views::sidebar::AlbumSelection;
 
 #[core::prelude::v1::test]
 fn top_bar_actions_are_icon_buttons_and_back_is_keyboard_only() {
-    let (dir, engine) = seed_library("br_topbar", 2);
+    let (_dir, engine) = seed_library("br_topbar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -32,12 +32,11 @@ fn top_bar_actions_are_icon_buttons_and_back_is_keyboard_only() {
         f32::from(title.size.height) >= 24.0,
         "the page title is 20px (Library frame), not 12px breadcrumb text: {title:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_long_title_truncates_and_keeps_the_toolbar_buttons_on_screen() {
-    let (dir, engine) = seed_library("br_long_title", 2);
+    let (_dir, engine) = seed_library("br_long_title", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -59,7 +58,6 @@ fn a_long_title_truncates_and_keeps_the_toolbar_buttons_on_screen() {
         import.right() <= root.right(),
         "Import, the rightmost action, stays on screen: {import:?} vs {root:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -159,7 +157,7 @@ fn the_widest_header_fits_a_1024px_window_with_the_inspector_open() {
 fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
     use crate::app::library::FOLDER_PICKS;
     let picks = || FOLDER_PICKS.with(|n| n.get());
-    let (dir, engine) = seed_library("br_open_library", 2);
+    let (_dir, engine) = seed_library("br_open_library", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -179,12 +177,11 @@ fn open_library_lives_in_the_sidebar_and_answers_cmd_o() {
         before + 2,
         "⌘O opens the picker, as the palette advertises"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn sidebar_runs_full_height_beside_the_header_and_status_bar() {
-    let (dir, engine) = seed_library("br_layout", 2);
+    let (_dir, engine) = seed_library("br_layout", 2);
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -215,14 +212,13 @@ fn sidebar_runs_full_height_beside_the_header_and_status_bar() {
         status.left() >= sidebar.right(),
         "the status bar sits in the main column: status={status:?} sidebar={sidebar:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 const FAVORITES: AlbumSelection = AlbumSelection::System(lumina_core::SystemAlbum::Favorites);
 
 #[core::prelude::v1::test]
 fn palette_filter_toggles_query_token() {
-    let (dir, engine) = seed_library("br_quick_filter", 4);
+    let (_dir, engine) = seed_library("br_quick_filter", 4);
     let rated = engine.get_item_slice(0..1)[0].id;
     engine.set_ratings(&[(rated, 4)]).expect("seed a rating");
     let mut cx = crate::tests::TestApp::single();
@@ -253,12 +249,11 @@ fn palette_filter_toggles_query_token() {
             app.search_query
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn no_dimmed_cards_after_filter() {
-    let (dir, engine) = seed_library("br_no_dim", 4);
+    let (_dir, engine) = seed_library("br_no_dim", 4);
     let ids: Vec<_> = engine.get_item_slice(0..4).iter().map(|i| i.id).collect();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -282,12 +277,11 @@ fn no_dimmed_cards_after_filter() {
             );
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typing_a_query_moves_sidebar_to_library() {
-    let (dir, engine) = seed_library("br_type_scope", 2);
+    let (_dir, engine) = seed_library("br_type_scope", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.select_album(FAVORITES, cx));
@@ -326,12 +320,11 @@ fn typing_a_query_moves_sidebar_to_library() {
             "the trail is Library → Favorites → query"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn suggestion_and_command_queries_move_sidebar_to_library() {
-    let (dir, engine) = seed_library("br_cmd_scope", 2);
+    let (_dir, engine) = seed_library("br_cmd_scope", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -362,12 +355,11 @@ fn suggestion_and_command_queries_move_sidebar_to_library() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, FAVORITES, "Back restores the album");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn search_from_an_album_year_goes_back_to_that_year() {
-    let (dir, engine) = seed_library("br_year_scope", 2);
+    let (_dir, engine) = seed_library("br_year_scope", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let year = view.update(vcx, |app, _| app.timeline_year_buckets[0].0);
@@ -415,12 +407,11 @@ fn search_from_an_album_year_goes_back_to_that_year() {
             );
         });
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_clear_filters_keeps_free_text() {
-    let (dir, engine) = seed_library("br_clear_filters", 2);
+    let (_dir, engine) = seed_library("br_clear_filters", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let offered = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
@@ -453,12 +444,11 @@ fn palette_clear_filters_keeps_free_text() {
             "Clear Filters drops the filter tokens and keeps the text"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
-    let (dir, engine) = seed_library("br_sidebar", 2);
+    let (_dir, engine) = seed_library("br_sidebar", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -479,12 +469,11 @@ fn sidebar_has_no_events_and_untagged_sits_under_smart_albums() {
         untagged.top() > new_album.top() && untagged.top() < tags_header.top(),
         "Untagged sits in SMART ALBUMS, above TAGS"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn context_menu_sets_label_and_rating_with_20px_targets() {
-    let (dir, engine) = seed_library("br_menu", 2);
+    let (_dir, engine) = seed_library("br_menu", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
@@ -508,12 +497,11 @@ fn context_menu_sets_label_and_rating_with_20px_targets() {
     click(vcx, "context-label-3");
     assert_eq!(engine.get_ratings_map().get(&id).copied(), Some(4));
     assert_eq!(engine.get_color_labels_map().get(&id).copied(), Some(3));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn size_slider_follows_a_layout_change_and_keys_step_its_levels() {
-    let (dir, engine) = seed_library("br_slider", 2);
+    let (_dir, engine) = seed_library("br_slider", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| app.inspector_open = false);
@@ -535,12 +523,11 @@ fn size_slider_follows_a_layout_change_and_keys_step_its_levels() {
     view.update(vcx, |app, _| {
         assert_eq!(app.grid_columns, 2, "and clamps at the end")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
-    let (dir, engine) = seed_library("br_month_band", 4);
+    let (_dir, engine) = seed_library("br_month_band", 4);
     let items = engine.get_item_slice(0..4);
     let first = items[0].clone();
     let in_month = items
@@ -612,15 +599,13 @@ fn date_sorted_grid_shows_the_top_rows_month_above_the_cards() {
             "months mean nothing in a name-sorted grid"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_wide_thumbnail_never_widens_its_card() {
     // Undecodable: a real decode landing after the injected wide texture
     // would replace it, and the test would pass on a square thumbnail.
-    let (dir, engine) = seed_library_undecodable("br_wide_thumb", 4);
+    let (_dir, engine) = seed_library_undecodable("br_wide_thumb", 4);
     let items = engine.get_item_slice(0..4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -653,15 +638,13 @@ fn a_wide_thumbnail_never_widens_its_card() {
             "fit={fit}: a wide thumbnail must stay in its column ({column:?}), got {thumb:?}"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---- Query explanation and recent searches ----
 
 #[core::prelude::v1::test]
 fn explanation_lists_not_understood_tokens() {
-    let (dir, engine) = seed_library("br_explain", 2);
+    let (_dir, engine) = seed_library("br_explain", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     click(vcx, "search-input");
@@ -696,12 +679,11 @@ fn explanation_lists_not_understood_tokens() {
             && vcx.debug_bounds("search-explanation").is_some(),
         "the first Escape hides the suggestion rows but keeps the explanation"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn recent_rows_are_marked_and_clearable() {
-    let (dir, engine) = seed_library("br_recent_clear", 2);
+    let (_dir, engine) = seed_library("br_recent_clear", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -744,13 +726,12 @@ fn recent_rows_are_marked_and_clearable() {
         vcx.debug_bounds("search-suggestion-recent-0").is_none(),
         "no recent rows are left in the dropdown"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn clear_recent_searches_is_hidden_when_empty_and_reverts_a_failed_save() {
     use crate::app::command_palette::{CommandId, PaletteTarget};
-    let (dir, engine) = seed_library("br_recent_revert", 1);
+    let (_dir, engine) = seed_library("br_recent_revert", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let listed = |app: &crate::LuminaApp| {
@@ -780,5 +761,4 @@ fn clear_recent_searches_is_hidden_when_empty_and_reverts_a_failed_save() {
             app.error_message
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

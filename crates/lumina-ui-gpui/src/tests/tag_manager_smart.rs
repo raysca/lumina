@@ -3,7 +3,7 @@
 
 use super::duplicates::run_palette_command;
 use super::tag_manager::open;
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui, seed_library};
 use crate::views::sidebar::AlbumSelection;
 use lumina_core::{RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 
@@ -19,7 +19,7 @@ fn tag_rule(path: &str) -> SmartAlbumRule {
 fn tag_save_as_smart_album_prefills_tag_rule() {
     // Items 0 and 1 carry trips/japan (1 also trips/japan/kyoto); 2 is
     // only trips; 3 is untagged.
-    let (dir, engine) = seed_library("tm_save_smart", 4);
+    let (_dir, engine) = seed_library("tm_save_smart", 4);
     let mut ids: Vec<u64> = engine.get_item_slice(0..4).iter().map(|i| i.id.0).collect();
     ids.sort();
     let ids: Vec<lumina_core::MediaId> = ids.into_iter().map(lumina_core::MediaId).collect();
@@ -136,6 +136,4 @@ fn tag_save_as_smart_album_prefills_tag_rule() {
         assert_eq!(app.album_draft.album_title, "kyoto");
         assert_eq!(app.draft_rules(), Some(vec![tag_rule("trips/japan/kyoto")]));
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use crate::tests::culling::{card, flags, ids};
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui, seed_library};
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui, seed_library};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
 #[cfg(target_os = "macos")]
@@ -58,7 +58,7 @@ fn start_at(
 
 #[core::prelude::v1::test]
 fn slideshow_advances_on_clock() {
-    let (dir, engine) = seed_library("slideshow_clock", 4);
+    let (_dir, engine) = seed_library("slideshow_clock", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -107,12 +107,11 @@ fn slideshow_advances_on_clock() {
     render_ui(vcx);
     assert!(playing(&view, vcx), "⌘K Slideshow starts the slideshow");
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn space_pauses_and_arrows_step() {
-    let (dir, engine) = seed_library("slideshow_space", 4);
+    let (_dir, engine) = seed_library("slideshow_space", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -147,12 +146,11 @@ fn space_pauses_and_arrows_step() {
     idle(vcx, INTERVAL - Duration::from_millis(500));
     assert_eq!(shown(&view, vcx), Some(1), "the timer restarts on a step");
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn esc_exits_to_previous_selection() {
-    let (dir, engine) = seed_library("slideshow_esc", 5);
+    let (_dir, engine) = seed_library("slideshow_esc", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -210,12 +208,11 @@ fn esc_exits_to_previous_selection() {
     view.update(vcx, |app, _| {
         assert!(app.selected_indices.is_empty() && app.selected_item.is_none())
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_stops_at_end_without_loop() {
-    let (dir, engine) = seed_library("slideshow_end", 3);
+    let (_dir, engine) = seed_library("slideshow_end", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -236,12 +233,11 @@ fn slideshow_stops_at_end_without_loop() {
     assert_eq!(shown(&view, vcx), Some(2), "→ at the end stays put");
     keystrokes(vcx, "escape");
     assert!(!playing(&view, vcx), "Esc still ends it");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_loop_wraps_to_first() {
-    let (dir, engine) = seed_library("slideshow_loop", 3);
+    let (_dir, engine) = seed_library("slideshow_loop", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -254,7 +250,7 @@ fn slideshow_loop_wraps_to_first() {
             if ch == ' ' {
                 "space"
             } else {
-                crate::tests::ui_automation::leak(ch.to_string())
+                crate::tests::helpers::leak(ch.to_string())
             },
         );
     }
@@ -275,7 +271,6 @@ fn slideshow_loop_wraps_to_first() {
         app.execute_command(crate::app::command_palette::CommandId::SlideshowLoop, cx);
         assert!(!app.config.slideshow_loop, "the command toggles it off");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // Needs a real player backend; other platforms use the dummy player.
@@ -336,12 +331,11 @@ fn space_on_video_pauses_slideshow_not_video() {
         "←/→ on a video step the slideshow instead of seeking"
     );
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_reduce_motion_has_no_transition() {
-    let (dir, engine) = seed_library("slideshow_motion", 3);
+    let (_dir, engine) = seed_library("slideshow_motion", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -365,12 +359,11 @@ fn slideshow_reduce_motion_has_no_transition() {
     );
     keystrokes(vcx, "escape");
     crate::motion::REDUCE_MOTION.with(|on| on.set(true));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_absorbs_background_shortcuts() {
-    let (dir, engine) = seed_library("slideshow_absorb", 3);
+    let (_dir, engine) = seed_library("slideshow_absorb", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -422,12 +415,11 @@ fn slideshow_absorbs_background_shortcuts() {
     });
     keystrokes(vcx, "escape");
     assert!(!playing(&view, vcx));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn slideshow_stops_cleanly_when_view_empties_or_library_switches() {
-    let (dir, engine) = seed_library("slideshow_empty", 3);
+    let (_dir, engine) = seed_library("slideshow_empty", 3);
     let (other, _) = seed_library("slideshow_other", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -470,8 +462,6 @@ fn slideshow_stops_cleanly_when_view_empties_or_library_switches() {
     view.update(vcx, |app, _| {
         assert!(app.selected_item.is_none(), "no old timer selects anything")
     });
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 /// The macOS menu bar stays reachable in full screen: its items that open a
@@ -479,7 +469,7 @@ fn slideshow_stops_cleanly_when_view_empties_or_library_switches() {
 /// slideshow plays.
 #[core::prelude::v1::test]
 fn menu_actions_are_disabled_while_the_slideshow_plays() {
-    let (dir, engine) = seed_library("slideshow_menus", 4);
+    let (_dir, engine) = seed_library("slideshow_menus", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -659,14 +649,13 @@ fn menu_actions_are_disabled_while_the_slideshow_plays() {
         "no menu rotation reached a slide: {rotations:?}"
     );
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Esc puts the selection back by id: a row that leaves the view during the
 /// show shifts every later row, and the same items come back.
 #[core::prelude::v1::test]
 fn esc_restores_the_selection_by_id_after_rows_move() {
-    let (dir, engine) = seed_library("slideshow_by_id", 6);
+    let (_dir, engine) = seed_library("slideshow_by_id", 6);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -696,14 +685,13 @@ fn esc_restores_the_selection_by_id_after_rows_move() {
         );
         assert_eq!(app.selected_index, Some(3), "at its new position");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The HUD keeps only Back while a slideshow plays; Back ends the show like
 /// Esc, and the controls that would step, mark, play or hand off are gone.
 #[core::prelude::v1::test]
 fn slideshow_hud_has_only_back_and_back_restores_the_selection() {
-    let (dir, engine) = seed_library("slideshow_hud", 4);
+    let (_dir, engine) = seed_library("slideshow_hud", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -731,7 +719,7 @@ fn slideshow_hud_has_only_back_and_back_restores_the_selection() {
             "{gone} is hidden during a slideshow"
         );
     }
-    let stage = crate::tests::ui_automation::bounds_center(vcx, "slideshow-view");
+    let stage = crate::tests::helpers::bounds_center(vcx, "slideshow-view");
     vcx.simulate_mouse_down(stage, gpui::MouseButton::Right, gpui::Modifiers::none());
     vcx.simulate_mouse_up(stage, gpui::MouseButton::Right, gpui::Modifiers::none());
     render_ui(vcx);
@@ -755,12 +743,11 @@ fn slideshow_hud_has_only_back_and_back_restores_the_selection() {
         assert_eq!(app.selected_item.as_ref().map(|item| item.id), Some(ids[1]));
     });
     assert!(!vcx.update(|window, _| window.is_fullscreen()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn failed_slideshow_setting_save_reverts_and_shows_the_banner() {
-    let (dir, engine) = seed_library("slideshow_save", 1);
+    let (_dir, engine) = seed_library("slideshow_save", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -779,7 +766,6 @@ fn failed_slideshow_setting_save_reverts_and_shows_the_banner() {
         assert!(!app.config.slideshow_loop, "a failed save puts Loop back");
         assert!(app.error_message.is_some(), "and says so");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// More rows than the slideshow holds by id.
@@ -807,7 +793,7 @@ fn rows_read() -> usize {
 /// the UI thread, not every selected row (twice).
 #[core::prelude::v1::test]
 fn large_selection_slideshow_reads_bounded_rows() {
-    let (dir, engine) = seed_library("slideshow_large_reads", LARGE);
+    let (_dir, engine) = seed_library("slideshow_large_reads", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -824,13 +810,12 @@ fn large_selection_slideshow_reads_bounded_rows() {
         "starting and ending a slideshow must not read every selected row \
          on the UI thread: {read} rows read for {LARGE} selected"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A large selection comes back exactly after Esc when nothing moved.
 #[core::prelude::v1::test]
 fn large_selection_is_restored_after_esc() {
-    let (dir, engine) = seed_library("slideshow_large_restore", LARGE);
+    let (_dir, engine) = seed_library("slideshow_large_restore", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = ids(&view, vcx);
@@ -856,14 +841,13 @@ fn large_selection_is_restored_after_esc() {
             "the batch summary describes the whole selection"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An outside write that changes the count during the show clears a large
 /// selection (never a wrong item), and the viewer still closes.
 #[core::prelude::v1::test]
 fn large_selection_is_cleared_when_rows_move() {
-    let (dir, engine) = seed_library("slideshow_large_moved", LARGE);
+    let (_dir, engine) = seed_library("slideshow_large_moved", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -890,7 +874,6 @@ fn large_selection_is_cleared_when_rows_move() {
         !vcx.update(|window, _| window.is_fullscreen()),
         "the window leaves full screen"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Selects `rows` with the focus on `focus`, as clicks would.
@@ -913,7 +896,7 @@ fn select_rows(
 /// now hold other items.
 #[core::prelude::v1::test]
 fn large_selection_is_cleared_when_rows_reorder_at_same_count() {
-    let (dir, engine) = seed_library("slideshow_large_reorder", LARGE);
+    let (_dir, engine) = seed_library("slideshow_large_reorder", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -959,14 +942,13 @@ fn large_selection_is_cleared_when_rows_reorder_at_same_count() {
             "a selection the write may have moved is cleared"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Two picks far apart (a small count over a large span) read a bounded
 /// number of rows: the by-id re-find reads the whole span.
 #[core::prelude::v1::test]
 fn far_apart_picks_read_bounded_rows() {
-    let (dir, engine) = seed_library("slideshow_far_picks", LARGE);
+    let (_dir, engine) = seed_library("slideshow_far_picks", LARGE);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     select_rows(&view, vcx, [0, LARGE - 1], 0);
@@ -988,5 +970,4 @@ fn far_apart_picks_read_bounded_rows() {
             "and the picks come back"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

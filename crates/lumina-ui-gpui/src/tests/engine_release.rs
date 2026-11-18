@@ -1,7 +1,7 @@
 //! Engines must be released when their app or library goes away: each one
 //! holds a decoder pool, a watcher and a catalog connection.
 
-use super::ui_automation::{app_with_library, seed_library};
+use super::helpers::{app_with_library, seed_library};
 use super::TestApp;
 use crate::LuminaApp;
 
@@ -9,7 +9,7 @@ use crate::LuminaApp;
 /// out of threads (`kern.num_taskthreads`) part way through the suite.
 #[core::prelude::v1::test]
 fn ending_a_test_app_releases_its_engine() {
-    let (temp_dir, engine) = seed_library("release_app", 2);
+    let (_temp_dir, engine) = seed_library("release_app", 2);
     let weak = std::sync::Arc::downgrade(&engine);
     {
         let mut cx = TestApp::single();
@@ -21,7 +21,6 @@ fn ending_a_test_app_releases_its_engine() {
         0,
         "a finished test app must drop its window and with it the engine"
     );
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Switching libraries must drop the old engine, or every switch would keep
@@ -45,6 +44,4 @@ fn switching_libraries_releases_the_old_engine() {
         0,
         "the previous library's engine must be dropped on a switch"
     );
-    let _ = std::fs::remove_dir_all(&first);
-    let _ = std::fs::remove_dir_all(&second);
 }

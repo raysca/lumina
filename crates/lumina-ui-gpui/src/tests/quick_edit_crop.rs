@@ -2,15 +2,21 @@
 //! rect in unrotated coordinates, handle drags at rendered bounds, arrows
 //! held inside the frame, and Esc leaving crop without leaving edit mode.
 
+use crate::tests::helpers::{app_with_library, click, keystrokes, render_ui};
 use crate::tests::quick_edit::{edits_of, open_viewer_on, scanned, temp_library};
-use crate::tests::ui_automation::{app_with_library, click, keystrokes, render_ui};
 use crate::*;
 use lumina_core::{CropRect, LuminaEngine, MediaId};
 use std::sync::Arc;
 
 /// Two real 60×40 photos, the top half red and the bottom half blue;
 /// returns the library, its engine and their ids.
-pub(crate) fn photo_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>, Vec<MediaId>) {
+pub(crate) fn photo_library(
+    prefix: &str,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    Arc<LuminaEngine>,
+    Vec<MediaId>,
+) {
     let dir = temp_library(prefix);
     for name in ["a.jpg", "b.jpg"] {
         image::RgbImage::from_fn(60, 40, |_, y| {
@@ -70,7 +76,7 @@ pub(crate) fn near(a: f32, b: f32, tolerance: f32) -> bool {
 
 #[core::prelude::v1::test]
 fn keyboard_only_crop_persists() {
-    let (dir, engine, ids) = photo_library("crop_keys");
+    let (_dir, engine, ids) = photo_library("crop_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -123,12 +129,11 @@ fn keyboard_only_crop_persists() {
         None,
         "undo removes the crop"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_on_rotated_photo_stores_unrotated_coordinates() {
-    let (dir, engine, ids) = photo_library("crop_rotated");
+    let (_dir, engine, ids) = photo_library("crop_rotated");
     engine.set_rotations(&[(ids[0], 1)]).expect("seed rotation");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -186,12 +191,11 @@ fn crop_on_rotated_photo_stores_unrotated_coordinates() {
             "pixel ({x}, {y}) of the saved crop must be blue, got r {r} b {b}"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_handle_drag_resizes() {
-    let (dir, engine, ids) = photo_library("crop_drag");
+    let (_dir, engine, ids) = photo_library("crop_drag");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -248,12 +252,11 @@ fn crop_handle_drag_resizes() {
         near(crop.w, 0.5, 0.01) && near(crop.h, 0.5, 0.01),
         "{crop:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_arrow_keys_stay_inside_frame() {
-    let (dir, engine, ids) = photo_library("crop_arrows");
+    let (_dir, engine, ids) = photo_library("crop_arrows");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -296,12 +299,11 @@ fn crop_arrow_keys_stay_inside_frame() {
     keystrokes(vcx, "enter");
     let crop = saved_crop(&engine, ids[0]);
     assert!(crop.validate().is_ok(), "the saved crop is valid: {crop:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn escape_leaves_crop_but_not_edit_mode() {
-    let (dir, engine, ids) = photo_library("crop_escape");
+    let (_dir, engine, ids) = photo_library("crop_escape");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -327,12 +329,11 @@ fn escape_leaves_crop_but_not_edit_mode() {
         near(saved.exposure_ev, 1.0 / 3.0, 1e-3),
         "other edits are kept"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn crop_mode_previews_the_whole_turned_frame() {
-    let (dir, engine, ids) = photo_library("crop_preview");
+    let (_dir, engine, ids) = photo_library("crop_preview");
     let saved = lumina_core::Edits {
         rotation: 1,
         crop: Some(CropRect {
@@ -382,12 +383,11 @@ fn crop_mode_previews_the_whole_turned_frame() {
         (20, 30),
         "leaving crop renders the cropped preview again"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rotating_while_cropping_keeps_the_region() {
-    let (dir, engine, ids) = photo_library("crop_rotate");
+    let (_dir, engine, ids) = photo_library("crop_rotate");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -412,12 +412,11 @@ fn rotating_while_cropping_keeps_the_region() {
         near(crop.x, before.x, 1e-4) && near(crop.w, before.w, 1e-4),
         "the stored (unrotated) crop is the region chosen before the turn: {crop:?} vs {before:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn shift_c_applies_the_crop_and_keeps_editing() {
-    let (dir, engine, ids) = photo_library("crop_shift_c");
+    let (_dir, engine, ids) = photo_library("crop_shift_c");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     edit_with_source(&view, vcx, &engine, ids[0]);
@@ -439,5 +438,4 @@ fn shift_c_applies_the_crop_and_keeps_editing() {
         assert_eq!(size.width.0, size.height.0, "the preview is cropped again");
     });
     assert_eq!(edits_of(&engine, ids[0]).crop, None, "nothing is saved yet");
-    let _ = std::fs::remove_dir_all(&dir);
 }

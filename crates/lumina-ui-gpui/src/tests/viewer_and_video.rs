@@ -1,4 +1,4 @@
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library, type_text,
 };
 use crate::*;
@@ -98,7 +98,7 @@ fn test_e2e_fullscreen_viewer_journey() {
 
     // Keys reach the viewer only with a library open (the welcome screen
     // gates every key it does not handle).
-    let (dir, engine) = seed_library("viewer_journey", 1);
+    let (_dir, engine) = seed_library("viewer_journey", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = app_with_library(&mut cx, engine);
 
@@ -297,7 +297,6 @@ fn test_e2e_fullscreen_viewer_journey() {
         assert!(app.immersive_hud_visible);
     });
     cx.run_until_parked();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -378,8 +377,7 @@ fn test_viewer_player_ux_and_navigation_controls() {
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
-    let (temp_dir, engine) = seed_library("viewer_nav", 2);
-    let _cleanup = super::downloads::TempLibrary(temp_dir);
+    let (_temp_dir, engine) = seed_library("viewer_nav", 2);
     assert!(engine.total_count() >= 2);
 
     let sample = get_sample_items();
@@ -527,7 +525,7 @@ fn press_viewer_key(
     window: &mut gpui::Window,
     cx: &mut gpui::Context<LuminaApp>,
 ) {
-    let key = crate::tests::ui_automation::platform_test_keys(key);
+    let key = crate::tests::helpers::platform_test_keys(key);
     let key: &'static str = Box::leak(key.into_boxed_str());
     app.handle_key_down(
         &KeyDownEvent {
@@ -554,7 +552,7 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
 
     // Keys reach the viewer only with a library open (the welcome screen
     // gates every key it does not handle).
-    let (dir, engine) = seed_library("viewer_zoom_keys", 1);
+    let (_dir, engine) = seed_library("viewer_zoom_keys", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, cx) = app_with_library(&mut cx, engine);
     let sample = get_sample_items();
@@ -650,12 +648,11 @@ fn test_viewer_zoom_presets_hud_label_and_shortcuts() {
         });
     });
     cx.run_until_parked();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn test_viewer_fit_button_floats_below_the_top_bar() {
-    let (temp_dir, engine) = seed_library("viewer_zoom_hud", 2);
+    let (_temp_dir, engine) = seed_library("viewer_zoom_hud", 2);
     assert!(engine.total_count() >= 2);
 
     let mut cx = crate::tests::TestApp::single();
@@ -732,8 +729,6 @@ fn test_viewer_fit_button_floats_below_the_top_bar() {
             "Fit to window must return to Fit"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -984,8 +979,7 @@ fn test_video_scrub_resets_on_viewer_close_and_media_change() {
 fn test_video_scrub_pointer_drag_updates_destination_and_commits() {
     // The root render path shows onboarding when no library is open, so the
     // scrubber can only be verified through a real (temporary) library.
-    let (temp_dir, engine) = seed_library("video_scrub_drag", 2);
-    let _cleanup = super::downloads::TempLibrary(temp_dir);
+    let (_temp_dir, engine) = seed_library("video_scrub_drag", 2);
     assert!(engine.total_count() >= 2);
 
     let mut cx = crate::tests::TestApp::single();
@@ -1156,7 +1150,7 @@ fn rotation_test_library(
     prefix: &str,
     files: &[&str],
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let temp_dir = std::env::temp_dir().join(format!(
@@ -1184,14 +1178,14 @@ fn rotation_test_library(
             break;
         }
     }
-    (temp_dir, engine)
+    (crate::tests::helpers::TempLibrary(temp_dir), engine)
 }
 
 #[core::prelude::v1::test]
 fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
     use crate::views::grid::GridState;
 
-    let (temp_dir, engine) =
+    let (_temp_dir, engine) =
         rotation_test_library("viewer_rotate_controls", &["photo0.jpg", "photo1.jpg"]);
     let item = engine
         .get_item_slice(0..1)
@@ -1328,8 +1322,6 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
             "the context menu must close after rotating"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -1363,7 +1355,7 @@ fn test_viewer_rotate_video_is_a_clear_no_op() {
 fn rotation_batch_library(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     Vec<lumina_core::MediaId>,
     lumina_core::MediaId,
@@ -1413,7 +1405,7 @@ fn open_rotation_viewer(
 
 #[core::prelude::v1::test]
 fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
-    let (dir, engine, photos, video) = rotation_batch_library("rotate_batch_shortcut");
+    let (_dir, engine, photos, video) = rotation_batch_library("rotate_batch_shortcut");
     // Different starting angles, so undo must restore each item's own value.
     let seeded = [0_u8, 1, 3];
     for (id, quarters) in photos.iter().zip(seeded) {
@@ -1492,13 +1484,11 @@ fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
             "redo must drop the thumbnail painted at the redone angle"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn shift_r_rotates_left_in_viewer() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_shift_r_viewer");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_shift_r_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_rotation_viewer(&view, vcx, &engine, photos[0]);
@@ -1516,13 +1506,11 @@ fn shift_r_rotates_left_in_viewer() {
         );
         assert_eq!(app.undo.undo_stack.len(), 1);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rotate_from_palette_in_viewer() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_palette_viewer");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_palette_viewer");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     open_rotation_viewer(&view, vcx, &engine, photos[0]);
@@ -1542,8 +1530,6 @@ fn rotate_from_palette_in_viewer() {
         );
         assert!(app.is_fullscreen_viewer);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Caches a placeholder thumbnail for `id`, as if painted at its angle.
@@ -1581,7 +1567,7 @@ fn assert_not_rotated(
 
 #[core::prelude::v1::test]
 fn image_menu_rotate_is_refused_behind_sheets() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_menu_shield");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_menu_shield");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "cmd-a");
@@ -1655,13 +1641,11 @@ fn image_menu_rotate_is_refused_behind_sheets() {
         vec![1, 1, 1],
         "Image > Rotate Right turns the selection when no sheet is open"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rotate_is_refused_in_recently_deleted() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_in_trash");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_in_trash");
     engine
         .batch_set_trashed(&photos, true)
         .expect("photos must move to Recently Deleted");
@@ -1686,25 +1670,21 @@ fn rotate_is_refused_in_recently_deleted() {
         &photos,
         "R must not rotate in Recently Deleted, where the context menu hides Rotate",
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn option_r_does_not_rotate_in_grid() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_option_r");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_option_r");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "cmd-a");
     keystrokes(vcx, "alt-r");
     assert_not_rotated(&view, vcx, &engine, &photos, "only R and ⇧R rotate, not ⌥R");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn r_in_text_field_does_not_rotate() {
-    let (dir, engine, photos, _video) = rotation_batch_library("rotate_r_in_search");
+    let (_dir, engine, photos, _video) = rotation_batch_library("rotate_r_in_search");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "cmd-a");
@@ -1728,8 +1708,6 @@ fn r_in_text_field_does_not_rotate() {
         vec![0, 0, 0],
         "typing R in a text field must not rotate the selection"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Synthetic double-click at a window-space position. The click count is read
@@ -1759,7 +1737,7 @@ pub(crate) fn viewer_with_gradient<'a>(
     width: f32,
     height: f32,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     gpui::Entity<LuminaApp>,
     &'a mut gpui::VisualTestContext,
 ) {
@@ -1793,7 +1771,7 @@ pub(crate) fn viewer_with_gradient<'a>(
 #[core::prelude::v1::test]
 fn test_viewer_zoom_changes_painted_media_bounds() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_zoom_paint", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_zoom_paint", 1440.0, 900.0);
 
     let fit = vcx
         .debug_bounds("viewer-media")
@@ -1867,14 +1845,13 @@ fn test_viewer_zoom_changes_painted_media_bounds() {
         gpui::px(16.0),
         "the navigator sits 16px left of the docked panel: nav={nav:?} drawer={drawer:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn test_viewer_double_click_zoom_is_media_bounded() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_double_click", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) =
+        viewer_with_gradient(&mut cx, "viewer_double_click", 1440.0, 900.0);
 
     let viewport = vcx
         .debug_bounds("viewer-viewport")
@@ -1911,13 +1888,11 @@ fn test_viewer_double_click_zoom_is_media_bounded() {
             "a double-click on the media itself must toggle the zoom"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn test_inspector_filename_wraps_inside_the_open_drawer() {
-    let (temp_dir, engine) = seed_library("inspector_filename_wrap", 4);
+    let (_temp_dir, engine) = seed_library("inspector_filename_wrap", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let photo = view.update(vcx, |app, _| {
@@ -1957,8 +1932,6 @@ fn test_inspector_filename_wraps_inside_the_open_drawer() {
         f32::from(name.size.height) > 24.0,
         "a long filename must wrap to more than one line, got {name:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -2000,7 +1973,7 @@ fn replaced_viewer_frames_are_evicted_but_cached_thumbnails_are_kept() {
 
 #[core::prelude::v1::test]
 fn scrub_drag_keeps_tracking_after_leaving_the_control() {
-    let (temp_dir, engine) = seed_library("drag_off_control", 2);
+    let (_temp_dir, engine) = seed_library("drag_off_control", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     let video = get_sample_items()[1].clone();
@@ -2046,14 +2019,12 @@ fn scrub_drag_keeps_tracking_after_leaving_the_control() {
     );
     render_viewer_ui(vcx);
     view.update(vcx, |app, _| assert!(!app.video.is_scrubbing));
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn test_viewer_fills_canvas_and_offers_actual_pixels() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_actual", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_actual", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         // A 4000x3000 original shown through the 800x600 gradient decode.
         let item = app.selected_item.as_mut().expect("viewer has an item");
@@ -2093,8 +2064,6 @@ fn test_viewer_fills_canvas_and_offers_actual_pixels() {
             "pan must stop at the media edge, not run off-screen"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -2175,18 +2144,8 @@ fn retired_frames_are_evicted_without_any_window_drawing() {
 /// through the library grew GPU memory by ~240 MB.
 #[core::prelude::v1::test]
 fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
-    let (temp_dir, engine) = seed_library("thumb_evict", 2);
+    let (_temp_dir, engine) = seed_library("thumb_evict", 2);
     let (other_dir, _other) = seed_library("thumb_evict_other", 1);
-    // Removes both libraries even when an assertion below fails.
-    struct Cleanup(Vec<std::path::PathBuf>);
-    impl Drop for Cleanup {
-        fn drop(&mut self) {
-            for dir in &self.0 {
-                let _ = std::fs::remove_dir_all(dir);
-            }
-        }
-    }
-    let _cleanup = Cleanup(vec![temp_dir.clone(), other_dir.clone()]);
     let mut cx = crate::tests::TestApp::single();
     let app = cx.new(LuminaApp::new);
     app.update(&mut *cx, |app, cx| {
@@ -2266,7 +2225,7 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
 #[core::prelude::v1::test]
 fn test_viewer_fits_a_photo_inside_the_stage_margins() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_fit_tall", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_fit_tall", 1440.0, 900.0);
     // V3Photo fits into at most 1200x760 of the 1440x848 stage, clear of the
     // prev/next buttons, instead of running edge to edge.
     view.update(vcx, |app, cx| {
@@ -2299,14 +2258,13 @@ fn test_viewer_fits_a_photo_inside_the_stage_margins() {
         (fit_w - fit_h).abs() < 1.0 && fit_h <= 761.0,
         "a square photo fits as a square at most 760 tall: {fit_w}x{fit_h}"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_drawer_clear", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) =
+        viewer_with_gradient(&mut cx, "viewer_drawer_clear", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         cx.notify();
@@ -2329,8 +2287,6 @@ fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
             "the info drawer must sit beside {selector}, not over it: {b:?} drawer={drawer:?}"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Sends a trackpad pinch at `position` after moving the pointer there, since
@@ -2383,7 +2339,8 @@ fn off_centre_media_point(vcx: &mut gpui::VisualTestContext) -> gpui::Point<gpui
 #[core::prelude::v1::test]
 fn viewer_pinch_keeps_content_under_pinch_center() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_anchor", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) =
+        viewer_with_gradient(&mut cx, "viewer_pinch_anchor", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
     let (scale, before) = view.update(vcx, |app, _| {
@@ -2403,14 +2360,12 @@ fn viewer_pinch_keeps_content_under_pinch_center() {
             "the content under the pinch centre must stay put: {before:?} -> {after:?}"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_pinch_ignored_for_video() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_video", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_video", 1440.0, 900.0);
     view.update(vcx, |app, cx| {
         app.selected_item
             .as_mut()
@@ -2422,12 +2377,12 @@ fn viewer_pinch_ignored_for_video() {
     let at = off_centre_media_point(vcx);
 
     pinch(vcx, at, 0.3);
-    crate::tests::ui_automation::wheel(vcx, at, scroll_px(40.0, 60.0), gpui::Modifiers::default());
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(vcx, at, scroll_px(40.0, 60.0), gpui::Modifiers::default());
+    crate::tests::helpers::wheel(
         vcx,
         at,
         scroll_px(0.0, 60.0),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     view.update(vcx, |app, _| {
         assert_eq!(
@@ -2441,19 +2396,17 @@ fn viewer_pinch_ignored_for_video() {
             "a video never pans"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn pinch_out_to_fit_recenters() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_fit", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_pinch_fit", 1440.0, 900.0);
     let at = off_centre_media_point(vcx);
 
     pinch(vcx, at, 0.5);
     pinch(vcx, at, 0.5);
-    crate::tests::ui_automation::wheel(vcx, at, scroll_px(25.0, -15.0), gpui::Modifiers::default());
+    crate::tests::helpers::wheel(vcx, at, scroll_px(25.0, -15.0), gpui::Modifiers::default());
     view.update(vcx, |app, _| {
         assert!(
             app.viewer_state.zoom_scale > 2.0,
@@ -2476,20 +2429,18 @@ fn pinch_out_to_fit_recenters() {
         );
         assert_eq!(app.viewer_state.pan_offset, (0.0, 0.0), "Fit must recenter");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_pan", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_pan", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
     let scale = view.update(vcx, |app, _| app.viewer_state.zoom_scale);
 
     // Trackpad: pixel deltas pan one to one.
-    crate::tests::ui_automation::wheel(vcx, at, scroll_px(30.0, -20.0), gpui::Modifiers::default());
+    crate::tests::helpers::wheel(vcx, at, scroll_px(30.0, -20.0), gpui::Modifiers::default());
     view.update(vcx, |app, _| {
         assert_eq!(
             app.viewer_state.zoom_scale, scale,
@@ -2504,7 +2455,7 @@ fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
 
     // Mouse wheel: line deltas pan by the window line height per line.
     let line = vcx.update(|window, _| f32::from(window.line_height()));
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(
         vcx,
         at,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 1.0)),
@@ -2519,7 +2470,7 @@ fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
     });
 
     // A huge scroll stops at the media edge, the same clamp as drag-pan.
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(
         vcx,
         at,
         scroll_px(100_000.0, 100_000.0),
@@ -2535,17 +2486,15 @@ fn viewer_scroll_pans_when_zoomed_and_clamps_like_drag() {
             "scroll-pan must stop at the media edge ({max_x}, {max_y}), got ({x}, {y})"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_scroll_at_fit_does_nothing() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_fit", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_scroll_fit", 1440.0, 900.0);
     let at = off_centre_media_point(vcx);
-    crate::tests::ui_automation::wheel(vcx, at, scroll_px(30.0, 80.0), gpui::Modifiers::default());
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(vcx, at, scroll_px(30.0, 80.0), gpui::Modifiers::default());
+    crate::tests::helpers::wheel(
         vcx,
         at,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 3.0)),
@@ -2559,14 +2508,12 @@ fn viewer_scroll_at_fit_does_nothing() {
         );
         assert_eq!(app.viewer_state.pan_offset, (0.0, 0.0), "Fit must not pan");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
     let mut cx = crate::tests::TestApp::single();
-    let (temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_cmd_scroll", 1440.0, 900.0);
+    let (_temp_dir, view, vcx) = viewer_with_gradient(&mut cx, "viewer_cmd_scroll", 1440.0, 900.0);
     zoom_to_two_x(&view, vcx);
     let at = off_centre_media_point(vcx);
     let (scale, before) = view.update(vcx, |app, _| {
@@ -2574,11 +2521,11 @@ fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
     });
 
     // A mouse-wheel notch with ⌘ zooms (one line is ~13%).
-    crate::tests::ui_automation::wheel(
+    crate::tests::helpers::wheel(
         vcx,
         at,
         gpui::ScrollDelta::Lines(gpui::point(0.0, 1.0)),
-        crate::tests::ui_automation::primary_modifier(),
+        crate::tests::helpers::primary_modifier(),
     );
     view.update(vcx, |app, _| {
         assert!(
@@ -2592,8 +2539,6 @@ fn viewer_cmd_scroll_zooms_anchored_at_pointer() {
             "⌘-scroll zoom must keep the content under the pointer: {before:?} -> {after:?}"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Speed and mute are restored from the config into the viewer state and the

@@ -4,7 +4,7 @@
 
 use super::album_cards::utc_ms;
 use super::albums_overview::height;
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::app::LuminaApp;
@@ -18,7 +18,7 @@ use std::sync::Arc;
 pub(super) fn library_with_album(
     prefix: &str,
 ) -> (
-    super::downloads::TempLibrary,
+    super::helpers::TempLibrary,
     Arc<LuminaEngine>,
     i64,
     Vec<MediaId>,
@@ -37,7 +37,7 @@ pub(super) fn library_with_album(
         engine.set_timestamp(*id, utc_ms(2025, 6, day)).unwrap();
     }
     let album = engine.create_album_with("Lisbon, June", &ids).unwrap();
-    (super::downloads::TempLibrary(dir), engine, album.id, ids)
+    (dir, engine, album.id, ids)
 }
 
 pub(super) fn open_album(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, id: i64) {
@@ -51,8 +51,7 @@ pub(super) fn open_album(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, 
 }
 
 pub(super) fn painted(vcx: &mut VisualTestContext, selector: String) -> bool {
-    vcx.debug_bounds(super::ui_automation::leak(selector))
-        .is_some()
+    vcx.debug_bounds(super::helpers::leak(selector)).is_some()
 }
 
 #[core::prelude::v1::test]
@@ -307,8 +306,7 @@ fn album_header_popovers_keep_the_band() {
 
 #[core::prelude::v1::test]
 fn album_header_empty_album_shows_zero_items() {
-    let (dir, engine) = seed_library("album_header_empty", 1);
-    let _dir = super::downloads::TempLibrary(dir);
+    let (_dir, engine) = seed_library("album_header_empty", 1);
     let album = engine.create_album_with("Nothing yet", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);

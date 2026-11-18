@@ -8,10 +8,10 @@ use std::sync::Arc;
 use gpui::{px, size, Entity, Modifiers, MouseButton, VisualTestContext};
 use lumina_core::{LuminaEngine, MediaId};
 
-use crate::tests::mosaic::{card, day_app, day_library, mosaic_app};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     bounds_center, click, focus_app, keystrokes, leak, render_ui, seed_library_undecodable, wheel,
 };
+use crate::tests::mosaic::{card, day_app, day_library, mosaic_app};
 use crate::views::mosaic::{MosaicLayout, RowKind};
 use crate::LuminaApp;
 
@@ -21,7 +21,10 @@ fn secondary(vcx: &mut VisualTestContext) -> Modifiers {
 
 /// `count` texture-less items with aspects cycling 3:2, 2:3, 1:1, 2:1,
 /// 3:4, so rows hold uneven numbers of tiles.
-fn uneven_library(prefix: &str, count: usize) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+fn uneven_library(
+    prefix: &str,
+    count: usize,
+) -> (crate::tests::helpers::TempLibrary, Arc<LuminaEngine>) {
     let (dir, engine) = seed_library_undecodable(prefix, count);
     let sizes = [
         (3000, 2000),
@@ -106,7 +109,7 @@ fn probe(layout: &MosaicLayout, columns: usize) -> usize {
 
 #[core::prelude::v1::test]
 fn arrow_keys_use_nearest_x_in_uneven_rows() {
-    let (dir, engine) = uneven_library("mosaic_arrows", 60);
+    let (_dir, engine) = uneven_library("mosaic_arrows", 60);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let layout = layout(&view, vcx);
@@ -167,12 +170,11 @@ fn arrow_keys_use_nearest_x_in_uneven_rows() {
         selected(&view, vcx).unwrap() <= from + 8,
         "PageUp moves back up"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn marquee_selects_the_reading_order_range() {
-    let (dir, engine) = seed_library_undecodable("mosaic_marquee_drag", 12);
+    let (_dir, engine) = seed_library_undecodable("mosaic_marquee_drag", 12);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = mosaic_app(&mut cx, engine);
     let layout = layout(&view, vcx);
@@ -197,12 +199,13 @@ fn marquee_selects_the_reading_order_range() {
             "a sweep selects the contiguous range, not a grid rectangle"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Months seeded newest first: 2025-06 (20), 2025-05 (8), 2024-12 (8),
 /// 2024-03 (24). The first 2024 item is index 28.
-pub(crate) fn rail_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngine>) {
+pub(crate) fn rail_library(
+    prefix: &str,
+) -> (crate::tests::helpers::TempLibrary, Arc<LuminaEngine>) {
     let months = [
         ("2025-06-15", 20usize),
         ("2025-05-15", 8),
@@ -227,7 +230,7 @@ pub(crate) fn rail_library(prefix: &str) -> (std::path::PathBuf, Arc<LuminaEngin
 
 #[core::prelude::v1::test]
 fn rail_year_click_and_zoom_keep_position_in_mosaic() {
-    let (dir, engine) = rail_library("mosaic_rail");
+    let (_dir, engine) = rail_library("mosaic_rail");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     assert!(
@@ -280,12 +283,11 @@ fn rail_year_click_and_zoom_keep_position_in_mosaic() {
         after.size.height > before.size.height,
         "and grows with the new level"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn wheel_zoom_keeps_the_item_under_the_pointer() {
-    let (dir, engine) = seed_library_undecodable("mosaic_wheel", 150);
+    let (_dir, engine) = seed_library_undecodable("mosaic_wheel", 150);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -363,12 +365,11 @@ fn wheel_zoom_keeps_the_item_under_the_pointer() {
         (top.item_ix, top.offset_in_item),
         "⌘-wheel never scrolls the Mosaic"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn saved_anchor_reads_the_mosaic_and_grid_does_not_jump_back() {
-    let (dir, engine) = seed_library_undecodable("mosaic_anchor", 200);
+    let (_dir, engine) = seed_library_undecodable("mosaic_anchor", 200);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -408,12 +409,11 @@ fn saved_anchor_reads_the_mosaic_and_grid_does_not_jump_back() {
             "Grid opens where it was, not at row 37"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn select_dims_while_the_layout_is_updating() {
-    let (dir, engine) = day_library("mosaic_select_dim");
+    let (_dir, engine) = day_library("mosaic_select_dim");
     let writer = engine.clone();
     let id = engine.get_item_slice(0..1)[0].id;
     let mut cx = crate::tests::TestApp::single();
@@ -439,12 +439,11 @@ fn select_dims_while_the_layout_is_updating() {
         )
     });
     assert!(vcx.debug_bounds("mosaic-day-select-20250614").is_some());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn arrows_at_the_first_and_last_tile_rows_keep_the_selection() {
-    let (dir, engine) = uneven_library("mosaic_arrow_ends", 30);
+    let (_dir, engine) = uneven_library("mosaic_arrow_ends", 30);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let layout = layout(&view, vcx);
@@ -461,12 +460,11 @@ fn arrows_at_the_first_and_last_tile_rows_keep_the_selection() {
         Some(last),
         "↓ on the bottom tile row stays"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_zoom_anchor_never_outlives_its_view() {
-    let (dir, engine) = seed_library_undecodable("mosaic_anchor_view", 200);
+    let (_dir, engine) = seed_library_undecodable("mosaic_anchor_view", 200);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     // Zoom, then switch view (the sort) before the zoomed layout lands.
@@ -510,7 +508,6 @@ fn a_zoom_anchor_never_outlives_its_view() {
         layout.row_of(first),
         "the relayout keeps the top item; no stale zoom jump"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Before and after the view's first layout lands.
@@ -532,7 +529,7 @@ fn relaunch_in_mosaic_reveals_an_off_screen_selection() {
 fn relaunch_in_mosaic(before_layout: bool, selected: usize) {
     use crate::app::types::UiMessage;
     use crate::config::{LastView, RestoredSession};
-    let (dir, engine) = seed_library_undecodable("mosaic_relaunch", 200);
+    let (_dir, engine) = seed_library_undecodable("mosaic_relaunch", 200);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let anchor = view.update(vcx, |app, cx| {
@@ -597,12 +594,11 @@ fn relaunch_in_mosaic(before_layout: bool, selected: usize) {
             "no restore was queued on the hidden Grid"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn offset_past_the_end_stays_inside_the_last_row() {
-    let (dir, engine) = uneven_library("mosaic_offset_end", 30);
+    let (_dir, engine) = uneven_library("mosaic_offset_end", 30);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let layout = layout(&view, vcx);
@@ -613,12 +609,11 @@ fn offset_past_the_end_stays_inside_the_last_row() {
         f32::from(offset.offset_in_item) <= layout.rows[last].height,
         "the offset is clamped to the row height"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn a_relaunch_scroll_for_another_view_is_dropped() {
-    let (dir, engine) = seed_library_undecodable("mosaic_stale_relaunch", 200);
+    let (_dir, engine) = seed_library_undecodable("mosaic_stale_relaunch", 200);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = tall_mosaic(&mut cx, engine);
     let flip = |app: &mut LuminaApp| {
@@ -655,5 +650,4 @@ fn a_relaunch_scroll_for_another_view_is_dropped() {
     render_ui(vcx);
     render_ui(vcx);
     assert_eq!(top_ix(&view, vcx), 0, "the new view starts at the top");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -2,14 +2,14 @@
 //! library switch. (`ExternalPaths` cannot be built in tests, so the drop
 //! handler's one call, `begin_import`, is driven directly.)
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::app::import::ImportDialog;
 use std::path::{Path, PathBuf};
 
 /// A folder outside any library with `count` (at most 13) distinct jpegs.
-fn source_folder(name: &str, count: u8) -> PathBuf {
+fn source_folder(name: &str, count: u8) -> crate::tests::helpers::TempLibrary {
     let dir = std::env::temp_dir().join(format!(
         "lumina_uitest_import_src_{name}_{}",
         std::time::SystemTime::now()
@@ -25,7 +25,7 @@ fn source_folder(name: &str, count: u8) -> PathBuf {
         .save(dir.join(format!("new_{seed}.jpg")))
         .unwrap();
     }
-    dir
+    crate::tests::helpers::TempLibrary(dir)
 }
 
 fn imported_files(library: &Path) -> usize {
@@ -91,8 +91,6 @@ fn import_dialog_flow() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
@@ -122,13 +120,11 @@ fn import_dialog_backdrop_and_cancel_close() {
     assert_eq!(imported_files(&library), 0);
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
 fn import_dialog_absorbs_keys_and_text() {
-    let (library, engine) = seed_library("import_keys", 2);
+    let (_library, engine) = seed_library("import_keys", 2);
     let source = source_folder("keys", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -151,14 +147,12 @@ fn import_dialog_absorbs_keys_and_text() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
 fn shift_cmd_i_opens_import_not_get_info() {
     use crate::app::import::IMPORT_PICKS;
-    let (library, engine) = seed_library("import_shortcut", 1);
+    let (_library, engine) = seed_library("import_shortcut", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
@@ -180,12 +174,11 @@ fn shift_cmd_i_opens_import_not_get_info() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
 fn library_switch_clears_import_dialog() {
-    let (library, engine) = seed_library("import_switch", 1);
+    let (_library, engine) = seed_library("import_switch", 1);
     let (other, _other_engine) = seed_library("import_switch_other", 1);
     let source = source_folder("switch", 1);
     let mut cx = crate::tests::TestApp::single();
@@ -202,9 +195,6 @@ fn library_switch_clears_import_dialog() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
@@ -233,8 +223,6 @@ fn nothing_new_shows_ok_only() {
     assert_eq!(imported_files(&library), 0);
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
@@ -253,7 +241,7 @@ fn import_needs_a_library() {
 
 #[core::prelude::v1::test]
 fn library_switch_stops_a_running_copy() {
-    let (library, engine) = seed_library("import_switch_copy", 1);
+    let (_library, engine) = seed_library("import_switch_copy", 1);
     let (other, _other_engine) = seed_library("import_switch_copy_other", 1);
     let source = source_folder("switch_copy", 2);
     let mut cx = crate::tests::TestApp::single();
@@ -283,14 +271,11 @@ fn library_switch_stops_a_running_copy() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
 fn import_waits_while_a_delete_confirmation_is_open() {
-    let (library, engine) = seed_library("import_vs_delete", 2);
+    let (_library, engine) = seed_library("import_vs_delete", 2);
     let source = source_folder("vs_delete", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -312,13 +297,11 @@ fn import_waits_while_a_delete_confirmation_is_open() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
 fn checking_shows_a_live_count() {
-    let (library, engine) = seed_library("import_checking", 1);
+    let (_library, engine) = seed_library("import_checking", 1);
     let source = source_folder("checking", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -353,13 +336,11 @@ fn checking_shows_a_live_count() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 #[core::prelude::v1::test]
 fn status_bar_shows_progress_and_cancels() {
-    let (library, engine) = seed_library("import_status", 1);
+    let (_library, engine) = seed_library("import_status", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -387,13 +368,12 @@ fn status_bar_shows_progress_and_cancels() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 /// Plans `total` files, removes `failing` of them, then imports: the copy
 /// of each removed file fails.
 fn import_with_failures(name: &str, total: u8, failing: u8) -> Option<String> {
-    let (library, engine) = seed_library(name, 1);
+    let (_library, engine) = seed_library(name, 1);
     let source = source_folder(name, total);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -414,8 +394,6 @@ fn import_with_failures(name: &str, total: u8, failing: u8) -> Option<String> {
         app.error_message.clone()
     });
     drop(view);
-    let _ = std::fs::remove_dir_all(&source);
-    let _ = std::fs::remove_dir_all(&library);
     message
 }
 
@@ -448,7 +426,7 @@ fn partial_import_banner_reads_imported_x_of_y() {
 
 #[core::prelude::v1::test]
 fn import_stopped_by_a_full_disk_counts_the_files_not_copied() {
-    let (library, engine) = seed_library("disk_full", 1);
+    let (_library, engine) = seed_library("disk_full", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     // 10 planned; 3 copied, the 4th hit a full disk and the copy stopped,
@@ -472,7 +450,6 @@ fn import_stopped_by_a_full_disk_counts_the_files_not_copied() {
     assert!(detail.starts_with("d.jpg: No space left"), "{detail}");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&library);
 }
 
 /// A later error takes the banner's title, but the import's failure line
@@ -480,7 +457,7 @@ fn import_stopped_by_a_full_disk_counts_the_files_not_copied() {
 /// dismissed.
 #[core::prelude::v1::test]
 fn a_later_error_keeps_the_import_failure_line() {
-    let (library, engine) = seed_library("import_then_error", 1);
+    let (_library, engine) = seed_library("import_then_error", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let report = lumina_core::import::CopyImportReport {
@@ -538,5 +515,4 @@ fn a_later_error_keeps_the_import_failure_line() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&library);
 }

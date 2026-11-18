@@ -3,7 +3,7 @@
 //! still act on the items the user chose (by id, never by position).
 
 use super::culling::{card, flags, ids, rating};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
 };
 use crate::*;
@@ -16,7 +16,7 @@ pub(super) fn rejects_view<'a>(
     prefix: &str,
     n: usize,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<LuminaEngine>,
     Entity<LuminaApp>,
     &'a mut VisualTestContext,
@@ -40,7 +40,7 @@ pub(super) fn rejects_view<'a>(
 #[core::prelude::v1::test]
 fn viewer_unflag_in_show_rejected_lands_on_next_reject() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_view_rej", 4);
+    let (_dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_view_rej", 4);
     click(vcx, card(r[0]));
     focus_app(vcx, &view);
     keystrokes(vcx, "space");
@@ -76,14 +76,12 @@ fn viewer_unflag_in_show_rejected_lands_on_next_reject() {
         "the last reject is untouched"
     );
     view.update(vcx, |app, _| assert!(app.is_fullscreen_viewer));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn grid_unflag_in_show_rejected_never_retargets_the_selection() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_grid_rej", 4);
+    let (_dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_grid_rej", 4);
     click(vcx, card(r[1]));
     focus_app(vcx, &view);
     keystrokes(vcx, "shift-right");
@@ -109,13 +107,11 @@ fn grid_unflag_in_show_rejected_never_retargets_the_selection() {
         want,
         "X after the selection left the view changes no other item"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn grid_rating_in_rating_search_never_retargets_the_selection() {
-    let (dir, engine) = seed_library("cull_grid_rate", 4);
+    let (_dir, engine) = seed_library("cull_grid_rate", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let all = ids(&view, vcx);
@@ -144,13 +140,11 @@ fn grid_rating_in_rating_search_never_retargets_the_selection() {
         );
     }
     assert_eq!((rating(&engine, r[1]), rating(&engine, r[2])), (1, 1));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rating_while_sorted_by_rating_keeps_the_rated_items_selected() {
-    let (dir, engine) = seed_library("cull_sort_rate", 5);
+    let (_dir, engine) = seed_library("cull_sort_rate", 5);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -183,14 +177,12 @@ fn rating_while_sorted_by_rating_keeps_the_rated_items_selected() {
     for id in [r[0], r[1], r[4]] {
         assert_eq!(rating(&engine, id), 0, "no other item gets the rating");
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undo_unflag_in_viewer_keeps_index_on_the_shown_item() {
     let mut cx = crate::tests::TestApp::single();
-    let (dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_undo_rej", 4);
+    let (_dir, engine, view, vcx, r) = rejects_view(&mut cx, "cull_undo_rej", 4);
     click(vcx, card(r[0]));
     focus_app(vcx, &view);
     keystrokes(vcx, "space");
@@ -220,13 +212,11 @@ fn undo_unflag_in_viewer_keeps_index_on_the_shown_item() {
             "] after undo moves to the next reject"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_rating_that_swaps_past_the_next_item_still_advances_to_it() {
-    let (dir, engine) = seed_library("cull_sort_swap", 4);
+    let (_dir, engine) = seed_library("cull_sort_swap", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let all = ids(&view, vcx);
@@ -259,6 +249,4 @@ fn viewer_rating_that_swaps_past_the_next_item_still_advances_to_it() {
         );
         assert_eq!(app.selected_index, Some(1), "at its new row");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

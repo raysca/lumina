@@ -2,7 +2,7 @@
 
 use super::duplicates::run_palette_command;
 use super::duplicates_review::seed_two_groups;
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use gpui::{Entity, VisualTestContext};
 use lumina_core::MediaId;
 
@@ -38,7 +38,7 @@ fn active(engine: &lumina_core::LuminaEngine) -> Vec<MediaId> {
 
 #[core::prelude::v1::test]
 fn duplicates_keyboard_review() {
-    let (temp_dir, engine) = seed_two_groups("dup_keys");
+    let (_temp_dir, engine) = seed_two_groups("dup_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-nav-duplicates");
@@ -96,12 +96,11 @@ fn duplicates_keyboard_review() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn digit_picks_keeper_without_rating() {
-    let (temp_dir, engine) = seed_two_groups("dup_digit");
+    let (_temp_dir, engine) = seed_two_groups("dup_digit");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-nav-duplicates");
@@ -128,12 +127,11 @@ fn digit_picks_keeper_without_rating() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_down_opens_the_keeper_in_the_viewer() {
-    let (temp_dir, engine) = seed_two_groups("dup_open");
+    let (_temp_dir, engine) = seed_two_groups("dup_open");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     click(vcx, "sidebar-nav-duplicates");
@@ -180,12 +178,11 @@ fn cmd_down_opens_the_keeper_in_the_viewer() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_skips_all_groups() {
-    let (temp_dir, engine) = seed_two_groups("dup_pal_skip");
+    let (_temp_dir, engine) = seed_two_groups("dup_pal_skip");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-nav-duplicates");
@@ -205,12 +202,11 @@ fn palette_skips_all_groups() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn review_clicks_and_grid_keys_hold_no_hidden_selection() {
-    let (temp_dir, engine) = seed_two_groups("dup_hidden_sel");
+    let (_temp_dir, engine) = seed_two_groups("dup_hidden_sel");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     click(vcx, "sidebar-nav-duplicates");
@@ -255,5 +251,4 @@ fn review_clicks_and_grid_keys_hold_no_hidden_selection() {
     assert_eq!(active(&engine).len(), 5, "and nothing was merged");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

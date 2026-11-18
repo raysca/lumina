@@ -2,8 +2,8 @@
 
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 
-use super::downloads::TempLibrary;
-use super::ui_automation::{
+use super::helpers::TempLibrary;
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -11,7 +11,7 @@ use crate::views::toast::{ToastAction, ToastKind, TOAST_DURATION};
 
 #[core::prelude::v1::test]
 fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
-    let (dir, engine) = seed_library("states_toast", 3);
+    let (_dir, engine) = seed_library("states_toast", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -78,13 +78,11 @@ fn toast_sits_centred_over_the_grid_and_waits_while_hovered() {
             "it closes once the pointer leaves"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn error_banner_splits_title_retries_and_esc_dismisses() {
-    let (dir, engine) = seed_library("states_error", 2);
+    let (_dir, engine) = seed_library("states_error", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -152,13 +150,11 @@ fn error_banner_splits_title_retries_and_esc_dismisses() {
     view.update(vcx, |app, _| {
         assert!(app.error_message.is_none(), "clicking Dismiss dismisses")
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
-    let (dir, engine) = seed_library("states_trash", 3);
+    let (_dir, engine) = seed_library("states_trash", 3);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -240,13 +236,11 @@ fn recently_deleted_counts_notes_and_hides_buttons_when_empty() {
         !engine.get_item_by_id(item.id).unwrap().is_trashed,
         "Restore All puts the item back"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn restore_all_reports_what_it_did() {
-    let (dir, engine) = seed_library("states_restore_all", 2);
+    let (_dir, engine) = seed_library("states_restore_all", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     engine.set_trashed(item.id, true).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -261,7 +255,6 @@ fn restore_all_reports_what_it_did() {
         );
     });
     assert!(!engine.get_item_by_id(item.id).unwrap().is_trashed);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn favorite_rule() -> SmartAlbumRule {
@@ -276,7 +269,7 @@ fn favorite_rule() -> SmartAlbumRule {
 fn empty_smart_album_shows_rule_chips_edit_and_delete() {
     use crate::app::rule_label::rule_label;
 
-    let (dir, engine) = seed_library("states_album", 2);
+    let (_dir, engine) = seed_library("states_album", 2);
     let rules = [
         favorite_rule(),
         SmartAlbumRule {
@@ -356,12 +349,11 @@ fn empty_smart_album_shows_rule_chips_edit_and_delete() {
     view.update(vcx, |app, _| {
         assert!(app.album_draft.modal_open, "Edit rules opens the builder")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_library_shows_its_path() {
-    let (empty_dir, empty) = seed_library("states_empty_lib", 0);
+    let (_empty_dir, empty) = seed_library("states_empty_lib", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, empty);
     view.update(vcx, |app, _| {
@@ -374,7 +366,6 @@ fn empty_library_shows_its_path() {
         vcx.debug_bounds("empty-library-path").is_some(),
         "an empty library shows its path on its own mono line"
     );
-    let _ = std::fs::remove_dir_all(&empty_dir);
 }
 
 /// Three clips (1 h + 2 m + 1 m, 1,000,000 bytes each) in June 2025 beside
@@ -382,7 +373,7 @@ fn empty_library_shows_its_path() {
 fn library_with_clips(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
     Vec<lumina_core::MediaId>,
 ) {
@@ -408,8 +399,7 @@ fn library_with_clips(
 
 #[core::prelude::v1::test]
 fn videos_header_reads_clips() {
-    let (dir, engine, _clips) = library_with_clips("states_videos_meta");
-    let _cleanup = super::downloads::TempLibrary(dir);
+    let (_dir, engine, _clips) = library_with_clips("states_videos_meta");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -466,8 +456,7 @@ fn videos_header_reads_clips() {
 
 #[core::prelude::v1::test]
 fn videos_meta_updates_after_a_clip_is_trashed() {
-    let (dir, engine, clips) = library_with_clips("states_videos_trash");
-    let _cleanup = super::downloads::TempLibrary(dir);
+    let (_dir, engine, clips) = library_with_clips("states_videos_trash");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -490,7 +479,7 @@ fn videos_meta_updates_after_a_clip_is_trashed() {
 fn empty_album_offers_add_from_library() {
     use crate::app::command_palette::CommandId;
 
-    let (dir, engine) = seed_library("states_empty_album_add", 1);
+    let (_dir, engine) = seed_library("states_empty_album_add", 1);
     let album = engine.create_album_with("Iceland 2024", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -553,13 +542,11 @@ fn empty_album_offers_add_from_library() {
     );
     render_ui(vcx);
     assert_went_to_library(vcx, "⌘K Add from Library");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn empty_album_long_title_wraps_and_keeps_the_button_in_view() {
-    let (dir, engine) = seed_library("states_empty_album_long", 1);
+    let (_dir, engine) = seed_library("states_empty_album_long", 1);
     let title = "A very long album title for the Iceland road trip of summer 2024 and more";
     assert!(title.chars().count() >= 60);
     let album = engine.create_album_with(title, &[]).unwrap();
@@ -595,15 +582,12 @@ fn empty_album_long_title_wraps_and_keeps_the_button_in_view() {
             && primary.bottom() <= window.height,
         "Add from Library stays inside the {window:?} window, got {primary:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Ten terms read as a word; more than ten switch to digits.
 #[core::prelude::v1::test]
 fn empty_search_headline_uses_digits_past_ten_terms() {
-    let (dir, engine) = seed_library("states_digits", 2);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("states_digits", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -636,8 +620,7 @@ fn empty_search_headline_uses_digits_past_ten_terms() {
 /// the middle column and overflow neither it nor the window.
 #[core::prelude::v1::test]
 fn empty_smart_album_chips_wrap_between_sidebar_and_inspector() {
-    let (dir, engine) = seed_library("states_chips", 1);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("states_chips", 1);
     let rules: Vec<_> = (0..9)
         .map(|i| SmartAlbumRule {
             field: RuleField::Camera,
@@ -710,8 +693,7 @@ fn empty_smart_album_chips_wrap_between_sidebar_and_inspector() {
 /// An empty library mid-scan also draws at the Hero size.
 #[core::prelude::v1::test]
 fn empty_library_scanning_uses_hero_size() {
-    let (dir, engine) = seed_library("states_scan_hero", 0);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("states_scan_hero", 0);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -745,8 +727,7 @@ fn empty_library_scanning_uses_hero_size() {
 /// keeps its full width inside the card.
 #[core::prelude::v1::test]
 fn long_toast_text_truncates_before_the_action() {
-    let (dir, engine) = seed_library("states_toast_long", 1);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("states_toast_long", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -826,7 +807,7 @@ fn empty_tag_view<'a>(
         vcx.debug_bounds("empty-secondary").is_some(),
         "precondition: the empty tag view shows two buttons"
     );
-    (TempLibrary(dir), view, vcx)
+    (dir, view, vcx)
 }
 
 /// AGENTS §11: Tab / ⇧Tab move a visible ring between the shown buttons,
@@ -883,8 +864,7 @@ fn empty_state_buttons_take_tab_and_enter() {
 /// With one button Tab focuses it, and ↵ presses it.
 #[core::prelude::v1::test]
 fn empty_search_single_button_takes_tab_and_enter() {
-    let (dir, engine) = seed_library("states_tab_one", 1);
-    let _dir = TempLibrary(dir);
+    let (_dir, engine) = seed_library("states_tab_one", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.set_search_query("zzqxnothing", cx));

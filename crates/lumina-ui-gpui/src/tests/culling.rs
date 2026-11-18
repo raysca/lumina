@@ -4,8 +4,8 @@
 //! modals, text fields and ⌥P out of it.
 
 #[cfg(target_os = "macos")]
-use crate::tests::ui_automation::render_ui;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::render_ui;
+use crate::tests::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, right_click, seed_library,
 };
 use crate::*;
@@ -47,7 +47,7 @@ fn type_keys(vcx: &mut VisualTestContext, text: &str) {
 
 #[core::prelude::v1::test]
 fn p_x_u_flag_selection_and_undo_groups_batch() {
-    let (dir, engine) = seed_library("cull_pxu", 4);
+    let (_dir, engine) = seed_library("cull_pxu", 4);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -138,13 +138,11 @@ fn p_x_u_flag_selection_and_undo_groups_batch() {
     click(vcx, "context-flag-pick");
     assert_eq!(flags(&engine).get(&ids[2]), Some(&Flag::Pick));
     view.update(vcx, |app, _| assert_eq!(app.selected_index, Some(2)));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn digit_keys_rate_selection_in_grid_and_viewer() {
-    let (dir, engine) = seed_library("cull_digits", 3);
+    let (_dir, engine) = seed_library("cull_digits", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -176,13 +174,11 @@ fn digit_keys_rate_selection_in_grid_and_viewer() {
         assert!(app.is_fullscreen_viewer, "digits never close the viewer");
         assert_eq!(app.item_ratings.get(&ids[0]), None);
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_flag_auto_advances() {
-    let (dir, engine) = seed_library("cull_advance", 3);
+    let (_dir, engine) = seed_library("cull_advance", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -240,8 +236,6 @@ fn viewer_flag_auto_advances() {
         "a context-menu flag never advances"
     );
     keystrokes(vcx, "escape");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // Needs a real player backend; other platforms use the dummy player.
@@ -290,13 +284,11 @@ fn alt_p_still_toggles_pip() {
         assert!(app.video.in_pip, "⌥P in the viewer moves the video to PiP")
     });
     assert!(flags(&engine).is_empty());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn show_picks_palette_filter_adds_is_pick_token() {
-    let (dir, engine) = seed_library("cull_filter", 3);
+    let (_dir, engine) = seed_library("cull_filter", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -323,13 +315,11 @@ fn show_picks_palette_filter_adds_is_pick_token() {
         );
         assert_eq!(app.get_active_count(), 1, "only the reject is shown");
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn flag_keys_absorbed_by_modals_and_text() {
-    let (dir, engine) = seed_library("cull_absorb", 2);
+    let (_dir, engine) = seed_library("cull_absorb", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -391,13 +381,11 @@ fn flag_keys_absorbed_by_modals_and_text() {
     focus_app(vcx, &view);
     keystrokes(vcx, "p");
     assert_eq!(flags(&engine).get(&ids[0]), Some(&Flag::Pick));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn flag_write_failure_shows_banner_and_keeps_state() {
-    let (dir, engine) = seed_library("cull_fail", 2);
+    let (_dir, engine) = seed_library("cull_fail", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let ids = ids(&view, vcx);
@@ -436,6 +424,4 @@ fn flag_write_failure_shows_banner_and_keeps_state() {
             "a failed flag in the viewer does not advance"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

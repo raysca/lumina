@@ -3,13 +3,13 @@
 //! tag with its real count and undo.
 
 use super::tag_manager::{count, open};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, seed_library, type_text,
 };
 
 #[core::prelude::v1::test]
 fn tag_detail_panel_sections() {
-    let (dir, engine) = seed_library("tm_detail_panel", 9);
+    let (_dir, engine) = seed_library("tm_detail_panel", 9);
     let ids: Vec<_> = engine.get_item_slice(0..9).iter().map(|i| i.id).collect();
     engine.add_tags_batch(&ids, &["beach".into()]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -135,13 +135,11 @@ fn tag_detail_panel_sections() {
         assert_eq!(app.search_query, "tag:sand", "View all searches the tag");
         assert!(app.error_message.is_none());
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn view_all_quotes_a_spaced_tag() {
-    let (dir, engine) = seed_library("tm_view_all_spaced", 3);
+    let (_dir, engine) = seed_library("tm_view_all_spaced", 3);
     let ids: Vec<_> = engine.get_item_slice(0..3).iter().map(|i| i.id).collect();
     engine
         .add_tags_batch(&ids[..2], &["golden hour".into()])
@@ -173,13 +171,11 @@ fn view_all_quotes_a_spaced_tag() {
             "the view shows 2 items: {meta}"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn delete_hint_names_children_again_after_undo() {
-    let (dir, engine) = seed_library("tm_hint_undo", 2);
+    let (_dir, engine) = seed_library("tm_hint_undo", 2);
     let ids: Vec<_> = engine.get_item_slice(0..2).iter().map(|i| i.id).collect();
     engine.add_tags_batch(&ids[..1], &["a".into()]).unwrap();
     engine.add_tags_batch(&ids[1..], &["a/b".into()]).unwrap();
@@ -209,13 +205,11 @@ fn delete_hint_names_children_again_after_undo() {
         vcx.debug_bounds(with_children).is_some(),
         "after ⌘Z the hint names the keywords below it again"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn preview_asks_for_thumbnails_it_has_not_got() {
-    let (dir, engine) = seed_library("tm_detail_preview_decode", 8);
+    let (_dir, engine) = seed_library("tm_detail_preview_decode", 8);
     let ids: Vec<_> = engine.get_item_slice(0..8).iter().map(|i| i.id).collect();
     engine.add_tags_batch(&ids, &["dusk".into()]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -240,5 +234,4 @@ fn preview_asks_for_thumbnails_it_has_not_got() {
             );
         }
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

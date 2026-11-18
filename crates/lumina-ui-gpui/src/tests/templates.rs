@@ -4,7 +4,7 @@
 
 use crate::app::templates::MetadataTemplate;
 use crate::config::AppConfig;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, render_ui, seed_library, type_text,
 };
 use crate::LuminaApp;
@@ -54,7 +54,7 @@ fn with_templates(
 
 #[core::prelude::v1::test]
 fn template_apply_and_single_undo() {
-    let (dir, engine) = seed_library("template_apply", 3);
+    let (_dir, engine) = seed_library("template_apply", 3);
     let all = ids(&engine, 3);
     let own = Rights {
         creator: Some("Grace".into()),
@@ -171,13 +171,11 @@ fn template_apply_and_single_undo() {
         );
         assert!(sidecar.tags.contains(&"work/clients".to_string()));
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn batch_inspector_applies_picked_template() {
-    let (dir, engine) = seed_library("template_batch", 2);
+    let (_dir, engine) = seed_library("template_batch", 2);
     let all = ids(&engine, 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -210,12 +208,11 @@ fn batch_inspector_applies_picked_template() {
             "it has no keywords"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_editor_creates_edits_and_deletes_by_keyboard() {
-    let (dir, engine) = seed_library("template_editor", 1);
+    let (_dir, engine) = seed_library("template_editor", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -302,12 +299,11 @@ fn template_editor_creates_edits_and_deletes_by_keyboard() {
             "the editor closes so the toast's Undo can be reached"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_editor_escape_discards() {
-    let (dir, engine) = seed_library("template_escape", 2);
+    let (_dir, engine) = seed_library("template_escape", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     keystrokes(vcx, "home");
@@ -336,12 +332,11 @@ fn template_editor_escape_discards() {
         assert!(app.config.templates.is_empty(), "and saves nothing");
     });
     assert!(vcx.debug_bounds("template-editor").is_none());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_apply_write_failure_reverts_and_banners() {
-    let (dir, engine) = seed_library("template_failure", 2);
+    let (_dir, engine) = seed_library("template_failure", 2);
     let all = ids(&engine, 2);
     engine
         .catalog()
@@ -381,12 +376,11 @@ fn template_apply_write_failure_reverts_and_banners() {
             "a failed apply is not undoable"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_save_failure_keeps_list_and_typing() {
-    let (dir, engine) = seed_library("template_save_fail", 1);
+    let (_dir, engine) = seed_library("template_save_fail", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_template_editor(cx));
@@ -408,7 +402,6 @@ fn template_save_failure_keeps_list_and_typing() {
             .expect("the editor stays open");
         assert_eq!(editor.values[0], "Studio", "with the typing kept");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -423,6 +416,7 @@ fn config_round_trip_keeps_templates() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::tests::helpers::TempLibrary(dir);
     let path = dir.join("config.json");
     let config = AppConfig {
         templates: vec![studio()],
@@ -436,7 +430,6 @@ fn config_round_trip_keeps_templates() {
         AppConfig::load_from(&path).templates.is_empty(),
         "a config from before templates loads with none"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn named(name: &str) -> MetadataTemplate {
@@ -448,7 +441,7 @@ fn named(name: &str) -> MetadataTemplate {
 
 #[core::prelude::v1::test]
 fn template_editor_never_stacks_with_other_sheets() {
-    let (dir, engine) = seed_library("template_stacking", 1);
+    let (_dir, engine) = seed_library("template_stacking", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -486,12 +479,11 @@ fn template_editor_never_stacks_with_other_sheets() {
         picks,
         "Import… waits until the editor is closed"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_editor_keeps_unsaved_typing() {
-    let (dir, engine) = seed_library("template_unsaved", 1);
+    let (_dir, engine) = seed_library("template_unsaved", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     with_templates(&view, vcx, vec![named("Alpha"), named("Beta")]);
@@ -501,7 +493,7 @@ fn template_editor_keeps_unsaved_typing() {
 
     keystrokes(vcx, "down");
     click(vcx, "template-row-1");
-    crate::tests::ui_automation::click_point(vcx, 4.0, 4.0);
+    crate::tests::helpers::click_point(vcx, 4.0, 4.0);
     view.update(vcx, |app, _| {
         let editor = app
             .templates
@@ -527,16 +519,15 @@ fn template_editor_keeps_unsaved_typing() {
             "with nothing typed ↓ shows the next template"
         );
     });
-    crate::tests::ui_automation::click_point(vcx, 4.0, 4.0);
+    crate::tests::helpers::click_point(vcx, 4.0, 4.0);
     view.update(vcx, |app, _| {
         assert!(app.templates.editor.is_none(), "and the backdrop closes it")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn template_delete_can_be_undone() {
-    let (dir, engine) = seed_library("template_delete_undo", 1);
+    let (_dir, engine) = seed_library("template_delete_undo", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     with_templates(&view, vcx, vec![named("Alpha"), named("Beta")]);
@@ -565,12 +556,11 @@ fn template_delete_can_be_undone() {
             "redo deletes it again"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn undoing_a_template_delete_never_duplicates_a_name() {
-    let (dir, engine) = seed_library("template_delete_undo_name", 1);
+    let (_dir, engine) = seed_library("template_delete_undo_name", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     with_templates(&view, vcx, vec![named("Alpha"), named("Beta")]);
@@ -593,5 +583,4 @@ fn undoing_a_template_delete_never_duplicates_a_name() {
         );
         assert_eq!(app.undo.undo_stack.len(), 1, "the undo stays available");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

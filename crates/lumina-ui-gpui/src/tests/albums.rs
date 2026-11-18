@@ -2,7 +2,7 @@
 //! view, New Album (⌘N), rename, delete and their undo. Every data-changing
 //! test reads the catalog rows back, not only the app state.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::app::types::UiMessage;
@@ -51,7 +51,7 @@ pub(super) fn album_with_members(
 
 #[core::prelude::v1::test]
 fn new_album_from_selection_shows_in_sidebar_with_count() {
-    let (dir, engine) = seed_library("album_from_selection", 3);
+    let (_dir, engine) = seed_library("album_from_selection", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -100,12 +100,11 @@ fn new_album_from_selection_shows_in_sidebar_with_count() {
         "the album has a sidebar row"
     );
     assert!(vcx.debug_bounds("sidebar-albums-header").is_some());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_n_creates_empty_album_in_rename_mode() {
-    let (dir, engine) = seed_library("album_cmd_n", 2);
+    let (_dir, engine) = seed_library("album_cmd_n", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -153,12 +152,11 @@ fn cmd_n_creates_empty_album_in_rename_mode() {
         !titles.iter().any(|t| t.ends_with('x')),
         "Esc discards the typed name: {titles:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_view_lists_members_in_sort_order() {
-    let (dir, engine) = seed_library("album_sort", 5);
+    let (_dir, engine) = seed_library("album_sort", 5);
     // Members 1, 3 and 4 by file name; 0 and 2 stay out.
     let items = engine.get_item_slice_sorted(
         0,
@@ -217,12 +215,11 @@ fn album_view_lists_members_in_sort_order() {
         ),
         "the grid shows the catalog's album query"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_count_follows_trash_and_restore() {
-    let (dir, engine) = seed_library("album_trash_count", 3);
+    let (_dir, engine) = seed_library("album_trash_count", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -254,12 +251,11 @@ fn album_count_follows_trash_and_restore() {
         ids.len(),
         "the restored item is still a member"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_rename_undo() {
-    let (dir, engine) = seed_library("album_rename_undo", 1);
+    let (_dir, engine) = seed_library("album_rename_undo", 1);
     let album = engine.create_album_with("Before", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -303,7 +299,6 @@ fn album_rename_undo() {
             "Rename Album… opens the field"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -322,7 +317,7 @@ fn album_selection_persists_across_restart_token() {
         "albums and smart albums are separate id spaces"
     );
 
-    let (dir, engine) = seed_library("album_restore", 2);
+    let (_dir, engine) = seed_library("album_restore", 2);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     for (saved, expected) in [
         (LastView::Album(album.id), AlbumSelection::Album(album.id)),
@@ -352,5 +347,4 @@ fn album_selection_persists_across_restart_token() {
             );
         });
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

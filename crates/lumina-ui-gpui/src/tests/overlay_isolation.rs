@@ -5,7 +5,7 @@
 //! control and the toolbar/grid control painted underneath.
 
 use crate::app::types::get_sample_items;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, click_point, leak, render_ui, right_click, seed_library,
 };
 use lumina_core::MediaType;
@@ -47,7 +47,7 @@ fn selected_id(
 
 #[core::prelude::v1::test]
 fn viewer_info_click_does_not_open_toolbar_sort() {
-    let (temp_dir, engine) = seed_library("overlay_info", 8);
+    let (_temp_dir, engine) = seed_library("overlay_info", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
@@ -86,13 +86,11 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
             "the click on viewer Info must not reach the toolbar sort button"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_open_click_does_not_open_tag_manager() {
-    let (temp_dir, engine) = seed_library("overlay_open", 8);
+    let (_temp_dir, engine) = seed_library("overlay_open", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_viewer_with_first_item(&view, vcx);
@@ -113,13 +111,11 @@ fn viewer_open_click_does_not_open_tag_manager() {
             "the Open click must not also open the Tag Manager"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_play_badge_does_not_change_the_selected_media() {
-    let (temp_dir, engine) = seed_library("overlay_play", 8);
+    let (_temp_dir, engine) = seed_library("overlay_play", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -162,13 +158,11 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
         );
         assert!(app.video.is_playing, "the play badge must start playback");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn info_drawer_click_does_not_change_the_selected_media() {
-    let (temp_dir, engine) = seed_library("overlay_drawer", 8);
+    let (_temp_dir, engine) = seed_library("overlay_drawer", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let item = view.update(vcx, |app, _| {
@@ -202,13 +196,11 @@ fn info_drawer_click_does_not_change_the_selected_media() {
         before,
         "a click inside the info drawer must not select the grid card underneath"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_page_click_does_not_select_a_grid_card() {
-    let (temp_dir, engine) = seed_library("overlay_tags", 8);
+    let (_temp_dir, engine) = seed_library("overlay_tags", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let ids = card_ids(&view, vcx);
@@ -234,8 +226,6 @@ fn tags_page_click_does_not_select_a_grid_card() {
         before,
         "a click on the page must not select a grid card"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 fn select_first(
@@ -256,7 +246,7 @@ fn select_first(
 
 #[core::prelude::v1::test]
 fn action_dock_favorite_keeps_the_multi_selection() {
-    let (temp_dir, engine) = seed_library("overlay_dock_fav", 8);
+    let (_temp_dir, engine) = seed_library("overlay_dock_fav", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     select_first(&view, vcx, 3);
@@ -275,13 +265,11 @@ fn action_dock_favorite_keeps_the_multi_selection() {
             "the dock Favorite button must favourite every selected item"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn action_dock_add_tags_keeps_the_multi_selection_and_starts_input() {
-    let (temp_dir, engine) = seed_library("overlay_dock_tags", 8);
+    let (_temp_dir, engine) = seed_library("overlay_dock_tags", 8);
     let ids: Vec<_> = engine
         .get_item_slice(0..3)
         .iter()
@@ -317,15 +305,13 @@ fn action_dock_add_tags_keeps_the_multi_selection_and_starts_input() {
             "batch tagging from the dock must tag every selected item, missing on {id:?}"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// Settings is an opaque full-window layer: a toast raised under it must
 /// still be seen and clickable, so it is drawn above settings.
 #[core::prelude::v1::test]
 fn toast_raised_with_settings_open_is_drawn_above_it() {
-    let (temp_dir, engine) = seed_library("settings_toast", 2);
+    let (_temp_dir, engine) = seed_library("settings_toast", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -361,8 +347,6 @@ fn toast_raised_with_settings_open_is_drawn_above_it() {
         );
         assert!(app.preferences_open, "the click did not reach settings");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// View > Toggle Sidebar would flip and save a setting hidden behind
@@ -370,7 +354,7 @@ fn toast_raised_with_settings_open_is_drawn_above_it() {
 /// question, which belongs to General.
 #[core::prelude::v1::test]
 fn menu_actions_under_settings_leave_the_hidden_library_alone() {
-    let (temp_dir, engine) = seed_library("settings_menus", 2);
+    let (_temp_dir, engine) = seed_library("settings_menus", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let root = view.read_with(vcx, |app, _| app.focus_handle.clone());
@@ -432,6 +416,4 @@ fn menu_actions_under_settings_leave_the_hidden_library_alone() {
             "the reset question is General's; About must not keep it open"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

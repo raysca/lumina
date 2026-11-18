@@ -3,7 +3,7 @@
 //! data-changing test reads the catalog rows back.
 
 use super::albums::{album_with_members, catalog_albums, member_ids};
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, right_click, seed_library,
     type_text,
 };
@@ -38,7 +38,7 @@ fn picker_open(view: &Entity<crate::LuminaApp>, vcx: &mut VisualTestContext) -> 
 
 #[core::prelude::v1::test]
 fn add_to_album_via_keyboard_picker() {
-    let (dir, engine) = seed_library("picker_keys", 3);
+    let (_dir, engine) = seed_library("picker_keys", 3);
     let kyoto = engine.create_album_with("Kyoto", &[]).unwrap();
     let paris = engine.create_album_with("Paris", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -127,12 +127,11 @@ fn add_to_album_via_keyboard_picker() {
     type_text(vcx, "add to album");
     keystrokes(vcx, "enter");
     assert!(picker_open(&view, vcx), "Add to Album… in the palette");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn context_menu_add_to_album() {
-    let (dir, engine) = seed_library("picker_context", 2);
+    let (_dir, engine) = seed_library("picker_context", 2);
     let album = engine.create_album_with("Trip", &[]).unwrap();
     let first = engine.get_item_slice(0..1)[0].id;
     let card = leak(format!("media-card-{}", first.0));
@@ -179,12 +178,11 @@ fn context_menu_add_to_album() {
     render_ui(vcx);
     assert!(!picker_open(&view, vcx), "the backdrop dismisses it");
     assert!(members(&engine, album.id).is_empty(), "without adding");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn backspace_in_album_removes_membership_only() {
-    let (dir, engine) = seed_library("album_backspace", 3);
+    let (_dir, engine) = seed_library("album_backspace", 3);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let total = engine.total_count();
     let mut cx = crate::tests::TestApp::single();
@@ -234,12 +232,11 @@ fn backspace_in_album_removes_membership_only() {
     keystrokes(vcx, "enter");
     assert!(members(&engine, album.id).is_empty(), "Remove from Album");
     assert_eq!(engine.total_count(), total);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_backspace_in_album_opens_delete_dialog() {
-    let (dir, engine) = seed_library("album_cmd_backspace", 2);
+    let (_dir, engine) = seed_library("album_cmd_backspace", 2);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -260,12 +257,11 @@ fn cmd_backspace_in_album_opens_delete_dialog() {
         "⌘⌫ alone changes no membership"
     );
     keystrokes(vcx, "escape");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_membership_undo_redo() {
-    let (dir, engine) = seed_library("album_membership_undo", 3);
+    let (_dir, engine) = seed_library("album_membership_undo", 3);
     // The first item is already a member: undoing the add must keep it.
     let (album, before) = album_with_members(&engine, "Trip", 1);
     let mut cx = crate::tests::TestApp::single();
@@ -313,12 +309,11 @@ fn album_membership_undo_redo() {
     focus_app(vcx, &view);
     keystrokes(vcx, "cmd-shift-z");
     assert!(members(&engine, album.id).is_empty(), "redo removes again");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn shift_cmd_a_opens_picker_not_select_all() {
-    let (dir, engine) = seed_library("shift_cmd_a", 3);
+    let (_dir, engine) = seed_library("shift_cmd_a", 3);
     engine.create_album_with("Trip", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -342,12 +337,11 @@ fn shift_cmd_a_opens_picker_not_select_all() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selected_indices.len(), 3, "⌘A still selects all");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_picker_absorbs_delete_and_text() {
-    let (dir, engine) = seed_library("picker_absorbs", 2);
+    let (_dir, engine) = seed_library("picker_absorbs", 2);
     let (album, ids) = album_with_members(&engine, "Trip", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -384,12 +378,11 @@ fn album_picker_absorbs_delete_and_text() {
     );
     keystrokes(vcx, "escape");
     assert!(!picker_open(&view, vcx));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn album_membership_write_failure_shows_banner() {
-    let (dir, engine) = seed_library("membership_fail", 2);
+    let (_dir, engine) = seed_library("membership_fail", 2);
     let (album, ids) = album_with_members(&engine, "Trip", 1);
     let other = engine.create_album_with("Other", &[]).unwrap();
     let mut cx = crate::tests::TestApp::single();
@@ -432,5 +425,4 @@ fn album_membership_write_failure_shows_banner() {
         assert_eq!(app.selected_indices.len(), 1, "the selection stays");
         assert_eq!(app.albums.counts.get(&album.id), Some(&1));
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

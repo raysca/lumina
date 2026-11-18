@@ -1,9 +1,7 @@
 //! UI automation tests for the Duplicates view, navigation, and merge actions.
 
 use super::duplicates_review::seed_two_groups;
-use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
-};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui, seed_library};
 use crate::views::sidebar::AlbumSelection;
 
 pub(crate) fn run_palette_command(
@@ -27,7 +25,7 @@ pub(crate) fn run_palette_command(
 #[core::prelude::v1::test]
 fn duplicates_navigation_and_empty_state() {
     // 1 item means 0 duplicates in library
-    let (temp_dir, engine) = seed_library("dup_empty", 1);
+    let (_temp_dir, engine) = seed_library("dup_empty", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -46,13 +44,12 @@ fn duplicates_navigation_and_empty_state() {
 
     render_ui(vcx);
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn duplicates_view_renders_group_and_merges() {
     // 2 items seeded with same content are duplicates
-    let (temp_dir, engine) = seed_library("dup_merge", 2);
+    let (_temp_dir, engine) = seed_library("dup_merge", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -94,12 +91,11 @@ fn duplicates_view_renders_group_and_merges() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn command_palette_navigates_to_duplicates() {
-    let (temp_dir, engine) = seed_library("dup_palette", 2);
+    let (_temp_dir, engine) = seed_library("dup_palette", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -116,12 +112,11 @@ fn command_palette_navigates_to_duplicates() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn command_palette_merges_all_duplicates() {
-    let (temp_dir, engine) = seed_library("dup_pal_merge", 3);
+    let (_temp_dir, engine) = seed_library("dup_pal_merge", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);
@@ -148,7 +143,6 @@ fn command_palette_merges_all_duplicates() {
     assert_eq!(items.len(), 1, "only 1 active item remains after merge all");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -190,12 +184,11 @@ fn failed_merge_uses_the_error_banner() {
     assert_eq!(engine.get_item_slice(0..10).len(), 2, "nothing was trashed");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn duplicates_review_lists_groups_and_compares_selected() {
-    let (temp_dir, engine) = seed_two_groups("dup_review");
+    let (_temp_dir, engine) = seed_two_groups("dup_review");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
@@ -233,10 +226,8 @@ fn duplicates_review_lists_groups_and_compares_selected() {
         .expect("the compare pane is drawn");
     let shown = |vcx: &mut gpui::VisualTestContext, ids: &[u64]| {
         ids.iter().all(|id| {
-            vcx.debug_bounds(super::ui_automation::leak(format!(
-                "duplicate-candidate-{id}"
-            )))
-            .is_some_and(|b| compare.contains(&b.origin))
+            vcx.debug_bounds(super::helpers::leak(format!("duplicate-candidate-{id}")))
+                .is_some_and(|b| compare.contains(&b.origin))
         })
     };
     assert!(
@@ -256,19 +247,18 @@ fn duplicates_review_lists_groups_and_compares_selected() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn clicked_candidate_shows_it_is_selected() {
-    let (temp_dir, engine) = seed_two_groups("dup_selected");
+    let (_temp_dir, engine) = seed_two_groups("dup_selected");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     render_ui(vcx);
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let second = view.update(vcx, |app, _| app.duplicate_groups[0].items[1].id.0);
-    let marker = super::ui_automation::leak(format!("duplicate-selected-text:{second}"));
+    let marker = super::helpers::leak(format!("duplicate-selected-text:{second}"));
     assert!(
         vcx.debug_bounds(marker).is_none(),
         "no card reads as selected before a click"
@@ -276,7 +266,7 @@ fn clicked_candidate_shows_it_is_selected() {
 
     click(
         vcx,
-        super::ui_automation::leak(format!("duplicate-candidate-{second}")),
+        super::helpers::leak(format!("duplicate-candidate-{second}")),
     );
     view.update(vcx, |app, _| {
         assert_eq!(app.selected_item.as_ref().map(|i| i.id.0), Some(second));
@@ -287,12 +277,11 @@ fn clicked_candidate_shows_it_is_selected() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn review_hides_the_inspector_and_ignores_its_toggle() {
-    let (temp_dir, engine) = seed_two_groups("dup_inspector");
+    let (_temp_dir, engine) = seed_two_groups("dup_inspector");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| app.inspector_open = true);
@@ -319,14 +308,12 @@ fn review_hides_the_inspector_and_ignores_its_toggle() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn failed_merge_all_keeps_every_copy_and_uses_the_error_banner() {
     let (temp_dir, engine) = seed_two_groups("dup_merge_all_fail");
     // Removed when the test ends, pass or fail.
-    let temp_dir = super::downloads::TempLibrary(temp_dir);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     render_ui(vcx);

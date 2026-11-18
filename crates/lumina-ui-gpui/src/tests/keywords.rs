@@ -3,7 +3,7 @@
 //! and the Untagged view surviving a relaunch.
 
 use crate::config::{AppConfig, LastView};
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -48,7 +48,7 @@ pub(super) fn sorted_tags(engine: &LuminaEngine, id: MediaId) -> Vec<String> {
 
 #[core::prelude::v1::test]
 fn keyword_tree_rows_indent_by_depth() {
-    let (dir, engine) = seed_library("kw_tree", 1);
+    let (_dir, engine) = seed_library("kw_tree", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     // `a/b` has no items of its own: the tree still draws it.
     tag(&engine, id, &["a", "a/b/c", "a-z"]);
@@ -91,13 +91,11 @@ fn keyword_tree_rows_indent_by_depth() {
             "an ancestor with no items of its own counts its subtree"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typing_alias_suggests_canonical_and_applies_it() {
-    let (dir, engine) = seed_library("kw_alias_suggest", 2);
+    let (_dir, engine) = seed_library("kw_alias_suggest", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let (first, other) = select_first(&view, vcx);
@@ -127,13 +125,11 @@ fn typing_alias_suggests_canonical_and_applies_it() {
         ["places/usa/new york"],
         "the suggestion applies the canonical keyword, never the alias"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn segment_prefix_suggests_child() {
-    let (dir, engine) = seed_library("kw_segment", 2);
+    let (_dir, engine) = seed_library("kw_segment", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let (first, other) = select_first(&view, vcx);
@@ -155,13 +151,11 @@ fn segment_prefix_suggests_child() {
     // Equal counts sort A–Z: party, then places/europe/paris.
     keystrokes(vcx, "down down enter");
     assert_eq!(sorted_tags(&engine, first), ["places/europe/paris"]);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn move_keyword_by_keyboard_updates_catalog() {
-    let (dir, engine) = seed_library("kw_move", 2);
+    let (_dir, engine) = seed_library("kw_move", 2);
     let items = engine.get_item_slice(0..2);
     tag(&engine, items[0].id, &["paris", "paris/louvre"]);
     tag(&engine, items[1].id, &["europe", "paris"]);
@@ -215,13 +209,11 @@ fn move_keyword_by_keyboard_updates_catalog() {
     });
     keystrokes(vcx, "secondary-backspace enter");
     assert_eq!(sorted_tags(&engine, items[1].id), ["europe", "paris"]);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn detail_panel_adds_and_removes_aliases() {
-    let (dir, engine) = seed_library("kw_alias_detail", 1);
+    let (_dir, engine) = seed_library("kw_alias_detail", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["places/usa/new york"]);
     let mut cx = crate::tests::TestApp::single();
@@ -270,13 +262,11 @@ fn detail_panel_adds_and_removes_aliases() {
         assert!(app.error_message.is_some(), "the refusal is surfaced");
     });
     assert!(engine.aliases().unwrap().is_empty());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn untagged_view_restores_after_relaunch() {
-    let (dir, engine) = seed_library("kw_untagged_restore", 2);
+    let (_dir, engine) = seed_library("kw_untagged_restore", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| {
@@ -307,13 +297,11 @@ fn untagged_view_restores_after_relaunch() {
             "Untagged comes back after a relaunch"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_on_the_tags_page_cannot_rate_hidden_media() {
-    let (dir, engine) = seed_library("kw_palette_over_page", 1);
+    let (_dir, engine) = seed_library("kw_palette_over_page", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["beach"]);
     let mut cx = crate::tests::TestApp::single();
@@ -339,13 +327,11 @@ fn palette_on_the_tags_page_cannot_rate_hidden_media() {
         0,
         "a palette command on the Tags page must not rate the media left behind"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn bulk_delete_reloads_the_focused_count() {
-    let (dir, engine) = seed_library("kw_bulk_count", 2);
+    let (_dir, engine) = seed_library("kw_bulk_count", 2);
     let items = engine.get_item_slice(0..2);
     tag(&engine, items[0].id, &["a", "z"]);
     tag(&engine, items[1].id, &["a/x"]);
@@ -365,13 +351,11 @@ fn bulk_delete_reloads_the_focused_count() {
             "the detail count follows a bulk delete below the focused keyword"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn filtered_select_all_never_reaches_an_unmatched_ancestor() {
-    let (dir, engine) = seed_library("kw_filter_flat", 2);
+    let (_dir, engine) = seed_library("kw_filter_flat", 2);
     let items = engine.get_item_slice(0..2);
     tag(&engine, items[0].id, &["places", "places/rome", "other"]);
     tag(&engine, items[1].id, &["places/paris"]);
@@ -397,13 +381,11 @@ fn filtered_select_all_never_reaches_an_unmatched_ancestor() {
         ["places"],
         "the unmatched parent keeps its own row"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn typing_after_a_highlight_adds_the_typed_text() {
-    let (dir, engine) = seed_library("kw_stale_highlight", 3);
+    let (_dir, engine) = seed_library("kw_stale_highlight", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let (first, other) = select_first(&view, vcx);
@@ -424,13 +406,11 @@ fn typing_after_a_highlight_adds_the_typed_text() {
         ["no"],
         "new text drops the highlight, so ↵ adds what was typed"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn sidebar_keywords_row_counts_keywords_and_lists_no_tree() {
-    let (dir, engine) = seed_library("kw_sidebar_tree", 1);
+    let (_dir, engine) = seed_library("kw_sidebar_tree", 1);
     let id = engine.get_item_slice(0..1)[0].id;
     tag(&engine, id, &["a", "a/b/c"]);
     let mut cx = crate::tests::TestApp::single();
@@ -454,6 +434,4 @@ fn sidebar_keywords_row_counts_keywords_and_lists_no_tree() {
             "the keyword tree lives on the Tags page, not the sidebar: {path}"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

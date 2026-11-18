@@ -6,13 +6,16 @@
 use lumina_core::{EngineEvent, LuminaEngine};
 
 use crate::app::command_palette::CommandId;
-use crate::tests::ui_automation::{app_with_library, keystrokes};
+use crate::tests::helpers::{app_with_library, keystrokes};
 use crate::views::sidebar::AlbumSelection;
 
 const LEGACY_SCHEMA: &str = include_str!("../../tests/fixtures/legacy_catalog_v7.sql");
 
 /// Two photos and a catalog in the legacy layout holding one saved album.
-fn legacy_library() -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
+fn legacy_library() -> (
+    crate::tests::helpers::TempLibrary,
+    std::sync::Arc<LuminaEngine>,
+) {
     let dir = std::env::temp_dir().join(format!(
         "lumina_legacy_{}",
         std::time::SystemTime::now()
@@ -22,7 +25,7 @@ fn legacy_library() -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     for name in ["photo_00.jpg", "photo_01.jpg"] {
-        std::fs::write(dir.join(name), crate::tests::ui_automation::tiny_jpeg()).unwrap();
+        std::fs::write(dir.join(name), crate::tests::helpers::tiny_jpeg()).unwrap();
     }
     let db = dir.join("catalog.db");
     {
@@ -44,12 +47,12 @@ fn legacy_library() -> (std::path::PathBuf, std::sync::Arc<LuminaEngine>) {
             break;
         }
     }
-    (dir, engine)
+    (crate::tests::helpers::TempLibrary(dir), engine)
 }
 
 #[core::prelude::v1::test]
 fn upgraded_legacy_catalog_accepts_every_everyday_write() {
-    let (dir, engine) = legacy_library();
+    let (_dir, engine) = legacy_library();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     let no_error = |app: &crate::LuminaApp, step: &str| {
@@ -170,6 +173,4 @@ fn upgraded_legacy_catalog_accepts_every_everyday_write() {
         assert_eq!(app.get_active_count(), 1);
     });
     assert!(engine.get_item_by_id(first.id).unwrap().is_trashed);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

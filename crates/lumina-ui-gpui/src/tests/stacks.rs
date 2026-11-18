@@ -4,15 +4,12 @@
 
 use crate::app::stacks::{DuplicatesTab, StacksList};
 use crate::tests::duplicates::run_palette_command;
+use crate::tests::helpers::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::tests::quick_edit::{scanned, temp_library};
-use crate::tests::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, leak, render_ui,
-};
 use crate::views::sidebar::AlbumSelection;
 use crate::*;
 use lumina_core::{Flag, LuminaEngine, MediaId, StackKind};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 const T0: i64 = 1_789_430_400_000;
@@ -20,7 +17,7 @@ const T0: i64 = 1_789_430_400_000;
 /// The fixture's ids: a RAW+JPEG pair (stack 0) and a three-shot burst
 /// (stack 1), in each stack's member order.
 pub(crate) struct Fixture {
-    pub(crate) dir: PathBuf,
+    pub(crate) dir: crate::tests::helpers::TempLibrary,
     pub(crate) engine: Arc<LuminaEngine>,
     pub(crate) jpg: MediaId,
     pub(crate) raw: MediaId,
@@ -42,7 +39,7 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
     // Real, distinct JPEGs decode in process; the RAW stays a placeholder.
     for (i, name) in names.iter().enumerate() {
         let bytes = if name.ends_with(".jpg") {
-            crate::tests::ui_automation::shaded_jpeg(i as u8 * 40)
+            crate::tests::helpers::shaded_jpeg(i as u8 * 40)
         } else {
             format!("fixture-{i}").into_bytes()
         };
@@ -51,7 +48,7 @@ pub(crate) fn stacked_library(prefix: &str) -> Fixture {
     // An exact-copy pair with no camera (never a stack), so Exact copies
     // has items a hidden selection could take.
     for name in ["copy_a.jpg", "copy_b.jpg"] {
-        std::fs::write(dir.join(name), crate::tests::ui_automation::tiny_jpeg()).unwrap();
+        std::fs::write(dir.join(name), crate::tests::helpers::tiny_jpeg()).unwrap();
     }
     let engine = scanned(&dir);
     let all = engine.get_item_slice(0..100);
@@ -172,12 +169,11 @@ fn stacks_tab_lists_raw_jpeg_pair() {
     assert!(vcx.debug_bounds("stacks-empty").is_none());
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
 fn stacks_tab_empty_state() {
-    let (dir, engine) = crate::tests::ui_automation::seed_library("stacks_empty", 3);
+    let (_dir, engine) = crate::tests::helpers::seed_library("stacks_empty", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open_similar_shots(vcx);
@@ -190,7 +186,6 @@ fn stacks_tab_empty_state() {
     assert!(vcx.debug_bounds("stacks-error").is_none());
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -231,7 +226,6 @@ fn keep_picks_rejects_others_with_one_undo() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -255,7 +249,6 @@ fn keep_picks_without_a_pick_changes_nothing() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -294,7 +287,6 @@ fn reject_all_but_first_keeps_the_first() {
     assert!(flags(&f.engine).is_empty(), "two ⌘Z undo the two actions");
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -375,7 +367,6 @@ fn stacks_keyboard_keep_picks() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -408,7 +399,6 @@ fn stack_flag_write_failure_shows_banner_and_keeps_flags() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }
 
 #[core::prelude::v1::test]
@@ -435,8 +425,6 @@ fn stale_stacks_result_dropped_after_library_switch() {
     });
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 #[core::prelude::v1::test]
@@ -462,5 +450,4 @@ fn palette_switches_duplicates_tabs() {
     assert!(vcx.debug_bounds("stack-0").is_none());
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&f.dir);
 }

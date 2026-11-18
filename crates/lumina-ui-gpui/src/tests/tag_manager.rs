@@ -2,9 +2,7 @@
 //! select-all over shown rows, and the detail panel.
 
 use super::tag_manager_sidecars::sidecar_library;
-use crate::tests::ui_automation::{
-    app_with_library, click, keystrokes, leak, render_ui, seed_library,
-};
+use crate::tests::helpers::{app_with_library, click, keystrokes, leak, render_ui, seed_library};
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
 
@@ -12,7 +10,7 @@ use gpui::{Entity, VisualTestContext};
 fn tag_library(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let (dir, engine) = seed_library(prefix, 3);
@@ -54,7 +52,7 @@ pub(super) fn count(
 
 #[core::prelude::v1::test]
 fn bar_shows_at_two_and_merge_folds_into_the_most_used() {
-    let (dir, engine) = tag_library("tm_merge");
+    let (_dir, engine) = tag_library("tm_merge");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -95,13 +93,11 @@ fn bar_shows_at_two_and_merge_folds_into_the_most_used() {
         assert_eq!(app.tag_manager.focused.as_deref(), Some("sea"));
         assert!(app.error_message.is_none());
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn select_all_only_touches_shown_rows_and_esc_deselects() {
-    let (dir, engine) = tag_library("tm_select_all");
+    let (_dir, engine) = tag_library("tm_select_all");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -136,13 +132,11 @@ fn select_all_only_touches_shown_rows_and_esc_deselects() {
             "then does nothing: a page has no close"
         )
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn keyboard_checks_and_merges_and_trash_deletes() {
-    let (dir, engine) = tag_library("tm_keys");
+    let (_dir, engine) = tag_library("tm_keys");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -162,13 +156,11 @@ fn keyboard_checks_and_merges_and_trash_deletes() {
     click(vcx, "bulk-delete-tags-btn");
     assert_eq!(count(&view, vcx, "sea"), None);
     assert_eq!(count(&view, vcx, "unique"), None);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
-    let (dir, engine) = tag_library("tm_detail");
+    let (_dir, engine) = tag_library("tm_detail");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -210,13 +202,11 @@ fn rows_have_usage_bars_and_detail_shows_items_and_renames_in_place() {
         "the name field renames in place"
     );
     assert_eq!(count(&view, vcx, "beach"), None);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_backspace_edits_the_filter_and_only_deletes_with_the_bar_showing() {
-    let (dir, engine) = tag_library("tm_cmd_backspace");
+    let (_dir, engine) = tag_library("tm_cmd_backspace");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -245,13 +235,11 @@ fn cmd_backspace_edits_the_filter_and_only_deletes_with_the_bar_showing() {
         "⌘⌫ deletes the checked tags"
     );
     assert_eq!(count(&view, vcx, "coast"), None);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn moving_focus_cancels_a_rename_in_progress() {
-    let (dir, engine) = tag_library("tm_rename_focus");
+    let (_dir, engine) = tag_library("tm_rename_focus");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -271,13 +259,11 @@ fn moving_focus_cancels_a_rename_in_progress() {
         "the hidden rename was dropped"
     );
     assert_eq!(count(&view, vcx, "beachx"), None);
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rename_and_delete_follow_a_selected_child() {
-    let (dir, engine, _item) = sidecar_library("tm_child_refs", &["a/x"]);
+    let (_dir, engine, _item) = sidecar_library("tm_child_refs", &["a/x"]);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     open(&view, vcx);
@@ -314,14 +300,12 @@ fn rename_and_delete_follow_a_selected_child() {
         assert!(app.tag_manager.focused.is_none());
         assert!(app.tag_manager.selected.is_empty());
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn tags_page_opens_in_main_area() {
     use crate::views::sidebar::AlbumSelection;
-    let (dir, engine) = tag_library("tm_page");
+    let (_dir, engine) = tag_library("tm_page");
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
@@ -391,14 +375,12 @@ fn tags_page_opens_in_main_area() {
     render_ui(vcx);
     assert!(vcx.debug_bounds("tags-page").is_none());
     assert!(vcx.debug_bounds("media-grid-surface").is_some());
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn inspector_and_open_tags_do_nothing_on_the_tags_page() {
     use crate::app::command_palette::CommandId;
-    let (dir, engine) = tag_library("tm_page_inspector");
+    let (_dir, engine) = tag_library("tm_page_inspector");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, _| {
@@ -421,5 +403,4 @@ fn inspector_and_open_tags_do_nothing_on_the_tags_page() {
             "nor Open Tags on the Tags page"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }

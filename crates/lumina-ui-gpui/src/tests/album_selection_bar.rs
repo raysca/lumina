@@ -3,9 +3,7 @@
 
 use super::album_page::{library_with_album, open_album, painted};
 use super::albums_overview::height;
-use super::ui_automation::{
-    app_with_library, bounds_center, click, focus_app, keystrokes, render_ui,
-};
+use super::helpers::{app_with_library, bounds_center, click, focus_app, keystrokes, render_ui};
 use crate::app::library::EXPORT_PICKS;
 use crate::app::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -16,13 +14,13 @@ use lumina_core::{ExportPreset, MediaId};
 fn select_two(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, ids: &[MediaId]) {
     click(
         vcx,
-        super::ui_automation::leak(format!("media-card-{}", ids[0].0)),
+        super::helpers::leak(format!("media-card-{}", ids[0].0)),
     );
     let second = bounds_center(
         vcx,
-        super::ui_automation::leak(format!("media-card-{}", ids[1].0)),
+        super::helpers::leak(format!("media-card-{}", ids[1].0)),
     );
-    vcx.simulate_click(second, crate::tests::ui_automation::primary_modifier());
+    vcx.simulate_click(second, crate::tests::helpers::primary_modifier());
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(

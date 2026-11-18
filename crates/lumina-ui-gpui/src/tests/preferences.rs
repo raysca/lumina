@@ -1,7 +1,7 @@
 //! Settings: a full-window page with a category sidebar, grouped rows per
 //! category, and it fits a small window.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, leak, render_ui, seed_library,
     type_text,
 };
@@ -9,7 +9,7 @@ use crate::app::preferences::{thumbnail_cache_dir, CacheUsage, PreferencesTab};
 
 #[core::prelude::v1::test]
 fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
-    let (temp_dir, engine) = seed_library("settings_shell", 2);
+    let (_temp_dir, engine) = seed_library("settings_shell", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
@@ -111,13 +111,11 @@ fn settings_shell_has_sidebar_categories_and_keyboard_nav() {
     view.update(vcx, |app, _| {
         assert!(!app.preferences_open, "⌘, closes settings again")
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn menu_overlays_do_not_open_under_settings() {
-    let (temp_dir, engine) = seed_library("settings_menu_guard", 2);
+    let (_temp_dir, engine) = seed_library("settings_menu_guard", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
@@ -142,13 +140,11 @@ fn menu_overlays_do_not_open_under_settings() {
         assert!(!app.preferences_open, "Esc still closes settings");
         assert!(!app.shortcuts_overlay_open, "and nothing opens behind it");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn command_palette_menu_item_does_not_open_under_settings() {
-    let (temp_dir, engine) = seed_library("settings_palette_guard", 2);
+    let (_temp_dir, engine) = seed_library("settings_palette_guard", 2);
     let item = engine.get_item_slice(0..1)[0].clone();
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -172,8 +168,6 @@ fn command_palette_menu_item_does_not_open_under_settings() {
         );
         assert!(app.preferences_open, "settings stays open");
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -202,7 +196,7 @@ fn downloads_list_does_not_open_under_settings() {
 
 #[core::prelude::v1::test]
 fn error_banner_shows_inside_settings_once() {
-    let (temp_dir, engine) = seed_library("settings_banner", 2);
+    let (_temp_dir, engine) = seed_library("settings_banner", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -223,13 +217,11 @@ fn error_banner_shows_inside_settings_once() {
         Some(banner.left()),
         "the banner sits in the settings column, not in the hidden library"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn preferences_tabs_group_actions_and_fit_a_small_window() {
-    let (temp_dir, engine) = seed_library("prefs_v3", 2);
+    let (_temp_dir, engine) = seed_library("prefs_v3", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
@@ -291,13 +283,11 @@ fn preferences_tabs_group_actions_and_fit_a_small_window() {
         vcx.debug_bounds("preferences-version").is_some(),
         "About must show the version"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
-    let (temp_dir, engine) = seed_library("prefs_v3_details", 2);
+    let (_temp_dir, engine) = seed_library("prefs_v3_details", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_preferences(cx));
@@ -360,8 +350,8 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
 
     // Keyboard path: ⌘K runs both documents too.
     for query in ["l i c e n s e enter", "a c k n o w enter"] {
-        super::ui_automation::focus_app(vcx, &view);
-        super::ui_automation::keystrokes(vcx, &format!("secondary-k {query}"));
+        super::helpers::focus_app(vcx, &view);
+        super::helpers::keystrokes(vcx, &format!("secondary-k {query}"));
         view.update(vcx, |app, _| {
             assert!(!app.command_palette_open, "{query} ran a command");
             assert!(app.error_message.is_none(), "{query} found its document");
@@ -369,7 +359,6 @@ fn preferences_v3_counts_thumbnails_confirms_clear_and_opens_license() {
     }
 
     let _ = std::fs::remove_dir_all(&cache);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -398,7 +387,7 @@ fn height(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
 
 #[core::prelude::v1::test]
 fn settings_rows_match_design_heights() {
-    let (temp_dir, engine) = seed_library("settings_rows", 2);
+    let (_temp_dir, engine) = seed_library("settings_rows", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1024.0), gpui::px(560.0)));
@@ -427,8 +416,6 @@ fn settings_rows_match_design_heights() {
         34.0,
         "the library path pill is 34 tall"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -531,7 +518,7 @@ fn long_library_path_truncates_inside_its_row() {
 #[core::prelude::v1::test]
 fn general_shows_general_rows_and_launch_view() {
     use crate::config::LaunchView;
-    let (temp_dir, engine) = seed_library("settings_general", 2);
+    let (_temp_dir, engine) = seed_library("settings_general", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -629,8 +616,6 @@ fn general_shows_general_rows_and_launch_view() {
             "the failure is in the error banner"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// UI preferences away from their defaults, plus library, session and
@@ -763,7 +748,7 @@ fn reset_dialog_shown(vcx: &mut gpui::VisualTestContext) -> bool {
 
 #[core::prelude::v1::test]
 fn reset_to_defaults_asks_then_resets_ui_preferences_only() {
-    let (temp_dir, engine) = seed_library("settings_reset", 2);
+    let (_temp_dir, engine) = seed_library("settings_reset", 2);
     crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -873,13 +858,11 @@ fn reset_to_defaults_asks_then_resets_ui_preferences_only() {
         kept,
         "library, recents, session, editor and playback settings are kept"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn reset_to_defaults_by_keyboard() {
-    let (temp_dir, engine) = seed_library("settings_reset_keys", 2);
+    let (_temp_dir, engine) = seed_library("settings_reset_keys", 2);
     crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -922,13 +905,11 @@ fn reset_to_defaults_by_keyboard() {
     keystrokes(vcx, "enter");
     assert!(!reset_dialog_shown(vcx), "↵ confirms");
     assert_eq!(ui_prefs(&view, vcx), default_prefs(), "↵ resets");
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn reset_to_defaults_reverts_when_the_save_fails() {
-    let (temp_dir, engine) = seed_library("settings_reset_fails", 2);
+    let (_temp_dir, engine) = seed_library("settings_reset_fails", 2);
     crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -964,14 +945,12 @@ fn reset_to_defaults_reverts_when_the_save_fails() {
         !reset_dialog_shown(vcx),
         "the confirmation closes either way"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_has_library_downloads_and_storage_categories() {
     use crate::app::library::FOLDER_PICKS;
-    let (temp_dir, engine) = seed_library("settings_categories", 2);
+    let (_temp_dir, engine) = seed_library("settings_categories", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1109,8 +1088,6 @@ fn settings_has_library_downloads_and_storage_categories() {
             "on the Downloads category"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
@@ -1159,7 +1136,7 @@ fn downloads_settings_buttons_open_downloads_category() {
 
 #[core::prelude::v1::test]
 fn concurrency_segmented_responds_to_keys() {
-    let (temp_dir, engine) = seed_library("settings_concurrency_keys", 2);
+    let (_temp_dir, engine) = seed_library("settings_concurrency_keys", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1204,13 +1181,11 @@ fn concurrency_segmented_responds_to_keys() {
     // ←/→ on another category leave the setting alone.
     keystrokes(vcx, "up right");
     assert_eq!(concurrency(vcx), 1, "→ on Library changes nothing");
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn concurrency_save_failure_reverts() {
-    let (temp_dir, engine) = seed_library("settings_concurrency_fails", 2);
+    let (_temp_dir, engine) = seed_library("settings_concurrency_fails", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1232,8 +1207,6 @@ fn concurrency_save_failure_reverts() {
             "the failure is in the error banner"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// A seeded item copied as a `kind` file of `bytes` at `name` in `root`.
@@ -1422,13 +1395,12 @@ fn storage_card_shows_segments() {
     );
 
     let _ = std::fs::remove_dir_all(&cache);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn storage_card_handles_empty_library() {
     use crate::app::library_storage::CAPACITY_UNKNOWN;
-    let (temp_dir, engine) = seed_library("settings_storage_empty", 0);
+    let (_temp_dir, engine) = seed_library("settings_storage_empty", 0);
     let _ = std::fs::remove_dir_all(thumbnail_cache_dir());
     CAPACITY_UNKNOWN.with(|c| c.set(true));
     let mut cx = crate::tests::TestApp::single();
@@ -1471,13 +1443,11 @@ fn storage_card_handles_empty_library() {
             .is_some(),
         "Library size reads 0 B · 0 items"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn storage_card_hides_without_a_reading_for_this_library() {
-    let (temp_dir, engine) = seed_library("settings_storage_stale", 2);
+    let (_temp_dir, engine) = seed_library("settings_storage_stale", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1526,14 +1496,12 @@ fn storage_card_hides_without_a_reading_for_this_library() {
         app.grid_state = None;
     });
     hidden(vcx, "with no library open");
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn downloads_path_row_reveals_imports() {
     use crate::app::preferences::REVEALED;
-    let (temp_dir, engine) = seed_library("settings_downloads_path", 1);
+    let (_temp_dir, engine) = seed_library("settings_downloads_path", 1);
     let root = engine.library_root().to_path_buf();
     let imports = root.join(lumina_core::import::IMPORTS_DIR);
     let mut cx = crate::tests::TestApp::single();
@@ -1594,8 +1562,6 @@ fn downloads_path_row_reveals_imports() {
             "{gone} hides with no library open"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 /// The settings button the Tab walk is on, by its selector.
@@ -1609,7 +1575,7 @@ fn settings_focus(
 #[core::prelude::v1::test]
 fn settings_tab_walks_buttons_and_return_activates() {
     use crate::app::preferences::REVEALED;
-    let (temp_dir, engine) = seed_library("settings_tab_walk", 1);
+    let (_temp_dir, engine) = seed_library("settings_tab_walk", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1700,13 +1666,12 @@ fn settings_tab_walks_buttons_and_return_activates() {
     assert_eq!(settings_focus(&view, vcx), None, "closing clears the focus");
 
     let _ = std::fs::remove_dir_all(&cache);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_tab_focus_resets_on_category_change() {
     use crate::app::preferences::REVEALED;
-    let (temp_dir, engine) = seed_library("settings_tab_reset", 1);
+    let (_temp_dir, engine) = seed_library("settings_tab_reset", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1733,14 +1698,12 @@ fn settings_tab_focus_resets_on_category_change() {
         assert!(app.preferences_open, "↵ does not close settings");
         assert!(app.error_message.is_none());
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_tab_on_library_rescans_and_opens_another() {
     use crate::app::library::FOLDER_PICKS;
-    let (temp_dir, engine) = seed_library("settings_tab_library", 1);
+    let (_temp_dir, engine) = seed_library("settings_tab_library", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -1796,13 +1759,11 @@ fn settings_tab_on_library_rescans_and_opens_another() {
             "↵ on Rescan Library starts a scan"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_tab_on_general_reaches_editor_and_reset() {
-    let (temp_dir, engine) = seed_library("settings_tab_general", 1);
+    let (_temp_dir, engine) = seed_library("settings_tab_general", 1);
     crate::app::state::TEST_CONFIG.with(|c| *c.borrow_mut() = Some(changed_config()));
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
@@ -1839,13 +1800,11 @@ fn settings_tab_on_general_reaches_editor_and_reset() {
         view.update(vcx, |app, _| app.preferences_open),
         "Esc closes only the confirmation"
     );
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn storage_cache_size_and_clear_run_off_the_ui_thread() {
-    let (temp_dir, engine) = seed_library("settings_storage_bg", 1);
+    let (_temp_dir, engine) = seed_library("settings_storage_bg", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let cache = thumbnail_cache_dir();
@@ -1925,12 +1884,11 @@ fn storage_cache_size_and_clear_run_off_the_ui_thread() {
     });
 
     let _ = std::fs::remove_file(&cache);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn storage_reading_started_before_a_clear_never_lands_after_it() {
-    let (temp_dir, engine) = seed_library("settings_storage_stale", 1);
+    let (_temp_dir, engine) = seed_library("settings_storage_stale", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let cache = thumbnail_cache_dir();
@@ -1980,12 +1938,11 @@ fn storage_reading_started_before_a_clear_never_lands_after_it() {
     });
 
     let _ = std::fs::remove_dir_all(&cache);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_brand_shows_the_logo_where_the_library_does() {
-    let (temp_dir, engine) = seed_library("settings_brand", 1);
+    let (_temp_dir, engine) = seed_library("settings_brand", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
@@ -2013,12 +1970,11 @@ fn settings_brand_shows_the_logo_where_the_library_does() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[core::prelude::v1::test]
 fn settings_subtitle_is_sans_and_library_meta_mono() {
-    let (temp_dir, engine) = seed_library("settings_meta_font", 1);
+    let (_temp_dir, engine) = seed_library("settings_meta_font", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(800.0)));
@@ -2047,5 +2003,4 @@ fn settings_subtitle_is_sans_and_library_meta_mono() {
     );
 
     drop(view);
-    let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -1,6 +1,6 @@
 //! The virtualized grid settles after a deep scroll.
 
-use super::ui_automation::{
+use super::helpers::{
     app_with_library, click, leak, render_ui, seed_library, seed_library_undecodable,
 };
 
@@ -12,7 +12,7 @@ use super::ui_automation::{
 /// assertion).
 #[core::prelude::v1::test]
 fn deep_scroll_settles_and_keeps_the_visible_rows() {
-    let (dir, engine) = seed_library("grid_deep_scroll", 200);
+    let (_dir, engine) = seed_library("grid_deep_scroll", 200);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -45,8 +45,6 @@ fn deep_scroll_settles_and_keeps_the_visible_rows() {
             "the month band must follow the top visible row"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Grid columns in the rail tests: few cards per frame keeps them fast.
@@ -65,7 +63,7 @@ const RAIL_MONTHS: [(&str, usize); 4] = [
 fn seed_rail_library(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let total = RAIL_MONTHS.iter().map(|(_, n)| n).sum();
@@ -107,7 +105,7 @@ fn bounds(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> gpui::Bo
 
 #[core::prelude::v1::test]
 fn rail_draws_month_bars_and_scrolls_to_a_year() {
-    let (dir, engine) = seed_rail_library("rail_bars");
+    let (_dir, engine) = seed_rail_library("rail_bars");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
 
@@ -191,13 +189,11 @@ fn rail_draws_month_bars_and_scrolls_to_a_year() {
             "the bubble names the months on screen"
         );
     });
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_hides_outside_the_unfiltered_date_view() {
-    let (dir, engine) = seed_rail_library("rail_hides");
+    let (_dir, engine) = seed_rail_library("rail_hides");
     let (album, _) = super::albums::album_with_members(&engine, "Trip", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
@@ -241,13 +237,11 @@ fn rail_hides_outside_the_unfiltered_date_view() {
     view.update(vcx, |app, cx| app.show_map(cx));
     render_ui(vcx);
     assert!(!shown(vcx), "the map has no rail");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_lens_tracks_scroll() {
-    let (dir, engine) = seed_rail_library("rail_lens");
+    let (_dir, engine) = seed_rail_library("rail_lens");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
     let covers = |vcx: &mut gpui::VisualTestContext, bar: &'static str| {
@@ -286,13 +280,11 @@ fn rail_lens_tracks_scroll() {
         !covers(vcx, "timeline-bar-2025-06"),
         "June 2025 left the lens"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_follows_ascending_sort() {
-    let (dir, engine) = seed_rail_library("rail_ascending");
+    let (_dir, engine) = seed_rail_library("rail_ascending");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
     view.update(vcx, |app, cx| {
@@ -325,13 +317,11 @@ fn rail_follows_ascending_sort() {
         },
         "the lens is on May 2025, the first 2025 month ascending"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn rail_lens_shows_for_a_library_within_one_row() {
-    let (dir, engine) = seed_library("rail_tiny", 3);
+    let (_dir, engine) = seed_library("rail_tiny", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
     let month = view.update(vcx, |app, _| app.rail.months[0]);
@@ -342,7 +332,6 @@ fn rail_lens_shows_for_a_library_within_one_row() {
         lens.origin.y <= y && y <= lens.origin.y + lens.size.height,
         "3 items in one row still get a lens over their month"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 30 years (1997-2026), one item each, newest first: year Y is item
@@ -350,7 +339,7 @@ fn rail_lens_shows_for_a_library_within_one_row() {
 fn seed_many_years(
     prefix: &str,
 ) -> (
-    std::path::PathBuf,
+    crate::tests::helpers::TempLibrary,
     std::sync::Arc<lumina_core::LuminaEngine>,
 ) {
     let (dir, engine) = seed_library_undecodable(prefix, 30);
@@ -375,7 +364,7 @@ fn seed_many_years(
 
 #[core::prelude::v1::test]
 fn rail_collapses_older_years_and_stays_inside_its_bounds() {
-    let (dir, engine) = seed_many_years("rail_older");
+    let (_dir, engine) = seed_many_years("rail_older");
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = rail_app(&mut cx, engine);
     vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(480.0)));
@@ -425,8 +414,6 @@ fn rail_collapses_older_years_and_stays_inside_its_bounds() {
         lens.origin.y <= y && y <= lens.origin.y + lens.size.height,
         "the lens clamps to the older row: {lens:?} vs {older:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The lens and every drawn year label (and the "{year} ↓" row) do not
@@ -452,7 +439,7 @@ fn assert_lens_clears_labels(vcx: &mut gpui::VisualTestContext, when: &str) {
 #[core::prelude::v1::test]
 fn rail_lens_never_covers_a_year_label() {
     // At the top the lens is on June 2025, right under the 2025 label.
-    let (dir, engine) = seed_rail_library("rail_lens_labels");
+    let (_dir, engine) = seed_rail_library("rail_lens_labels");
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = rail_app(&mut cx, engine);
     assert_lens_clears_labels(vcx, "the first month of a year");
@@ -462,10 +449,9 @@ fn rail_lens_never_covers_a_year_label() {
         bar.origin.y >= year.origin.y + year.size.height,
         "bars sit on their own lines under the year label: {bar:?} vs {year:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 
     // One item per year: the screen spans many years, and so does the lens.
-    let (dir, engine) = seed_many_years("rail_lens_years");
+    let (_dir, engine) = seed_many_years("rail_lens_years");
     let mut cx = crate::tests::TestApp::single();
     let (_view, vcx) = rail_app(&mut cx, engine);
     assert_lens_clears_labels(vcx, "a lens over several years");
@@ -476,5 +462,4 @@ fn rail_lens_never_covers_a_year_label() {
     click(vcx, "timeline-older");
     render_ui(vcx);
     assert_lens_clears_labels(vcx, "the older row");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -3,7 +3,7 @@
 
 use super::downloads::{install, queue_app, row_id};
 use super::downloads_panel::queue;
-use super::ui_automation::{app_with_library, focus_app, keystrokes, leak, render_ui};
+use super::helpers::{app_with_library, focus_app, keystrokes, leak, render_ui};
 use crate::app::downloads::{DownloadEntry, DownloadSurface};
 use crate::views::downloads_popover_rows::finished_label;
 use crate::LuminaApp;

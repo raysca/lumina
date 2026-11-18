@@ -2,7 +2,7 @@
 //! keyboard paths, Clear finished, long rows.
 
 use super::downloads::{imported, install, persisted, queue_app, row_id, settle, states, submit};
-use super::ui_automation::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
+use super::helpers::{app_with_library, click, focus_app, keystrokes, leak, render_ui};
 use crate::app::downloads::JobOutcome;
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
@@ -117,7 +117,7 @@ fn panel_toggles_by_click_and_shortcut_and_closes_on_a_click_outside() {
 
     view.update(vcx, |app, cx| app.toggle_downloads_panel(cx));
     render_ui(vcx);
-    super::ui_automation::click_point(vcx, 40.0, 400.0);
+    super::helpers::click_point(vcx, 40.0, 400.0);
     view.update(vcx, |app, _| {
         assert!(!app.downloads.open, "a click outside closes the list")
     });

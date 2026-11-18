@@ -2,8 +2,7 @@
 //! photo in the plain viewer: a slideshow hides it, and a missing video's
 //! smaller frame still holds the whole card.
 
-use super::downloads::TempLibrary;
-use super::ui_automation::{app_with_library, keystrokes, render_ui, seed_library};
+use super::helpers::{app_with_library, keystrokes, render_ui, seed_library};
 use gpui::px;
 use lumina_core::MediaType;
 
@@ -11,7 +10,6 @@ use lumina_core::MediaType;
 fn slideshow_hides_the_missing_card() {
     let (temp_dir, engine) = seed_library("missing_slideshow", 2);
     // Removed when the test ends, pass or fail.
-    let temp_dir = TempLibrary(temp_dir);
     for file in ["photo_00.jpg", "photo_01.jpg"] {
         let gone = temp_dir.join(file);
         std::fs::remove_file(&gone).unwrap();
@@ -54,7 +52,6 @@ fn slideshow_hides_the_missing_card() {
 fn missing_video_shows_the_whole_card_inside_its_frame() {
     let (temp_dir, engine) = seed_library("missing_video", 1);
     // Removed when the test ends, pass or fail.
-    let temp_dir = TempLibrary(temp_dir);
     let mut clip = engine.get_item_slice(0..1).remove(0);
     clip.path = temp_dir.join("clip.mp4");
     clip.file_name = "clip.mp4".into();

@@ -4,7 +4,7 @@
 use lumina_core::{MatchMode, RuleField, RuleOperator, RuleValue, SmartAlbumRule};
 
 use crate::app::viewer_actions::REVEALED_PATHS;
-use crate::tests::ui_automation::{
+use crate::tests::helpers::{
     app_with_library, click, click_point, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
@@ -12,7 +12,7 @@ use lumina_core::DeletionTarget;
 
 #[core::prelude::v1::test]
 fn shift_cmd_r_reveals_the_selection_instead_of_rescanning() {
-    let (dir, engine) = seed_library("reg_reveal", 2);
+    let (_dir, engine) = seed_library("reg_reveal", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     REVEALED_PATHS.with(|p| p.borrow_mut().clear());
@@ -37,12 +37,11 @@ fn shift_cmd_r_reveals_the_selection_instead_of_rescanning() {
             "plain ⌘R still rescans"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn alt_cmd_c_copies_the_selected_file_path() {
-    let (dir, engine) = seed_library("reg_copy", 2);
+    let (_dir, engine) = seed_library("reg_copy", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -53,12 +52,11 @@ fn alt_cmd_c_copies_the_selected_file_path() {
         .and_then(|item| item.text())
         .expect("⌥⌘C writes the clipboard");
     assert_eq!(copied, path.to_string_lossy());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn t_opens_the_tag_field_for_the_selection() {
-    let (dir, engine) = seed_library("reg_tag_key", 2);
+    let (_dir, engine) = seed_library("reg_tag_key", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -70,18 +68,17 @@ fn t_opens_the_tag_field_for_the_selection() {
     keystrokes(vcx, "s u n enter");
     let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
     assert_eq!(engine.get_tags_for_item(id), ["sun"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
-    let (dir, engine) = seed_library("reg_tag_menu", 2);
+    let (_dir, engine) = seed_library("reg_tag_menu", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
     keystrokes(vcx, "home");
     let id = view.update(vcx, |app, _| app.selected_item.clone().unwrap().id);
-    crate::tests::ui_automation::right_click(vcx, leak(format!("media-card-{}", id.0)));
+    crate::tests::helpers::right_click(vcx, leak(format!("media-card-{}", id.0)));
     click(vcx, "tags-menu-btn");
     view.update(vcx, |app, _| {
         assert!(app.tag_input_active, "Tags… starts the tag field");
@@ -90,12 +87,11 @@ fn context_menu_tags_tags_the_selection_instead_of_opening_the_manager() {
             "Tags… no longer opens the Tag Manager"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn cmd_backspace_deletes_like_backspace() {
-    let (dir, engine) = seed_library("reg_cmd_bs", 3);
+    let (_dir, engine) = seed_library("reg_cmd_bs", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -111,12 +107,11 @@ fn cmd_backspace_deletes_like_backspace() {
         engine.get_item_by_id(id).unwrap().is_trashed,
         "⌘⌫ (the menu's shortcut) moves the item to the Trash"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_f_favorites_and_ctrl_cmd_f_goes_full_screen() {
-    let (dir, engine) = seed_library("reg_viewer_f", 2);
+    let (_dir, engine) = seed_library("reg_viewer_f", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -145,12 +140,11 @@ fn viewer_f_favorites_and_ctrl_cmd_f_goes_full_screen() {
             "⌃⌘F must not be swallowed by ⌘F search"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn enter_without_the_permanent_acknowledgement_keeps_the_dialog_open() {
-    let (dir, engine) = seed_library("reg_perm_ack", 2);
+    let (_dir, engine) = seed_library("reg_perm_ack", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
 
@@ -179,12 +173,11 @@ fn enter_without_the_permanent_acknowledgement_keeps_the_dialog_open() {
         );
     });
     assert!(engine.get_item_by_id(id).is_some(), "nothing was deleted");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_next_button_moves_exactly_one_item() {
-    let (dir, engine) = seed_library("reg_viewer_nav", 3);
+    let (_dir, engine) = seed_library("reg_viewer_nav", 3);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -193,12 +186,11 @@ fn viewer_next_button_moves_exactly_one_item() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selected_index, Some(1), "one click, one step");
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
-    let (dir, engine) = seed_library("reg_album_undo", 2);
+    let (_dir, engine) = seed_library("reg_album_undo", 2);
     let rules = [SmartAlbumRule {
         field: RuleField::IsFavorite,
         operator: RuleOperator::Equals,
@@ -243,12 +235,11 @@ fn deleting_a_smart_album_can_be_undone_with_the_same_id() {
             "redo must not leave the view on the deleted album"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn info_toggle_keeps_its_selector_and_the_inspector_stays_with_no_selection() {
-    let (dir, engine) = seed_library("reg_inspector", 2);
+    let (_dir, engine) = seed_library("reg_inspector", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -268,12 +259,11 @@ fn info_toggle_keeps_its_selector_and_the_inspector_stays_with_no_selection() {
     view.update(vcx, |app, _| {
         assert!(!app.inspector_open, "and still closes")
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn palette_keyboard_selection_stays_in_view() {
-    let (dir, engine) = seed_library("reg_palette_scroll", 2);
+    let (_dir, engine) = seed_library("reg_palette_scroll", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
 
@@ -302,12 +292,11 @@ fn palette_keyboard_selection_stays_in_view() {
         row.top() >= list.top(),
         "after reopening, the selected first row ({row:?}) must be in view ({list:?})"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn viewer_specs_show_only_known_facts() {
-    let (dir, engine) = seed_library("reg_specs", 1);
+    let (_dir, engine) = seed_library("reg_specs", 1);
     let mut item = engine.get_item_slice(0..1).remove(0);
     item.width = 0;
     item.height = 0;
@@ -317,7 +306,6 @@ fn viewer_specs_show_only_known_facts() {
     item.width = 4032;
     item.height = 3024;
     assert!(crate::views::viewer::top_bar::specs_line(&item).starts_with("4032 × 3024 · JPG"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
@@ -358,7 +346,7 @@ fn a_frame_step_accepts_the_frame_it_lands_on() {
 /// all; it now says so in the error banner and launches nothing.
 #[core::prelude::v1::test]
 fn reveal_in_finder_reports_a_missing_file() {
-    let (dir, engine) = seed_library("reg_reveal_missing", 2);
+    let (_dir, engine) = seed_library("reg_reveal_missing", 2);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     REVEALED_PATHS.with(|p| p.borrow_mut().clear());
@@ -375,12 +363,11 @@ fn reveal_in_finder_reports_a_missing_file() {
         );
     });
     REVEALED_PATHS.with(|p| assert!(p.borrow().is_empty(), "nothing is launched"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn deleting_a_smart_album_asks_first() {
-    let (dir, engine) = seed_library("reg_album_confirm", 3);
+    let (_dir, engine) = seed_library("reg_album_confirm", 3);
     let rules = [SmartAlbumRule {
         field: RuleField::IsFavorite,
         operator: RuleOperator::Equals,
@@ -479,12 +466,11 @@ fn deleting_a_smart_album_asks_first() {
         items,
         "no photo or video goes with it"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[core::prelude::v1::test]
 fn opening_another_library_drops_a_pending_smart_album_delete() {
-    let (dir, engine) = seed_library("reg_album_confirm_switch", 2);
+    let (_dir, engine) = seed_library("reg_album_confirm_switch", 2);
     let (other, _other_engine) = seed_library("reg_album_confirm_other", 2);
     let rules = [SmartAlbumRule {
         field: RuleField::IsFavorite,
@@ -505,15 +491,13 @@ fn opening_another_library_drops_a_pending_smart_album_delete() {
             "ids restart per library, so the question cannot carry over"
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&other);
 }
 
 /// Lumina › Preferences… while settings is open closes it, as ⌘, does,
 /// instead of jumping back to General.
 #[core::prelude::v1::test]
 fn preferences_menu_item_toggles_settings_like_cmd_comma() {
-    let (dir, engine) = seed_library("reg_prefs_toggle", 1);
+    let (_dir, engine) = seed_library("reg_prefs_toggle", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     focus_app(vcx, &view);
@@ -540,7 +524,6 @@ fn preferences_menu_item_toggles_settings_like_cmd_comma() {
             "reopened on General, as ⌘, does"
         );
     });
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A second Clear Cache while one runs is ignored; both Clear buttons say
@@ -548,7 +531,7 @@ fn preferences_menu_item_toggles_settings_like_cmd_comma() {
 #[core::prelude::v1::test]
 fn clear_cache_buttons_read_clearing_while_a_clear_runs() {
     use crate::app::preferences::{thumbnail_cache_dir, PreferencesTab};
-    let (dir, engine) = seed_library("reg_clearing", 1);
+    let (_dir, engine) = seed_library("reg_clearing", 1);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let cache = thumbnail_cache_dir();
@@ -604,5 +587,4 @@ fn clear_cache_buttons_read_clearing_while_a_clear_runs() {
         "the button reads Clear Cache again once done"
     );
     let _ = std::fs::remove_dir_all(&cache);
-    let _ = std::fs::remove_dir_all(&dir);
 }
