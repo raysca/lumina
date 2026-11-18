@@ -260,7 +260,20 @@ wait_db "SELECT COUNT(*) FROM media_items" "4" || fail "catalog did not index th
 echo "PASS: catalog indexed 3 seeded images and 1 video"
 
 wait_config "inspector_visible" "False" || true
-capture base || fail "could not capture the window"
+if ! capture base; then
+    # screencapture fails without Screen Recording permission: a missing
+    # permission skips (AGENTS.md section 6.4) unless it is required.
+    if [[ "$REQUIRE_PERMS" == "1" ]]; then
+        fail "could not capture the window; Screen Recording permission required (LUMINA_REQUIRE_UI_PERMISSIONS=1)"
+    fi
+    echo ""
+    echo "SKIP: could not capture the window. Screen Recording permission is"
+    echo "      probably not granted to this process. Grant it in System Settings"
+    echo "      -> Privacy & Security -> Screen Recording for the terminal running"
+    echo "      this script, then rerun. Launch, window and catalog checks above passed;"
+    echo "      the screenshot and interaction tests did not run."
+    exit 0
+fi
 echo "PASS: screenshot $OUT_DIR/base.png"
 
 # --- accessibility-gated interaction tests --------------------------------
