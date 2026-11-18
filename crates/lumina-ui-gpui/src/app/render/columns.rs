@@ -19,6 +19,10 @@ impl LuminaApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        // The fullscreen viewer covers the header and the canvas: leave their
+        // controls out of the tree, as the sidebar does (VoiceOver listed
+        // them under the viewer). The viewer reads items without the grid.
+        let covered = self.viewer_shown();
         div()
             .flex_1()
             .size_full()
@@ -59,7 +63,9 @@ impl LuminaApp {
                     .when(!self.preferences_open, |col| {
                         col.child(self.render_error_banner(cx))
                     })
-                    .child(if self.search_screen_shown() {
+                    .child(if covered {
+                        Empty.into_any_element()
+                    } else if self.search_screen_shown() {
                         self.render_search_header(cx).into_any_element()
                     } else if let Some(id) = self.album_page_album() {
                         crate::views::album_page::header::render(self, id, window, cx)
@@ -68,9 +74,11 @@ impl LuminaApp {
                         self.render_toolbar(view_label, window, cx)
                             .into_any_element()
                     })
-                    .child(crate::views::album_page::selection_bar::render(
-                        self, window, cx,
-                    ))
+                    .when(!covered, |col| {
+                        col.child(crate::views::album_page::selection_bar::render(
+                            self, window, cx,
+                        ))
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -136,22 +144,22 @@ impl LuminaApp {
                                             .min_h_0()
                                             .flex()
                                             .flex_row()
-                                            .child(
-                                                if self.selection == AlbumSelection::Duplicates {
-                                                    crate::views::stacks::render_duplicates(
-                                                        self,
-                                                        total_count,
-                                                        cx,
-                                                    )
-                                                } else if self.map_shown() {
-                                                    crate::views::map::render(self, cx)
-                                                } else if self.mosaic_shown() {
-                                                    self.render_mosaic(total_count, cx)
-                                                } else {
-                                                    self.render_browser_grid(total_count, cx)
-                                                        .into_any_element()
-                                                },
-                                            )
+                                            .child(if covered {
+                                                div().flex_1().into_any_element()
+                                            } else if self.selection == AlbumSelection::Duplicates {
+                                                crate::views::stacks::render_duplicates(
+                                                    self,
+                                                    total_count,
+                                                    cx,
+                                                )
+                                            } else if self.map_shown() {
+                                                crate::views::map::render(self, cx)
+                                            } else if self.mosaic_shown() {
+                                                self.render_mosaic(total_count, cx)
+                                            } else {
+                                                self.render_browser_grid(total_count, cx)
+                                                    .into_any_element()
+                                            })
                                             // Pinned Vertical Year Rail
                                             .child(self.render_year_rail(cx))
                                             // Zoom pill, selection dock and toast, over the grid

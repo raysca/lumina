@@ -626,6 +626,44 @@ fn fullscreen_viewer_takes_the_sidebar_out_of_the_tree() {
     );
 }
 
+/// The viewer covers the toolbar and the grid too: they leave the tree with
+/// the sidebar, and come back when it closes.
+#[core::prelude::v1::test]
+fn fullscreen_viewer_takes_the_toolbar_and_grid_out_of_the_tree() {
+    let (_dir, engine) = seed_library("nav_viewer_hides_grid", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let toolbar = vcx.debug_bounds("toolbar-drag-area");
+    let grid = vcx.debug_bounds("media-grid");
+    assert!(toolbar.is_some() && grid.is_some(), "precondition");
+
+    view.update(vcx, |app, cx| {
+        let first = app.get_active_slice(0..1)[0].clone();
+        app.open_viewer(first, cx);
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("toolbar-drag-area").is_none(),
+        "the viewer covers the toolbar, so it must not be in the tree"
+    );
+    assert!(
+        vcx.debug_bounds("media-grid").is_none(),
+        "the viewer covers the grid, so it must not be in the tree"
+    );
+
+    view.update(vcx, |app, cx| app.close_viewer(cx));
+    render_ui(vcx);
+    assert_eq!(
+        (
+            vcx.debug_bounds("toolbar-drag-area"),
+            vcx.debug_bounds("media-grid")
+        ),
+        (toolbar, grid),
+        "closing the viewer brings the toolbar and grid back where they were"
+    );
+}
+
 /// Dropping the viewed item's selection (an untag in a Tag view, a merge
 /// that trashes it) leaves the viewer flag set but draws no viewer: the
 /// sidebar must come back, not stay blank.

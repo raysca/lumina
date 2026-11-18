@@ -6,7 +6,7 @@
 
 use crate::app::types::get_sample_items;
 use crate::tests::helpers::{
-    app_with_library, click, click_point, leak, render_ui, right_click, seed_library,
+    app_with_library, bounds_center, click, click_point, leak, render_ui, right_click, seed_library,
 };
 use lumina_core::MediaType;
 
@@ -50,11 +50,17 @@ fn viewer_info_click_does_not_open_toolbar_sort() {
     let (_temp_dir, engine) = seed_library("overlay_info", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let sort = bounds_center(vcx, "sort-menu-button");
     open_viewer_with_first_item(&view, vcx);
+    assert!(
+        vcx.debug_bounds("sort-menu-button").is_none(),
+        "the toolbar under the viewer is out of the tree"
+    );
 
     // The toolbar is icon-only now and no longer sits under viewer Info, so
-    // click the toolbar's Sort position itself: the viewer must swallow it.
-    click(vcx, "sort-menu-button");
+    // click where Sort was: the viewer must take it.
+    click_point(vcx, f32::from(sort.x), f32::from(sort.y));
     view.update(vcx, |app, _| {
         assert!(
             !app.sort_menu_open,
@@ -93,9 +99,11 @@ fn viewer_open_click_does_not_open_tag_manager() {
     let (_temp_dir, engine) = seed_library("overlay_open", 8);
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    let tags = bounds_center(vcx, "tags-toolbar-btn");
     open_viewer_with_first_item(&view, vcx);
 
-    click(vcx, "tags-toolbar-btn");
+    click_point(vcx, f32::from(tags.x), f32::from(tags.y));
     view.update(vcx, |app, _| {
         assert!(
             !app.tags_page_shown(),
@@ -128,6 +136,15 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
         // Two columns of large cards so one sits under the stage centre
         // regardless of small viewer layout changes.
         app.grid_columns = 2;
+        cx.notify();
+    });
+    render_ui(vcx);
+    // Where the cards are; the viewer takes the grid out of the tree.
+    let cards: Vec<_> = card_ids(&view, vcx)
+        .into_iter()
+        .filter_map(|id| vcx.debug_bounds(leak(format!("media-card-{id}"))))
+        .collect();
+    view.update(vcx, |app, cx| {
         app.open_viewer(video, cx);
         // The sample path doesn't exist, so the load failed; this test is
         // about the play badge a loadable paused video shows.
@@ -139,11 +156,7 @@ fn viewer_play_badge_does_not_change_the_selected_media() {
         .debug_bounds("viewer-center-play")
         .expect("a paused video must paint the centre play badge")
         .center();
-    let covered = card_ids(&view, vcx).into_iter().any(|id| {
-        vcx.debug_bounds(leak(format!("media-card-{id}")))
-            .map(|bounds| bounds.contains(&play_center))
-            .unwrap_or(false)
-    });
+    let covered = cards.iter().any(|bounds| bounds.contains(&play_center));
     assert!(
         covered,
         "test premise: a grid card must sit under the play badge"
@@ -171,6 +184,12 @@ fn info_drawer_click_does_not_change_the_selected_media() {
             .next()
             .expect("seeded library must have an item")
     });
+    render_ui(vcx);
+    // Where the cards are; the viewer takes the grid out of the tree.
+    let cards: Vec<_> = card_ids(&view, vcx)
+        .into_iter()
+        .filter_map(|id| vcx.debug_bounds(leak(format!("media-card-{id}"))))
+        .collect();
     view.update(vcx, |app, cx| {
         app.open_viewer(item, cx);
         app.inspector_open = true;
@@ -181,8 +200,7 @@ fn info_drawer_click_does_not_change_the_selected_media() {
     let drawer = vcx
         .debug_bounds("viewer-info-drawer")
         .expect("open inspector must paint the info drawer");
-    let target = card_ids(&view, vcx).into_iter().find_map(|id| {
-        let card = vcx.debug_bounds(leak(format!("media-card-{id}")))?;
+    let target = cards.iter().find_map(|card| {
         let overlap = card.intersect(&drawer);
         (f32::from(overlap.size.width) > 40.0 && f32::from(overlap.size.height) > 40.0)
             .then(|| overlap.center())

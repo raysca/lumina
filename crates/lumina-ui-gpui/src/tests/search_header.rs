@@ -2,7 +2,8 @@
 //! rule that decides between the Search screen and the Library.
 
 use crate::tests::helpers::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library,
+    app_with_library, bounds_center, click, click_point, focus_app, keystrokes, render_ui,
+    seed_library,
 };
 use gpui::{point, px, Bounds, Entity, Modifiers, MouseButton, Pixels, VisualTestContext};
 
@@ -414,6 +415,7 @@ fn save_is_disabled_in_edit_mode() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     set_query(&view, vcx, "tram");
+    let save = bounds_center(vcx, "search-save-smart-album");
     open_viewer_on(&view, vcx, &engine, photos[0]);
     keystrokes(vcx, "e");
     assert!(editing(&view, vcx), "E opens edit mode");
@@ -426,8 +428,9 @@ fn save_is_disabled_in_edit_mode() {
         );
         app.command_query.clear();
     });
-    // The viewer covers the header; a click there must not save either.
-    click(vcx, "search-save-smart-album");
+    // The viewer covers the header (out of the tree); a click where Save
+    // was must not save either.
+    click_point(vcx, f32::from(save.x), f32::from(save.y));
     view.update(vcx, |app, _| {
         assert!(
             !app.album_draft.modal_open,
