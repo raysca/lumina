@@ -17,11 +17,15 @@ pub(crate) struct SpeedHistory {
 
 impl SpeedHistory {
     /// Adds `speed` (bytes a second) unless a sample was taken less than a
-    /// second before `now`.
+    /// second before `now`. A zero after a non-zero sample is always added,
+    /// so the bars fall to zero when every job stalls: nothing may sample
+    /// again for a long while.
     pub(crate) fn record(&mut self, now: Instant, speed: u64) {
-        if self
-            .last
-            .is_some_and(|last| now.saturating_duration_since(last) < Duration::from_secs(1))
+        let falls_to_zero = speed == 0 && self.samples.back().is_some_and(|&last| last > 0);
+        if !falls_to_zero
+            && self
+                .last
+                .is_some_and(|last| now.saturating_duration_since(last) < Duration::from_secs(1))
         {
             return;
         }
@@ -59,6 +63,21 @@ mod tests {
             kept,
             (5..25).collect::<Vec<_>>(),
             "the oldest samples drop off, oldest first"
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn a_zero_after_a_speed_is_always_added() {
+        let start = Instant::now();
+        let mut history = SpeedHistory::default();
+        history.record(start, 5);
+        history.record(start + Duration::from_millis(200), 0);
+        history.record(start + Duration::from_millis(400), 0);
+        let kept: Vec<u64> = history.samples().collect();
+        assert_eq!(
+            kept,
+            [5, 0],
+            "a stall drops the bars to zero at once, and only once"
         );
     }
 }

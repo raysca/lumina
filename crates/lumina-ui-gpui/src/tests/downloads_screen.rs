@@ -612,6 +612,11 @@ fn a_stalled_download_redraws_without_its_speed() {
         0,
         "a stalled job adds nothing to the combined speed"
     );
+    assert_eq!(
+        view.update(vcx, |app, _| app.downloads.speed.samples().last()),
+        Some(0),
+        "when every job stalls the speed bars fall to zero"
+    );
 
     // A row removed while its wait runs: nothing fires for it.
     report(&view, vcx, 0, 4 * MB);

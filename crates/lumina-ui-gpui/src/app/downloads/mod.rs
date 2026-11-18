@@ -493,6 +493,9 @@ impl LuminaApp {
         if let Some(progress) = entry.progress.as_mut() {
             if progress.speed_bytes_per_sec > 0 {
                 progress.speed_bytes_per_sec = 0;
+                // The bars drop with the speed, or the last one stays up.
+                let combined = self.download_speed();
+                self.downloads.speed.record(Instant::now(), combined);
                 cx.notify();
             }
         }
