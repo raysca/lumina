@@ -9,12 +9,14 @@ use lumina_core::{ExportPreset, ExportReport, ImportReport};
 use crate::app::LuminaApp;
 use crate::i18n::t;
 
-/// The export and XMP import running now, as their item counts. App-level,
-/// so a job started in one library still blocks a second one after a switch.
+/// The export and XMP import running now, as their item counts, and
+/// whether a Duplicates Merge all is running. App-level, so a job started
+/// in one library still blocks a second one after a switch.
 #[derive(Debug, Default)]
 pub(crate) struct ForegroundJobs {
     pub(crate) export: Option<usize>,
     pub(crate) xmp: Option<usize>,
+    pub(crate) merge_all: bool,
 }
 
 impl ForegroundJobs {

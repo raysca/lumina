@@ -260,14 +260,43 @@ impl LuminaApp {
         }
     }
 
+    /// Merges every visible group into its keeper. The one transaction runs
+    /// on the background executor; nothing in the app changes until it
+    /// lands, so a failure has no optimistic state to revert and only shows
+    /// the banner. A second Merge all while one runs is ignored.
     pub fn merge_all_duplicates(&mut self, cx: &mut Context<Self>) {
-        let Some(ref state) = self.grid_state else {
+        if self.jobs.merge_all {
+            return;
+        }
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
-        match state
-            .engine
-            .merge_all_duplicates(&self.stacks.review.keepers, &self.stacks.review.skipped)
-        {
+        let keepers = self.stacks.review.keepers.clone();
+        let skipped = self.stacks.review.skipped.clone();
+        let generation = self.library_generation;
+        self.jobs.merge_all = true;
+        let task = cx
+            .background_executor()
+            .spawn(async move { engine.merge_all_duplicates(&keepers, &skipped) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            // The app may be gone; then there is nothing left to update.
+            let _ = this.update(cx, |app, cx| {
+                app.jobs.merge_all = false;
+                // A merge from a library since closed: its undo entry and
+                // counts belong to that library, not this one.
+                if app.library_generation == generation {
+                    app.finish_merge_all(result, cx);
+                } else if let Err(err) = result {
+                    log::error!("merging duplicates in a closed library: {err:#}");
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn finish_merge_all(&mut self, result: anyhow::Result<Vec<MediaId>>, cx: &mut Context<Self>) {
+        match result {
             Ok(trashed_ids) => {
                 let total_merged = trashed_ids.len();
                 if !trashed_ids.is_empty() {

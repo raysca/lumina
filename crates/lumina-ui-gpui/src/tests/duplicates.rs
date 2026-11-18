@@ -310,6 +310,52 @@ fn review_hides_the_inspector_and_ignores_its_toggle() {
     drop(view);
 }
 
+/// Regression: Merge all ran its transaction on the UI thread. It now runs
+/// as a background task, and a second press while it runs does nothing.
+#[core::prelude::v1::test]
+fn merge_all_runs_in_the_background_and_ignores_a_second_press() {
+    let (_temp_dir, engine) = seed_two_groups("dup_merge_all_bg");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+
+    view.update(vcx, |app, cx| {
+        app.merge_all_duplicates(cx);
+        assert!(app.jobs.merge_all, "the merge is marked as running");
+        app.merge_all_duplicates(cx);
+    });
+    assert_eq!(
+        engine.get_item_slice(0..10).len(),
+        5,
+        "the UI thread returns before the merge writes anything"
+    );
+
+    render_ui(vcx);
+    assert_eq!(
+        engine.get_item_slice(0..10).len(),
+        2,
+        "the background merge kept one copy per group"
+    );
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.jobs.merge_all,
+            "the finished merge is no longer running"
+        );
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "the ignored second press added no merge of its own"
+        );
+        assert!(
+            app.duplicate_groups.is_empty(),
+            "the groups are read again after the merge"
+        );
+        assert!(app.toast.current().is_some(), "the merge toast is shown");
+    });
+}
+
 #[core::prelude::v1::test]
 fn failed_merge_all_keeps_every_copy_and_uses_the_error_banner() {
     let (temp_dir, engine) = seed_two_groups("dup_merge_all_fail");
