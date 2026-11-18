@@ -102,7 +102,9 @@ fn tiff_ifd0_orientation(file: &mut (impl std::io::Read + std::io::Seek)) -> Opt
     // Orientation is a SHORT (type 3) held in the entry's value field.
     let orientation = read_entries().and_then(|entries| {
         entries
-            .chunks_exact(12)
+            .as_chunks::<12>()
+            .0
+            .iter()
             .find(|entry| u16_at(&entry[0..2]) == 0x0112 && u16_at(&entry[2..4]) == 3)
             .map(|entry| u32::from(u16_at(&entry[8..10])))
     });
