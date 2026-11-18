@@ -63,12 +63,12 @@ impl Catalog {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::{MediaId, MediaItem, MediaType};
     use std::path::PathBuf;
 
-    fn item(index: usize, city: &str, country: &str) -> MediaItem {
+    pub(in crate::catalog) fn item(index: usize, city: &str, country: &str) -> MediaItem {
         let file_name = format!("IMG_{index:04}.JPG");
         MediaItem {
             id: MediaId(0),
