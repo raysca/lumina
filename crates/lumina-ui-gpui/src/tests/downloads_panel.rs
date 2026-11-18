@@ -599,6 +599,11 @@ fn downloads_popover_shell() {
         vcx.debug_bounds("downloads-header-pause").is_none(),
         "pause turns into Resume all once nothing runs"
     );
+    assert!(
+        vcx.debug_bounds("downloads-header-count-text:1 active")
+            .is_some(),
+        "a paused row is still active: it sits in the Active list and the toolbar badge counts it"
+    );
     click(vcx, "downloads-header-resume");
     settle(vcx, &view, "Resume all requeues the paused row", |app| {
         running(app) == 1

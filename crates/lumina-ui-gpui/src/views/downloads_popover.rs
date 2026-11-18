@@ -52,10 +52,12 @@ pub(crate) fn named_popover_button(
 /// nothing runs and some rows are paused), the Downloads screen and
 /// settings on its Downloads category.
 pub(crate) fn header(app: &LuminaApp, cx: &mut Context<LuminaApp>) -> Div {
-    let active = app.running_or_waiting_count();
+    // Running, waiting and paused rows, as the toolbar badge counts and the
+    // Active list shows them.
+    let active = app.download_badge_count();
     let any_paused = app.any_download_in(&[DownloadState::Paused]);
     let plain = (theme::bg_1(), theme::t2());
-    let toggle = if active > 0 {
+    let toggle = if app.running_or_waiting_count() > 0 {
         Some(
             popover_button(
                 "downloads-header-pause".into(),
