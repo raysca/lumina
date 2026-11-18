@@ -373,10 +373,13 @@ impl LuminaApp {
                     },
                 },
                 AlbumSelection::Album(id) => EmptyCopy {
-                    primary: Some((
-                        crate::i18n::t("command.add_from_library"),
-                        EmptyAction::AddFromLibrary,
-                    )),
+                    // The same condition ⌘K offers the command under.
+                    primary: self.empty_album_shown().then(|| {
+                        (
+                            crate::i18n::t("command.add_from_library"),
+                            EmptyAction::AddFromLibrary,
+                        )
+                    }),
                     ..copy(
                         Icon::ImagePlus,
                         match self.album_title(*id) {

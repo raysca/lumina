@@ -542,6 +542,28 @@ fn empty_album_offers_add_from_library() {
     );
     render_ui(vcx);
     assert_went_to_library(vcx, "⌘K Add from Library");
+
+    // The album's title lookup fails (it left the list): the button and
+    // ⌘K agree that there is nothing to add to.
+    open_album(vcx);
+    view.update(vcx, |app, cx| {
+        app.albums.list.retain(|a| a.id != album.id);
+        cx.notify();
+    });
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("empty-state-headline-text:This album is empty")
+            .is_some(),
+        "the empty album still shows, without its title"
+    );
+    let button = vcx
+        .debug_bounds("empty-primary-text:Add from Library")
+        .is_some();
+    let command = view.update(vcx, |app, _| app.command_applies(CommandId::AddFromLibrary));
+    assert!(
+        !button && !command,
+        "button ({button}) and ⌘K ({command}) share one condition"
+    );
 }
 
 #[core::prelude::v1::test]
