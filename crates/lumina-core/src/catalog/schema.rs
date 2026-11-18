@@ -615,6 +615,19 @@ impl Catalog {
                 .context("repairing the search index")?;
             tx.commit()?;
         }
+        // v23: the scanner stored an empty GPS block (0,0) as a position.
+        // Clear it unless the user set the place; `media_fts_au` reindexes
+        // the cleared place names. A new catalog has no rows, so this is a
+        // no-op there, and a rerun finds nothing to clear.
+        if current < 23 {
+            conn.execute(
+                "UPDATE media_items SET latitude = NULL, longitude = NULL, altitude = NULL, \
+                 city = NULL, admin1_region = NULL, country_code = NULL \
+                 WHERE latitude = 0 AND longitude = 0 AND place_edited = 0;",
+                [],
+            )
+            .context("clearing 0,0 GPS positions")?;
+        }
         if current < SCHEMA_VERSION {
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }

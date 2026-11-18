@@ -104,16 +104,21 @@ mod tests {
         }
     }
 
-    #[test]
-    fn matching_places_returns_city_country_and_count() {
+    fn temp_dir(prefix: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "lumina_places_{}",
+            "lumina_{prefix}_{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         ));
         std::fs::create_dir_all(&dir).expect("temp dir");
+        dir
+    }
+
+    #[test]
+    fn matching_places_returns_city_country_and_count() {
+        let dir = temp_dir("places");
         let catalog = Catalog::open(dir.join("catalog.db")).expect("catalog opens");
         let mut items = vec![
             item(1, "Lisbon", "PT"),
@@ -159,6 +164,76 @@ mod tests {
             catalog.matching_places("orto", 4).unwrap().is_empty(),
             "the name's start, not the middle"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Regression: catalogs scanned before v23 kept an empty GPS block
+    /// (0,0) as a position, geocoded to a place in the Gulf of Guinea.
+    #[test]
+    fn migration_clears_zero_zero_positions_once() {
+        let dir = temp_dir("gps_zero_migration");
+        let db = dir.join("catalog.db");
+        let (zero, edited, real) = {
+            let catalog = Catalog::open(&db).expect("catalog opens");
+            let at = |index, lat, lon, city| {
+                let mut item = item(index, city, "ST");
+                (item.latitude, item.longitude) = (Some(lat), Some(lon));
+                catalog.insert_or_update_batch(&[item]).unwrap()[0].id
+            };
+            let ids = (
+                at(1, 0.0, 0.0, "Gulfton"),
+                at(2, 0.0, 0.0, "Gulfton"),
+                at(3, 35.0, 135.0, "Kyoto"),
+            );
+            // The user placed this one at 0,0 on purpose.
+            catalog
+                .conn
+                .lock()
+                .execute(
+                    "UPDATE media_items SET place_edited = 1 WHERE id = ?1;",
+                    params![ids.1 .0 as i64],
+                )
+                .unwrap();
+            catalog
+                .conn
+                .lock()
+                .execute_batch("PRAGMA user_version = 22;")
+                .unwrap();
+            ids
+        };
+        for pass in 0..2 {
+            let catalog = Catalog::open(&db).expect("catalog reopens");
+            let place = |id: crate::MediaId| {
+                let item = catalog.get_item_by_id(id).unwrap().expect("item exists");
+                (item.latitude, item.city)
+            };
+            assert_eq!(
+                place(zero),
+                (None, None),
+                "pass {pass}: a scanned 0,0 position and its place are cleared"
+            );
+            assert_eq!(
+                place(edited),
+                (Some(0.0), Some("Gulfton".to_string())),
+                "pass {pass}: a place the user set is kept"
+            );
+            assert_eq!(
+                place(real),
+                (Some(35.0), Some("Kyoto".to_string())),
+                "pass {pass}: a real position is kept"
+            );
+            let found: Vec<_> = catalog
+                .search_structured(&crate::StructuredQuery::parse("gulfton"), 10, 0)
+                .unwrap()
+                .into_iter()
+                .map(|item| item.id)
+                .collect();
+            assert_eq!(
+                found,
+                vec![edited],
+                "pass {pass}: the search index drops the cleared place name"
+            );
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 }

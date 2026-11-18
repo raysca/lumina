@@ -795,8 +795,9 @@ fn red_jpeg(width: u32, height: u32) -> Vec<u8> {
     bytes
 }
 
-/// `jpeg` with an EXIF APP1 holding a GPS position, right after SOI.
-fn with_gps_exif(jpeg: &[u8]) -> Vec<u8> {
+/// `jpeg` with an EXIF APP1 holding a GPS position (whole degrees north
+/// and east), right after SOI.
+fn with_gps_exif(jpeg: &[u8], lat: u32, lon: u32) -> Vec<u8> {
     use exif::{Field, In, Rational, Tag, Value};
     let degrees =
         |d: u32| Value::Rational(vec![Rational::from((d, 1)), (0, 1).into(), (0, 1).into()]);
@@ -809,7 +810,7 @@ fn with_gps_exif(jpeg: &[u8]) -> Vec<u8> {
         Field {
             tag: Tag::GPSLatitude,
             ifd_num: In::PRIMARY,
-            value: degrees(35),
+            value: degrees(lat),
         },
         Field {
             tag: Tag::GPSLongitudeRef,
@@ -819,7 +820,7 @@ fn with_gps_exif(jpeg: &[u8]) -> Vec<u8> {
         Field {
             tag: Tag::GPSLongitude,
             ifd_num: In::PRIMARY,
-            value: degrees(135),
+            value: degrees(lon),
         },
     ];
     with_exif(jpeg, &fields)
@@ -841,6 +842,33 @@ fn with_exif(jpeg: &[u8], fields: &[exif::Field]) -> Vec<u8> {
     out.extend_from_slice(&tiff);
     out.extend_from_slice(&jpeg[2..]);
     out
+}
+
+/// Regression: cameras with no fix write an empty GPS block as 0,0, which
+/// put a pin in the Gulf of Guinea.
+#[test]
+fn scan_drops_a_zero_zero_gps_position() {
+    let (tmp_dir, engine, _rx) = library_with(
+        "gps_zero",
+        &[
+            ("nowhere.jpg", with_gps_exif(&red_jpeg(8, 8), 0, 0)),
+            ("kyoto.jpg", with_gps_exif(&red_jpeg(8, 8), 35, 135)),
+        ],
+    );
+    let nowhere = item_named(&engine, "nowhere.jpg");
+    assert_eq!(
+        (nowhere.latitude, nowhere.longitude, nowhere.city.as_deref()),
+        (None, None, None),
+        "an exact 0,0 position is stored as no location"
+    );
+    let kyoto = item_named(&engine, "kyoto.jpg");
+    assert_eq!(
+        (kyoto.latitude, kyoto.longitude),
+        (Some(35.0), Some(135.0)),
+        "a real position is kept"
+    );
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
 fn item_named(engine: &LuminaEngine, name: &str) -> MediaItem {
@@ -873,7 +901,7 @@ fn has_app1(jpeg: &[u8]) -> bool {
 
 #[test]
 fn jpeg_export_applies_rotation_and_strips_gps() {
-    let source = with_gps_exif(&red_jpeg(64, 32));
+    let source = with_gps_exif(&red_jpeg(64, 32), 35, 135);
     assert!(has_app1(&source), "control: the fixture carries EXIF GPS");
     let (tmp_dir, engine, _rx) = library_with("jpeg_rotation", &[("photo.jpg", source)]);
     let photo = item_named(&engine, "photo.jpg");

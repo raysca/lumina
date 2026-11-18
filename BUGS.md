@@ -46,8 +46,6 @@ you find something you are not fixing now. Planned features live in
 
 ### Places, dates and search
 
-- Cameras that write an empty GPS block as 0,0 get a map pin in the Gulf of
-  Guinea, in the location card and on Places. The scanner should drop 0,0.
 - Neither the location card nor the Places map wraps across the date line.
 - City search is accent-sensitive: "sao" does not find "São Paulo" (SQLite
   `LIKE` folds ASCII case only).

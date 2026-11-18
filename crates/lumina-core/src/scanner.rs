@@ -300,6 +300,11 @@ impl Scanner {
                         });
                     }
                     altitude = alt_val;
+                    // Cameras with no fix write an empty GPS block as 0,0:
+                    // a pin in the Gulf of Guinea, not a place.
+                    if latitude == Some(0.0) && longitude == Some(0.0) {
+                        (latitude, longitude, altitude) = (None, None, None);
+                    }
                 }
             }
             (width, height) = crate::dims::displayed_size(path, header, exif_size);
