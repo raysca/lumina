@@ -1002,21 +1002,33 @@ mod tests {
     #[test]
     fn undated_migration_moves_1970_rows_to_year_zero() {
         let (dir, db) = temp_catalog("undated_migration");
-        let (undated, dated) = {
+        let (undated, dated, user_epoch) = {
             let catalog = Catalog::open(&db).expect("catalog must open");
             let mut old_undated = sample_item(1);
             old_undated.timestamp_epoch_ms = 0;
             (old_undated.year, old_undated.month, old_undated.day) = (1970, 1, 1);
+            let mut user_epoch = sample_item(3);
+            user_epoch.timestamp_epoch_ms = 0;
+            (user_epoch.year, user_epoch.month, user_epoch.day) = (1970, 1, 1);
             let ids = catalog
-                .insert_or_update_batch(&[old_undated, sample_item(2)])
+                .insert_or_update_batch(&[old_undated, sample_item(2), user_epoch])
                 .unwrap();
             catalog.compute_timeline_buckets().unwrap();
+            // The user set this one's date to exactly the epoch.
+            catalog
+                .conn
+                .lock()
+                .execute(
+                    "UPDATE media_items SET date_edited = 1 WHERE id = ?1;",
+                    [ids[2].id.0 as i64],
+                )
+                .unwrap();
             catalog
                 .conn
                 .lock()
                 .execute_batch("PRAGMA user_version = 23;")
                 .unwrap();
-            (ids[0].id, ids[1].id)
+            (ids[0].id, ids[1].id, ids[2].id)
         };
         for pass in 0..2 {
             let catalog = Catalog::open(&db).expect("catalog must reopen");
@@ -1030,6 +1042,11 @@ mod tests {
                 (2022, 1, 15),
                 "pass {pass}: dated rows keep theirs"
             );
+            assert_eq!(
+                date(user_epoch),
+                (1970, 1, 1),
+                "pass {pass}: a date the user set to the epoch is not undated"
+            );
             let keys: Vec<String> = catalog
                 .get_timeline_buckets("month")
                 .unwrap()
@@ -1038,8 +1055,12 @@ mod tests {
                 .collect();
             assert_eq!(
                 keys,
-                vec!["2022-01".to_string(), "0000-00".to_string()],
-                "pass {pass}: the undated row has its own bucket, not 1970-01"
+                vec![
+                    "2022-01".to_string(),
+                    "1970-01".to_string(),
+                    "0000-00".to_string()
+                ],
+                "pass {pass}: the undated row has its own bucket; 1970-01 is the user's date"
             );
             assert_eq!(user_version(&catalog), SCHEMA_VERSION);
         }
