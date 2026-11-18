@@ -9,16 +9,18 @@ you find something you are not fixing now. Planned features live in
 
 ### Organizing
 
-- Undoing a duplicate merge puts the trashed copies back, but not the metadata
-  that was merged onto the keeper. Core now returns each keeper's pre-merge
-  metadata (`Catalog::merge_duplicate_group` / `merge_all_duplicates`, via
-  `engine.catalog()`) and restores it with `Catalog::restore_merged_keepers`;
-  the undo record (`UndoAction::Trashed` in
-  `crates/lumina-ui-gpui/src/app/duplicates_review.rs`) still has to keep
-  the snapshots and restore them on undo.
-- In Duplicates, the ORIGINAL label and the group title follow the automatic
-  pick, not the copy chosen as keeper; "ORIGINAL" is not always the earliest
-  copy.
+- Redoing an undone duplicate merge moves the copies back to Recently Deleted
+  but does not copy their metadata onto the keeper again
+  (`UndoAction::DuplicateMerge` in `crates/lumina-ui-gpui/src/app/undo.rs`
+  does not record which copies went into which keeper).
+- Setting an item's date to a capture time of 0 through the catalog
+  (`Catalog::set_timestamp`) still files it under January 1970; only the
+  scanner and the v24 migration store it as undated (year 0).
+
+### Library
+
+- Opening the same folder twice in quick succession can briefly open two
+  engines on one catalog; the later open wins and cancels the earlier scan.
 
 ### Accessibility
 
@@ -31,9 +33,3 @@ you find something you are not fixing now. Planned features live in
   Writing `AXValue` (the whole text) does work: GPUI Kit's input handles
   `SetValue` (`gpui-base` `handle_accessibility_set_value`). Not checked with a
   real assistive client.
-
-## Performance (work on the UI thread, or not measured)
-
-- Merge All in Duplicates runs its transaction on the UI thread.
-- Duplicates filters every group several times per frame (about 50k hash probes
-  at 10k groups). Not measured.
