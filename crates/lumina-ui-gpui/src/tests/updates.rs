@@ -12,8 +12,8 @@ use lumina_core::update::install::StagedUpdate;
 use lumina_core::update::Release;
 
 use super::downloads_screen::marker;
-use super::ui_automation::{
-    app_with_library, click, focus_app, keystrokes, render_ui, seed_library, type_text,
+use super::helpers::{
+    app_with_library, click, focus_app, keystrokes, render_ui, seed_library, type_text, TempLibrary,
 };
 use crate::app::updates::{UpdateBackend, UpdatePhase};
 use crate::app::LuminaApp;
@@ -69,7 +69,11 @@ fn counts() -> (usize, usize) {
 fn about_with(
     name: &str,
     backend: UpdateBackend,
-) -> (Entity<LuminaApp>, &'static mut VisualTestContext, Cleanup) {
+) -> (
+    Entity<LuminaApp>,
+    &'static mut VisualTestContext,
+    TempLibrary,
+) {
     INSTALLS.with(|n| n.set(0));
     RELAUNCHES.with(|n| n.set(0));
     let (dir, engine) = seed_library(name, 1);
@@ -80,15 +84,7 @@ fn about_with(
         app.open_about(cx);
     });
     render_ui(vcx);
-    (view, vcx, Cleanup(dir))
-}
-
-struct Cleanup(std::path::PathBuf);
-
-impl Drop for Cleanup {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+    (view, vcx, dir)
 }
 
 /// ⌘K, `query`, ↵ (from the About page: Esc closes settings first).
