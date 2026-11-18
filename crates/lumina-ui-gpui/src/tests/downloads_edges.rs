@@ -98,6 +98,7 @@ fn failed_clear_completed_puts_the_rows_back() {
         .unwrap();
     let (view, vcx) = app_with_library(&mut cx, engine.clone());
     view.update(vcx, |app, cx| app.open_library_inner(dir.clone(), cx));
+    vcx.run_until_parked();
     install(&view, vcx, &fake);
     settle(vcx, &view, "the stored rows load", |app| {
         app.downloads.entries.len() == 3

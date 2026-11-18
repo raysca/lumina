@@ -35,7 +35,9 @@ impl LuminaApp {
             return;
         }
         self.welcome.generating_sample = true;
-        let generation = self.library_generation;
+        // Moves when another library open is asked for, even before that
+        // open (in the background) has landed.
+        let generation = self.welcome.retry_generation;
         let target = dest.clone();
         let task = cx
             .background_executor()
@@ -62,7 +64,7 @@ impl LuminaApp {
         cx.notify();
         match result {
             // The user opened another library meanwhile: keep it.
-            Ok(_) if generation != self.library_generation => {
+            Ok(_) if generation != self.welcome.retry_generation => {
                 log::info!("sample library ready; another library was opened meanwhile");
             }
             Ok(_) => self.open_library(dest, cx),

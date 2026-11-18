@@ -711,6 +711,7 @@ fn paused_rows_load_without_starting() {
     }
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_library_inner(dir.clone(), cx));
+    vcx.run_until_parked();
     install(&view, vcx, &fake);
     settle(vcx, &view, "the stored rows load", |app| {
         app.downloads.entries.len() == 2
@@ -739,6 +740,7 @@ fn resume_all_starts_up_to_three() {
     }
     let (view, vcx) = app_with_library(&mut cx, engine);
     view.update(vcx, |app, cx| app.open_library_inner(dir.clone(), cx));
+    vcx.run_until_parked();
     install(&view, vcx, &fake);
     settle(vcx, &view, "the stored rows load", |app| {
         app.downloads.entries.len() == 4
@@ -762,6 +764,7 @@ fn switching_library_drops_old_jobs() {
         count(app, DownloadState::Running) == 1
     });
     view.update(vcx, |app, cx| app.open_library(dir_b.clone(), cx));
+    vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert!(
             matches!(

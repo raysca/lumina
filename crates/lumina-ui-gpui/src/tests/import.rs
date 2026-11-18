@@ -186,6 +186,7 @@ fn library_switch_clears_import_dialog() {
 
     view.update(vcx, |app, cx| app.begin_import(vec![source.clone()], cx));
     view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    vcx.run_until_parked();
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(
@@ -254,13 +255,13 @@ fn library_switch_stops_a_running_copy() {
         app.confirm_import(cx);
         assert!(app.import.progress.is_some(), "the copy has started");
         app.open_library_inner(other.clone(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert!(
             !app.import.is_busy() && app.import.progress.is_none(),
             "the new library shows no import of the old one"
         );
-    });
-    vcx.run_until_parked();
-    view.update(vcx, |app, _| {
         assert!(
             app.toast
                 .current()

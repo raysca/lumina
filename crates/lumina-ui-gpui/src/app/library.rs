@@ -44,7 +44,10 @@ impl LuminaApp {
         self.open_library_inner(path, cx);
     }
 
-    /// Opens a library without touching the pending startup restore.
+    /// Opens a library without touching the pending startup restore. The
+    /// engine opens on the background executor (catalog migrations, an
+    /// unmounted volume); the current library stays until it is installed.
+    /// A later open, a Retry or Back supersedes this one.
     pub(crate) fn open_library_inner(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         if let Some(ref state) = self.grid_state {
             state.engine.cancel_scan();
@@ -53,16 +56,45 @@ impl LuminaApp {
         self.close_pip(cx);
         self.close_compare(cx);
         self.drop_slideshow(cx);
+        // A copy into the library being left stops now: finishing while the
+        // new one opens, it would report into the new library.
+        self.abandon_import(cx);
 
-        let (engine, rx) = match open_engine(&path) {
-            Ok(res) => res,
-            Err(e) => {
-                log::error!("failed to open library at {:?}: {e:?}", path);
-                self.set_error(format!("Could not open library: {e:#}"), cx);
-                return;
-            }
-        };
-        self.finish_open_library(path, engine, rx, cx);
+        self.welcome.retry_generation += 1;
+        let ticket = self.welcome.retry_generation;
+        self.welcome.opening = Some(ticket);
+        cx.notify();
+        let task = cx.background_executor().spawn({
+            let path = path.clone();
+            async move { open_engine(&path) }
+        });
+        cx.spawn(async move |this, cx| {
+            let opened = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| {
+                if app.welcome.retry_generation != ticket {
+                    // The stale engine started its initial scan on open.
+                    if let Ok((engine, _)) = &opened {
+                        engine.cancel_scan();
+                    }
+                    return;
+                }
+                app.welcome.opening = None;
+                cx.notify();
+                let import = app.import.import_after_open.take() == Some(ticket);
+                match opened {
+                    Ok((engine, rx)) => {
+                        app.finish_open_library(path, engine, rx, cx);
+                        app.import.pending_import_after_open = import;
+                    }
+                    Err(e) => {
+                        log::error!("failed to open library at {:?}: {e:?}", path);
+                        app.set_error(format!("Could not open library: {e:#}"), cx);
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     /// The UI-thread half of opening a library: installs an engine that

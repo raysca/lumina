@@ -317,12 +317,12 @@ fn only_an_empty_catalog_gets_the_scan_screen() {
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
 
     view.update(vcx, |app, cx| {
-        app.open_library_inner(empty.clone(), cx);
+        crate::tests::helpers::install_library(app, empty.clone(), cx);
         assert!(
             app.first_scan.is_some(),
             "a new library shows the scan screen"
         );
-        app.open_library_inner(populated.clone(), cx);
+        crate::tests::helpers::install_library(app, populated.clone(), cx);
         assert!(
             app.first_scan.is_none(),
             "a scanned library opens straight away"
@@ -838,7 +838,15 @@ fn failed_open_does_not_become_last_library() {
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| {
         app.open_library_inner(file.clone(), cx);
+    });
+    // The open fails in the background.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert!(app.grid_state.is_none(), "a file is not a library");
+        assert!(
+            !app.welcome.opening(),
+            "the welcome comes back once the open has failed"
+        );
         assert_eq!(
             app.config.last_library_path, None,
             "a failed open must not become the startup library"
@@ -1066,24 +1074,25 @@ fn import_into_new_library_opens_then_asks_for_sources() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
-    // Checked in the same update: the real scan's own ScanComplete may
-    // arrive at the next run-until-parked.
     view.update(vcx, |app, cx| {
         app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
+        assert!(
+            app.grid_state.is_none() && !app.import.pending_import_after_open,
+            "the engine opens in the background; nothing is asked before it has opened"
+        );
+    });
+    vcx.run_until_parked();
+    // The real scan's own ScanComplete may already have arrived, so the
+    // import is either still waiting for it or asked exactly once.
+    view.update(vcx, |app, _| {
+        assert!(
+            app.import.pending_import_after_open != (import_picks() == before + 1),
+            "the import waits for the first scan, or that scan has asked once"
+        );
         assert_eq!(
             open_root(app).as_deref(),
             Some(folder.as_ref()),
             "the chosen folder opens as the new library"
-        );
-        assert!(
-            app.first_scan.is_some(),
-            "an empty library shows the first-scan screen"
-        );
-        assert!(app.import.pending_import_after_open);
-        assert_eq!(
-            import_picks(),
-            before,
-            "the import picker waits for the first scan: that screen paints no import dialog"
         );
     });
 
@@ -1111,6 +1120,10 @@ fn new_library_open_failure_asks_nothing() {
     let before = import_picks();
     view.update(vcx, |app, cx| {
         app.handle_ui_message(UiMessage::NewLibraryPicked(file.clone()), cx);
+    });
+    // The open fails in the background.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert!(app.grid_state.is_none(), "a file is not a library");
         assert!(app.error_message.is_some(), "the banner says it failed");
         assert!(
@@ -1184,8 +1197,10 @@ fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
     view.update(vcx, |app, cx| {
-        app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
-        assert!(app.import.pending_import_after_open);
+        // The new library as its open lands (in one update, so the real
+        // scan's ScanComplete cannot arrive in between).
+        crate::tests::helpers::install_library(app, folder.to_path_buf(), cx);
+        app.import.pending_import_after_open = true;
         // A failed first scan sends no ScanComplete; the user then rescans.
         app.rescan_library(cx);
         assert!(
@@ -1773,6 +1788,7 @@ fn late_recent_folder_check_is_dropped() {
     render_ui(vcx);
     click_unparked(vcx, "welcome-recent-0");
     view.update(vcx, |app, cx| app.open_library(other.to_path_buf(), cx));
+    vcx.run_until_parked();
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert_eq!(

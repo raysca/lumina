@@ -44,16 +44,14 @@ you find something you are not fixing now. Planned features live in
 
 ## Performance (work on the UI thread, or not measured)
 
-- The smart-album builder runs its count and preview queries on the UI thread
-  after every edit. Measured once at about 5.6 ms per edit on a 25k library
-  (release); there is no bench gate.
 - The Settings storage card's query (about 22 ms at 105k rows, release, measured
-  once) runs off the UI thread but holds the catalog lock while it scans. No
-  bench gate.
+  once) runs off the UI thread, but `Catalog::storage_summary`
+  (`lumina-core/src/catalog/storage.rs`) holds the catalog connection lock for
+  the whole single-statement scan, so any UI-thread catalog read in that window
+  waits up to ~22 ms. Fixing it needs a core change (sum in keyset-paged
+  chunks by `media_items.id`, releasing the lock between chunks, or a
+  separate read-only connection under WAL); the UI cannot split it. No bench
+  gate.
 - Merge All in Duplicates runs its transaction on the UI thread.
-- Opening a library opens the engine on the UI thread (only Retry on the
-  welcome screen opens it in the background).
 - Duplicates filters every group several times per frame (about 50k hash probes
   at 10k groups). Not measured.
-- The library keeps laying out, refreshing and loading thumbnails under the
-  Settings page. Not measured.

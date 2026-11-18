@@ -283,7 +283,8 @@ fn library_switch_starts_with_no_failures() {
         let callback = app
             .begin_thumbnail_request(app.grid_state.as_ref().unwrap(), id)
             .expect("the cleared id can be requested again");
-        app.open_library(other.clone(), cx);
+        // As the background open lands, in this update.
+        super::helpers::install_library(app, other.clone(), cx);
         assert!(
             !app.grid_state.as_ref().unwrap().is_failed(id),
             "a new library starts with no failures"

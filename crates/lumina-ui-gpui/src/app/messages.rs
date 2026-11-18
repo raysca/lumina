@@ -295,11 +295,12 @@ impl LuminaApp {
                 self.open_library(folder, cx);
             }
             UiMessage::NewLibraryPicked(folder) => {
-                let generation = self.library_generation;
+                let ticket = self.welcome.retry_generation;
                 self.open_library(folder, cx);
-                // Only a library that opened (not a failed open, not one
-                // waiting on the downloads prompt) gets the import.
-                self.import.pending_import_after_open = self.library_generation != generation;
+                // Only this open, once it succeeds, gets the import (not a
+                // failed open, not one waiting on the downloads prompt).
+                self.import.import_after_open = (self.welcome.retry_generation != ticket)
+                    .then_some(self.welcome.retry_generation);
             }
             UiMessage::ExportFolderPicked(folder, preset) => {
                 self.export_to_folder(folder, preset, cx);

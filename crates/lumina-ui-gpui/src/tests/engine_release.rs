@@ -33,11 +33,13 @@ fn switching_libraries_releases_the_old_engine() {
     let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
     view.update(vcx, |app, cx| app.open_library_inner(first.clone(), cx));
     vcx.run_until_parked();
+    vcx.run_until_parked();
     let weak = view.read_with(vcx, |app, _| {
         let state = app.grid_state.as_ref().expect("first library opened");
         std::sync::Arc::downgrade(&state.engine)
     });
     view.update(vcx, |app, cx| app.open_library_inner(second.clone(), cx));
+    vcx.run_until_parked();
     vcx.run_until_parked();
     assert_eq!(
         weak.strong_count(),

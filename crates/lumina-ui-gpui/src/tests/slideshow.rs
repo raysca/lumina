@@ -452,6 +452,7 @@ fn slideshow_stops_cleanly_when_view_empties_or_library_switches() {
     render_ui(vcx);
     start_at(&view, vcx, &ids, 0);
     view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    vcx.run_until_parked();
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(app.slideshow.is_none(), "switching libraries ends it");

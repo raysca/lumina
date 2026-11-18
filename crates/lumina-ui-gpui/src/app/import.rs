@@ -37,6 +37,9 @@ pub(crate) struct ImportState {
     /// "Import into New Library…" opened this library: ask for the photos to
     /// copy in when its first scan completes. Cleared when another opens.
     pub pending_import_after_open: bool,
+    /// The ticket of the background open "Import into New Library…" started;
+    /// that open, once it succeeds, sets `pending_import_after_open`.
+    pub import_after_open: Option<u64>,
     /// The last import's failure line, kept until the banner is dismissed:
     /// a later error takes the banner's title, and this stays under it.
     pub failure: Option<String>,

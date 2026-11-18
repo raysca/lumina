@@ -192,8 +192,10 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
     render_ui(vcx);
     render_ui(vcx);
 
-    view.update(vcx, |app, cx| {
-        app.open_library_inner(dir_b.clone(), cx);
+    // The engine opens in the background; nothing draws meanwhile.
+    view.update(vcx, |app, cx| app.open_library_inner(dir_b.clone(), cx));
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         // Before the new library's first fetch lands. Ids restart per
         // catalog, so an old row would act on the wrong photo.
         let shown = app.displayed_rows(0..5);
@@ -215,6 +217,37 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert_eq!(app.displayed_count(), 5, "the new library's rows arrive");
+    });
+}
+
+#[core::prelude::v1::test]
+fn opening_a_library_opens_its_engine_off_the_ui_thread() {
+    let (_dir_a, engine_a) = seed_library("ui_thread_open_a", 1);
+    let (dir_b, _engine_b) = seed_library("ui_thread_open_b", 2);
+    let (dir_c, _engine_c) = seed_library("ui_thread_open_c", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine_a.clone());
+
+    view.update(vcx, |app, cx| {
+        let generation = app.library_generation;
+        app.open_library(dir_b.clone(), cx);
+        assert!(
+            app.grid_state
+                .as_ref()
+                .is_some_and(|s| Arc::ptr_eq(&s.engine, &engine_a))
+                && app.library_generation == generation,
+            "the open returns before the engine opens; the current library stays meanwhile"
+        );
+        // A second choice before the first lands supersedes it.
+        app.open_library(dir_c.clone(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.grid_state.as_ref().map(|s| s.engine.total_count()),
+            Some(3),
+            "the latest open wins; the superseded engine is dropped"
+        );
     });
 }
 
@@ -477,6 +510,10 @@ fn xmp_result_after_library_switch_does_not_refresh_the_new_library() {
         app.import_sidecars_selected(cx);
         assert_eq!(app.jobs.xmp, Some(1), "the XMP import is still running");
         app.open_library(dir_b.clone(), cx);
+    });
+    // The new library's engine opens in the background.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         // A marker a refresh would reset (nothing is selected in the new
         // library). The new library's own scan never touches it.
         app.batch_summary.count = 99;

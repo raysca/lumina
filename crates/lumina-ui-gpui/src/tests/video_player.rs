@@ -1054,7 +1054,7 @@ fn switching_library_stops_the_viewer_video() {
         state.video_resume.begin(id);
         let positions = state.video_resume.positions.clone();
         app.is_immersive_fullscreen = true;
-        app.open_library_inner(other.clone(), cx);
+        crate::tests::helpers::install_library(app, other.clone(), cx);
         assert_eq!(
             positions.get(id),
             Some(30.0),
@@ -1081,6 +1081,17 @@ fn a_library_that_fails_to_open_leaves_the_video_playing() {
     std::fs::write(&not_a_folder, b"x").expect("write the blocking file");
     view.update(vcx, |app, cx| {
         app.open_library_inner(not_a_folder.clone(), cx);
+    });
+    // The open fails in the background.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(
+            app.error_message
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Could not open library")),
+            "setup: the open failed, got {:?}",
+            app.error_message
+        );
         assert!(
             app.video.player.is_some() && app.video.is_playing && app.is_fullscreen_viewer,
             "the current library stays open, so its video keeps playing"
@@ -1098,7 +1109,7 @@ fn resume_points_do_not_follow_into_another_library() {
         // Media ids restart in every library: id 2 here is another video there.
         let id = lumina_core::MediaId(2);
         app.config.resume_positions.record(id, 30.0, 60.0);
-        app.open_library_inner(other.clone(), cx);
+        crate::tests::helpers::install_library(app, other.clone(), cx);
         let state = app.grid_state.as_ref().expect("the second library is open");
         assert_eq!(
             state.video_resume.saved(id),
@@ -1113,7 +1124,7 @@ fn resume_points_do_not_follow_into_another_library() {
         // Reopening the same library, by a different spelling of its path,
         // keeps its points.
         app.config.resume_positions.record(id, 30.0, 60.0);
-        app.open_library_inner(other.join("."), cx);
+        crate::tests::helpers::install_library(app, other.join("."), cx);
         let state = app.grid_state.as_ref().expect("the library reopened");
         assert_eq!(state.video_resume.saved(id), Some(30.0));
     });
@@ -1131,7 +1142,7 @@ fn an_older_config_keeps_its_resume_points_for_the_last_library() {
         app.config.resume_library = None;
         app.config.last_library_path = Some(last.clone());
         app.config.resume_positions.record(id, 30.0, 60.0);
-        app.open_library_inner(last.clone(), cx);
+        crate::tests::helpers::install_library(app, last.clone(), cx);
         let state = app.grid_state.as_ref().expect("the last library is open");
         assert_eq!(
             state.video_resume.saved(id),

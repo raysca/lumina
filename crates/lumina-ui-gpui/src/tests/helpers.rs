@@ -28,6 +28,18 @@ pub(crate) fn seed_library(
     seed_with(prefix, count, tiny_jpeg())
 }
 
+/// Installs the library at `path` now, as a finished background open does
+/// (`open_library` opens the engine off the UI thread). For tests about what
+/// happens after a switch that must stay inside one update.
+pub(crate) fn install_library(
+    app: &mut LuminaApp,
+    path: std::path::PathBuf,
+    cx: &mut gpui::Context<LuminaApp>,
+) {
+    let (engine, rx) = crate::app::library::open_engine(&path).expect("the test library opens");
+    app.finish_open_library(path, engine, rx, cx);
+}
+
 /// A library of files named `.jpg` that are not images: no size in the
 /// catalog, and every decode of them fails (fast: sips rejects them), so no
 /// texture ever lands. Only for tests about failed or texture-less cards

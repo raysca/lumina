@@ -485,6 +485,7 @@ fn opening_another_library_drops_a_pending_smart_album_delete() {
 
     click(vcx, leak(format!("smart-album-delete-{}", album.id)));
     view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert!(
             app.album_draft.confirm_delete.is_none(),

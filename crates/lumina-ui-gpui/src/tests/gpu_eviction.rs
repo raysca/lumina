@@ -173,7 +173,9 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             },
             cx,
         );
-        app.open_library_inner(other_dir.clone(), cx);
+        // Installed in this update: any UI message handled later drops
+        // the retired images from every atlas.
+        crate::tests::helpers::install_library(app, other_dir.clone(), cx);
         assert!(
             other_dir.join("catalog.db").exists(),
             "tests must keep catalogs in the temp library, never the user's data dir"

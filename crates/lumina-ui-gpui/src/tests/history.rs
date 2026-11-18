@@ -306,6 +306,10 @@ fn library_switch_clears_forward() {
     view.update(vcx, |app, cx| {
         assert!(app.can_navigate_forward());
         app.open_library(other.clone(), cx);
+    });
+    // The new library's engine opens in the background.
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert!(
             !app.can_navigate_forward() && !app.can_navigate_back(),
             "no Back or Forward across libraries"

@@ -77,7 +77,11 @@ impl LuminaApp {
                                     // A small window scrolls the welcome.
                                     .overflow_y_scroll()
                                     .track_scroll(&self.welcome.body_scroll)
-                                    .child(OnboardingView::render(self.welcome_props(cx))),
+                                    // Empty while a library opens, so the
+                                    // welcome does not flash up at launch.
+                                    .when(!self.welcome.opening(), |body| {
+                                        body.child(OnboardingView::render(self.welcome_props(cx)))
+                                    }),
                             ),
                     ),
             )

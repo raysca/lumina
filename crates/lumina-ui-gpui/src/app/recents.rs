@@ -27,9 +27,11 @@ pub(crate) struct WelcomeState {
     pub(crate) missing_error: Option<String>,
     /// Tab focus in the missing-library state: 0 Retry, 1 Choose.
     pub(crate) missing_focus: Option<usize>,
-    /// Counts Retry starts and Backs; a Retry or recent check applies only
-    /// if it has not moved since it started.
-    retry_generation: u64,
+    /// Counts library opens, Retry starts and Backs; an open, a Retry or a
+    /// recent check applies only if it has not moved since it started.
+    pub(crate) retry_generation: u64,
+    /// The ticket of the library open in flight; see [`Self::opening`].
+    pub(crate) opening: Option<u64>,
     /// The recent the keyboard has focused (↑/↓), as a list index.
     pub(crate) focused_recent: Option<usize>,
     /// Recents whose folder is not there. `None` = not checked yet, shown
@@ -57,6 +59,12 @@ impl WelcomeState {
         self.retrying = false;
         self.missing_error = None;
         self.missing_focus = None;
+    }
+
+    /// A library open is in flight and nothing has superseded it: the
+    /// welcome body hides so it does not flash up at launch.
+    pub(crate) fn opening(&self) -> bool {
+        self.opening == Some(self.retry_generation)
     }
 }
 
@@ -129,8 +137,6 @@ impl LuminaApp {
     /// first on the background executor (an unmounted network volume can
     /// stall a `stat` for seconds). A missing folder shows the notice
     /// instead of opening.
-    // ponytail: the engine open after the check still runs on the UI thread,
-    // as it does for every open path (folder picker, ⌘O); move them together.
     pub(crate) fn open_recent_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         // Back, a Retry or another library supersedes this check.
         let ticket = (self.library_generation, self.welcome.retry_generation);

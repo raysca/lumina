@@ -530,6 +530,7 @@ fn map_follows_locations_and_library_switch() {
     render_ui(vcx);
     assert_eq!(counts(&view, vcx), vec![1]);
     view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    vcx.run_until_parked();
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(!app.map.shown, "a new library opens on the grid");
@@ -826,7 +827,7 @@ fn late_points_from_previous_library_are_dropped() {
         app.show_map(cx);
         // The read starts; the library changes before it lands.
         app.refresh_map_points(cx);
-        app.open_library_inner(other.clone(), cx);
+        crate::tests::helpers::install_library(app, other.clone(), cx);
         // The new library's map starts its first read, which reuses the old
         // read's request number, so only the library generation tells them
         // apart. It fails, so the old read is the only one that could land

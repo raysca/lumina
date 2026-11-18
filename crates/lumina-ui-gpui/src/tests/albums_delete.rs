@@ -306,6 +306,9 @@ fn opening_another_library_resets_album_state() {
         assert!(app.albums.picker.is_some(), "the picker is open");
         app.albums.confirm_delete = Some(album.id);
         app.open_library_inner(other.clone(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
         assert!(
             app.albums.picker.is_none(),
             "the picker holds old ids and closes on a switch"
@@ -399,6 +402,9 @@ fn opening_another_library_clears_undo_history() {
         app.confirm_delete_album(cx);
         assert!(!app.undo.undo_stack.is_empty(), "the delete is undoable");
         app.open_library_inner(other.clone(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, cx| {
         assert!(
             app.undo.undo_stack.is_empty() && app.undo.redo_stack.is_empty(),
             "undo history belongs to the library it was made in"
@@ -429,6 +435,9 @@ fn opening_another_library_closes_dialogs_holding_old_ids() {
         app.album_draft.editing_album_id = Some(1);
         app.open_tag_manager(cx);
         app.open_library_inner(other.clone(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, cx| {
         assert!(
             app.delete_confirm_state.is_none(),
             "a Delete dialog must not outlive its library"

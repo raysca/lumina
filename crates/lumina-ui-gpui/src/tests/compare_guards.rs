@@ -236,6 +236,7 @@ fn opening_another_library_closes_compare() {
     render_ui(vcx);
 
     view.update(vcx, |app, cx| app.open_library_inner(other.clone(), cx));
+    vcx.run_until_parked();
     render_ui(vcx);
     view.update(vcx, |app, _| {
         assert!(app.compare.is_none(), "a library switch closes compare");
