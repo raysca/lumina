@@ -87,31 +87,21 @@ impl Render for LuminaApp {
                 .into_any_element();
         }
 
-        self.refresh_active_view(cx);
-        self.refresh_top_matches(cx);
-        self.refresh_map_points(cx);
-        self.prepare_albums_overview(window, cx);
-        self.prepare_album_page(cx);
+        // Settings is an opaque full-window page: the library under it is
+        // not laid out, refreshed or asked for thumbnails until it closes.
+        let library_shown = !self.preferences_open;
+        if library_shown {
+            self.refresh_active_view(cx);
+            self.refresh_top_matches(cx);
+            self.refresh_map_points(cx);
+            self.prepare_albums_overview(window, cx);
+            self.prepare_album_page(cx);
+        }
         self.close_header_popovers_under_modals();
         // A mouse-up outside an inactive window never reaches the root.
         if !window.is_window_active() {
             self.query_bar.held_for_click = false;
         }
-        let total_count = self.displayed_count();
-
-        let view_label = self.view_label();
-
-        // The inspector stays while Info is on; with no selection it shows an
-        // empty state rather than vanishing under a lit toggle.
-        let is_fullscreen_viewer = self.is_fullscreen_viewer;
-        // The Albums overview, the Tags page and the Downloads screen hold
-        // no media: the panel would have nothing to show, so it stays hidden
-        // there (Info stays on for other views). Review Duplicates hides it
-        // too: the compare cards show each copy's facts.
-        let inspector_shown = self.inspector_open
-            && !is_fullscreen_viewer
-            && !self.non_media_page_shown()
-            && !self.duplicates_review_shown();
 
         let app_root = app_actions(
             crate::app::text_input::field_input_actions(div(), &cx.entity()),
@@ -173,15 +163,33 @@ impl Render for LuminaApp {
             .bg(theme::bg_0())
             .flex()
             .flex_col()
-            .relative()
-            // Sidebar (full height) + resizer + main column (banner, header, canvas, inspector)
-            .child(self.render_library_columns(
+            .relative();
+        let root = if library_shown {
+            let total_count = self.displayed_count();
+            let view_label = self.view_label();
+            // The inspector stays while Info is on; with no selection it
+            // shows an empty state rather than vanishing under a lit toggle.
+            // The Albums overview, the Tags page and the Downloads screen
+            // hold no media: the panel would have nothing to show, so it
+            // stays hidden there (Info stays on for other views). Review
+            // Duplicates hides it too: the compare cards show each copy's
+            // facts.
+            let inspector_shown = self.inspector_open
+                && !self.is_fullscreen_viewer
+                && !self.non_media_page_shown()
+                && !self.duplicates_review_shown();
+            // Sidebar (full height) + resizer + main column (banner,
+            // header, canvas, inspector)
+            root.child(self.render_library_columns(
                 &view_label,
                 total_count,
                 inspector_shown,
                 window,
                 cx,
-            ));
+            ))
+        } else {
+            root
+        };
         self.render_overlays(root, window, cx).into_any_element()
     }
 }

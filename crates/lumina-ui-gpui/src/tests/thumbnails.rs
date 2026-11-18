@@ -778,3 +778,44 @@ fn ui_automation_card_tooltip_carries_the_filename() {
         "hovering a card must show the filename tooltip that replaced the label"
     );
 }
+
+#[core::prelude::v1::test]
+fn settings_pauses_the_library_grid_and_its_thumbnail_loads() {
+    let (_dir, engine) = seed_library("settings_pause", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    reset_requests();
+    // Settings opens before the library's first draw, so no card has ever
+    // asked for a thumbnail.
+    view.update(vcx, |app, cx| {
+        app.grid_state = Some(GridState::new(engine));
+        app.refresh_album_counts();
+        app.open_preferences(cx);
+        cx.notify();
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open, "setup: Settings is open")
+    });
+    assert!(
+        vcx.debug_bounds("media-grid").is_none(),
+        "the grid under Settings must not be laid out"
+    );
+    assert_eq!(
+        requests(),
+        0,
+        "no thumbnail may be requested while Settings covers the library"
+    );
+
+    view.update(vcx, |app, cx| app.close_preferences(cx));
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("media-grid").is_some(),
+        "the grid lays out again once Settings closes"
+    );
+    assert!(
+        requests() > 0,
+        "the library asks for its thumbnails again once Settings closes"
+    );
+}
