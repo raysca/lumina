@@ -36,7 +36,7 @@ pub fn commands() -> &'static [Command] {
         cmd(ClearFinishedDownloads, "command.clear_finished_downloads", "", "downloads done completed remove list"),
         cmd(CancelImport, "command.cancel_import", "", "import stop abort copy"),
         cmd(Rescan, "command.rescan", "⌘R", "refresh index scan"),
-        cmd(Preferences, "command.preferences", "⌘,", "settings config cache"),
+        cmd(Preferences, "command.preferences", "⌘,", "settings preferences config cache"),
         cmd(SettingsDownloads, "command.settings_downloads", "", "preferences concurrency simultaneous url video"),
         cmd(ResetPreferences, "command.reset_preferences", "", "settings preferences restore default layout sort sidebar columns"),
         cmd(About, "command.about", "", "version info"),

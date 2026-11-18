@@ -540,7 +540,7 @@ fn ui_automation_command_palette() {
             .into_iter()
             .map(|row| row.title)
             .collect();
-        assert_eq!(titles.first().map(String::as_str), Some("Preferences…"));
+        assert_eq!(titles.first().map(String::as_str), Some("Settings…"));
     });
     keystrokes(vcx, "enter");
     view.update(vcx, |app, _| {

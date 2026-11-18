@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn known_and_unknown_keys() {
-        assert_eq!(t("command.preferences"), "Preferences…");
+        assert_eq!(t("command.preferences"), "Settings…");
         assert_eq!(t("missing.key"), "missing.key");
     }
 

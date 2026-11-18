@@ -21,10 +21,10 @@ pub(crate) struct HudIdle {
 
 /// Banner shown when Edit in External Editor has no configured application.
 pub(crate) const EXTERNAL_EDITOR_UNSET_MESSAGE: &str =
-    "No external editor configured. Choose an external editor in Preferences.";
+    "No external editor configured. Choose an external editor in Settings.";
 /// Banner shown when the saved application value or target path is unusable.
 pub(crate) const EXTERNAL_EDITOR_INVALID_MESSAGE: &str =
-    "The external editor setting is invalid. Choose an external editor in Preferences.";
+    "The external editor setting is invalid. Choose an external editor in Settings.";
 /// Banner shown when the media file has gone away since it was selected
 /// (external editor, Open in Default App and Reveal in Finder).
 pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
@@ -32,7 +32,7 @@ pub(crate) const EXTERNAL_EDITOR_FILE_MISSING_MESSAGE: &str =
 /// Banner shown when the configured editor could not open the file, for
 /// example because the app was deleted.
 pub(crate) const EXTERNAL_EDITOR_FAILED_MESSAGE: &str =
-    "The external editor could not open this file. Choose an external editor in Preferences.";
+    "The external editor could not open this file. Choose an external editor in Settings.";
 /// Banner shown when the file manager could not reveal the file.
 pub(crate) const REVEAL_FAILED_MESSAGE: &str = crate::i18n::platform::REVEAL_FAILED;
 

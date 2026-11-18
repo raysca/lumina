@@ -5,7 +5,7 @@
 Lumina is designed to be usable without a mouse:
 
 - **Command palette** (`⌘K`) searches and runs every major command: open
-  library, rescan, preferences, layouts, sorting, export, XMP import, sidebar
+  library, rescan, settings, layouts, sorting, export, XMP import, sidebar
   and inspector toggles, grid zoom, viewer zoom presets (in the photo
   viewer, also on `⌘0`–`⌘4`), quick search filters, Clear Recent Searches,
   Save Search as Smart Album… and more. Its GO TO group reaches every
@@ -244,9 +244,9 @@ Lumina is designed to be usable without a mouse:
   bar's buttons and the grid's "Edited" badge carry roles, labels and
   tooltips, not yet checked with VoiceOver.
 - **External editor**: `⌘E` opens the selected item in the editor set in
-  Preferences and `⌥⌘E` opens a copy of it (Edit a Copy), also ⌘K, the
+  Settings and `⌥⌘E` opens a copy of it (Edit a Copy), also ⌘K, the
   Image menu and the context menu. With no editor set they open
-  Preferences on its General category, where the editor row is. A focused text
+  Settings on its General category, where the editor row is. A focused text
   field and edit mode absorb both keys.
 - **Errors and Trash**: `Esc` dismisses the error banner (after any toast);
   ⌘K has Retry Failed Action, Empty Trash… and Restore All from Trash.
@@ -280,7 +280,7 @@ currently sees little beyond the window frame. Mitigations:
 - the shortcut sheet documents all keyboard paths;
 - the video scrub preview is pointer-only; `,` `.`, J/K/L and the arrows
   seek and show the frame itself;
-- file dialogs and menus are native/accessible. Preferences is a
+- file dialogs and menus are native/accessible. Settings is a
   full-window page drawn by Lumina: `⌘,` opens and closes it, `↑`/`↓` move
   between its categories (General, Library, Downloads, Storage, About),
   `←`/`→` choose General's Default view on launch (Library or Last viewed)

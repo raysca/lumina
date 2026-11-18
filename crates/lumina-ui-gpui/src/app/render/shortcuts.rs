@@ -16,7 +16,7 @@ const SHORTCUT_SECTIONS: [(&str, &[(&str, &str)]); 12] = [
             ("⌘F", "Focus search"),
             ("⌘O", "Open library…"),
             ("⇧⌘I", "Import…"),
-            ("⌘,", "Preferences"),
+            ("⌘,", "Settings"),
             ("↑ / ↓ in Settings", "Previous / next category"),
             (
                 "Tab / ⇧Tab, Return / Space in Settings",

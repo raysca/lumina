@@ -542,7 +542,7 @@ pub struct LuminaApp {
     pub preferences_open: bool,
     pub preferences_tab: crate::app::preferences::PreferencesTab,
     pub preferences_cache: Option<crate::app::preferences::CacheUsage>,
-    /// Inline "Cleared" after Clear Cache; reset when Preferences reopens.
+    /// Inline "Cleared" after Clear Cache; reset when Settings reopens.
     pub preferences_cache_cleared: bool,
     /// Orders cache readings against Clear Cache.
     pub preferences_cache_job: crate::app::preferences::CacheJob,

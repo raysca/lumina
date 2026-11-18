@@ -266,7 +266,7 @@ fn editor_handoff_context_menu_without_editor_shows_error() {
         );
         let message = app.error_message.as_deref().unwrap_or_default();
         assert!(
-            message.contains("Choose an external editor in Preferences"),
+            message.contains("Choose an external editor in Settings"),
             "the unset error must tell the user where to configure the editor; got {message:?}"
         );
     });

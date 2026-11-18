@@ -13,7 +13,7 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
             #[cfg(target_os = "macos")]
             MenuItem::action(crate::i18n::t("command.check_for_updates"), CheckForUpdates),
             MenuItem::separator(),
-            MenuItem::action("Preferences…", OpenPreferences),
+            MenuItem::action("Settings…", OpenPreferences),
             MenuItem::separator(),
             MenuItem::action("Quit Lumina", QuitApp),
         ]),
@@ -99,7 +99,7 @@ mod tests {
         let app_items = &menus[0].items;
         assert!(app_items
             .iter()
-            .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Preferences…")));
+            .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Settings…")));
         assert!(menus[1]
             .items
             .iter()

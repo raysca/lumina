@@ -7,7 +7,7 @@ pub(super) fn en_us(key: &str) -> Option<&'static str> {
     Some(match key {
         "command.open_library" => "Open Library…",
         "command.rescan" => "Rescan Library",
-        "command.preferences" => "Preferences…",
+        "command.preferences" => "Settings…",
         "command.reset_preferences" => "Reset Settings to Defaults…",
         "command.settings_downloads" => "Settings: Downloads",
         "command.about" => "About Lumina",
@@ -434,7 +434,7 @@ pub(super) fn en_us(key: &str) -> Option<&'static str> {
         "downloads.status_speed" => "{}/s combined",
         "downloads.status_remaining" => "about {} remaining",
         "downloads.overall" => "OVERALL",
-        "downloads.settings" => "Preferences",
+        "downloads.settings" => "Settings",
         "downloads.section_active" => "ACTIVE",
         "downloads.section_attention" => "NEEDS ATTENTION",
         "downloads.section_queued" => "QUEUED",
