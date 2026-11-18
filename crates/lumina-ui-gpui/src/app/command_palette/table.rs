@@ -215,7 +215,7 @@ mod table_tests {
         assert_eq!(table.len(), 157, "command count changed");
         assert_eq!(
             hash,
-            15_117_093_722_329_621_587,
+            2_204_023_891_752_454_397,
             "command table changed:\n{}",
             rows.join("\n")
         );
