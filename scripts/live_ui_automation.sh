@@ -283,14 +283,14 @@ if [[ "$POST_EVENT" != "true" && "$POST_EVENT" != "1" ]]; then
     echo "SKIP: Accessibility / PostEvent permission is not granted to this process;"
     echo "      synthetic keyboard/mouse input would be discarded by macOS."
     echo "      Grant it in System Settings -> Privacy & Security -> Accessibility"
-    echo "      for DeepSeek Harness (and the terminal running this script), then"
+    echo "      for the terminal (or app) running this script, then"
     echo "      rerun. Base launch/window/screenshot/catalog checks above passed."
     echo "      Opening the Accessibility pane is harmless if you need it:"
     echo "      open 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'"
     if [[ "$REQUIRE_PERMS" == "1" ]]; then
         fail "Accessibility permission required (LUMINA_REQUIRE_UI_PERMISSIONS=1)"
     fi
-    echo "PASS: live UI automation (interaction tests skipped)"
+    echo "SKIP: live UI automation interaction tests (Accessibility permission missing)"
     exit 0
 fi
 
