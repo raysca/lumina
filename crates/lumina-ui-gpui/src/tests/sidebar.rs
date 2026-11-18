@@ -637,6 +637,13 @@ fn fullscreen_viewer_takes_the_toolbar_and_grid_out_of_the_tree() {
     let toolbar = vcx.debug_bounds("toolbar-drag-area");
     let grid = vcx.debug_bounds("media-grid");
     assert!(toolbar.is_some() && grid.is_some(), "precondition");
+    let rail_and_pill = ["timeline-label", "grid-zoom-pill"];
+    for selector in rail_and_pill {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "precondition: {selector}"
+        );
+    }
 
     view.update(vcx, |app, cx| {
         let first = app.get_active_slice(0..1)[0].clone();
@@ -651,6 +658,12 @@ fn fullscreen_viewer_takes_the_toolbar_and_grid_out_of_the_tree() {
         vcx.debug_bounds("media-grid").is_none(),
         "the viewer covers the grid, so it must not be in the tree"
     );
+    for selector in rail_and_pill {
+        assert!(
+            vcx.debug_bounds(selector).is_none(),
+            "the viewer covers {selector}, so it must not be in the tree"
+        );
+    }
 
     view.update(vcx, |app, cx| app.close_viewer(cx));
     render_ui(vcx);

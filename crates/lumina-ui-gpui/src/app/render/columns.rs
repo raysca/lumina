@@ -161,11 +161,14 @@ impl LuminaApp {
                                                     .into_any_element()
                                             })
                                             // Pinned Vertical Year Rail
-                                            .child(self.render_year_rail(cx))
+                                            .when(!covered, |d| d.child(self.render_year_rail(cx)))
                                             // Zoom pill, selection dock and toast, over the grid
                                             // column only, stacked bottom-up: dock, pill, toast.
-                                            .child(self.render_zoom_pill(cx))
-                                            .child(self.render_action_dock(cx))
+                                            // The viewer covers all but the toast.
+                                            .when(!covered, |d| {
+                                                d.child(self.render_zoom_pill(cx))
+                                                    .child(self.render_action_dock(cx))
+                                            })
                                             .when(!self.preferences_open, |d| {
                                                 d.child(self.render_toast_overlay(cx))
                                             }),
