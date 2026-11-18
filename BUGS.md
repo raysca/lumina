@@ -17,9 +17,6 @@ you find something you are not fixing now. Planned features live in
   not paused ones.
 - The download speed graph keeps its last bar when every job stalls: a stalled
   job's speed drops to zero, but no new sample is added.
-- Plain (non-page) downloads report an average speed every 100 ms
-  (`crates/lumina-core/src/net_import/direct.rs`), so their speed never goes
-  stale even when the transfer stalls.
 
 ### Settings
 

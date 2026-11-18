@@ -1,6 +1,7 @@
 //! Direct HTTP/HTTPS video downloads using the system curl.
 
 use anyhow::{anyhow, bail, Context, Result};
+use std::collections::VecDeque;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
@@ -162,20 +163,19 @@ pub fn download_direct_url(
     let (mut child, _reaper) = spawn_group(&mut command)?;
     let stderr = super::drain(child.stderr.take());
 
-    let start = Instant::now();
     let mut last = Instant::now();
+    let mut samples = VecDeque::new();
     let status = wait_child(&mut child, cancel, None, || {
         if last.elapsed() < Duration::from_millis(100) {
             return;
         }
         last = Instant::now();
         let bytes = fs::metadata(target).map(|m| m.len()).unwrap_or(0);
-        let secs = start.elapsed().as_secs_f64().max(0.001);
         progress(NetworkDownloadProgress {
             phase: DownloadPhase::Downloading,
             bytes_downloaded: bytes,
             total_bytes: expected_bytes,
-            speed_bytes_per_sec: (bytes as f64 / secs) as u64,
+            speed_bytes_per_sec: current_rate(&mut samples, last, bytes),
             message: "Downloading".to_string(),
         });
     })?;
@@ -188,6 +188,29 @@ pub fn download_direct_url(
         bail!("This link opens a web page, not a video file. Copy the video's own link instead.");
     }
     Ok(())
+}
+
+/// How far back the reported speed looks: long enough to smooth out curl's
+/// write bursts, short enough that a stall reads zero within a second.
+const SPEED_WINDOW: Duration = Duration::from_secs(1);
+
+/// Bytes per second over the last [`SPEED_WINDOW`] of `(time, file size)`
+/// samples, after adding `(now, bytes)`. Not the average since the start,
+/// so a stalled transfer reads zero instead of a slowly falling speed.
+fn current_rate(samples: &mut VecDeque<(Instant, u64)>, now: Instant, bytes: u64) -> u64 {
+    samples.push_back((now, bytes));
+    while samples
+        .front()
+        .is_some_and(|(at, _)| now.duration_since(*at) > SPEED_WINDOW)
+    {
+        samples.pop_front();
+    }
+    let (since, before) = samples.front().copied().unwrap_or((now, bytes));
+    let secs = now.duration_since(since).as_secs_f64();
+    if secs <= 0.0 {
+        return 0;
+    }
+    (bytes.saturating_sub(before) as f64 / secs) as u64
 }
 
 /// Whether a file begins like an HTML page; no video container starts with `<`.
@@ -206,6 +229,33 @@ fn starts_like_html(path: &Path) -> std::io::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: the speed was the average since the start, so a
+    /// stalled download kept reporting a speed that only slowly fell.
+    #[test]
+    fn speed_is_the_current_rate_and_a_stall_reads_zero() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut samples = VecDeque::new();
+        // 100 KB every 100 ms for a second: 1 MB/s.
+        let mut speed = 0;
+        for tick in 0..=10 {
+            speed = current_rate(&mut samples, at(tick * 100), tick * 100_000);
+        }
+        assert_eq!(speed, 1_000_000, "a steady transfer reports its rate");
+        // Then the file stops growing.
+        let half = current_rate(&mut samples, at(1_500), 1_000_000);
+        assert_eq!(half, 500_000, "half the window still holds growth");
+        for tick in 16..=21 {
+            speed = current_rate(&mut samples, at(tick * 100), 1_000_000);
+        }
+        assert_eq!(speed, 0, "a transfer stalled for a whole window reads zero");
+        assert!(
+            samples.len() <= 11,
+            "only the window's samples are kept: {}",
+            samples.len()
+        );
+    }
 
     #[test]
     fn final_response_uses_last_hop() {
