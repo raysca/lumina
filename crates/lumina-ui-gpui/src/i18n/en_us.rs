@@ -666,6 +666,7 @@ pub(super) fn en_us(key: &str) -> Option<&'static str> {
         "header.clips_other" => "{n} clips",
         "header.clips_meta" => "{clips} · {duration} · {size}",
         "header.clips_size" => "{clips} · {size}",
+        "header.at_least" => "at least {duration}",
         "header.hours_minutes" => "{h} h {m} m",
         "header.minutes" => "{m} m",
         "header.date_range" => "{from} — {to}",

@@ -54,10 +54,18 @@ pub fn hours_minutes(ms: u64) -> Option<String> {
 }
 
 /// The Videos meta line: "4,183 clips · 68 h 12 m · 211.0 GB", without the
-/// duration when none is known. `size` is already formatted.
-pub fn clips_meta(n: usize, duration_ms: u64, size: &str) -> String {
+/// duration when none is known, and "at least 68 h 12 m" when `unknown`
+/// clips have no duration yet. `size` is already formatted.
+pub fn clips_meta(n: usize, duration_ms: u64, unknown: usize, size: &str) -> String {
     let clips = plural("header.clips", n);
-    match hours_minutes(duration_ms) {
+    let duration = hours_minutes(duration_ms).map(|d| {
+        if unknown > 0 {
+            t("header.at_least").replace("{duration}", &d)
+        } else {
+            d
+        }
+    });
+    match duration {
         Some(duration) => t("header.clips_meta")
             .replace("{clips}", &clips)
             .replace("{duration}", &duration)
@@ -416,14 +424,22 @@ mod tests {
             hours_minutes((68 * 60 + 12) * 60_000).as_deref(),
             Some("68 h 12 m")
         );
-        assert_eq!(clips_meta(2, 180_000, "1.9 MB"), "2 clips · 3 m · 1.9 MB");
+        assert_eq!(
+            clips_meta(2, 180_000, 0, "1.9 MB"),
+            "2 clips · 3 m · 1.9 MB"
+        );
+        assert_eq!(
+            clips_meta(3, 180_000, 1, "1.9 MB"),
+            "3 clips · at least 3 m · 1.9 MB",
+            "an unprobed clip makes the summed duration a lower bound"
+        );
         assert_eq!(
             t("header.clips_size"),
             "{clips} · {size}",
             "the no-duration line has its own key, not the date-range one"
         );
         assert_eq!(
-            clips_meta(1, 0, "12 B"),
+            clips_meta(1, 0, 1, "12 B"),
             "1 clip · 12 B",
             "unprobed clips drop the duration, not the size"
         );

@@ -85,6 +85,9 @@ pub struct ViewTotals {
     pub count: usize,
     /// Sum of known durations; an unprobed clip (no duration) adds nothing.
     pub duration_ms: u64,
+    /// Items with no duration yet (unprobed), so the header can say the
+    /// summed duration is a lower bound.
+    pub unknown_durations: usize,
     /// Sum of file sizes.
     pub bytes: u64,
     /// Items per (year, month), keyed as the grid's month band reads an
@@ -102,7 +105,7 @@ fn totals_sql(scope: &ViewScope) -> Result<SqlParts> {
     Ok((
         format!(
             "SELECT m.year, m.month, COUNT(*), COALESCE(SUM(m.duration_ms), 0), \
-             SUM(m.file_size) FROM media_items m WHERE ({view}) GROUP BY 1, 2"
+             SUM(m.file_size), COUNT(*) - COUNT(m.duration_ms) FROM media_items m WHERE ({view}) GROUP BY 1, 2"
         ),
         params,
     ))
@@ -245,13 +248,16 @@ impl Catalog {
                 row.get::<_, i64>(2)? as usize,
                 row.get::<_, i64>(3)?.max(0) as u64,
                 row.get::<_, i64>(4)?.max(0) as u64,
+                row.get::<_, i64>(5)? as usize,
             ))
         })?;
         let mut totals = ViewTotals::default();
         for row in rows {
-            let (month, count, duration_ms, bytes) = row.context("reading the view totals")?;
+            let (month, count, duration_ms, bytes, unknown) =
+                row.context("reading the view totals")?;
             totals.count += count;
             totals.duration_ms += duration_ms;
+            totals.unknown_durations += unknown;
             totals.bytes += bytes;
             totals.months.insert(month, count);
         }

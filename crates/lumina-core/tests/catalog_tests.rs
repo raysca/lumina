@@ -1566,6 +1566,10 @@ fn view_totals_sum_duration_and_size() {
         "Videos totals cover exactly its three clips, not the photo"
     );
     assert_eq!(
+        totals.unknown_durations, 1,
+        "the unprobed clip is counted, so the header can say the duration is a lower bound"
+    );
+    assert_eq!(
         (totals.months.get(&(2025, 6)), totals.months.get(&(2025, 7))),
         (Some(&2), Some(&1)),
         "per-month counts follow the view's rows, for the month band"

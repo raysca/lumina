@@ -454,6 +454,35 @@ fn videos_header_reads_clips() {
     });
 }
 
+/// Regression: an unprobed clip added its size but not its length, and the
+/// header gave the sum as the whole running time.
+#[core::prelude::v1::test]
+fn videos_header_says_at_least_when_a_duration_is_unknown() {
+    let (dir, engine, clips) = library_with_clips("states_videos_unknown");
+    let mut unprobed = engine.get_item_by_id(clips[0]).expect("the first clip");
+    unprobed.file_name = "unprobed.mov".into();
+    unprobed.path = dir.join(&unprobed.file_name);
+    unprobed.duration_ms = None;
+    engine
+        .catalog()
+        .insert_or_update_batch(&[unprobed])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.select_album(AlbumSelection::System(lumina_core::SystemAlbum::Videos), cx)
+    });
+    render_ui(vcx);
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.page_meta().as_deref(),
+            Some("4 clips · at least 1 h 3 m · 3.8 MB"),
+            "with a clip of unknown length the summed duration is a lower bound"
+        );
+    });
+}
+
 #[core::prelude::v1::test]
 fn videos_meta_updates_after_a_clip_is_trashed() {
     let (_dir, engine, clips) = library_with_clips("states_videos_trash");

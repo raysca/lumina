@@ -20,11 +20,6 @@ you find something you are not fixing now. Planned features live in
   pick, not the copy chosen as keeper; "ORIGINAL" is not always the earliest
   copy.
 
-### Places, dates and search
-
-- The Videos header understates the total running time: clips whose duration
-  has not been read add their size but not their length, with no hint.
-
 ### Accessibility
 
 - Writing `AXSelectedText` (replace the selection) through the macOS

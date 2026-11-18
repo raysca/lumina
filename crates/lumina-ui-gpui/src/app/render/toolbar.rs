@@ -115,6 +115,7 @@ impl LuminaApp {
             Some(totals) => crate::i18n::clips_meta(
                 count,
                 totals.duration_ms,
+                totals.unknown_durations,
                 &crate::app::types::format_bytes(totals.bytes),
             ),
             None => crate::i18n::plural("header.clips", count),
