@@ -30,7 +30,12 @@ you find something you are not fixing now. Planned features live in
 ### Organizing
 
 - Undoing a duplicate merge puts the trashed copies back, but not the metadata
-  that was merged onto the keeper.
+  that was merged onto the keeper. Core now returns each keeper's pre-merge
+  metadata (`Catalog::merge_duplicate_group` / `merge_all_duplicates`, via
+  `engine.catalog()`) and restores it with `Catalog::restore_merged_keepers`;
+  the undo record (`UndoAction::Trashed` in
+  `crates/lumina-ui-gpui/src/app/duplicates_review.rs`) still has to keep
+  the snapshots and restore them on undo.
 - In Duplicates, the ORIGINAL label and the group title follow the automatic
   pick, not the copy chosen as keeper; "ORIGINAL" is not always the earliest
   copy.

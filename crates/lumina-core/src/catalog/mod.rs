@@ -4,6 +4,8 @@ mod dims;
 pub use albums::{Album, AlbumCard, AlbumStats};
 mod downloads;
 mod duplicates;
+mod merge_undo;
+pub use merge_undo::{DuplicateMerge, KeeperSnapshot};
 mod edits;
 mod flags;
 pub use edits::{CropRect, Edits};

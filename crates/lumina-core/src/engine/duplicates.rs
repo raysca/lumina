@@ -87,8 +87,13 @@ impl LuminaEngine {
     }
 
     /// Merges duplicates into `keep_id` and moves `trash_ids` to Recently Deleted.
+    /// The keeper's pre-merge metadata (for undo) is dropped here; use
+    /// [`Catalog::merge_duplicate_group`](crate::Catalog::merge_duplicate_group)
+    /// through `catalog()` to keep it.
     pub fn merge_duplicate_group(&self, keep_id: MediaId, trash_ids: &[MediaId]) -> Result<()> {
-        self.catalog.merge_duplicate_group(keep_id, trash_ids)
+        self.catalog
+            .merge_duplicate_group(keep_id, trash_ids)
+            .map(|_| ())
     }
 
     /// Merges all duplicate groups in the catalog in a single atomic transaction,
@@ -100,7 +105,9 @@ impl LuminaEngine {
         keepers: &std::collections::HashMap<String, MediaId>,
         skipped: &std::collections::HashSet<String>,
     ) -> Result<Vec<MediaId>> {
-        self.catalog.merge_all_duplicates(keepers, skipped)
+        self.catalog
+            .merge_all_duplicates(keepers, skipped)
+            .map(|merge| merge.trashed)
     }
 
     /// Points the missing item `id` at `chosen`, a file inside the library

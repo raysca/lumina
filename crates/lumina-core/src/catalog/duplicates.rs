@@ -3,6 +3,7 @@ use rusqlite::params;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use super::merge_undo::{DuplicateMerge, KeeperSnapshot};
 use super::Catalog;
 use crate::duplicates::DuplicateGroup;
 use crate::now_ms;
@@ -254,15 +255,14 @@ impl Catalog {
         Ok(groups)
     }
 
-    /// Internal helper that merges a single group within an active SQLite transaction.
+    /// Merges one non-empty group within an active SQLite transaction and
+    /// returns the keeper as it was before.
     fn merge_duplicate_group_in_tx(
         tx: &rusqlite::Transaction,
         keep_id: MediaId,
         trash_ids: &[MediaId],
-    ) -> Result<()> {
-        if trash_ids.is_empty() {
-            return Ok(());
-        }
+    ) -> Result<KeeperSnapshot> {
+        let snapshot = KeeperSnapshot::take(tx, keep_id, trash_ids)?;
         Self::merge_metadata_in_tx(tx, keep_id, trash_ids)?;
 
         let mut trash_stmt =
@@ -270,7 +270,7 @@ impl Catalog {
         for trash_id in trash_ids {
             trash_stmt.execute(params![trash_id.0 as i64])?;
         }
-        Ok(())
+        Ok(snapshot)
     }
 
     /// Copies the user metadata of `trash_ids` onto `keep_id`: tags (union),
@@ -465,18 +465,25 @@ impl Catalog {
         Ok(())
     }
 
-    /// Merges duplicates into a keeper item within a single atomic SQLite transaction.
-    pub fn merge_duplicate_group(&self, keep_id: MediaId, trash_ids: &[MediaId]) -> Result<()> {
+    /// Merges duplicates into a keeper item within a single atomic SQLite
+    /// transaction. Returns the keeper's metadata from before the merge, for
+    /// undo ([`Catalog::restore_merged_keepers`]); `None` when there was
+    /// nothing to merge.
+    pub fn merge_duplicate_group(
+        &self,
+        keep_id: MediaId,
+        trash_ids: &[MediaId],
+    ) -> Result<Option<KeeperSnapshot>> {
         if trash_ids.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        Self::merge_duplicate_group_in_tx(&tx, keep_id, trash_ids)?;
+        let snapshot = Self::merge_duplicate_group_in_tx(&tx, keep_id, trash_ids)?;
         Self::rebuild_timeline_buckets(&tx)?;
         tx.commit()?;
-        Ok(())
+        Ok(Some(snapshot))
     }
 
     /// Merges all duplicate groups in a single atomic transaction.
@@ -484,20 +491,21 @@ impl Catalog {
     /// with no entry, or whose entry is not one of its items, keeps its
     /// heuristic pick (the first item). Groups whose hash is in `skipped`
     /// are left alone.
-    /// Returns the IDs of all newly trashed duplicate items.
+    /// Returns the IDs of all newly trashed duplicate items and each keeper's
+    /// metadata from before the merge, for undo.
     pub fn merge_all_duplicates(
         &self,
         keepers: &HashMap<String, MediaId>,
         skipped: &HashSet<String>,
-    ) -> Result<Vec<MediaId>> {
+    ) -> Result<DuplicateMerge> {
         let groups = self.query_duplicate_groups()?;
         if groups.is_empty() {
-            return Ok(Vec::new());
+            return Ok(DuplicateMerge::default());
         }
 
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let mut all_trashed = Vec::new();
+        let mut merge = DuplicateMerge::default();
         for group in groups {
             if group.items.len() >= 2 && !skipped.contains(&group.hash) {
                 let keep_id = keepers
@@ -511,15 +519,17 @@ impl Catalog {
                     .map(|i| i.id)
                     .filter(|id| *id != keep_id)
                     .collect();
-                Self::merge_duplicate_group_in_tx(&tx, keep_id, &trash_ids)?;
-                all_trashed.extend(trash_ids);
+                merge
+                    .keepers
+                    .push(Self::merge_duplicate_group_in_tx(&tx, keep_id, &trash_ids)?);
+                merge.trashed.extend(trash_ids);
             }
         }
-        if !all_trashed.is_empty() {
+        if !merge.trashed.is_empty() {
             Self::rebuild_timeline_buckets(&tx)?;
         }
         tx.commit()?;
-        Ok(all_trashed)
+        Ok(merge)
     }
 }
 
@@ -605,7 +615,8 @@ mod tests {
         let keepers = HashMap::from([("a".to_string(), a2), ("b".to_string(), a1)]);
         let mut trashed = catalog
             .merge_all_duplicates(&keepers, &HashSet::new())
-            .unwrap();
+            .unwrap()
+            .trashed;
         trashed.sort_by_key(|id| id.0);
         assert_eq!(
             trashed,
@@ -652,7 +663,8 @@ mod tests {
         let skipped = HashSet::from(["a".to_string()]);
         let trashed = catalog
             .merge_all_duplicates(&HashMap::new(), &skipped)
-            .unwrap();
+            .unwrap()
+            .trashed;
         assert_eq!(trashed, vec![b2], "only the group not skipped merges");
         assert_eq!(
             catalog.find_items_by_hash("a").unwrap().len(),

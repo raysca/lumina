@@ -36,9 +36,9 @@ use std::sync::Arc;
 pub use cache::DiskCache;
 pub use catalog::{
     Album, AlbumCard, AlbumStats, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget,
-    DownloadRow, DownloadState, Edits, GeoPoint, LayoutCell, PlaceCount, PriorDownload,
-    RejectedItems, Rights, StorageSummary, TagChange, TagReplay, TemplateChange, ViewScope,
-    ViewTotals, SCHEMA_VERSION,
+    DownloadRow, DownloadState, DuplicateMerge, Edits, GeoPoint, KeeperSnapshot, LayoutCell,
+    PlaceCount, PriorDownload, RejectedItems, Rights, StorageSummary, TagChange, TagReplay,
+    TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
