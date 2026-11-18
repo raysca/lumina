@@ -7,17 +7,6 @@ you find something you are not fixing now. Planned features live in
 
 ## Bugs
 
-### Playback and downloads
-
-- The guard that makes loop and mute do nothing on a clip that failed to load
-  lives in the callers (palette, PiP keys). It belongs in `toggle_video_loop`
-  and `toggle_video_mute` (`crates/lumina-ui-gpui/src/app/video_actions.rs`)
-  so every caller gets it.
-- The downloads popover's "N active" pill counts only running and waiting rows,
-  not paused ones.
-- The download speed graph keeps its last bar when every job stalls: a stalled
-  job's speed drops to zero, but no new sample is added.
-
 ### Settings
 
 - Reopening Settings while a thumbnail-cache clear is waiting for its final
@@ -76,21 +65,3 @@ you find something you are not fixing now. Planned features live in
   at 10k groups). Not measured.
 - The library keeps laying out, refreshing and loading thumbnails under the
   Settings page. Not measured.
-
-## Flaky tests
-
-These passed on re-run; each failed only under heavy machine load (for example
-while another `cargo test` was running).
-
-- `tests::downloads_pause::pause_download_stops_job_and_keeps_row` (download
-  queue timing).
-- `views::mosaic::tests::justify_100k_within_budget` (took 199 ms against its
-  60 ms debug budget at a load average around 22).
-- `tests::pip::pip_window_takes_the_player_keys`.
-
-## Tooling
-
-- `scripts/live_ui_automation.sh` fails with "could not capture the window" when
-  Screen Recording is not granted, before its Accessibility check can report
-  SKIP. AGENTS.md §6.4 says a missing permission skips; a capture failure should
-  map to SKIP unless `LUMINA_REQUIRE_UI_PERMISSIONS=1`.
