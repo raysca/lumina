@@ -7,8 +7,6 @@ use crate::app::types::get_sample_items;
 use crate::tests::helpers::{app_with_library, render_ui, seed_library};
 use lumina_core::{MediaItem, MediaType};
 
-/// Removes the temp library on success and failure.
-
 /// A library plus a video item whose file is not a video, so every load
 /// fails.
 fn broken_video(

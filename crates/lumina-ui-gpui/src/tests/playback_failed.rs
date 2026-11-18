@@ -9,8 +9,6 @@ use crate::tests::helpers::{
 };
 use lumina_core::{MediaItem, MediaType};
 
-/// Removes the temp library on success and failure.
-
 /// A library plus a video item whose file exists but is not a video, so
 /// every load fails (for real on macOS, and with the dummy player elsewhere).
 fn broken_video(

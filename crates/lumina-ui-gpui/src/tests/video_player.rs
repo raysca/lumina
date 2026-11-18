@@ -10,7 +10,6 @@ use lumina_core::MediaType;
 
 /// Library-backed window (the viewer needs a grid to render) showing the
 /// sample video. The temp dir is removed on drop.
-
 fn open_video(
     cx: &mut gpui::TestAppContext,
 ) -> (
