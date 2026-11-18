@@ -27,10 +27,10 @@ pub(crate) const FOOTER_MIN_HEIGHT: f32 = 63.5;
 
 /// The Exact copies body: the empty state, or the list and compare panes.
 pub fn render(this: &LuminaApp, total_count: usize, cx: &mut Context<LuminaApp>) -> AnyElement {
-    let visible = this.stacks.review.visible(&this.duplicate_groups);
+    let visible = this.stacks.review.visible(this.duplicate_groups());
     // Nothing found, or every group skipped. Groups still loading (none
     // yet, a count already) draw the empty panes instead.
-    if visible.is_empty() && (total_count == 0 || !this.duplicate_groups.is_empty()) {
+    if visible.is_empty() && (total_count == 0 || !this.duplicate_groups().is_empty()) {
         return this.render_empty_state(cx);
     }
     div()
@@ -54,7 +54,7 @@ pub fn render(this: &LuminaApp, total_count: usize, cx: &mut Context<LuminaApp>)
 /// The page header's meta line: "128 groups · 412 items · 18.4 GB recoverable".
 /// Skipped groups are left out.
 pub(crate) fn meta(this: &LuminaApp) -> String {
-    let groups = this.stacks.review.visible(&this.duplicate_groups);
+    let groups = this.stacks.review.visible(this.duplicate_groups());
     let items: usize = groups.iter().map(|g| g.items.len()).sum();
     let bytes: u64 = groups.iter().map(|g| g.potential_reclaimable_bytes).sum();
     format!(
@@ -66,8 +66,20 @@ pub(crate) fn meta(this: &LuminaApp) -> String {
 }
 
 /// The header's "Merge {n} groups": merges every group into its keeper.
+/// While that runs it reads "Merging…" (its accessible label too), dimmed,
+/// and a press does nothing.
 pub(crate) fn merge_all_button(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
-    let n = this.stacks.review.visible(&this.duplicate_groups).len();
+    if this.merge_all_running() {
+        return header_primary_button(
+            "merge-all-duplicates",
+            Icon::Combine,
+            t("duplicates.merging"),
+            t("duplicates.merging_wait"),
+        )
+        .opacity(0.6)
+        .cursor_default();
+    }
+    let n = this.stacks.review.visible(this.duplicate_groups()).len();
     let label = if n == 1 {
         t("duplicates.merge_groups_one")
     } else {

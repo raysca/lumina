@@ -15,7 +15,7 @@ use crate::LuminaApp;
 /// (All is not a sum). The Similar count is known once that review is read.
 pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Stateful<Div> {
     let exact = this.stacks.tab == DuplicatesTab::Exact;
-    let groups = this.stacks.review.visible(&this.duplicate_groups).len();
+    let groups = this.stacks.review.visible(this.duplicate_groups()).len();
     let similar = match &this.stacks.list {
         StacksList::Loaded(stacks) => Some(stacks.len()),
         _ => None,

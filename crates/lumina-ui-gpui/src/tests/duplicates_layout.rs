@@ -114,7 +114,7 @@ fn copy_cards_and_differences_fit_above_the_footer() {
     let footer = open(vcx, 1280.0, 840.0);
 
     let ids: Vec<u64> = view.update(vcx, |app, _| {
-        app.duplicate_groups[0]
+        app.duplicate_groups()[0]
             .items
             .iter()
             .map(|i| i.id.0)
@@ -189,7 +189,7 @@ fn tall_window_caps_the_photo_and_leaves_spare_space_below() {
     open(vcx, 1280.0, 1440.0);
 
     let ids: Vec<u64> = view.update(vcx, |app, _| {
-        app.duplicate_groups[0]
+        app.duplicate_groups()[0]
             .items
             .iter()
             .map(|i| i.id.0)
@@ -311,7 +311,7 @@ fn six_copies_scroll_sideways_with_the_footer_fixed() {
     let footer = open(vcx, 1280.0, 840.0);
 
     let ids: Vec<u64> = view.update(vcx, |app, _| {
-        app.duplicate_groups[0]
+        app.duplicate_groups()[0]
             .items
             .iter()
             .map(|i| i.id.0)
@@ -368,7 +368,7 @@ fn selection_dock_hides_on_duplicates_and_the_toast_clears_the_footer() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = app_with_library(&mut cx, engine);
     let footer = open(vcx, 1280.0, 840.0);
-    let id = view.update(vcx, |app, _| app.duplicate_groups[0].items[1].id.0);
+    let id = view.update(vcx, |app, _| app.duplicate_groups()[0].items[1].id.0);
     // The photo: a squeezed card's centre can land on its keep radio.
     click(vcx, leak(format!("duplicate-photo-{id}")));
     view.update(vcx, |app, _| {
@@ -438,7 +438,7 @@ fn selection_dock_hides_on_duplicates_and_the_toast_clears_the_footer() {
     // the normal offset above the column's bottom.
     view.update(vcx, |app, cx| {
         let hashes: Vec<String> = app
-            .duplicate_groups
+            .duplicate_groups()
             .iter()
             .map(|g| g.hash.clone())
             .collect();

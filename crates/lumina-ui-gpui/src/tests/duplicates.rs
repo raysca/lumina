@@ -61,7 +61,7 @@ fn duplicates_view_renders_group_and_merges() {
     view.update(vcx, |app, _| {
         assert_eq!(app.selection, AlbumSelection::Duplicates);
         assert_eq!(app.duplicate_items_count, 2, "two duplicate items found");
-        assert_eq!(app.duplicate_groups.len(), 1, "one duplicate group found");
+        assert_eq!(app.duplicate_groups().len(), 1, "one duplicate group found");
     });
 
     // Merge the group
@@ -124,7 +124,7 @@ fn command_palette_merges_all_duplicates() {
     view.update(vcx, |app, _| {
         app.refresh_duplicates();
         assert_eq!(app.duplicate_items_count, 3);
-        assert_eq!(app.duplicate_groups.len(), 1);
+        assert_eq!(app.duplicate_groups().len(), 1);
     });
 
     run_palette_command(vcx, &view, "Merge All Duplicates");
@@ -196,7 +196,7 @@ fn duplicates_review_lists_groups_and_compares_selected() {
     render_ui(vcx);
 
     let groups: Vec<Vec<u64>> = view.update(vcx, |app, _| {
-        app.duplicate_groups
+        app.duplicate_groups()
             .iter()
             .map(|g| g.items.iter().map(|i| i.id.0).collect())
             .collect()
@@ -257,7 +257,7 @@ fn clicked_candidate_shows_it_is_selected() {
     render_ui(vcx);
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
-    let second = view.update(vcx, |app, _| app.duplicate_groups[0].items[1].id.0);
+    let second = view.update(vcx, |app, _| app.duplicate_groups()[0].items[1].id.0);
     let marker = super::helpers::leak(format!("duplicate-selected-text:{second}"));
     assert!(
         vcx.debug_bounds(marker).is_none(),
@@ -323,7 +323,7 @@ fn merge_all_runs_in_the_background_and_ignores_a_second_press() {
 
     view.update(vcx, |app, cx| {
         app.merge_all_duplicates(cx);
-        assert!(app.jobs.merge_all, "the merge is marked as running");
+        assert!(app.merge_all_running(), "the merge is marked as running");
         app.merge_all_duplicates(cx);
     });
     assert_eq!(
@@ -340,7 +340,7 @@ fn merge_all_runs_in_the_background_and_ignores_a_second_press() {
     );
     view.update(vcx, |app, _| {
         assert!(
-            !app.jobs.merge_all,
+            !app.merge_all_running(),
             "the finished merge is no longer running"
         );
         assert_eq!(
@@ -349,7 +349,7 @@ fn merge_all_runs_in_the_background_and_ignores_a_second_press() {
             "the ignored second press added no merge of its own"
         );
         assert!(
-            app.duplicate_groups.is_empty(),
+            app.duplicate_groups().is_empty(),
             "the groups are read again after the merge"
         );
         assert!(app.toast.current().is_some(), "the merge toast is shown");
@@ -367,7 +367,7 @@ fn failed_merge_all_keeps_every_copy_and_uses_the_error_banner() {
     render_ui(vcx);
     let (groups_before, selected_before) = view.update(vcx, |app, _| {
         let groups: Vec<Vec<u64>> = app
-            .duplicate_groups
+            .duplicate_groups()
             .iter()
             .map(|g| g.items.iter().map(|i| i.id.0).collect())
             .collect();
@@ -410,7 +410,7 @@ fn failed_merge_all_keeps_every_copy_and_uses_the_error_banner() {
             "a failed Merge all is not undoable"
         );
         let groups: Vec<Vec<u64>> = app
-            .duplicate_groups
+            .duplicate_groups()
             .iter()
             .map(|g| g.items.iter().map(|i| i.id.0).collect())
             .collect();

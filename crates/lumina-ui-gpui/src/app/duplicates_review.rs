@@ -9,9 +9,24 @@ use crate::app::undo::UndoAction;
 use crate::app::LuminaApp;
 
 impl LuminaApp {
+    /// True while Merge all runs in the open library: its groups and undo
+    /// history are about to change under the review.
+    pub(crate) fn merge_all_running(&self) -> bool {
+        self.jobs.merge_all == Some(self.library_generation)
+    }
+
+    /// Refuses a review action or undo/redo while Merge all runs, with a
+    /// toast saying why. True when refused.
+    pub(crate) fn refuse_during_merge_all(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.merge_all_running() {
+            self.show_warning_toast(crate::i18n::t("duplicates.merging_wait"), cx);
+        }
+        self.merge_all_running()
+    }
+
     /// The shown group (index among the visible groups, and the group).
     fn shown_duplicate_group(&self) -> Option<(usize, &DuplicateGroup)> {
-        let visible = self.stacks.review.visible(&self.duplicate_groups);
+        let visible = self.stacks.review.visible(self.duplicate_groups());
         let index = self.stacks.review.selected(&visible)?;
         Some((index, visible[index]))
     }
@@ -20,7 +35,7 @@ impl LuminaApp {
     /// prev/next. The selection is cleared, so ⌫ and ⌘E never act on a
     /// copy of a group no longer shown.
     pub(crate) fn duplicates_select_group(&mut self, index: usize, cx: &mut Context<Self>) {
-        let visible = self.stacks.review.visible(&self.duplicate_groups);
+        let visible = self.stacks.review.visible(self.duplicate_groups());
         let Some(last) = visible.len().checked_sub(1) else {
             return;
         };
@@ -51,6 +66,20 @@ impl LuminaApp {
             return;
         };
         let hash = group.hash.clone();
+        self.duplicates_set_keeper(hash, id, cx);
+    }
+
+    /// The group `hash` keeps `id`: the keys above and a card's Keep this
+    /// copy. Refused while Merge all runs.
+    pub(crate) fn duplicates_set_keeper(
+        &mut self,
+        hash: String,
+        id: MediaId,
+        cx: &mut Context<Self>,
+    ) {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
         self.stacks.review.keepers.insert(hash, id);
         cx.notify();
     }
@@ -68,6 +97,9 @@ impl LuminaApp {
 
     /// S / Skip group: hides the shown group; the next one is shown.
     pub(crate) fn duplicates_skip_shown(&mut self, cx: &mut Context<Self>) {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
         let Some((index, group)) = self.shown_duplicate_group() else {
             return;
         };
@@ -78,8 +110,11 @@ impl LuminaApp {
 
     /// Skip all: hides every group until Duplicates is opened again.
     pub(crate) fn duplicates_skip_all(&mut self, cx: &mut Context<Self>) {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
         let hashes: Vec<String> = self
-            .duplicate_groups
+            .duplicate_groups()
             .iter()
             .map(|g| g.hash.clone())
             .collect();
@@ -89,6 +124,9 @@ impl LuminaApp {
 
     /// Auto-select best: every group back to the heuristic pick.
     pub(crate) fn duplicates_auto_best(&mut self, cx: &mut Context<Self>) {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
         self.stacks.review.keepers.clear();
         cx.notify();
     }
@@ -96,6 +134,9 @@ impl LuminaApp {
     /// ↵ / Merge group: the shown group's other copies go to Recently
     /// Deleted (undoable); the next group is shown.
     pub(crate) fn duplicates_merge_shown(&mut self, cx: &mut Context<Self>) {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
         let Some((index, group)) = self.shown_duplicate_group() else {
             return;
         };
@@ -173,12 +214,6 @@ impl LuminaApp {
 }
 
 impl LuminaApp {
-    /// Replaces the exact-copy groups; the review filters them afresh.
-    pub(crate) fn set_duplicate_groups(&mut self, groups: Vec<DuplicateGroup>) {
-        self.duplicate_groups = groups;
-        self.stacks.review.groups_changed();
-    }
-
     pub fn refresh_duplicates(&mut self) {
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
@@ -222,12 +257,12 @@ impl LuminaApp {
         trash_ids: &[MediaId],
         cx: &mut Context<Self>,
     ) {
+        if trash_ids.is_empty() || self.refuse_during_merge_all(cx) {
+            return;
+        }
         let Some(ref state) = self.grid_state else {
             return;
         };
-        if trash_ids.is_empty() {
-            return;
-        }
         let count = trash_ids.len();
         // Through the catalog, which hands back the keeper's metadata from
         // before the merge, so undo can put it back.
@@ -239,7 +274,6 @@ impl LuminaApp {
             Ok(keeper) => {
                 self.push_undo(UndoAction::DuplicateMerge {
                     merge: DuplicateMerge {
-                        trashed: trash_ids.to_vec(),
                         keepers: keeper.into_iter().collect(),
                     },
                 });
@@ -248,7 +282,7 @@ impl LuminaApp {
                 if let Some(ref sel) = self.selected_item {
                     if trash_ids.contains(&sel.id) {
                         self.selected_item = self
-                            .duplicate_groups
+                            .duplicate_groups()
                             .iter()
                             .flat_map(|g| &g.items)
                             .find(|i| i.id == keep_id)
@@ -270,9 +304,11 @@ impl LuminaApp {
     /// Merges every visible group into its keeper. The one transaction runs
     /// on the background executor; nothing in the app changes until it
     /// lands, so a failure has no optimistic state to revert and only shows
-    /// the banner. A second Merge all while one runs is ignored.
+    /// the banner. A second Merge all while one runs is ignored, and so are
+    /// the review's other actions and undo/redo
+    /// ([`Self::refuse_during_merge_all`]).
     pub fn merge_all_duplicates(&mut self, cx: &mut Context<Self>) {
-        if self.jobs.merge_all {
+        if self.merge_all_running() {
             return;
         }
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
@@ -281,7 +317,7 @@ impl LuminaApp {
         let keepers = self.stacks.review.keepers.clone();
         let skipped = self.stacks.review.skipped.clone();
         let generation = self.library_generation;
-        self.jobs.merge_all = true;
+        self.jobs.merge_all = Some(generation);
         let task = cx
             .background_executor()
             .spawn(async move { engine.catalog().merge_all_duplicates(&keepers, &skipped) });
@@ -289,7 +325,11 @@ impl LuminaApp {
             let result = task.await;
             // The app may be gone; then there is nothing left to update.
             let _ = this.update(cx, |app, cx| {
-                app.jobs.merge_all = false;
+                // Only its own mark: a Merge all started in a library
+                // opened since has replaced it.
+                if app.jobs.merge_all == Some(generation) {
+                    app.jobs.merge_all = None;
+                }
                 // A merge from a library since closed: its undo entry and
                 // counts belong to that library, not this one.
                 if app.library_generation == generation {
@@ -305,10 +345,11 @@ impl LuminaApp {
     fn finish_merge_all(&mut self, result: anyhow::Result<DuplicateMerge>, cx: &mut Context<Self>) {
         match result {
             Ok(merge) => {
-                let total_merged = merge.trashed.len();
-                if !merge.trashed.is_empty() {
+                let trashed = merge.trashed();
+                let total_merged = trashed.len();
+                if !trashed.is_empty() {
                     if let Some(ref sel) = self.selected_item {
-                        if merge.trashed.contains(&sel.id) {
+                        if trashed.contains(&sel.id) {
                             self.clear_selection_fields();
                         }
                     }

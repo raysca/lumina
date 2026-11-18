@@ -9,12 +9,14 @@ use super::Catalog;
 use crate::MediaId;
 
 /// The keeper's user metadata before a duplicate merge copied the trashed
-/// copies' onto it (`Catalog::merge_metadata_in_tx`). Undo restores the
-/// copies from the trash and hands this to
-/// [`Catalog::restore_merged_keepers`].
+/// copies' onto it (`Catalog::merge_metadata_in_tx`), and which copies
+/// those were. [`Catalog::undo_duplicate_merge`] puts it back;
+/// [`Catalog::redo_duplicate_merge`] merges the same copies again.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeeperSnapshot {
     keep_id: MediaId,
+    /// The copies merged into the keeper and moved to Recently Deleted.
+    copies: Vec<MediaId>,
     is_favorite: i64,
     rating: i64,
     color_label: i64,
@@ -30,11 +32,31 @@ pub struct KeeperSnapshot {
     covers: Vec<(i64, MediaId)>,
 }
 
-/// One merge's undo record: the copies it trashed and each keeper as it was.
+/// One merge's undo record: each keeper as it was, with its copies.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DuplicateMerge {
-    pub trashed: Vec<MediaId>,
     pub keepers: Vec<KeeperSnapshot>,
+}
+
+impl DuplicateMerge {
+    /// Every copy the merge moved to Recently Deleted.
+    pub fn trashed(&self) -> Vec<MediaId> {
+        self.keepers
+            .iter()
+            .flat_map(|k| k.copies.iter().copied())
+            .collect()
+    }
+}
+
+/// What [`Catalog::undo_duplicate_merge`] did.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MergeUndo {
+    /// The keepers put back, their copies restored: what a redo merges
+    /// again.
+    pub restored: DuplicateMerge,
+    /// Keepers left merged because a copy was permanently deleted since:
+    /// the merged-in metadata is all that is left of it.
+    pub kept_merged: usize,
 }
 
 impl KeeperSnapshot {
@@ -60,6 +82,7 @@ impl KeeperSnapshot {
                 |row| {
                     Ok(Self {
                         keep_id,
+                        copies: trash_ids.to_vec(),
                         is_favorite: row.get(0)?,
                         rating: row.get(1)?,
                         color_label: row.get(2)?,
@@ -163,17 +186,79 @@ impl KeeperSnapshot {
 }
 
 impl Catalog {
-    /// Undoes the metadata side of duplicate merges: each keeper gets back
-    /// what it had before ([`KeeperSnapshot`]), in one transaction. Putting
-    /// the trashed copies back is the caller's separate restore from trash.
-    pub fn restore_merged_keepers(&self, keepers: &[KeeperSnapshot]) -> Result<()> {
+    /// Undoes duplicate merges in one transaction: each keeper gets back
+    /// what it had before ([`KeeperSnapshot`]) and its copies leave
+    /// Recently Deleted. A keeper with a copy permanently deleted since
+    /// stays merged, copies and all: its merged-in metadata is the only
+    /// place that copy's tags, albums and edits still live.
+    pub fn undo_duplicate_merge(&self, merge: &DuplicateMerge) -> Result<MergeUndo> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        for snapshot in keepers.iter().rev() {
-            snapshot.restore(&tx)?;
+        let mut undo = MergeUndo::default();
+        {
+            let mut exists = tx.prepare_cached("SELECT 1 FROM media_items WHERE id = ?1;")?;
+            let mut untrash =
+                tx.prepare_cached("UPDATE media_items SET is_trashed = 0 WHERE id = ?1;")?;
+            for snapshot in merge.keepers.iter().rev() {
+                let mut all_there = true;
+                for copy in &snapshot.copies {
+                    all_there &= exists.exists([copy.0 as i64])?;
+                }
+                if !all_there {
+                    undo.kept_merged += 1;
+                    continue;
+                }
+                snapshot.restore(&tx)?;
+                for copy in &snapshot.copies {
+                    untrash.execute([copy.0 as i64])?;
+                }
+                undo.restored.keepers.push(snapshot.clone());
+            }
+        }
+        undo.restored.keepers.reverse();
+        if !undo.restored.keepers.is_empty() {
+            Self::rebuild_timeline_buckets(&tx)?;
         }
         tx.commit()?;
-        Ok(())
+        Ok(undo)
+    }
+
+    /// Redoes an undone merge in one transaction: each keeper takes its
+    /// copies' metadata again and they go back to Recently Deleted, so a
+    /// later Empty Recently Deleted cannot lose it. Returns the fresh
+    /// record for the next undo. A keeper deleted since is skipped, as are
+    /// copies deleted since.
+    pub fn redo_duplicate_merge(&self, merge: &DuplicateMerge) -> Result<DuplicateMerge> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut redone = DuplicateMerge::default();
+        for snapshot in &merge.keepers {
+            let present: Vec<MediaId> = {
+                let mut exists = tx.prepare_cached("SELECT 1 FROM media_items WHERE id = ?1;")?;
+                if !exists.exists([snapshot.keep_id.0 as i64])? {
+                    continue;
+                }
+                let mut present = Vec::new();
+                for copy in &snapshot.copies {
+                    if exists.exists([copy.0 as i64])? {
+                        present.push(*copy);
+                    }
+                }
+                present
+            };
+            if !present.is_empty() {
+                redone.keepers.push(Self::merge_duplicate_group_in_tx(
+                    &tx,
+                    snapshot.keep_id,
+                    &present,
+                )?);
+            }
+        }
+        if !redone.keepers.is_empty() {
+            Self::rebuild_timeline_buckets(&tx)?;
+        }
+        tx.commit()?;
+        Ok(redone)
     }
 }
 
@@ -254,8 +339,16 @@ mod tests {
         );
         assert_eq!(search(&catalog, "sunset"), vec![keep], "control: merged");
 
-        catalog.restore_merged_keepers(&[snapshot]).unwrap();
-        catalog.set_trashed(dup, false).unwrap();
+        let undo = catalog
+            .undo_duplicate_merge(&DuplicateMerge {
+                keepers: vec![snapshot],
+            })
+            .unwrap();
+        assert_eq!(undo.kept_merged, 0, "every copy is still there");
+        assert!(
+            !catalog.get_item_by_id(dup).unwrap().unwrap().is_trashed,
+            "the same undo takes the copy out of Recently Deleted"
+        );
 
         assert_eq!(
             state(&catalog, keep, &[dup]),
@@ -302,13 +395,97 @@ mod tests {
         let merge = catalog
             .merge_all_duplicates(&HashMap::from([("a".to_string(), a1)]), &HashSet::new())
             .unwrap();
-        assert_eq!(merge.trashed, vec![a2]);
+        assert_eq!(merge.trashed(), vec![a2]);
         assert_eq!(catalog.get_ratings_map().unwrap().get(&a1), Some(&4));
-        catalog.restore_merged_keepers(&merge.keepers).unwrap();
+        catalog.undo_duplicate_merge(&merge).unwrap();
         assert_eq!(
             catalog.get_ratings_map().unwrap().get(&a1),
             None,
             "the keeper's rating is back to unrated"
+        );
+    }
+
+    /// Regression: undo after Empty Recently Deleted stripped the purged
+    /// copy's tag from the keeper and restored nothing, losing it for good.
+    #[test]
+    fn undo_leaves_a_keeper_merged_when_its_copy_was_purged() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let (a_keep, a_dup) = (
+            plain(&catalog, "/lib/a1.mp4"),
+            plain(&catalog, "/lib/a2.mp4"),
+        );
+        let (b_keep, b_dup) = (
+            plain(&catalog, "/lib/b1.mp4"),
+            plain(&catalog, "/lib/b2.mp4"),
+        );
+        catalog.add_tags_batch(&[a_dup], &["beach".into()]).unwrap();
+        catalog.add_tags_batch(&[b_dup], &["snow".into()]).unwrap();
+        let mut merge = DuplicateMerge::default();
+        for (keep, dup) in [(a_keep, a_dup), (b_keep, b_dup)] {
+            let snapshot = catalog.merge_duplicate_group(keep, &[dup]).unwrap();
+            merge.keepers.extend(snapshot);
+        }
+        catalog
+            .permanently_delete_items(&[a_dup], crate::catalog::DeletionTarget::CatalogOnly)
+            .unwrap();
+
+        let undo = catalog.undo_duplicate_merge(&merge).unwrap();
+        assert_eq!(undo.kept_merged, 1, "group a stays merged");
+        assert_eq!(
+            catalog.get_tags_for_item(a_keep).unwrap(),
+            vec!["beach".to_string()],
+            "the purged copy's tag stays on its keeper"
+        );
+        assert!(
+            catalog.get_tags_for_item(b_keep).unwrap().is_empty(),
+            "group b, whose copy is still there, is undone"
+        );
+        assert!(!catalog.get_item_by_id(b_dup).unwrap().unwrap().is_trashed);
+        assert_eq!(
+            undo.restored.trashed(),
+            vec![b_dup],
+            "redo merges only what the undo restored"
+        );
+    }
+
+    /// Regression: redo only trashed the copies again, so the keeper lacked
+    /// their metadata and a later Empty Recently Deleted lost it.
+    #[test]
+    fn redo_merges_the_copies_into_the_keeper_again() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog.add_tags_batch(&[dup], &["beach".into()]).unwrap();
+        let merge = DuplicateMerge {
+            keepers: catalog
+                .merge_duplicate_group(keep, &[dup])
+                .unwrap()
+                .into_iter()
+                .collect(),
+        };
+        let undone = catalog.undo_duplicate_merge(&merge).unwrap().restored;
+        assert!(catalog.get_tags_for_item(keep).unwrap().is_empty());
+
+        let redone = catalog.redo_duplicate_merge(&undone).unwrap();
+        assert!(catalog.get_item_by_id(dup).unwrap().unwrap().is_trashed);
+        assert_eq!(
+            catalog.get_tags_for_item(keep).unwrap(),
+            vec!["beach".to_string()],
+            "redo copies the tag onto the keeper again"
+        );
+        catalog
+            .permanently_delete_items(&[dup], crate::catalog::DeletionTarget::CatalogOnly)
+            .unwrap();
+        assert_eq!(
+            catalog.get_tags_for_item(keep).unwrap(),
+            vec!["beach".to_string()],
+            "emptying Recently Deleted after a redo keeps the tag"
+        );
+        assert_eq!(redone.trashed(), vec![dup]);
+        let again = catalog.undo_duplicate_merge(&redone).unwrap();
+        assert_eq!(
+            again.kept_merged, 1,
+            "a fresh record: the next undo sees the purge"
         );
     }
 }

@@ -78,11 +78,12 @@ pub enum UndoAction {
     },
     /// (id, before, after)
     Trashed { changes: Vec<(MediaId, bool, bool)> },
-    /// A duplicate merge (one group, or Merge all): the copies it trashed
-    /// and each keeper's metadata from before. Undo puts the keepers back
-    /// as they were and takes the copies out of Recently Deleted. Redo
-    /// moves the copies back to Recently Deleted; their metadata stays on
-    /// them and is not copied onto the keeper again.
+    /// A duplicate merge (one group, or Merge all): each keeper's metadata
+    /// from before and the copies it took in. Undo puts the keepers back as
+    /// they were and takes their copies out of Recently Deleted, in one
+    /// transaction; a keeper whose copy was permanently deleted since stays
+    /// merged. Redo merges the restored groups again. Each step replaces
+    /// `merge` with what it did, for the next one.
     DuplicateMerge { merge: lumina_core::DuplicateMerge },
     /// One grouped undo entry for a batch title/caption edit: a single undo
     /// restores every touched item.
@@ -173,9 +174,8 @@ impl UndoAction {
                 changes.iter().map(|(id, _, _)| *id).collect()
             }
             UndoAction::DuplicateMerge { merge } => merge
-                .trashed
-                .iter()
-                .copied()
+                .trashed()
+                .into_iter()
                 .chain(merge.keepers.iter().map(|k| k.keep_id()))
                 .collect(),
             UndoAction::BatchMetadata { changes, .. } => {
@@ -232,10 +232,10 @@ impl UndoAction {
         }
     }
 
-    /// Applies one side. Only a keyword change can leave anything alone
-    /// (rows, aliases or albums changed since); every other action reports
-    /// nothing skipped.
-    fn apply(&self, engine: &LuminaEngine, before: bool) -> Result<TagReplay> {
+    /// Applies one side and returns the toast's note on what it left alone,
+    /// or `""`. Only a keyword change (rows, aliases or albums changed
+    /// since) and a merge undo (copies purged since) can leave anything.
+    fn apply(&mut self, engine: &LuminaEngine, before: bool) -> Result<String> {
         let done = match self {
             UndoAction::Rating { changes } => engine.set_ratings(&pick(changes, before)),
             UndoAction::ColorLabel { changes } => engine.set_color_labels(&pick(changes, before)),
@@ -286,11 +286,15 @@ impl UndoAction {
             UndoAction::Trashed { changes } => set_bool_changes(changes, before, |ids, value| {
                 engine.batch_set_trashed(ids, value)
             }),
-            UndoAction::DuplicateMerge { merge } if before => engine
+            UndoAction::DuplicateMerge { merge } if before => {
+                let undo = engine.catalog().undo_duplicate_merge(merge)?;
+                *merge = undo.restored;
+                return Ok(kept_merged_note(undo.kept_merged));
+            }
+            UndoAction::DuplicateMerge { merge } => engine
                 .catalog()
-                .restore_merged_keepers(&merge.keepers)
-                .and_then(|()| engine.batch_set_trashed(&merge.trashed, false)),
-            UndoAction::DuplicateMerge { merge } => engine.batch_set_trashed(&merge.trashed, true),
+                .redo_duplicate_merge(merge)
+                .map(|redone| *merge = redone),
             UndoAction::BatchMetadata { field, changes } => {
                 let values: Vec<(MediaId, Option<&str>)> = changes
                     .iter()
@@ -350,10 +354,21 @@ impl UndoAction {
             UndoAction::Template { change } => engine.replay_template_change(change, before),
             // Config, not the catalog: `apply_history_action` handles it.
             UndoAction::TemplateDeleted { .. } => Ok(()),
-            UndoAction::TagRows { change, .. } => return engine.apply_tag_rows(change, before),
+            UndoAction::TagRows { change, .. } => {
+                return engine.apply_tag_rows(change, before).map(replay_note)
+            }
         };
-        done.map(|()| TagReplay::default())
+        done.map(|()| String::new())
     }
+}
+
+/// The toast's note on keepers a merge undo left merged, or `""`.
+fn kept_merged_note(n: usize) -> String {
+    if n == 0 {
+        return String::new();
+    }
+    crate::i18n::t(&crate::i18n::plural_key("duplicates.kept_merged", n))
+        .replace("{n}", &n.to_string())
 }
 
 /// Puts back an album's key photo. An item that left the album since is
@@ -433,12 +448,16 @@ impl LuminaApp {
     }
 
     pub fn undo_last(&mut self, cx: &mut Context<Self>) {
-        let Some(action) = self.undo.undo_stack.pop() else {
+        // Merge all pushes its entry when it lands; a step now would race it.
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
+        let Some(mut action) = self.undo.undo_stack.pop() else {
             self.set_last_action("Nothing to undo");
             cx.notify();
             return;
         };
-        if let Some(note) = self.apply_history_action(&action, true, cx) {
+        if let Some(note) = self.apply_history_action(&mut action, true, cx) {
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.moves += crate::app::present::history_moves(&action);
@@ -454,12 +473,15 @@ impl LuminaApp {
     }
 
     pub fn redo_last(&mut self, cx: &mut Context<Self>) {
-        let Some(action) = self.undo.redo_stack.pop() else {
+        if self.refuse_during_merge_all(cx) {
+            return;
+        }
+        let Some(mut action) = self.undo.redo_stack.pop() else {
             self.set_last_action("Nothing to redo");
             cx.notify();
             return;
         };
-        if let Some(note) = self.apply_history_action(&action, false, cx) {
+        if let Some(note) = self.apply_history_action(&mut action, false, cx) {
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.moves += crate::app::present::history_moves(&action);
@@ -488,7 +510,7 @@ impl LuminaApp {
 
     fn apply_history_action(
         &mut self,
-        action: &UndoAction,
+        action: &mut UndoAction,
         before: bool,
         cx: &mut Context<Self>,
     ) -> Option<String> {
@@ -510,7 +532,8 @@ impl LuminaApp {
         // Flags and ratings can reorder or filter the view; see selection_by_id.
         let held = self.hold_for_history(action);
         match action.apply(&engine, before) {
-            Ok(skipped) => {
+            Ok(note) => {
+                let action: &UndoAction = action;
                 if let Some(held) = held {
                     self.reselect_held(held, cx);
                 }
@@ -576,7 +599,7 @@ impl LuminaApp {
                     self.restore_tag_view_refs(replay, cx);
                     self.load_tag_manager_items();
                 }
-                Some(replay_note(skipped))
+                Some(note)
             }
             Err(err) => {
                 self.set_error(format!("History action failed: {err:#}"), cx);

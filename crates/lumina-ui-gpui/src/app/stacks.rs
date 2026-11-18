@@ -228,7 +228,7 @@ impl LuminaApp {
         !self
             .stacks
             .review
-            .visible(&self.duplicate_groups)
+            .visible(self.duplicate_groups())
             .is_empty()
     }
 

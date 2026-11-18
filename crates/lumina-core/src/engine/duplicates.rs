@@ -107,7 +107,7 @@ impl LuminaEngine {
     ) -> Result<Vec<MediaId>> {
         self.catalog
             .merge_all_duplicates(keepers, skipped)
-            .map(|merge| merge.trashed)
+            .map(|merge| merge.trashed())
     }
 
     /// Points the missing item `id` at `chosen`, a file inside the library

@@ -169,7 +169,10 @@ impl Catalog {
 
     /// Groups duplicate items into [`DuplicateGroup`] structures.
     pub fn query_duplicate_groups(&self) -> Result<Vec<DuplicateGroup>> {
-        let conn = self.conn.lock();
+        Self::duplicate_groups_in(&self.conn.lock())
+    }
+
+    fn duplicate_groups_in(conn: &rusqlite::Connection) -> Result<Vec<DuplicateGroup>> {
         // 1. Get all duplicate hashes and their counts/sizes
         let mut group_stmt = conn.prepare_cached(
             r#"
@@ -257,7 +260,7 @@ impl Catalog {
 
     /// Merges one non-empty group within an active SQLite transaction and
     /// returns the keeper as it was before.
-    fn merge_duplicate_group_in_tx(
+    pub(super) fn merge_duplicate_group_in_tx(
         tx: &rusqlite::Transaction,
         keep_id: MediaId,
         trash_ids: &[MediaId],
@@ -467,7 +470,7 @@ impl Catalog {
 
     /// Merges duplicates into a keeper item within a single atomic SQLite
     /// transaction. Returns the keeper's metadata from before the merge, for
-    /// undo ([`Catalog::restore_merged_keepers`]); `None` when there was
+    /// undo ([`Catalog::undo_duplicate_merge`]); `None` when there was
     /// nothing to merge.
     pub fn merge_duplicate_group(
         &self,
@@ -491,20 +494,17 @@ impl Catalog {
     /// with no entry, or whose entry is not one of its items, keeps its
     /// heuristic pick (the first item). Groups whose hash is in `skipped`
     /// are left alone.
-    /// Returns the IDs of all newly trashed duplicate items and each keeper's
-    /// metadata from before the merge, for undo.
+    /// Returns each keeper's metadata from before the merge and the copies
+    /// it trashed, for undo. The groups are read inside the transaction, so
+    /// a merge or undo that landed after the caller looked is seen.
     pub fn merge_all_duplicates(
         &self,
         keepers: &HashMap<String, MediaId>,
         skipped: &HashSet<String>,
     ) -> Result<DuplicateMerge> {
-        let groups = self.query_duplicate_groups()?;
-        if groups.is_empty() {
-            return Ok(DuplicateMerge::default());
-        }
-
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
+        let groups = Self::duplicate_groups_in(&tx)?;
         let mut merge = DuplicateMerge::default();
         for group in groups {
             if group.items.len() >= 2 && !skipped.contains(&group.hash) {
@@ -522,10 +522,9 @@ impl Catalog {
                 merge
                     .keepers
                     .push(Self::merge_duplicate_group_in_tx(&tx, keep_id, &trash_ids)?);
-                merge.trashed.extend(trash_ids);
             }
         }
-        if !merge.trashed.is_empty() {
+        if !merge.keepers.is_empty() {
             Self::rebuild_timeline_buckets(&tx)?;
         }
         tx.commit()?;
@@ -616,7 +615,7 @@ mod tests {
         let mut trashed = catalog
             .merge_all_duplicates(&keepers, &HashSet::new())
             .unwrap()
-            .trashed;
+            .trashed();
         trashed.sort_by_key(|id| id.0);
         assert_eq!(
             trashed,
@@ -664,7 +663,7 @@ mod tests {
         let trashed = catalog
             .merge_all_duplicates(&HashMap::new(), &skipped)
             .unwrap()
-            .trashed;
+            .trashed();
         assert_eq!(trashed, vec![b2], "only the group not skipped merges");
         assert_eq!(
             catalog.find_items_by_hash("a").unwrap().len(),

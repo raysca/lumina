@@ -10,13 +10,16 @@ use crate::app::LuminaApp;
 use crate::i18n::t;
 
 /// The export and XMP import running now, as their item counts, and
-/// whether a Duplicates Merge all is running. App-level, so a job started
-/// in one library still blocks a second one after a switch.
+/// the library a Duplicates Merge all is running in. Export and XMP import
+/// are app-level, so one started in one library still blocks a second one
+/// after a switch; Merge all only blocks its own library
+/// ([`LuminaApp::merge_all_running`]).
 #[derive(Debug, Default)]
 pub(crate) struct ForegroundJobs {
     pub(crate) export: Option<usize>,
     pub(crate) xmp: Option<usize>,
-    pub(crate) merge_all: bool,
+    /// The `library_generation` a running Merge all belongs to.
+    pub(crate) merge_all: Option<u64>,
 }
 
 impl ForegroundJobs {

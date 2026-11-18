@@ -581,8 +581,9 @@ pub struct LuminaApp {
     pub untagged_count: usize,
     /// Cached count of duplicate items across all duplicate groups.
     pub duplicate_items_count: usize,
-    /// Cached duplicate groups.
-    pub duplicate_groups: Vec<lumina_core::DuplicateGroup>,
+    /// Cached duplicate groups. Private: the review caches indices into
+    /// them, so every change goes through [`Self::set_duplicate_groups`].
+    duplicate_groups: Vec<lumina_core::DuplicateGroup>,
     pub tag_input_buffer: String,
     pub tag_input_active: bool,
     pub keywords: KeywordState,
@@ -637,6 +638,17 @@ pub struct LuminaApp {
 }
 
 impl LuminaApp {
+    /// The cached exact-copy groups.
+    pub(crate) fn duplicate_groups(&self) -> &[lumina_core::DuplicateGroup] {
+        &self.duplicate_groups
+    }
+
+    /// Replaces the exact-copy groups; the review filters them afresh.
+    pub(crate) fn set_duplicate_groups(&mut self, groups: Vec<lumina_core::DuplicateGroup>) {
+        self.duplicate_groups = groups;
+        self.stacks.review.groups_changed();
+    }
+
     /// The app as a window's root view, with keyboard focus on it so key
     /// events and the text input handler (app/text_input.rs) reach it.
     pub fn new_in_window(window: &mut Window, cx: &mut Context<Self>) -> Self {

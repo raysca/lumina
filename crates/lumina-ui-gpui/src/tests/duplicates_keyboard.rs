@@ -11,7 +11,7 @@ use crate::LuminaApp;
 /// The ids of each duplicate group, in list order.
 fn groups(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Vec<Vec<MediaId>> {
     view.update(vcx, |app, _| {
-        app.duplicate_groups
+        app.duplicate_groups()
             .iter()
             .map(|g| g.items.iter().map(|i| i.id).collect())
             .collect()
@@ -21,7 +21,7 @@ fn groups(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> Vec<Vec<Medi
 /// The shown group's index among the visible groups, and its keeper.
 fn shown(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext) -> (Option<usize>, MediaId) {
     view.update(vcx, |app, _| {
-        let visible = app.stacks.review.visible(&app.duplicate_groups);
+        let visible = app.stacks.review.visible(app.duplicate_groups());
         let index = app.stacks.review.selected(&visible);
         let keeper = index.map_or(MediaId(0), |i| app.stacks.review.keeper(visible[i]));
         (index, keeper)

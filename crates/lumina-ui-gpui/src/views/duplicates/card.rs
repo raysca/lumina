@@ -262,8 +262,7 @@ fn keep_radio(hash: &str, id: MediaId, on: bool, cx: &mut Context<LuminaApp>) ->
         )
         .on_click(cx.listener(move |this, _e: &ClickEvent, _w, cx| {
             cx.stop_propagation();
-            this.stacks.review.keepers.insert(hash.clone(), id);
-            cx.notify();
+            this.duplicates_set_keeper(hash.clone(), id, cx);
         }))
 }
 

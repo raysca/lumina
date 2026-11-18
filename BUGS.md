@@ -9,10 +9,6 @@ you find something you are not fixing now. Planned features live in
 
 ### Organizing
 
-- Redoing an undone duplicate merge moves the copies back to Recently Deleted
-  but does not copy their metadata onto the keeper again
-  (`UndoAction::DuplicateMerge` in `crates/lumina-ui-gpui/src/app/undo.rs`
-  does not record which copies went into which keeper).
 - Setting an item's date to a capture time of 0 through the catalog
   (`Catalog::set_timestamp`) still files it under January 1970; only the
   scanner and the v24 migration store it as undated (year 0).

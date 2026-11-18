@@ -83,7 +83,7 @@ pub(super) fn render(
                         "duplicates-group-rows",
                         len,
                         cx.processor(|this, range: std::ops::Range<usize>, _window, cx| {
-                            let visible = this.stacks.review.visible(&this.duplicate_groups);
+                            let visible = this.stacks.review.visible(this.duplicate_groups());
                             let selected = this.stacks.review.selected(&visible);
                             range
                                 .filter_map(|index| {

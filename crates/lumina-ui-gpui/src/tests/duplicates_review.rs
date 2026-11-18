@@ -129,12 +129,12 @@ fn choosing_a_keeper_merges_the_others() {
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let (first, second) = view.update(vcx, |app, _| {
-        let items = &app.duplicate_groups[0].items;
+        let items = &app.duplicate_groups()[0].items;
         (items[0].id, items[1].id)
     });
     let keeper = |view: &gpui::Entity<crate::LuminaApp>, vcx: &mut gpui::VisualTestContext| {
         view.update(vcx, |app, _| {
-            app.stacks.review.keeper(&app.duplicate_groups[0])
+            app.stacks.review.keeper(&app.duplicate_groups()[0])
         })
     };
     assert_eq!(
@@ -279,7 +279,7 @@ fn keep_tag_and_title_follow_the_chosen_keeper() {
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let items: Vec<(u64, String)> = view.update(vcx, |app, _| {
-        app.duplicate_groups[0]
+        app.duplicate_groups()[0]
             .items
             .iter()
             .map(|i| (i.id.0, i.file_name.trim_end_matches(".jpg").to_string()))
@@ -328,7 +328,7 @@ fn merge_all_keeps_the_chosen_copy() {
     render_ui(vcx);
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
-    let second = view.update(vcx, |app, _| app.duplicate_groups[0].items[1].id);
+    let second = view.update(vcx, |app, _| app.duplicate_groups()[0].items[1].id);
 
     click(
         vcx,
@@ -354,7 +354,7 @@ fn footer_counts_copies_and_freed_bytes() {
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let (count, freed) = view.update(vcx, |app, _| {
-        let items = &app.duplicate_groups[0].items;
+        let items = &app.duplicate_groups()[0].items;
         let freed: u64 = items[1..].iter().map(|i| i.file_size).sum();
         (items.len(), crate::app::types::format_bytes(freed))
     });
@@ -387,7 +387,7 @@ fn skip_group_moves_on_and_skip_all_empties_the_review() {
     render_ui(vcx);
     let before = engine.get_item_slice(0..100).len();
     let (second_ids, second_meta) = view.update(vcx, |app, _| {
-        let g = &app.duplicate_groups[1];
+        let g = &app.duplicate_groups()[1];
         let meta = format!(
             "page-meta-text:1 group · 2 items · {} recoverable",
             crate::app::types::format_bytes(g.potential_reclaimable_bytes)
@@ -452,7 +452,11 @@ fn merge_all_leaves_skipped_groups() {
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let skipped: Vec<_> = view.update(vcx, |app, _| {
-        app.duplicate_groups[0].items.iter().map(|i| i.id).collect()
+        app.duplicate_groups()[0]
+            .items
+            .iter()
+            .map(|i| i.id)
+            .collect()
     });
 
     click(vcx, "duplicates-skip-group");
@@ -476,7 +480,7 @@ fn merging_a_group_moves_on_to_the_next() {
     click(vcx, "sidebar-nav-duplicates");
     render_ui(vcx);
     let second_ids: Vec<u64> = view.update(vcx, |app, _| {
-        app.duplicate_groups[1]
+        app.duplicate_groups()[1]
             .items
             .iter()
             .map(|i| i.id.0)
@@ -543,7 +547,7 @@ fn differences_name_renamed_copies_and_edits() {
         "renamed copies in one folder differ by name"
     );
     only(vcx, &["name"]);
-    let first = view.update(vcx, |app, _| app.duplicate_groups[0].items[0].id);
+    let first = view.update(vcx, |app, _| app.duplicate_groups()[0].items[0].id);
     assert!(
         vcx.debug_bounds(super::helpers::leak(format!("duplicate-name-{}", first.0)))
             .is_some(),
