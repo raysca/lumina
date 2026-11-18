@@ -49,6 +49,40 @@ impl LuminaApp {
     }
 }
 
+/// Splits "Title: detail" into the banner's two lines. The detail is
+/// usually an error chain ("creating an album: database is locked");
+/// leading links that only restate the title ("Could not create album")
+/// are dropped, so the detail says what the title does not.
+fn banner_parts(message: &str) -> (String, Option<String>) {
+    let Some((title, detail)) = message.split_once(": ") else {
+        return (message.to_string(), None);
+    };
+    let title_lower = title.to_lowercase();
+    // "could not create album" -> "creat": matches "creating …".
+    let stem = title_lower
+        .strip_prefix("could not ")
+        .and_then(|rest| rest.split_whitespace().next())
+        .map(|verb| verb.strip_suffix('e').unwrap_or(verb));
+    let restates = |link: &str| {
+        let link = link.to_lowercase();
+        link == title_lower
+            || stem.is_some_and(|stem| {
+                link.split_whitespace()
+                    .next()
+                    .is_some_and(|word| word.starts_with(stem) && word.ends_with("ing"))
+            })
+    };
+    let mut rest = detail;
+    // Always keep the last link: it is the cause.
+    while let Some((link, tail)) = rest.split_once(": ") {
+        if !restates(link) {
+            break;
+        }
+        rest = tail;
+    }
+    (title.to_string(), Some(rest.to_string()))
+}
+
 /// The action an error banner's Retry re-runs.
 pub type ErrorRetry = fn(&mut LuminaApp, &mut Context<LuminaApp>);
 
@@ -59,10 +93,7 @@ impl LuminaApp {
         let Some(message) = self.error_message.clone() else {
             return Empty.into_any_element();
         };
-        let (title, detail) = match message.split_once(": ") {
-            Some((title, detail)) => (title.to_string(), Some(detail.to_string())),
-            None => (message, None),
-        };
+        let (title, detail) = banner_parts(&message);
         // A later error took the banner: the import's failure line stays
         // under it, so which files were not copied is not lost.
         let import_failure = self
@@ -145,5 +176,39 @@ impl LuminaApp {
                     })),
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::banner_parts;
+
+    #[core::prelude::v1::test]
+    fn banner_detail_drops_links_that_restate_the_title() {
+        let parts = banner_parts;
+        assert_eq!(
+            parts("Could not create album: creating an album: database is locked"),
+            (
+                "Could not create album".to_string(),
+                Some("database is locked".to_string())
+            ),
+            "a context link that restates the title is not shown under it"
+        );
+        assert_eq!(
+            parts("Could not read edits: could not read edits: no such row").1,
+            Some("no such row".to_string()),
+            "a link equal to the title is dropped"
+        );
+        assert_eq!(
+            parts("Could not save settings: could not write /tmp/c.json: disk full").1,
+            Some("could not write /tmp/c.json: disk full".to_string()),
+            "context that adds information (what was written) stays"
+        );
+        assert_eq!(
+            parts("Could not delete: deleting").1,
+            Some("deleting".to_string()),
+            "the last link (the cause) always stays"
+        );
+        assert_eq!(parts("Plain failure"), ("Plain failure".to_string(), None));
     }
 }
