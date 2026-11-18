@@ -36,7 +36,7 @@ pub(super) fn card(
     hash: &str,
     position: usize,
     item: &MediaItem,
-    keeper: bool,
+    copy: Option<usize>,
     cx: &mut Context<LuminaApp>,
 ) -> Stateful<Div> {
     let id = item.id.0;
@@ -44,11 +44,15 @@ pub(super) fn card(
     let best = position == 0;
     let selected = this.selected_item.as_ref().is_some_and(|i| i.id == item.id);
     let item_clone = item.clone();
-    let tag = if best {
-        t("duplicates.original")
-    } else {
-        t_with("duplicates.copy_n", &[&position.to_string()])
-    };
+    // Byte-identical copies carry the same capture date, so Lumina cannot
+    // tell which file came first: the tag names the copy that stays
+    // (`copy` is None) instead of claiming an "original".
+    let keeper = copy.is_none();
+    let tag: SharedString = match copy {
+        None => t("duplicates.keep_tag"),
+        Some(n) => t_with("duplicates.copy_n", &[&n.to_string()]),
+    }
+    .into();
     let format = format_of(item);
     let source = camera(item).unwrap_or_else(|| item.parent_dir.clone());
     let edits = if this.edits.edited_ids.contains(&item.id) {
@@ -127,6 +131,7 @@ pub(super) fn card(
                         .into_any_element(),
                     None => render_icon(Icon::Image, px(24.0), theme::t3()).into_any_element(),
                 })
+                .children(text_marker("duplicate-tag", &format!("{id}:{tag}").into()))
                 .child(media_tag(tag).top(px(10.0)).left(px(10.0)))
                 .when(best, |image| image.child(best_badge(id)))
                 .children(resolution.map(|r| media_tag(r).bottom(px(10.0)).left(px(10.0)))),

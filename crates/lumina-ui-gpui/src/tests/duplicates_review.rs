@@ -195,6 +195,58 @@ fn choosing_a_keeper_merges_the_others() {
     drop(view);
 }
 
+/// Regression: the KEEP tag (once "ORIGINAL") and the group title followed
+/// the heuristic pick, not the copy the user chose to keep.
+#[core::prelude::v1::test]
+fn keep_tag_and_title_follow_the_chosen_keeper() {
+    let (_temp_dir, engine) = seed_two_groups("dup_keep_tag");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    let items: Vec<(u64, String)> = view.update(vcx, |app, _| {
+        app.duplicate_groups[0]
+            .items
+            .iter()
+            .map(|i| (i.id.0, i.file_name.trim_end_matches(".jpg").to_string()))
+            .collect()
+    });
+    assert_eq!(items.len(), 3, "the three-copy group is shown");
+    let has = |vcx: &mut gpui::VisualTestContext, selector: String| {
+        vcx.debug_bounds(super::helpers::leak(selector)).is_some()
+    };
+    let tags = |vcx: &mut gpui::VisualTestContext, expected: [&str; 3]| {
+        for ((id, _), tag) in items.iter().zip(expected) {
+            assert!(
+                has(vcx, format!("duplicate-tag-text:{id}:{tag}")),
+                "copy {id} is tagged {tag}"
+            );
+        }
+    };
+    tags(vcx, ["KEEP", "COPY 1", "COPY 2"]);
+    assert!(
+        has(vcx, format!("duplicates-compare-title-text:{}", items[0].1)),
+        "the title is the heuristic keeper's"
+    );
+
+    click(
+        vcx,
+        super::helpers::leak(format!("duplicate-keep-{}", items[2].0)),
+    );
+    tags(vcx, ["COPY 1", "COPY 2", "KEEP"]);
+    assert!(
+        has(vcx, format!("duplicates-compare-title-text:{}", items[2].1)),
+        "the title follows the chosen keeper"
+    );
+    assert!(
+        has(vcx, format!("duplicate-best-{}", items[0].0)),
+        "BEST still marks the heuristic pick"
+    );
+
+    drop(view);
+}
+
 #[core::prelude::v1::test]
 fn merge_all_keeps_the_chosen_copy() {
     let (_temp_dir, engine) = seed_library("dup_keeper_all", 2);

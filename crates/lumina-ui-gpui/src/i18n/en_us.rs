@@ -151,7 +151,7 @@ pub(super) fn en_us(key: &str) -> Option<&'static str> {
         "duplicates.auto_best_hint" => "Keep the best copy in every group: highest rating, then favourite, then earliest",
         "duplicates.prev" => "Previous group",
         "duplicates.next" => "Next group",
-        "duplicates.original" => "ORIGINAL",
+        "duplicates.keep_tag" => "KEEP",
         "duplicates.copy_n" => "COPY {}",
         "duplicates.fact_size" => "File size",
         "duplicates.fact_format" => "Format",

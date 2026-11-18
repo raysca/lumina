@@ -10,7 +10,7 @@ mod list;
 use std::sync::Arc;
 
 use gpui::*;
-use lumina_core::{DuplicateGroup, MediaItem};
+use lumina_core::{DuplicateGroup, MediaId, MediaItem};
 
 use crate::app::types::format_bytes;
 use crate::i18n::{t, t_with};
@@ -138,10 +138,10 @@ fn header_button(selector: &'static str, icon: Icon, label: String, hint: String
         .child(label)
 }
 
-/// A group's name: the heuristic pick's title (the first item, whichever
-/// copy is kept), else that copy's file stem.
-fn group_title(group: &DuplicateGroup) -> String {
-    let Some(keeper) = group.items.first() else {
+/// A group's name: the title of the copy it keeps (`keeper`, the user's
+/// choice or the heuristic pick), else that copy's file stem.
+fn group_title(group: &DuplicateGroup, keeper: MediaId) -> String {
+    let Some(keeper) = group.items.iter().find(|i| i.id == keeper) else {
         return String::new();
     };
     keeper

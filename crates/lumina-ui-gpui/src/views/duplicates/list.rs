@@ -107,7 +107,7 @@ fn row(
     selected: bool,
     cx: &mut Context<LuminaApp>,
 ) -> AnyElement {
-    let title = group_title(group);
+    let title = group_title(group, this.stacks.review.keeper(group));
     let thumbs: Vec<_> = group
         .items
         .iter()

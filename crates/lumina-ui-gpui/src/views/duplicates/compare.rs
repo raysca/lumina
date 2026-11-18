@@ -50,6 +50,16 @@ pub(super) fn render(
     .into();
     let frees: SharedString = t_with("duplicates.frees", &[&format_bytes(freed)]).into();
     let footer_height = this.stacks.review.footer_height.clone();
+    // The keeper is KEEP; the others are COPY 1, 2… in group order.
+    let mut copies = 0;
+    let mut cards = Vec::with_capacity(group.items.len());
+    for (i, item) in group.items.iter().enumerate() {
+        let copy = (item.id != keeper).then(|| {
+            copies += 1;
+            copies
+        });
+        cards.push(card(this, &group.hash, i, item, copy, cx));
+    }
     div()
         .debug_selector(|| "duplicates-compare".to_string())
         .flex_1()
@@ -57,7 +67,7 @@ pub(super) fn render(
         .h_full()
         .flex()
         .flex_col()
-        .child(head(visible, index, cx))
+        .child(head(visible, index, keeper, cx))
         .child(
             div()
                 .id("duplicates-candidates")
@@ -85,9 +95,7 @@ pub(super) fn render(
                         .flex()
                         .flex_row()
                         .gap(px(14.0))
-                        .children(group.items.iter().enumerate().map(|(i, item)| {
-                            card(this, &group.hash, i, item, item.id == keeper, cx)
-                        })),
+                        .children(cards),
                 )
                 .child(super::differences::render(this, group).flex_shrink_0()),
         )
@@ -237,11 +245,16 @@ pub(super) fn render(
         )
 }
 
-fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) -> Div {
+fn head(
+    visible: &[&DuplicateGroup],
+    index: usize,
+    keeper: MediaId,
+    cx: &mut Context<LuminaApp>,
+) -> Div {
     let group = visible[index];
     let len = visible.len();
     let step = |i: usize| (i < len).then_some(i);
-    let title = group_title(group);
+    let title: SharedString = group_title(group, keeper).into();
     div()
         .debug_selector(|| "duplicates-compare-head".to_string())
         .h(px(55.5))
@@ -264,6 +277,7 @@ fn head(visible: &[&DuplicateGroup], index: usize, cx: &mut Context<LuminaApp>) 
                 .text_size(px(15.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme::t1())
+                .children(text_marker("duplicates-compare-title", &title))
                 .child(title),
         )
         .child(
