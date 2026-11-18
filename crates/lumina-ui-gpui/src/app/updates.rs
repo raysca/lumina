@@ -15,6 +15,8 @@ use crate::app::LuminaApp;
 use crate::views::toast::{ToastAction, ToastKind};
 
 /// The daily check waits this long after the last one.
+// Only launch (not in tests) and the macOS-only update tests call the check.
+#[cfg_attr(all(test, not(target_os = "macos")), allow(dead_code))]
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Whether this build offers updates: only macOS has published releases.
@@ -92,6 +94,7 @@ fn now_secs() -> u64 {
 
 impl LuminaApp {
     /// At launch: the daily check, when the user turned it on and a day passed.
+    #[cfg_attr(all(test, not(target_os = "macos")), allow(dead_code))]
     pub fn auto_check_for_updates(&mut self, cx: &mut Context<Self>) {
         let due = self
             .config
