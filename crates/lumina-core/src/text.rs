@@ -72,9 +72,71 @@ pub fn clean_caption(raw: &str, max_chars: usize) -> String {
     capped.trim_end().to_string()
 }
 
+/// `s` lowercased with the accents of Latin letters removed ("São Paulo"
+/// becomes "sao paulo"), for accent- and case-insensitive place matching.
+/// Combining marks (decomposed text) are dropped. SQL reaches it as
+/// `lumina_fold(text)`.
+///
+/// ponytail: Latin-1 and Latin Extended-A letters plus Romanian ș/ț only;
+/// Vietnamese (Latin Extended Additional) and other scripts keep their
+/// marks. A Unicode decomposition table is the upgrade if places need it.
+pub fn fold(s: &str) -> String {
+    if s.is_ascii() {
+        return s.to_ascii_lowercase();
+    }
+    s.chars()
+        .flat_map(char::to_lowercase)
+        .filter(|c| !matches!(c, '\u{300}'..='\u{36F}'))
+        .map(|c| match c {
+            'à'..='å' | 'ā' | 'ă' | 'ą' => 'a',
+            'ç' | 'ć' | 'ĉ' | 'ċ' | 'č' => 'c',
+            'ď' | 'đ' => 'd',
+            'è'..='ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' => 'e',
+            'ĝ' | 'ğ' | 'ġ' | 'ģ' => 'g',
+            'ĥ' | 'ħ' => 'h',
+            'ì'..='ï' | 'ĩ' | 'ī' | 'ĭ' | 'į' | 'ı' => 'i',
+            'ĵ' => 'j',
+            'ķ' => 'k',
+            'ĺ' | 'ļ' | 'ľ' | 'ŀ' | 'ł' => 'l',
+            'ñ' | 'ń' | 'ņ' | 'ň' => 'n',
+            'ò'..='ö' | 'ø' | 'ō' | 'ŏ' | 'ő' => 'o',
+            'ŕ' | 'ŗ' | 'ř' => 'r',
+            'ś' | 'ŝ' | 'ş' | 'š' | 'ș' => 's',
+            'ţ' | 'ť' | 'ŧ' | 'ț' => 't',
+            'ù'..='ü' | 'ũ' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' => 'u',
+            'ŵ' => 'w',
+            'ý' | 'ÿ' | 'ŷ' => 'y',
+            'ź' | 'ż' | 'ž' => 'z',
+            c => c,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fold_removes_case_and_latin_accents() {
+        assert_eq!(fold("São Paulo"), "sao paulo");
+        assert_eq!(fold("ZÜRICH"), "zurich");
+        assert_eq!(fold("Kraków, Łódź"), "krakow, lodz");
+        assert_eq!(
+            fold("Bras\u{0327}ov"),
+            "brasov",
+            "a combining mark is dropped"
+        );
+        assert_eq!(
+            fold("Sa\u{0303}o"),
+            "sao",
+            "decomposed text folds like composed"
+        );
+        assert_eq!(
+            fold("Æbeltoft ß"),
+            "æbeltoft ß",
+            "letters with no base stay"
+        );
+    }
 
     #[test]
     fn one_clean_line() {

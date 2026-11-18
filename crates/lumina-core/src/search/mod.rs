@@ -217,12 +217,17 @@ impl StructuredQuery {
             params.push(format!("%{}%", escaped).into());
         }
 
+        // Accent- and case-insensitive: "sao" finds "São Paulo". A leading
+        // `%` never seeks an index, so the function call does not change the
+        // plan: the city filters whatever access path the rest picks.
+        // Measured once (release, 25k rows, no match, so a full timeline
+        // walk): 3.5 ms against 2.7 ms for the plain LIKE.
         if let Some(ref city) = self.city {
-            let escaped = city
+            let escaped = crate::text::fold(city)
                 .replace('\\', "\\\\")
                 .replace('%', "\\%")
                 .replace('_', "\\_");
-            clauses.push("m.city LIKE ? ESCAPE '\\'".to_string());
+            clauses.push("lumina_fold(m.city) LIKE ? ESCAPE '\\'".to_string());
             params.push(format!("%{}%", escaped).into());
         }
 

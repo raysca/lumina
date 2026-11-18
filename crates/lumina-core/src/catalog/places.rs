@@ -16,14 +16,15 @@ pub struct PlaceCount {
 }
 
 impl Catalog {
-    /// Cities whose name starts with `prefix` (case-insensitive), most
-    /// items first, at most `limit`. A prefix with no letters or digits
-    /// matches nothing.
+    /// Cities whose name starts with `prefix` (case- and accent-insensitive:
+    /// "sao" finds "São Paulo"), most items first, at most `limit`. A prefix
+    /// with no letters or digits matches nothing.
     ///
     /// The search index finds the candidate rows (an FTS5 prefix query on
     /// its `city` column), so the cost follows the matching items, not the
-    /// library; the join keeps active items, and LIKE keeps the name's
-    /// start (FTS matches any word of "New York").
+    /// library (its tokenizer already folds accents); the join keeps active
+    /// items, and LIKE on the folded name keeps the name's start (FTS
+    /// matches any word of "New York").
     pub fn matching_places(&self, prefix: &str, limit: usize) -> Result<Vec<PlaceCount>> {
         let prefix = prefix.trim();
         if !prefix.chars().any(char::is_alphanumeric) || limit == 0 {
@@ -31,7 +32,7 @@ impl Catalog {
         }
         let fts = format!("city : \"{}\"*", prefix.replace('"', "\"\""));
         let mut pattern = String::with_capacity(prefix.len() + 1);
-        for ch in prefix.chars() {
+        for ch in crate::text::fold(prefix).chars() {
             if matches!(ch, '%' | '_' | '\\') {
                 pattern.push('\\');
             }
@@ -45,7 +46,7 @@ impl Catalog {
                CROSS JOIN media_items m ON m.id = f.rowid
                WHERE media_search_fts MATCH ?1
                  AND m.is_trashed = 0 AND m.is_hidden = 0
-                 AND m.city LIKE ?2 ESCAPE '\'
+                 AND lumina_fold(m.city) LIKE ?2 ESCAPE '\'
                GROUP BY m.city, m.country_code
                ORDER BY n DESC, m.city ASC
                LIMIT ?3;"#,

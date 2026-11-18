@@ -19,7 +19,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 zune-jpeg = "0.4"
 
 notify-debouncer-mini = "0.4"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "functions"] }
 anyhow = "1.0"
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }

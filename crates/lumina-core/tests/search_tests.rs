@@ -2339,3 +2339,106 @@ fn camera_equals_matches_the_stored_make_and_model_exactly() {
         "each stored camera once, in index order; items with no camera, or only spaces, are skipped"
     );
 }
+
+/// Regression: SQLite's LIKE folds ASCII case only, so "sao" did not find
+/// "São Paulo" in `city:`, the Place top matches or a smart album.
+#[test]
+fn city_matching_ignores_accents_and_case() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    catalog
+        .insert_or_update_batch(&[
+            sample_media_item("/p/sp.jpg", MediaType::Image, 1000, Some("São Paulo"), None),
+            sample_media_item("/p/zh.jpg", MediaType::Image, 2000, Some("Zürich"), None),
+            sample_media_item("/p/ky.jpg", MediaType::Image, 3000, Some("Kyoto"), None),
+        ])
+        .unwrap();
+    assert_eq!(
+        names_for(&catalog, "city:sao"),
+        ["sp.jpg"],
+        "unaccented finds accented"
+    );
+    assert_eq!(
+        names_for(&catalog, "city:SÃO"),
+        ["sp.jpg"],
+        "accented upper case too"
+    );
+    assert_eq!(names_for(&catalog, "city:zur"), ["zh.jpg"]);
+    assert_eq!(
+        catalog
+            .search_structured_count(&StructuredQuery::parse("city:sao"))
+            .unwrap(),
+        1,
+        "the count agrees with the page"
+    );
+    assert_eq!(
+        catalog
+            .matching_places("sao", 4)
+            .unwrap()
+            .iter()
+            .map(|p| p.city.as_str())
+            .collect::<Vec<_>>(),
+        ["São Paulo"],
+        "the Place top matches fold accents too"
+    );
+    let album = |field: RuleField, operator: RuleOperator, value: &str| -> Vec<String> {
+        let album = lumina_core::SmartAlbum::new(
+            "Places".into(),
+            "map".into(),
+            MatchMode::All,
+            vec![SmartAlbumRule {
+                field,
+                operator,
+                value: RuleValue::Text(value.to_string()),
+            }],
+        );
+        let mut names: Vec<String> = catalog
+            .query_smart_album(&album, 10, 0)
+            .unwrap()
+            .into_iter()
+            .map(|item| item.file_name)
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        album(RuleField::Place, RuleOperator::Contains, "sao"),
+        ["sp.jpg"]
+    );
+    assert_eq!(
+        album(RuleField::City, RuleOperator::Contains, "ZURICH"),
+        ["zh.jpg"]
+    );
+    assert_eq!(
+        album(RuleField::City, RuleOperator::NotContains, "sao"),
+        ["ky.jpg", "zh.jpg"]
+    );
+}
+
+/// The folded `city:` filter is an expression on the row, like the plain
+/// LIKE it replaced (a leading `%` never seeks an index): it filters the
+/// rows of the plan without it and never changes it.
+#[test]
+fn city_filter_keeps_the_plan_without_it() {
+    let catalog = Catalog::open_in_memory().expect("open catalog");
+    let plan = |text: &str| {
+        let (sql, params) =
+            StructuredQuery::parse(text).synthesize_query_sorted(50, 0, SortSpec::default());
+        catalog
+            .explain_query_plan(&inline_sql_params(&sql, &params))
+            .expect("explain")
+            .join(" | ")
+    };
+    // `city:sao` alone walks idx_media_timestamp in sort order.
+    for (with, without) in [
+        ("city:sao", ""),
+        ("is:video city:sao", "is:video"),
+        ("year:2020 city:sao", "year:2020"),
+    ] {
+        let (with_plan, without_plan) = (plan(with), plan(without));
+        println!("EXPLAIN `{with}`: {with_plan}");
+        assert_eq!(
+            with_plan, without_plan,
+            "`{with}` must filter the rows of `{without:?}`'s plan, not change it"
+        );
+    }
+}

@@ -122,10 +122,24 @@ pub(super) fn compile_rule(rule: &SmartAlbumRule, sorted: bool) -> Result<SqlPar
             RuleOperator::NotContains => true,
             _ => return Err(anyhow!("this field supports contains / does not contain")),
         };
-        let pattern = like_pattern(&rule_value_to_string(&rule.value)?);
+        // Places match accent- and case-insensitively ("sao" finds "São
+        // Paulo"); camera names keep plain LIKE.
+        let place = rule.field == RuleField::Place;
+        let value = rule_value_to_string(&rule.value)?;
+        let pattern = like_pattern(&if place {
+            crate::text::fold(&value)
+        } else {
+            value
+        });
         let any = columns
             .iter()
-            .map(|col| format!("{col} LIKE ? ESCAPE '\\'"))
+            .map(|col| {
+                if place {
+                    format!("lumina_fold({col}) LIKE ? ESCAPE '\\'")
+                } else {
+                    format!("{col} LIKE ? ESCAPE '\\'")
+                }
+            })
             .collect::<Vec<_>>()
             .join(" OR ");
         // NULL columns make the OR NULL; COALESCE keeps "does not contain"
@@ -157,6 +171,13 @@ pub(super) fn compile_rule(rule: &SmartAlbumRule, sorted: bool) -> Result<SqlPar
     }
 
     let col = column_for_field(&rule.field);
+    // City contains / does not contain is accent- and case-insensitive, as
+    // the Place field and the `city:` search are.
+    let (target, fold) = match rule.field {
+        RuleField::City => ("lumina_fold(m.city)", true),
+        _ => (col, false),
+    };
+    let contains_pattern = |s: String| like_pattern(&if fold { crate::text::fold(&s) } else { s });
 
     match &rule.operator {
         RuleOperator::AnyOf => Err(anyhow!("Only keywords support \"include any of\"")),
@@ -168,28 +189,14 @@ pub(super) fn compile_rule(rule: &SmartAlbumRule, sorted: bool) -> Result<SqlPar
             let val = rule_value_to_sqlite(&rule.value)?;
             Ok((format!("({} IS NULL OR {} != ?)", col, col), vec![val]))
         }
-        RuleOperator::Contains => {
-            let s = rule_value_to_string(&rule.value)?;
-            let escaped = s
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_");
-            Ok((
-                format!("{} LIKE ? ESCAPE '\\'", col),
-                vec![format!("%{}%", escaped).into()],
-            ))
-        }
-        RuleOperator::NotContains => {
-            let s = rule_value_to_string(&rule.value)?;
-            let escaped = s
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_");
-            Ok((
-                format!("({} IS NULL OR {} NOT LIKE ? ESCAPE '\\')", col, col),
-                vec![format!("%{}%", escaped).into()],
-            ))
-        }
+        RuleOperator::Contains => Ok((
+            format!("{target} LIKE ? ESCAPE '\\'"),
+            vec![contains_pattern(rule_value_to_string(&rule.value)?).into()],
+        )),
+        RuleOperator::NotContains => Ok((
+            format!("({col} IS NULL OR {target} NOT LIKE ? ESCAPE '\\')"),
+            vec![contains_pattern(rule_value_to_string(&rule.value)?).into()],
+        )),
         RuleOperator::GreaterThan => {
             let val = rule_value_to_sqlite(&rule.value)?;
             Ok((format!("{} > ?", col), vec![val]))

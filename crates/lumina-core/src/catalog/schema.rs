@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{params, Connection};
 
 use super::{Catalog, SCHEMA_VERSION};
@@ -43,6 +44,23 @@ fn add_column_if_missing(conn: &Connection, table: &str, column: &str, ddl: &str
 impl Catalog {
     pub(crate) fn init_schema(&self) -> Result<()> {
         let conn = self.conn.lock();
+
+        // Accent- and case-insensitive place matching (`text::fold`). LIKE
+        // folds ASCII case only, so "sao" missed "São Paulo".
+        conn.create_scalar_function(
+            "lumina_fold",
+            1,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            // Borrows the argument: no copy per row before folding.
+            |ctx| {
+                let text = ctx
+                    .get_raw(0)
+                    .as_str_or_null()
+                    .map_err(|err| rusqlite::Error::UserFunctionError(err.into()))?;
+                Ok(text.map(crate::text::fold))
+            },
+        )
+        .context("registering lumina_fold")?;
 
         conn.execute_batch(
             r#"

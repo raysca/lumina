@@ -47,8 +47,6 @@ you find something you are not fixing now. Planned features live in
 ### Places, dates and search
 
 - Neither the location card nor the Places map wraps across the date line.
-- City search is accent-sensitive: "sao" does not find "São Paulo" (SQLite
-  `LIKE` folds ASCII case only).
 - Undated items (capture time 0) are now stored as year 0, month 0, so the
   month band says "Undated", but the timeline rail and the year buckets label
   their `0000-00` bucket as year "0"
