@@ -665,7 +665,7 @@ impl LuminaApp {
                 }
             }
             TextTarget::AlbumDraft if self.album_draft.focus != DraftFocus::Title => {
-                self.refresh_draft_preview();
+                self.refresh_draft_preview(cx);
             }
             TextTarget::Search => {
                 if self.search_screen_shown() {

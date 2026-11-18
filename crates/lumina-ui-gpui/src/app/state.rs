@@ -276,6 +276,9 @@ pub struct AlbumDraftState {
     pub match_count: Option<usize>,
     /// The first few matches, shown as thumbnails.
     pub preview: Vec<MediaItem>,
+    /// Bumped by every preview refresh; a background result for an older
+    /// edit is dropped.
+    pub preview_epoch: u64,
     /// Why valid-looking rules cannot run (a saved rule the engine rejects).
     pub problem: Option<String>,
     /// The smart album whose delete confirmation is open.
@@ -315,6 +318,7 @@ impl Default for AlbumDraftState {
             popup: None,
             match_count: None,
             preview: Vec::new(),
+            preview_epoch: 0,
             problem: None,
             confirm_delete: None,
             scroll: gpui::ScrollHandle::new(),

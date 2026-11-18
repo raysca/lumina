@@ -198,7 +198,7 @@ impl LuminaApp {
             }
             _ => {}
         }
-        self.refresh_draft_preview();
+        self.refresh_draft_preview(cx);
         cx.notify();
     }
 
@@ -208,7 +208,7 @@ impl LuminaApp {
             row.list.retain(|t| t != tag);
         }
         self.set_draft_focus(DraftFocus::Value(i), cx);
-        self.refresh_draft_preview();
+        self.refresh_draft_preview(cx);
     }
 
     /// The focused keyword list's chips, when the focus is on one.
@@ -253,7 +253,7 @@ impl LuminaApp {
             None if list.pop().is_none() => return false,
             None => {}
         }
-        self.refresh_draft_preview();
+        self.refresh_draft_preview(cx);
         cx.notify();
         true
     }
@@ -326,7 +326,7 @@ impl LuminaApp {
             row.text = n.clamp(1, 5).to_string();
         }
         self.set_draft_focus(DraftFocus::Value(i), cx);
-        self.refresh_draft_preview();
+        self.refresh_draft_preview(cx);
     }
 
     /// ←/→ on a focused Rating value; false when the focus is elsewhere.
@@ -355,7 +355,7 @@ impl LuminaApp {
         self.album_draft.focus_on(DraftFocus::Field(at));
         self.album_draft.popup = None;
         self.reveal_draft_focus();
-        self.refresh_draft_preview();
+        self.refresh_draft_preview(cx);
         cx.notify();
     }
 
@@ -370,7 +370,7 @@ impl LuminaApp {
             };
             self.album_draft.focus_on(focus);
             self.album_draft.popup = None;
-            self.refresh_draft_preview();
+            self.refresh_draft_preview(cx);
             cx.notify();
         }
     }

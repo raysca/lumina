@@ -135,7 +135,10 @@ impl LuminaApp {
         draft.pinned_before = false;
         // A reopened builder starts at the first condition.
         draft.scroll = gpui::ScrollHandle::new();
-        self.refresh_draft_preview();
+        // Another album's matches must not show while this one's load.
+        draft.match_count = None;
+        draft.preview.clear();
+        self.refresh_draft_preview(cx);
         cx.notify();
     }
 
@@ -204,29 +207,51 @@ impl LuminaApp {
         rules_from_rows(&self.album_draft.rows)
     }
 
-    /// Re-runs the count and preview queries. Called after a rule changes,
-    /// never from render.
-    // ponytail: on the UI thread. Count plus the first 8 cost at most ~5.6 ms
-    // per edit on a 25k-item catalog (release build,
-    // measured); move it to a background task if catalogs grow much larger.
-    pub fn refresh_draft_preview(&mut self) {
+    /// Re-runs the count and preview queries in the background. Called
+    /// after a rule changes, never from render. The previous result stays
+    /// on screen until this one lands; a result for an older edit is
+    /// dropped (latest edit wins).
+    pub fn refresh_draft_preview(&mut self, cx: &mut Context<Self>) {
         let draft = &mut self.album_draft;
-        draft.match_count = None;
-        draft.preview.clear();
+        draft.preview_epoch += 1;
+        let epoch = draft.preview_epoch;
         draft.problem = None;
-        let (Some(rules), Some(state)) = (rules_from_rows(&draft.rows), self.grid_state.as_ref())
-        else {
+        let engine = self.grid_state.as_ref().map(|s| s.engine.clone());
+        let (Some(rules), Some(engine)) = (rules_from_rows(&draft.rows), engine) else {
+            draft.match_count = None;
+            draft.preview.clear();
             return;
         };
         let album = SmartAlbum::new(String::new(), String::new(), draft.match_mode, rules);
         // The engine's query helpers read errors as "no matches"; compile
         // first so a rule the engine rejects is reported, not shown as 0.
         if let Err(err) = album.build_sql() {
+            draft.match_count = None;
+            draft.preview.clear();
             draft.problem = Some(err.to_string());
             return;
         }
-        draft.match_count = Some(state.engine.query_smart_album_count(&album));
-        draft.preview = state.engine.query_smart_album(&album, PREVIEW_LIMIT, 0);
+        // Opening another library resets the draft (and its epoch).
+        let library = self.library_generation;
+        let task = cx.background_executor().spawn(async move {
+            (
+                engine.query_smart_album_count(&album),
+                engine.query_smart_album(&album, PREVIEW_LIMIT, 0),
+            )
+        });
+        cx.spawn(async move |this, cx| {
+            let (count, preview) = task.await;
+            // The app may be gone; then nothing is left to update.
+            let _ = this.update(cx, |app, cx| {
+                let draft = &mut app.album_draft;
+                if draft.preview_epoch == epoch && app.library_generation == library {
+                    draft.match_count = Some(count);
+                    draft.preview = preview;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// OK: saves when every row is valid, then shows the album.

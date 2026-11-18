@@ -1077,7 +1077,7 @@ fn chip_highlight_does_not_follow_focus_to_another_row() {
             row
         };
         app.album_draft.rows = vec![keywords(&["a", "b"]), keywords(&["c", "d"])];
-        app.refresh_draft_preview();
+        app.refresh_draft_preview(cx);
         app.set_draft_focus(DraftFocus::Value(0), cx);
     });
     render_ui(vcx);
@@ -1129,7 +1129,7 @@ fn too_many_keywords_block_save() {
         row.set_operator(RuleOperator::AnyOf);
         row.list = (0..1_001).map(|i| format!("k{i}")).collect();
         app.album_draft.rows = vec![row];
-        app.refresh_draft_preview();
+        app.refresh_draft_preview(cx);
         app.save_draft_smart_album(cx);
         assert_eq!(
             app.album_draft.problem.as_deref(),
@@ -1488,4 +1488,59 @@ fn focused_empty_name_field_shows_the_untitled_placeholder() {
         "Untitled Smart Album",
         "back on the name field the placeholder returns"
     );
+}
+
+#[core::prelude::v1::test]
+fn preview_queries_run_off_the_ui_thread_and_stale_results_are_dropped() {
+    use crate::app::smart_draft::DraftRow;
+    let beach = || {
+        let mut row = DraftRow::new(RuleField::Tag);
+        row.set_operator(RuleOperator::AnyOf);
+        row.list = vec!["beach".to_string()];
+        row
+    };
+    let (_dir, engine, _ids) = library("sab_background_preview");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    open_sheet(vcx, &view);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(2))
+    });
+
+    // The edit returns before the query runs; the previous result stays
+    // on screen until the new one lands.
+    view.update(vcx, |app, cx| {
+        app.album_draft.rows = vec![beach()];
+        app.refresh_draft_preview(cx);
+        assert_eq!(
+            app.album_draft.match_count,
+            Some(2),
+            "an edit must not query on the UI thread; the old count stays meanwhile"
+        );
+        assert_eq!(app.album_draft.preview.len(), 2, "the old preview stays");
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(app.album_draft.match_count, Some(1), "the new result lands");
+        assert_eq!(app.album_draft.preview.len(), 1);
+    });
+
+    // Back to "Favorite is Yes", then an invalid row before that query
+    // lands: the older edit's result must not overwrite the newer state.
+    view.update(vcx, |app, cx| {
+        app.album_draft.rows = vec![DraftRow::new(RuleField::IsFavorite)];
+        app.refresh_draft_preview(cx);
+        let mut empty = beach();
+        empty.list.clear();
+        app.album_draft.rows = vec![empty];
+        app.refresh_draft_preview(cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.album_draft.match_count, None,
+            "a result for an older edit is dropped (latest edit wins)"
+        );
+        assert!(app.album_draft.preview.is_empty());
+    });
 }

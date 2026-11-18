@@ -635,6 +635,44 @@ fn benchmark_scale_and_gates() {
         "the any-of album and count must resolve in < {album_budget}ms (got {any_ms:.3}ms)"
     );
 
+    // Gate 3c: the smart-album builder's live preview after each edit: the
+    // count plus the first 8 matches of a new sheet's "Favorite is Yes".
+    let builder = lumina_core::SmartAlbum::new(
+        String::new(),
+        String::new(),
+        lumina_core::MatchMode::All,
+        vec![lumina_core::SmartAlbumRule {
+            field: lumina_core::RuleField::IsFavorite,
+            operator: lumina_core::RuleOperator::Equals,
+            value: lumina_core::RuleValue::Bool(true),
+        }],
+    );
+    assert_eq!(
+        catalog
+            .query_smart_album(&builder, 8, 0)
+            .expect("builder preview")
+            .len(),
+        8,
+        "the builder preview must fill its strip so the gate measures real work"
+    );
+    let builder_start = Instant::now();
+    for _ in 0..iterations {
+        catalog
+            .query_smart_album_count(&builder)
+            .expect("builder count must run");
+        catalog
+            .query_smart_album(&builder, 8, 0)
+            .expect("builder preview must run");
+    }
+    let builder_ms = (builder_start.elapsed().as_secs_f64() * 1000.0) / iterations as f64;
+    println!(
+        "Gate 3c - Smart Album Builder Count + Preview Latency: {builder_ms:.3} ms (< {album_budget:.1} ms target)"
+    );
+    assert!(
+        builder_ms < album_budget,
+        "the builder's count and preview must resolve in < {album_budget}ms (got {builder_ms:.3}ms)"
+    );
+
     // Gate 3: saved searches (smart album `Query` rules) under the default
     // date sort: a common term with a LIKE and a rating filter, and a rare
     // term (25 rows), which walks the date index. Then the sidebar count for
