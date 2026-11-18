@@ -5,7 +5,9 @@ use lumina_core::ExportPreset;
 
 use crate::app::library::EXPORT_PICKS;
 use crate::app::types::UiMessage;
+use crate::tests::helpers::*;
 use crate::tests::helpers::{app_with_library, render_ui, seed_library_undecodable};
+use crate::*;
 
 #[core::prelude::v1::test]
 fn export_as_jpeg_uses_picked_folder() {
@@ -133,4 +135,52 @@ fn jpeg_export_says_when_a_video_loses_its_rotation() {
         turned.contains("1 video exported as the original (1 without Lumina's rotation)"),
         "a rotated video copied as the original says its rotation stays behind: {turned:?}"
     );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_export_writes_originals_and_sidecars() {
+    let (temp_dir, engine) = seed_library("export", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine.catalog().set_rating(item.id, 5).unwrap();
+    engine
+        .catalog()
+        .set_caption(item.id, "Export caption")
+        .unwrap();
+    engine
+        .catalog()
+        .add_tags_batch(&[item.id], &["exported".to_string()])
+        .unwrap();
+
+    let destination = temp_dir.join("exported");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.export_to_folder(
+            destination.clone(),
+            lumina_core::ExportPreset::Originals,
+            cx,
+        );
+    });
+    // The copy runs in the background.
+    render_ui(vcx);
+
+    let copied = destination.join(&item.file_name);
+    assert!(copied.exists(), "export must copy the original file");
+    let sidecar = lumina_core::read_sidecar(&copied)
+        .unwrap()
+        .expect("export should write a sidecar for annotated items");
+    assert_eq!(sidecar.rating, 5);
+    assert_eq!(sidecar.caption.as_deref(), Some("Export caption"));
+    assert!(sidecar.tags.contains(&"exported".to_string()));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.last_action
+                .as_deref()
+                .unwrap_or("")
+                .contains("Exported"),
+            "got {:?}",
+            app.last_action
+        );
+    });
 }

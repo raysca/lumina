@@ -1,6 +1,8 @@
 //! Docked inspector: one-column summary for a single item.
 
 use super::helpers::{app_with_library, click, leak, render_ui, seed_library};
+use crate::tests::helpers::*;
+use crate::*;
 
 #[core::prelude::v1::test]
 fn docked_inspector_summary_rates_labels_and_opens_get_info() {
@@ -585,4 +587,77 @@ fn docked_capture_reads_the_35mm_equivalent_once_the_selection_rests() {
         "the panel's focal row shows the 35 mm equivalent: {shown:?}"
     );
     assert!(vcx.debug_bounds("inspector-capture-focal").is_some());
+}
+
+#[core::prelude::v1::test]
+fn test_inspector_filename_wraps_inside_the_open_drawer() {
+    let (_temp_dir, engine) = seed_library("inspector_filename_wrap", 4);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let photo = view.update(vcx, |app, _| {
+        app.get_active_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("seeded library must have an item")
+    });
+    let long_name =
+        "Screenshot_2026-10-30_at_10.00.00_AM_with_a_very_long_descriptive_suffix_that_cannot_fit.png";
+    view.update(vcx, |app, app_cx| {
+        app.open_viewer(photo, app_cx);
+        app.inspector_open = true;
+        app.window_bounds = Some((0.0, 0.0, 1440.0, 900.0));
+        if let Some(item) = app.selected_item.as_mut() {
+            item.file_name = long_name.to_string();
+        }
+        app_cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let drawer = vcx
+        .debug_bounds("viewer-info-drawer")
+        .expect("an open inspector must paint the info drawer");
+    let name = vcx
+        .debug_bounds("inspector-filename")
+        .expect("the inspector hero must paint the filename");
+    assert!(
+        name.left() >= drawer.left() && name.right() <= drawer.right(),
+        "a long filename must stay inside the drawer instead of widening it: name={name:?} drawer={drawer:?}"
+    );
+    // text_xs is 12px with GPUI's 1.618 line height, so one line is ~19px;
+    // more than 24px proves the name wrapped onto multiple lines.
+    assert!(
+        f32::from(name.size.height) > 24.0,
+        "a long filename must wrap to more than one line, got {name:?}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn test_open_info_drawer_never_covers_the_photo_or_its_controls() {
+    let mut cx = crate::tests::TestApp::single();
+    let (_temp_dir, view, vcx) =
+        viewer_with_gradient(&mut cx, "viewer_drawer_clear", 1440.0, 900.0);
+    view.update(vcx, |app, cx| {
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+
+    let drawer = vcx.debug_bounds("viewer-info-drawer").unwrap();
+    assert_eq!(
+        (drawer.top(), drawer.right(), drawer.size.height),
+        (gpui::px(0.0), gpui::px(1440.0), gpui::px(900.0)),
+        "the info panel is docked full height at the right edge: {drawer:?}"
+    );
+    for selector in ["viewer-media", "viewer-next", "viewer-viewport"] {
+        let b = vcx
+            .debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} renders"));
+        assert!(
+            b.right() <= drawer.left(),
+            "the info drawer must sit beside {selector}, not over it: {b:?} drawer={drawer:?}"
+        );
+    }
 }

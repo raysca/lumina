@@ -149,7 +149,7 @@ fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
         app.handle_ui_message(
             crate::UiMessage::ThumbnailLoaded {
                 id,
-                frame: super::viewer_and_video::tiny_decoded_frame(id),
+                frame: super::helpers::tiny_decoded_frame(id),
             },
             cx,
         );
@@ -177,7 +177,7 @@ fn viewer_step_without_cache_keeps_stage_size() {
         app.handle_ui_message(
             crate::UiMessage::ThumbnailLoaded {
                 id,
-                frame: super::viewer_and_video::tiny_decoded_frame(id),
+                frame: super::helpers::tiny_decoded_frame(id),
             },
             cx,
         );
@@ -512,12 +512,8 @@ fn viewer_immersive_panel_leaves_the_top_bar_buttons_clickable() {
 #[core::prelude::v1::test]
 fn viewer_immersive_panel_clears_the_zoom_navigator() {
     let mut cx = crate::tests::TestApp::single();
-    let (_dir, view, vcx) = super::viewer_and_video::viewer_with_gradient(
-        &mut cx,
-        "viewer_immersive_nav",
-        1600.0,
-        1000.0,
-    );
+    let (_dir, view, vcx) =
+        super::helpers::viewer_with_gradient(&mut cx, "viewer_immersive_nav", 1600.0, 1000.0);
     view.update(vcx, |app, cx| {
         app.inspector_open = true;
         app.is_immersive_fullscreen = true;

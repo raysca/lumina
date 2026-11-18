@@ -38,7 +38,7 @@ fn only_a_just_decoded_thumbnail_fades_in() {
         app.handle_ui_message(
             crate::UiMessage::ThumbnailLoaded {
                 id: fresh,
-                frame: super::viewer_and_video::tiny_decoded_frame(fresh),
+                frame: super::helpers::tiny_decoded_frame(fresh),
             },
             cx,
         );

@@ -3,11 +3,13 @@
 //! and the Untagged view surviving a relaunch.
 
 use crate::config::{AppConfig, LastView};
+use crate::tests::helpers::*;
 use crate::tests::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, seed_library, type_text,
 };
 use crate::views::sidebar::AlbumSelection;
 use crate::LuminaApp;
+use crate::*;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::{LuminaEngine, MediaId};
 
@@ -434,4 +436,38 @@ fn sidebar_keywords_row_counts_keywords_and_lists_no_tree() {
             "the keyword tree lives on the Tags page, not the sidebar: {path}"
         );
     }
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_keywords_row_opens_the_page_and_enter_renames() {
+    let (_temp_dir, engine) = seed_library("tag_rename", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    engine
+        .add_tags_batch(&[item.id], &["travel".to_string()])
+        .unwrap();
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.refresh_album_counts();
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    click(vcx, "sidebar-nav-keywords");
+    render_ui(vcx);
+    assert!(
+        vcx.debug_bounds("tag-manager-row-travel").is_some(),
+        "TAGS › Keywords opens the Tags page with the tagged item's keyword"
+    );
+    click(vcx, "tag-manager-row-travel");
+    focus_app(vcx, &view);
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.tag_manager.editing.as_deref(),
+            Some("travel"),
+            "↵ on a focused keyword begins its rename"
+        );
+    });
 }

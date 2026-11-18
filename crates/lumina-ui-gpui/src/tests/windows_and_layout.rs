@@ -1,3 +1,4 @@
+use crate::tests::helpers::*;
 use crate::*;
 
 #[core::prelude::v1::test]
@@ -453,4 +454,19 @@ fn frameless_windows_get_their_own_window_controls() {
             "a client-decorated window must show {control}, or it cannot be managed"
         );
     }
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_resize_updates_persisted_bounds() {
+    let (_temp_dir, engine) = seed_library("resize", 8);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    vcx.simulate_resize(gpui::size(gpui::px(1100.0), gpui::px(720.0)));
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let (_, _, width, height) = app.window_bounds.expect("bounds observer should fire");
+        assert!((width - 1100.0).abs() < 2.0, "width was {width}");
+        assert!((height - 720.0).abs() < 2.0, "height was {height}");
+    });
 }

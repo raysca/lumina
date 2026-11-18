@@ -1,8 +1,10 @@
 //! The search field lives in the sidebar.
 
+use crate::tests::helpers::*;
 use crate::tests::helpers::{
     app_with_library, focus_app, keystrokes, render_ui, seed_library, type_text,
 };
+use crate::*;
 
 #[core::prelude::v1::test]
 fn search_field_lives_in_the_sidebar() {
@@ -154,5 +156,221 @@ fn cmd_f_leaves_search_alone_when_showing_the_sidebar_fails() {
             !app.search_focused,
             "⌘F must not focus a search field that is off screen"
         );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_search_click_type_clear() {
+    let (_temp_dir, engine) = seed_library("search", 8);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| assert!(app.search_focused));
+
+    // A query that matches the seeded photos, so the grid stays painted
+    // once the results land.
+    type_text(vcx, "photo");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "photo");
+        assert!(app.search_focused, "typing keeps search focused");
+    });
+
+    // Clicking elsewhere must blur search so shortcuts work again. With the
+    // layout switcher gone, an empty grid point is the neutral rendered target.
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let empty_point = gpui::point(
+        surface.origin.x + gpui::px(24.0),
+        surface.origin.y + surface.size.height - gpui::px(24.0),
+    );
+    vcx.simulate_click(empty_point, gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| assert!(!app.search_focused));
+    assert!(vcx.debug_bounds("clear-search").is_some());
+
+    click(vcx, "search-input");
+    click(vcx, "clear-search");
+    view.update(vcx, |app, _| {
+        assert!(app.search_query.is_empty());
+        assert!(!app.search_focused);
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_empty_search_state_offers_a_clear_action() {
+    let (_temp_dir, engine) = seed_library("empty_search", 8);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.set_search_query("no-such-photo", cx);
+    });
+    render_ui(vcx);
+    assert!(vcx.debug_bounds("empty-state").is_some());
+    assert!(
+        vcx.debug_bounds("empty-primary").is_none(),
+        "no-results offers term chips and Clear all filters, never a primary button"
+    );
+
+    click(vcx, "empty-search-term-0");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_query.is_empty(),
+            "removing the only term's chip clears the search"
+        );
+        assert!(app.selected_item.is_none());
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_search_suggestions_filter_and_keyboard_apply() {
+    let (_temp_dir, engine) = seed_library("search_suggestions", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert!(app.search_focused, "clicking the field focuses search");
+        assert!(
+            !app.search_suggestions.dismissed,
+            "focusing the field opens suggestions"
+        );
+        assert!(
+            !app.search_suggestion_items().is_empty(),
+            "an empty query offers recent searches and operators"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("search-suggestions").is_some(),
+        "the dropdown must paint under the focused field"
+    );
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "the first suggestion row must be painted"
+    );
+
+    type_text(vcx, "is:f");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.search_query, "is:f");
+        let items = app.search_suggestion_items();
+        assert!(
+            items.iter().any(|item| item == "is:favorite"),
+            "the matching operator must be suggested: {items:?}"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| item.to_lowercase().contains("is:f")),
+            "suggestions must be filtered by the typed token: {items:?}"
+        );
+    });
+
+    keystrokes(vcx, "down");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_suggestions.selected,
+            Some(0),
+            "ArrowDown highlights the first suggestion"
+        );
+        assert_eq!(
+            app.search_query, "is:f",
+            "moving the highlight must not edit the query"
+        );
+    });
+
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "is:favorite",
+            "Enter applies the highlighted suggestion"
+        );
+        assert!(
+            app.search_focused,
+            "applying a suggestion keeps the field focused for refinement"
+        );
+        assert!(
+            app.search_suggestions.dismissed,
+            "applying a suggestion closes the dropdown"
+        );
+        assert_eq!(
+            app.config.recent_searches.first().map(String::as_str),
+            Some("is:favorite"),
+            "an applied suggestion is a committed search"
+        );
+    });
+
+    // Escape hides the open dropdown first and only the second Escape blurs.
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert!(!app.search_suggestions.dismissed);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.search_focused,
+            "the first Escape only closes the dropdown"
+        );
+        assert!(app.search_suggestions.dismissed);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.search_focused,
+            "the second Escape unfocuses the search field"
+        );
+    });
+
+    // Committing the same query again must not duplicate recent history.
+    click(vcx, "search-input");
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.search_focused, "Enter without a highlight unfocuses");
+        assert_eq!(
+            app.config
+                .recent_searches
+                .iter()
+                .filter(|entry| entry.eq_ignore_ascii_case("is:favorite"))
+                .count(),
+            1,
+            "recent searches dedupe case-insensitively"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_search_suggestion_click_applies_without_blurring() {
+    let (_temp_dir, engine) = seed_library("search_suggestion_click", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, _| {
+        app.config.recent_searches = vec!["camera:sony".to_string(), "is:video".to_string()];
+    });
+
+    click(vcx, "search-input");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_suggestion_items().first().map(String::as_str),
+            Some("camera:sony"),
+            "the newest recent search is the first empty-query suggestion"
+        );
+    });
+    assert!(
+        vcx.debug_bounds("search-suggestion-0").is_some(),
+        "the recent-search row must be painted"
+    );
+
+    click(vcx, "search-suggestion-0");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.search_query, "camera:sony",
+            "clicking a suggestion applies it"
+        );
+        assert!(
+            app.search_focused,
+            "clicking inside the dropdown must not blur the search field"
+        );
+        assert!(app.search_suggestions.dismissed);
     });
 }

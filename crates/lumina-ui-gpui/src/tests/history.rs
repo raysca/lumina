@@ -6,6 +6,7 @@ use super::helpers::{
 };
 use crate::app::command_palette::{CommandId, PaletteTarget};
 use crate::views::sidebar::AlbumSelection;
+use crate::*;
 use lumina_core::SystemAlbum;
 
 const FAVORITES: AlbumSelection = AlbumSelection::System(SystemAlbum::Favorites);
@@ -308,6 +309,237 @@ fn library_switch_clears_forward() {
         assert!(
             !app.can_navigate_forward() && !app.can_navigate_back(),
             "no Back or Forward across libraries"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_undo_redo_rating_and_sidecar() {
+    let (_temp_dir, engine) = seed_library("undo", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.set_rating_selected(4, cx);
+    });
+    // Sidecars are written on the background executor.
+    vcx.run_until_parked();
+    assert!(sidecar.exists(), "rating should write an XMP sidecar");
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied().unwrap_or(0),
+            0,
+            "undo should clear the rating"
+        );
+    });
+    assert!(
+        !sidecar.exists(),
+        "undoing the only metadata should remove the sidecar"
+    );
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_ratings.get(&item.id).copied().unwrap_or(0),
+            4,
+            "redo should restore the rating"
+        );
+    });
+    assert!(sidecar.exists(), "redo should rewrite the sidecar");
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_undo_tag_and_caption() {
+    let (_temp_dir, engine) = seed_library("undo_meta", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.selected_indices.insert(0);
+        app.batch_add_tag("travel".to_string(), cx);
+    });
+    view.update(vcx, |app, _| {
+        assert!(app.selected_item_tags.contains(&"travel".to_string()));
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert!(
+            !app.selected_item_tags.contains(&"travel".to_string()),
+            "undo should remove the tag"
+        );
+    });
+    keystrokes(vcx, "secondary-shift-z");
+    view.update(vcx, |app, _| {
+        assert!(app.selected_item_tags.contains(&"travel".to_string()));
+    });
+
+    view.update(vcx, |app, cx| {
+        app.start_caption_input(cx);
+        app.caption.input_buffer = "A short caption".to_string();
+        app.commit_caption_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.item_captions.get(&item.id).map(String::as_str),
+            Some("A short caption")
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert!(!app.item_captions.contains_key(&item.id));
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_title_edit_undo_and_xmp_import() {
+    let (_temp_dir, engine) = seed_library("title_import", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let sidecar = lumina_core::sidecar_path(&item.path);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.start_title_input(cx);
+        app.caption.title_input_buffer = "Kyoto Trip".to_string();
+        app.commit_title_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            Some("Kyoto Trip")
+        );
+    });
+    vcx.run_until_parked();
+    let written = lumina_core::read_sidecar(&item.path).unwrap().unwrap();
+    assert_eq!(written.title.as_deref(), Some("Kyoto Trip"));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            None,
+            "undo should clear the title"
+        );
+    });
+    assert!(!sidecar.exists(), "empty title should remove the sidecar");
+
+    lumina_core::write_sidecar(
+        &item.path,
+        &lumina_core::SidecarMetadata {
+            title: Some("Imported title".to_string()),
+            caption: Some("Imported caption".to_string()),
+            rating: 5,
+            color_label: 0,
+            tags: vec!["imported".to_string()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    view.update(vcx, |app, cx| {
+        app.import_sidecars_selected(cx);
+    });
+    // The sidecars are read in the background.
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.title.as_deref()),
+            Some("Imported title")
+        );
+        assert_eq!(app.item_ratings.get(&item.id).copied(), Some(5));
+        assert_eq!(
+            app.item_captions.get(&item.id).map(String::as_str),
+            Some("Imported caption")
+        );
+        assert!(app.selected_item_tags.contains(&"imported".to_string()));
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_date_and_location_edit_undo() {
+    let (_temp_dir, engine) = seed_library("edit_time_place", 3);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let original_timestamp = item.timestamp_epoch_ms;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.selected_item = Some(item.clone());
+        app.start_date_input(cx);
+        app.caption.date_input_buffer = "2020-05-06".to_string();
+        app.commit_date_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.year),
+            Some(2020),
+            "date edit should update the selected item"
+        );
+        assert!(app
+            .timeline_year_buckets
+            .iter()
+            .any(|(year, _)| *year == 2020));
+    });
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().map(|it| it.timestamp_epoch_ms),
+            Some(original_timestamp),
+            "undo should restore the original date"
+        );
+    });
+    keystrokes(vcx, "secondary-shift-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_item.as_ref().map(|it| it.year), Some(2020));
+    });
+
+    view.update(vcx, |app, cx| {
+        app.start_location_input(cx);
+        app.caption.location_input_buffer = "48.8566, 2.3522".to_string();
+        app.commit_location_input(cx);
+    });
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.latitude)
+                .map(|lat| (lat * 10_000.0).round() / 10_000.0),
+            Some(48.8566)
+        );
+        assert_eq!(
+            app.selected_item
+                .as_ref()
+                .and_then(|it| it.longitude)
+                .map(|lon| (lon * 10_000.0).round() / 10_000.0),
+            Some(2.3522)
+        );
+    });
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.selected_item.as_ref().and_then(|it| it.latitude),
+            None,
+            "undo should clear the location"
         );
     });
 }

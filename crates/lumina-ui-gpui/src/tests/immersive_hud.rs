@@ -6,6 +6,7 @@ use gpui::{Modifiers, VisualTestContext};
 use crate::app::viewer_actions::HUD_IDLE;
 use crate::tests::helpers::{app_with_library, keystrokes, render_ui, right_click, seed_library};
 use crate::LuminaApp;
+use crate::*;
 
 fn idle(vcx: &mut VisualTestContext, by: std::time::Duration) {
     vcx.executor().advance_clock(by);
@@ -184,4 +185,44 @@ fn i_brings_the_hud_back_with_the_info_drawer() {
         hud(&view, vcx),
         "I wakes the HUD, or the drawer it opens stays invisible"
     );
+}
+
+#[core::prelude::v1::test]
+fn test_immersive_fullscreen_mode_lifecycle() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+
+        // 1. Initial State
+        assert!(!app.is_immersive_fullscreen);
+        assert!(app.immersive_hud_visible);
+
+        // 2. Enter Immersive Fullscreen
+        app.enter_immersive_fullscreen(None, cx);
+        assert!(app.is_immersive_fullscreen);
+        assert!(app.immersive_hud_visible);
+
+        // 3. Toggle HUD visibility
+        app.toggle_immersive_hud(cx);
+        assert!(!app.immersive_hud_visible);
+        app.toggle_immersive_hud(cx);
+        assert!(app.immersive_hud_visible);
+
+        // 4. Toggle Immersive Fullscreen (exits)
+        app.toggle_immersive_fullscreen(None, cx);
+        assert!(!app.is_immersive_fullscreen);
+        assert!(app.immersive_hud_visible);
+
+        // 5. Toggle Immersive Fullscreen back on
+        app.toggle_immersive_fullscreen(None, cx);
+        assert!(app.is_immersive_fullscreen);
+
+        // 6. Close viewer resets immersive fullscreen
+        app.close_viewer(cx);
+        assert!(!app.is_immersive_fullscreen);
+        assert!(app.immersive_hud_visible);
+    });
+    cx.run_until_parked();
 }

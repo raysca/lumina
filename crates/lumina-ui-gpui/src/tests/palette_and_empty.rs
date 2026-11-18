@@ -3,6 +3,7 @@
 use super::helpers::{
     app_with_library, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
+use crate::*;
 
 fn run_palette_command(
     vcx: &mut gpui::VisualTestContext,
@@ -516,4 +517,56 @@ fn empty_library_state_uses_first_run_glyph_and_buttons() {
         54.0,
         "an empty tag view keeps the default glyph"
     );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_command_palette() {
+    let (_temp_dir, engine) = seed_library("command_palette", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    render_ui(vcx);
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k");
+    view.update(vcx, |app, _| assert!(app.command_palette_open));
+
+    for key in ["p", "r", "e", "f"] {
+        keystrokes(vcx, key);
+    }
+    view.update(vcx, |app, _| {
+        assert_eq!(app.command_query, "pref");
+        let titles: Vec<String> = app
+            .palette_rows()
+            .into_iter()
+            .map(|row| row.title)
+            .collect();
+        assert_eq!(titles.first().map(String::as_str), Some("Preferences…"));
+    });
+    keystrokes(vcx, "enter");
+    view.update(vcx, |app, _| {
+        assert!(!app.command_palette_open);
+        assert!(app.preferences_open);
+    });
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.preferences_open));
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k");
+    for key in ["a", "b", "o", "u", "t"] {
+        keystrokes(vcx, key);
+    }
+    click(vcx, "command-item-command.about");
+    view.update(vcx, |app, _| {
+        assert!(app.preferences_open);
+        assert_eq!(
+            app.preferences_tab,
+            crate::app::preferences::PreferencesTab::About
+        );
+    });
+    keystrokes(vcx, "escape");
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-k");
+    keystrokes(vcx, "escape");
+    view.update(vcx, |app, _| assert!(!app.command_palette_open));
 }

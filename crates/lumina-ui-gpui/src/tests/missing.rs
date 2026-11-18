@@ -4,6 +4,7 @@ use super::helpers::{
     app_with_library, click, keystrokes, leak, render_ui, right_click, seed_library,
 };
 use crate::views::sidebar::AlbumSelection;
+use crate::*;
 use lumina_core::SystemAlbum;
 
 #[core::prelude::v1::test]
@@ -525,4 +526,31 @@ fn locate_reconnects_a_moved_file() {
         );
     });
     drop(view);
+}
+
+/// Regression: O / Open in Default App on a file that has gone away did
+/// nothing at all; it now says so in the error banner.
+#[core::prelude::v1::test]
+fn ui_automation_open_in_default_app_reports_a_missing_file() {
+    let (_temp_dir, engine) = seed_library("open_default_missing", 2);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    keystrokes(vcx, "home enter");
+    let path = view.update(vcx, |app, _| {
+        assert!(app.is_fullscreen_viewer, "Enter opens the viewer");
+        app.selected_item
+            .as_ref()
+            .expect("an item is open")
+            .path
+            .clone()
+    });
+    std::fs::remove_file(&path).unwrap();
+    keystrokes(vcx, "o");
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.error_message.as_deref(),
+            Some(crate::app::viewer_actions::EXTERNAL_EDITOR_FILE_MISSING_MESSAGE),
+            "a vanished file must be reported, not silently ignored"
+        );
+    });
 }

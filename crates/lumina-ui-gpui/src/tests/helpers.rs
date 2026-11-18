@@ -274,3 +274,101 @@ impl Drop for TempLibrary {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+pub(crate) fn press_viewer_key(
+    app: &mut LuminaApp,
+    key: &'static str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<LuminaApp>,
+) {
+    let key = crate::tests::helpers::platform_test_keys(key);
+    let key: &'static str = Box::leak(key.into_boxed_str());
+    app.handle_key_down(
+        &KeyDownEvent {
+            keystroke: Keystroke::parse(key).expect("test keystroke must parse"),
+            is_held: false,
+            prefer_character_input: false,
+        },
+        window,
+        cx,
+    );
+}
+
+pub(crate) fn render_viewer_ui(cx: &mut gpui::VisualTestContext) {
+    cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear(cx);
+    });
+    cx.run_until_parked();
+}
+
+/// Synthetic double-click at a window-space position. The click count is read
+/// from the mouse-up event, matching the platform driver used by the app.
+pub(crate) fn double_click_at(
+    cx: &mut gpui::VisualTestContext,
+    position: gpui::Point<gpui::Pixels>,
+) {
+    cx.simulate_event(gpui::MouseDownEvent {
+        position,
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Left,
+        click_count: 2,
+        first_mouse: false,
+    });
+    cx.simulate_event(gpui::MouseUpEvent {
+        position,
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Left,
+        click_count: 2,
+    });
+    render_viewer_ui(cx);
+}
+
+/// Opens the overlay viewer with a known gradient texture so the painted media
+/// element has deterministic bounds independent of real decoder output.
+pub(crate) fn viewer_with_gradient<'a>(
+    cx: &'a mut gpui::TestAppContext,
+    prefix: &str,
+    width: f32,
+    height: f32,
+) -> (
+    crate::tests::helpers::TempLibrary,
+    gpui::Entity<LuminaApp>,
+    &'a mut gpui::VisualTestContext,
+) {
+    let (temp_dir, engine) = seed_library(prefix, 4);
+    let (view, vcx) = app_with_library(cx, engine);
+    let photo = view.update(vcx, |app, _| {
+        app.get_active_slice(0..1)
+            .into_iter()
+            .next()
+            .expect("seeded library must have an item")
+    });
+    view.update(vcx, |app, app_cx| {
+        app.open_viewer(photo, app_cx);
+        // The seeded JPEG payload is not a real image, so this gradient stays
+        // the displayed texture for the whole test.
+        app.viewer_image = Some(generate_gradient_image(
+            (40, 60, 90),
+            (10, 15, 30),
+            800,
+            600,
+        ));
+        app.window_bounds = Some((0.0, 0.0, width, height));
+        app_cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(width), gpui::px(height)));
+    render_viewer_ui(vcx);
+    render_viewer_ui(vcx);
+    (temp_dir, view, vcx)
+}
+
+pub(crate) fn tiny_decoded_frame(id: lumina_core::MediaId) -> lumina_core::DecodedFrame {
+    lumina_core::DecodedFrame {
+        id,
+        width: 2,
+        height: 2,
+        format: lumina_core::PixelFormat::Rgba8,
+        data: vec![0; 16],
+    }
+}

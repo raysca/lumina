@@ -4,6 +4,7 @@ use super::helpers::{
     app_with_library, bounds_center, click, focus_app, keystrokes, leak, render_ui, seed_library,
 };
 use crate::views::inspector::batch::common_rating;
+use crate::*;
 
 /// Click the first item, ⌘-click the second, dock the inspector at 1440×900.
 fn select_two<'a>(
@@ -541,6 +542,62 @@ fn check_circle_click_toggles_that_item() {
         assert!(
             !app.selected_indices.contains(&0),
             "the first card is the one removed"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_selection_contract_and_empty_space_click() {
+    let (_temp_dir, engine) = seed_library("selection_contract", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(0), "card click selects");
+    });
+
+    let surface = vcx
+        .debug_bounds("media-grid-surface")
+        .expect("grid surface must be painted");
+    let empty_point = gpui::point(
+        surface.origin.x + gpui::px(24.0),
+        surface.origin.y + surface.size.height - gpui::px(24.0),
+    );
+    vcx.simulate_click(empty_point, gpui::Modifiers::default());
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.selected_indices.is_empty(),
+            "empty space clears selection"
+        );
+        assert!(
+            app.selected_index.is_none(),
+            "empty space clears the focus index"
+        );
+        assert!(
+            app.selected_item.is_none(),
+            "empty space clears selected metadata"
+        );
+    });
+
+    click(vcx, card);
+    keystrokes(vcx, "shift-right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(1), "Shift+Right moves the focus");
+        assert!(app.selected_indices.contains(&0));
+        assert!(app.selected_indices.contains(&1));
+    });
+    keystrokes(vcx, "shift-right");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(2));
+        assert_eq!(
+            app.selected_indices.len(),
+            3,
+            "Shift+Right grows from the anchor"
         );
     });
 }

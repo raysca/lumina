@@ -5,6 +5,7 @@ use super::viewer_stage::{app_without_decodes, detach_decoder_answers, open_at};
 use crate::app::state::THUMB_REQUEST_ITEMS;
 use crate::views::viewer::filmstrip::{filmstrip_slots, filmstrip_window, FILMSTRIP_MAX};
 use crate::LuminaApp;
+use crate::*;
 use gpui::{Entity, VisualTestContext};
 use lumina_core::MediaId;
 
@@ -73,7 +74,7 @@ fn viewer_filmstrip_centres_current_and_navigates() {
         app.handle_ui_message(
             crate::UiMessage::ThumbnailLoaded {
                 id: ids[10],
-                frame: super::viewer_and_video::tiny_decoded_frame(ids[10]),
+                frame: super::helpers::tiny_decoded_frame(ids[10]),
             },
             cx,
         );
@@ -321,5 +322,47 @@ fn viewer_filmstrip_click_opens_the_clicked_item_while_rows_are_stale() {
             "a click opens exactly the clicked thumb (#13), not a neighbour"
         );
         assert_eq!(app.selected_index, Some(11), "at its fresh position");
+    });
+}
+
+#[core::prelude::v1::test]
+fn test_viewer_bottom_filmstrip_selection_transition() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+
+    let sample = get_sample_items();
+    let photo_item = sample[0].clone();
+    let video_item = sample[1].clone();
+    assert_eq!(photo_item.media_type, lumina_core::MediaType::Image);
+    assert_eq!(video_item.media_type, lumina_core::MediaType::Video);
+
+    // 1. Open viewer on video item with active player
+    view.update(cx, |app, cx| {
+        app.select_item_at(video_item.clone(), 1, cx);
+        app.open_viewer(video_item.clone(), cx);
+        assert!(app.is_fullscreen_viewer);
+        assert_eq!(app.selected_item.as_ref().unwrap().id, video_item.id);
+        // Set active player backend
+        app.video.player = Some(crate::player::NativeVideoPlayer::new());
+        app.video.duration = 30.0;
+        assert!(app.video.player.is_some());
+    });
+
+    // 2. Select photo item via filmstrip transition
+    view.update(cx, |app, cx| {
+        app.select_item_at(photo_item.clone(), 0, cx);
+        app.open_viewer(photo_item.clone(), cx);
+        assert!(app.is_fullscreen_viewer);
+        assert_eq!(app.selected_item.as_ref().unwrap().id, photo_item.id);
+        // Switching to photo properly tears down video player
+        assert!(app.video.player.is_none());
+    });
+
+    // 3. Switch back to video item
+    view.update(cx, |app, cx| {
+        app.select_item_at(video_item.clone(), 1, cx);
+        app.open_viewer(video_item.clone(), cx);
+        assert!(app.is_fullscreen_viewer);
+        assert_eq!(app.selected_item.as_ref().unwrap().id, video_item.id);
     });
 }

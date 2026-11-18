@@ -8,6 +8,7 @@
 use crate::app::scrub_preview::{test_seam, ScrubStrip};
 use crate::app::types::{get_sample_items, UiMessage};
 use crate::tests::helpers::{app_with_library, render_ui, seed_library};
+use crate::*;
 use lumina_core::{MediaItem, MediaType};
 use std::time::{Duration, Instant};
 
@@ -708,4 +709,141 @@ fn scrubber_is_a_strip_with_playhead_pill() {
         vcx.debug_bounds("video-playhead-time-text:0:34").is_some(),
         "the pill shows the current time"
     );
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_state_transitions_and_commit() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+        // No player backend is loaded here (the sample path does not exist), so
+        // this exercises the state/seek-commit boundary directly. The drag
+        // wiring test below runs the same path with a native player handle.
+        app.video.duration = 42.0;
+
+        assert!(!app.video.is_scrubbing, "viewer opens with no active scrub");
+        assert!(app.video.scrub_time.is_none());
+
+        // Pointer-down starts scrubbing and seeks to the pressed position.
+        app.begin_video_scrub(0.25, cx);
+        assert!(app.video.is_scrubbing);
+        assert!((app.video.scrub_time.unwrap() - 10.5).abs() < 1e-6);
+        assert!((app.video.playback_time - 10.5).abs() < 1e-6);
+
+        // Pointer-move always advances the destination, even when the player
+        // seek inside the throttle window is coalesced.
+        app.update_video_scrub(0.75, cx);
+        assert!(app.video.is_scrubbing);
+        assert!((app.video.scrub_time.unwrap() - 31.5).abs() < 1e-6);
+        assert!(
+            (app.video.playback_time - 10.5).abs() < 1e-6,
+            "a move inside one throttle window must not queue another seek"
+        );
+
+        // Pointer-up ends scrubbing and commits the final destination.
+        app.end_video_scrub(cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!(app.video.last_scrub_seek.is_none());
+        assert!((app.video.playback_time - 31.5).abs() < 1e-6);
+
+        // Releasing again or moving without a drag is a no-op, not a stray seek.
+        app.end_video_scrub(cx);
+        app.update_video_scrub(0.1, cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!((app.video.playback_time - 31.5).abs() < 1e-6);
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_clamps_to_duration_and_catalog_fallback() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let video = get_sample_items()[1].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video, cx);
+
+        // Player metadata is authoritative once known.
+        app.video.duration = 42.0;
+        app.video.playback_time = 0.0;
+        app.begin_video_scrub(-0.25, cx);
+        assert_eq!(app.video.scrub_time, Some(0.0));
+        assert_eq!(app.video.playback_time, 0.0);
+        app.update_video_scrub(1.5, cx);
+        assert!((app.video.scrub_time.unwrap() - 42.0).abs() < 1e-6);
+        app.end_video_scrub(cx);
+        assert!((app.video.playback_time - 42.0).abs() < 1e-6);
+
+        // Before player metadata arrives the catalog duration drives the track;
+        // the sample video is 15 seconds.
+        app.video.duration = 0.0;
+        app.video.playback_time = 0.0;
+        app.begin_video_scrub(2.0, cx);
+        assert!((app.video.scrub_time.unwrap() - 15.0).abs() < 1e-6);
+        app.end_video_scrub(cx);
+
+        // A video with no duration at all clamps to zero instead of inventing one.
+        if let Some(item) = app.selected_item.as_mut() {
+            item.duration_ms = None;
+        }
+        app.video.duration = 0.0;
+        app.video.playback_time = 3.0;
+        app.begin_video_scrub(0.5, cx);
+        assert_eq!(app.video.scrub_time, Some(0.0));
+        assert_eq!(app.video.playback_time, 0.0);
+    });
+    cx.run_until_parked();
+}
+
+#[core::prelude::v1::test]
+fn test_video_scrub_resets_on_viewer_close_and_media_change() {
+    let mut cx = crate::tests::TestApp::single();
+    let (view, cx) = cx.add_window_view(|_window, cx| LuminaApp::new(cx));
+    let sample = get_sample_items();
+    let video = sample[1].clone();
+    let photo = sample[0].clone();
+
+    view.update(cx, |app, cx| {
+        app.grid_state = None;
+        app.select_item_at(video.clone(), 1, cx);
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 31.0;
+
+        // Closing the viewer stops playback and clears the armed drag.
+        app.begin_video_scrub(0.5, cx);
+        assert!(app.video.is_scrubbing);
+        app.close_viewer(cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+        assert!(app.video.last_scrub_seek.is_none());
+
+        // Switching media tears the video player down; no stale scrub survives.
+        app.open_viewer(video.clone(), cx);
+        app.video.duration = 31.0;
+        app.begin_video_scrub(0.25, cx);
+        assert!(app.video.is_scrubbing);
+        app.open_viewer(photo.clone(), cx);
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+
+        // Stopping the player directly also clears scrub state.
+        app.open_viewer(video, cx);
+        app.video.duration = 31.0;
+        app.begin_video_scrub(0.75, cx);
+        assert!(app.video.is_scrubbing);
+        app.stop_video_player();
+        assert!(!app.video.is_scrubbing);
+        assert!(app.video.scrub_time.is_none());
+    });
+    cx.run_until_parked();
 }

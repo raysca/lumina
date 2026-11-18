@@ -12,8 +12,10 @@ use super::helpers::{
 use crate::app::command_palette::CommandId;
 use crate::app::state::{on_thumbnail_result, THUMB_REQUESTS};
 use crate::app::types::UiMessage;
+use crate::tests::helpers::*;
 use crate::views::grid::GridState;
 use crate::LuminaApp;
+use crate::*;
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use lumina_core::{EngineEvent, LuminaEngine, MediaId};
 use std::sync::Arc;
@@ -146,7 +148,7 @@ fn thumbnail_callback_marks_and_messages_on_none() {
 
     let other = MediaId(8);
     in_flight.lock().insert(other);
-    let frame = super::viewer_and_video::tiny_decoded_frame(other);
+    let frame = super::helpers::tiny_decoded_frame(other);
     on_thumbnail_result(&failures, &in_flight, &tx, other, Some(frame));
     assert!(
         !failures.lock().contains(&other),
@@ -486,4 +488,293 @@ fn small_tiles_keep_state_badges_apart() {
         }
     }
     drop(view);
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_skeleton_selection_and_open() {
+    let (_temp_dir, engine) = seed_library("card_states", 8);
+    let first = engine.get_item_slice(0..1)[0].id;
+    let first_id = first.0;
+    let card = leak(format!("media-card-{}", first_id));
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let skeleton = leak(format!("media-card-skeleton-{}", first_id));
+    let selected = leak(format!("media-card-selected-{}", first_id));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_pending(&mut cx, engine, &[first]);
+
+    assert!(
+        vcx.debug_bounds(skeleton).is_some(),
+        "a card without a decoded texture must paint media-card-skeleton-<id>"
+    );
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("every card must paint its photo area");
+    let skeleton_bounds = vcx
+        .debug_bounds(skeleton)
+        .expect("skeleton bounds disappeared between assertions");
+    assert!(
+        photo_bounds.contains(&skeleton_bounds.center()),
+        "the skeleton must sit inside the card photo area"
+    );
+    assert_eq!(
+        photo_bounds.size, skeleton_bounds.size,
+        "the skeleton must fill the photo area so the layout cannot jump on reveal"
+    );
+    assert!(
+        vcx.debug_bounds(selected).is_none(),
+        "an unselected card must not paint the selected marker"
+    );
+
+    click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert_eq!(app.selected_index, Some(0), "single-click still selects");
+        assert!(app.selected_item.is_some());
+    });
+    assert!(
+        vcx.debug_bounds(selected).is_some(),
+        "selecting a card must paint media-card-selected-<id>"
+    );
+
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "double-click must still open the viewer"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_thumbnail_chrome_is_minimal() {
+    let (_temp_dir, engine) = seed_library("card_chrome", 8);
+    let first_id = engine.get_item_slice(0..1)[0].id.0;
+    let card = leak(format!("media-card-{}", first_id));
+    let selected = leak(format!("media-card-selected-{}", first_id));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Fix the window so the rendered card width and the production row-height
+    // formula use the same budget (the resize observer records the bounds).
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    click(vcx, card);
+    let card_bounds = vcx
+        .debug_bounds(card)
+        .expect("the card must still paint its hit target");
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("the card must paint its photo well");
+    let selected_bounds = vcx
+        .debug_bounds(selected)
+        .expect("selection must still paint its highlight");
+    let selected_w = f32::from(selected_bounds.size.width);
+    let selected_h = f32::from(selected_bounds.size.height);
+    let photo_w = f32::from(photo_bounds.size.width);
+    let photo_h = f32::from(photo_bounds.size.height);
+    // A 2px ring with a 1px gap: 3px outside the well, half the 6px tile gap,
+    // so the rings of two adjacent selected tiles never overlap.
+    assert!(
+        (selected_w - photo_w - 6.0).abs() <= 0.5 && (selected_h - photo_h - 6.0).abs() <= 0.5,
+        "the ring must sit 3px outside the photo well: photo={photo_bounds:?} selected={selected_bounds:?}"
+    );
+    assert!(
+        (f32::from(photo_bounds.left()) - f32::from(selected_bounds.left()) - 3.0).abs() <= 0.5
+            && (f32::from(photo_bounds.top()) - f32::from(selected_bounds.top()) - 3.0).abs()
+                <= 0.5,
+        "the ring must be centred on the well: photo={photo_bounds:?} selected={selected_bounds:?}"
+    );
+    assert!(
+        (selected_w - selected_h).abs() <= 2.0,
+        "the thumbnail highlight must be square: selected={selected_bounds:?}"
+    );
+    assert!(
+        photo_w > f32::from(card_bounds.size.width) * 0.8
+            && photo_h > f32::from(card_bounds.size.height) * 0.8,
+        "the photo well must still fill the card: card={card_bounds:?} photo={photo_bounds:?}"
+    );
+    // The removed check badge and hover "Open" hint never had debug
+    // selectors, so absence assertions on them could not fail; the square,
+    // photo-sized highlight above is the observable contract.
+
+    double_click(vcx, card);
+    view.update(vcx, |app, _| {
+        assert!(
+            app.is_fullscreen_viewer,
+            "removing the hover hint must not remove the open action"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_texture_replaces_skeleton() {
+    let (_temp_dir, engine) = seed_library("card_reveal", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let card_id = item.id.0;
+    let photo = leak(format!("media-card-photo-{}", card_id));
+    let skeleton = leak(format!("media-card-skeleton-{}", card_id));
+    let thumb = leak(format!("media-card-thumb-{}", card_id));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_pending(&mut cx, engine, &[item.id]);
+    assert!(vcx.debug_bounds(skeleton).is_some());
+    assert!(vcx.debug_bounds(thumb).is_none());
+
+    let texture = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(4, 4),
+    )]));
+    view.update(vcx, |app, cx| {
+        let state = app
+            .grid_state
+            .as_ref()
+            .expect("grid state is installed by the test harness");
+        state.texture_cache.lock().put(item.id, texture);
+        cx.notify();
+    });
+    render_ui(vcx);
+
+    // debug_bounds is cumulative across frames, so the reveal is proven by the
+    // thumbnail appearing rather than by the skeleton's stale bounds vanishing.
+    assert!(
+        vcx.debug_bounds(thumb).is_some(),
+        "a cached texture must paint inside the photo area"
+    );
+    let photo_bounds = vcx
+        .debug_bounds(photo)
+        .expect("the photo area must stay painted across the reveal");
+    let thumb_bounds = vcx
+        .debug_bounds(thumb)
+        .expect("thumbnail bounds disappeared between assertions");
+    assert_eq!(
+        photo_bounds.size, thumb_bounds.size,
+        "the revealed thumbnail must keep the same layout as the skeleton"
+    );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_photo_well_is_square_at_all_densities() {
+    let (_temp_dir, engine) = seed_library("square_well", 8);
+    let first = engine.get_item_slice(0..1)[0].clone();
+    let first_id = first.id.0;
+    engine.catalog().set_rating(first.id, 3).unwrap();
+    let photo = leak(format!("media-card-photo-{}", first_id));
+    let meta = leak(format!("media-card-meta-{}", first_id));
+    let unrated_meta = leak(format!(
+        "media-card-meta-{}",
+        engine.get_item_slice(1..2)[0].id.0
+    ));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // Fix the window so the rendered card width and the production formula use
+    // the same budget; the resize observer records the new bounds before the
+    // next draw.
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    for columns in [2usize, 4, 8] {
+        view.update(vcx, |app, cx| {
+            app.grid_columns = columns;
+            cx.notify();
+        });
+        render_ui(vcx);
+
+        let photo_bounds = vcx
+            .debug_bounds(photo)
+            .unwrap_or_else(|| panic!("no photo well painted at {columns} columns"));
+        let width = f32::from(photo_bounds.size.width);
+        let height = f32::from(photo_bounds.size.height);
+        assert!(
+            (width - height).abs() <= 2.0,
+            "the photo well must be square at {columns} columns, got {width}x{height}"
+        );
+
+        let expected = view.update(vcx, |app, _| app.grid_metrics().photo_side);
+        assert!(
+            (height - expected).abs() <= 2.0,
+            "the rendered well ({height}) must use the derived side ({expected}) at {columns} columns"
+        );
+
+        // No band under the photo. Rating and label ride in a pill
+        // on the thumbnail, and only when there is something to show. Compact
+        // tiles hide the pill (small_tiles_keep_state_badges_apart).
+        if expected < crate::views::grid::COMPACT_TILE {
+            continue;
+        }
+        let meta_bounds = vcx.debug_bounds(meta).unwrap_or_else(|| {
+            panic!("a rated card must paint its meta pill at {columns} columns")
+        });
+        assert!(
+            photo_bounds.contains(&meta_bounds.origin)
+                && photo_bounds.contains(&meta_bounds.bottom_right()),
+            "the meta pill must sit inside the photo well at {columns} columns"
+        );
+        assert!(
+            vcx.debug_bounds(unrated_meta).is_none(),
+            "an unmarked card must not paint an empty meta pill"
+        );
+    }
+
+    // A live resize must relayout from the same formula, not a stale width.
+    view.update(vcx, |app, cx| {
+        app.grid_columns = 4;
+        cx.notify();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1440.0), gpui::px(900.0)));
+    render_ui(vcx);
+    let resized = vcx
+        .debug_bounds(photo)
+        .expect("the photo well must survive a window resize");
+    let width = f32::from(resized.size.width);
+    let height = f32::from(resized.size.height);
+    assert!(
+        (width - height).abs() <= 2.0,
+        "the photo well must stay square after a resize, got {width}x{height}"
+    );
+
+    // The docked inspector narrows the grid: its width and 4px resizer must be
+    // part of the same budget.
+    view.update(vcx, |app, cx| {
+        app.selected_item = app.get_active_slice(0..1).first().cloned();
+        app.inspector_open = true;
+        cx.notify();
+    });
+    render_ui(vcx);
+    let with_inspector = vcx
+        .debug_bounds(photo)
+        .expect("the photo well must stay painted with the inspector open");
+    let width = f32::from(with_inspector.size.width);
+    let height = f32::from(with_inspector.size.height);
+    let expected = view.update(vcx, |app, _| app.grid_metrics().photo_side);
+    assert!(
+        (width - height).abs() <= 2.0 && (height - expected).abs() <= 2.0,
+        "the inspector chrome must be budgeted: well {width}x{height}, expected {expected}"
+    );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_card_tooltip_carries_the_filename() {
+    let (_temp_dir, engine) = seed_library("card_tooltip", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let card = leak(format!("media-card-{}", item.id.0));
+
+    let mut cx = crate::tests::TestApp::single();
+    let (_view, vcx) = app_with_library(&mut cx, engine);
+
+    let center = bounds_center(vcx, card);
+    vcx.simulate_mouse_move(center, None, gpui::Modifiers::default());
+    // GPUI waits 500ms before building a tooltip.
+    vcx.background_executor
+        .advance_clock(std::time::Duration::from_millis(600));
+    vcx.run_until_parked();
+    render_ui(vcx);
+
+    assert!(
+        vcx.debug_bounds("media-card-name-tooltip").is_some(),
+        "hovering a card must show the filename tooltip that replaced the label"
+    );
 }

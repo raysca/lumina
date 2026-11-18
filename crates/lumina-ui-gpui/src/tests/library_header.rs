@@ -3,6 +3,8 @@
 
 use super::downloads::{install, queue_app, settle, submit};
 use super::helpers::{app_with_library, click, focus_app, keystrokes, render_ui};
+use crate::tests::helpers::*;
+use crate::*;
 use gpui::{Bounds, Pixels};
 
 fn bounds(vcx: &mut gpui::VisualTestContext, selector: &'static str) -> Bounds<Pixels> {
@@ -350,4 +352,37 @@ fn date_span_rereads_after_a_write_before_a_scroll_fetch() {
         Some((2010, 1)),
         "a span reused across a write would show the old months until the next edit"
     );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_sort_menu_orders_grid() {
+    let (_temp_dir, engine) = seed_library("sorting", 5);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    render_ui(vcx);
+    click(vcx, "sort-menu-button");
+    view.update(vcx, |app, _| assert!(app.sort_menu_open));
+
+    click(vcx, "sort-field-name");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.sort.field, lumina_core::SortField::FileName);
+        assert!(!app.sort_menu_open);
+    });
+
+    click(vcx, "sort-menu-button");
+    click(vcx, "sort-direction-asc");
+    view.update(vcx, |app, _| {
+        assert_eq!(app.sort.direction, lumina_core::SortDirection::Ascending);
+        assert_eq!(app.sort_label(), "Name ↑");
+        let names: Vec<String> = app
+            .get_active_slice(0..5)
+            .into_iter()
+            .map(|item| item.file_name)
+            .collect();
+        let mut expected = names.clone();
+        expected.sort_by_key(|name| name.to_lowercase());
+        assert_eq!(names, expected, "grid must follow the selected sort");
+        assert_eq!(names.first().map(String::as_str), Some("photo_00.jpg"));
+    });
 }

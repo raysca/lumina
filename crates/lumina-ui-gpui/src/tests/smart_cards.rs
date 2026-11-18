@@ -11,6 +11,7 @@ use super::helpers::{
 };
 use crate::app::albums_overview::OverviewFocus;
 use crate::views::sidebar::AlbumSelection;
+use crate::*;
 
 pub(super) fn iso_over_1600() -> SmartAlbumRule {
     SmartAlbumRule {
@@ -355,4 +356,62 @@ fn smart_row_and_album_grid_scroll_as_one_page() {
         painted(vcx, smart_card),
         "the focused smart card scrolls in"
     );
+}
+
+#[core::prelude::v1::test]
+fn ui_automation_smart_album_edit_and_delete() {
+    let (_temp_dir, engine) = seed_library("smart_album_mgmt", 3);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    view.update(vcx, |app, cx| {
+        app.open_album_builder(cx);
+        app.album_draft.album_title = "Round Trip".to_string();
+        app.save_draft_smart_album(cx);
+    });
+    let album = view.update(vcx, |app, _| {
+        let album = app
+            .user_smart_albums
+            .first()
+            .cloned()
+            .expect("album should be created");
+        assert_eq!(album.title, "Round Trip");
+        album
+    });
+
+    render_ui(vcx);
+    click(vcx, leak(format!("smart-album-edit-{}", album.id)));
+    view.update(vcx, |app, _| {
+        assert!(
+            app.album_draft.modal_open,
+            "edit button should open builder"
+        );
+        assert_eq!(app.album_draft.editing_album_id, Some(album.id));
+    });
+    view.update(vcx, |app, cx| {
+        app.album_draft.album_title = "Renamed Trip".to_string();
+        app.save_draft_smart_album(cx);
+    });
+    view.update(vcx, |app, _| {
+        let updated = app
+            .user_smart_albums
+            .iter()
+            .find(|candidate| candidate.id == album.id)
+            .expect("album should still exist");
+        assert_eq!(updated.title, "Renamed Trip");
+    });
+
+    render_ui(vcx);
+    click(vcx, leak(format!("smart-album-delete-{}", album.id)));
+    click(vcx, "smart-album-delete-confirm");
+    view.update(vcx, |app, _| {
+        assert!(
+            app.user_smart_albums.is_empty(),
+            "delete button should remove the album"
+        );
+        assert_eq!(
+            app.selection,
+            crate::views::sidebar::AlbumSelection::AllLibrary
+        );
+    });
 }
