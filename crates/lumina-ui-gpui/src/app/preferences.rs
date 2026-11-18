@@ -132,6 +132,9 @@ pub struct CacheJob {
     pub epoch: u64,
     /// A clear is running, or waiting for its new reading; Clear is ignored.
     pub clearing: bool,
+    /// Its reading shows "Cleared": false once Settings is reopened, so the
+    /// confirmation stays with the visit that pressed Clear.
+    pub confirm: bool,
 }
 
 pub(crate) fn directory_usage(path: &Path) -> CacheUsage {
@@ -326,6 +329,7 @@ impl LuminaApp {
         // Help > About over the reset question: Reset is General's alone.
         self.preferences_reset_confirm = false;
         self.preferences_cache_cleared = false;
+        self.preferences_cache_job.confirm = false;
         self.refresh_cache_usage(cx);
         if tab == PreferencesTab::Library {
             self.refresh_library_storage(cx);
@@ -446,7 +450,7 @@ impl LuminaApp {
         // The first reading after a clear confirms it.
         if self.preferences_cache_job.clearing {
             self.preferences_cache_job.clearing = false;
-            self.preferences_cache_cleared = true;
+            self.preferences_cache_cleared = self.preferences_cache_job.confirm;
             self.set_last_action("Thumbnail cache cleared");
         }
         cx.notify();
@@ -460,6 +464,7 @@ impl LuminaApp {
             return;
         }
         self.preferences_cache_job.clearing = true;
+        self.preferences_cache_job.confirm = true;
         self.preferences_cache_job.epoch += 1;
         let dir = thumbnail_cache_dir();
         let task = cx.background_executor().spawn(async move {

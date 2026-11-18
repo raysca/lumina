@@ -1941,6 +1941,39 @@ fn storage_reading_started_before_a_clear_never_lands_after_it() {
 }
 
 #[core::prelude::v1::test]
+fn reopening_settings_mid_clear_does_not_show_cleared() {
+    let (_temp_dir, engine) = seed_library("settings_storage_reopen", 1);
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    let cache = thumbnail_cache_dir();
+    let _ = std::fs::remove_dir_all(&cache);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("1.jpg"), b"thumb").unwrap();
+    view.update(vcx, |app, cx| {
+        app.open_preferences_at(PreferencesTab::Storage, cx)
+    });
+    vcx.run_until_parked();
+
+    // Clear, then close and reopen Settings before its size reading lands.
+    view.update(vcx, |app, cx| {
+        app.clear_thumbnail_cache(cx);
+        app.close_preferences(cx);
+        app.open_preferences_at(PreferencesTab::Storage, cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert!(!app.preferences_cache_job.clearing, "the clear finished");
+        assert_eq!(app.preferences_cache.map(|u| u.files), Some(0));
+        assert!(
+            !app.preferences_cache_cleared,
+            "a reopened Settings page never shows the previous visit's Cleared"
+        );
+    });
+
+    let _ = std::fs::remove_dir_all(&cache);
+}
+
+#[core::prelude::v1::test]
 fn settings_brand_shows_the_logo_where_the_library_does() {
     let (_temp_dir, engine) = seed_library("settings_brand", 1);
     let mut cx = crate::tests::TestApp::single();
