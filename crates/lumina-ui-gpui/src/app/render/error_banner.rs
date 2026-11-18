@@ -52,7 +52,8 @@ impl LuminaApp {
 /// Splits "Title: detail" into the banner's two lines. The detail is
 /// usually an error chain ("creating an album: database is locked");
 /// leading links that only restate the title ("Could not create album")
-/// are dropped, so the detail says what the title does not.
+/// are dropped, so the detail says what the title does not. A link that
+/// adds anything (a path, another noun) stays.
 fn banner_parts(message: &str) -> (String, Option<String>) {
     let Some((title, detail)) = message.split_once(": ") else {
         return (message.to_string(), None);
@@ -63,14 +64,18 @@ fn banner_parts(message: &str) -> (String, Option<String>) {
         .strip_prefix("could not ")
         .and_then(|rest| rest.split_whitespace().next())
         .map(|verb| verb.strip_suffix('e').unwrap_or(verb));
+    let title_words: std::collections::HashSet<&str> = title_lower.split_whitespace().collect();
+    // The verb's -ing form, then only articles and the title's own words.
     let restates = |link: &str| {
         let link = link.to_lowercase();
-        link == title_lower
-            || stem.is_some_and(|stem| {
-                link.split_whitespace()
-                    .next()
-                    .is_some_and(|word| word.starts_with(stem) && word.ends_with("ing"))
-            })
+        if link == title_lower {
+            return true;
+        }
+        let mut words = link.split_whitespace();
+        let verb = words.next().is_some_and(|word| {
+            stem.is_some_and(|stem| word.starts_with(stem) && word.ends_with("ing"))
+        });
+        verb && words.all(|word| matches!(word, "a" | "an" | "the") || title_words.contains(word))
     };
     let mut rest = detail;
     // Always keep the last link: it is the cause.
@@ -203,6 +208,21 @@ mod tests {
             parts("Could not save settings: could not write /tmp/c.json: disk full").1,
             Some("could not write /tmp/c.json: disk full".to_string()),
             "context that adds information (what was written) stays"
+        );
+        assert_eq!(
+            parts("Could not open library: opening /Volumes/X/lib: no such file").1,
+            Some("opening /Volumes/X/lib: no such file".to_string()),
+            "a link that restates the verb but adds a path stays"
+        );
+        assert_eq!(
+            parts("Could not open library: opening the library: no such file").1,
+            Some("no such file".to_string()),
+            "a link with only the verb, articles and the title's words is dropped"
+        );
+        assert_eq!(
+            parts("Could not create album: creating album cover: disk full").1,
+            Some("creating album cover: disk full".to_string()),
+            "a link naming something the title does not stays"
         );
         assert_eq!(
             parts("Could not delete: deleting").1,
