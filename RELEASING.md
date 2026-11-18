@@ -83,6 +83,12 @@ Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml` on
 artifacts, and creates a **draft** GitHub release with the zip, DMG, and
 checksums. Publish the draft after verifying the artifacts.
 
+Publishing ships the release to every Lumina that checks for updates
+(`docs/updates.md`). Installed apps take it only if the zip holds a
+Developer ID signed, notarized and stapled `Lumina.app` from the same team
+and bundle id, with the tag's version. Never publish an ad-hoc build, and
+keep the zip and `SHA256SUMS.txt` names that `package_release.sh` writes.
+
 ### Repository secrets
 
 | Secret | Purpose |

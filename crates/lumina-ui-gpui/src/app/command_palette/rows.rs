@@ -107,6 +107,19 @@ impl LuminaApp {
             // An open album's tiles always fill.
             CommandId::ToggleFit => !self.album_tiles(),
             CommandId::ToggleAlbumPanel => self.album_panel_fits(),
+            CommandId::CheckForUpdates => crate::app::updates::supported() && !self.updates.busy(),
+            CommandId::RestartToUpdate => {
+                matches!(
+                    self.updates.phase,
+                    crate::app::updates::UpdatePhase::Ready(_)
+                )
+            }
+            CommandId::AutoUpdatesOn => {
+                crate::app::updates::supported() && !self.config.auto_update_check
+            }
+            CommandId::AutoUpdatesOff => {
+                crate::app::updates::supported() && self.config.auto_update_check
+            }
             CommandId::PinAlbum => self.open_album_pinned() == Some(false),
             CommandId::UnpinAlbum => self.open_album_pinned() == Some(true),
             CommandId::DuplicateSmartAlbum | CommandId::ExportSmartAlbumRules => {

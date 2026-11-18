@@ -15,6 +15,13 @@ pub enum CommandId {
     About,
     ShowLicense,
     ShowAcknowledgements,
+    /// Looks for a newer Lumina and downloads it (macOS).
+    CheckForUpdates,
+    /// Quits, installs the downloaded update and opens it.
+    RestartToUpdate,
+    /// Turn the daily update check on or off.
+    AutoUpdatesOn,
+    AutoUpdatesOff,
     EmptyTrash,
     RestoreAll,
     MergeAllDuplicates,
@@ -205,6 +212,9 @@ impl Command {
             | SortAsc | SortDesc => Icon::Sliders,
             About | ToggleInspector | GetInfo | ShowLicense | ShowAcknowledgements => Icon::Info,
             Shortcuts => Icon::Zap,
+            CheckForUpdates => Icon::ArrowDownToLine,
+            RestartToUpdate => Icon::RotateCw,
+            AutoUpdatesOn | AutoUpdatesOff => Icon::RefreshCw,
             ToggleSidebar => Icon::PanelLeft,
             ToggleAlbumPanel => Icon::PanelRight,
             ExportSelection | ExportJpeg | Share => Icon::ExternalLink,

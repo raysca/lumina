@@ -73,6 +73,11 @@ impl LuminaApp {
         self.downloads.reset(None);
         // State changed since the last debounced session save would be lost.
         self.save_config();
+        // Last: a failed Restart to Update stops here with the banner.
+        if !self.install_update_on_quit() {
+            cx.notify();
+            return;
+        }
         #[cfg(test)]
         {
             self.downloads.quit_requested = true;
@@ -96,6 +101,8 @@ impl LuminaApp {
     /// Cancel, Esc and the backdrop: the downloads keep going.
     pub(crate) fn dismiss_downloads_prompt(&mut self, cx: &mut Context<Self>) {
         self.downloads.confirm = None;
+        // A cancelled Restart to Update: a later quit installs, but doesn't reopen.
+        self.updates.relaunch = false;
         cx.notify();
     }
 

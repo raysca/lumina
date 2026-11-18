@@ -44,6 +44,13 @@ pub enum SettingsButton {
     RevealLogs,
     License,
     Acknowledgements,
+    /// About's update button, by state: Check for Updates, Restart to
+    /// Update, or Open Release Page (see `update_button`).
+    CheckUpdates,
+    RestartToUpdate,
+    ReleasePage,
+    /// About › Check Daily, a toggle.
+    AutoUpdates,
 }
 
 impl SettingsButton {
@@ -62,6 +69,10 @@ impl SettingsButton {
             Self::RevealLogs => "preferences-reveal-logs",
             Self::License => "preferences-license",
             Self::Acknowledgements => "preferences-acknowledgements",
+            Self::CheckUpdates => "preferences-check-updates",
+            Self::RestartToUpdate => "preferences-restart-to-update",
+            Self::ReleasePage => "preferences-release-page",
+            Self::AutoUpdates => "preferences-auto-updates",
         }
     }
 
@@ -78,6 +89,10 @@ impl SettingsButton {
             Self::RevealLogs => app.reveal_logs(cx),
             Self::License => app.open_bundled_doc("LICENSE", cx),
             Self::Acknowledgements => app.open_bundled_doc("THIRD_PARTY_NOTICES.md", cx),
+            Self::CheckUpdates => app.check_for_updates(true, cx),
+            Self::RestartToUpdate => app.restart_to_update(cx),
+            Self::ReleasePage => app.open_release_page(cx),
+            Self::AutoUpdates => app.set_auto_update_check(!app.config.auto_update_check, cx),
         }
     }
 }
@@ -352,6 +367,9 @@ impl LuminaApp {
                 .into_iter()
                 .collect(),
             PreferencesTab::Storage => vec![RevealCache, ClearCache, RevealConfig, RevealLogs],
+            PreferencesTab::About if crate::app::updates::supported() => {
+                vec![License, Acknowledgements, self.update_button(), AutoUpdates]
+            }
             PreferencesTab::About => vec![License, Acknowledgements],
         }
     }

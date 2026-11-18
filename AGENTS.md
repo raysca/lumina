@@ -75,6 +75,7 @@ crates/lumina-core/src/
   smart_albums/   rule evaluation and SQL synthesis (rules_sql.rs)
   xmp/            sidecar render/parse/write
   net_import/     user-initiated URL video import
+  update/         self-update: release check, download, verify, swap
   cache.rs        memory/disk thumbnail cache
 crates/lumina-ui-gpui/src/
   app/            state, actions, keymap, selection, undo, sort, command
@@ -85,7 +86,7 @@ crates/lumina-ui-gpui/src/
   tests/          in-process UI automation
 scripts/          live smoke/e2e, Linux packaging and release scripts
 resources/        Info.plist, icns, icons, fonts, entitlements
-docs/             accessibility, search, network import, Linux
+docs/             accessibility, search, network import, updates, Linux
 ```
 
 ## 5. Rust coding standards
@@ -164,8 +165,15 @@ docs/             accessibility, search, network import, Linux
   approved future network feature that handles user media is optional backup to
   user-owned S3-compatible storage: credentials only in the OS credential store,
   client-side encryption, no secrets in config/database/logs, and no automatic
-  deletion of local or remote data. Update checks remain explicit opt-in and
-  must not upload user data.
+  deletion of local or remote data.
+- Approved exception: self-update (`lumina-core/src/update/`, macOS only).
+  It contacts GitHub's release API and download hosts only when the user
+  picks Check for Updates or turned on Check Daily (off by default), and
+  sends no user data. It installs only an app that meets the running app's
+  designated requirement plus `notarized` (same Developer ID team and bundle
+  id), checked when staged and again just before the swap; the release
+  checksum alone is never trusted. The swap happens at quit and rolls back
+  on failure. See `docs/updates.md`.
 - Approved exception: user-initiated URL video import (`net_import`, File >
   Import Video from URL). It contacts the site in the URL the user pasted and
   the servers that site sends the video from (CDN and API hosts), sends no
@@ -174,8 +182,9 @@ docs/             accessibility, search, network import, Linux
   `scripts/fetch_yt_dlp.sh` and `scripts/fetch_ffmpeg.sh` (an LGPL-only,
   copy-only ffmpeg built from source with network protocols disabled).
   Without the bundled copies (a local build) it falls back to ones the user
-  installed (Homebrew, `PATH`). Lumina never downloads an executable at run
-  time. The UI never
+  installed (Homebrew, `PATH`). Apart from a signed, notarized self-update
+  of Lumina itself, Lumina never downloads an executable at run time. The
+  UI never
   names these tools: messages say what happened and what the user can do.
   See `docs/network-import.md`.
 

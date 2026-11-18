@@ -471,6 +471,13 @@ pub struct AppConfig {
         deserialize_with = "lenient_download_concurrency"
     )]
     pub download_concurrency: usize,
+    /// Settings › About › Check Daily: look for an update at launch, at most
+    /// once a day. Off unless the user turns it on (AGENTS.md §5.4).
+    #[serde(default)]
+    pub auto_update_check: bool,
+    /// When the last update check ran (failed attempts count), in Unix seconds.
+    #[serde(default)]
+    pub last_update_check_secs: Option<u64>,
 }
 
 /// The Simultaneous downloads choices.
@@ -693,6 +700,8 @@ impl Default for AppConfig {
             album_panel_hidden: false,
             launch_view: LaunchView::LastViewed,
             download_concurrency: DEFAULT_DOWNLOAD_CONCURRENCY,
+            auto_update_check: false,
+            last_update_check_secs: None,
         }
     }
 }

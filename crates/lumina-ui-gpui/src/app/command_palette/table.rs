@@ -64,6 +64,10 @@ pub fn commands() -> &'static [Command] {
         cmd(RetryError, "command.retry_error", "", "error again failed"),
         cmd(ShowLicense, "command.show_license", "", "license mit legal about"),
         cmd(ShowAcknowledgements, "command.show_acknowledgements", "", "acknowledgements credits third party notices licenses about"),
+        cmd(CheckForUpdates, "command.check_for_updates", "", "update upgrade new version latest release download"),
+        cmd(RestartToUpdate, "command.restart_to_update", "", "update upgrade install relaunch new version"),
+        cmd(AutoUpdatesOn, "command.auto_updates_on", "", "update automatic daily check enable settings"),
+        cmd(AutoUpdatesOff, "command.auto_updates_off", "", "update automatic daily check disable settings"),
         cmd(Shortcuts, "command.shortcuts", "⌘/", "help keys"),
         // Titled by state in `command_title`: Hide or Show Sidebar.
         cmd(ToggleSidebar, "command.toggle_sidebar", crate::app::panels::SIDEBAR_SHORTCUT, "panel hide show toggle sidebar"),
@@ -208,10 +212,10 @@ mod table_tests {
             .fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
                 (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
             });
-        assert_eq!(table.len(), 153, "command count changed");
+        assert_eq!(table.len(), 157, "command count changed");
         assert_eq!(
             hash,
-            14_141_671_826_939_022_113,
+            15_117_093_722_329_621_587,
             "command table changed:\n{}",
             rows.join("\n")
         );

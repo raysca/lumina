@@ -507,6 +507,8 @@ pub struct LuminaApp {
     pub last_action: Option<String>,
     /// Transient success/info toast shown bottom-right (errors stay in the banner).
     pub toast: crate::views::toast::ToastState,
+    /// Check for Updates and the update waiting to install.
+    pub updates: crate::app::updates::UpdateState,
     /// Keyboard shortcut cheat sheet visibility.
     pub shortcuts_overlay_open: bool,
     /// Last persisted window bounds: (x, y, width, height).
@@ -747,6 +749,7 @@ impl LuminaApp {
             error_retry: None,
             last_action: None,
             toast: crate::views::toast::ToastState::default(),
+            updates: Default::default(),
             shortcuts_overlay_open: false,
             window_bounds: config.restored_window_bounds(),
             window_bounds_subscription: None,
@@ -830,6 +833,17 @@ impl LuminaApp {
         // Tests are isolated: they must set up their own temporary library.
         #[cfg(not(test))]
         app.apply_startup_library(crate::app::recents::startup_library(&config), cx);
+        // Only when the user turned on the daily check (AGENTS.md §5.4).
+        #[cfg(not(test))]
+        app.auto_check_for_updates(cx);
+        // Every quit installs a waiting update, not only ⌘Q: the Dock, logout
+        // and shutdown reach GPUI's quit observers (applicationWillTerminate).
+        // After `request_quit` already installed it, this is a no-op.
+        cx.on_app_quit(|app: &mut Self, _cx| {
+            app.install_update_on_quit();
+            async {}
+        })
+        .detach();
 
         app
     }

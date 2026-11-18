@@ -32,6 +32,9 @@ fn app_actions(div: Div, cx: &mut Context<LuminaApp>) -> Div {
     div.on_action(cx.listener(|this, _: &QuitApp, _w, cx| {
         this.request_quit(cx);
     }))
+    .on_action(cx.listener(|this, _: &CheckForUpdates, _w, cx| {
+        this.check_for_updates(true, cx);
+    }))
     .on_action(cx.listener(|this, _: &OpenLibrary, _w, cx| {
         // The menu bar is reachable over a full-screen slideshow; the
         // picker would open behind it while the show plays on.

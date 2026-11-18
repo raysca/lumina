@@ -19,6 +19,7 @@ pub mod sort;
 pub mod stacks;
 pub mod text;
 mod types;
+pub mod update;
 mod video_frame;
 pub mod watcher;
 pub mod xmp;

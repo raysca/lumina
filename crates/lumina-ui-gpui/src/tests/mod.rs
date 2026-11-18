@@ -104,6 +104,9 @@ mod thumbnails;
 mod toasts;
 mod ui_automation;
 mod ui_thread;
+// Updates are offered on macOS only (`app::updates::supported`).
+#[cfg(target_os = "macos")]
+mod updates;
 mod video_filters;
 mod video_player;
 mod video_scrub;

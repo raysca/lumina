@@ -64,6 +64,7 @@ pub mod templates;
 pub mod text_input;
 pub mod types;
 pub mod undo;
+pub mod updates;
 pub mod video_actions;
 #[cfg(target_os = "linux")]
 mod video_load_linux;

@@ -58,12 +58,23 @@ impl ToastKind {
 }
 
 /// The toast's text action.
-// ponytail: only Undo has a caller; View/Retry from the design land with
-// their first caller.
+// ponytail: View/Retry from the design land with their first caller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToastAction {
     /// Runs [`LuminaApp::undo_from_toast`].
     Undo,
+    /// Runs [`LuminaApp::restart_to_update`].
+    RestartToUpdate,
+}
+
+impl ToastAction {
+    /// The button's label and its tooltip / VoiceOver label.
+    fn labels(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Undo => ("Undo", "Undo (⌘Z)"),
+            Self::RestartToUpdate => ("Restart", "Restart to Update"),
+        }
+    }
 }
 
 /// The single visible toast.
@@ -239,8 +250,9 @@ impl LuminaApp {
         let colour = kind.colour();
         let message = toast.message.clone();
         let subtitle = toast.subtitle.clone();
-        let action = toast.action.map(|ToastAction::Undo| {
-            let label = SharedString::from("Undo");
+        let action = toast.action.map(|action| {
+            let (label, tip) = action.labels();
+            let label = SharedString::from(label);
             div()
                 .id("toast-action")
                 .debug_selector(|| "toast-action".to_string())
@@ -250,14 +262,17 @@ impl LuminaApp {
                 .text_color(colour)
                 .cursor_pointer()
                 .hover(|style| style.opacity(0.8))
-                .tooltip(theme::tooltip_label("Undo (⌘Z)"))
+                .tooltip(theme::tooltip_label(tip))
                 .role(Role::Button)
-                .aria_label("Undo (⌘Z)")
+                .aria_label(tip)
                 .children(text_marker("toast-action", &label))
                 .child(label)
-                .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                    this.undo_from_toast(cx);
-                }))
+                .on_click(
+                    cx.listener(move |this, _event: &ClickEvent, _window, cx| match action {
+                        ToastAction::Undo => this.undo_from_toast(cx),
+                        ToastAction::RestartToUpdate => this.restart_to_update(cx),
+                    }),
+                )
         });
 
         let toast = div()

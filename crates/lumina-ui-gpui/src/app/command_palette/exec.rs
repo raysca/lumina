@@ -23,6 +23,10 @@ impl LuminaApp {
             }
             CommandId::About => self.open_about(cx),
             CommandId::ShowLicense => self.open_bundled_doc("LICENSE", cx),
+            CommandId::CheckForUpdates => self.check_for_updates(true, cx),
+            CommandId::RestartToUpdate => self.restart_to_update(cx),
+            CommandId::AutoUpdatesOn => self.set_auto_update_check(true, cx),
+            CommandId::AutoUpdatesOff => self.set_auto_update_check(false, cx),
             CommandId::EmptyTrash => self.prompt_empty_trash(cx),
             CommandId::RestoreAll => self.restore_all_trash(cx),
             CommandId::MergeAllDuplicates => self.merge_all_duplicates(cx),

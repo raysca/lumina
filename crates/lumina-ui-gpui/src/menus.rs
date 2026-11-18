@@ -10,6 +10,8 @@ pub fn build_menus(sidebar_collapsed: bool) -> Vec<Menu> {
     vec![
         Menu::new("Lumina").items([
             MenuItem::action("About Lumina", ShowAbout),
+            #[cfg(target_os = "macos")]
+            MenuItem::action(crate::i18n::t("command.check_for_updates"), CheckForUpdates),
             MenuItem::separator(),
             MenuItem::action("Preferences…", OpenPreferences),
             MenuItem::separator(),
@@ -130,6 +132,13 @@ mod tests {
                 .iter()
                 .any(|item| matches!(item, MenuItem::Action { name, .. } if name == "Share…")),
             "File offers Share… on macOS"
+        );
+        #[cfg(target_os = "macos")]
+        assert!(
+            app_items.iter().any(
+                |item| matches!(item, MenuItem::Action { name, .. } if name == "Check for Updates…")
+            ),
+            "the Lumina menu offers Check for Updates… on macOS"
         );
     }
 

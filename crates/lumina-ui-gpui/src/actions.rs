@@ -11,6 +11,7 @@ actions!(
         RescanLibrary,
         ShowShortcuts,
         ShowAbout,
+        CheckForUpdates,
         QuitApp,
         ToggleSidebar,
         ToggleInspector,
