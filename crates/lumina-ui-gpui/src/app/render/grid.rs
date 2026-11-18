@@ -366,7 +366,7 @@ fn month_title(year: i32, month: u32) -> String {
     if year > 0 {
         format!("{} {year}", crate::app::types::month_name(month))
     } else {
-        "Undated".to_string()
+        crate::i18n::t("date.undated")
     }
 }
 

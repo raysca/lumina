@@ -429,7 +429,7 @@ impl LuminaApp {
                 .iter()
                 .map(|(year, _)| PaletteRow {
                     target: PaletteTarget::Year(*year),
-                    title: year.to_string(),
+                    title: crate::i18n::year_label(*year),
                     shortcut: "",
                     icon: Icon::Image,
                     selector: format!("palette-go-year-{year}"),

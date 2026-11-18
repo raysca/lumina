@@ -22,10 +22,6 @@ you find something you are not fixing now. Planned features live in
 
 ### Places, dates and search
 
-- Undated items (capture time 0) are now stored as year 0, month 0, so the
-  month band says "Undated", but the timeline rail and the year buckets label
-  their `0000-00` bucket as year "0"
-  (`crates/lumina-ui-gpui/src/app/render/rail.rs`); they should say "Undated".
 - The Videos header understates the total running time: clips whose duration
   has not been read add their size but not their length, with no hint.
 

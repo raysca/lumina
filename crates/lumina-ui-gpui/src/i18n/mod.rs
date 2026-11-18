@@ -84,9 +84,22 @@ pub fn import_failed(copied: usize, total: usize, failed: usize) -> String {
         .replace("{total}", &count(total))
 }
 
+/// A year bucket's label: "2018", or "Undated" for items without a capture
+/// time (the catalog files them under year 0).
+pub fn year_label(year: i32) -> String {
+    if year > 0 {
+        year.to_string()
+    } else {
+        t("date.undated")
+    }
+}
+
 /// "Jun 2018" (en-US short month and year); the year alone for a month
-/// outside 1-12.
+/// outside 1-12, and "Undated" for year 0.
 pub fn month_year(year: i32, month: u32) -> String {
+    if year <= 0 {
+        return year_label(year);
+    }
     if !(1..=12).contains(&month) {
         return year.to_string();
     }
@@ -481,5 +494,8 @@ mod tests {
             "2018",
             "a bad month never shows a raw key"
         );
+        assert_eq!(month_year(0, 0), "Undated", "year 0 is undated");
+        assert_eq!(year_label(0), "Undated");
+        assert_eq!(year_label(2018), "2018");
     }
 }

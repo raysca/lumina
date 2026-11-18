@@ -16,6 +16,7 @@ use crate::app::LuminaApp;
 use crate::i18n::t;
 use crate::theme;
 use crate::views::grid::YEAR_RAIL_WIDTH;
+use crate::views::page_header::text_marker;
 use crate::views::sidebar::AlbumSelection;
 
 /// "TIMELINE" label top.
@@ -128,21 +129,23 @@ impl TimelineRail {
     }
 }
 
-/// "JUN 2025", "MAY — JUL 2025" or "DEC 2024 — FEB 2025", oldest first.
+/// "JUN 2025", "MAY — JUL 2025" or "DEC 2024 — FEB 2025", oldest first;
+/// undated items (year 0) read "UNDATED".
 fn range_label(oldest: &RailMonth, newest: &RailMonth) -> String {
     let short = |m: &RailMonth| t(&format!("date.month_short_{}", m.month)).to_uppercase();
+    let full = |m: &RailMonth| {
+        if m.year > 0 {
+            format!("{} {}", short(m), m.year)
+        } else {
+            t("date.undated").to_uppercase()
+        }
+    };
     if (oldest.year, oldest.month) == (newest.year, newest.month) {
-        format!("{} {}", short(newest), newest.year)
-    } else if oldest.year == newest.year {
+        full(newest)
+    } else if oldest.year == newest.year && newest.year > 0 {
         format!("{} — {} {}", short(oldest), short(newest), newest.year)
     } else {
-        format!(
-            "{} {} — {} {}",
-            short(oldest),
-            oldest.year,
-            short(newest),
-            newest.year
-        )
+        format!("{} — {}", full(oldest), full(newest))
     }
 }
 
@@ -378,7 +381,8 @@ impl LuminaApp {
             children.push(match *row {
                 RailRow::Year { year, y } => {
                     let is_current = current_year == Some(year);
-                    let label = t("timeline.scroll_to").replace("{year}", &year.to_string());
+                    let name = crate::i18n::year_label(year);
+                    let label = t("timeline.scroll_to").replace("{year}", &name);
                     div()
                         .id(ElementId::NamedInteger("timeline-year".into(), year as u64))
                         .debug_selector(move || format!("timeline-year-{year}"))
@@ -396,7 +400,8 @@ impl LuminaApp {
                         .text_size(px(9.5))
                         .text_color(if is_current { theme::t1() } else { theme::t3() })
                         .hover(|s| s.text_color(theme::t1()))
-                        .child(year.to_string())
+                        .children(text_marker("timeline-year", &name.clone().into()))
+                        .child(name)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.scroll_to_year(year, cx);
                         }))
@@ -457,7 +462,8 @@ impl LuminaApp {
                 }
                 RailRow::Older { year, first, y } => {
                     let on_screen = visible.is_some_and(|(_, oldest)| oldest >= first);
-                    let label = t("timeline.scroll_to_older").replace("{year}", &year.to_string());
+                    let name = crate::i18n::year_label(year);
+                    let label = t("timeline.scroll_to_older").replace("{year}", &name);
                     div()
                         .id("timeline-older")
                         .debug_selector(|| "timeline-older".to_string())
@@ -479,7 +485,7 @@ impl LuminaApp {
                             theme::t3()
                         })
                         .hover(|s| s.text_color(theme::t1()))
-                        .child(format!("{year} ↓"))
+                        .child(format!("{name} ↓"))
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.scroll_to_year(year, cx);
                         }))
@@ -603,6 +609,18 @@ mod tests {
         assert_eq!(
             range_label(&r.months[oldest], &r.months[newest]),
             "DEC 2024"
+        );
+    }
+
+    /// Regression: undated items (year 0) read "0" on the rail and its
+    /// bubble showed a raw month key.
+    #[core::prelude::v1::test]
+    fn undated_months_read_undated() {
+        let r = rail(&[((2025, 7), 2), ((0, 0), 2)]);
+        assert_eq!(range_label(&r.months[1], &r.months[1]), "UNDATED");
+        assert_eq!(
+            range_label(&r.months[1], &r.months[0]),
+            "UNDATED — JUL 2025"
         );
     }
 

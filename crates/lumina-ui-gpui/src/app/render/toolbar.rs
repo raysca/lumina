@@ -156,7 +156,7 @@ impl LuminaApp {
                 .get(&lumina_core::SystemAlbum::RecentlyDeleted)
                 .is_some_and(|&n| n > 0);
         let title = match self.active_year {
-            Some(year) => year.to_string(),
+            Some(year) => crate::i18n::year_label(year),
             None => view_label.to_string(),
         };
         let toggle = self.render_sidebar_toggle(cx);

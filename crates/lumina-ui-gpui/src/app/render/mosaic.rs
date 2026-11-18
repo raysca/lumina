@@ -333,7 +333,7 @@ fn day_title(day: u32) -> String {
     chrono::NaiveDate::from_ymd_opt((day / 10_000) as i32, day / 100 % 100, day % 100)
         .filter(|_| day != 0)
         .map_or_else(
-            || crate::i18n::t("mosaic.undated"),
+            || crate::i18n::t("date.undated"),
             |date| date.format(&crate::i18n::t("mosaic.day_date")).to_string(),
         )
 }

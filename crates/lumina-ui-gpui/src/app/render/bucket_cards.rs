@@ -116,7 +116,7 @@ impl LuminaApp {
                     let offset = self.rail.year_offset(year, direction)?;
                     Some(card(
                         format!("year-card-{year}"),
-                        year.to_string(),
+                        crate::i18n::year_label(year),
                         count,
                         self.levels.year_covers.get(&year).copied(),
                         offset,

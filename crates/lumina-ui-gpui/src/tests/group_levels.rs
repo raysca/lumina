@@ -30,6 +30,48 @@ fn assert_header_on_top(view: &Entity<LuminaApp>, vcx: &mut VisualTestContext, f
     );
 }
 
+/// Regression: items with no capture time (year 0) were labelled "0" on
+/// the timeline rail and on their year card.
+#[core::prelude::v1::test]
+fn undated_items_read_undated_on_the_rail_and_year_cards() {
+    let (dir, engine) = rail_library("levels_undated");
+    let items = engine.get_item_slice(0..2);
+    // As the scanner files a capture time of 0 (year 0); a date edit to 0
+    // does not, so the row is written directly. Re-dating another item to
+    // its own time rebuilds the timeline buckets.
+    rusqlite::Connection::open(dir.0.join("catalog.db"))
+        .unwrap()
+        .execute(
+            "UPDATE media_items SET timestamp_epoch_ms = 0, year = 0, month = 0, day = 0 \
+             WHERE id = ?1",
+            [items[0].id.0 as i64],
+        )
+        .unwrap();
+    engine
+        .set_timestamps(&[(items[1].id, items[1].timestamp_epoch_ms)])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = tall_mosaic(&mut cx, engine);
+    assert!(
+        shown(vcx, "timeline-year-text:Undated"),
+        "the rail labels the year-0 bucket Undated"
+    );
+    assert!(!shown(vcx, "timeline-year-text:0"), "never as year 0");
+    click(vcx, "zoom-level-years");
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        let undated = app
+            .bucket_cards()
+            .into_iter()
+            .find(|c| c.aria_label.starts_with("Undated"));
+        assert_eq!(
+            undated.map(|c| c.aria_label),
+            Some("Undated, 1 item".to_string()),
+            "the year card for undated items says Undated"
+        );
+    });
+}
+
 #[core::prelude::v1::test]
 fn zoom_pill_levels_show_year_and_month_cards() {
     let (_dir, engine) = rail_library("levels_cards");
