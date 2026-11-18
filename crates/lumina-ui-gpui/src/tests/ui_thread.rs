@@ -192,12 +192,12 @@ fn opening_another_library_never_shows_the_last_ones_rows() {
     render_ui(vcx);
     render_ui(vcx);
 
-    // The engine opens in the background; nothing draws meanwhile.
-    view.update(vcx, |app, cx| app.open_library_inner(dir_b.clone(), cx));
-    vcx.run_until_parked();
-    view.update(vcx, |app, _| {
-        // Before the new library's first fetch lands. Ids restart per
-        // catalog, so an old row would act on the wrong photo.
+    // Installed as a finished background open does, and checked in the
+    // same update: before the new library's first fetch can land.
+    view.update(vcx, |app, cx| {
+        crate::tests::helpers::install_library(app, dir_b.to_path_buf(), cx);
+        // Ids restart per catalog, so an old row would act on the wrong
+        // photo.
         let shown = app.displayed_rows(0..5);
         assert!(
             shown

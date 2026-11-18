@@ -1064,6 +1064,25 @@ fn import_picks() -> usize {
     crate::app::import::IMPORT_PICKS.with(|n| n.get())
 }
 
+/// Runs `then` once, in its own update right after the update in which a
+/// library open lands (`grid_state` set), so no other task runs between.
+fn on_open_landed(
+    view: &gpui::Entity<LuminaApp>,
+    vcx: &mut gpui::VisualTestContext,
+    then: impl FnOnce(&mut LuminaApp, &mut gpui::Context<LuminaApp>) + 'static,
+) -> gpui::Subscription {
+    let mut then = Some(then);
+    vcx.update(|_, cx| {
+        cx.observe(view, move |view, cx| {
+            if view.read(cx).grid_state.is_some() {
+                if let Some(then) = then.take() {
+                    view.update(cx, then);
+                }
+            }
+        })
+    })
+}
+
 fn picture_opens() -> usize {
     crate::app::first_scan::PICTURE_OPENS.with(|n| n.get())
 }
@@ -1074,6 +1093,13 @@ fn import_into_new_library_opens_then_asks_for_sources() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
+    // What the app holds the moment the open lands: an observer runs right
+    // after that update, before the real scan's ScanComplete can be read.
+    let landed = std::rc::Rc::new(std::cell::Cell::new(None));
+    let _watch = on_open_landed(&view, vcx, {
+        let landed = landed.clone();
+        move |app, _| landed.set(Some((app.import.pending_import_after_open, import_picks())))
+    });
     view.update(vcx, |app, cx| {
         app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
         assert!(
@@ -1082,6 +1108,11 @@ fn import_into_new_library_opens_then_asks_for_sources() {
         );
     });
     vcx.run_until_parked();
+    assert_eq!(
+        landed.get(),
+        Some((true, before)),
+        "once the open lands the import waits for the first scan: nothing is asked yet"
+    );
     // The real scan's own ScanComplete may already have arrived, so the
     // import is either still waiting for it or asked exactly once.
     view.update(vcx, |app, _| {
@@ -1196,18 +1227,26 @@ fn rescan_before_the_first_scan_completes_drops_the_pending_import() {
     let mut cx = crate::tests::TestApp::single();
     let (view, vcx) = welcome_with_recents(&mut cx, Vec::new());
     let before = import_picks();
-    view.update(vcx, |app, cx| {
-        // The new library as its open lands (in one update, so the real
-        // scan's ScanComplete cannot arrive in between).
-        crate::tests::helpers::install_library(app, folder.to_path_buf(), cx);
-        app.import.pending_import_after_open = true;
-        // A failed first scan sends no ScanComplete; the user then rescans.
-        app.rescan_library(cx);
-        assert!(
-            !app.import.pending_import_after_open,
-            "the user's own rescan cancels the new-library import prompt"
-        );
+    // The user rescans as the open lands, before the real first scan's
+    // ScanComplete is read (as if that scan had failed and sent none).
+    let rescanned = std::rc::Rc::new(std::cell::Cell::new(None));
+    let _watch = on_open_landed(&view, vcx, {
+        let rescanned = rescanned.clone();
+        move |app, cx| {
+            let pending = app.import.pending_import_after_open;
+            app.rescan_library(cx);
+            rescanned.set(Some((pending, app.import.pending_import_after_open)));
+        }
     });
+    view.update(vcx, |app, cx| {
+        app.handle_ui_message(UiMessage::NewLibraryPicked(folder.to_path_buf()), cx);
+    });
+    vcx.run_until_parked();
+    assert_eq!(
+        rescanned.get(),
+        Some((true, false)),
+        "the open set the pending import; the user's own rescan cancels it"
+    );
     feed(&view, vcx, EngineEvent::ScanComplete { total_items: 0 });
     assert_eq!(
         import_picks(),
@@ -1788,7 +1827,6 @@ fn late_recent_folder_check_is_dropped() {
     render_ui(vcx);
     click_unparked(vcx, "welcome-recent-0");
     view.update(vcx, |app, cx| app.open_library(other.to_path_buf(), cx));
-    vcx.run_until_parked();
     vcx.run_until_parked();
     view.update(vcx, |app, _| {
         assert_eq!(

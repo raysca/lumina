@@ -23,6 +23,62 @@ fn ending_a_test_app_releases_its_engine() {
     );
 }
 
+/// The engines `open_engine` opened for `path`.
+fn opened_for(path: &std::path::Path) -> Vec<std::sync::Weak<lumina_core::LuminaEngine>> {
+    crate::app::library::OPENED_ENGINES
+        .lock()
+        .iter()
+        .filter(|(p, _)| p == path)
+        .map(|(_, weak)| weak.clone())
+        .collect()
+}
+
+/// An open superseded before it lands (Back, or another library chosen)
+/// must drop the engine it opened, not leave its threads running.
+#[core::prelude::v1::test]
+fn a_superseded_open_drops_its_engine() {
+    let (_current, engine) = seed_library("release_current", 1);
+    let (backed_out, _) = seed_library("release_backed_out", 2);
+    let (replaced, _) = seed_library("release_replaced", 2);
+    let (chosen, _) = seed_library("release_chosen", 3);
+    let mut cx = TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    drop(engine);
+
+    view.update(vcx, |app, cx| {
+        app.open_library(backed_out.to_path_buf(), cx);
+        // Back (Esc) while the engine opens.
+        app.leave_missing_library(cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, cx| {
+        assert_eq!(
+            app.grid_state.as_ref().map(|s| s.engine.total_count()),
+            Some(1),
+            "Back keeps the current library"
+        );
+        app.open_library(replaced.to_path_buf(), cx);
+        app.open_library(chosen.to_path_buf(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.grid_state.as_ref().map(|s| s.engine.total_count()),
+            Some(3),
+            "the latest open wins"
+        );
+    });
+    for (path, why) in [(&backed_out, "Back"), (&replaced, "a later open")] {
+        let opened = opened_for(path);
+        assert_eq!(opened.len(), 1, "control: the open ran for {why}");
+        assert_eq!(
+            opened[0].strong_count(),
+            0,
+            "the engine of an open superseded by {why} is dropped"
+        );
+    }
+}
+
 /// Switching libraries must drop the old engine, or every switch would keep
 /// its threads running.
 #[core::prelude::v1::test]

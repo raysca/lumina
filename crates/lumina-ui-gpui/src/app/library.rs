@@ -22,12 +22,26 @@ pub(crate) fn open_engine(
     #[cfg(not(test))]
     return LuminaEngine::open(path.to_path_buf());
     #[cfg(test)]
-    LuminaEngine::open_with_paths(
-        path.to_path_buf(),
-        path.join("catalog.db"),
-        Some(path.join("cache")),
-    )
+    {
+        let opened = LuminaEngine::open_with_paths(
+            path.to_path_buf(),
+            path.join("catalog.db"),
+            Some(path.join("cache")),
+        )?;
+        OPENED_ENGINES
+            .lock()
+            .push((path.to_path_buf(), Arc::downgrade(&opened.0)));
+        Ok(opened)
+    }
 }
+
+/// Every engine [`open_engine`] opened, by library path, so a test can
+/// check that one it never installed was dropped. A static, not a thread
+/// local: the open runs on the background executor.
+#[cfg(test)]
+pub(crate) static OPENED_ENGINES: parking_lot::Mutex<
+    Vec<(PathBuf, std::sync::Weak<LuminaEngine>)>,
+> = parking_lot::Mutex::new(Vec::new());
 
 impl LuminaApp {
     pub fn open_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
