@@ -7,15 +7,6 @@ you find something you are not fixing now. Planned features live in
 
 ## Bugs
 
-### Settings
-
-- Reopening Settings while a thumbnail-cache clear is waiting for its final
-  size reading can show "Cleared" again (`crates/lumina-ui-gpui/src/app/preferences.rs`).
-- "Preferences" and "Settings" name the same page: the menu item, the ⌘K
-  command, the shortcut sheet's ⌘, row and the downloads settings buttons say
-  Preferences, while ⌘K "Settings: Downloads", "Reset Settings to Defaults…"
-  and the shortcut sheet's navigation rows say Settings.
-
 ### Organizing
 
 - Undoing a duplicate merge puts the trashed copies back, but not the metadata
@@ -28,10 +19,6 @@ you find something you are not fixing now. Planned features live in
 - In Duplicates, the ORIGINAL label and the group title follow the automatic
   pick, not the copy chosen as keeper; "ORIGINAL" is not always the earliest
   copy.
-- An empty album shows an "Add from Library" button even when its title lookup
-  fails, but ⌘K offers the command only when it succeeds.
-- The error banner's detail can repeat the title in other words, for example
-  "Could not create album" above "creating an album: database is locked".
 
 ### Places, dates and search
 
@@ -45,10 +32,15 @@ you find something you are not fixing now. Planned features live in
 
 ### Accessibility
 
-- Text set through the macOS Accessibility API (`AXSelectedText`) does not reach
-  Lumina's text fields.
-- With the viewer open, the toolbar and grid stay in the accessibility tree
-  under it (the sidebar is already removed).
+- Writing `AXSelectedText` (replace the selection) through the macOS
+  Accessibility API does not reach Lumina's text fields: accesskit_macos
+  0.26.3 implements no `setAccessibilitySelectedText:` (its `node.rs` only has
+  `setAccessibilityValue:` -> `SetValue` and `setAccessibilitySelectedTextRange:`
+  -> `SetTextSelection`), so `Action::ReplaceSelectedText` never reaches
+  gpui-pre's `handle_a11y_action`. Needs that setter upstream in AccessKit.
+  Writing `AXValue` (the whole text) does work: GPUI Kit's input handles
+  `SetValue` (`gpui-base` `handle_accessibility_set_value`). Not checked with a
+  real assistive client.
 
 ## Performance (work on the UI thread, or not measured)
 
