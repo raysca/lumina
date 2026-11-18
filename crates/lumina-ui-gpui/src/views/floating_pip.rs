@@ -62,8 +62,6 @@ fn handle_pip_key(app: &mut LuminaApp, keystroke: &Keystroke, cx: &mut Context<L
         "space" | "k" => app.toggle_video_play(cx),
         "j" | "left" => app.seek_video_relative(-5.0, cx),
         "right" => app.seek_video_relative(5.0, cx),
-        // A clip that failed to load: L and M are absorbed and change nothing.
-        "l" | "m" if app.video_unplayable() => {}
         "l" => app.toggle_video_loop(cx),
         "m" => app.toggle_video_mute(cx),
         "escape" => app.close_pip(cx),

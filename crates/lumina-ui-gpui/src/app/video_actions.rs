@@ -642,7 +642,11 @@ impl LuminaApp {
         self.set_video_speed(next, cx);
     }
 
+    /// Mute or unmute. A clip that failed to load is left alone.
     pub fn toggle_video_mute(&mut self, cx: &mut Context<Self>) {
+        if self.video_unplayable() {
+            return;
+        }
         self.video.is_muted = !self.video.is_muted;
         if let Some(ref mut player) = self.video.player {
             player.set_muted(self.video.is_muted);
@@ -652,7 +656,11 @@ impl LuminaApp {
         cx.notify();
     }
 
+    /// Loop on or off. A clip that failed to load is left alone.
     pub fn toggle_video_loop(&mut self, cx: &mut Context<Self>) {
+        if self.video_unplayable() {
+            return;
+        }
         self.video.is_looping = !self.video.is_looping;
         self.sync_player_looping();
         cx.notify();

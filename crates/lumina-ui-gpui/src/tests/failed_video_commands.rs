@@ -1,6 +1,6 @@
 //! A video that failed to load: the palette's loop, volume and frame
-//! commands and the PiP window's L and M keys leave it alone, as the
-//! viewer's transport keys do.
+//! commands, the loop and mute toggles and the PiP window's L and M keys
+//! leave it alone, as the viewer's transport keys do.
 
 use crate::app::command_palette::CommandId;
 use crate::app::types::get_sample_items;
@@ -87,4 +87,32 @@ fn pip_loop_and_mute_keys_leave_a_failed_video_alone() {
             "{key} in PiP must not loop or mute a clip that failed to load"
         );
     }
+}
+
+#[core::prelude::v1::test]
+fn loop_and_mute_toggles_leave_a_failed_video_alone() {
+    let (_fixture, engine, video) = broken_video("failed_video_toggles");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| app.open_viewer(video, cx));
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        assert!(app.video_unplayable(), "the clip failed to load");
+        let before = (
+            app.video.is_looping,
+            app.video.is_muted,
+            app.config.video_muted,
+        );
+        app.toggle_video_loop(cx);
+        app.toggle_video_mute(cx);
+        assert_eq!(
+            (
+                app.video.is_looping,
+                app.video.is_muted,
+                app.config.video_muted
+            ),
+            before,
+            "every caller of the loop and mute toggles must leave a failed clip alone"
+        );
+    });
 }
