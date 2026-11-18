@@ -172,25 +172,30 @@ impl LuminaApp {
 }
 
 impl LuminaApp {
+    /// Replaces the exact-copy groups; the review filters them afresh.
+    pub(crate) fn set_duplicate_groups(&mut self, groups: Vec<DuplicateGroup>) {
+        self.duplicate_groups = groups;
+        self.stacks.review.groups_changed();
+    }
+
     pub fn refresh_duplicates(&mut self) {
-        let Some(ref state) = self.grid_state else {
+        let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };
 
         // Instant, non-blocking read of already-computed duplicate groups from SQLite cache.
-        self.duplicate_groups = state.engine.get_cached_duplicate_groups();
-        self.duplicate_items_count = state.engine.query_duplicate_count();
+        self.set_duplicate_groups(engine.get_cached_duplicate_groups());
+        self.duplicate_items_count = engine.query_duplicate_count();
 
         #[cfg(test)]
         {
             // In unit/automation tests, run scan_duplicates synchronously so tests don't need async waits.
-            self.duplicate_groups = state.engine.query_duplicate_groups();
-            self.duplicate_items_count = state.engine.query_duplicate_count();
+            self.set_duplicate_groups(engine.query_duplicate_groups());
+            self.duplicate_items_count = engine.query_duplicate_count();
         }
 
         #[cfg(not(test))]
         {
-            let engine = state.engine.clone();
             let tx = self.ui_tx.clone();
             let generation = self.library_generation;
             if let Err(err) = std::thread::Builder::new()

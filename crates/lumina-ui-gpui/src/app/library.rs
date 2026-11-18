@@ -517,7 +517,7 @@ impl LuminaApp {
             self.untagged_count = engine.query_untagged_count();
             self.duplicate_items_count = engine.query_duplicate_count();
             if self.selection == AlbumSelection::Duplicates {
-                self.duplicate_groups = engine.query_duplicate_groups();
+                self.set_duplicate_groups(engine.query_duplicate_groups());
             }
             self.item_ratings = engine.get_ratings_map();
             self.item_color_labels = engine.get_color_labels_map();

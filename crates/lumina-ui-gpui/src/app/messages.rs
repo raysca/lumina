@@ -433,7 +433,7 @@ impl LuminaApp {
                 items_count,
             } => {
                 if generation == self.library_generation {
-                    self.duplicate_groups = groups;
+                    self.set_duplicate_groups(groups);
                     self.duplicate_items_count = items_count;
                     cx.notify();
                 }

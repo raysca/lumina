@@ -81,6 +81,12 @@ pub struct DuplicatesReview {
     /// a narrow window), so the toast can sit above it. Starts at the
     /// one-row height, right for the first frame at the default width.
     pub footer_height: std::rc::Rc<std::cell::Cell<f32>>,
+    /// Indices of the visible groups, read through [`Self::visible`], and
+    /// the skip count they were filtered with. A frame asks for the visible
+    /// groups several times; this filters once per change. `skipped` only
+    /// grows within a review, so its length changes exactly when it does;
+    /// new groups clear the cache ([`Self::groups_changed`]).
+    visible_cache: std::cell::RefCell<Option<(usize, std::rc::Rc<[usize]>)>>,
 }
 
 impl Default for DuplicatesReview {
@@ -94,18 +100,41 @@ impl Default for DuplicatesReview {
             footer_height: std::rc::Rc::new(std::cell::Cell::new(
                 crate::views::duplicates::FOOTER_MIN_HEIGHT,
             )),
+            visible_cache: std::cell::RefCell::new(None),
         }
     }
 }
 
 impl DuplicatesReview {
-    /// The groups not skipped, in order.
-    // ponytail: O(groups) per call; cache it if thousands of groups lag.
+    /// The groups not skipped, in order. Filtered once per change of the
+    /// groups or the skips ([`Self::visible_indices`]); each call only maps
+    /// the cached indices, with no hash lookups.
     pub fn visible<'a>(&self, groups: &'a [DuplicateGroup]) -> Vec<&'a DuplicateGroup> {
-        groups
+        self.visible_indices(groups)
             .iter()
-            .filter(|g| !self.skipped.contains(&g.hash))
+            .filter_map(|&i| groups.get(i))
             .collect()
+    }
+
+    /// Indices into `groups` of those not skipped, cached until the skips
+    /// change or [`Self::groups_changed`] is called.
+    pub(crate) fn visible_indices(&self, groups: &[DuplicateGroup]) -> std::rc::Rc<[usize]> {
+        let mut cache = self.visible_cache.borrow_mut();
+        if let Some((skips, indices)) = cache.as_ref() {
+            if *skips == self.skipped.len() {
+                return indices.clone();
+            }
+        }
+        let indices: std::rc::Rc<[usize]> = (0..groups.len())
+            .filter(|&i| !self.skipped.contains(&groups[i].hash))
+            .collect();
+        *cache = Some((self.skipped.len(), indices.clone()));
+        indices
+    }
+
+    /// The groups were replaced: the visible list is filtered afresh.
+    pub(crate) fn groups_changed(&mut self) {
+        *self.visible_cache.get_mut() = None;
     }
 
     /// The selected group's index in `visible`: the selected hash where it
@@ -426,6 +455,7 @@ mod tests {
 
         review.select(1, "b");
         let shifted = [group("b"), group("c")];
+        review.groups_changed();
         assert_eq!(
             review.selected(&review.visible(&shifted)),
             Some(0),
@@ -453,6 +483,60 @@ mod tests {
             review.selected(&review.visible(&groups)),
             None,
             "all skipped: none"
+        );
+    }
+
+    /// Regression: Duplicates filtered every group by hash several times
+    /// per frame. The filter now runs once per change of the groups or
+    /// the skips, and is reused in between.
+    #[core::prelude::v1::test]
+    fn visible_groups_are_filtered_once_per_change() {
+        let groups: Vec<DuplicateGroup> = (0..10_000).map(|i| group(&format!("h{i}"))).collect();
+        let mut review = DuplicatesReview::default();
+        let first = review.visible_indices(&groups);
+        assert_eq!(first.len(), 10_000);
+        assert!(
+            std::rc::Rc::ptr_eq(&first, &review.visible_indices(&groups)),
+            "with nothing changed the filtered list is reused, not rebuilt"
+        );
+
+        review.skip(0, "h0");
+        let skipped = review.visible_indices(&groups);
+        assert!(
+            !std::rc::Rc::ptr_eq(&first, &skipped),
+            "a skip filters afresh"
+        );
+        assert_eq!(skipped.first(), Some(&1), "the skipped group is gone");
+
+        let fewer = &groups[..5];
+        review.groups_changed();
+        assert_eq!(
+            review.visible(fewer).len(),
+            4,
+            "new groups filter afresh (h0 is still skipped)"
+        );
+
+        // Timing note (debug, 10k groups, 5k skipped): 6 calls per frame
+        // before took ~60k hash probes; now one filter, then index maps.
+        let mut review = DuplicatesReview::default();
+        review
+            .skipped
+            .extend((0..5_000).map(|i| format!("h{}", i * 2)));
+        let started = std::time::Instant::now();
+        for _ in 0..600 {
+            let _ = review.visible(&groups);
+        }
+        let cached = started.elapsed();
+        let started = std::time::Instant::now();
+        for _ in 0..600 {
+            let _: Vec<&DuplicateGroup> = groups
+                .iter()
+                .filter(|g| !review.skipped.contains(&g.hash))
+                .collect();
+        }
+        let uncached = started.elapsed();
+        eprintln!(
+            "100 frames x 6 calls at 10k groups: cached {cached:?}, per-call filter {uncached:?}"
         );
     }
 }
