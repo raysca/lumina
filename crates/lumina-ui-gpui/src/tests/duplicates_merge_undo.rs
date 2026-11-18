@@ -59,8 +59,14 @@ fn undo_after_the_copy_was_purged_leaves_the_keeper_merged() {
         assert!(app.error_message.is_none(), "{:?}", app.error_message);
         let toast = app.toast.current().map(|t| t.message.clone());
         assert!(
-            toast.as_deref().is_some_and(|m| m.contains("stays merged")),
-            "the toast says the group stayed merged: {toast:?}"
+            toast
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Can't undo the merge")),
+            "the toast says nothing was undone: {toast:?}"
+        );
+        assert!(
+            app.undo.redo_stack.is_empty(),
+            "an undo that changed nothing leaves no redo entry"
         );
     });
     drop(view);
@@ -107,6 +113,114 @@ fn redo_merges_again_so_emptying_the_trash_keeps_the_tag() {
     view.update(vcx, |app, _| {
         assert!(app.error_message.is_none(), "{:?}", app.error_message);
     });
+    drop(view);
+}
+
+/// Regression: redo trashed a copy whose file changed on disk after the
+/// undo; now it leaves the copy alone, says so and keeps no undo entry.
+#[core::prelude::v1::test]
+fn redo_leaves_a_copy_that_changed_on_disk() {
+    let (_temp_dir, engine) = tagged_library("dup_redo_changed");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    let (copy, keep) = merge_tagged_copy(&engine, vcx);
+
+    focus_app(vcx, &view);
+    keystrokes(vcx, "secondary-z");
+    render_ui(vcx);
+    let mut changed = engine.get_item_by_id(copy).expect("control: restored");
+    changed.mtime_epoch_ms += 1;
+    engine
+        .catalog()
+        .insert_or_update_batch(&[changed])
+        .expect("record the file change");
+    keystrokes(vcx, "secondary-shift-z");
+    render_ui(vcx);
+    assert!(
+        !engine.get_item_by_id(copy).unwrap().is_trashed,
+        "a copy that changed on disk stays out of Recently Deleted"
+    );
+    assert!(
+        engine.get_tags_for_item(keep).is_empty(),
+        "nothing was merged into the keeper"
+    );
+    view.update(vcx, |app, _| {
+        let toast = app.toast.current().map(|t| t.message.clone());
+        assert!(
+            toast
+                .as_deref()
+                .is_some_and(|m| m.starts_with("Can't redo the merge")),
+            "the toast says nothing was redone: {toast:?}"
+        );
+        assert!(
+            app.undo.undo_stack.is_empty(),
+            "a redo that changed nothing leaves no undo entry"
+        );
+    });
+    drop(view);
+}
+
+/// Regression: reopening the library while Merge all ran let the merge
+/// land in the old engine with no undo entry; the open now waits.
+#[core::prelude::v1::test]
+fn opening_a_library_waits_for_merge_all() {
+    let (dir, engine) = seed_two_groups("dup_merge_all_reopen");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        app.merge_all_duplicates(cx);
+        app.open_library(dir.0.clone(), cx);
+        assert!(!app.welcome.opening(), "no open starts during Merge all");
+        let toast = app.toast.current().map(|t| t.message.clone());
+        assert_eq!(
+            toast.as_deref(),
+            Some("Wait for the merge to finish"),
+            "the toast says why the open was refused"
+        );
+    });
+    render_ui(vcx);
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.undo.undo_stack.len(),
+            1,
+            "the merge lands in the open library with its undo entry"
+        );
+    });
+    drop(view);
+}
+
+/// Regression: Merge all started while a library opened committed in the
+/// old engine and dropped its undo entry; it now waits for the open.
+#[core::prelude::v1::test]
+fn merge_all_waits_for_a_library_open() {
+    let (dir, engine) = seed_two_groups("dup_merge_all_opening");
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine.clone());
+    render_ui(vcx);
+    click(vcx, "sidebar-nav-duplicates");
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        app.open_library(dir.0.clone(), cx);
+        assert!(app.welcome.opening(), "control: the open is in flight");
+        app.merge_all_duplicates(cx);
+        assert!(!app.merge_all_running(), "no merge starts during an open");
+        let toast = app.toast.current().map(|t| t.message.clone());
+        assert_eq!(
+            toast.as_deref(),
+            Some("Wait for the library to open, then merge"),
+            "the toast says why the merge was refused"
+        );
+    });
+    vcx.run_until_parked();
+    assert_eq!(
+        engine.get_item_slice(0..10).len(),
+        5,
+        "nothing was merged in the old engine"
+    );
     drop(view);
 }
 

@@ -103,3 +103,30 @@ fn switching_libraries_releases_the_old_engine() {
         "the previous library's engine must be dropped on a switch"
     );
 }
+
+/// Regression: opening the same folder twice in quick succession opened
+/// two engines on one catalog; the second open is now ignored.
+#[core::prelude::v1::test]
+fn opening_the_same_folder_twice_opens_one_engine() {
+    let (_current, engine) = seed_library("release_twice_current", 1);
+    let (twice, _) = seed_library("release_twice", 2);
+    let mut cx = TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    view.update(vcx, |app, cx| {
+        app.open_library(twice.to_path_buf(), cx);
+        app.open_library(twice.to_path_buf(), cx);
+    });
+    vcx.run_until_parked();
+    view.update(vcx, |app, _| {
+        assert_eq!(
+            app.grid_state.as_ref().map(|s| s.engine.total_count()),
+            Some(2),
+            "control: the folder opened"
+        );
+    });
+    assert_eq!(
+        opened_for(&twice).len(),
+        1,
+        "a second open of the folder already opening must not open another engine"
+    );
+}

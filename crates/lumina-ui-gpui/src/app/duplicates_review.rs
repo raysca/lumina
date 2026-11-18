@@ -311,6 +311,12 @@ impl LuminaApp {
         if self.merge_all_running() {
             return;
         }
+        // A library opening would replace this engine before the merge
+        // lands, dropping its undo entry.
+        if self.welcome.opening() {
+            self.show_warning_toast(crate::i18n::t("duplicates.merge_wait_open"), cx);
+            return;
+        }
         let Some(engine) = self.grid_state.as_ref().map(|s| s.engine.clone()) else {
             return;
         };

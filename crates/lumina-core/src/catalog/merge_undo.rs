@@ -227,7 +227,9 @@ impl Catalog {
     /// copies' metadata again and they go back to Recently Deleted, so a
     /// later Empty Recently Deleted cannot lose it. Returns the fresh
     /// record for the next undo. A keeper deleted since is skipped, as are
-    /// copies deleted since.
+    /// copies deleted since and copies no longer known to match the keeper:
+    /// a change to either file on disk drops its content hash (the
+    /// `media_hashes_invalidate_au` trigger), so it may not be a duplicate.
     pub fn redo_duplicate_merge(&self, merge: &DuplicateMerge) -> Result<DuplicateMerge> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -238,9 +240,14 @@ impl Catalog {
                 if !exists.exists([snapshot.keep_id.0 as i64])? {
                     continue;
                 }
+                let mut same = tx.prepare_cached(
+                    "SELECT 1 FROM media_hashes c JOIN media_hashes k \
+                     ON k.content_hash = c.content_hash \
+                     WHERE c.media_id = ?1 AND k.media_id = ?2;",
+                )?;
                 let mut present = Vec::new();
                 for copy in &snapshot.copies {
-                    if exists.exists([copy.0 as i64])? {
+                    if same.exists([copy.0 as i64, snapshot.keep_id.0 as i64])? {
                         present.push(*copy);
                     }
                 }
@@ -455,6 +462,9 @@ mod tests {
         let catalog = Catalog::open_in_memory().unwrap();
         let keep = plain(&catalog, "/lib/keep.mp4");
         let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog
+            .batch_insert_hashes(&[(keep, 1_000, "a".into()), (dup, 1_000, "a".into())])
+            .unwrap();
         catalog.add_tags_batch(&[dup], &["beach".into()]).unwrap();
         let merge = DuplicateMerge {
             keepers: catalog
@@ -486,6 +496,44 @@ mod tests {
         assert_eq!(
             again.kept_merged, 1,
             "a fresh record: the next undo sees the purge"
+        );
+    }
+
+    /// Regression: redo trashed a copy whose file changed on disk after the
+    /// undo, though it may no longer be a duplicate of the keeper.
+    #[test]
+    fn redo_skips_a_copy_whose_file_changed_since() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        catalog
+            .batch_insert_hashes(&[(keep, 1_000, "a".into()), (dup, 1_000, "a".into())])
+            .unwrap();
+        let merge = DuplicateMerge {
+            keepers: catalog
+                .merge_duplicate_group(keep, &[dup])
+                .unwrap()
+                .into_iter()
+                .collect(),
+        };
+        let undone = catalog.undo_duplicate_merge(&merge).unwrap().restored;
+        catalog
+            .conn
+            .lock()
+            .execute(
+                "UPDATE media_items SET mtime_epoch_ms = mtime_epoch_ms + 1 WHERE id = ?1;",
+                [dup.0 as i64],
+            )
+            .unwrap();
+
+        let redone = catalog.redo_duplicate_merge(&undone).unwrap();
+        assert!(
+            redone.keepers.is_empty(),
+            "a copy that changed on disk is not merged again"
+        );
+        assert!(
+            !catalog.get_item_by_id(dup).unwrap().unwrap().is_trashed,
+            "a copy that changed on disk stays out of Recently Deleted"
         );
     }
 }

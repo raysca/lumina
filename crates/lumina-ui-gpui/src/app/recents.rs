@@ -30,8 +30,9 @@ pub(crate) struct WelcomeState {
     /// Counts library opens, Retry starts and Backs; an open, a Retry or a
     /// recent check applies only if it has not moved since it started.
     pub(crate) retry_generation: u64,
-    /// The ticket of the library open in flight; see [`Self::opening`].
-    pub(crate) opening: Option<u64>,
+    /// The ticket and folder of the library open in flight; see
+    /// [`Self::opening`].
+    pub(crate) opening: Option<(u64, PathBuf)>,
     /// The recent the keyboard has focused (↑/↓), as a list index.
     pub(crate) focused_recent: Option<usize>,
     /// Recents whose folder is not there. `None` = not checked yet, shown
@@ -64,7 +65,13 @@ impl WelcomeState {
     /// A library open is in flight and nothing has superseded it: the
     /// welcome body hides so it does not flash up at launch.
     pub(crate) fn opening(&self) -> bool {
-        self.opening == Some(self.retry_generation)
+        self.opening_path().is_some()
+    }
+
+    /// The folder of the open in flight that nothing has superseded.
+    pub(crate) fn opening_path(&self) -> Option<&Path> {
+        let (ticket, path) = self.opening.as_ref()?;
+        (*ticket == self.retry_generation).then_some(path.as_path())
     }
 }
 

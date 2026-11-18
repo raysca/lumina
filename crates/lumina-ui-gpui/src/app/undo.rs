@@ -289,12 +289,14 @@ impl UndoAction {
             UndoAction::DuplicateMerge { merge } if before => {
                 let undo = engine.catalog().undo_duplicate_merge(merge)?;
                 *merge = undo.restored;
-                return Ok(kept_merged_note(undo.kept_merged));
+                return Ok(plural_note("duplicates.kept_merged", undo.kept_merged));
             }
-            UndoAction::DuplicateMerge { merge } => engine
-                .catalog()
-                .redo_duplicate_merge(merge)
-                .map(|redone| *merge = redone),
+            UndoAction::DuplicateMerge { merge } => {
+                let redone = engine.catalog().redo_duplicate_merge(merge)?;
+                let skipped = merge.trashed().len() - redone.trashed().len();
+                *merge = redone;
+                return Ok(plural_note("duplicates.redo_skipped", skipped));
+            }
             UndoAction::BatchMetadata { field, changes } => {
                 let values: Vec<(MediaId, Option<&str>)> = changes
                     .iter()
@@ -362,13 +364,13 @@ impl UndoAction {
     }
 }
 
-/// The toast's note on keepers a merge undo left merged, or `""`.
-fn kept_merged_note(n: usize) -> String {
+/// The toast's note on the `n` keepers a merge undo left merged or copies
+/// a redo left alone (`key`), or `""`.
+fn plural_note(key: &str, n: usize) -> String {
     if n == 0 {
         return String::new();
     }
-    crate::i18n::t(&crate::i18n::plural_key("duplicates.kept_merged", n))
-        .replace("{n}", &n.to_string())
+    crate::i18n::t(&crate::i18n::plural_key(key, n)).replace("{n}", &n.to_string())
 }
 
 /// Puts back an album's key photo. An item that left the album since is
@@ -458,6 +460,13 @@ impl LuminaApp {
             return;
         };
         if let Some(note) = self.apply_history_action(&mut action, true, cx) {
+            // Every group stayed merged (each lost a copy for good): nothing
+            // changed, so there is nothing to redo.
+            if matches!(&action, UndoAction::DuplicateMerge { merge } if merge.keepers.is_empty()) {
+                self.show_warning_toast(crate::i18n::t("duplicates.undo_kept_all"), cx);
+                cx.notify();
+                return;
+            }
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.moves += crate::app::present::history_moves(&action);
@@ -482,6 +491,12 @@ impl LuminaApp {
             return;
         };
         if let Some(note) = self.apply_history_action(&mut action, false, cx) {
+            // Every copy changed on disk since the undo: nothing was merged.
+            if matches!(&action, UndoAction::DuplicateMerge { merge } if merge.keepers.is_empty()) {
+                self.show_warning_toast(crate::i18n::t("duplicates.redo_skipped_all"), cx);
+                cx.notify();
+                return;
+            }
             let label = action.label();
             let affected = action.affected_ids();
             self.undo.moves += crate::app::present::history_moves(&action);

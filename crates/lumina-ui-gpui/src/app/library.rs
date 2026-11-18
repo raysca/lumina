@@ -45,6 +45,9 @@ pub(crate) static OPENED_ENGINES: parking_lot::Mutex<
 
 impl LuminaApp {
     pub fn open_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if self.refuse_library_open(&path, cx) {
+            return;
+        }
         if self.ask_before_leaving(
             crate::app::downloads::DownloadsConfirm::OpenLibrary(path.clone()),
             cx,
@@ -63,6 +66,9 @@ impl LuminaApp {
     /// unmounted volume); the current library stays until it is installed.
     /// A later open, a Retry or Back supersedes this one.
     pub(crate) fn open_library_inner(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if self.refuse_library_open(&path, cx) {
+            return;
+        }
         if let Some(ref state) = self.grid_state {
             state.engine.cancel_scan();
         }
@@ -76,7 +82,7 @@ impl LuminaApp {
 
         self.welcome.retry_generation += 1;
         let ticket = self.welcome.retry_generation;
-        self.welcome.opening = Some(ticket);
+        self.welcome.opening = Some((ticket, path.clone()));
         cx.notify();
         let task = cx.background_executor().spawn({
             let path = path.clone();
@@ -109,6 +115,14 @@ impl LuminaApp {
             });
         })
         .detach();
+    }
+
+    /// True when an open of `path` must not start: the same folder is
+    /// already opening (two engines would share one catalog), or Merge all
+    /// is running (it would land in the old engine with no undo entry; a
+    /// toast says to wait).
+    fn refuse_library_open(&mut self, path: &Path, cx: &mut Context<Self>) -> bool {
+        self.welcome.opening_path() == Some(path) || self.refuse_during_merge_all(cx)
     }
 
     /// The UI-thread half of opening a library: installs an engine that
