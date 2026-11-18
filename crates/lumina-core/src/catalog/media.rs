@@ -996,6 +996,56 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// Regression: undated rows (capture time 0) were stored as 1970-01-01,
+    /// so the month band and the timeline buckets filed them under January
+    /// 1970 instead of "Undated".
+    #[test]
+    fn undated_migration_moves_1970_rows_to_year_zero() {
+        let (dir, db) = temp_catalog("undated_migration");
+        let (undated, dated) = {
+            let catalog = Catalog::open(&db).expect("catalog must open");
+            let mut old_undated = sample_item(1);
+            old_undated.timestamp_epoch_ms = 0;
+            (old_undated.year, old_undated.month, old_undated.day) = (1970, 1, 1);
+            let ids = catalog
+                .insert_or_update_batch(&[old_undated, sample_item(2)])
+                .unwrap();
+            catalog.compute_timeline_buckets().unwrap();
+            catalog
+                .conn
+                .lock()
+                .execute_batch("PRAGMA user_version = 23;")
+                .unwrap();
+            (ids[0].id, ids[1].id)
+        };
+        for pass in 0..2 {
+            let catalog = Catalog::open(&db).expect("catalog must reopen");
+            let date = |id| {
+                let item = catalog.get_item_by_id(id).unwrap().expect("item exists");
+                (item.year, item.month, item.day)
+            };
+            assert_eq!(date(undated), (0, 0, 0), "pass {pass}: undated is year 0");
+            assert_eq!(
+                date(dated),
+                (2022, 1, 15),
+                "pass {pass}: dated rows keep theirs"
+            );
+            let keys: Vec<String> = catalog
+                .get_timeline_buckets("month")
+                .unwrap()
+                .into_iter()
+                .map(|b| b.bucket_key)
+                .collect();
+            assert_eq!(
+                keys,
+                vec!["2022-01".to_string(), "0000-00".to_string()],
+                "pass {pass}: the undated row has its own bucket, not 1970-01"
+            );
+            assert_eq!(user_version(&catalog), SCHEMA_VERSION);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn fts_repair_migration_runs_once() {
         let (dir, db) = temp_catalog("fts_repair");

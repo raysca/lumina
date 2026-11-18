@@ -628,6 +628,23 @@ impl Catalog {
             )
             .context("clearing 0,0 GPS positions")?;
         }
+        // v24: the scanner filed an undated row (capture time 0) under
+        // 1970-01-01; it now stores year, month and day 0 ("Undated"). One
+        // transaction with the bucket rebuild, so a failure retries next open.
+        if current < 24 {
+            let tx = conn.unchecked_transaction()?;
+            let changed = tx
+                .execute(
+                    "UPDATE media_items SET year = 0, month = 0, day = 0 \
+                     WHERE timestamp_epoch_ms = 0 AND year <> 0;",
+                    [],
+                )
+                .context("marking undated items")?;
+            if changed > 0 {
+                Self::rebuild_timeline_buckets(&tx)?;
+            }
+            tx.commit()?;
+        }
         if current < SCHEMA_VERSION {
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }

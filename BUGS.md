@@ -49,8 +49,10 @@ you find something you are not fixing now. Planned features live in
 - Neither the location card nor the Places map wraps across the date line.
 - City search is accent-sensitive: "sao" does not find "São Paulo" (SQLite
   `LIKE` folds ASCII case only).
-- Items with a capture time of 0 are filed under January 1970 in the month band
-  (and the 1970 bucket of the timeline rail) instead of "Undated".
+- Undated items (capture time 0) are now stored as year 0, month 0, so the
+  month band says "Undated", but the timeline rail and the year buckets label
+  their `0000-00` bucket as year "0"
+  (`crates/lumina-ui-gpui/src/app/render/rail.rs`); they should say "Undated".
 - The Videos header understates the total running time: clips whose duration
   has not been read add their size but not their length, with no hint.
 

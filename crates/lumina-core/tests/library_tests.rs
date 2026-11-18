@@ -871,6 +871,45 @@ fn scan_drops_a_zero_zero_gps_position() {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
+/// Regression: a file with no capture date and a modification time of 0
+/// was filed under January 1970 instead of "Undated".
+#[test]
+fn scan_files_a_capture_time_of_zero_as_undated() {
+    let tmp_dir = unique_temp_dir("undated_scan");
+    let media_dir = tmp_dir.join("library");
+    std::fs::create_dir_all(&media_dir).unwrap();
+    let path = media_dir.join("undated.jpg");
+    std::fs::write(&path, red_jpeg(8, 8)).unwrap();
+    File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH)
+        .unwrap();
+    let (engine, rx) = LuminaEngine::open_with_paths(
+        media_dir,
+        tmp_dir.join("catalog.db"),
+        Some(tmp_dir.join("cache")),
+    )
+    .unwrap();
+    wait_for_scan(&rx);
+    let item = item_named(&engine, "undated.jpg");
+    assert_eq!(item.timestamp_epoch_ms, 0, "control: no capture time");
+    assert_eq!(
+        (item.year, item.month, item.day),
+        (0, 0, 0),
+        "a capture time of 0 is undated (year 0), not 1970-01-01"
+    );
+    let months: Vec<String> = engine
+        .get_timeline_buckets("month")
+        .into_iter()
+        .map(|b| b.bucket_key)
+        .collect();
+    assert_eq!(months, vec!["0000-00"], "no January 1970 bucket");
+    drop(engine);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
 fn item_named(engine: &LuminaEngine, name: &str) -> MediaItem {
     engine
         .get_item_slice(0..100)
