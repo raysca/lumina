@@ -256,10 +256,19 @@ impl LuminaApp {
                             self.select_item_internal(it, cx);
                         }
                     } else {
-                        // Deselecting the last card must reset every
-                        // selection-derived field the same way a normal
-                        // clear does, not a hand-picked subset.
-                        self.clear_selection_fields();
+                        // Deselecting the last card clears the selection but,
+                        // as before, keeps an open edit draft: only fields
+                        // with no remaining target are reset. The request bump
+                        // stops a late tag load for the deselected card.
+                        self.selected_index = None;
+                        self.selected_item = None;
+                        self.set_viewer_image(None);
+                        self.selected_item_tags.clear();
+                        self.selected_tag_counts.clear();
+                        self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
+                        self.batch_summary = BatchSelectionSummary::default();
+                        self.batch_metadata = BatchMetadataSummary::default();
+                        self.selection_anchor = None;
                     }
                 }
             } else {

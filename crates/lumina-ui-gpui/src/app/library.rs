@@ -181,14 +181,10 @@ impl LuminaApp {
             }
         }
         self.load_downloads(cx);
-        self.selected_item = None;
-        self.selected_index = None;
-        self.selected_indices.clear();
-        self.selection_anchor = None;
-        self.selected_item_tags.clear();
-        self.selected_tag_counts.clear();
-        self.batch_summary = Default::default();
-        self.set_viewer_image(None);
+        // A full reset, including the tag-load request, so an in-flight load
+        // for the old library cannot land on the new one (media ids restart
+        // per library, so it could otherwise match an unrelated item).
+        self.clear_selection_fields();
         self.selection = AlbumSelection::AllLibrary;
         self.stacks.reset();
         // The map's points and clusters belong to the old library.
