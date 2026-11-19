@@ -30,7 +30,7 @@ use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 
 pub use cache::DiskCache;
@@ -65,6 +65,41 @@ pub use xmp::{
 /// Wall-clock milliseconds since the Unix epoch, as the catalog stores times.
 pub(crate) fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// Minimum gap between rescan triggers caused by watcher errors. A failing
+/// filesystem can emit a stream of notify errors; without this every error
+/// spawned a full, detached rescan thread that was never joined, so an error
+/// storm piled up threads until it ended.
+const WATCHER_ERROR_RESCAN_DEBOUNCE_MS: i64 = 2_000;
+
+/// Coalesces watcher-error rescan triggers. `allow` is true at most once per
+/// window, so an error storm starts one rescan per window instead of one per
+/// error. Races between concurrent watcher callbacks are harmless: only one
+/// wins the compare-exchange and triggers.
+#[derive(Debug)]
+struct RescanDebounce {
+    last: AtomicI64,
+    window_ms: i64,
+}
+
+impl RescanDebounce {
+    fn new(window_ms: i64) -> Self {
+        Self {
+            last: AtomicI64::new(0),
+            window_ms,
+        }
+    }
+
+    fn allow(&self, now_ms: i64) -> bool {
+        let last = self.last.load(Ordering::Relaxed);
+        if now_ms.saturating_sub(last) < self.window_ms {
+            return false;
+        }
+        self.last
+            .compare_exchange(last, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    }
 }
 
 #[derive(Clone)]
@@ -165,12 +200,17 @@ impl LuminaEngine {
         // A watcher error means events were lost, so it rescans. The engine
         // owns the watcher, so the hook holds it weakly. Untested: notify
         // errors cannot be triggered on demand.
-        // ponytail: back-to-back errors each restart the scan (rescan cancels
-        // the running one); debounce here if an error storm is ever seen.
         let rescan_target: Arc<std::sync::OnceLock<std::sync::Weak<Self>>> = Arc::default();
+        // Coalesce watcher-error triggers: a stream of notify errors must not
+        // spawn one detached rescan thread per error.
+        let rescan_debounce = Arc::new(RescanDebounce::new(WATCHER_ERROR_RESCAN_DEBOUNCE_MS));
         let on_error = {
             let rescan_target = rescan_target.clone();
+            let rescan_debounce = rescan_debounce.clone();
             Box::new(move || {
+                if !rescan_debounce.allow(now_ms()) {
+                    return;
+                }
                 if let Some(engine) = rescan_target.get().and_then(std::sync::Weak::upgrade) {
                     engine.rescan();
                 }
@@ -935,6 +975,19 @@ pub(crate) mod tests {
         let dir = std::env::temp_dir().join(format!("lumina_{prefix}_{nanos}"));
         fs::create_dir_all(&dir).expect("temp library dir must be creatable");
         dir
+    }
+
+    #[test]
+    fn watcher_error_rescans_are_coalesced_per_window() {
+        let debounce = RescanDebounce::new(2_000);
+        assert!(debounce.allow(10_000), "the first error triggers a rescan");
+        assert!(
+            !debounce.allow(10_500),
+            "a burst inside the window is coalesced, not one thread per error"
+        );
+        assert!(!debounce.allow(11_999), "still inside the same window");
+        assert!(debounce.allow(12_000), "the next window triggers again");
+        assert!(!debounce.allow(12_500), "and coalesces its own burst");
     }
 
     pub(crate) fn request_thumbnail_frame(
