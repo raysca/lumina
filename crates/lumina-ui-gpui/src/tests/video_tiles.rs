@@ -245,7 +245,13 @@ fn portrait_clips_cover_fit_and_the_fit_toggle_contains_them() {
         view.update(vcx, |app, cx| {
             app.card_fit_mode = contain;
             let state = app.grid_state.as_ref().expect("grid state");
-            state.texture_cache.lock().put(clip, tall.clone());
+            state.texture_cache.lock().put(
+                clip,
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    tall.clone(),
+                ),
+            );
             cx.notify();
         });
         render_ui(vcx);

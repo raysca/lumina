@@ -179,10 +179,13 @@ fn group_summary(group: &DuplicateGroup) -> String {
 /// `item`'s thumbnail from the cache, queueing a decode when it is missing.
 /// Never decodes on the UI thread.
 fn texture(this: &LuminaApp, item: &MediaItem) -> Option<Arc<RenderImage>> {
-    let texture = this
-        .grid_state
-        .as_ref()
-        .and_then(|state| state.texture_cache.lock().get(&item.id).cloned());
+    let texture = this.grid_state.as_ref().and_then(|state| {
+        state
+            .texture_cache
+            .lock()
+            .get(&item.id)
+            .map(|t| t.image.clone())
+    });
     if texture.is_none() {
         this.queue_thumbnail_request_item(item);
     }

@@ -865,7 +865,9 @@ impl DecoderPipeline {
     fn resize_to_frame(id: MediaId, img: DynamicImage, target_size: u32) -> DecodedFrame {
         let (w, h) = img.dimensions();
         let resized = if w > target_size || h > target_size {
-            img.resize(target_size, target_size, FilterType::Triangle)
+            // Lanczos3, not Triangle: thumbnails are viewed at or above their
+            // decoded size, so bilinear's softness is visible as blur.
+            img.resize(target_size, target_size, FilterType::Lanczos3)
         } else {
             img
         };
@@ -1789,5 +1791,52 @@ pub(crate) mod tests {
             );
         }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Sum of horizontal neighbour differences in the middle row: a proxy for
+    /// retained edge contrast.
+    fn edge_energy(img: &image::RgbaImage) -> u64 {
+        let (w, h) = img.dimensions();
+        let row = h / 2;
+        (1..w)
+            .map(|x| {
+                let a = img.get_pixel(x, row)[1] as i32;
+                let b = img.get_pixel(x - 1, row)[1] as i32;
+                (a - b).unsigned_abs() as u64
+            })
+            .sum()
+    }
+
+    /// Regression: thumbnails were downscaled with `FilterType::Triangle`
+    /// (bilinear), which visibly softens a reduced photo. The decode path must
+    /// stay sharper than a plain bilinear pass over the same source.
+    #[test]
+    fn thumbnail_downscale_keeps_edges_sharper_than_bilinear() {
+        // 6 px vertical bars in a 600 px source: a 6x reduction to 100 px.
+        let source = image::RgbImage::from_fn(600, 600, |x, _| {
+            image::Rgb(if (x / 6) % 2 == 0 {
+                [0, 0, 0]
+            } else {
+                [255, 255, 255]
+            })
+        });
+        let frame = DecoderPipeline::resize_to_frame(
+            MediaId(1),
+            DynamicImage::ImageRgb8(source.clone()),
+            100,
+        );
+        assert_eq!((frame.width, frame.height), (100, 100));
+        let decoded = image::RgbaImage::from_raw(frame.width, frame.height, frame.data)
+            .expect("the frame keeps its dimensions");
+        let bilinear = DynamicImage::ImageRgb8(source)
+            .resize(100, 100, FilterType::Triangle)
+            .to_rgba8();
+
+        let (sharp, soft) = (edge_energy(&decoded), edge_energy(&bilinear));
+        assert!(soft > 0, "the bilinear reference must keep some contrast");
+        assert!(
+            sharp > soft,
+            "a thumbnail ({sharp}) must keep more edge contrast than a bilinear downscale ({soft})"
+        );
     }
 }

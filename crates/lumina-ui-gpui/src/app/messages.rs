@@ -146,7 +146,7 @@ impl LuminaApp {
                         EngineEvent::ItemRemoved(id) => {
                             state.total_count = state.engine.total_count();
                             if let Some(old) = state.texture_cache.lock().pop(&id) {
-                                removed_textures.push(old);
+                                removed_textures.push(old.image);
                             }
                             state.in_flight.lock().remove(&id);
                             state.clear_failed(id);
@@ -221,7 +221,11 @@ impl LuminaApp {
                     }
                 }
             }
-            UiMessage::ThumbnailLoaded { id, frame } => {
+            UiMessage::ThumbnailLoaded {
+                id,
+                frame,
+                requested_size,
+            } => {
                 let Some(state) = self.grid_state.as_ref() else {
                     return;
                 };
@@ -231,10 +235,13 @@ impl LuminaApp {
                         state.clear_failed(id);
                         // `push` hands back the LRU entry it evicts (or the entry
                         // it replaces); its texture must be freed too.
-                        let evicted = state.texture_cache.lock().push(id, gpui_img);
+                        let evicted = state.texture_cache.lock().push(
+                            id,
+                            crate::views::grid::CachedThumb::new(requested_size, gpui_img),
+                        );
                         state.mark_fresh_thumb(id);
                         if let Some((_, old)) = evicted {
-                            self.retire_image(old);
+                            self.retire_image(old.image);
                         }
                     }
                     Err(e) => {

@@ -32,7 +32,7 @@ pub fn render(app: &LuminaApp, scan: &FirstScanState, cx: &mut Context<LuminaApp
             let cache = grid.texture_cache.lock();
             scan.just_added
                 .iter()
-                .map(|id| cache.peek(id).cloned())
+                .map(|id| cache.peek(id).map(|t| t.image.clone()))
                 .collect()
         }
         None => Vec::new(),

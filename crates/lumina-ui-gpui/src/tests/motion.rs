@@ -39,6 +39,7 @@ fn only_a_just_decoded_thumbnail_fades_in() {
             crate::UiMessage::ThumbnailLoaded {
                 id: fresh,
                 frame: super::helpers::tiny_decoded_frame(fresh),
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
             },
             cx,
         );

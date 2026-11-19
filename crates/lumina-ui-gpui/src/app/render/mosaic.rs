@@ -164,15 +164,25 @@ impl LuminaApp {
     }
 
     /// The item's cached thumbnail, or `None` after queueing its decode.
+    /// A thumbnail decoded for a smaller tile keeps painting while a sharper
+    /// one is queued, so a zoom never flashes a skeleton.
     fn card_texture(&self, item: &lumina_core::MediaItem) -> Option<Arc<RenderImage>> {
-        let texture = self
+        let cached = self
             .grid_state
             .as_ref()
             .and_then(|state| state.texture_cache.lock().get(&item.id).cloned());
-        if texture.is_none() {
-            self.queue_thumbnail_request_item(item);
+        match cached {
+            Some(thumb) => {
+                if thumb.requested < self.thumbnail_request_size() {
+                    self.queue_thumbnail_request_item(item);
+                }
+                Some(thumb.image)
+            }
+            None => {
+                self.queue_thumbnail_request_item(item);
+                None
+            }
         }
-        texture
     }
 }
 

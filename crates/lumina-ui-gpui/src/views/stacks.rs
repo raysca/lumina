@@ -360,10 +360,13 @@ fn render_stack(
 fn render_member(this: &LuminaApp, index: usize, item: &lumina_core::MediaItem) -> AnyElement {
     let id = item.id.0;
     let flag = this.item_flag(item.id);
-    let texture: Option<Arc<RenderImage>> = this
-        .grid_state
-        .as_ref()
-        .and_then(|state| state.texture_cache.lock().get(&item.id).cloned());
+    let texture: Option<Arc<RenderImage>> = this.grid_state.as_ref().and_then(|state| {
+        state
+            .texture_cache
+            .lock()
+            .get(&item.id)
+            .map(|t| t.image.clone())
+    });
     if texture.is_none() {
         this.queue_thumbnail_request_item(item);
     }

@@ -193,10 +193,13 @@ impl LuminaApp {
         self.caption.input_buffer.clear();
         self.cancel_batch_edit();
 
-        let cached = self
-            .grid_state
-            .as_ref()
-            .and_then(|state| state.texture_cache.lock().get(&item.id).cloned());
+        let cached = self.grid_state.as_ref().and_then(|state| {
+            state
+                .texture_cache
+                .lock()
+                .get(&item.id)
+                .map(|t| t.image.clone())
+        });
         if cached.is_some() {
             self.set_viewer_image(cached);
         }

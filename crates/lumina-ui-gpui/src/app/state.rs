@@ -517,6 +517,9 @@ pub struct LuminaApp {
     pub shortcuts_overlay_open: bool,
     /// Last persisted window bounds: (x, y, width, height).
     pub window_bounds: Option<(f32, f32, f32, f32)>,
+    /// The window's backing scale (2.0 on Retina). Refreshed every frame by
+    /// `Render`, which is what makes thumbnail decodes match the display.
+    pub window_scale: f32,
     pub(crate) window_bounds_subscription: Option<Subscription>,
     pub(crate) last_bounds_save: Option<std::time::Instant>,
     /// Debounced, generation-guarded writer for the restored-session fields.
@@ -768,6 +771,7 @@ impl LuminaApp {
             updates: Default::default(),
             shortcuts_overlay_open: false,
             window_bounds: config.restored_window_bounds(),
+            window_scale: 1.0,
             window_bounds_subscription: None,
             last_bounds_save: None,
             session_save: SessionSaveState::default(),
@@ -1032,33 +1036,54 @@ impl LuminaApp {
         self.grid_metrics().row_height
     }
 
+    /// The thumbnail decode size for the current tile and display: the photo
+    /// well in device pixels, so a Retina tile or a zoomed-in 2-column tile is
+    /// requested at the size it paints. A texture cached from a smaller tile is
+    /// kept on screen and re-requested by the paint path, never re-requested
+    /// from here.
+    pub(crate) fn thumbnail_request_size(&self) -> u32 {
+        let metrics = self.grid_metrics();
+        crate::views::grid::thumbnail_decode_size(
+            metrics.photo_side.max(metrics.photo_height),
+            self.window_scale,
+        )
+    }
+
     pub(crate) fn queue_thumbnail_request(&self, item_id: MediaId) {
         if let Some(state) = self.grid_state.as_ref() {
-            if let Some(callback) = self.begin_thumbnail_request(state, item_id) {
-                state.engine.request_thumbnail(item_id, 320, callback);
+            let size = self.thumbnail_request_size();
+            if let Some(callback) = self.begin_thumbnail_request(state, item_id, size) {
+                #[cfg(test)]
+                THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().push((item_id, size)));
+                state.engine.request_thumbnail(item_id, size, callback);
             }
         }
     }
 
     pub(crate) fn queue_thumbnail_request_item(&self, item: &lumina_core::MediaItem) {
         if let Some(state) = self.grid_state.as_ref() {
-            if let Some(callback) = self.begin_thumbnail_request(state, item.id) {
+            let size = self.thumbnail_request_size();
+            if let Some(callback) = self.begin_thumbnail_request(state, item.id, size) {
                 #[cfg(test)]
                 THUMB_REQUEST_ITEMS
                     .with(|items| items.borrow_mut().push((item.id, item.mtime_epoch_ms)));
+                #[cfg(test)]
+                THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().push((item.id, size)));
                 state
                     .engine
-                    .request_thumbnail_item(item.clone(), 320, callback);
+                    .request_thumbnail_item(item.clone(), size, callback);
             }
         }
     }
 
-    /// Claims a decode of `id` and returns its callback, or `None` when one
-    /// is already in flight or the thumbnail failed before (Rescan retries).
+    /// Claims a decode of `id` at `requested_size` and returns its callback,
+    /// or `None` when one is already in flight or the thumbnail failed before
+    /// (Rescan retries).
     pub(crate) fn begin_thumbnail_request(
         &self,
         state: &GridState,
         id: MediaId,
+        requested_size: u32,
     ) -> Option<impl FnOnce(Option<lumina_core::DecodedFrame>) + Send + 'static> {
         if state.is_failed(id) || !state.in_flight.lock().insert(id) {
             return None;
@@ -1068,7 +1093,9 @@ impl LuminaApp {
         let tx = self.ui_tx.clone();
         let failures = state.thumb_failures.clone();
         let in_flight = state.in_flight.clone();
-        Some(move |frame| on_thumbnail_result(&failures, &in_flight, &tx, id, frame))
+        Some(move |frame| {
+            on_thumbnail_result(&failures, &in_flight, &tx, id, requested_size, frame)
+        })
     }
 
     /// The viewer's full-size decode of `id`. Its failure stays out of the
@@ -1112,6 +1139,7 @@ pub(crate) fn on_thumbnail_result(
     in_flight: &parking_lot::Mutex<HashSet<MediaId>>,
     tx: &async_channel::Sender<UiMessage>,
     id: MediaId,
+    requested_size: u32,
     frame: Option<lumina_core::DecodedFrame>,
 ) {
     // Mark the failure before releasing the in-flight claim, so a render in
@@ -1122,7 +1150,11 @@ pub(crate) fn on_thumbnail_result(
     in_flight.lock().remove(&id);
     // A closed receiver means the app is gone; nothing is left to repaint.
     let _ = match frame {
-        Some(frame) => tx.send_blocking(UiMessage::ThumbnailLoaded { id, frame }),
+        Some(frame) => tx.send_blocking(UiMessage::ThumbnailLoaded {
+            id,
+            frame,
+            requested_size,
+        }),
         None => tx.send_blocking(UiMessage::ThumbnailFailed),
     };
 }
@@ -1147,6 +1179,11 @@ thread_local! {
     /// Id and file mtime of each decode sent with a row the UI already held;
     /// a stale row would decode (or hit the disk cache for) the old file.
     pub(crate) static THUMB_REQUEST_ITEMS: std::cell::RefCell<Vec<(MediaId, i64)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// Id and decode size (long edge, device px) of each thumbnail request sent
+    /// from this test thread, so a test can prove the grid asks for the tile's
+    /// real size on its display.
+    pub(crate) static THUMB_DECODE_SIZES: std::cell::RefCell<Vec<(MediaId, u32)>> =
         const { std::cell::RefCell::new(Vec::new()) };
 }
 

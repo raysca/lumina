@@ -130,7 +130,10 @@ fn render_header(app: &LuminaApp) -> Div {
     let thumbs: Vec<Option<std::sync::Arc<RenderImage>>> = match &app.grid_state {
         Some(grid) => {
             let cache = grid.texture_cache.lock();
-            stack.iter().map(|id| cache.peek(id).cloned()).collect()
+            stack
+                .iter()
+                .map(|id| cache.peek(id).map(|t| t.image.clone()))
+                .collect()
         }
         None => vec![None; stack.len()],
     };

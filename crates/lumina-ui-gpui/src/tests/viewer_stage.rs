@@ -150,6 +150,7 @@ fn viewer_open_with_cached_thumb_paints_media_on_first_draw() {
             crate::UiMessage::ThumbnailLoaded {
                 id,
                 frame: super::helpers::tiny_decoded_frame(id),
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
             },
             cx,
         );
@@ -178,6 +179,7 @@ fn viewer_step_without_cache_keeps_stage_size() {
             crate::UiMessage::ThumbnailLoaded {
                 id,
                 frame: super::helpers::tiny_decoded_frame(id),
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
             },
             cx,
         );

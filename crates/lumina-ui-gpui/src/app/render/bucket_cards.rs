@@ -263,7 +263,7 @@ impl LuminaApp {
             let texture = self
                 .grid_state
                 .as_ref()
-                .and_then(|state| state.texture_cache.lock().get(&id).cloned());
+                .and_then(|state| state.texture_cache.lock().get(&id).map(|t| t.image.clone()));
             if texture.is_none() {
                 self.queue_thumbnail_request(id);
             }

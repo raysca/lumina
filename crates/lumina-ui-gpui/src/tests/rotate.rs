@@ -64,7 +64,13 @@ fn test_viewer_rotate_controls_persist_and_invalidate_thumbnail() {
             .grid_state
             .as_ref()
             .expect("grid state must be installed");
-        state.texture_cache.lock().put(item_id, texture.clone());
+        state.texture_cache.lock().put(
+            item_id,
+            crate::views::grid::CachedThumb::new(
+                crate::views::grid::THUMBNAIL_SIZE_MAX,
+                texture.clone(),
+            ),
+        );
         app.viewer_image = Some(texture);
         cx.notify();
     });
@@ -303,7 +309,13 @@ fn rotate_selection_by_shortcut_persists_all_and_undoes_once() {
             .expect("grid state must be installed")
             .texture_cache
             .lock()
-            .put(photos[0], texture);
+            .put(
+                photos[0],
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    texture,
+                ),
+            );
     });
 
     keystrokes(vcx, "cmd-z");
@@ -402,7 +414,13 @@ fn put_test_texture(
             .expect("grid state must be installed")
             .texture_cache
             .lock()
-            .put(id, texture);
+            .put(
+                id,
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    texture,
+                ),
+            );
     });
 }
 

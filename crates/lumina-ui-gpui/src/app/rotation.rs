@@ -132,7 +132,9 @@ impl LuminaApp {
             let mut textures = state.texture_cache.lock();
             for id in ids {
                 in_flight.remove(id);
-                stale.extend(textures.pop(id));
+                if let Some(thumb) = textures.pop(id) {
+                    stale.push(thumb.image);
+                }
             }
         }
         for image in stale {

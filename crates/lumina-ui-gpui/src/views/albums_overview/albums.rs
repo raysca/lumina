@@ -378,7 +378,7 @@ pub(crate) fn thumbnail(this: &LuminaApp, id: lumina_core::MediaId) -> Option<Ar
     let texture = this
         .grid_state
         .as_ref()
-        .and_then(|state| state.texture_cache.lock().get(&id).cloned());
+        .and_then(|state| state.texture_cache.lock().get(&id).map(|t| t.image.clone()));
     if texture.is_none() {
         this.queue_thumbnail_request(id);
     }

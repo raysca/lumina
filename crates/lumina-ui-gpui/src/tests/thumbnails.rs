@@ -10,7 +10,7 @@ use super::helpers::{
     focus_app, keystrokes, leak, render_ui, seed_library, seed_library_undecodable,
 };
 use crate::app::command_palette::CommandId;
-use crate::app::state::{on_thumbnail_result, THUMB_REQUESTS};
+use crate::app::state::{on_thumbnail_result, THUMB_DECODE_SIZES, THUMB_REQUESTS};
 use crate::app::types::UiMessage;
 use crate::tests::helpers::*;
 use crate::views::grid::GridState;
@@ -30,7 +30,14 @@ fn reset_requests() {
 
 /// Fails `id` the way the decode callback does when the pool answers `None`.
 fn fail(state: &GridState, tx: &async_channel::Sender<UiMessage>, id: MediaId) {
-    on_thumbnail_result(&state.thumb_failures, &state.in_flight, tx, id, None);
+    on_thumbnail_result(
+        &state.thumb_failures,
+        &state.in_flight,
+        tx,
+        id,
+        crate::views::grid::THUMBNAIL_SIZE_MIN,
+        None,
+    );
 }
 
 /// Opens the app on `engine` with `failed` already failed before the first
@@ -137,7 +144,14 @@ fn thumbnail_callback_marks_and_messages_on_none() {
     let id = MediaId(7);
 
     in_flight.lock().insert(id);
-    on_thumbnail_result(&failures, &in_flight, &tx, id, None);
+    on_thumbnail_result(
+        &failures,
+        &in_flight,
+        &tx,
+        id,
+        crate::views::grid::THUMBNAIL_SIZE_MIN,
+        None,
+    );
     assert!(failures.lock().contains(&id), "None marks the id failed");
     assert!(!in_flight.lock().contains(&id), "None ends the request");
     assert!(
@@ -149,7 +163,14 @@ fn thumbnail_callback_marks_and_messages_on_none() {
     let other = MediaId(8);
     in_flight.lock().insert(other);
     let frame = super::helpers::tiny_decoded_frame(other);
-    on_thumbnail_result(&failures, &in_flight, &tx, other, Some(frame));
+    on_thumbnail_result(
+        &failures,
+        &in_flight,
+        &tx,
+        other,
+        crate::views::grid::THUMBNAIL_SIZE_MIN,
+        Some(frame),
+    );
     assert!(
         !failures.lock().contains(&other),
         "a frame never marks failed"
@@ -177,7 +198,14 @@ fn conversion_failure_is_marked() {
         data: vec![0; 3],
     };
     view.update(vcx, |app, cx| {
-        app.handle_ui_message(UiMessage::ThumbnailLoaded { id, frame }, cx)
+        app.handle_ui_message(
+            UiMessage::ThumbnailLoaded {
+                id,
+                frame,
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MIN,
+            },
+            cx,
+        )
     });
     render_ui(vcx);
     assert!(
@@ -281,7 +309,11 @@ fn library_switch_starts_with_no_failures() {
         old.clear_failed(id);
         let old_failures = old.thumb_failures.clone();
         let callback = app
-            .begin_thumbnail_request(app.grid_state.as_ref().unwrap(), id)
+            .begin_thumbnail_request(
+                app.grid_state.as_ref().unwrap(),
+                id,
+                crate::views::grid::THUMBNAIL_SIZE_MIN,
+            )
             .expect("the cleared id can be requested again");
         // As the background open lands, in this update.
         super::helpers::install_library(app, other.clone(), cx);
@@ -632,7 +664,10 @@ fn ui_automation_card_texture_replaces_skeleton() {
             .grid_state
             .as_ref()
             .expect("grid state is installed by the test harness");
-        state.texture_cache.lock().put(item.id, texture);
+        state.texture_cache.lock().put(
+            item.id,
+            crate::views::grid::CachedThumb::new(crate::views::grid::THUMBNAIL_SIZE_MAX, texture),
+        );
         cx.notify();
     });
     render_ui(vcx);
@@ -818,5 +853,177 @@ fn settings_pauses_the_library_grid_and_its_thumbnail_loads() {
     assert!(
         requests() > 0,
         "the library asks for its thumbnails again once Settings closes"
+    );
+}
+
+/// The grid must ask for a thumbnail the size of the tile it paints, in the
+/// display's pixels: a fixed 1x size is what made Retina tiles look blurred.
+#[core::prelude::v1::test]
+fn thumbnails_are_decoded_for_the_tile_on_this_display() {
+    let (_dir, engine) = seed_library("thumb_density", 4);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let id = item.id;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    // The test platform starts at 2x, so setting 1x proves `Render` reads the
+    // window rather than the field's default.
+    vcx.update(|window, _| window.set_scale_factor(1.0));
+    render_ui(vcx);
+    assert_eq!(
+        view.update(vcx, |app, _| app.window_scale),
+        1.0,
+        "the app must read the window's backing scale"
+    );
+
+    for (columns, scale) in [(4usize, 1.0f32), (4, 2.0), (2, 2.0)] {
+        // The real window, so the painted tile and `grid_metrics` share one
+        // budget (the resize observer records the bounds).
+        vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+        vcx.update(|window, _| window.set_scale_factor(scale));
+        view.update(vcx, |app, cx| {
+            app.grid_columns = columns;
+            cx.notify();
+        });
+        render_ui(vcx);
+
+        // The painted well, not the derived metric: this is what the user sees.
+        let photo = vcx
+            .debug_bounds(leak(format!("media-card-photo-{}", id.0)))
+            .unwrap_or_else(|| panic!("no photo well painted at {columns} columns"));
+        // The painted well is un-floored while `grid_metrics` floors
+        // `photo_side`; the 64 px size step absorbs that sub-pixel difference.
+        let device = f32::from(photo.size.width) * scale;
+
+        let size = view.update(vcx, |app, _| {
+            let state = app.grid_state.as_ref().expect("grid state is installed");
+            // Let the same item be requested again for this tile size.
+            state.in_flight.lock().clear();
+            THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().clear());
+            app.thumbnail_request_size()
+        });
+
+        // Both request paths: the id/prefetch one and the painted row's.
+        view.update(vcx, |app, _| {
+            app.queue_thumbnail_request(id);
+            app.grid_state.as_ref().unwrap().in_flight.lock().clear();
+            app.queue_thumbnail_request_item(&item);
+        });
+
+        let requested = THUMB_DECODE_SIZES.with(|sizes| sizes.borrow().clone());
+        assert_eq!(
+            requested,
+            vec![(id, size), (id, size)],
+            "{columns} columns at {scale}x must request its own decode size"
+        );
+        assert!(
+            size as f32 >= device,
+            "a {device} device px tile at {scale}x needs at least that decode, got {size}"
+        );
+        if scale > 1.0 {
+            assert!(
+                size > 320,
+                "a Retina tile must not keep the old fixed 320 px decode"
+            );
+        }
+    }
+}
+
+/// A texture decoded for a smaller tile (a zoom-in, or a move to a sharper
+/// display) is refreshed for the bigger tile while staying on screen: no
+/// skeleton flash, and the request converges because the new size is stamped.
+#[core::prelude::v1::test]
+fn a_smaller_cached_thumbnail_is_refreshed_without_a_skeleton() {
+    let (_dir, engine) = seed_library("thumb_refresh", 1);
+    let item = engine.get_item_slice(0..1)[0].clone();
+    let id = item.id;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    // A Retina display, so the tile needs more than the smallest decode.
+    vcx.update(|window, _| window.set_scale_factor(2.0));
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    let coarse = Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(320, 320),
+    )]));
+    view.update(vcx, |app, _| {
+        let state = app.grid_state.as_ref().expect("grid state is installed");
+        state.texture_cache.lock().put(
+            id,
+            crate::views::grid::CachedThumb::new(crate::views::grid::THUMBNAIL_SIZE_MIN, coarse),
+        );
+        state.in_flight.lock().clear();
+        THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().clear());
+    });
+    render_ui(vcx);
+
+    let wanted = view.update(vcx, |app, _| app.thumbnail_request_size());
+    assert!(
+        wanted > crate::views::grid::THUMBNAIL_SIZE_MIN,
+        "setup: the tile must want more than the coarse decode, got {wanted}"
+    );
+    let requested = THUMB_DECODE_SIZES.with(|sizes| sizes.borrow().clone());
+    assert!(
+        !requested.is_empty(),
+        "the smaller decode must be refreshed at the tile's size"
+    );
+    assert!(
+        requested
+            .iter()
+            .all(|(got_id, size)| *got_id == id && *size == wanted),
+        "every refresh must be for this id at the tile's size {wanted}: {requested:?}"
+    );
+    assert!(
+        vcx.debug_bounds(leak(format!("media-card-thumb-{}", id.0)))
+            .is_some(),
+        "the coarse thumbnail must keep painting while the sharper one decodes"
+    );
+}
+
+/// The cache stamps the size the decode was *requested* at, not the frame's
+/// own size: the test fixtures decode to 2x2, and comparing the frame would
+/// re-request a thumbnail on every frame forever.
+#[core::prelude::v1::test]
+fn a_small_source_is_not_refreshed_forever() {
+    let (_dir, engine) = seed_library("thumb_small_source", 1);
+    let id = engine.get_item_slice(0..1)[0].id;
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+    vcx.update(|window, _| window.set_scale_factor(2.0));
+    vcx.simulate_resize(gpui::size(gpui::px(1280.0), gpui::px(840.0)));
+    render_ui(vcx);
+
+    let wanted = view.update(vcx, |app, cx| {
+        app.grid_state
+            .as_ref()
+            .expect("grid state")
+            .in_flight
+            .lock()
+            .clear();
+        let size = app.thumbnail_request_size();
+        app.handle_ui_message(
+            UiMessage::ThumbnailLoaded {
+                id,
+                frame: super::helpers::tiny_decoded_frame(id),
+                requested_size: size,
+            },
+            cx,
+        );
+        THUMB_DECODE_SIZES.with(|sizes| sizes.borrow_mut().clear());
+        size
+    });
+    assert!(wanted > 2, "setup: the tile wants more than the 2x2 source");
+
+    render_ui(vcx);
+    assert!(
+        THUMB_DECODE_SIZES.with(|sizes| sizes.borrow().is_empty()),
+        "a texture stamped with its requested size must not be re-requested \
+         just because the source is smaller"
+    );
+    assert!(
+        vcx.debug_bounds(leak(format!("media-card-thumb-{}", id.0)))
+            .is_some(),
+        "the small source's texture still paints"
     );
 }

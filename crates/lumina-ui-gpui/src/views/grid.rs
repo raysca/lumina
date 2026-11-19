@@ -97,6 +97,77 @@ pub(crate) const PHOTO_SIDE_MIN: f32 = 48.0;
 /// Largest photo well side, so a very wide window cannot produce huge rows.
 pub(crate) const PHOTO_SIDE_MAX: f32 = 640.0;
 
+/// Smallest thumbnail decode, in device pixels on its long edge: the size
+/// the grid used to ask for unconditionally, so a 1x display or a tiny tile
+/// never decodes less than before.
+pub(crate) const THUMBNAIL_SIZE_MIN: u32 = 320;
+
+/// Largest thumbnail decode. Covers the widest tile (`PHOTO_SIDE_MAX`) at the
+/// 2x Retina scale, so a tile is drawn from at least its own device pixels.
+pub(crate) const THUMBNAIL_SIZE_MAX: u32 = 2 * PHOTO_SIDE_MAX as u32;
+
+/// Decode sizes round up to this step so a live resize, which changes the
+/// tile width every frame, does not mint a cache entry per pixel.
+const THUMBNAIL_SIZE_STEP: u32 = 64;
+
+/// The long edge, in device pixels, a thumbnail needs when its tile is
+/// `side` points wide on a display scaled by `scale`.
+///
+/// The grid used to request a fixed 320 px whatever the tile or display, so a
+/// Retina tile (2x) or a zoomed-in 2-column tile drew from a source smaller
+/// than its own pixels and the GPU bilinear-stretched it. This is the tile's
+/// own size in device pixels instead, rounded up to [`THUMBNAIL_SIZE_STEP`]
+/// (so adjacent window sizes share a decode) and clamped to the thumbnail
+/// range.
+pub(crate) fn thumbnail_decode_size(side: f32, scale: f32) -> u32 {
+    if !side.is_finite() || !scale.is_finite() {
+        return THUMBNAIL_SIZE_MIN;
+    }
+    let device = (side.max(0.0) * scale.max(1.0)).ceil() as u32;
+    device
+        .div_ceil(THUMBNAIL_SIZE_STEP)
+        .saturating_mul(THUMBNAIL_SIZE_STEP)
+        .clamp(THUMBNAIL_SIZE_MIN, THUMBNAIL_SIZE_MAX)
+}
+
+/// Bytes of decoded grid textures kept in memory: the old fixed footprint
+/// (800 tiles at 320² BGRA8), so a larger decode size trades cache depth for
+/// detail instead of growing memory without bound. A heuristic, not a hard
+/// cap: stamps from a previous, larger size can briefly put the total above
+/// it until the LRU drains them.
+const TEXTURE_CACHE_BUDGET_BYTES: usize = 800 * 320 * 320 * 4;
+
+/// Texture-cache entries that fit [`TEXTURE_CACHE_BUDGET_BYTES`] at `size`²
+/// BGRA8, within 48..=800. The floor is a viewport plus its prefetch at the
+/// largest decode.
+pub(crate) fn texture_cache_capacity(size: u32) -> NonZeroUsize {
+    let bytes = (size as usize)
+        .saturating_mul(size as usize)
+        .saturating_mul(4)
+        .max(1);
+    NonZeroUsize::new((TEXTURE_CACHE_BUDGET_BYTES / bytes).clamp(48, 800))
+        .expect("the clamp keeps the capacity non-zero")
+}
+
+/// A decoded grid thumbnail and the decode size it was requested at (long
+/// edge, device px).
+///
+/// The *requested* size, not the frame's own, is what a tile compares against:
+/// a small source file or a crop decodes below the request, and comparing the
+/// frame would re-request it on every frame.
+#[derive(Clone)]
+pub struct CachedThumb {
+    pub requested: u32,
+    pub image: Arc<RenderImage>,
+}
+
+impl CachedThumb {
+    /// Pairs a decoded image with the size its decode was requested at.
+    pub fn new(requested: u32, image: Arc<RenderImage>) -> Self {
+        Self { requested, image }
+    }
+}
+
 /// Column gap between Videos tiles.
 pub(crate) const VIDEO_COLUMN_GAP: f32 = 14.0;
 
@@ -484,7 +555,7 @@ pub struct GridState {
     pub total_count: usize,
     pub is_scanning: bool,
     pub scan_progress: usize,
-    pub texture_cache: Arc<Mutex<LruCache<MediaId, Arc<RenderImage>>>>,
+    pub texture_cache: Arc<Mutex<LruCache<MediaId, CachedThumb>>>,
     pub in_flight: Arc<Mutex<HashSet<MediaId>>>,
     /// When each thumbnail finished decoding, so only fresh ones fade in;
     /// a card scrolled back into view shows its cached image at once.
@@ -539,9 +610,37 @@ impl GridState {
         self.thumb_failures.lock().clear();
     }
 
+    /// Keeps the texture cache near [`TEXTURE_CACHE_BUDGET_BYTES`] when the
+    /// thumbnail decode size changes (a display scale change or a zoom):
+    /// bigger images mean fewer of them. Called from `Render`, which holds no
+    /// other lock.
+    ///
+    /// Returns the images it evicted, which the caller must retire: dropping
+    /// their `Arc` alone would leave the texture in the GPU atlas.
+    pub fn resize_texture_cache(&self, thumbnail_size: u32) -> Vec<Arc<RenderImage>> {
+        let capacity = texture_cache_capacity(thumbnail_size);
+        let mut cache = self.texture_cache.lock();
+        if cache.cap() == capacity {
+            return Vec::new();
+        }
+        let mut evicted = Vec::new();
+        while cache.len() > capacity.get() {
+            match cache.pop_lru() {
+                Some((_, thumb)) => evicted.push(thumb.image),
+                None => break,
+            }
+        }
+        // Only changes the cap here: the loop above already trimmed to it, and
+        // `LruCache::resize` evicts silently, which would drop GPU textures
+        // without anyone able to retire them.
+        debug_assert!(cache.len() <= capacity.get());
+        cache.resize(capacity);
+        evicted
+    }
+
     pub fn new(engine: Arc<LuminaEngine>) -> Self {
         let total_count = engine.total_count();
-        let cache_capacity = NonZeroUsize::new(800).unwrap();
+        let cache_capacity = texture_cache_capacity(THUMBNAIL_SIZE_MIN);
 
         Self {
             engine,
@@ -759,5 +858,62 @@ mod tests {
     fn card_tooltip_payload_keeps_the_complete_filename() {
         let tooltip = MediaCardTooltip::new("IMG_2036.HEIC");
         assert_eq!(tooltip.name, "IMG_2036.HEIC");
+    }
+
+    #[core::prelude::v1::test]
+    fn thumbnails_decode_at_the_tile_device_size() {
+        // 4 columns at 1280 px: a 239 px well, so a Retina tile is ~478
+        // device px. The old fixed 320 left it 1.5x upscaled.
+        let four = grid_metrics(1280.0, 252.0, false, false, None, 4, TileShape::Square);
+        let side = four.photo_side;
+        let retina = thumbnail_decode_size(side, 2.0);
+        assert!(
+            retina as f32 >= side * 2.0,
+            "a 2x tile must decode at least its {side} px at 2x, got {retina}"
+        );
+        assert_eq!(
+            retina % THUMBNAIL_SIZE_STEP,
+            0,
+            "decode sizes are quantized so a resize shares a cache entry"
+        );
+
+        // 1x never decodes below the old size (a large tile is still > 320).
+        assert_eq!(thumbnail_decode_size(side, 1.0), THUMBNAIL_SIZE_MIN);
+
+        // Zooming in (2 columns, 485 px) asks for more than 4 columns.
+        let two = grid_metrics(1280.0, 252.0, false, false, None, 2, TileShape::Square);
+        assert!(
+            thumbnail_decode_size(two.photo_side, 2.0) > retina,
+            "a wider tile must ask for a bigger decode"
+        );
+
+        // The widest tile at 2x is covered: no clamp gap at the top.
+        assert_eq!(
+            thumbnail_decode_size(PHOTO_SIDE_MAX, 2.0),
+            2 * PHOTO_SIDE_MAX as u32,
+            "the largest tile must decode at its own 2x size"
+        );
+        assert_eq!(thumbnail_decode_size(f32::NAN, 2.0), THUMBNAIL_SIZE_MIN);
+        assert_eq!(
+            thumbnail_decode_size(side, f32::INFINITY),
+            THUMBNAIL_SIZE_MIN
+        );
+    }
+
+    #[core::prelude::v1::test]
+    fn texture_cache_depth_follows_the_decode_size() {
+        // The old footprint: 800 tiles at 320 px.
+        assert_eq!(texture_cache_capacity(THUMBNAIL_SIZE_MIN).get(), 800);
+        // A 512 px decode keeps roughly the same bytes with fewer entries.
+        assert_eq!(texture_cache_capacity(512).get(), 312);
+        // The largest decode still keeps a viewport and its prefetch, and its
+        // entries stay inside the byte budget.
+        let max_entries = texture_cache_capacity(THUMBNAIL_SIZE_MAX).get();
+        assert!(max_entries >= 48, "got {max_entries}");
+        assert!(max_entries < 312);
+        assert!(
+            max_entries * (THUMBNAIL_SIZE_MAX as usize).pow(2) * 4 <= TEXTURE_CACHE_BUDGET_BYTES,
+            "the largest size must not exceed the cache budget"
+        );
     }
 }

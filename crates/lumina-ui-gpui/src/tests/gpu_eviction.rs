@@ -125,6 +125,7 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
                 UiMessage::ThumbnailLoaded {
                     id,
                     frame: tiny_decoded_frame(id),
+                    requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
                 },
                 cx,
             );
@@ -170,6 +171,7 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             UiMessage::ThumbnailLoaded {
                 id,
                 frame: tiny_decoded_frame(id),
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
             },
             cx,
         );
@@ -186,4 +188,59 @@ fn evicted_and_removed_thumbnails_are_queued_for_gpu_eviction() {
             "opening another library must queue the old library's thumbnails for GPU eviction"
         );
     });
+}
+
+/// Regression: resizing the texture cache for a bigger decode size used to let
+/// `LruCache::resize` evict entries silently, so the app never saw the images
+/// it had to retire and the atlas grew with every zoom or display change.
+#[core::prelude::v1::test]
+fn shrinking_the_texture_cache_hands_back_its_evicted_images() {
+    use crate::views::grid::{CachedThumb, GridState, THUMBNAIL_SIZE_MAX, THUMBNAIL_SIZE_MIN};
+
+    let (_dir, engine) = seed_library("thumb_resize_evict", 1);
+    let state = GridState::new(engine);
+    let texture = || {
+        std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+            image::RgbaImage::new(4, 4),
+        )]))
+    };
+    {
+        let mut cache = state.texture_cache.lock();
+        cache.resize(std::num::NonZeroUsize::new(60).unwrap());
+        for id in 1..=60 {
+            cache.push(
+                lumina_core::MediaId(id),
+                CachedThumb::new(THUMBNAIL_SIZE_MIN, texture()),
+            );
+        }
+    }
+
+    // The largest decode holds fewer entries: 60 must drop to the floor.
+    let evicted = state.resize_texture_cache(THUMBNAIL_SIZE_MAX);
+    let remaining = state.texture_cache.lock().len();
+    assert_eq!(
+        evicted.len(),
+        60 - remaining,
+        "every entry the smaller capacity cannot hold must be handed back"
+    );
+    assert_eq!(remaining, 50, "1280 px entries fit 50 in the budget");
+    assert!(
+        evicted
+            .iter()
+            .all(|image| std::sync::Arc::strong_count(image) == 1),
+        "each evicted image must be unshared, so the caller can retire it"
+    );
+    // Least recently used first: the visible (recently read) tiles survive,
+    // which is what makes a zoom shrink the cache without blanking the grid.
+    {
+        let cache = state.texture_cache.lock();
+        assert!(
+            !cache.contains(&lumina_core::MediaId(1)),
+            "the least recently used entry must be the first to go"
+        );
+        assert!(
+            cache.contains(&lumina_core::MediaId(60)),
+            "the most recently used entry must survive"
+        );
+    }
 }

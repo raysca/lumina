@@ -62,7 +62,7 @@ impl DeleteConfirmModal {
                 state
                     .preview_ids
                     .iter()
-                    .filter_map(|id| cache.peek(id).cloned())
+                    .filter_map(|id| cache.peek(id).map(|t| t.image.clone()))
                     .collect()
             })
             .unwrap_or_default();

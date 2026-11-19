@@ -37,7 +37,8 @@ pub(crate) const EXTERNAL_EDITOR_FAILED_MESSAGE: &str =
 pub(crate) const REVEAL_FAILED_MESSAGE: &str = crate::i18n::platform::REVEAL_FAILED;
 
 /// Decode size requested for the full-viewer still, matching the selection path
-/// in `select_item_internal`; the grid requests 320 and the viewer 2048.
+/// in `select_item_internal`. The grid asks for its tile in device pixels
+/// (`LuminaApp::thumbnail_request_size`: 320..=1280) and the viewer for 2048.
 ///
 /// Deliberate simplification: one fixed viewer decode instead of per-zoom
 /// tiers (2048 for 2x, 4096 for 4x). 2048 already exceeds a 1440-1660 px Fit

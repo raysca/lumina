@@ -75,6 +75,7 @@ fn viewer_filmstrip_centres_current_and_navigates() {
             crate::UiMessage::ThumbnailLoaded {
                 id: ids[10],
                 frame: super::helpers::tiny_decoded_frame(ids[10]),
+                requested_size: crate::views::grid::THUMBNAIL_SIZE_MAX,
             },
             cx,
         );

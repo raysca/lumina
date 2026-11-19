@@ -113,6 +113,9 @@ pub enum UiMessage {
     ThumbnailLoaded {
         id: MediaId,
         frame: DecodedFrame,
+        /// The decode size (long edge, device px) this frame was requested at,
+        /// stored with the texture so a bigger tile can refresh it.
+        requested_size: u32,
     },
     /// A thumbnail decode failed for good (already recorded in the grid's
     /// failure set); the handler only repaints.

@@ -75,7 +75,11 @@ pub(crate) fn render(this: &LuminaApp, cx: &mut Context<LuminaApp>) -> Option<An
     let selected = this.selected_item.as_ref().map(|item| item.id);
     let rows = this.displayed_rows(window.clone());
     let thumbs = rows.iter().zip(window.start..).map(|(item, index)| {
-        let texture = state.texture_cache.lock().get(&item.id).cloned();
+        let texture = state
+            .texture_cache
+            .lock()
+            .get(&item.id)
+            .map(|t| t.image.clone());
         if texture.is_none() {
             // Skips ids already in flight or failed, so stepping queues
             // only the thumb entering the strip.

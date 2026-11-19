@@ -176,8 +176,8 @@ impl LuminaApp {
             GridState::with_resume_positions(engine, self.config.resume_positions.clone());
         if let Some(old) = self.grid_state.replace(grid_state) {
             let mut cache = old.texture_cache.lock();
-            while let Some((_, image)) = cache.pop_lru() {
-                self.retire_image(image);
+            while let Some((_, thumb)) = cache.pop_lru() {
+                self.retire_image(thumb.image);
             }
         }
         self.load_downloads(cx);

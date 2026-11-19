@@ -28,6 +28,9 @@ impl LuminaApp {
         let metrics = self.grid_metrics();
         let row_h = metrics.row_height;
         let photo = size(metrics.photo_side, metrics.photo_height);
+        // What one tile of this grid needs from the decoder. A cached texture
+        // below it keeps painting while a sharper decode is queued.
+        let needed = self.thumbnail_request_size();
         let column_gap = metrics.column_gap;
         let (row_gap, padding_right) = (metrics.row_gap, metrics.padding_right);
         let total_rows = effective_count.div_ceil(cols);
@@ -111,27 +114,33 @@ impl LuminaApp {
                                 &[][..]
                             };
 
-                            let (row_textures, missing_items) =
+                            let (row_textures, decode_needed) =
                                 if let Some(ref state) = this.grid_state {
                                     let mut cache = state.texture_cache.lock();
                                     let mut texs = Vec::with_capacity(items.len());
-                                    let mut missing = Vec::new();
+                                    let mut needed_items = Vec::new();
                                     for item in items {
-                                        if let Some(tex) = cache.get(&item.id).cloned() {
-                                            texs.push(Some(tex));
+                                        if let Some(thumb) = cache.get(&item.id).cloned() {
+                                            texs.push(Some(thumb.image.clone()));
+                                            if thumb.requested < needed {
+                                                // Zoomed in or moved to a sharper
+                                                // display: keep these pixels on
+                                                // screen, fetch the bigger size.
+                                                needed_items.push(item);
+                                            }
                                         } else {
                                             texs.push(None);
-                                            missing.push(item);
+                                            needed_items.push(item);
                                         }
                                     }
                                     drop(cache);
-                                    (texs, missing)
+                                    (texs, needed_items)
                                 } else {
                                     (vec![None; items.len()], Vec::new())
                                 };
 
-                            for missing_item in missing_items {
-                                this.queue_thumbnail_request_item(missing_item);
+                            for item in decode_needed {
+                                this.queue_thumbnail_request_item(item);
                             }
 
                             let mut row_cards = Vec::with_capacity(cols);

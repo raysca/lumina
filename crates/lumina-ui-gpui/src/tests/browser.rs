@@ -626,7 +626,13 @@ fn a_wide_thumbnail_never_widens_its_card() {
         view.update(vcx, |app, cx| {
             app.card_fit_mode = fit;
             let state = app.grid_state.as_ref().expect("grid state");
-            state.texture_cache.lock().put(item.id, wide.clone());
+            state.texture_cache.lock().put(
+                item.id,
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    wide.clone(),
+                ),
+            );
             cx.notify();
         });
         render_ui(vcx);

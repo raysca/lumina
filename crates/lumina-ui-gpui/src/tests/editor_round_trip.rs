@@ -82,7 +82,13 @@ fn app_with_texture(
         let mut state = GridState::new(engine);
         // The library's opening scan has finished (ScanComplete).
         state.is_scanning = false;
-        state.texture_cache.lock().put(id, placeholder.clone());
+        state.texture_cache.lock().put(
+            id,
+            crate::views::grid::CachedThumb::new(
+                crate::views::grid::THUMBNAIL_SIZE_MAX,
+                placeholder.clone(),
+            ),
+        );
         app.grid_state = Some(state);
         app.refresh_album_counts();
         cx.notify();
@@ -107,7 +113,7 @@ fn shows(
                 .texture_cache
                 .lock()
                 .peek(&id)
-                .is_some_and(|texture| Arc::ptr_eq(texture, old))
+                .is_some_and(|thumb| Arc::ptr_eq(&thumb.image, old))
         })
     })
 }

@@ -215,7 +215,13 @@ fn put_texture(view: &gpui::Entity<LuminaApp>, vcx: &mut gpui::VisualTestContext
             .expect("grid state must be installed")
             .texture_cache
             .lock()
-            .put(id, texture);
+            .put(
+                id,
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    texture,
+                ),
+            );
     });
 }
 

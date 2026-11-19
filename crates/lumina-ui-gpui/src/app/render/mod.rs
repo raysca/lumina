@@ -49,6 +49,19 @@ impl Render for LuminaApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root = self.focus_handle.clone();
         self.sync_field_input(window, &root, false, cx);
+        // Thumbnails decode for this display's pixels, so the grid never
+        // stretches a 1x source over a Retina tile. The texture cache's depth
+        // follows the resulting image size to keep its footprint steady; the
+        // images it sheds must be retired, not just dropped (the atlas entry
+        // outlives the Arc).
+        self.window_scale = window.scale_factor();
+        let evicted = match self.grid_state.as_ref() {
+            Some(state) => state.resize_texture_cache(self.thumbnail_request_size()),
+            None => Vec::new(),
+        };
+        for image in evicted {
+            self.retire_image(image);
+        }
         // Evict replaced viewer frames before painting the new one.
         crate::app::viewer_actions::evict_retired_images(
             std::mem::take(&mut self.retired_images),

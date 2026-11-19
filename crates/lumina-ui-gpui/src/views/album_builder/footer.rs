@@ -117,7 +117,7 @@ pub(super) fn render_preview(app: &LuminaApp) -> impl IntoElement {
     let textures = app.grid_state.as_ref().map(|state| &state.texture_cache);
     let tiles = draft.preview.iter().map(|item| {
         let id = item.id;
-        let texture = textures.and_then(|cache| cache.lock().get(&id).cloned());
+        let texture = textures.and_then(|cache| cache.lock().get(&id).map(|t| t.image.clone()));
         if texture.is_none() {
             app.queue_thumbnail_request(id);
         }

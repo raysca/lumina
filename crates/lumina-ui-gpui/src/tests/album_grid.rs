@@ -73,10 +73,13 @@ fn album_grid_has_five_filled_columns_ten_apart_inside_the_frame_padding() {
     view.update(vcx, |app, cx| {
         let state = app.grid_state.as_ref().expect("grid state");
         for &id in &ids {
-            state
-                .texture_cache
-                .lock()
-                .put(MediaId(id as _), image.clone());
+            state.texture_cache.lock().put(
+                MediaId(id as _),
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    image.clone(),
+                ),
+            );
         }
         cx.notify();
     });
@@ -212,10 +215,13 @@ fn album_zoom_and_arrows_use_album_columns_and_leave_library_zoom_alone() {
     view.update(vcx, |app, cx| {
         let state = app.grid_state.as_ref().expect("grid state");
         for &id in &ids {
-            state
-                .texture_cache
-                .lock()
-                .put(MediaId(id as _), image.clone());
+            state.texture_cache.lock().put(
+                MediaId(id as _),
+                crate::views::grid::CachedThumb::new(
+                    crate::views::grid::THUMBNAIL_SIZE_MAX,
+                    image.clone(),
+                ),
+            );
         }
         cx.notify();
     });
