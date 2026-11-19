@@ -410,41 +410,29 @@ impl StructuredQuery {
         let sql = if !fts_query.is_empty() {
             format!(
                 r#"
-                SELECT 
-                    m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                    m.media_type, m.width, m.height, m.duration_ms,
-                    m.timestamp_epoch_ms, m.year, m.month, m.day,
-                    m.latitude, m.longitude, m.altitude,
-                    m.country_code, m.admin1_region, m.city,
-                    m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                    m.is_favorite, m.is_hidden, m.is_trashed, m.title
+                SELECT {columns}
                 FROM media_search_fts
                 CROSS JOIN media_items m ON media_search_fts.rowid = m.id
-                WHERE {}
-                ORDER BY {}
+                WHERE {where_clause}
+                ORDER BY {order}
                 LIMIT ? OFFSET ?;
                 "#,
-                where_clause,
-                sort.order_by("m.")
+                columns = crate::sql::media_columns("m."),
+                where_clause = &where_clause,
+                order = sort.order_by("m.")
             )
         } else {
             format!(
                 r#"
-                SELECT 
-                    m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                    m.media_type, m.width, m.height, m.duration_ms,
-                    m.timestamp_epoch_ms, m.year, m.month, m.day,
-                    m.latitude, m.longitude, m.altitude,
-                    m.country_code, m.admin1_region, m.city,
-                    m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                    m.is_favorite, m.is_hidden, m.is_trashed, m.title
+                SELECT {columns}
                 FROM media_items m
-                WHERE {}
-                ORDER BY {}
+                WHERE {where_clause}
+                ORDER BY {order}
                 LIMIT ? OFFSET ?;
                 "#,
-                where_clause,
-                sort.order_by("m.")
+                columns = crate::sql::media_columns("m."),
+                where_clause = &where_clause,
+                order = sort.order_by("m.")
             )
         };
 

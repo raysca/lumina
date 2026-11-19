@@ -16,6 +16,7 @@ pub mod scanner;
 pub mod search;
 pub mod smart_albums;
 pub mod sort;
+mod sql;
 pub mod stacks;
 pub mod text;
 mod types;

@@ -325,21 +325,11 @@ impl Catalog {
     ) -> Result<Vec<MediaItem>> {
         let conn = self.conn.lock();
         let sql = format!(
-            r#"
-            SELECT 
-                id, file_path, parent_dir, file_name, file_size, mtime_epoch_ms,
-                media_type, width, height, duration_ms,
-                timestamp_epoch_ms, year, month, day,
-                latitude, longitude, altitude,
-                country_code, admin1_region, city,
-                make, model, lens, focal_length, f_number, iso, exposure_time,
-                is_favorite, is_hidden, is_trashed, title
-            FROM media_items
-            WHERE is_trashed = 0 AND is_hidden = 0
-            ORDER BY {}
-            LIMIT ?1 OFFSET ?2;
-            "#,
-            sort.order_by("")
+            "SELECT {columns} FROM media_items \
+             WHERE is_trashed = 0 AND is_hidden = 0 \
+             ORDER BY {order} LIMIT ?1 OFFSET ?2;",
+            columns = crate::sql::media_columns(""),
+            order = sort.order_by("")
         );
         let mut stmt = conn.prepare_cached(&sql)?;
 
@@ -348,20 +338,10 @@ impl Catalog {
 
     pub fn get_item_by_id(&self, id: MediaId) -> Result<Option<MediaItem>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
-            r#"
-            SELECT 
-                id, file_path, parent_dir, file_name, file_size, mtime_epoch_ms,
-                media_type, width, height, duration_ms,
-                timestamp_epoch_ms, year, month, day,
-                latitude, longitude, altitude,
-                country_code, admin1_region, city,
-                make, model, lens, focal_length, f_number, iso, exposure_time,
-                is_favorite, is_hidden, is_trashed, title
-            FROM media_items
-            WHERE id = ?1;
-            "#,
-        )?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT {columns} FROM media_items WHERE id = ?1;",
+            columns = crate::sql::media_columns("")
+        ))?;
 
         let mut rows = Self::map_query_rows(&mut stmt, params![id.0 as i64])?;
         Ok(rows.pop())
@@ -376,14 +356,8 @@ impl Catalog {
         for chunk in ids.chunks(500) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT id, file_path, parent_dir, file_name, file_size, mtime_epoch_ms, \
-                 media_type, width, height, duration_ms, \
-                 timestamp_epoch_ms, year, month, day, \
-                 latitude, longitude, altitude, \
-                 country_code, admin1_region, city, \
-                 make, model, lens, focal_length, f_number, iso, exposure_time, \
-                 is_favorite, is_hidden, is_trashed, title \
-                 FROM media_items WHERE id IN ({marks});"
+                "SELECT {} FROM media_items WHERE id IN ({marks});",
+                crate::sql::media_columns("")
             );
             let mut stmt = conn.prepare(&sql)?;
             let params = rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64));
@@ -652,15 +626,12 @@ impl Catalog {
         // time), so they move with them: re-geocoded on edit, cleared on
         // removal. The FTS update trigger reindexes them. Geocoding runs
         // before the catalog lock is taken.
-        static GEOCODER: std::sync::OnceLock<crate::OfflineGeocoder> = std::sync::OnceLock::new();
+        let geocoder = crate::OfflineGeocoder::shared();
         let places: Vec<_> = changes
             .iter()
             .map(|(_, (lat, lon))| {
-                lat.zip(*lon).and_then(|(lat, lon)| {
-                    GEOCODER
-                        .get_or_init(crate::OfflineGeocoder::new)
-                        .reverse_geocode(lat, lon)
-                })
+                lat.zip(*lon)
+                    .and_then(|(lat, lon)| geocoder.reverse_geocode(lat, lon))
             })
             .collect();
         let mut conn = self.conn.lock();

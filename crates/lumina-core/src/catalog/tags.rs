@@ -282,24 +282,18 @@ impl Catalog {
         let conn = self.conn.lock();
         let sql = format!(
             r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            SELECT {columns}
             FROM media_items m
             WHERE m.is_trashed = 0
               AND m.is_hidden = 0
               AND NOT EXISTS (
                   SELECT 1 FROM media_tags mt WHERE mt.media_id = m.id
               )
-            ORDER BY {}
+            ORDER BY {order}
             LIMIT ?1 OFFSET ?2;
             "#,
-            sort.order_by("m.")
+            columns = crate::sql::media_columns("m."),
+            order = sort.order_by("m.")
         );
         let mut stmt = conn.prepare_cached(&sql)?;
         Self::map_query_rows(&mut stmt, params![limit as i64, offset as i64])
@@ -335,21 +329,15 @@ impl Catalog {
 fn items_by_tag_sql() -> String {
     format!(
         r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            SELECT {columns}
             FROM media_items m
-            WHERE m.id IN (SELECT media_id FROM media_tags WHERE {})
+            WHERE m.id IN (SELECT media_id FROM media_tags WHERE {clause})
                 AND m.is_trashed = 0 AND m.is_hidden = 0
             ORDER BY m.timestamp_epoch_ms DESC, m.id DESC
             LIMIT ? OFFSET ?;
             "#,
-        subtree_clause("tag")
+        columns = crate::sql::media_columns("m."),
+        clause = subtree_clause("tag")
     )
 }
 

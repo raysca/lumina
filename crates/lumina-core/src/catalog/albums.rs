@@ -390,26 +390,20 @@ impl Catalog {
     pub fn album_slice_sql(sort: SortSpec) -> String {
         format!(
             r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            SELECT {columns}
             FROM media_items m
             WHERE m.id IN (
                 SELECT am.id FROM album_items ai
                 JOIN media_items am ON am.id = ai.media_id
                 WHERE ai.album_id = ?1 AND am.is_trashed = 0 AND am.is_hidden = 0
-                ORDER BY {}
+                ORDER BY {inner}
                 LIMIT ?2 OFFSET ?3
             )
-            ORDER BY {};
+            ORDER BY {outer};
             "#,
-            sort.order_by("am."),
-            sort.order_by("m.")
+            columns = crate::sql::media_columns("m."),
+            inner = sort.order_by("am."),
+            outer = sort.order_by("m.")
         )
     }
 

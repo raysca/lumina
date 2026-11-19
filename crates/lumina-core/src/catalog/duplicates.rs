@@ -73,22 +73,16 @@ impl Catalog {
     /// Returns active items that match a specific content hash.
     pub fn find_items_by_hash(&self, content_hash: &str) -> Result<Vec<MediaItem>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
+        let mut stmt = conn.prepare_cached(&format!(
             r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            SELECT {columns}
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
             WHERE h.content_hash = ?1 AND m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL)
             ORDER BY m.timestamp_epoch_ms ASC, m.id ASC;
             "#,
-        )?;
+            columns = crate::sql::media_columns("m.")
+        ))?;
         Self::map_query_rows(&mut stmt, params![content_hash])
     }
 
@@ -140,16 +134,9 @@ impl Catalog {
         limit: usize,
     ) -> Result<Vec<MediaItem>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(
+        let mut stmt = conn.prepare_cached(&format!(
             r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title
+            SELECT {columns}
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
             WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
@@ -163,7 +150,8 @@ impl Catalog {
             ORDER BY h.content_hash ASC, m.timestamp_epoch_ms ASC, m.id ASC
             LIMIT ?1 OFFSET ?2;
             "#,
-        )?;
+            columns = crate::sql::media_columns("m.")
+        ))?;
         Self::map_query_rows(&mut stmt, params![limit as i64, offset as i64])
     }
 
@@ -201,17 +189,9 @@ impl Catalog {
         }
 
         // 2. Fetch all matching media items in one query using the shared row mapper
-        let mut item_stmt = conn.prepare_cached(
+        let mut item_stmt = conn.prepare_cached(&format!(
             r#"
-            SELECT
-                m.id, m.file_path, m.parent_dir, m.file_name, m.file_size, m.mtime_epoch_ms,
-                m.media_type, m.width, m.height, m.duration_ms,
-                m.timestamp_epoch_ms, m.year, m.month, m.day,
-                m.latitude, m.longitude, m.altitude,
-                m.country_code, m.admin1_region, m.city,
-                m.make, m.model, m.lens, m.focal_length, m.f_number, m.iso, m.exposure_time,
-                m.is_favorite, m.is_hidden, m.is_trashed, m.title,
-                h.content_hash
+            SELECT {columns}, h.content_hash
             FROM media_items m
             JOIN media_hashes h ON m.id = h.media_id
             WHERE m.is_trashed = 0 AND m.is_hidden = 0 AND NOT EXISTS (SELECT 1 FROM media_file_state s WHERE s.media_id = m.id AND s.missing_since_epoch_ms IS NOT NULL) AND m.file_size > 0
@@ -224,7 +204,8 @@ impl Catalog {
               )
             ORDER BY h.content_hash ASC, m.rating DESC, m.is_favorite DESC, m.timestamp_epoch_ms ASC, m.id ASC;
             "#,
-        )?;
+            columns = crate::sql::media_columns("m.")
+        ))?;
 
         let mut hash_to_items: std::collections::HashMap<String, Vec<MediaItem>> =
             std::collections::HashMap::new();

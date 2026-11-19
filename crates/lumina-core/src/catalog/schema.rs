@@ -818,4 +818,53 @@ mod tests {
             "the error must name the column: {err:#}"
         );
     }
+
+    /// The shared SELECT list must match `map_media_item_row`'s positional
+    /// order exactly; a transposition silently maps the wrong value.
+    #[test]
+    fn media_columns_match_the_row_mapper_order() {
+        let expected = [
+            "id",
+            "file_path",
+            "parent_dir",
+            "file_name",
+            "file_size",
+            "mtime_epoch_ms",
+            "media_type",
+            "width",
+            "height",
+            "duration_ms",
+            "timestamp_epoch_ms",
+            "year",
+            "month",
+            "day",
+            "latitude",
+            "longitude",
+            "altitude",
+            "country_code",
+            "admin1_region",
+            "city",
+            "make",
+            "model",
+            "lens",
+            "focal_length",
+            "f_number",
+            "iso",
+            "exposure_time",
+            "is_favorite",
+            "is_hidden",
+            "is_trashed",
+            "title",
+        ];
+        let columns = crate::sql::media_columns("");
+        let cols: Vec<&str> = columns.split(',').map(str::trim).collect();
+        assert_eq!(
+            cols,
+            expected.to_vec(),
+            "the shared list must match map_media_item_row's index order"
+        );
+        let prefixed = crate::sql::media_columns("m.");
+        assert!(prefixed.starts_with("m.id,"));
+        assert!(prefixed.ends_with("m.title"));
+    }
 }
