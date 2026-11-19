@@ -256,11 +256,10 @@ impl LuminaApp {
                             self.select_item_internal(it, cx);
                         }
                     } else {
-                        self.selected_index = None;
-                        self.selected_item = None;
-                        self.set_viewer_image(None);
-                        self.selected_item_tags.clear();
-                        self.selected_tag_counts.clear();
+                        // Deselecting the last card must reset every
+                        // selection-derived field the same way a normal
+                        // clear does, not a hand-picked subset.
+                        self.clear_selection_fields();
                     }
                 }
             } else {
@@ -355,6 +354,9 @@ impl LuminaApp {
         self.set_viewer_image(None);
         self.selected_item_tags.clear();
         self.selected_tag_counts.clear();
+        // Invalidate any tag load still in flight for the item just cleared:
+        // without this, its late result repopulates the cleared tag list.
+        self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
         self.batch_summary = BatchSelectionSummary::default();
         self.batch_metadata = BatchMetadataSummary::default();
         self.batch_load.invalidate();

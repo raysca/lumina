@@ -150,6 +150,35 @@ fn tags_follow_the_latest_selection_even_when_loads_land_late() {
 }
 
 #[core::prelude::v1::test]
+fn a_cleared_selection_ignores_a_late_tag_load() {
+    let (_dir, engine) = seed_library("ui_thread_tags_cleared", 2);
+    let items = engine.get_item_slice(0..1);
+    engine
+        .add_tags_batch(&[items[0].id], &["stale".to_string()])
+        .unwrap();
+    let mut cx = crate::tests::TestApp::single();
+    let (view, vcx) = app_with_library(&mut cx, engine);
+
+    let request = view.update(vcx, |app, cx| {
+        app.select_item(items[0].clone(), cx);
+        app.selected_tags_request
+    });
+    view.update(vcx, |app, cx| app.clear_selection(cx));
+    render_ui(vcx);
+    view.update(vcx, |app, cx| {
+        assert!(
+            app.selected_item_tags.is_empty(),
+            "clearing drops the selected item's tags"
+        );
+        app.apply_selected_item_tags(request, vec!["stale".to_string()], cx);
+        assert!(
+            app.selected_item_tags.is_empty(),
+            "a late load for a cleared selection must not repopulate its tags"
+        );
+    });
+}
+
+#[core::prelude::v1::test]
 /// The redraw a scan or watcher event triggers then shows the change; the
 /// test draws those frames itself.
 fn after_a_catalog_change_the_next_frames_show_it() {
