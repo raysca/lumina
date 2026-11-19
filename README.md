@@ -298,6 +298,14 @@ other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog i
 `~/Library/Caches/lumina/thumbnails/`; UI preferences live in
 `~/Library/Application Support/lumina/config.json`.
 
+URL import (File > Import Video from URL…, ⌥⌘U) needs the pinned `yt-dlp` and
+`ffmpeg`. The packaged app ships them. A build run outside a `.app`
+(`make dev`, `cargo run`) looks beside its binary, then in Homebrew and
+`PATH`, so run `make bundle-deps` once to add the pinned copies; without one,
+paste-a-link import stops with "A part of Lumina needed for downloads is
+missing from this build." Direct links to a video file (`…/clip.mp4`) never
+need them. See [docs/network-import.md](docs/network-import.md).
+
 ## Commands
 
 | Command | Description |

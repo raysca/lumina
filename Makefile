@@ -40,6 +40,7 @@ help:
 
 ## Run GPUI native desktop application in debug mode
 dev:
+	@test -f "$$LUMINA_YT_DLP" || test -x target/debug/yt-dlp || test -x /opt/homebrew/bin/yt-dlp || test -x /usr/local/bin/yt-dlp || command -v yt-dlp >/dev/null 2>&1 || echo "note: no download helper found; run 'make bundle-deps' to add the pinned one."
 	cargo run -p lumina-ui-gpui --bin lumina-ui-gpui
 
 ## Alias for dev

@@ -546,7 +546,7 @@ fn missing_helper_failure_has_no_retry() {
         assert!(!row.can_retry, "Retry can't fix a damaged install");
         assert_eq!(
             row.error.as_deref(),
-            Some(lumina_core::net_import::MISSING_PART)
+            Some(lumina_core::net_import::missing_part())
         );
     });
 }

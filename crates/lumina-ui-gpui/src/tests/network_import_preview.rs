@@ -8,7 +8,7 @@ use super::network_import::without_yt_dlp;
 use crate::app::network_import::{InspectFn, NetworkImportStage};
 use crate::LuminaApp;
 use gpui::{Entity, VisualTestContext};
-use lumina_core::net_import::{classify_url, NetworkMediaInfo, NetworkSourceKind, MISSING_PART};
+use lumina_core::net_import::{classify_url, missing_part, NetworkMediaInfo, NetworkSourceKind};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -286,7 +286,7 @@ fn net_import_dialog_reports_missing_helper_without_inspecting() {
     view.update(vcx, |app, _| {
         assert_eq!(
             input_error(app).as_deref(),
-            Some(MISSING_PART),
+            Some(missing_part()),
             "a missing helper is reported in the dialog"
         );
         assert!(app.downloads.entries.is_empty(), "nothing is queued");

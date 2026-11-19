@@ -79,6 +79,25 @@ fn find_tool_for(name: &str, bundle_only: bool) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// True when this process is a build from this source tree, not an install:
+/// a debug build (never distributed), or an executable under a cargo
+/// `target/` directory (`make run-release`, a local `make bundle`).
+pub(crate) fn is_source_build() -> bool {
+    cfg!(debug_assertions)
+        || std::env::current_exe()
+            .map(|exe| exe_is_under_target(&exe))
+            .unwrap_or(false)
+}
+
+/// `…/target/debug/…`, `…/target/<triple>/release/…` and a local
+/// `…/target/release/bundle/osx/Lumina.app/…` all count; an installed
+/// `/Applications/Lumina.app` or `/usr/bin/lumina` does not. The component
+/// name is a heuristic: a path that happens to contain `target` (or a custom
+/// `CARGO_TARGET_DIR`) only picks which of the two messages is shown.
+fn exe_is_under_target(exe: &Path) -> bool {
+    exe.components().any(|part| part.as_os_str() == "target")
+}
+
 /// The yt-dlp to run, honouring [`YT_DLP_ENV`].
 pub fn find_yt_dlp() -> Option<PathBuf> {
     // Debug builds only: a release app must not run a binary named by the
@@ -344,5 +363,25 @@ mod tests {
             "/Users/me/src/lumina/target/debug/lumina-ui-gpui"
         )));
         assert!(!is_app_bundle_exe(Path::new("/usr/bin/lumina")));
+    }
+
+    /// A local test bundle built with `LUMINA_BUNDLE_DEPS=0` sits under
+    /// `target/` and is still a source build (rebuilt, not reinstalled); an
+    /// installed app or a Linux package is not.
+    #[test]
+    fn source_build_detection_covers_local_bundles() {
+        assert!(exe_is_under_target(Path::new(
+            "/Users/me/src/lumina/target/debug/lumina-ui-gpui"
+        )));
+        assert!(exe_is_under_target(Path::new(
+            "/Users/me/src/lumina/target/aarch64-apple-darwin/debug/lumina-ui-gpui"
+        )));
+        assert!(exe_is_under_target(Path::new(
+            "/Users/me/src/lumina/target/release/bundle/osx/Lumina.app/Contents/MacOS/lumina-ui-gpui"
+        )));
+        assert!(!exe_is_under_target(Path::new(
+            "/Applications/Lumina.app/Contents/MacOS/lumina-ui-gpui"
+        )));
+        assert!(!exe_is_under_target(Path::new("/usr/bin/lumina")));
     }
 }

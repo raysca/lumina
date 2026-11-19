@@ -98,8 +98,13 @@ it has something in it.
 
 The dialog and its errors never name the tools behind a download (yt-dlp,
 ffmpeg, curl, Homebrew) or stream formats (HLS, m3u8). Messages say what
-happened and what the user can do ("This video is private.", "Reinstall
-Lumina to fix this."); tool output and full error chains go to the log.
+happened and what the user can do ("This video is private."). With a helper
+missing, an installed app says "A part of Lumina needed for downloads is
+missing. Reinstall Lumina to fix this."; a source build (a debug build or an
+executable under `target/`, which is rebuilt, not reinstalled) says "A part
+of Lumina needed for downloads is missing from this build. Run
+`make bundle-deps`, then try again." Tool output and full error chains go to
+the log.
 
 ## Privacy and network
 
@@ -108,16 +113,18 @@ Lumina to fix this."); tool output and full error chains go to the log.
   no analytics are collected.
 - yt-dlp and ffmpeg ship inside the app, pinned by version and SHA-256
   (`scripts/fetch_yt_dlp.sh`, `scripts/fetch_ffmpeg.sh`). Lumina never
-  downloads executables at run time. Without the bundled copies (a local
-  build), Homebrew's `yt-dlp` and `ffmpeg` are used if installed. yt-dlp and curl run in their own process group with the
+  downloads executables at run time. Without the bundled copies, a local
+  build that is not inside a `.app` (`make dev`, `cargo run`) uses Homebrew's
+  `yt-dlp` and `ffmpeg` if installed; a `.app` only ever runs the pinned copy
+  beside its executable. yt-dlp and curl run in their own process group with the
   user's yt-dlp config ignored; cancel and quit stop the whole group.
 - ffmpeg is built from the pinned source as LGPL-2.1 only, copy-only
   (demuxers, muxers and parsers; no encoders, no network protocols). yt-dlp
   uses it to merge separate video and audio into MP4 and to turn streams into
   MP4 without re-encoding. Downloads prefer the best H.264 version (many Macs
   can't play AV1, and macOS doesn't play VP9 in MP4). If it is missing (a damaged install),
-  streams show "Reinstall Lumina" and web video falls back to single-file
-  formats.
+  streams show the missing-helper message and web video falls back to
+  single-file formats.
 - Downloading material may be subject to the site's terms and copyright; the
   user is responsible for what they import.
 
@@ -125,6 +132,9 @@ Lumina to fix this."); tool output and full error chains go to the log.
 
 `make bundle-deps` fetches the pinned yt-dlp, builds the pinned ffmpeg (a few
 minutes the first time), and copies both next to the debug and release
-binaries. Tests never touch the network: `LUMINA_YT_DLP` points
+binaries. A locally built `.app` (`make bundle`) fetches and bundles them
+itself; one built with `LUMINA_BUNDLE_DEPS=0` must be rebuilt, since a `.app`
+never uses a copy outside its own `Contents/MacOS`. Tests never touch the
+network: `LUMINA_YT_DLP` points
 the lookup at a fake script or a missing path, and direct downloads are tested
 against `file://` URLs.

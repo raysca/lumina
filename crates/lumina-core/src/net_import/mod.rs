@@ -32,8 +32,30 @@ use crate::{LuminaEngine, MediaItem};
 const DIRECT_EXTENSIONS: &[&str] = &["mp4", "mov", "m4v", "mkv", "avi"];
 /// Shown when a bundled helper is gone; names no tool (users never need to
 /// know how a download works).
-pub const MISSING_PART: &str =
+const MISSING_PART: &str =
     "A part of Lumina needed for downloads is missing. Reinstall Lumina to fix this.";
+/// The message for a source build, which is rebuilt, not reinstalled. Names
+/// the recipe, not the tools. Short enough for the download popover's
+/// three-line clamp, where a failed row shows it.
+const MISSING_PART_DEV: &str =
+    "A part of Lumina needed for downloads is missing from this build. Run \"make bundle-deps\", then try again.";
+
+/// The message for a missing helper, for the build that is running. Call it
+/// only on the failure path: it asks where the executable lives.
+pub fn missing_part() -> &'static str {
+    missing_part_for(helper::is_source_build())
+}
+
+/// The message for a known build kind, so both can be tested without moving
+/// the test binary.
+fn missing_part_for(source_build: bool) -> &'static str {
+    if source_build {
+        MISSING_PART_DEV
+    } else {
+        MISSING_PART
+    }
+}
+
 /// Shown when the library folder can't be written; the path goes to the log.
 const CANT_SAVE: &str =
     "Lumina couldn't save to your library folder. Check that it is connected and has free space.";
@@ -207,7 +229,7 @@ pub fn inspect_url(url: &str, cancel: &AtomicBool) -> Result<NetworkMediaInfo> {
         NetworkSourceKind::DirectUrl => direct::inspect_direct_url(url, cancel),
         NetworkSourceKind::HlsStream => hls::inspect_hls_url(url, cancel),
         kind @ (NetworkSourceKind::YouTube | NetworkSourceKind::GenericPlatform) => {
-            let binary = find_yt_dlp().ok_or_else(|| anyhow!(MISSING_PART))?;
+            let binary = find_yt_dlp().ok_or_else(|| anyhow!(missing_part()))?;
             helper::inspect_url_helper(&binary, url, kind, cancel)
         }
     }
@@ -397,9 +419,9 @@ impl LuminaEngine {
             | NetworkSourceKind::YouTube
             | NetworkSourceKind::GenericPlatform => {
                 if helper_missing(info.kind) {
-                    bail!(MISSING_PART);
+                    bail!(missing_part());
                 }
-                let binary = find_yt_dlp().ok_or_else(|| anyhow!(MISSING_PART))?;
+                let binary = find_yt_dlp().ok_or_else(|| anyhow!(missing_part()))?;
                 helper::download_yt_dlp(&binary, &info.url, &staging.0, cancel, progress)?;
             }
         }
@@ -494,6 +516,35 @@ impl LuminaEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A packaged app is reinstalled; a source build is told the recipe that
+    /// adds the pinned helpers, and neither message names a tool. The test
+    /// binary is a source build, which pins the wiring, not just the table.
+    #[test]
+    fn missing_helper_message_matches_the_build() {
+        assert_eq!(missing_part(), MISSING_PART_DEV, "tests run from target/");
+        assert_eq!(missing_part_for(true), MISSING_PART_DEV);
+        assert_eq!(missing_part_for(false), MISSING_PART);
+        assert!(
+            MISSING_PART.contains("Reinstall"),
+            "an installed app cannot fetch a helper at run time"
+        );
+        assert!(
+            !MISSING_PART_DEV.contains("Reinstall"),
+            "a source build is not reinstalled: {MISSING_PART_DEV}"
+        );
+        for message in [MISSING_PART, MISSING_PART_DEV] {
+            let lower = message.to_lowercase();
+            for word in [
+                "yt-dlp", "ytdlp", "ffmpeg", "curl", "homebrew", "hls", "m3u8",
+            ] {
+                assert!(
+                    !lower.contains(word),
+                    "UI copy must not name download tools or formats: {message}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_classify_url() {

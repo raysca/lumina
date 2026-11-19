@@ -58,8 +58,9 @@ install -m 644 LICENSE THIRD_PARTY_NOTICES.md "$BUNDLE_DIR/Contents/Resources/"
 
 # Bundle the pinned yt-dlp and ffmpeg (network import). The fetch scripts
 # verify their SHA-256 and fail the build on any error; LUMINA_BUNDLE_DEPS=0
-# builds without them for local testing only (YouTube/stream import then needs
-# Homebrew's yt-dlp and ffmpeg).
+# builds without them for local UI work only. A `.app` never falls back to a
+# Homebrew or PATH tool, so URL import in such a build reports a missing
+# helper until it is rebuilt with the deps.
 if [[ "${LUMINA_BUNDLE_DEPS:-1}" == "1" ]]; then
     ./scripts/fetch_yt_dlp.sh
     echo "Bundling yt-dlp into $BUNDLE_DIR/Contents/MacOS/yt-dlp"

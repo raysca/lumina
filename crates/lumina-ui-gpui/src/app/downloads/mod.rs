@@ -23,7 +23,7 @@ pub(crate) use speed::{SpeedHistory, SAMPLES as SPEED_SAMPLES};
 
 use gpui::*;
 use lumina_core::net_import::{
-    classify_url, NetworkDownloadProgress, NetworkMediaInfo, MISSING_PART,
+    classify_url, missing_part, NetworkDownloadProgress, NetworkMediaInfo,
 };
 use lumina_core::{Catalog, DownloadRow, DownloadState};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -685,7 +685,7 @@ fn apply_outcome(row: &mut DownloadRow, outcome: &JobOutcome) -> bool {
         }
         JobOutcome::MissingHelper => {
             row.state = DownloadState::Failed;
-            row.error = Some(MISSING_PART.to_string());
+            row.error = Some(missing_part().to_string());
             row.can_retry = false;
         }
         JobOutcome::NotCatalogued { path } => {

@@ -5,7 +5,7 @@
 
 use gpui::*;
 use lumina_core::net_import::{
-    classify_url, helper_missing, inspect_url, NetworkMediaInfo, MISSING_PART,
+    classify_url, helper_missing, inspect_url, missing_part, NetworkMediaInfo,
 };
 use lumina_core::PriorDownload;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -208,7 +208,7 @@ impl LuminaApp {
                 app.network_import.stage = Some(match result {
                     CheckResult::MissingHelper => NetworkImportStage::Input {
                         url,
-                        error: Some(MISSING_PART.to_string()),
+                        error: Some(missing_part().to_string()),
                     },
                     CheckResult::Prior(prior) => {
                         NetworkImportStage::AlreadyDownloaded { url, prior }
