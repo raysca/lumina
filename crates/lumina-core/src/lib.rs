@@ -772,6 +772,9 @@ impl LuminaEngine {
         ids: &[MediaId],
         target: DeletionTarget,
     ) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
         // An unmounted volume makes every file look "not found", which the
         // delete path treats as already gone; refuse instead of purging rows
         // whose files are still there. CatalogOnly never touches disk.
@@ -997,6 +1000,33 @@ pub(crate) mod tests {
         assert!(!debounce.allow(11_999), "still inside the same window");
         assert!(debounce.allow(12_000), "the next window triggers again");
         assert!(!debounce.allow(12_500), "and coalesces its own burst");
+    }
+
+    /// Regression: an unmounted volume makes every file look "not found", so
+    /// a disk delete or Empty Trash must refuse rather than purge rows whose
+    /// files are still on the unreadable disk.
+    #[test]
+    fn delete_refuses_when_the_library_folder_is_unavailable() {
+        let dir = temp_library("delete_unavailable");
+        // A root that never exists stands in for an unmounted volume.
+        let root = dir.join("missing_lib");
+        let (engine, _rx) =
+            LuminaEngine::open_with_paths(root, dir.join("catalog.db"), Some(dir.join("cache")))
+                .expect("open engine");
+
+        let err = engine
+            .permanently_delete_items(&[MediaId(1)], DeletionTarget::PermanentDisk)
+            .expect_err("a disk delete must be refused when the library is unavailable");
+        assert!(err.to_string().contains("isn't available"), "{err}");
+        let err = engine
+            .empty_trash(DeletionTarget::PermanentDisk)
+            .expect_err("emptying the Trash must be refused when the library is unavailable");
+        assert!(err.to_string().contains("isn't available"), "{err}");
+        // CatalogOnly never touches disk, and an empty selection is a no-op.
+        assert!(engine
+            .permanently_delete_items(&[], DeletionTarget::CatalogOnly)
+            .is_ok());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     pub(crate) fn request_thumbnail_frame(
