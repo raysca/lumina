@@ -86,6 +86,18 @@ pub struct InspectorBody<'a> {
     pub details: Option<&'a InfoDetails>,
 }
 
+fn inspector_empty_state() -> AnyElement {
+    div()
+        .size_full()
+        .flex()
+        .justify_center()
+        .items_center()
+        .text_sm()
+        .text_color(theme::t2())
+        .child("No media selected")
+        .into_any_element()
+}
+
 pub fn render_inspector_body(body: InspectorBody<'_>) -> AnyElement {
     let InspectorBody {
         weak_app,
@@ -108,15 +120,7 @@ pub fn render_inspector_body(body: InspectorBody<'_>) -> AnyElement {
         details,
     } = body;
     let Some(item) = selected_item else {
-        return div()
-            .size_full()
-            .flex()
-            .justify_center()
-            .items_center()
-            .text_sm()
-            .text_color(theme::t2())
-            .child("No media selected")
-            .into_any_element();
+        return inspector_empty_state();
     };
 
     let details = details.filter(|d| d.is_for(&item));
@@ -164,7 +168,7 @@ fn render_single_body(body: InspectorBody<'_>) -> AnyElement {
         details,
     } = body;
     let Some(item) = selected_item else {
-        return div().into_any_element();
+        return inspector_empty_state();
     };
     let path = item.path.clone();
     let file_name = item.file_name.clone();
