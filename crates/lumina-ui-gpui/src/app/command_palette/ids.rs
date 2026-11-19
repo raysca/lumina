@@ -6,6 +6,8 @@ use crate::views::viewer_state::ViewerZoomPreset;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandId {
     OpenLibrary,
+    /// Removes the open library's catalog and thumbnails; its files stay.
+    DeleteLibrary,
     Rescan,
     Preferences,
     /// Settings › Reset to defaults (asks first).
@@ -206,6 +208,7 @@ impl Command {
         use CommandId::*;
         match self.id {
             OpenLibrary => Icon::Folder,
+            DeleteLibrary => Icon::Trash,
             Rescan => Icon::RotateCw,
             ResetPreferences => Icon::RefreshCw,
             Preferences | SettingsDownloads | SortDate | SortName | SortSize | SortRating

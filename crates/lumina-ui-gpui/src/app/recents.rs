@@ -135,9 +135,66 @@ impl LuminaApp {
         match startup {
             // Startup keeps the pending restore; a user-chosen folder clears it.
             StartupLibrary::Open(path) => self.open_library_inner(path, cx),
-            StartupLibrary::Missing(path) => self.welcome.set_missing(Some(path)),
+            StartupLibrary::Missing(path) => {
+                self.welcome.set_missing(Some(path.clone()));
+                // The folder may have moved with its volume (an external
+                // drive mounted elsewhere): look before asking the user.
+                self.try_relocate_library(path, cx);
+            }
             StartupLibrary::None => {}
         }
+    }
+
+    /// Looks for a missing library's volume and, when it is mounted somewhere
+    /// else, updates the saved paths and opens it from there. The catalog
+    /// follows the volume, so nothing is rescanned or lost.
+    pub(crate) fn try_relocate_library(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        // A later open, Back or Retry supersedes this relocation.
+        let ticket = (self.library_generation, self.welcome.retry_generation);
+        let task = cx.background_executor().spawn({
+            let path = path.clone();
+            async move { lumina_core::library::find_library_relocation(&path) }
+        });
+        cx.spawn(async move |this, cx| {
+            let relocation = match task.await {
+                Ok(Some(relocation)) => relocation,
+                Ok(None) => return,
+                Err(err) => {
+                    log::warn!("could not look for the missing library at {path:?}: {err:#}");
+                    return;
+                }
+            };
+            let _ = this.update(cx, |app, cx| {
+                // The catalog is remapped but not moved yet, so a superseded
+                // result leaves the old layout untouched.
+                if (app.library_generation, app.welcome.retry_generation) != ticket {
+                    return;
+                }
+                let found = relocation.library_root.clone();
+                if let Err(err) = relocation.commit() {
+                    log::error!("could not move the relocated catalog: {err:#}");
+                    app.set_error(format!("Could not open the moved library: {err:#}"), cx);
+                    return;
+                }
+                for recent in &mut app.config.recent_libraries {
+                    if recent == &path {
+                        *recent = found.clone();
+                    }
+                }
+                if app.config.last_library_path.as_ref() == Some(&path) {
+                    app.config.last_library_path = Some(found.clone());
+                }
+                if let Err(err) = app.try_save_config() {
+                    // The catalog already moved; open it for this session and
+                    // let the next save (or launch) settle the paths.
+                    log::warn!("could not save the relocated library path: {err:#}");
+                    app.set_error(format!("Could not save settings: {err:#}"), cx);
+                }
+                app.welcome.set_missing(None);
+                app.open_library_inner(found, cx);
+            });
+        })
+        .detach();
     }
 
     /// Opens a recent library (welcome row, ⌘K), re-checking its one folder
@@ -172,7 +229,9 @@ impl LuminaApp {
                     // The welcome notice is not on screen; say it in the banner.
                     app.set_error(missing_library_message(&path), cx);
                 }
-                app.welcome.set_missing(Some(path));
+                app.welcome.set_missing(Some(path.clone()));
+                // It may be the same volume at a new mount point.
+                app.try_relocate_library(path, cx);
                 cx.notify();
             });
         })
@@ -223,7 +282,11 @@ impl LuminaApp {
                 }
                 match opened {
                     // Still not there: the state stays, nothing has changed.
-                    None => app.welcome.missing_error = None,
+                    None => {
+                        app.welcome.missing_error = None;
+                        // Before asking the user, look for the volume.
+                        app.try_relocate_library(path.clone(), cx);
+                    }
                     Some(Err(err)) => {
                         log::warn!("retry could not open library at {path:?}: {err:#}");
                         app.welcome.missing_error = Some(format!("{err:#}"));
@@ -353,24 +416,30 @@ impl LuminaApp {
         use crate::views::missing_library::MissingLibraryProps;
         use crate::views::onboarding::{RecentRow, WelcomeProps};
         self.scroll_focused_recent_into_view();
-        let recents = self
-            .config
-            .recent_libraries
-            .iter()
-            .enumerate()
-            .map(|(i, path)| RecentRow {
-                name: library_name(path),
-                path: path.display().to_string(),
-                unavailable: self.recent_unavailable(path),
-                focused: self.welcome.focused_recent == Some(i),
-                on_open: Box::new(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| this.open_recent_at(i, cx)),
-                ),
-                on_remove: Box::new(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| this.remove_recent_at(i, cx)),
-                ),
-            })
-            .collect();
+        let recents =
+            self.config
+                .recent_libraries
+                .iter()
+                .enumerate()
+                .map(|(i, path)| {
+                    let path = path.clone();
+                    RecentRow {
+                        name: library_name(&path),
+                        path: path.display().to_string(),
+                        unavailable: self.recent_unavailable(&path),
+                        focused: self.welcome.focused_recent == Some(i),
+                        on_open: Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.open_recent_at(i, cx)
+                        })),
+                        on_remove: Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.remove_recent_at(i, cx)
+                        })),
+                        on_delete: Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.prompt_delete_library(path.clone(), cx)
+                        })),
+                    }
+                })
+                .collect();
         WelcomeProps {
             on_open: Box::new(
                 cx.listener(|this, _: &ClickEvent, _, cx| this.pick_folder_dialog(cx)),

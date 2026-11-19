@@ -32,9 +32,10 @@ impl Catalog {
     pub fn insert_or_update_batch(&self, items: &[MediaItem]) -> Result<Vec<MediaItem>> {
         // Stat before locking: no file IO under the catalog lock.
         let inodes: Vec<Option<u64>> = items.iter().map(|item| file_inode(&item.path)).collect();
+        let root = self.root_context();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let inserted = Self::upsert_in_tx(&tx, items, &inodes)?;
+        let inserted = Self::upsert_in_tx(&tx, items, &inodes, root.as_ref())?;
         tx.commit()?;
         Ok(inserted)
     }
@@ -48,11 +49,15 @@ impl Catalog {
         uploader: Option<&str>,
     ) -> Result<MediaItem> {
         let inodes = [file_inode(&item.path)];
+        let root = self.root_context();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let mut inserted = Self::upsert_in_tx(&tx, std::slice::from_ref(item), &inodes)?
-            .pop()
-            .ok_or_else(|| anyhow::anyhow!("the catalog returned no row for {:?}", item.path))?;
+        let mut inserted =
+            Self::upsert_in_tx(&tx, std::slice::from_ref(item), &inodes, root.as_ref())?
+                .pop()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("the catalog returned no row for {:?}", item.path)
+                })?;
         // The watcher may have catalogued the new file first; an upsert keeps
         // that row's favorite and title, so set the user's choices here.
         tx.execute(
@@ -70,6 +75,7 @@ impl Catalog {
         tx: &rusqlite::Transaction,
         items: &[MediaItem],
         inodes: &[Option<u64>],
+        root: Option<&super::roots::RootContext>,
     ) -> Result<Vec<MediaItem>> {
         let mut inserted = Vec::with_capacity(items.len());
 
@@ -83,7 +89,8 @@ impl Catalog {
                     latitude, longitude, altitude,
                     country_code, admin1_region, city,
                     make, model, lens, focal_length, f_number, iso, exposure_time,
-                    is_favorite, is_hidden, is_trashed, title, added_epoch_ms
+                    is_favorite, is_hidden, is_trashed, title, added_epoch_ms,
+                    root_id, rel_path, rel_parent
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5,
                     ?6, ?7, ?8, ?9,
@@ -92,7 +99,8 @@ impl Catalog {
                     ?17, ?18, ?19,
                     ?20, ?21, ?22, ?23, ?24, ?25, ?26,
                     ?27, ?28, ?29, ?30,
-                    CAST(unixepoch('subsec') * 1000 AS INTEGER)
+                    CAST(unixepoch('subsec') * 1000 AS INTEGER),
+                    ?31, ?32, ?33
                 )
                 -- added_epoch_ms is set once, on first insert, never on update.
                 -- A date or place the user edited outlives the file's own.
@@ -103,6 +111,9 @@ impl Catalog {
                 ON CONFLICT(file_path) DO UPDATE SET
                     file_size = excluded.file_size,
                     mtime_epoch_ms = excluded.mtime_epoch_ms,
+                    root_id = COALESCE(excluded.root_id, root_id),
+                    rel_path = COALESCE(excluded.rel_path, rel_path),
+                    rel_parent = COALESCE(excluded.rel_parent, rel_parent),
                     width = excluded.width,
                     height = excluded.height,
                     duration_ms = CASE
@@ -133,12 +144,14 @@ impl Catalog {
 
             let mut reconnect = tx.prepare_cached(
                 r#"
-                UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3
+                UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3,
+                       root_id = ?7, rel_path = ?8, rel_parent = ?9
                 WHERE id = (
                     SELECT s.media_id FROM media_file_state s
                     JOIN media_items m ON m.id = s.media_id
                     WHERE s.missing_since_epoch_ms IS NOT NULL
                       AND s.file_inode = ?4 AND m.file_size = ?5
+                      AND (s.volume_id IS NULL OR s.volume_id = ?6)
                     ORDER BY s.missing_since_epoch_ms DESC LIMIT 1
                 )
                 AND NOT EXISTS (SELECT 1 FROM media_items WHERE file_path = ?1);
@@ -146,10 +159,11 @@ impl Catalog {
             )?;
             let mut mark_present = tx.prepare_cached(
                 r#"
-                INSERT INTO media_file_state (media_id, file_inode, missing_since_epoch_ms)
-                VALUES (?1, ?2, NULL)
+                INSERT INTO media_file_state (media_id, file_inode, volume_id, missing_since_epoch_ms)
+                VALUES (?1, ?2, ?3, NULL)
                 ON CONFLICT(media_id) DO UPDATE SET
                     file_inode = COALESCE(excluded.file_inode, file_inode),
+                    volume_id = COALESCE(excluded.volume_id, volume_id),
                     missing_since_epoch_ms = NULL;
                 "#,
             )?;
@@ -161,14 +175,20 @@ impl Catalog {
                     MediaType::Raw => "raw",
                 };
 
-                let path_str = item.path.to_string_lossy().to_string();
+                let path_str = super::roots::path_string(&item.path);
+                let (root_id, rel_path, rel_parent) = super::roots::placement(root, &item.path);
+                let volume_id = root.map(|root| root.volume_id.as_str());
                 if let Some(inode) = inode {
                     reconnect.execute(params![
                         path_str,
                         item.parent_dir,
                         item.file_name,
                         *inode as i64,
-                        item.file_size
+                        item.file_size,
+                        volume_id,
+                        root_id,
+                        rel_path,
+                        rel_parent,
                     ])?;
                 }
 
@@ -205,6 +225,9 @@ impl Catalog {
                         item.is_hidden as i32,
                         item.is_trashed as i32,
                         item.title,
+                        root_id,
+                        rel_path,
+                        rel_parent,
                     ],
                     |row| {
                         updated.is_favorite = row.get::<_, i32>(1)? != 0;
@@ -216,7 +239,11 @@ impl Catalog {
                     },
                 )?;
 
-                mark_present.execute(params![row_id, inode.map(|inode| inode as i64)])?;
+                mark_present.execute(params![
+                    row_id,
+                    inode.map(|inode| inode as i64),
+                    volume_id
+                ])?;
 
                 updated.id = MediaId(row_id as u64);
                 inserted.push(updated);
@@ -241,6 +268,23 @@ impl Catalog {
             Ok((PathBuf::from(path_str), (file_size, mtime_epoch_ms)))
         })?;
 
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// `(path, file_size, mtime_epoch_ms)` for every row, missing and trashed
+    /// included: what deleting a library needs to evict its cached decodes
+    /// before the catalog file goes away.
+    pub fn all_file_signatures(&self) -> Result<Vec<(PathBuf, u64, i64)>> {
+        let conn = self.conn.lock();
+        let mut stmt =
+            conn.prepare_cached("SELECT file_path, file_size, mtime_epoch_ms FROM media_items;")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                PathBuf::from(row.get::<_, String>(0)?),
+                row.get(1)?,
+                row.get(2)?,
+            ))
+        })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 

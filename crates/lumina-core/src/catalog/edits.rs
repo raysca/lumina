@@ -227,7 +227,8 @@ impl Catalog {
         if stale {
             bail!("a catalog item already uses {:?}", copy.path);
         }
-        let inserted = Self::upsert_in_tx(&tx, std::slice::from_ref(copy), &inodes)?
+        let root = self.root_context();
+        let inserted = Self::upsert_in_tx(&tx, std::slice::from_ref(copy), &inodes, root.as_ref())?
             .pop()
             .context("the catalog returned no row for the copy")?;
         Self::merge_metadata_in_tx(&tx, inserted.id, &[original])?;

@@ -40,9 +40,16 @@ pub struct CacheCleanupStats {
 }
 
 impl DiskCache {
+    /// Where thumbnails live for a normal install, without creating it.
+    pub fn default_dir() -> PathBuf {
+        dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join("lumina")
+            .join("thumbnails")
+    }
+
     pub fn new() -> Result<Self> {
-        let base = dirs::cache_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-        let cache_dir = base.join("lumina").join("thumbnails");
+        let cache_dir = Self::default_dir();
         fs::create_dir_all(&cache_dir)
             .with_context(|| format!("Failed to create disk cache directory at {:?}", cache_dir))?;
 
@@ -219,6 +226,15 @@ impl DiskCache {
     where
         I: IntoIterator<Item = (&'a Path, u64, i64)>,
     {
+        self.remove_cached_items_counted(items);
+    }
+
+    /// [`Self::remove_cached_items`], reporting how many cache files went
+    /// away: deleting a library tells the user what it removed.
+    pub fn remove_cached_items_counted<'a, I>(&self, items: I) -> usize
+    where
+        I: IntoIterator<Item = (&'a Path, u64, i64)>,
+    {
         let prefixes: std::collections::HashSet<String> = items
             .into_iter()
             .map(|(path, file_size, mtime_epoch_ms)| {
@@ -226,11 +242,12 @@ impl DiskCache {
             })
             .collect();
         if prefixes.is_empty() {
-            return;
+            return 0;
         }
         let Ok(entries) = fs::read_dir(&self.cache_dir) else {
-            return;
+            return 0;
         };
+        let mut removed = 0;
         for entry in entries.flatten() {
             let name = entry.file_name();
             let Some(name) = name.to_str() else {
@@ -239,10 +256,14 @@ impl DiskCache {
             let Some((prefix, rest)) = name.split_once('_') else {
                 continue;
             };
-            if rest.ends_with(".bin") && prefixes.contains(prefix) {
-                let _ = fs::remove_file(entry.path());
+            if rest.ends_with(".bin")
+                && prefixes.contains(prefix)
+                && fs::remove_file(entry.path()).is_ok()
+            {
+                removed += 1;
             }
         }
+        removed
     }
 
     pub fn cache_dir(&self) -> &Path {

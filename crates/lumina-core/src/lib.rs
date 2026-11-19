@@ -10,6 +10,7 @@ mod export;
 pub mod geo_cluster;
 pub mod geocoder;
 pub mod import;
+pub mod library;
 pub mod net_import;
 pub mod sample;
 pub mod scanner;
@@ -22,6 +23,7 @@ pub mod text;
 mod types;
 pub mod update;
 mod video_frame;
+pub mod volumes;
 pub mod watcher;
 pub mod xmp;
 
@@ -120,13 +122,7 @@ pub struct LuminaEngine {
 
 impl LuminaEngine {
     pub fn open(library_root: PathBuf) -> Result<(Arc<Self>, Receiver<EngineEvent>)> {
-        let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-        let db_dir = base.join("lumina");
-        let canonical = library_root
-            .canonicalize()
-            .unwrap_or_else(|_| library_root.clone());
-        let hash = xxhash_rust::xxh3::xxh3_64(canonical.to_string_lossy().as_bytes());
-        let db_path = db_dir.join(format!("catalog_{:016x}.db", hash));
+        let db_path = crate::library::catalog_path_for(&library_root);
         Self::open_with_paths(library_root, db_path, None)
     }
 
@@ -155,6 +151,9 @@ impl LuminaEngine {
             Some(dir) => DiskCache::with_directory(dir)?,
             None => DiskCache::new()?,
         };
+        catalog
+            .ensure_library_root(&library_root)
+            .context("recording the library root")?;
         {
             let cache = cache.clone();
             let _ = std::thread::Builder::new()
@@ -257,6 +256,16 @@ impl LuminaEngine {
 
     pub fn library_root(&self) -> &Path {
         &self.library_root
+    }
+
+    /// The catalog file backing this library, for deleting it.
+    pub fn catalog_path(&self) -> Option<&Path> {
+        self.catalog.db_path()
+    }
+
+    /// Where this engine caches decoded thumbnails.
+    pub fn cache_dir(&self) -> &Path {
+        self.cache.cache_dir()
     }
 
     pub fn catalog(&self) -> &Catalog {

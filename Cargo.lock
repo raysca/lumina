@@ -4364,6 +4364,7 @@ dependencies = [
  "dirs",
  "image",
  "kamadak-exif",
+ "libc",
  "log",
  "notify-debouncer-mini",
  "parking_lot",

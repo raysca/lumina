@@ -298,6 +298,14 @@ other library) and **Use Pictures Folder** (⇧↵). Lumina stores its catalog i
 `~/Library/Caches/lumina/thumbnails/`; UI preferences live in
 `~/Library/Application Support/lumina/config.json`.
 
+**Removing a library** (⌘K › Delete Library…) deletes that library's catalog
+and cached thumbnails and returns to the welcome screen. The library folder and
+every photo and video stay where they are. Media paths are stored relative to
+the library root as well as absolutely, so a library whose volume comes back at
+a different mount point (an external drive, or a macOS volume mounted as
+`Photos 1`) is found again from the volume recorded in its catalog and opened
+without rescanning.
+
 URL import (File > Import Video from URL…, ⌥⌘U) needs the pinned `yt-dlp` and
 `ffmpeg`. The packaged app ships them. A build run outside a `.app`
 (`make dev`, `cargo run`) looks beside its binary, then in Homebrew and

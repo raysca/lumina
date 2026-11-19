@@ -23,6 +23,7 @@ pub mod floating_pip;
 pub mod grid;
 pub mod import_dialog;
 pub mod inspector;
+pub mod library_delete_modal;
 pub mod map;
 pub mod marks;
 pub mod missing_library;

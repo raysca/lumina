@@ -262,6 +262,12 @@ impl LuminaApp {
                 self.render_delete_confirm_modal(cx),
                 "delete-confirm-in",
             ))
+            // 8a. Remove a library from Lumina (its files stay)
+            .child(motion::overlay_in(
+                self.library_delete.is_some(),
+                self.render_library_delete_modal(cx),
+                "library-delete-in",
+            ))
             // 8b. Smart album delete confirmation
             .child(motion::overlay_in(
                 self.album_draft.confirm_delete.is_some(),

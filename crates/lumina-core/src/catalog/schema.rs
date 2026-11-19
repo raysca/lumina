@@ -72,6 +72,15 @@ impl Catalog {
             PRAGMA mmap_size = 268435456;
             PRAGMA foreign_keys = ON;
 
+            CREATE TABLE IF NOT EXISTS library_roots (
+                id INTEGER PRIMARY KEY,
+                volume_id TEXT NOT NULL,
+                mount_point TEXT NOT NULL,
+                rel_from_volume TEXT NOT NULL,
+                stored_root TEXT NOT NULL,
+                updated_epoch_ms INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS media_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
@@ -116,7 +125,10 @@ impl Catalog {
                 added_epoch_ms INTEGER,
                 date_edited INTEGER NOT NULL DEFAULT 0,
                 place_edited INTEGER NOT NULL DEFAULT 0,
-                flag INTEGER NOT NULL DEFAULT 0
+                flag INTEGER NOT NULL DEFAULT 0,
+                root_id INTEGER REFERENCES library_roots(id),
+                rel_path TEXT,
+                rel_parent TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_timestamp ON media_items(timestamp_epoch_ms DESC, id DESC) WHERE is_trashed = 0 AND is_hidden = 0;
@@ -246,6 +258,7 @@ impl Catalog {
             CREATE TABLE IF NOT EXISTS media_file_state (
                 media_id INTEGER PRIMARY KEY,
                 file_inode INTEGER,
+                volume_id TEXT,
                 missing_since_epoch_ms INTEGER,
                 FOREIGN KEY (media_id) REFERENCES media_items(id) ON DELETE CASCADE
             );
@@ -627,6 +640,25 @@ impl Catalog {
             [],
         )
         .context("creating the album key photo index")?;
+
+        // v26: the library root and root-relative identity of each file. Rows
+        // written before this version are backfilled by
+        // `Catalog::ensure_library_root` the first time a library opens.
+        add_column_if_missing(
+            &conn,
+            "media_items",
+            "root_id",
+            "INTEGER REFERENCES library_roots(id)",
+        )?;
+        add_column_if_missing(&conn, "media_items", "rel_path", "TEXT")?;
+        add_column_if_missing(&conn, "media_items", "rel_parent", "TEXT")?;
+        add_column_if_missing(&conn, "media_file_state", "volume_id", "TEXT")?;
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_media_root_rel \
+             ON media_items(root_id, rel_path) WHERE root_id IS NOT NULL;",
+            [],
+        )
+        .context("creating the root-relative identity index")?;
 
         // Stamp the schema version so future migrations can dispatch on it.
         let current: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;

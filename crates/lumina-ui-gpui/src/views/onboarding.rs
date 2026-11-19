@@ -49,6 +49,8 @@ pub struct RecentRow {
     pub focused: bool,
     pub on_open: WelcomeHandler,
     pub on_remove: WelcomeHandler,
+    /// Removes the library's catalog and thumbnails (files stay). Asks first.
+    pub on_delete: WelcomeHandler,
 }
 
 /// What the welcome screen shows (AGENTS §5.1: a struct, not a long
@@ -330,7 +332,9 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
     let path_selector = format!("welcome-recent-path-{i}");
     let remove_selector = format!("welcome-recent-remove-{i}");
     let remove_label = t("welcome.remove_recent_named").replace("{name}", &row.name);
+    let delete_label = t("welcome.delete_recent_named").replace("{name}", &row.name);
     let on_remove = row.on_remove;
+    let on_delete = row.on_delete;
     let mut open_label = t("welcome.open_recent").replace("{name}", &row.name);
     if row.unavailable {
         // Dimming alone says nothing to VoiceOver.
@@ -441,6 +445,29 @@ fn recent_row(i: usize, row: RecentRow) -> impl IntoElement {
                     on_remove(event, window, cx);
                 })
                 .child(render_icon(Icon::X, px(13.0), theme::t2())),
+        )
+        // Last, so the two row actions keep one order: forget, then remove.
+        .child(
+            div()
+                .id(("welcome-recent-delete", i))
+                .debug_selector(move || format!("welcome-recent-delete-{i}"))
+                .role(Role::Button)
+                .aria_label(delete_label)
+                .flex_none()
+                .size(px(24.0))
+                .rounded(theme::RADIUS_MD)
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::danger_soft()))
+                .tooltip(theme::tooltip_label(t("welcome.delete_recent")))
+                .on_click(move |event, window, cx| {
+                    // The row behind it would open the library.
+                    cx.stop_propagation();
+                    on_delete(event, window, cx);
+                })
+                .child(render_icon(Icon::Trash, px(13.0), theme::danger())),
         )
 }
 

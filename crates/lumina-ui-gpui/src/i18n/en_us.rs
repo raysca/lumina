@@ -6,6 +6,15 @@ use super::platform;
 pub(super) fn en_us(key: &str) -> Option<&'static str> {
     Some(match key {
         "command.open_library" => "Open Library…",
+        "command.delete_library" => "Delete Library…",
+        "library.delete_title" => "Remove “{name}” from Lumina?",
+        "library.delete_body" => "Lumina will delete this library's catalog and cached thumbnails. Your photos and videos stay in {path}.",
+        "library.delete_confirm" => "Remove Library",
+        "library.delete_cancel" => "Cancel",
+        "welcome.delete_recent" => "Delete Library…",
+        "welcome.delete_recent_named" => "Delete the {name} library from Lumina; its files stay",
+        "library.removed" => "Removed “{name}”. Your files are still in {path}.",
+        "library.removed_already" => "Removed “{name}” from Lumina. Its files were already gone from this catalog.",
         "command.rescan" => "Rescan Library",
         "command.preferences" => "Settings…",
         "command.reset_preferences" => "Reset Settings to Defaults…",

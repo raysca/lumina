@@ -25,6 +25,7 @@ pub mod jobs;
 pub mod keymap;
 pub mod keywords;
 pub mod library;
+pub mod library_delete;
 pub mod library_storage;
 pub mod loop_range;
 pub mod map;

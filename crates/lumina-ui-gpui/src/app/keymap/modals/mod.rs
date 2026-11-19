@@ -84,6 +84,16 @@ impl LuminaApp {
             return true;
         }
 
+        // 1a. Remove-library confirmation
+        if self.library_delete.is_some() {
+            match key {
+                "escape" => self.cancel_delete_library(cx),
+                "enter" | "return" => self.confirm_delete_library(cx),
+                _ => {}
+            }
+            return true;
+        }
+
         // 1b. Smart album delete confirmation
         if self.album_draft.confirm_delete.is_some() {
             match key {

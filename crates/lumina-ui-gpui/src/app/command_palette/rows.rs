@@ -76,6 +76,10 @@ impl LuminaApp {
     pub(crate) fn command_applies(&self, id: CommandId) -> bool {
         match id {
             CommandId::RetryError => self.error_retry.is_some(),
+            CommandId::DeleteLibrary => {
+                self.welcome.missing.is_none()
+                    && (self.grid_state.is_some() || self.welcome.focused_recent.is_some())
+            }
             CommandId::Back => self.can_navigate_back() && !self.compare_holds_view(),
             CommandId::Forward => self.can_navigate_forward() && !self.compare_holds_view(),
             CommandId::ClearRecents => !self.config.recent_libraries.is_empty(),

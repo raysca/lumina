@@ -63,24 +63,28 @@ impl Catalog {
 
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        let gone: Vec<(i64, i64, Option<i64>)> = {
+        let gone: Vec<(i64, i64, Option<i64>, Option<String>)> = {
             let mut stmt = tx.prepare_cached(
                 r#"
-                SELECT m.id, m.file_size, s.file_inode
+                SELECT m.id, m.file_size, s.file_inode, s.volume_id
                 FROM media_items m LEFT JOIN media_file_state s ON s.media_id = m.id
                 WHERE (m.file_path = ?1 OR (m.file_path >= ?2 AND m.file_path < ?3))
                   AND s.missing_since_epoch_ms IS NULL;
                 "#,
             )?;
             let rows = stmt.query_map(params![exact, lower, upper], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             })?;
             rows.collect::<rusqlite::Result<_>>()?
         };
 
         let mut change = MissingChange::default();
-        for (id, file_size, inode) in gone {
-            Self::set_missing_in_tx(&tx, id, now)?;
+        let root = self.root_context();
+        for (id, file_size, inode, gone_volume) in gone {
+            let volume = gone_volume
+                .as_deref()
+                .or_else(|| root.as_ref().map(|root| root.volume_id.as_str()));
+            Self::set_missing_in_tx(&tx, id, now, volume)?;
             let twin = match inode {
                 Some(inode) => tx
                     .query_row(
@@ -89,6 +93,7 @@ impl Catalog {
                         JOIN media_file_state s ON s.media_id = m.id
                         WHERE s.file_inode = ?1 AND m.file_size = ?2 AND m.id != ?3
                           AND s.missing_since_epoch_ms IS NULL
+                          AND s.volume_id IS ?8
                           AND m.added_epoch_ms >= ?4
                           -- A hard link gone with the same folder is no twin.
                           AND NOT (m.file_path = ?5 OR (m.file_path >= ?6 AND m.file_path < ?7))
@@ -101,7 +106,8 @@ impl Catalog {
                             now - FOLD_WINDOW_MS,
                             exact,
                             lower,
-                            upper
+                            upper,
+                            volume
                         ],
                         |row| row.get::<_, i64>(0),
                     )
@@ -110,7 +116,7 @@ impl Catalog {
             };
             match twin {
                 Some(twin) => {
-                    Self::fold_in_tx(&tx, MediaId(id as u64), MediaId(twin as u64))?;
+                    Self::fold_in_tx(&tx, MediaId(id as u64), MediaId(twin as u64), root.as_ref())?;
                     change
                         .folded
                         .push((MediaId(id as u64), MediaId(twin as u64)));
@@ -163,20 +169,25 @@ impl Catalog {
         }
 
         let now = now_ms();
+        let root = self.root_context();
+        let volume = root.as_ref().map(|root| root.volume_id.as_str());
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         for id in &gone {
-            Self::set_missing_in_tx(&tx, *id, now)?;
+            Self::set_missing_in_tx(&tx, *id, now, volume)?;
         }
         {
             let mut stmt = tx.prepare_cached(
                 r#"
-                INSERT INTO media_file_state (media_id, file_inode) VALUES (?1, ?2)
-                ON CONFLICT(media_id) DO UPDATE SET file_inode = excluded.file_inode;
+                INSERT INTO media_file_state (media_id, file_inode, volume_id)
+                VALUES (?1, ?2, ?3)
+                ON CONFLICT(media_id) DO UPDATE SET
+                    file_inode = excluded.file_inode,
+                    volume_id = COALESCE(excluded.volume_id, volume_id);
                 "#,
             )?;
             for (id, inode) in &inodes {
-                stmt.execute(params![id, inode])?;
+                stmt.execute(params![id, inode, volume])?;
             }
         }
         tx.commit()?;
@@ -187,15 +198,21 @@ impl Catalog {
     /// `other`'s metadata where it has none, then its path, and is present
     /// again; `other` is deleted.
     pub fn fold_into(&self, keep: MediaId, other: MediaId) -> Result<()> {
+        let root = self.root_context();
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        Self::fold_in_tx(&tx, keep, other)?;
+        Self::fold_in_tx(&tx, keep, other, root.as_ref())?;
         Self::rebuild_timeline_buckets(&tx)?;
         tx.commit()?;
         Ok(())
     }
 
-    fn fold_in_tx(tx: &rusqlite::Transaction, keep: MediaId, other: MediaId) -> Result<()> {
+    fn fold_in_tx(
+        tx: &rusqlite::Transaction,
+        keep: MediaId,
+        other: MediaId,
+        root: Option<&super::roots::RootContext>,
+    ) -> Result<()> {
         Self::merge_metadata_in_tx(tx, keep, &[other])?;
         // Edits the metadata merge leaves out: rotation, and an edited date
         // or place, where `keep` has none; hidden if either is.
@@ -239,35 +256,57 @@ impl Catalog {
             params![other.0 as i64],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
+        let (root_id, rel_path, rel_parent) = super::roots::placement(root, Path::new(&path));
+        let volume = root.map(|root| root.volume_id.as_str());
         tx.execute(
             "DELETE FROM media_items WHERE id = ?1;",
             params![other.0 as i64],
         )?;
         // After the merge, so the search row is rebuilt with merged tags.
         tx.execute(
-            "UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3 WHERE id = ?4;",
-            params![path, parent, name, keep.0 as i64],
+            "UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3, \
+             root_id = COALESCE(?4, root_id), rel_path = COALESCE(?5, rel_path), \
+             rel_parent = COALESCE(?6, rel_parent) WHERE id = ?7;",
+            params![
+                path,
+                parent,
+                name,
+                root_id,
+                rel_path,
+                rel_parent,
+                keep.0 as i64
+            ],
         )?;
         tx.execute(
             r#"
-            INSERT INTO media_file_state (media_id, file_inode, missing_since_epoch_ms)
-            VALUES (?1, ?2, NULL)
+            INSERT INTO media_file_state (media_id, file_inode, volume_id, missing_since_epoch_ms)
+            VALUES (?1, ?2, ?3, NULL)
             ON CONFLICT(media_id) DO UPDATE SET
-                file_inode = excluded.file_inode, missing_since_epoch_ms = NULL;
+                file_inode = excluded.file_inode,
+                volume_id = COALESCE(excluded.volume_id, volume_id),
+                missing_since_epoch_ms = NULL;
             "#,
-            params![keep.0 as i64, inode],
+            params![keep.0 as i64, inode, volume],
         )?;
         Ok(())
     }
 
-    fn set_missing_in_tx(tx: &rusqlite::Transaction, id: i64, now: i64) -> Result<()> {
+    fn set_missing_in_tx(
+        tx: &rusqlite::Transaction,
+        id: i64,
+        now: i64,
+        volume: Option<&str>,
+    ) -> Result<()> {
         tx.prepare_cached(
             r#"
-            INSERT INTO media_file_state (media_id, missing_since_epoch_ms) VALUES (?1, ?2)
-            ON CONFLICT(media_id) DO UPDATE SET missing_since_epoch_ms = excluded.missing_since_epoch_ms;
+            INSERT INTO media_file_state (media_id, volume_id, missing_since_epoch_ms)
+            VALUES (?1, ?2, ?3)
+            ON CONFLICT(media_id) DO UPDATE SET
+                volume_id = COALESCE(media_file_state.volume_id, excluded.volume_id),
+                missing_since_epoch_ms = excluded.missing_since_epoch_ms;
             "#,
         )?
-        .execute(params![id, now])?;
+        .execute(params![id, volume, now])?;
         Ok(())
     }
 
@@ -338,18 +377,34 @@ impl Catalog {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
+        let root = self.root_context();
+        let volume = root.as_ref().map(|root| root.volume_id.as_str());
+        let (root_id, rel_path, rel_parent) = super::roots::placement(root.as_ref(), path);
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         tx.execute(
-            "UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3 WHERE id = ?4;",
-            params![path.to_string_lossy(), parent, name, id.0 as i64],
+            "UPDATE media_items SET file_path = ?1, parent_dir = ?2, file_name = ?3, \
+             root_id = COALESCE(?4, root_id), rel_path = COALESCE(?5, rel_path), \
+             rel_parent = COALESCE(?6, rel_parent) WHERE id = ?7;",
+            params![
+                super::roots::path_string(path),
+                parent,
+                name,
+                root_id,
+                rel_path,
+                rel_parent,
+                id.0 as i64
+            ],
         )?;
         tx.execute(
             r#"
-            INSERT INTO media_file_state (media_id, missing_since_epoch_ms) VALUES (?1, NULL)
-            ON CONFLICT(media_id) DO UPDATE SET missing_since_epoch_ms = NULL;
+            INSERT INTO media_file_state (media_id, volume_id, missing_since_epoch_ms)
+            VALUES (?1, ?2, NULL)
+            ON CONFLICT(media_id) DO UPDATE SET
+                volume_id = COALESCE(excluded.volume_id, volume_id),
+                missing_since_epoch_ms = NULL;
             "#,
-            params![id.0 as i64],
+            params![id.0 as i64, volume],
         )?;
         tx.commit()?;
         Ok(())
@@ -881,6 +936,69 @@ pub(crate) mod tests {
         assert!(
             plan.contains("idx_file_state_inode"),
             "marking a folder missing must not scan the table per file: {plan}"
+        );
+    }
+
+    #[test]
+    fn a_folded_rename_keeps_the_new_root_relative_path() {
+        let dir = TempDir::new("fold_root");
+        let catalog = Catalog::open_in_memory().unwrap();
+        catalog.ensure_library_root(&dir.0).unwrap();
+        let old = dir.write("a.jpg", b"same bytes");
+        let item = ingest(&catalog, &old);
+        let new = dir.0.join("b.jpg");
+        std::fs::rename(&old, &new).unwrap();
+        // The watcher's order: the new path arrives, then the old goes away.
+        let twin = ingest(&catalog, &new);
+
+        let change = catalog.mark_missing_under(&old).unwrap();
+        assert_eq!(change.folded, vec![(item.id, twin.id)]);
+
+        let (path, rel, rel_parent): (String, String, String) = catalog
+            .conn
+            .lock()
+            .query_row(
+                "SELECT file_path, rel_path, rel_parent FROM media_items WHERE id = ?1;",
+                [item.id.0 as i64],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(PathBuf::from(path), new, "the row follows the new path");
+        assert_eq!(rel, "b.jpg", "and so does its root-relative identity");
+        assert_eq!(rel_parent, "", "a file in the root has no relative parent");
+    }
+
+    #[test]
+    fn a_twin_on_another_volume_does_not_fold() {
+        let dir = TempDir::new("fold_volume");
+        let catalog = Catalog::open_in_memory().unwrap();
+        catalog.ensure_library_root(&dir.0).unwrap();
+        let old = dir.write("a.jpg", b"same bytes");
+        let item = ingest(&catalog, &old);
+        // A hard link shares the inode and size, like the same file seen at a
+        // second path; only its recorded volume differs.
+        let twin_path = dir.0.join("b.jpg");
+        std::fs::hard_link(&old, &twin_path).unwrap();
+        let twin = ingest(&catalog, &twin_path);
+        catalog
+            .conn
+            .lock()
+            .execute(
+                "UPDATE media_file_state SET volume_id = 'dev:other' WHERE media_id = ?1;",
+                [twin.id.0 as i64],
+            )
+            .unwrap();
+
+        let change = catalog.mark_missing_under(&old).unwrap();
+        assert!(
+            change.folded.is_empty(),
+            "an inode from another volume is not the same file"
+        );
+        assert_eq!(change.missing, vec![item.id]);
+        assert_eq!(
+            catalog.total_count().unwrap(),
+            2,
+            "both rows survive as separate files"
         );
     }
 }

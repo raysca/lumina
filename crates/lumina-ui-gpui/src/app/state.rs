@@ -534,6 +534,14 @@ pub struct LuminaApp {
 
     // Delete confirmation
     pub delete_confirm_state: Option<DeleteConfirmState>,
+    /// The library a "Delete Library" confirmation is asking about.
+    pub library_delete: Option<crate::app::library_delete::LibraryDeleteState>,
+    /// Test-only: where a closed library's catalog and thumbnail cache live,
+    /// so deletion never resolves the real user data dir in tests.
+    #[cfg(test)]
+    pub(crate) catalog_dir_override: Option<std::path::PathBuf>,
+    #[cfg(test)]
+    pub(crate) cache_dir_override: Option<std::path::PathBuf>,
 
     // Viewer zoom and grid density
     pub viewer_state: ViewerState,
@@ -777,6 +785,11 @@ impl LuminaApp {
             session_save: SessionSaveState::default(),
             album_draft: AlbumDraftState::default(),
             delete_confirm_state: None,
+            library_delete: None,
+            #[cfg(test)]
+            catalog_dir_override: None,
+            #[cfg(test)]
+            cache_dir_override: None,
             viewer_state: ViewerState::default(),
             viewer_shortcuts_open: false,
             grid_columns: crate::views::search_bar::ladder_columns(config.grid_columns),

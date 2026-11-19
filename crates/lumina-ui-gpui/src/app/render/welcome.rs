@@ -90,6 +90,12 @@ impl LuminaApp {
                 crate::views::preferences::render_preferences_modal(self, cx),
                 "preferences-in",
             ))
+            // A recent library can be removed before any library is opened.
+            .child(motion::overlay_in(
+                self.library_delete.is_some(),
+                self.render_library_delete_modal(cx),
+                "library-delete-in",
+            ))
             // Above settings, which is opaque.
             .child(self.render_toast_overlay(cx))
             .into_any_element()

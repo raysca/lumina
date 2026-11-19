@@ -26,6 +26,7 @@ pub fn commands() -> &'static [Command] {
     use CommandId::*;
     const TABLE: &[Command] = &[
         cmd(OpenLibrary, "command.open_library", "⌘O", "folder choose switch library"),
+        cmd(DeleteLibrary, "command.delete_library", "", "remove delete library catalog thumbnails"),
         cmd(ImportMedia, "command.import_media", "⇧⌘I", "import copy add files folder card camera"),
         cmd(ImportNetworkVideo, "command.import_network_video", "⌥⌘U", "import video url youtube hls download stream network link web"),
         cmd(ToggleDownloads, "command.toggle_downloads", "⌥⌘L", "downloads queue progress url video"),
@@ -212,10 +213,10 @@ mod table_tests {
             .fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
                 (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
             });
-        assert_eq!(table.len(), 157, "command count changed");
+        assert_eq!(table.len(), 158, "command count changed");
         assert_eq!(
             hash,
-            2_204_023_891_752_454_397,
+            805_118_766_636_442_323,
             "command table changed:\n{}",
             rows.join("\n")
         );

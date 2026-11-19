@@ -27,6 +27,8 @@ mod places;
 pub use places::PlaceCount;
 mod rights;
 pub use rights::Rights;
+mod roots;
+pub use roots::LibraryRoot;
 mod schema;
 mod search;
 mod smart;
@@ -53,7 +55,7 @@ use crate::{MediaId, MediaItem, MediaType};
 /// Bumped whenever the catalog layout changes. The ad-hoc pragma migrations are
 /// idempotent, and this version is stamped into `PRAGMA user_version` so future
 /// migrations can dispatch on it.
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeletionTarget {
@@ -148,6 +150,9 @@ impl Drop for DbGuard<'_> {
 pub struct Catalog {
     pub(crate) conn: Arc<Db>,
     db_path: Option<PathBuf>,
+    /// The root an open library registered, shared by every clone so a scan
+    /// writes paths relative to it without re-reading the row per item.
+    root: Arc<Mutex<Option<roots::RootContext>>>,
 }
 
 impl Catalog {
@@ -160,6 +165,7 @@ impl Catalog {
         let catalog = Self {
             conn: Arc::new(Db::new(conn)),
             db_path: Some(db_path.to_path_buf()),
+            root: Arc::new(Mutex::new(None)),
         };
         catalog.init_schema()?;
         Ok(catalog)
@@ -170,6 +176,7 @@ impl Catalog {
         let catalog = Self {
             conn: Arc::new(Db::new(conn)),
             db_path: None,
+            root: Arc::new(Mutex::new(None)),
         };
         catalog.init_schema()?;
         Ok(catalog)
@@ -222,6 +229,12 @@ impl Catalog {
     pub fn schema_version(&self) -> Result<i64> {
         let conn = self.conn.lock();
         Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// The catalog file behind this handle, when it is file-backed. Deleting a
+    /// library needs the path; an in-memory catalog has none.
+    pub fn db_path(&self) -> Option<&Path> {
+        self.db_path.as_deref()
     }
 
     /// Runs SQLite's fast integrity check (bounded to one error).

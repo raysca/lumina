@@ -15,6 +15,9 @@ impl LuminaApp {
         self.command_query.clear();
         match id {
             CommandId::OpenLibrary => self.pick_folder_dialog(cx),
+            CommandId::DeleteLibrary => {
+                crate::views::library_delete_modal::prompt_open_library_delete(self, cx)
+            }
             CommandId::Rescan => self.rescan_library(cx),
             CommandId::Preferences => self.open_preferences(cx),
             CommandId::ResetPreferences => self.prompt_reset_preferences(cx),
