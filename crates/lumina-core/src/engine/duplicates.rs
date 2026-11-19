@@ -143,10 +143,11 @@ impl LuminaEngine {
                 // transposed size match: two uncompressed TIFFs of 6000x4000
                 // and 4000x6000 share a byte size.
                 let (w, h) = (missing.width, missing.height);
-                let turned = (5..=8).contains(&dims::read_exif_size(&path).orientation);
-                let same_file = item.file_size == missing.file_size
-                    && ((item.width, item.height) == (w, h)
-                        || (turned && (item.width, item.height) == (h, w)));
+                // Reuse the one orientation rule the scanner uses instead of
+                // re-deriving the quarter-turn swap here.
+                let oriented = dims::orient((w, h), dims::read_exif_size(&path).orientation);
+                let same_file =
+                    item.file_size == missing.file_size && (item.width, item.height) == oriented;
                 let same_content = match self.catalog.stored_hash(id)? {
                     Some(hash) => compute_file_hash(&path)? == hash,
                     None => true,
