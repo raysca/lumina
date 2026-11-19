@@ -34,13 +34,20 @@ fn find_tool(name: &str) -> Option<PathBuf> {
     find_tool_for(name, running_in_macos_app_bundle())
 }
 
+/// True when `exe` is the executable inside a macOS `.app` bundle. Compared
+/// case-insensitively because Finder treats `.APP` the same as `.app`.
+fn is_app_bundle_exe(exe: &Path) -> bool {
+    exe.to_string_lossy()
+        .to_ascii_lowercase()
+        .contains(".app/contents/macos/")
+}
+
 /// True when this process is the executable inside a macOS `.app` bundle.
 fn running_in_macos_app_bundle() -> bool {
     #[cfg(target_os = "macos")]
     {
         std::env::current_exe()
-            .ok()
-            .map(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))
+            .map(|exe| is_app_bundle_exe(&exe))
             .unwrap_or(false)
     }
     #[cfg(not(target_os = "macos"))]
@@ -320,5 +327,22 @@ mod tests {
             find_tool_for(on_path, true).is_none(),
             "a bundle must not run an unpinned PATH tool"
         );
+    }
+
+    #[test]
+    fn app_bundle_detection_matches_only_the_bundle_layout() {
+        assert!(is_app_bundle_exe(Path::new(
+            "/Applications/Lumina.app/Contents/MacOS/lumina-ui-gpui"
+        )));
+        assert!(
+            is_app_bundle_exe(Path::new(
+                "/Applications/Lumina.APP/Contents/MacOS/lumina-ui-gpui"
+            )),
+            "the extension is case-insensitive, like Finder"
+        );
+        assert!(!is_app_bundle_exe(Path::new(
+            "/Users/me/src/lumina/target/debug/lumina-ui-gpui"
+        )));
+        assert!(!is_app_bundle_exe(Path::new("/usr/bin/lumina")));
     }
 }
