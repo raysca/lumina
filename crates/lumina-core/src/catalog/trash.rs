@@ -379,4 +379,40 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// Empty Trash must keep a trashed row whose file the OS refuses to
+    /// delete, so it can be retried instead of purging its metadata.
+    #[test]
+    fn a_failed_disk_delete_keeps_the_trashed_row_and_reports_it() {
+        let dir = temp_dir("empty-keep");
+        let media = dir.join("locked.jpg");
+        std::fs::create_dir_all(&media).unwrap();
+
+        let catalog = Catalog::open_in_memory().unwrap();
+        let inserted = catalog.insert_or_update_batch(&[item(&media)]).unwrap();
+        let id = inserted[0].id;
+        catalog.set_trashed(id, true).unwrap();
+
+        let outcome = catalog.empty_trash(DeletionTarget::PermanentDisk).unwrap();
+
+        assert_eq!(
+            outcome.deleted_count(),
+            0,
+            "an undeletable file must not count as deleted"
+        );
+        assert_eq!(outcome.failed, vec![media.clone()]);
+        let kept = catalog
+            .get_item_by_id(id)
+            .unwrap()
+            .expect("the trashed row must survive a failed disk delete");
+        assert!(kept.is_trashed, "the item stays in the Trash for a retry");
+        assert_eq!(
+            catalog
+                .query_system_album_count(crate::SystemAlbum::RecentlyDeleted)
+                .unwrap(),
+            1,
+            "the item is still in the Trash, not purged"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

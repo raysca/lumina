@@ -717,6 +717,32 @@ mod tests {
         );
     }
 
+    /// Regression: a failed metadata read during a merge used to be swallowed
+    /// by `.ok()` / `if let Ok`, silently dropping a copy's rating/title/flag.
+    /// The merge must fail instead.
+    #[test]
+    fn merge_surfaces_a_metadata_read_error() {
+        let catalog = Catalog::open_in_memory().unwrap();
+        let keep = plain(&catalog, "/lib/keep.mp4");
+        let dup = plain(&catalog, "/lib/dup.mp4");
+        // SQLite is dynamically typed: store TEXT in the INTEGER rating column
+        // so reading it as u8 fails inside the merge's metadata copy.
+        catalog
+            .conn
+            .lock()
+            .execute(
+                "UPDATE media_items SET rating = 'x' WHERE id = ?1;",
+                [dup.0 as i64],
+            )
+            .unwrap();
+
+        let result = catalog.merge_duplicate_group(keep, &[dup]);
+        assert!(
+            result.is_err(),
+            "a read failure during merge must surface, not silently drop metadata"
+        );
+    }
+
     #[test]
     fn merge_duplicates_moves_key_photo_to_keeper() {
         let catalog = Catalog::open_in_memory().unwrap();
