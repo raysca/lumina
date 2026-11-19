@@ -274,18 +274,30 @@ impl Catalog {
     /// `(file_size, mtime_epoch_ms)` of the present rows at `paths`.
     pub fn present_signatures(&self, paths: &[PathBuf]) -> Result<HashMap<PathBuf, (u64, i64)>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(&format!(
-            "SELECT m.file_size, m.mtime_epoch_ms FROM media_items m WHERE m.file_path = ?1 AND {PRESENT};"
-        ))?;
-        let mut found = HashMap::new();
-        for path in paths {
-            let signature = stmt
-                .query_row([path.to_string_lossy()], |row| {
-                    Ok((row.get(0)?, row.get(1)?))
-                })
-                .optional()?;
-            if let Some(signature) = signature {
-                found.insert(path.clone(), signature);
+        let mut found = HashMap::with_capacity(paths.len());
+        // One read per 500 paths instead of a round-trip per file.
+        for chunk in paths.chunks(500) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT m.file_path, m.file_size, m.mtime_epoch_ms FROM media_items m \
+                 WHERE m.file_path IN ({marks}) AND {PRESENT};"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(
+                    chunk.iter().map(|path| path.to_string_lossy().into_owned()),
+                ),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, u64>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )?;
+            for row in rows {
+                let (path, file_size, mtime_epoch_ms) = row?;
+                found.insert(PathBuf::from(path), (file_size, mtime_epoch_ms));
             }
         }
         Ok(found)

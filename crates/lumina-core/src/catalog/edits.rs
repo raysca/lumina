@@ -5,7 +5,7 @@
 //! original file or a cached decode.
 
 use anyhow::{bail, Context, Result};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use std::collections::{HashMap, HashSet};
 
 use super::Catalog;
@@ -15,11 +15,6 @@ use crate::{normalize_quarter_turns, MediaId, MediaItem};
 const MIN_CROP_SIDE: f32 = 0.02;
 
 /// One item's rotation and edits row; read for every thumbnail request.
-const GET_EDITS_SQL: &str = "SELECT m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h,
-        e.exposure_ev, e.auto_enhance
- FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id
- WHERE m.id = ?1;";
-
 /// Ids of every rotated or edited item; see [`Catalog::edited_ids`].
 const EDITED_IDS_SQL: &str = "SELECT id FROM media_items WHERE rotation_quarters != 0
  UNION SELECT media_id FROM media_edits;";
@@ -75,31 +70,47 @@ impl Catalog {
     /// The edits of each of `ids` in the catalog; unknown ids are left out.
     pub fn get_edits(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, Edits>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare_cached(GET_EDITS_SQL)?;
         let mut edits = HashMap::with_capacity(ids.len());
-        for &id in ids {
-            let row = stmt
-                .query_row(params![id.0 as i64], |row| {
+        // One read per 500 ids instead of a round-trip per id. The rotation
+        // lives on media_items and the crop/tone on media_edits, so the join
+        // must return the id to map the row back.
+        for chunk in ids.chunks(500) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT m.id, m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h, \
+                 e.exposure_ev, e.auto_enhance \
+                 FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id \
+                 WHERE m.id IN ({marks});"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
+                |row| {
+                    let id: i64 = row.get(0)?;
                     let crop: [Option<f64>; 4] =
-                        [row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?];
-                    Ok(Edits {
-                        rotation: normalize_quarter_turns(row.get(0)?),
-                        crop: match crop {
-                            [Some(x), Some(y), Some(w), Some(h)] => Some(CropRect {
-                                x: x as f32,
-                                y: y as f32,
-                                w: w as f32,
-                                h: h as f32,
-                            }),
-                            _ => None,
+                        [row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?];
+                    Ok((
+                        MediaId(id as u64),
+                        Edits {
+                            rotation: normalize_quarter_turns(row.get(1)?),
+                            crop: match crop {
+                                [Some(x), Some(y), Some(w), Some(h)] => Some(CropRect {
+                                    x: x as f32,
+                                    y: y as f32,
+                                    w: w as f32,
+                                    h: h as f32,
+                                }),
+                                _ => None,
+                            },
+                            exposure_ev: row.get::<_, Option<f64>>(6)?.unwrap_or(0.0) as f32,
+                            auto_enhance: row.get::<_, Option<bool>>(7)?.unwrap_or(false),
                         },
-                        exposure_ev: row.get::<_, Option<f64>>(5)?.unwrap_or(0.0) as f32,
-                        auto_enhance: row.get::<_, Option<bool>>(6)?.unwrap_or(false),
-                    })
-                })
-                .optional()?;
-            if let Some(row) = row {
-                edits.insert(id, row);
+                    ))
+                },
+            )?;
+            for row in rows {
+                let (id, edit) = row?;
+                edits.insert(id, edit);
             }
         }
         Ok(edits)
@@ -449,9 +460,12 @@ mod tests {
     #[test]
     fn get_edits_plan_uses_primary_keys() {
         let catalog = Catalog::open_in_memory().unwrap();
-        let plan = catalog
-            .explain_query_plan(&GET_EDITS_SQL.replace("?1", "1"))
-            .unwrap();
+        // The same shape get_edits builds (a batch LEFT JOIN) with one id.
+        let sql = "SELECT m.id, m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h, \
+                   e.exposure_ev, e.auto_enhance \
+                   FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id \
+                   WHERE m.id IN (1);";
+        let plan = catalog.explain_query_plan(sql).unwrap();
         assert!(
             plan.len() == 2
                 && plan

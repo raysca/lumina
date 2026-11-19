@@ -556,15 +556,20 @@ impl Catalog {
     /// caller never records a change for a purged item.
     pub fn get_rotations(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, u8>> {
         let conn = self.conn.lock();
-        let mut stmt =
-            conn.prepare_cached("SELECT rotation_quarters FROM media_items WHERE id = ?1;")?;
         let mut map = HashMap::with_capacity(ids.len());
-        for id in ids {
-            let quarters: Option<i32> = stmt
-                .query_row(params![id.0 as i64], |row| row.get(0))
-                .optional()?;
-            if let Some(quarters) = quarters {
-                map.insert(*id, normalize_quarter_turns(quarters));
+        // One read per 500 ids instead of a round-trip per id.
+        for chunk in ids.chunks(500) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql =
+                format!("SELECT id, rotation_quarters FROM media_items WHERE id IN ({marks});");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i32>(1)?)),
+            )?;
+            for row in rows {
+                let (id, quarters) = row?;
+                map.insert(MediaId(id as u64), normalize_quarter_turns(quarters));
             }
         }
         Ok(map)
@@ -683,13 +688,26 @@ impl Catalog {
     /// user (or an XMP import) set the date or place, so sidecars carry them.
     pub fn edited_flags(&self, ids: &[MediaId]) -> Result<HashMap<MediaId, (bool, bool)>> {
         let conn = self.conn.lock();
-        let mut stmt = conn
-            .prepare_cached("SELECT date_edited, place_edited FROM media_items WHERE id = ?1;")?;
         let mut flags = HashMap::with_capacity(ids.len());
-        for &id in ids {
-            let mut rows = stmt.query(params![id.0 as i64])?;
-            if let Some(row) = rows.next()? {
-                flags.insert(id, (row.get(0)?, row.get(1)?));
+        for chunk in ids.chunks(500) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id, date_edited, place_edited FROM media_items WHERE id IN ({marks});"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, bool>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )?;
+            for row in rows {
+                let (id, date_edited, place_edited) = row?;
+                flags.insert(MediaId(id as u64), (date_edited, place_edited));
             }
         }
         Ok(flags)

@@ -94,24 +94,32 @@ impl Catalog {
 /// The rights rows of `ids` that have any, read inside `conn` (a
 /// transaction, so a template apply sees what it overwrites).
 pub(super) fn rights_in(conn: &Connection, ids: &[MediaId]) -> Result<HashMap<MediaId, Rights>> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT creator, copyright, usage_terms, contact_email, contact_url
-         FROM media_rights WHERE media_id = ?1;",
-    )?;
-    let mut rights = HashMap::new();
-    for &id in ids {
-        let mut rows = stmt.query(params![id.0 as i64])?;
-        if let Some(row) = rows.next()? {
-            rights.insert(
-                id,
-                Rights {
-                    creator: row.get(0)?,
-                    copyright: row.get(1)?,
-                    usage_terms: row.get(2)?,
-                    contact_email: row.get(3)?,
-                    contact_url: row.get(4)?,
-                },
-            );
+    let mut rights = HashMap::with_capacity(ids.len());
+    for chunk in ids.chunks(500) {
+        let marks = vec!["?"; chunk.len()].join(", ");
+        let sql = format!(
+            "SELECT media_id, creator, copyright, usage_terms, contact_email, contact_url
+             FROM media_rights WHERE media_id IN ({marks});"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
+            |row| {
+                Ok((
+                    MediaId(row.get::<_, i64>(0)? as u64),
+                    Rights {
+                        creator: row.get(1)?,
+                        copyright: row.get(2)?,
+                        usage_terms: row.get(3)?,
+                        contact_email: row.get(4)?,
+                        contact_url: row.get(5)?,
+                    },
+                ))
+            },
+        )?;
+        for row in rows {
+            let (id, value) = row?;
+            rights.insert(id, value);
         }
     }
     Ok(rights)
