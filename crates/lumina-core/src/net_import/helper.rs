@@ -23,20 +23,37 @@ const BREW_BINS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
 /// `Contents/MacOS`, or `target/debug` after `make bundle-deps`), then in
 /// Homebrew, then on `PATH`. Never relative to the working directory.
 ///
-/// A release app only ever runs its own bundled copy, which the build fetched
-/// and pinned by SHA-256 (`scripts/fetch_yt_dlp.sh`, `fetch_ffmpeg.sh`). The
-/// Homebrew/PATH fallback exists for a local (debug) build, where the
-/// developer installed the tools; allowing it in release would run whatever
-/// unpinned binary happens to be on the user's `PATH`, undoing the pinning.
+/// Inside a macOS `.app` — the signed, released artifact whose tools are
+/// bundled and SHA-256 pinned (`scripts/fetch_yt_dlp.sh`, `fetch_ffmpeg.sh`)
+/// — only the copy beside the executable is trusted, so a missing bundle can
+/// never fall through to an unpinned PATH binary. Everywhere else (a local
+/// `target/…` build, a Linux `.deb` install beside `/usr/bin`, a debug build)
+/// keeps the Homebrew/PATH fallback that AGENTS.md §5.4 documents for a local
+/// build.
 fn find_tool(name: &str) -> Option<PathBuf> {
-    find_tool_for(name, !cfg!(debug_assertions))
+    find_tool_for(name, running_in_macos_app_bundle())
 }
 
-fn find_tool_for(name: &str, release_only: bool) -> Option<PathBuf> {
+/// True when this process is the executable inside a macOS `.app` bundle.
+fn running_in_macos_app_bundle() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::current_exe()
+            .ok()
+            .map(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+fn find_tool_for(name: &str, bundle_only: bool) -> Option<PathBuf> {
     let beside_exe = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join(name)));
-    if release_only {
+    if bundle_only {
         return beside_exe.filter(|candidate| candidate.is_file());
     }
     let brew = BREW_BINS.iter().map(|dir| Path::new(dir).join(name));
@@ -287,20 +304,21 @@ mod tests {
         );
     }
 
-    /// A release build must never exec a tool from Homebrew or PATH: only the
-    /// bundled, SHA-256-pinned copy beside the executable is trusted.
+    /// A `.app` bundle must never exec a tool from Homebrew or PATH: only the
+    /// bundled, SHA-256-pinned copy beside the executable is trusted. A local
+    /// build (not inside a `.app`) may still use PATH.
     #[test]
-    fn release_lookup_ignores_homebrew_and_path() {
+    fn bundle_lookup_ignores_homebrew_and_path() {
         let on_path = if cfg!(windows) { "cmd.exe" } else { "sh" };
         // The test binary's directory does not contain a shell, so a local
-        // build finds it on PATH and a release build refuses it.
+        // build finds it on PATH and a bundle refuses it.
         assert!(
             find_tool_for(on_path, false).is_some(),
             "a local build may use a tool from PATH"
         );
         assert!(
             find_tool_for(on_path, true).is_none(),
-            "a release build must not run an unpinned PATH tool"
+            "a bundle must not run an unpinned PATH tool"
         );
     }
 }
