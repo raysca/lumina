@@ -209,7 +209,7 @@ fn test_fts5_caption_removed_when_media_deleted() {
     let removed = catalog
         .permanently_delete_items(&[doomed_id], DeletionTarget::CatalogOnly)
         .unwrap();
-    assert_eq!(removed, 1);
+    assert_eq!(removed.deleted_count(), 1);
 
     // The deleted media row no longer surfaces through the FTS join.
     assert!(catalog

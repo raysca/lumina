@@ -35,10 +35,10 @@ use std::sync::Arc;
 
 pub use cache::DiskCache;
 pub use catalog::{
-    Album, AlbumCard, AlbumStats, Catalog, CropRect, DateSpan, DayPlace, DeletionTarget,
-    DownloadRow, DownloadState, DuplicateMerge, Edits, GeoPoint, KeeperSnapshot, LayoutCell,
-    MergeUndo, PlaceCount, PriorDownload, RejectedItems, Rights, StorageSummary, TagChange,
-    TagReplay, TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
+    Album, AlbumCard, AlbumStats, Catalog, CropRect, DateSpan, DayPlace, DeleteOutcome,
+    DeletedItem, DeletionTarget, DownloadRow, DownloadState, DuplicateMerge, Edits, GeoPoint,
+    KeeperSnapshot, LayoutCell, MergeUndo, PlaceCount, PriorDownload, RejectedItems, Rights,
+    StorageSummary, TagChange, TagReplay, TemplateChange, ViewScope, ViewTotals, SCHEMA_VERSION,
 };
 pub use decoder::DecoderPipeline;
 pub use duplicates::{compute_file_hash, DuplicateCandidate, DuplicateGroup, DuplicateReport};
@@ -732,40 +732,53 @@ impl LuminaEngine {
         ids: &[MediaId],
         target: DeletionTarget,
     ) -> Result<usize> {
-        let items: Vec<MediaItem> = ids
-            .iter()
-            .filter_map(|id| self.catalog.get_item_by_id(*id).ok().flatten())
-            .collect();
+        let outcome = self.catalog.permanently_delete_items(ids, target)?;
 
-        let count = self.catalog.permanently_delete_items(ids, target)?;
+        // Evict the deleted items' decodes in one cache pass. The cache is
+        // keyed on the item's identity, so this also removes the
+        // crop-dependent edit decodes the old fixed-size list missed.
+        self.cache.remove_cached_items(
+            outcome
+                .deleted
+                .iter()
+                .map(|item| (item.path.as_path(), item.file_size, item.mtime_epoch_ms)),
+        );
+        for item in &outcome.deleted {
+            let _ = self.event_tx.send(EngineEvent::ItemRemoved(item.id));
+        }
 
-        for item in &items {
-            self.cache
-                .remove_cached_item(&item.path, item.file_size, item.mtime_epoch_ms);
+        if !outcome.failed.is_empty() {
+            // The lazy count is fine here: the UI shows the banner, the
+            // successfully deleted items above are already cleaned up.
+            anyhow::bail!(
+                "{} file(s) could not be deleted and are still in the library. \
+                 Retry after fixing access to them.",
+                outcome.failed.len()
+            );
         }
-        for id in ids {
-            let _ = self.event_tx.send(EngineEvent::ItemRemoved(*id));
-        }
-        Ok(count)
+        Ok(outcome.deleted_count())
     }
 
     pub fn empty_trash(&self, target: DeletionTarget) -> Result<usize> {
-        let trashed_items = self
-            .catalog
-            .query_system_album(SystemAlbum::RecentlyDeleted, 100_000, 0)
-            .context("could not list the trash")?;
+        let outcome = self.catalog.empty_trash(target)?;
 
-        let removed_ids = self.catalog.empty_trash(target)?;
-        let count = removed_ids.len();
+        self.cache.remove_cached_items(
+            outcome
+                .deleted
+                .iter()
+                .map(|item| (item.path.as_path(), item.file_size, item.mtime_epoch_ms)),
+        );
+        for item in &outcome.deleted {
+            let _ = self.event_tx.send(EngineEvent::ItemRemoved(item.id));
+        }
 
-        for item in &trashed_items {
-            self.cache
-                .remove_cached_item(&item.path, item.file_size, item.mtime_epoch_ms);
+        if !outcome.failed.is_empty() {
+            anyhow::bail!(
+                "{} file(s) in the Trash could not be deleted and are still there.",
+                outcome.failed.len()
+            );
         }
-        for id in removed_ids {
-            let _ = self.event_tx.send(EngineEvent::ItemRemoved(id));
-        }
-        Ok(count)
+        Ok(outcome.deleted_count())
     }
 
     pub fn add_tags_batch(&self, ids: &[MediaId], tags: &[String]) -> Result<()> {

@@ -37,6 +37,7 @@ mod tags;
 mod templates;
 pub use templates::TemplateChange;
 mod trash;
+pub use trash::{DeleteOutcome, DeletedItem};
 
 use anyhow::{bail, Result};
 use parking_lot::{Mutex, MutexGuard};

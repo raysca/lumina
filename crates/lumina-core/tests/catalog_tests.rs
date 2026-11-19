@@ -59,7 +59,7 @@ fn test_catalog_in_memory() {
     let removed = catalog
         .permanently_delete_items(&[inserted[0].id], DeletionTarget::CatalogOnly)
         .unwrap();
-    assert_eq!(removed, 1);
+    assert_eq!(removed.deleted_count(), 1);
     assert_eq!(catalog.total_count().unwrap(), 1);
 }
 
@@ -333,7 +333,7 @@ fn test_deletion_lifecycle_and_trash_restoration() {
     let deleted_count = catalog
         .permanently_delete_items(&[id3], DeletionTarget::PermanentDisk)
         .unwrap();
-    assert_eq!(deleted_count, 1);
+    assert_eq!(deleted_count.deleted_count(), 1);
     assert!(!file_path3.exists());
     assert!(
         !sidecar3.exists(),
@@ -347,7 +347,7 @@ fn test_deletion_lifecycle_and_trash_restoration() {
     assert!(file_path1.exists());
     assert!(file_path2.exists());
     let emptied = catalog.empty_trash(DeletionTarget::CatalogOnly).unwrap();
-    assert_eq!(emptied.len(), 2);
+    assert_eq!(emptied.deleted_count(), 2);
     assert!(
         sidecar1.exists(),
         "catalog-only removal leaves the file and its sidecar alone"
