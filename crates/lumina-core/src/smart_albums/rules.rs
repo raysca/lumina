@@ -185,7 +185,6 @@ impl SmartAlbum {
             LIMIT ? OFFSET ?;
             "#,
             columns = crate::sql::media_columns("m."),
-            where_clause = &where_clause,
             order = sort.order_by("m.")
         );
 

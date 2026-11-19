@@ -418,7 +418,6 @@ impl StructuredQuery {
                 LIMIT ? OFFSET ?;
                 "#,
                 columns = crate::sql::media_columns("m."),
-                where_clause = &where_clause,
                 order = sort.order_by("m.")
             )
         } else {
@@ -431,7 +430,6 @@ impl StructuredQuery {
                 LIMIT ? OFFSET ?;
                 "#,
                 columns = crate::sql::media_columns("m."),
-                where_clause = &where_clause,
                 order = sort.order_by("m.")
             )
         };

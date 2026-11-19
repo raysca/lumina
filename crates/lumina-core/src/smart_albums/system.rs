@@ -135,7 +135,6 @@ impl SystemAlbum {
             LIMIT ?1 OFFSET ?2;
             "#,
             columns = crate::sql::media_columns("m."),
-            where_clause = &where_clause,
             order = sort.order_by("m.")
         );
 
