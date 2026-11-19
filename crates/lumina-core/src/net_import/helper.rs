@@ -22,10 +22,23 @@ const BREW_BINS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
 /// Finds `name` next to the running executable (the app bundle's
 /// `Contents/MacOS`, or `target/debug` after `make bundle-deps`), then in
 /// Homebrew, then on `PATH`. Never relative to the working directory.
+///
+/// A release app only ever runs its own bundled copy, which the build fetched
+/// and pinned by SHA-256 (`scripts/fetch_yt_dlp.sh`, `fetch_ffmpeg.sh`). The
+/// Homebrew/PATH fallback exists for a local (debug) build, where the
+/// developer installed the tools; allowing it in release would run whatever
+/// unpinned binary happens to be on the user's `PATH`, undoing the pinning.
 fn find_tool(name: &str) -> Option<PathBuf> {
+    find_tool_for(name, !cfg!(debug_assertions))
+}
+
+fn find_tool_for(name: &str, release_only: bool) -> Option<PathBuf> {
     let beside_exe = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join(name)));
+    if release_only {
+        return beside_exe.filter(|candidate| candidate.is_file());
+    }
     let brew = BREW_BINS.iter().map(|dir| Path::new(dir).join(name));
     let on_path = std::env::var_os("PATH")
         .map(|paths| {
@@ -271,6 +284,23 @@ mod tests {
         assert!(
             !message.contains("generic") && !message.contains("yt-dlp"),
             "tool and extractor names stay out of user messages: {message}"
+        );
+    }
+
+    /// A release build must never exec a tool from Homebrew or PATH: only the
+    /// bundled, SHA-256-pinned copy beside the executable is trusted.
+    #[test]
+    fn release_lookup_ignores_homebrew_and_path() {
+        let on_path = if cfg!(windows) { "cmd.exe" } else { "sh" };
+        // The test binary's directory does not contain a shell, so a local
+        // build finds it on PATH and a release build refuses it.
+        assert!(
+            find_tool_for(on_path, false).is_some(),
+            "a local build may use a tool from PATH"
+        );
+        assert!(
+            find_tool_for(on_path, true).is_none(),
+            "a release build must not run an unpinned PATH tool"
         );
     }
 }
