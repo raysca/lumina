@@ -446,3 +446,28 @@ fn locate_refuses_a_transposed_size_without_a_quarter_turn() {
         "{err}"
     );
 }
+
+/// Regression: the scanner already stores the displayed (oriented) size, so a
+/// quarter-turned photo's row holds 16x24. Relinking must accept that stored
+/// pair and not double-rotate it into 24x16, which refused to fold a normal
+/// rotated twin.
+#[test]
+fn locate_folds_a_normally_scanned_turned_twin() {
+    let library = TestLibrary::new("locate_turned_normal");
+    let media = library.media_dir();
+    write_landscape_jpeg(&media.join("a.jpg"), true);
+    let original = {
+        let (engine, _rx) = open_scanned(&library);
+        id_at(&engine, &media.join("a.jpg"))
+    };
+    std::fs::copy(media.join("a.jpg"), media.join("copy.jpg")).unwrap();
+    std::fs::remove_file(media.join("a.jpg")).unwrap();
+    let (engine, _rx) = open_scanned(&library);
+    let copy = id_at(&engine, &media.join("copy.jpg"));
+    assert!(engine.get_missing_ids().contains(&original));
+    assert_eq!(
+        engine.relink(original, &media.join("copy.jpg")).unwrap(),
+        lumina_core::RelinkOutcome::Folded(copy),
+        "a normally scanned quarter-turned photo must still relink to its twin"
+    );
+}
