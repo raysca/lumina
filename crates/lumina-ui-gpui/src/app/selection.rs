@@ -266,8 +266,6 @@ impl LuminaApp {
                         self.selected_item_tags.clear();
                         self.selected_tag_counts.clear();
                         self.selected_tags_request = self.selected_tags_request.wrapping_add(1);
-                        self.batch_summary = BatchSelectionSummary::default();
-                        self.batch_metadata = BatchMetadataSummary::default();
                         self.selection_anchor = None;
                     }
                 }
