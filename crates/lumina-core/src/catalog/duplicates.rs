@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -300,7 +300,7 @@ impl Catalog {
                         row.get(4)?,
                     ))
                 })
-                .ok();
+                .optional()?;
 
             if let Some((init_fav, init_rating, init_color, init_title, init_flag)) = keeper_meta {
                 let mut updated_fav = init_fav != 0;
@@ -310,8 +310,10 @@ impl Catalog {
                 let mut updated_flag = init_flag;
 
                 for trash_id in trash_ids {
-                    if let Ok((fav, rating, color, title, flag)) =
-                        read_stmt.query_row(params![trash_id.0 as i64], |row| {
+                    // A read failure must fail the merge, not silently drop
+                    // this copy's favorite, rating, title or flag.
+                    let Some((fav, rating, color, title, flag)) = read_stmt
+                        .query_row(params![trash_id.0 as i64], |row| {
                             Ok((
                                 row.get::<_, i32>(0)?,
                                 row.get::<_, u8>(1)?,
@@ -320,21 +322,23 @@ impl Catalog {
                                 row.get::<_, i64>(4)?,
                             ))
                         })
-                    {
-                        if fav != 0 {
-                            updated_fav = true;
-                        }
-                        if rating > updated_rating {
-                            updated_rating = rating;
-                        }
-                        if updated_color == 0 && color != 0 {
-                            updated_color = color;
-                        }
-                        if updated_title.is_none() && title.is_some() {
-                            updated_title = title;
-                        }
-                        updated_flag = updated_flag.max(flag);
+                        .optional()?
+                    else {
+                        continue;
+                    };
+                    if fav != 0 {
+                        updated_fav = true;
                     }
+                    if rating > updated_rating {
+                        updated_rating = rating;
+                    }
+                    if updated_color == 0 && color != 0 {
+                        updated_color = color;
+                    }
+                    if updated_title.is_none() && title.is_some() {
+                        updated_title = title;
+                    }
+                    updated_flag = updated_flag.max(flag);
                 }
 
                 let mut update_stmt = tx.prepare_cached(
