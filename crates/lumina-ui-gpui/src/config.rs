@@ -740,14 +740,49 @@ impl AppConfig {
     }
 
     pub fn load_from(path: &Path) -> Self {
-        if path.exists() {
-            if let Ok(bytes) = fs::read(path) {
-                if let Ok(cfg) = serde_json::from_slice(&bytes) {
-                    return cfg;
+        Self::load_impl(path).0
+    }
+
+    /// Loads the config and, when the file exists but cannot be read or
+    /// parsed, preserves it as `config.json.corrupt` and returns a message for
+    /// the error banner. Returning it separately lets the app surface the loss
+    /// instead of silently starting from defaults and then overwriting the
+    /// user's settings on the next save.
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn load_with_error() -> (Self, Option<String>) {
+        Self::load_impl(&Self::config_path())
+    }
+
+    fn load_impl(path: &Path) -> (Self, Option<String>) {
+        if !path.exists() {
+            return (Self::default(), None);
+        }
+        let parsed = fs::read(path)
+            .map_err(|err| err.to_string())
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|err| err.to_string()));
+        match parsed {
+            Ok(cfg) => (cfg, None),
+            Err(err) => {
+                // Keep the user's file before any default is ever written over
+                // it: an unreadable config must not become a silent reset.
+                let corrupt = path.with_extension("json.corrupt");
+                match fs::rename(path, &corrupt) {
+                    Ok(()) => log::error!(
+                        "settings could not be read ({err}); kept at {}",
+                        corrupt.display()
+                    ),
+                    Err(rename_err) => log::error!(
+                        "settings could not be read ({err}); could not preserve the file: {rename_err}"
+                    ),
                 }
+                let message = format!(
+                    "Your settings could not be read, so Lumina started with defaults. \
+                     The old file was kept as {}.",
+                    corrupt.display()
+                );
+                (Self::default(), Some(message))
             }
         }
-        Self::default()
     }
 
     /// Writes the user's real config. Compiled out of tests so no test path
@@ -762,7 +797,15 @@ impl AppConfig {
             fs::create_dir_all(parent)?;
         }
         let data = serde_json::to_vec_pretty(self)?;
-        fs::write(path, data)?;
+        // Write beside the target and rename: a crash mid-write can leave a
+        // temp file behind, but never a truncated config.json that reads as
+        // defaults and is then overwritten.
+        let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+        fs::write(&tmp, &data)?;
+        if let Err(err) = fs::rename(&tmp, path) {
+            let _ = fs::remove_file(&tmp);
+            return Err(err.into());
+        }
         Ok(())
     }
 
@@ -907,6 +950,60 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("config.json")
+    }
+
+    /// Regression: an unreadable config silently loaded as defaults and was
+    /// then overwritten on the next save, permanently losing the settings.
+    #[test]
+    fn a_corrupt_config_is_preserved_and_reports_an_error() {
+        let path = temp_config_path("corrupt_preserve");
+        std::fs::write(&path, b"{ this is not json").unwrap();
+
+        let (cfg, err) = AppConfig::load_impl(&path);
+
+        assert_eq!(
+            cfg.sort_field,
+            AppConfig::default().sort_field,
+            "an unreadable config falls back to defaults"
+        );
+        assert!(
+            err.is_some(),
+            "a corrupt config must report an error so the user knows"
+        );
+        let corrupt = path.with_extension("json.corrupt");
+        assert!(
+            corrupt.exists(),
+            "the unreadable file must be kept for recovery, not deleted"
+        );
+        assert_eq!(
+            std::fs::read(&corrupt).unwrap(),
+            b"{ this is not json",
+            "the preserved file must be the user's original bytes"
+        );
+        assert!(
+            !path.exists(),
+            "the unreadable file is moved aside so a later save cannot overwrite it"
+        );
+    }
+
+    #[test]
+    fn save_is_atomic_and_leaves_no_temp_file() {
+        let path = temp_config_path("atomic_save");
+        let mut cfg = AppConfig::default();
+        cfg.sidebar_width = 321.0;
+        cfg.save_to(&path).unwrap();
+
+        assert_eq!(AppConfig::load_from(&path).sidebar_width, 321.0);
+        let leftovers: Vec<String> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp."))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "an atomic save must not leave a temp file behind: {leftovers:?}"
+        );
     }
 
     #[test]

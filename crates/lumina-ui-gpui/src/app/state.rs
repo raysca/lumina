@@ -661,7 +661,7 @@ impl LuminaApp {
         #[cfg(test)]
         let mut config = TEST_CONFIG.with(|c| c.take()).unwrap_or_default();
         #[cfg(not(test))]
-        let mut config = AppConfig::load();
+        let (mut config, config_load_error) = AppConfig::load_with_error();
         // Keep stale or hand-edited config files from unbounded history growth.
         config
             .recent_searches
@@ -844,6 +844,13 @@ impl LuminaApp {
             levels: Default::default(),
             selected_tags_request: 0,
         };
+
+        // A settings file that had to be set aside is surfaced before a
+        // library error, so the user knows their layout was reset.
+        #[cfg(not(test))]
+        if let Some(message) = config_load_error {
+            app.error_message = Some(message);
+        }
 
         // If previously selected library exists, open it immediately.
         // Tests are isolated: they must set up their own temporary library.
