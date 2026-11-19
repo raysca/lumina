@@ -772,6 +772,12 @@ impl LuminaEngine {
         ids: &[MediaId],
         target: DeletionTarget,
     ) -> Result<usize> {
+        // An unmounted volume makes every file look "not found", which the
+        // delete path treats as already gone; refuse instead of purging rows
+        // whose files are still there. CatalogOnly never touches disk.
+        if target != DeletionTarget::CatalogOnly && !self.library_root.is_dir() {
+            anyhow::bail!("The library folder isn't available, so nothing was deleted.");
+        }
         let outcome = self.catalog.permanently_delete_items(ids, target)?;
 
         // Evict the deleted items' decodes in one cache pass. The cache is
@@ -791,7 +797,7 @@ impl LuminaEngine {
             // The lazy count is fine here: the UI shows the banner, the
             // successfully deleted items above are already cleaned up.
             anyhow::bail!(
-                "{} file(s) could not be deleted and are still in the library. \
+                "{} file(s) could not be deleted and are still in your library or Trash. \
                  Retry after fixing access to them.",
                 outcome.failed.len()
             );
@@ -800,6 +806,9 @@ impl LuminaEngine {
     }
 
     pub fn empty_trash(&self, target: DeletionTarget) -> Result<usize> {
+        if target != DeletionTarget::CatalogOnly && !self.library_root.is_dir() {
+            anyhow::bail!("The library folder isn't available, so the Trash was not emptied.");
+        }
         let outcome = self.catalog.empty_trash(target)?;
 
         self.cache.remove_cached_items(
