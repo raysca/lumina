@@ -178,7 +178,9 @@ impl Catalog {
             );
 
             CREATE INDEX IF NOT EXISTS idx_media_tags_tag ON media_tags(tag);
-            CREATE INDEX IF NOT EXISTS idx_media_tags_media_id ON media_tags(media_id);
+            -- idx_media_tags_media_id was redundant: the primary key's leading
+            -- column already serves every WHERE media_id = ? lookup. Dropped
+            -- below so existing catalogs lose it too.
 
             -- v16: keyword aliases, resolved when a tag is typed; the alias
             -- itself is never stored on media. Both columns hold normalized
@@ -345,6 +347,12 @@ impl Catalog {
         // Columns added after a table's first release. Every add goes
         // through `add_column_if_missing`, so a failed ALTER stops the open
         // instead of leaving a catalog the queries cannot read.
+        //
+        // v25: idx_media_tags_media_id duplicated the media_tags primary key's
+        // leading column (`PRIMARY KEY (media_id, tag)`), so it only added
+        // write amplification. Drop it on catalogs that still have it.
+        conn.execute("DROP INDEX IF EXISTS idx_media_tags_media_id;", [])
+            .context("dropping the redundant media_tags media index")?;
         add_column_if_missing(&conn, "media_items", "rating", "INTEGER NOT NULL DEFAULT 0")?;
         add_column_if_missing(
             &conn,
