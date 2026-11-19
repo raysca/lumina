@@ -455,14 +455,14 @@ pub struct AppConfig {
     #[serde(default, deserialize_with = "lenient_group_level")]
     pub group_level: GroupLevel,
     /// The Albums overview's card order. An unknown value reads as Name.
-    #[serde(default, deserialize_with = "lenient_album_sort")]
+    #[serde(default, deserialize_with = "lenient")]
     pub album_sort: AlbumSort,
     /// The user hid the album settings panel (⌘K Hide Album Settings).
     #[serde(default)]
     pub album_panel_hidden: bool,
     /// Settings › General › Default view on launch. An unknown value reads
     /// as Last viewed.
-    #[serde(default, deserialize_with = "lenient_launch_view")]
+    #[serde(default, deserialize_with = "lenient")]
     pub launch_view: LaunchView,
     /// Settings › Downloads › Simultaneous downloads, one of
     /// [`DOWNLOAD_CONCURRENCY_CHOICES`]. Anything else reads as the default.
@@ -513,11 +513,13 @@ pub enum LaunchView {
     LastViewed,
 }
 
-/// Reads `launch_view` so a hand-edited or future value falls back to Last
-/// viewed instead of failing the whole config.
-fn lenient_launch_view<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<LaunchView, D::Error> {
+/// Reads a field so a hand-edited or future value falls back to the type's
+/// default instead of failing the whole config (which would reset it).
+fn lenient<'de, D, T>(deserializer: D) -> std::result::Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
     let value = serde_json::Value::deserialize(deserializer)?;
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
@@ -545,15 +547,6 @@ impl AlbumSort {
         AlbumSort::NewestPhoto,
         AlbumSort::ItemCount,
     ];
-}
-
-/// Reads `album_sort` so a hand-edited or future value falls back to Name
-/// instead of failing the whole config.
-fn lenient_album_sort<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<AlbumSort, D::Error> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 /// The zoom pill's grouping level in Mosaic. Years and Months apply only
@@ -989,8 +982,10 @@ mod tests {
     #[test]
     fn save_is_atomic_and_leaves_no_temp_file() {
         let path = temp_config_path("atomic_save");
-        let mut cfg = AppConfig::default();
-        cfg.sidebar_width = 321.0;
+        let cfg = AppConfig {
+            sidebar_width: 321.0,
+            ..Default::default()
+        };
         cfg.save_to(&path).unwrap();
 
         assert_eq!(AppConfig::load_from(&path).sidebar_width, 321.0);
