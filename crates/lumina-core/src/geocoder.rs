@@ -39,6 +39,13 @@ pub struct OfflineGeocoder {
 }
 
 impl OfflineGeocoder {
+    /// The shared table: the built-in cities are projected onto the sphere once
+    /// per process, not once per scan and again in the catalog.
+    pub fn shared() -> Self {
+        static SHARED: std::sync::OnceLock<OfflineGeocoder> = std::sync::OnceLock::new();
+        SHARED.get_or_init(OfflineGeocoder::new).clone()
+    }
+
     pub fn new() -> Self {
         let cities = load_default_cities();
         let points: Vec<CityPoint> = cities
@@ -56,7 +63,8 @@ impl OfflineGeocoder {
         }
     }
 
-    /// Resolves nearest city in < 1 microsecond (within ~250 km maximum threshold)
+    /// Resolves the nearest built-in city within ~250 km (a linear scan over a
+    /// small table), or `None` outside that radius.
     pub fn reverse_geocode(&self, lat: f64, lon: f64) -> Option<GeoLocation> {
         if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
             return None;

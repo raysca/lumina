@@ -42,7 +42,7 @@ impl Scanner {
             library_root,
             event_tx,
             cancel_flag,
-            geocoder: OfflineGeocoder::new(),
+            geocoder: OfflineGeocoder::shared(),
             known_signatures: HashMap::new(),
         }
     }
