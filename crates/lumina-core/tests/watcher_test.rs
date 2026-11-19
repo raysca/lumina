@@ -458,7 +458,15 @@ fn locate_folds_a_normally_scanned_turned_twin() {
     write_landscape_jpeg(&media.join("a.jpg"), true);
     let original = {
         let (engine, _rx) = open_scanned(&library);
-        id_at(&engine, &media.join("a.jpg"))
+        let id = id_at(&engine, &media.join("a.jpg"));
+        let scanned = engine.get_item_by_id(id).expect("original row");
+        assert_eq!(
+            (scanned.width, scanned.height),
+            (16, 24),
+            "the scanner stores the displayed (oriented) size; without this the \
+             test would still pass if the scanner stopped orienting"
+        );
+        id
     };
     std::fs::copy(media.join("a.jpg"), media.join("copy.jpg")).unwrap();
     std::fs::remove_file(media.join("a.jpg")).unwrap();
