@@ -14,10 +14,21 @@ use crate::{normalize_quarter_turns, MediaId, MediaItem};
 /// Smallest crop side, as a fraction of the frame.
 const MIN_CROP_SIDE: f32 = 0.02;
 
-/// One item's rotation and edits row; read for every thumbnail request.
 /// Ids of every rotated or edited item; see [`Catalog::edited_ids`].
 const EDITED_IDS_SQL: &str = "SELECT id FROM media_items WHERE rotation_quarters != 0
  UNION SELECT media_id FROM media_edits;";
+
+/// The batch edits SELECT for an `IN (...)` list of `marks`. Shared by
+/// `get_edits` and its query-plan test, so the tested SQL cannot drift from
+/// the one that runs.
+fn edits_batch_sql(marks: &str) -> String {
+    format!(
+        "SELECT m.id, m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h, \
+         e.exposure_ev, e.auto_enhance \
+         FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id \
+         WHERE m.id IN ({marks});"
+    )
+}
 
 /// A crop in normalized `[0, 1]` coordinates of the unrotated decoded frame,
 /// so a later rotation never needs to remap it.
@@ -76,13 +87,8 @@ impl Catalog {
         // must return the id to map the row back.
         for chunk in ids.chunks(500) {
             let marks = vec!["?"; chunk.len()].join(", ");
-            let sql = format!(
-                "SELECT m.id, m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h, \
-                 e.exposure_ev, e.auto_enhance \
-                 FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id \
-                 WHERE m.id IN ({marks});"
-            );
-            let mut stmt = conn.prepare(&sql)?;
+            let sql = edits_batch_sql(&marks);
+            let mut stmt = conn.prepare_cached(&sql)?;
             let rows = stmt.query_map(
                 rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
                 |row| {
@@ -461,11 +467,8 @@ mod tests {
     fn get_edits_plan_uses_primary_keys() {
         let catalog = Catalog::open_in_memory().unwrap();
         // The same shape get_edits builds (a batch LEFT JOIN) with one id.
-        let sql = "SELECT m.id, m.rotation_quarters, e.crop_x, e.crop_y, e.crop_w, e.crop_h, \
-                   e.exposure_ev, e.auto_enhance \
-                   FROM media_items m LEFT JOIN media_edits e ON e.media_id = m.id \
-                   WHERE m.id IN (1);";
-        let plan = catalog.explain_query_plan(sql).unwrap();
+        let sql = edits_batch_sql("1");
+        let plan = catalog.explain_query_plan(&sql).unwrap();
         assert!(
             plan.len() == 2
                 && plan

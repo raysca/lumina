@@ -211,32 +211,10 @@ impl DiskCache {
         self.trimming.store(false, Ordering::Release);
     }
 
-    pub fn remove_cached(
-        &self,
-        path: &Path,
-        file_size: u64,
-        mtime_epoch_ms: i64,
-        target_size: u32,
-    ) -> bool {
-        let key = Self::compute_key(path, file_size, mtime_epoch_ms, target_size);
-        let file_path = self.cache_file_path(&key);
-        if file_path.exists() {
-            fs::remove_file(file_path).is_ok()
-        } else {
-            false
-        }
-    }
-
-    /// Removes every cached decode of one item, whatever size it was stored
-    /// at. A fixed size list missed the crop-dependent edit decodes (their
-    /// size is derived from the crop, see `edits::edit_decode_size`), so a
-    /// deleted or cropped-away item left files behind until the age sweep.
-    pub fn remove_cached_item(&self, path: &Path, file_size: u64, mtime_epoch_ms: i64) {
-        self.remove_cached_items([(path, file_size, mtime_epoch_ms)]);
-    }
-
     /// Removes every cached decode of each item in `items` in one directory
     /// pass, so deleting a large selection does not scan the cache per item.
+    /// Best-effort: a cache that cannot be read is left to the age/budget
+    /// sweep rather than failing the delete that requested the eviction.
     pub fn remove_cached_items<'a, I>(&self, items: I)
     where
         I: IntoIterator<Item = (&'a Path, u64, i64)>,
@@ -481,7 +459,7 @@ mod tests {
         cache.put_cached(other, 10, 1000, 256, &frame()).unwrap();
         assert_eq!(std::fs::read_dir(cache.cache_dir()).unwrap().count(), 3);
 
-        cache.remove_cached_item(item, 10, 1000);
+        cache.remove_cached_items([(item, 10, 1000)]);
 
         let left: Vec<String> = std::fs::read_dir(cache.cache_dir())
             .unwrap()

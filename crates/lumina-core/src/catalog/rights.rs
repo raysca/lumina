@@ -101,7 +101,7 @@ pub(super) fn rights_in(conn: &Connection, ids: &[MediaId]) -> Result<HashMap<Me
             "SELECT media_id, creator, copyright, usage_terms, contact_email, contact_url
              FROM media_rights WHERE media_id IN ({marks});"
         );
-        let mut stmt = conn.prepare(&sql)?;
+        let mut stmt = conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(
             rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
             |row| {

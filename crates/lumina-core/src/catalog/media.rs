@@ -562,7 +562,7 @@ impl Catalog {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql =
                 format!("SELECT id, rotation_quarters FROM media_items WHERE id IN ({marks});");
-            let mut stmt = conn.prepare(&sql)?;
+            let mut stmt = conn.prepare_cached(&sql)?;
             let rows = stmt.query_map(
                 rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
                 |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i32>(1)?)),
@@ -694,7 +694,7 @@ impl Catalog {
             let sql = format!(
                 "SELECT id, date_edited, place_edited FROM media_items WHERE id IN ({marks});"
             );
-            let mut stmt = conn.prepare(&sql)?;
+            let mut stmt = conn.prepare_cached(&sql)?;
             let rows = stmt.query_map(
                 rusqlite::params_from_iter(chunk.iter().map(|id| id.0 as i64)),
                 |row| {

@@ -282,7 +282,7 @@ impl Catalog {
                 "SELECT m.file_path, m.file_size, m.mtime_epoch_ms FROM media_items m \
                  WHERE m.file_path IN ({marks}) AND {PRESENT};"
             );
-            let mut stmt = conn.prepare(&sql)?;
+            let mut stmt = conn.prepare_cached(&sql)?;
             let rows = stmt.query_map(
                 rusqlite::params_from_iter(
                     chunk.iter().map(|path| path.to_string_lossy().into_owned()),
