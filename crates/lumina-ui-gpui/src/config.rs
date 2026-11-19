@@ -761,45 +761,31 @@ impl AppConfig {
         if !path.exists() {
             return (Self::default(), None);
         }
-        // A read error (permissions, transient I/O) does not mean the file is
-        // bad: leave it in place and surface the failure instead of moving a
-        // possibly-good config aside.
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                log::error!("settings could not be read ({err}); leaving the file in place");
-                return (
-                    Self::default(),
-                    Some(format!(
-                        "Your settings could not be read ({err}). Lumina started with \
-                         defaults and left the file untouched."
-                    )),
-                );
-            }
-        };
-        match serde_json::from_slice::<Self>(&bytes) {
+        let loaded = fs::read(path)
+            .map_err(|err| format!("could not be read ({err})"))
+            .and_then(|bytes| {
+                serde_json::from_slice::<Self>(&bytes)
+                    .map_err(|err| format!("could not be read ({err})"))
+            });
+        match loaded {
             Ok(cfg) => (cfg, None),
-            Err(err) => {
-                // Keep the user's file before any default is ever written over
-                // it: an unparseable config must not become a silent reset.
+            Err(why) => {
+                // Move the file aside before any default can be written over
+                // it: an unreadable or unparseable config must not become a
+                // silent reset. rename() works on the directory entry, so it
+                // also preserves a file we could not read.
                 let corrupt = path.with_extension("json.corrupt");
-                let kept = fs::rename(path, &corrupt);
-                let message = match &kept {
+                let message = match fs::rename(path, &corrupt) {
                     Ok(()) => {
-                        log::error!(
-                            "settings could not be parsed ({err}); kept at {}",
-                            corrupt.display()
-                        );
+                        log::error!("settings {why}; kept at {}", corrupt.display());
                         format!(
-                            "Your settings could not be read, so Lumina started with defaults. \
+                            "Your settings {why}, so Lumina started with defaults. \
                              The old file was kept as {}.",
                             corrupt.display()
                         )
                     }
                     Err(rename_err) => {
-                        log::error!(
-                            "settings could not be parsed ({err}); could not preserve the file: {rename_err}"
-                        );
+                        log::error!("settings {why}; could not preserve the file: {rename_err}");
                         "Your settings could not be read, so Lumina started with defaults. \
                          The old file could not be moved aside and may be overwritten when \
                          settings are next saved."
@@ -1021,6 +1007,45 @@ mod tests {
         assert!(
             !path.exists(),
             "the unreadable file is moved aside so a later save cannot overwrite it"
+        );
+    }
+
+    /// Regression: a read error (permissions, transient I/O) must not later
+    /// become a silent overwrite. The file is moved aside just like an
+    /// unparseable one, because `rename` does not need read permission.
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_config_is_moved_aside_not_overwritten() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_config_path("unreadable_moved");
+        std::fs::write(&path, b"{\"sidebar_width\": 400.0}").unwrap();
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o000);
+        std::fs::set_permissions(&path, perms).unwrap();
+        if std::fs::read(&path).is_ok() {
+            // Running as root or on a mode-ignoring filesystem: the scenario
+            // cannot be staged, so this is not a pass or a failure.
+            return;
+        }
+
+        let (cfg, err) = AppConfig::load_impl(&path);
+
+        assert_eq!(cfg.sidebar_width, AppConfig::default().sidebar_width);
+        assert!(err.is_some(), "a read error must be surfaced");
+        let corrupt = path.with_extension("json.corrupt");
+        assert!(
+            corrupt.exists(),
+            "an unreadable file must be moved aside so the next save cannot overwrite it"
+        );
+        assert!(!path.exists());
+
+        // Restore permission for cleanup and confirm the bytes survived.
+        let mut perms = std::fs::metadata(&corrupt).unwrap().permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(&corrupt, perms).unwrap();
+        assert_eq!(
+            std::fs::read(&corrupt).unwrap(),
+            b"{\"sidebar_width\": 400.0}"
         );
     }
 
