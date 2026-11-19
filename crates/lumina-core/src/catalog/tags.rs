@@ -248,7 +248,7 @@ impl Catalog {
     /// Counts active media items that have no `media_tags` rows at all.
     ///
     /// Hidden and trashed items are excluded to match the other sidebar counts.
-    /// The correlated `NOT EXISTS` uses `idx_media_tags_media_id`, so this is
+    /// The correlated `NOT EXISTS` uses `sqlite_autoindex_media_tags_1`, so this is
     /// one aggregate query and never a full scan of the tag table.
     pub fn query_untagged_count(&self) -> Result<usize> {
         let conn = self.conn.lock();
