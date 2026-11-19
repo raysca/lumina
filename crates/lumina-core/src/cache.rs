@@ -21,7 +21,9 @@ pub struct DiskCache {
 /// Bump when the on-disk thumbnail encoding changes. v3: sips decodes apply
 /// EXIF orientation, so v2 files of rotated photos are stale. v4: decodes
 /// are color matched to sRGB, so v3 files of wide-gamut photos are stale.
-const CACHE_FORMAT_VERSION: u32 = 4;
+/// v5: the key is `{item_hash}_{size}` so every decoded size of one item can
+/// be evicted together (v4 hashed the size in and could not be enumerated).
+const CACHE_FORMAT_VERSION: u32 = 5;
 
 /// Default disk budget for thumbnails (1.5 GB).
 pub const DEFAULT_MAX_CACHE_BYTES: u64 = 1_500_000_000;
@@ -67,19 +69,29 @@ impl DiskCache {
         }
     }
 
+    /// The stable hash of one item independent of decoded size. Every cached
+    /// size of the item shares this prefix, which is what lets a delete evict
+    /// the standard thumbnails *and* the crop-dependent edit decodes together.
+    fn item_hash(path: &Path, file_size: u64, mtime_epoch_ms: i64) -> String {
+        let path_str = path.to_string_lossy();
+        let payload = format!(
+            "v{}:{}:{}:{}",
+            CACHE_FORMAT_VERSION, path_str, file_size, mtime_epoch_ms
+        );
+        format!("{:016x}", xxh3_64(payload.as_bytes()))
+    }
+
     pub fn compute_key(
         path: &Path,
         file_size: u64,
         mtime_epoch_ms: i64,
         target_size: u32,
     ) -> String {
-        let path_str = path.to_string_lossy();
-        let payload = format!(
-            "v{}:{}:{}:{}:{}",
-            CACHE_FORMAT_VERSION, path_str, file_size, mtime_epoch_ms, target_size
-        );
-        let hash = xxh3_64(payload.as_bytes());
-        format!("{:016x}", hash)
+        format!(
+            "{}_{}",
+            Self::item_hash(path, file_size, mtime_epoch_ms),
+            target_size
+        )
     }
 
     pub fn cache_file_path(&self, key: &str) -> PathBuf {
@@ -215,9 +227,43 @@ impl DiskCache {
         }
     }
 
+    /// Removes every cached decode of one item, whatever size it was stored
+    /// at. A fixed size list missed the crop-dependent edit decodes (their
+    /// size is derived from the crop, see `edits::edit_decode_size`), so a
+    /// deleted or cropped-away item left files behind until the age sweep.
     pub fn remove_cached_item(&self, path: &Path, file_size: u64, mtime_epoch_ms: i64) {
-        for size in [256, 320, 512, 1024, 2048] {
-            self.remove_cached(path, file_size, mtime_epoch_ms, size);
+        self.remove_cached_items([(path, file_size, mtime_epoch_ms)]);
+    }
+
+    /// Removes every cached decode of each item in `items` in one directory
+    /// pass, so deleting a large selection does not scan the cache per item.
+    pub fn remove_cached_items<'a, I>(&self, items: I)
+    where
+        I: IntoIterator<Item = (&'a Path, u64, i64)>,
+    {
+        let prefixes: std::collections::HashSet<String> = items
+            .into_iter()
+            .map(|(path, file_size, mtime_epoch_ms)| {
+                Self::item_hash(path, file_size, mtime_epoch_ms)
+            })
+            .collect();
+        if prefixes.is_empty() {
+            return;
+        }
+        let Ok(entries) = fs::read_dir(&self.cache_dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some((prefix, rest)) = name.split_once('_') else {
+                continue;
+            };
+            if rest.ends_with(".bin") && prefixes.contains(prefix) {
+                let _ = fs::remove_file(entry.path());
+            }
         }
     }
 
@@ -419,5 +465,36 @@ mod tests {
         assert!(!cold.exists());
         assert!(warm.exists());
         assert_eq!(stats.remaining_bytes, 8);
+    }
+
+    /// Regression: a delete only removed five hardcoded sizes, so a
+    /// crop-dependent edit decode (e.g. 640 px) of the same item survived.
+    #[test]
+    fn remove_cached_item_evicts_every_decoded_size_of_that_item() {
+        let cache = temp_cache("remove_all_sizes");
+        let item = std::path::Path::new("/photos/a.jpg");
+        let other = std::path::Path::new("/photos/b.jpg");
+        // 256 is a standard thumbnail; 640 is a plausible edit-decode size.
+        for size in [256, 640] {
+            cache.put_cached(item, 10, 1000, size, &frame()).unwrap();
+        }
+        cache.put_cached(other, 10, 1000, 256, &frame()).unwrap();
+        assert_eq!(std::fs::read_dir(cache.cache_dir()).unwrap().count(), 3);
+
+        cache.remove_cached_item(item, 10, 1000);
+
+        let left: Vec<String> = std::fs::read_dir(cache.cache_dir())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            left.len(),
+            1,
+            "every size of the removed item must go, the other item stays: {left:?}"
+        );
+        assert!(
+            left[0].starts_with(&DiskCache::item_hash(other, 10, 1000)),
+            "the surviving file must belong to the other item: {left:?}"
+        );
     }
 }
