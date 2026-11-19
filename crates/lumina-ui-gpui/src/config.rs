@@ -699,6 +699,14 @@ impl Default for AppConfig {
     }
 }
 
+// One startup parse shared by `main` (menus, window bounds) and
+// `LuminaApp::new`, so the corrupt-file message survives until the app can
+// show it instead of being lost to an earlier `load` that moved the file.
+thread_local! {
+    static STARTUP_CONFIG: std::cell::RefCell<Option<(AppConfig, Option<String>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 impl AppConfig {
     pub fn config_path() -> PathBuf {
         let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
@@ -728,51 +736,76 @@ impl AppConfig {
         self.launch_view = d.launch_view;
     }
 
-    pub fn load() -> Self {
-        Self::load_from(&Self::config_path())
+    /// Loads the config once for startup and caches the result, including a
+    /// corrupt-file message. `main` reads it before the window exists (menus,
+    /// window bounds) and `LuminaApp::new` takes the same cached result, so the
+    /// file is parsed once and the message is never lost to an earlier `load`
+    /// that already moved the corrupt file aside.
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn load_startup_once() -> (Self, Option<String>) {
+        STARTUP_CONFIG.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(Self::load_impl(&Self::config_path()));
+            }
+            slot.clone().expect("startup config was just loaded")
+        })
     }
 
+    #[cfg(test)]
     pub fn load_from(path: &Path) -> Self {
         Self::load_impl(path).0
-    }
-
-    /// Loads the config and, when the file exists but cannot be read or
-    /// parsed, preserves it as `config.json.corrupt` and returns a message for
-    /// the error banner. Returning it separately lets the app surface the loss
-    /// instead of silently starting from defaults and then overwriting the
-    /// user's settings on the next save.
-    #[cfg_attr(test, allow(dead_code))]
-    pub fn load_with_error() -> (Self, Option<String>) {
-        Self::load_impl(&Self::config_path())
     }
 
     fn load_impl(path: &Path) -> (Self, Option<String>) {
         if !path.exists() {
             return (Self::default(), None);
         }
-        let parsed = fs::read(path)
-            .map_err(|err| err.to_string())
-            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|err| err.to_string()));
-        match parsed {
+        // A read error (permissions, transient I/O) does not mean the file is
+        // bad: leave it in place and surface the failure instead of moving a
+        // possibly-good config aside.
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                log::error!("settings could not be read ({err}); leaving the file in place");
+                return (
+                    Self::default(),
+                    Some(format!(
+                        "Your settings could not be read ({err}). Lumina started with \
+                         defaults and left the file untouched."
+                    )),
+                );
+            }
+        };
+        match serde_json::from_slice::<Self>(&bytes) {
             Ok(cfg) => (cfg, None),
             Err(err) => {
                 // Keep the user's file before any default is ever written over
-                // it: an unreadable config must not become a silent reset.
+                // it: an unparseable config must not become a silent reset.
                 let corrupt = path.with_extension("json.corrupt");
-                match fs::rename(path, &corrupt) {
-                    Ok(()) => log::error!(
-                        "settings could not be read ({err}); kept at {}",
-                        corrupt.display()
-                    ),
-                    Err(rename_err) => log::error!(
-                        "settings could not be read ({err}); could not preserve the file: {rename_err}"
-                    ),
-                }
-                let message = format!(
-                    "Your settings could not be read, so Lumina started with defaults. \
-                     The old file was kept as {}.",
-                    corrupt.display()
-                );
+                let kept = fs::rename(path, &corrupt);
+                let message = match &kept {
+                    Ok(()) => {
+                        log::error!(
+                            "settings could not be parsed ({err}); kept at {}",
+                            corrupt.display()
+                        );
+                        format!(
+                            "Your settings could not be read, so Lumina started with defaults. \
+                             The old file was kept as {}.",
+                            corrupt.display()
+                        )
+                    }
+                    Err(rename_err) => {
+                        log::error!(
+                            "settings could not be parsed ({err}); could not preserve the file: {rename_err}"
+                        );
+                        "Your settings could not be read, so Lumina started with defaults. \
+                         The old file could not be moved aside and may be overwritten when \
+                         settings are next saved."
+                            .to_string()
+                    }
+                };
                 (Self::default(), Some(message))
             }
         }
@@ -792,11 +825,23 @@ impl AppConfig {
         let data = serde_json::to_vec_pretty(self)?;
         // Write beside the target and rename: a crash mid-write can leave a
         // temp file behind, but never a truncated config.json that reads as
-        // defaults and is then overwritten.
-        let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
-        fs::write(&tmp, &data)?;
+        // defaults and is then overwritten. The nanosecond suffix keeps two
+        // saves in one process from colliding on the temp name.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tmp = path.with_extension(format!("json.tmp.{}.{}", std::process::id(), nanos));
+        if let Err(err) = fs::write(&tmp, &data) {
+            if let Err(remove_err) = fs::remove_file(&tmp) {
+                log::warn!("could not remove the temporary settings file {tmp:?}: {remove_err}");
+            }
+            return Err(err.into());
+        }
         if let Err(err) = fs::rename(&tmp, path) {
-            let _ = fs::remove_file(&tmp);
+            if let Err(remove_err) = fs::remove_file(&tmp) {
+                log::warn!("could not remove the temporary settings file {tmp:?}: {remove_err}");
+            }
             return Err(err.into());
         }
         Ok(())

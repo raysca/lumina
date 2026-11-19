@@ -661,7 +661,7 @@ impl LuminaApp {
         #[cfg(test)]
         let mut config = TEST_CONFIG.with(|c| c.take()).unwrap_or_default();
         #[cfg(not(test))]
-        let (mut config, config_load_error) = AppConfig::load_with_error();
+        let (mut config, config_load_error) = AppConfig::load_startup_once();
         // Keep stale or hand-edited config files from unbounded history growth.
         config
             .recent_searches

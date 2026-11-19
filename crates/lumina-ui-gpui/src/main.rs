@@ -45,9 +45,11 @@ fn main() {
     gpui::application()
         .with_assets(assets::LuminaAssets)
         .run(|cx: &mut App| {
-            cx.set_menus(crate::menus::build_menus(
-                !crate::config::AppConfig::load().sidebar_visible,
-            ));
+            // One parse for the menus, the window bounds and the app itself.
+            // The corrupt-file message is cached with it and surfaced by
+            // LuminaApp::new, so an earlier read cannot consume the file first.
+            let (startup, _settings_error) = crate::config::AppConfig::load_startup_once();
+            cx.set_menus(crate::menus::build_menus(!startup.sidebar_visible));
             // The text fields' input key bindings and globals.
             gpui::init(cx);
 
@@ -58,7 +60,7 @@ fn main() {
                 log::warn!("failed to load bundled fonts: {e:?}");
             }
 
-            let restored = crate::config::AppConfig::load().restored_window_bounds();
+            let restored = startup.restored_window_bounds();
             let bounds = match restored {
                 Some((x, y, width, height)) => {
                     Bounds::new(point(px(x), px(y)), size(px(width), px(height)))
