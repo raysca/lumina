@@ -2,7 +2,7 @@ use gpui::*;
 
 use crate::icons::{render_icon, Icon};
 use crate::theme;
-use crate::views::inspector::render_inspector_body;
+use crate::views::inspector::{render_inspector_body, InspectorBody};
 use crate::views::sidebar::AlbumSelection;
 use crate::{LuminaApp, UiMessage};
 
@@ -207,26 +207,26 @@ impl Render for FloatingInspectorView {
                     .w_full()
                     .overflow_hidden()
                     .child(batch.unwrap_or_else(|| {
-                        render_inspector_body(
-                            self.app.clone(),
+                        render_inspector_body(InspectorBody {
+                            weak_app: self.app.clone(),
                             selected_item,
-                            viewer_image,
-                            &selected_item_tags,
-                            &suggestions,
+                            preview_image: viewer_image,
+                            tags: &selected_item_tags,
+                            suggestions: &suggestions,
                             suggestion_focus,
                             tag_input_active,
                             is_trash,
                             tab,
                             rating,
-                            &mark_pop,
-                            caption.as_deref(),
+                            mark_pop: &mark_pop,
+                            caption: caption.as_deref(),
                             caption_input_active,
                             title_input_active,
                             date_input_active,
                             location_input_active,
                             field_input,
-                            info_details.as_ref(),
-                        )
+                            details: info_details.as_ref(),
+                        })
                     })),
             )
             .into_any_element()

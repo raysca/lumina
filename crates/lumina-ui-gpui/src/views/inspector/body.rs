@@ -63,46 +63,33 @@ pub(crate) fn display_title(item: &MediaItem) -> String {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn render_inspector_body(
-    weak_app: WeakEntity<LuminaApp>,
-    selected_item: Option<MediaItem>,
-    preview_image: Option<Arc<RenderImage>>,
-    tags: &[String],
-    suggestions: &[Suggestion],
-    suggestion_focus: Option<usize>,
-    tag_input_active: bool,
-    is_trash: bool,
-    tab: InspectorTab,
-    rating: u8,
-    mark_pop: &MarkPop,
-    caption: Option<&str>,
-    caption_input_active: bool,
-    title_input_active: bool,
-    date_input_active: bool,
-    location_input_active: bool,
-    field_input: Option<FieldEditor>,
-    details: Option<&InfoDetails>,
-) -> AnyElement {
-    let item = match selected_item {
-        Some(it) => it,
-        None => {
-            return div()
-                .size_full()
-                .flex()
-                .justify_center()
-                .items_center()
-                .text_sm()
-                .text_color(theme::t2())
-                .child("No media selected")
-                .into_any_element();
-        }
-    };
+/// Everything the inspector pane needs to render one selection. Grouped so the
+/// render entry points take one argument instead of eighteen.
+pub struct InspectorBody<'a> {
+    pub weak_app: WeakEntity<LuminaApp>,
+    pub selected_item: Option<MediaItem>,
+    pub preview_image: Option<Arc<RenderImage>>,
+    pub tags: &'a [String],
+    pub suggestions: &'a [Suggestion],
+    pub suggestion_focus: Option<usize>,
+    pub tag_input_active: bool,
+    pub is_trash: bool,
+    pub tab: InspectorTab,
+    pub rating: u8,
+    pub mark_pop: &'a MarkPop,
+    pub caption: Option<&'a str>,
+    pub caption_input_active: bool,
+    pub title_input_active: bool,
+    pub date_input_active: bool,
+    pub location_input_active: bool,
+    pub field_input: Option<FieldEditor>,
+    pub details: Option<&'a InfoDetails>,
+}
 
-    let details = details.filter(|d| d.is_for(&item));
-    render_single_body(
+pub fn render_inspector_body(body: InspectorBody<'_>) -> AnyElement {
+    let InspectorBody {
         weak_app,
-        item,
+        selected_item,
         preview_image,
         tags,
         suggestions,
@@ -119,30 +106,66 @@ pub fn render_inspector_body(
         location_input_active,
         field_input,
         details,
-    )
+    } = body;
+    let Some(item) = selected_item else {
+        return div()
+            .size_full()
+            .flex()
+            .justify_center()
+            .items_center()
+            .text_sm()
+            .text_color(theme::t2())
+            .child("No media selected")
+            .into_any_element();
+    };
+
+    let details = details.filter(|d| d.is_for(&item));
+    render_single_body(InspectorBody {
+        weak_app,
+        selected_item: Some(item),
+        preview_image,
+        tags,
+        suggestions,
+        suggestion_focus,
+        tag_input_active,
+        is_trash,
+        tab,
+        rating,
+        mark_pop,
+        caption,
+        caption_input_active,
+        title_input_active,
+        date_input_active,
+        location_input_active,
+        field_input,
+        details,
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_single_body(
-    weak_app: WeakEntity<LuminaApp>,
-    item: MediaItem,
-    preview_image: Option<Arc<RenderImage>>,
-    tags: &[String],
-    suggestions: &[Suggestion],
-    suggestion_focus: Option<usize>,
-    tag_input_active: bool,
-    is_trash: bool,
-    tab: InspectorTab,
-    rating: u8,
-    mark_pop: &MarkPop,
-    caption: Option<&str>,
-    caption_input_active: bool,
-    title_input_active: bool,
-    date_input_active: bool,
-    location_input_active: bool,
-    field_input: Option<FieldEditor>,
-    details: Option<&InfoDetails>,
-) -> AnyElement {
+fn render_single_body(body: InspectorBody<'_>) -> AnyElement {
+    let InspectorBody {
+        weak_app,
+        selected_item,
+        preview_image,
+        tags,
+        suggestions,
+        suggestion_focus,
+        tag_input_active,
+        is_trash,
+        tab,
+        rating,
+        mark_pop,
+        caption,
+        caption_input_active,
+        title_input_active,
+        date_input_active,
+        location_input_active,
+        field_input,
+        details,
+    } = body;
+    let Some(item) = selected_item else {
+        return div().into_any_element();
+    };
     let path = item.path.clone();
     let file_name = item.file_name.clone();
     let size_str = format_bytes(item.file_size);

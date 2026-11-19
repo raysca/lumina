@@ -7,7 +7,7 @@ pub mod summary;
 pub mod summary_video;
 pub mod tabs;
 
-pub use body::{format_bytes, render_inspector_body, InspectorTab};
+pub use body::{format_bytes, render_inspector_body, InspectorBody, InspectorTab};
 
 use crate::theme;
 use crate::views::sidebar::AlbumSelection;
