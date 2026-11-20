@@ -1,0 +1,98 @@
+name: Flatpak
+
+# The manifest lives with the app, but Flathub builds it from its own
+# repository. Building it here keeps the sandbox, the bundled tools and the
+# offline cargo sources honest between releases. It is a heavy job, so it runs
+# only when the packaging inputs change (or on demand).
+on:
+  push:
+    branches: [main]
+    paths:
+      - packaging/flatpak/**
+      - resources/linux/**
+      - Cargo.lock
+      - Cargo.toml
+      - .github/workflows/flatpak.yml
+  pull_request:
+    paths:
+      - packaging/flatpak/**
+      - resources/linux/**
+      - Cargo.lock
+      - Cargo.toml
+      - .github/workflows/flatpak.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build Flatpak (x86_64, unsigned)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder dbus
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install runtime, SDK and Rust extension
+        run: |
+          sudo flatpak install -y --noninteractive flathub \
+            org.gnome.Platform//50 \
+            org.gnome.Sdk//50 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08
+
+      # The download cache is the only part worth keeping: the build itself is
+      # what the job proves.
+      - name: Cache flatpak-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/flatpak-builder
+          key: flatpak-builder-${{ hashFiles('packaging/flatpak/io.github.raysca.Lumina.yml', 'packaging/flatpak/cargo-sources.json') }}
+
+      - name: Build and install
+        run: |
+          # CI has the commit that is being tested, not necessarily the one the
+          # manifest pins (Flathub uses that pin for tagged releases). Build the
+          # checked-out tree through the same git source path.
+          sed -e "s#url: https://github.com/raysca/lumina.git#url: file://$GITHUB_WORKSPACE#" \
+              -e "s#^        commit: .*#        commit: $GITHUB_SHA#" \
+              packaging/flatpak/io.github.raysca.Lumina.yml \
+              > packaging/flatpak/ci.yml
+          flatpak-builder --user --install --disable-rofiles-fuse --force-clean \
+            --state-dir="$RUNNER_TEMP/flatpak-builder" \
+            --jobs="$(nproc)" \
+            "$RUNNER_TEMP/flatpak-build" \
+            packaging/flatpak/ci.yml
+          rm -f packaging/flatpak/ci.yml
+
+      # No display here: check the sandbox contents the app and URL import
+      # depend on, not the window. GUI checks stay in the Linux checklist.
+      - name: Check the sandbox contents
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          sudo mkdir -p /run/dbus
+          sudo dbus-daemon --system --fork 2>/dev/null || true
+          dbus-run-session -- flatpak run --command=sh io.github.raysca.Lumina -c '
+            set -e
+            /app/bin/ffmpeg -hide_banner -version | head -1
+            /app/bin/yt-dlp --version
+            /app/bin/curl --version | head -1
+            test -f /app/share/applications/io.github.raysca.Lumina.desktop
+            test -f /app/share/metainfo/io.github.raysca.Lumina.metainfo.xml
+            test -f /app/share/icons/hicolor/512x512/apps/io.github.raysca.Lumina.png
+            for f in LICENSE Inter-LICENSE.txt InterTight-OFL.txt JetBrainsMono-OFL.txt icons-LICENSE.txt curl-COPYING yt-dlp-THIRD_PARTY_LICENSES.txt ffmpeg-COPYING.LGPLv2.1; do
+              test -f "/app/share/licenses/io.github.raysca.Lumina/$f"
+            done
+          '

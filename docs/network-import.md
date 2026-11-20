@@ -12,8 +12,8 @@ downloads one video into the library.
 | HLS playlist (`.m3u8`, recorded streams only) | yt-dlp, remuxed to MP4 by ffmpeg |
 
 On macOS the app bundle ships both helpers; the Linux `.deb` uses the system
-`curl`, `yt-dlp` (a Recommends) and `ffmpeg`. The Flatpak draft does not ship
-them yet, so URL import is unavailable inside the sandbox.
+`curl`, `yt-dlp` (a Recommends) and `ffmpeg`; the Flatpak bundles its own
+copies, so URL import works there too.
 
 Live streams, web pages behind a video link, and formats Lumina can't
 catalogue (e.g. WebM) are refused with a message.
@@ -125,8 +125,8 @@ and full error chains go to the log.
   user's yt-dlp config ignored; cancel and quit stop the whole group.
 - On Linux, the `.deb` uses the system `curl` (a dependency) and `yt-dlp` (a
   Recommends, so a normal apt install adds it), plus the system `ffmpeg` and
-  GStreamer plugins. The Flatpak draft does not bundle `curl` or `yt-dlp` yet,
-  so URL import is not supported inside the sandbox until they are added.
+  GStreamer plugins. The Flatpak bundles its own `curl`, `yt-dlp` and ffmpeg,
+  so URL import works inside the sandbox without anything from the host.
 - ffmpeg is built from the pinned source as LGPL-2.1 only, copy-only
   (demuxers, muxers and parsers; no encoders, no network protocols). yt-dlp
   uses it to merge separate video and audio into MP4 and to turn streams into

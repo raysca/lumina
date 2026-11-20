@@ -29,6 +29,16 @@
       <li>Removable libraries: each library's catalog and thumbnails can be deleted without touching the originals</li>
     </ul>
   </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Browse the whole library in a date-grouped grid</caption>
+      <image>https://raw.githubusercontent.com/raysca/lumina/main/resources/linux/screenshots/library.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Inspect, rate and tag an item without leaving the grid</caption>
+      <image>https://raw.githubusercontent.com/raysca/lumina/main/resources/linux/screenshots/item-inspector.png</image>
+    </screenshot>
+  </screenshots>
   <launchable type="desktop-id">io.github.raysca.Lumina.desktop</launchable>
   <provides>
     <binary>lumina</binary>

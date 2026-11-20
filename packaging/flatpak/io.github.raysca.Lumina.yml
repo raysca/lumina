@@ -21,9 +21,11 @@ finish-args:
   # The library is a folder anywhere on the user's disks, and its catalog
   # stores paths relative to that folder. Broad host access is the supported
   # model for a media manager; the portal's per-document paths are not a
-  # stable identity for rescans or volume remaps.
+  # stable identity for rescans or volume remaps. Removable drives mount under
+  # /media or /run/media, so those are listed rather than all of /run.
   - --filesystem=home
-  - --filesystem=removable-media
+  - --filesystem=/media
+  - --filesystem=/run/media
   # GPU rendering (GPUI/Vulkan) and video audio through GStreamer.
   - --device=dri
   - --socket=pulseaudio
@@ -33,6 +35,71 @@ finish-args:
   - --socket=fallback-x11
 
 modules:
+  # URL import runs curl for direct video links. The runtime has libcurl but
+  # not the CLI, so build a small one against the runtime's GnuTLS.
+  - name: curl
+    buildsystem: autotools
+    config-opts:
+      - --disable-static
+      - --disable-debug
+      - --disable-curldebug
+      - --disable-manual
+      - --disable-ldap
+      - --disable-ldaps
+      - --disable-rtsp
+      - --disable-dict
+      - --disable-telnet
+      - --disable-tftp
+      - --disable-pop3
+      - --disable-imap
+      - --disable-smtp
+      - --disable-gopher
+      - --disable-mqtt
+      - --disable-smb
+      - --without-libidn2
+      - --without-librtmp
+      - --without-brotli
+      - --without-zstd
+      - --without-openssl
+      - --with-gnutls
+      # The freedesktop runtime keeps its trust store here.
+      - --with-ca-bundle=/etc/pki/tls/certs/ca-bundle.crt
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+      - /share/man
+      - /share/aclocal
+    post-install:
+      - install -Dm644 COPYING /app/share/licenses/io.github.raysca.Lumina/curl-COPYING
+    sources:
+      - type: archive
+        url: https://curl.se/download/curl-8.23.0.tar.xz
+        sha256: 8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5
+
+  # Site pages and HLS playlists use yt-dlp. The project publishes it as a
+  # self-contained binary, so the sandbox needs no Python runtime; this is the
+  # same release the macOS bundle pins (scripts/fetch_yt_dlp.sh).
+  - name: yt-dlp
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 yt-dlp /app/bin/yt-dlp
+      - install -Dm644 THIRD_PARTY_LICENSES.txt /app/share/licenses/io.github.raysca.Lumina/yt-dlp-THIRD_PARTY_LICENSES.txt
+    sources:
+      - type: file
+        url: https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux
+        sha256: 767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795
+        dest-filename: yt-dlp
+        only-arches: [x86_64]
+      - type: file
+        url: https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux_aarch64
+        sha256: e87e9533e89fe5889abaa21f5114dfe7756d6aa6219b83551add04d48b18e483
+        dest-filename: yt-dlp
+        only-arches: [aarch64]
+      - type: file
+        url: https://raw.githubusercontent.com/yt-dlp/yt-dlp/2026.10.26/THIRD_PARTY_LICENSES.txt
+        sha256: 472aefe951c7db35e1657c1d13fd337140511ed6f2b329205105ad441c5a02b7
+        dest-filename: THIRD_PARTY_LICENSES.txt
+
   # The app runs ffmpeg for video posters, scrub previews and URL-import
   # merging. The runtime does not carry the CLI, so build the same minimal,
   # LGPL-only, network-free binary the macOS bundle uses.
@@ -61,6 +128,8 @@ modules:
       - /lib/*.a
       - /lib/pkgconfig
       - /share/man
+    post-install:
+      - install -Dm644 COPYING.LGPLv2.1 /app/share/licenses/io.github.raysca.Lumina/ffmpeg-COPYING.LGPLv2.1
     sources:
       - type: archive
         url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
@@ -85,9 +154,9 @@ modules:
       - install -Dm644 resources/fonts/JetBrainsMono-OFL.txt /app/share/licenses/io.github.raysca.Lumina/JetBrainsMono-OFL.txt
       - install -Dm644 resources/icons/LICENSE /app/share/licenses/io.github.raysca.Lumina/icons-LICENSE.txt
     sources:
-      # Flathub wants a tagged release; this pins the current main commit for
-      # local builds until the first Linux release tag exists.
+      # Flathub wants a tagged release; until the first Linux release tag
+      # exists this pins the last commit that has the whole app tree.
       - type: git
         url: https://github.com/raysca/lumina.git
-        commit: 0a5d0a2f8591183ffcea8083972a38f3d3b7f22e
+        commit: 88c9bab91cfee546264513b6e4757d4b7143c658
       - cargo-sources.json

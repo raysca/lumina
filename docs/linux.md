@@ -83,25 +83,25 @@ This package is unsigned and must not be distributed as a supported release.
 `packaging/flatpak/io.github.raysca.Lumina.yml` is the Flathub build: the
 `org.gnome.Platform//50` runtime and SDK (GStreamer, GTK/GLib, Rust SDK
 extension), a minimal LGPL-only ffmpeg CLI built from the same source and flags
-as the macOS bundle, and the app itself from a pinned git commit with offline
-cargo sources.
+as the macOS bundle, a small `curl` built against the runtime's GnuTLS, the
+pinned `yt-dlp` release, and the app itself from a pinned git commit with
+offline cargo sources. All three helpers that URL import and previews rely on
+are inside the sandbox; nothing comes from the host.
 
-It requests `--filesystem=home` and `--filesystem=removable-media` on purpose:
-a library is a folder anywhere on the user's disks and the catalog stores paths
-relative to it, so portal document paths are not a stable identity across
-rescans or volume remaps. `--device=dri`, `--socket=pulseaudio` and Wayland
-with an X11 fallback cover rendering, audio and windowing. Expect to justify
-the filesystem access in the Flathub review.
+It requests `--filesystem=home`, `--filesystem=/media` and
+`--filesystem=/run/media` on purpose: a library is a folder anywhere on the
+user's disks and the catalog stores paths relative to it, so portal document
+paths are not a stable identity across rescans or volume remaps. `--device=dri`,
+`--socket=pulseaudio` and Wayland with an X11 fallback cover rendering, audio
+and windowing. Expect to justify the filesystem access in the Flathub review.
 
-URL import currently needs `yt-dlp`, which is not bundled inside the sandbox
-and is not present on the host, so the app reports its normal missing-helper
-message there. Bundling a pinned copy is required before calling URL import
-supported in the Flatpak. HEIC/HEIF and RAW previews remain unavailable on
-Linux.
+HEIC/HEIF and RAW previews remain unavailable on Linux.
 
-The manifest is a draft: it parses (`flatpak-builder --show-manifest`) and its
-cargo sources are generated, but it has not been built end to end yet. The
-build checklist (x86_64 and aarch64, sandbox launch, library on a removable
-drive, video audio, deletion, `ffmpeg -version`) is in
-[`packaging/flatpak/README.md`](../packaging/flatpak/README.md). Do not submit
-it to Flathub until that passes and the release is tagged.
+The manifest is a draft. An aarch64 build on a Linux host compiles and installs
+the app with ffmpeg, `curl` and `yt-dlp` inside the sandbox, and it launches
+under Xvfb (the AppStream screenshots were taken from that build). The CI job
+builds x86_64 when the packaging inputs change. The remaining checks are the
+manual ones on a Linux desktop (a library on a removable drive, video audio,
+deletion, URL import), a release tag, and the Flathub review. They are listed
+in [`packaging/flatpak/README.md`](../packaging/flatpak/README.md). Do not
+submit it to Flathub until they pass and the release is tagged.
