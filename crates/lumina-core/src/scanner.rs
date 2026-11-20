@@ -13,8 +13,50 @@ use walkdir::WalkDir;
 use crate::geocoder::OfflineGeocoder;
 use crate::{EngineEvent, MediaId, MediaItem, MediaType};
 
+mod details;
 mod mp4;
+use details::{clean_string, parse_dms, parse_integer, parse_rational};
+pub use details::{read_media_details, MediaDetails};
 pub use mp4::{extract_video_duration, extract_video_size};
+
+/// Every non-hidden entry under `dir`: hidden files and folders (and all
+/// inside them) are skipped, and symlinks are not followed.
+fn walk_entries(dir: &Path) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
+    WalkDir::new(dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
+}
+
+/// Files under `dir`, skipping hidden names and not following symlinks.
+pub fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    walk_entries(dir)
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path())
+}
+
+/// Media files under `dir`, by the scanner's rules.
+pub fn walk_media(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    walk_files(dir).filter(|path| is_supported_media(path))
+}
+
+/// `(file_size, mtime_epoch_ms)` as the catalog stores them.
+pub(crate) fn file_signature(path: &Path) -> Option<(u64, i64)> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let mtime_epoch_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    Some((metadata.len(), mtime_epoch_ms))
+}
+
+/// True for a file name Lumina catalogues (by extension, any case).
+pub fn is_supported_media(path: &Path) -> bool {
+    Scanner::classify_media_extension(path).is_some()
+}
 
 const BATCH_SIZE: usize = 256;
 /// Files between progress events inside a batch.
@@ -373,147 +415,6 @@ impl Scanner {
 
 /// Get Info facts not kept in the catalog: read from one file on demand, so
 /// the scan and every catalog query stay as lean as before.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct MediaDetails {
-    /// File-system creation (birth) time, where the platform records it.
-    pub created_epoch_ms: Option<i64>,
-    pub color_space: Option<String>,
-    pub exposure_bias_ev: Option<f64>,
-    pub exposure_program: Option<String>,
-    pub metering_mode: Option<String>,
-    pub flash: Option<String>,
-    pub white_balance: Option<String>,
-    pub software: Option<String>,
-    pub focal_length_35mm: Option<u32>,
-}
-
-/// Every non-hidden entry under `dir`: hidden files and folders (and all
-/// inside them) are skipped, and symlinks are not followed.
-fn walk_entries(dir: &Path) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
-    WalkDir::new(dir)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| !e.file_name().to_string_lossy().starts_with('.'))
-}
-
-/// Files under `dir`, skipping hidden names and not following symlinks.
-pub fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
-    walk_entries(dir)
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_type().is_file())
-        .map(|entry| entry.into_path())
-}
-
-/// Media files under `dir`, by the scanner's rules.
-pub fn walk_media(dir: &Path) -> impl Iterator<Item = PathBuf> {
-    walk_files(dir).filter(|path| is_supported_media(path))
-}
-
-/// `(file_size, mtime_epoch_ms)` as the catalog stores them.
-pub(crate) fn file_signature(path: &Path) -> Option<(u64, i64)> {
-    let metadata = std::fs::metadata(path).ok()?;
-    let mtime_epoch_ms = metadata
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    Some((metadata.len(), mtime_epoch_ms))
-}
-
-/// True for a file name Lumina catalogues (by extension, any case).
-pub fn is_supported_media(path: &Path) -> bool {
-    Scanner::classify_media_extension(path).is_some()
-}
-
-/// Reads [`MediaDetails`] for `path`. Missing or unreadable fields are `None`;
-/// this never fails, since Get Info just shows fewer rows. Does file IO: call
-/// it off the UI thread.
-pub fn read_media_details(path: &Path) -> MediaDetails {
-    let mut details = MediaDetails {
-        created_epoch_ms: std::fs::metadata(path)
-            .and_then(|m| m.created())
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as i64),
-        ..Default::default()
-    };
-    let Ok(file) = File::open(path) else {
-        return details;
-    };
-    let Ok(exif_data) = exif::Reader::new().read_from_container(&mut BufReader::new(file)) else {
-        return details;
-    };
-    let text = |tag: exif::Tag| {
-        exif_data
-            .get_field(tag, exif::In::PRIMARY)
-            .map(|f| sentence_case(&clean_string(&f.display_value().to_string())))
-            .filter(|s| !s.is_empty())
-    };
-    details.color_space = text(exif::Tag::ColorSpace);
-    details.exposure_program = text(exif::Tag::ExposureProgram);
-    details.metering_mode = text(exif::Tag::MeteringMode);
-    details.flash = text(exif::Tag::Flash);
-    details.white_balance = text(exif::Tag::WhiteBalance);
-    details.software = exif_data
-        .get_field(exif::Tag::Software, exif::In::PRIMARY)
-        .map(|f| clean_string(&f.display_value().to_string()))
-        .filter(|s| !s.is_empty());
-    details.exposure_bias_ev = exif_data
-        .get_field(exif::Tag::ExposureBiasValue, exif::In::PRIMARY)
-        .and_then(|f| match f.value {
-            exif::Value::SRational(ref v) => v.first().map(|r| r.to_f64()),
-            _ => parse_rational(&f.value),
-        });
-    details.focal_length_35mm = exif_data
-        .get_field(exif::Tag::FocalLengthIn35mmFilm, exif::In::PRIMARY)
-        .and_then(|f| parse_integer(&f.value))
-        .filter(|&mm| mm > 0);
-    details
-}
-
-/// "normal program" -> "Normal program" for display.
-fn sentence_case(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
-
-fn clean_string(s: &str) -> String {
-    s.trim().trim_matches('"').trim().to_string()
-}
-
-fn parse_rational(value: &exif::Value) -> Option<f64> {
-    if let exif::Value::Rational(ref rationals) = value {
-        if let Some(r) = rationals.first() {
-            return Some(r.to_f64());
-        }
-    }
-    None
-}
-
-fn parse_integer(value: &exif::Value) -> Option<u32> {
-    match value {
-        exif::Value::Short(ref v) => v.first().map(|&x| x as u32),
-        exif::Value::Long(ref v) => v.first().copied(),
-        _ => None,
-    }
-}
-
-fn parse_dms(value: &exif::Value) -> Option<f64> {
-    if let exif::Value::Rational(ref rationals) = value {
-        if rationals.len() >= 3 {
-            let deg = rationals[0].to_f64();
-            let min = rationals[1].to_f64();
-            let sec = rationals[2].to_f64();
-            return Some(deg + min / 60.0 + sec / 3600.0);
-        }
-    }
-    None
-}
-
 /// `(year, month, day)` of a capture time, or `(0, 0, 0)` for an undated
 /// one (capture time 0, as in `view_scope`), so the month band and the
 /// timeline buckets file it under "Undated", not January 1970.
